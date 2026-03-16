@@ -249,3 +249,38 @@
   color: #000;
 }
 
+.notifications-modal__app-update-slot {
+  margin-bottom: 0.5rem;
+}
+
+.notifications-modal__item--app-update {
+  cursor: pointer;
+}
+
+.notifications-modal__marker--update {
+  background: $color-accent;
+  color: #000;
+}
+
+.notifications-modal__marker--update-ready {
+  background: $color-success;
+  color: #000;
+}
+
+.notifications-modal__progress {
+  margin-top: 0.4rem;
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  background: $color-surface;
+  overflow: hidden;
+}
+
+.notifications-modal__progress-bar {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, $color-accent 0%, lighten($color-accent, 12%) 50%, $color-accent 100%);
+  transition: width 0.2s ease;
+}
+

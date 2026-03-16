@@ -146,3 +146,12 @@ export function iconArrowRight(size = 20): string {
 export function iconSearch(size = 20): string {
   return svg('search', size, '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>');
 }
+
+/** Загрузка / обновление (доступна новая версия) */
+export function iconDownload(size = 20): string {
+  return svg(
+    'download',
+    size,
+    '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  );
+}

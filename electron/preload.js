@@ -12,7 +12,12 @@ ipcRenderer.on('lobby:playerStateChanged', (_, playback) => {
   window.dispatchEvent(new CustomEvent('lobby:playerStateChanged', { detail: playback }));
 });
 
+ipcRenderer.on('app:update-progress', (_, payload) => {
+  window.dispatchEvent(new CustomEvent('app-update-progress', { detail: payload }));
+});
+
 contextBridge.exposeInMainWorld('electron', {
+  getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),
     maximize: () => ipcRenderer.send('window:maximize'),
@@ -24,6 +29,8 @@ contextBridge.exposeInMainWorld('electron', {
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   syncPlayerState: (playback) => ipcRenderer.send('player:syncState', playback),
   sendPlayerState: (playback) => ipcRenderer.send('player:stateChanged', playback),
+  startUpdateDownload: () => ipcRenderer.invoke('app:startUpdateDownload'),
+  installUpdate: () => ipcRenderer.invoke('app:installUpdate'),
 });
 
 contextBridge.exposeInMainWorld('anix', {

@@ -185,6 +185,63 @@
   padding: 0;
 }
 
+.titlebar__menu-item--update.tooltip-trigger {
+  cursor: pointer;
+  color: var(--color-accent, #7c8cff);
+
+  &[hidden] {
+    display: none !important;
+  }
+
+  &:hover {
+    color: var(--color-accent-hover, #9ba8ff);
+  }
+}
+
+.titlebar__update-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.titlebar__update-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-accent, #7c8cff);
+  pointer-events: none;
+}
+
+.titlebar__update-tooltip {
+  position: fixed;
+  z-index: 2147483647;
+  display: inline-block;
+  min-width: 200px;
+  padding: 0.6rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: #fff;
+  text-align: center;
+  background: #2d2d3a;
+  border: 1px solid rgba(124, 140, 255, 0.5);
+  border-radius: $radius-md;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-50%) translateY(-6px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.titlebar__update-tooltip--visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 .titlebar__avatar {
   display: inline-flex;
   align-items: center;

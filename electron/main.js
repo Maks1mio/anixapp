@@ -549,6 +549,165 @@ ipcMain.handle('shell:openExternal', (_, url) => {
   if (url && typeof url === 'string') shell.openExternal(url);
 });
 
+ipcMain.handle('app:getVersion', () => app.getVersion());
+
+// Простая система скачивания обновления с GitHub Releases.
+// Скачиваем первый .exe из assets последнего релиза и шлём прогресс в renderer.
+let pendingInstallerPath = null;
+let updateDownloadState = { state: 'idle', received: 0, total: 0 };
+
+function sendUpdateProgress(extra) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const payload = {
+    state: updateDownloadState.state,
+    received: updateDownloadState.received,
+    total: updateDownloadState.total,
+    percent: updateDownloadState.total > 0 ? Math.round((updateDownloadState.received / updateDownloadState.total) * 100) : 0,
+    filePath: pendingInstallerPath,
+    ...(extra || {}),
+  };
+  mainWindow.webContents.send('app:update-progress', payload);
+}
+
+async function fetchLatestInstallerUrl() {
+  const https = require('https');
+  const url = 'https://api.github.com/repos/Maks1mio/anixapp/releases/latest';
+  return new Promise((resolve, reject) => {
+    const req = https.get(
+      url,
+      {
+        headers: {
+          'User-Agent': 'AnixApp-Updater',
+          Accept: 'application/vnd.github.v3+json',
+        },
+      },
+      (res) => {
+        if (res.statusCode !== 200) {
+          reject(new Error(`GitHub status ${res.statusCode}`));
+          res.resume();
+          return;
+        }
+        let raw = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          raw += chunk;
+        });
+        res.on('end', () => {
+          try {
+            const data = JSON.parse(raw);
+            const assets = Array.isArray(data.assets) ? data.assets : [];
+            const exe = assets.find((a) => typeof a.browser_download_url === 'string' && /\.exe(\?|$)/i.test(a.browser_download_url));
+            if (!exe) {
+              reject(new Error('No .exe asset in latest release'));
+              return;
+            }
+            resolve(exe.browser_download_url);
+          } catch (e) {
+            reject(e);
+          }
+        });
+      },
+    );
+    req.on('error', reject);
+  });
+}
+
+async function downloadInstaller() {
+  const path = require('path');
+  const fs = require('fs');
+  const https = require('https');
+
+  try {
+    updateDownloadState = { state: 'downloading', received: 0, total: 0 };
+    sendUpdateProgress();
+    const downloadUrl = await fetchLatestInstallerUrl();
+    const updatesDir = path.join(app.getPath('userData'), 'updates');
+    if (!fs.existsSync(updatesDir)) fs.mkdirSync(updatesDir, { recursive: true });
+    const fileName = path.basename(downloadUrl.split('?')[0] || 'AnixApp-Setup.exe');
+    const destPath = path.join(updatesDir, fileName);
+    const file = fs.createWriteStream(destPath);
+
+    await new Promise((resolve, reject) => {
+      const maxRedirects = 5;
+      function doRequest(url, redirectsLeft) {
+        const req = https.get(
+          url,
+          {
+            headers: {
+              'User-Agent': 'AnixApp-Updater',
+            },
+          },
+          (res) => {
+            // GitHub assets обычно отдают 302/301 на CDN — поддерживаем редиректы.
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+              if (redirectsLeft <= 0) {
+                reject(new Error('Too many redirects while downloading update'));
+                res.resume();
+                return;
+              }
+              const nextUrl = res.headers.location;
+              res.resume();
+              doRequest(nextUrl, redirectsLeft - 1);
+              return;
+            }
+            if (res.statusCode !== 200) {
+              reject(new Error(`Download status ${res.statusCode}`));
+              res.resume();
+              return;
+            }
+            const total = parseInt(res.headers['content-length'] || '0', 10) || 0;
+            updateDownloadState.total = total;
+            res.on('data', (chunk) => {
+              file.write(chunk);
+              updateDownloadState.received += chunk.length;
+              sendUpdateProgress();
+            });
+            res.on('end', () => {
+              file.end(() => resolve());
+            });
+          },
+        );
+        req.on('error', reject);
+      }
+      doRequest(downloadUrl, maxRedirects);
+    });
+
+    pendingInstallerPath = destPath;
+    updateDownloadState.state = 'ready';
+    sendUpdateProgress();
+  } catch (e) {
+    console.error('Updater download error', e);
+    updateDownloadState = { state: 'error', received: 0, total: 0 };
+    sendUpdateProgress({ errorMessage: String(e) });
+  }
+}
+
+ipcMain.handle('app:startUpdateDownload', async () => {
+  if (updateDownloadState.state === 'downloading') {
+    return;
+  }
+  downloadInstaller();
+});
+
+ipcMain.handle('app:installUpdate', async () => {
+  const fs = require('fs');
+  const { spawn } = require('child_process');
+  if (!pendingInstallerPath || !fs.existsSync(pendingInstallerPath)) {
+    return;
+  }
+  try {
+    const child = spawn(pendingInstallerPath, [], {
+      detached: true,
+      stdio: 'ignore',
+    });
+    child.unref();
+    isQuitting = true;
+    app.quit();
+  } catch (e) {
+    console.error('Failed to start installer', e);
+  }
+});
+
 ipcMain.handle('anix:randomRelease', async (_, extended = true) => {
   const client = getAnixart();
   const data = await client.endpoints.release.getRandomRelease(extended);

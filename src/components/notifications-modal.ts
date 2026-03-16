@@ -1,6 +1,6 @@
 import { navigate } from '../app';
 import { renderPage } from '../components/page';
-import { iconPlay, iconBookmark } from '../components/icons';
+import { iconPlay, iconBookmark, iconDownload, iconCheck } from '../components/icons';
 
 interface EpisodeNotification {
   type: 'episode';
@@ -164,6 +164,11 @@ export function openNotificationsModal(): void {
   const scrollRoot = page.querySelector('#content') as HTMLElement;
   scrollRoot.innerHTML = '<div class="notifications-modal__loading">Загрузка…</div>';
 
+  // Слот для карточки обновления приложения (скачивание/готово).
+  const appUpdateSlot = document.createElement('div');
+  appUpdateSlot.className = 'notifications-modal__app-update-slot';
+  scrollRoot.prepend(appUpdateSlot);
+
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
 
@@ -319,11 +324,91 @@ export function openNotificationsModal(): void {
       });
 
       scrollRoot.innerHTML = '';
+      scrollRoot.appendChild(appUpdateSlot);
       scrollRoot.appendChild(list);
     })
     .catch((err: unknown) => {
       console.error(err);
       scrollRoot.innerHTML = `<p class="notifications-modal__error">Ошибка: ${String(err)}</p>`;
     });
+
+  // Подписка на прогресс обновления приложения
+  type AppUpdateProgress = import('../types/electron').AppUpdateProgress;
+  let appUpdateCard: HTMLButtonElement | null = null;
+
+  const onUpdateProgress = ((e: CustomEvent<AppUpdateProgress>) => {
+    const data = e.detail;
+    if (!data || !appUpdateSlot) return;
+
+    if (!appUpdateCard) {
+      appUpdateCard = document.createElement('button');
+      appUpdateCard.type = 'button';
+      appUpdateCard.className = 'notifications-modal__item notifications-modal__item--app-update';
+      appUpdateSlot.appendChild(appUpdateCard);
+    }
+
+    if (data.state === 'downloading') {
+      const percent = data.total > 0 ? Math.round((data.received / data.total) * 100) : data.percent || 0;
+      appUpdateCard.innerHTML = `
+        <div class="notifications-modal__thumb notifications-modal__thumb--placeholder">
+          <span class="notifications-modal__marker notifications-modal__marker--update">${iconDownload(12)}</span>
+        </div>
+        <div class="notifications-modal__content">
+          <div class="notifications-modal__row">
+            <span class="notifications-modal__title">Скачивание обновления AnixApp</span>
+          </div>
+          <div class="notifications-modal__subtitle">Пожалуйста, подождите…</div>
+          <div class="notifications-modal__progress">
+            <div class="notifications-modal__progress-bar" style="width:${percent}%"></div>
+          </div>
+        </div>
+      `;
+      appUpdateCard.onclick = null;
+    } else if (data.state === 'ready') {
+      appUpdateCard.innerHTML = `
+        <div class="notifications-modal__thumb notifications-modal__thumb--placeholder">
+          <span class="notifications-modal__marker notifications-modal__marker--update-ready">${iconCheck(12)}</span>
+        </div>
+        <div class="notifications-modal__content">
+          <div class="notifications-modal__row">
+            <span class="notifications-modal__title">Обновление скачано</span>
+            <span class="notifications-modal__badge">Готово</span>
+          </div>
+          <div class="notifications-modal__subtitle">
+            Закройте приложение или нажмите на уведомление, чтобы начать установку.
+          </div>
+        </div>
+      `;
+      appUpdateCard.onclick = () => {
+        window.electron?.installUpdate?.();
+      };
+    } else if (data.state === 'error') {
+      const msg = data.errorMessage ? String(data.errorMessage) : '';
+      appUpdateCard.innerHTML = `
+        <div class="notifications-modal__thumb notifications-modal__thumb--placeholder">
+          <span class="notifications-modal__marker notifications-modal__marker--update"></span>
+        </div>
+        <div class="notifications-modal__content">
+          <div class="notifications-modal__row">
+            <span class="notifications-modal__title">Ошибка при скачивании обновления</span>
+          </div>
+          <div class="notifications-modal__subtitle">
+            Попробуйте ещё раз позже.${msg ? ` (${msg})` : ''}
+          </div>
+        </div>
+      `;
+      appUpdateCard.onclick = null;
+    }
+  }) as EventListener;
+
+  window.addEventListener('app-update-progress', onUpdateProgress as EventListener);
+
+  // Отписываемся при закрытии модалки
+  const originalClose = (overlay as any)._close as (() => void) | undefined;
+  const wrappedClose = () => {
+    window.removeEventListener('app-update-progress', onUpdateProgress as EventListener);
+    if (typeof originalClose === 'function') originalClose();
+  };
+  (overlay as any)._close = wrappedClose;
 }
 

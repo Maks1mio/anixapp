@@ -15,9 +15,19 @@ export interface LobbyPlaybackPayload {
   currentTime: number;
 }
 
+export interface AppUpdateProgress {
+  state: 'idle' | 'downloading' | 'ready' | 'error';
+  percent: number;
+  received: number;
+  total: number;
+  filePath?: string;
+  errorMessage?: string;
+}
+
 declare global {
   interface Window {
     electron?: {
+      getAppVersion: () => Promise<string>;
       window: ElectronWindowAPI;
       openPlayerWindow: (params: { releaseId: string; sourceId: string; ep: string; title: string; sourceName: string; dubberId?: string }) => Promise<void>;
       closePlayerWindow: () => void;
@@ -25,6 +35,8 @@ declare global {
       openExternal: (url: string) => void;
       syncPlayerState: (playback: LobbyPlaybackPayload) => void;
       sendPlayerState: (playback: LobbyPlaybackPayload) => void;
+      startUpdateDownload?: () => Promise<void>;
+      installUpdate?: () => Promise<void>;
     };
   }
 }

@@ -2,6 +2,7 @@ import { navigate } from './app';
 import {
   iconBookmark,
   iconBell,
+  iconDownload,
   iconHome,
   iconLayoutGrid,
   iconLogOut,
@@ -18,6 +19,7 @@ import { getPath } from './router';
 import { bindSearchHotkeys } from './search-controller';
 import { openSearchDropdown, closeSearchDropdown } from './components/search-dropdown';
 import { addSearchHistory } from './utils/search-history';
+import { checkForUpdate, type UpdateInfo } from './services/update-checker';
 
 const SIDEBAR_NAV: { href: string; label: string; icon: string }[] = [
   { href: '/', label: 'Главная', icon: iconHome(18) },
@@ -63,6 +65,11 @@ export function renderLayout(onLogout: () => void): HTMLElement {
   const titlebarMenu = titlebar.querySelector('#titlebar-menu') as HTMLElement;
   if (titlebarMenu) {
     titlebarMenu.innerHTML = `
+      <button type="button" class="titlebar__menu-item titlebar__menu-item--update tooltip-trigger" id="titlebar-update" aria-label="Доступно обновление" hidden>
+        <span class="titlebar__update-icon">${iconDownload(18)}</span>
+        <span class="titlebar__update-dot" aria-hidden="true"></span>
+        <span class="tooltip tooltip--animated" data-update-tooltip>Доступно обновление приложения</span>
+      </button>
       <button type="button" class="titlebar__menu-item" id="titlebar-lobby" aria-label="Совместный просмотр">${iconUsers(18)}</button>
       <button type="button" class="titlebar__menu-item" id="titlebar-notifications" aria-label="Уведомления">${iconBell(18)}</button>
       <button type="button" class="titlebar__menu-item titlebar__menu-item--avatar" id="titlebar-profile" aria-label="Профиль">
@@ -70,13 +77,21 @@ export function renderLayout(onLogout: () => void): HTMLElement {
       </button>
       <button type="button" class="titlebar__menu-item" id="titlebar-settings" aria-label="Настройки">${iconSettings(18)}</button>
     `;
+    let updateInfo: { version: string; url: string } | null = null;
     titlebarMenu.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
+      const updateBtn = target.closest('#titlebar-update');
       const lobbyBtn = target.closest('#titlebar-lobby');
       const notificationsBtn = target.closest('#titlebar-notifications');
       const profileBtn = target.closest('#titlebar-profile');
       const settingsBtn = target.closest('#titlebar-settings');
-      if (lobbyBtn) {
+      if (updateBtn && updateInfo) {
+        e.preventDefault();
+        if (window.electron?.startUpdateDownload) {
+          window.electron.startUpdateDownload().catch(() => {});
+        }
+        openNotificationsModal();
+      } else if (lobbyBtn) {
         e.preventDefault();
         openLobbyModal();
       } else if (notificationsBtn) {
@@ -90,6 +105,26 @@ export function renderLayout(onLogout: () => void): HTMLElement {
         openSettingsModal(() => {});
       }
     });
+    // Проверка обновлений с GitHub. Кнопка и тултип (по наведению) — только при успешном ответе и версии новее текущей.
+    if (typeof (window.electron as { getAppVersion?: () => Promise<string> })?.getAppVersion === 'function') {
+      (window.electron as { getAppVersion: () => Promise<string> })
+        .getAppVersion()
+        .then((currentVersion: string) => checkForUpdate(currentVersion))
+        .then((info: UpdateInfo | null) => {
+          const btn = titlebar.querySelector('#titlebar-update') as HTMLElement | null;
+          if (!info) {
+            if (btn) btn.hidden = true;
+            return;
+          }
+          updateInfo = { version: info.version, url: info.url };
+          if (btn) {
+            btn.hidden = false;
+            const tooltipEl = btn.querySelector('[data-update-tooltip]');
+            if (tooltipEl) tooltipEl.textContent = `Доступна версия ${info.version}. Нажмите, чтобы открыть страницу загрузки.`;
+          }
+        })
+        .catch(() => {});
+    }
   }
 
   const sidebar = document.createElement('aside');

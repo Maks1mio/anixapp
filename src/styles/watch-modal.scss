@@ -1,0 +1,332 @@
+@use 'variables' as *;
+
+.watch-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  animation: watch-modal-in 0.2s ease;
+}
+
+.watch-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  cursor: pointer;
+}
+
+.watch-modal__panel {
+  position: relative;
+  width: 100%;
+  max-width: 56rem;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  box-shadow: $shadow;
+  overflow: hidden;
+}
+
+.watch-modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid $color-border;
+  flex-shrink: 0;
+}
+
+.watch-modal__title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: $color-text;
+}
+
+.watch-modal__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: $radius-md;
+  background: transparent;
+  color: $color-text-muted;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background $transition, color $transition;
+
+  &:hover {
+    background: $color-surface-hover;
+    color: $color-text;
+  }
+}
+
+.watch-modal__body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  min-height: 0;
+}
+
+.watch-modal__page {
+  flex: 1;
+  min-height: 0;
+  --page-scroll-padding: 0;
+}
+
+.watch-modal__page .page__scroll {
+  padding: 0;
+}
+
+.watch-modal__view {
+  padding: 1rem 1.25rem;
+  min-height: 200px;
+}
+
+.watch-modal__view--sources .watch-modal__col--sources {
+  max-width: 28rem;
+}
+
+.watch-modal__view--episodes .watch-modal__col--episodes {
+  min-height: 200px;
+}
+
+.watch-modal__back-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.watch-modal__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.5rem 0.4rem 0;
+  border: none;
+  background: transparent;
+  color: $color-text-muted;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: color $transition;
+
+  &:hover {
+    color: $color-text;
+  }
+}
+
+.watch-modal__source-selector-wrap {
+  margin-bottom: 0.75rem;
+}
+
+.watch-modal__col-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: $color-text-muted;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.watch-modal__col-count {
+  font-weight: 500;
+  color: $color-text;
+}
+
+.watch-modal__list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.watch-modal__loading {
+  color: $color-text-muted;
+  font-size: 0.9rem;
+  padding: 0.5rem 0;
+}
+
+.watch-modal__source-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  background: $color-surface-hover;
+  border: 1px solid transparent;
+  border-radius: $radius-md;
+  color: $color-text;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: border-color $transition, background $transition;
+
+  &:hover {
+    background: $color-border;
+    border-color: $color-text-muted;
+  }
+
+  &--active {
+    border-color: $color-accent;
+    background: rgba($color-accent, 0.12);
+  }
+}
+
+.watch-modal__source-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: $color-border;
+  background-size: cover;
+  background-position: center;
+
+  &--no-icon {
+    background: $color-border;
+  }
+}
+
+.watch-modal__source-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.watch-modal__source-name {
+  font-weight: 500;
+}
+
+.watch-modal__source-meta {
+  font-size: 0.8rem;
+  color: $color-text-muted;
+  margin-top: 0.2rem;
+}
+
+.watch-modal__episode-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  background: $color-surface-hover;
+  border: 1px solid transparent;
+  border-radius: $radius-md;
+  color: $color-text;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: border-color $transition, background $transition;
+
+  &:hover {
+    background: $color-border;
+    border-color: $color-text-muted;
+  }
+
+  &--active {
+    border-color: $color-accent;
+    background: rgba($color-accent, 0.12);
+  }
+
+  &--watched .watch-modal__episode-num {
+    color: $color-text-muted;
+  }
+}
+
+.watch-modal__episode-num {
+  flex: 1;
+}
+
+.watch-modal__episode-watched {
+  flex-shrink: 0;
+  color: $color-success;
+  font-size: 1rem;
+  margin-left: 0.5rem;
+}
+
+.watch-modal__source-sublist {
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.watch-modal__sublist-label {
+  font-size: 0.85rem;
+  color: $color-text-muted;
+}
+
+.watch-modal__source-select {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+  background: $color-bg;
+  border: 1px solid $color-border;
+  border-radius: $radius-sm;
+  color: $color-text;
+}
+
+.watch-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid $color-border;
+  flex-shrink: 0;
+  background: $color-surface;
+}
+
+.watch-modal__player-select-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.watch-modal__label {
+  font-size: 0.9rem;
+  color: $color-text-muted;
+}
+
+.watch-modal__player-select {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.9rem;
+  background: $color-bg;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  color: $color-text;
+}
+
+.watch-modal__play-btn {
+  padding: 0.6rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  background: $color-accent;
+  border-radius: $radius-md;
+  cursor: pointer;
+  transition: background $transition;
+
+  &:hover:not(:disabled) {
+    background: $color-accent-hover;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+@keyframes watch-modal-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

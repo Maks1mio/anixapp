@@ -1,0 +1,194 @@
+/**
+ * Всплывашка под полем поиска: три варианта (Поиск / Коллекции / Пользователи) + разделитель + история.
+ * Рендерится в body, позиция и ширина по якорю (обёртка поиска).
+ */
+
+import { getSearchHistory } from '../utils/search-history';
+
+const GAP = 4;
+const EDGE = 8;
+
+export type SearchDropdownTab = 'releases' | 'profiles' | 'collections';
+
+export interface SearchDropdownSelect {
+  query: string;
+  tab?: SearchDropdownTab;
+}
+
+let activeClose: (() => void) | null = null;
+
+export function closeSearchDropdown(): void {
+  activeClose?.();
+}
+
+function esc(s: string): string {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function positionDropdown(dropdown: HTMLElement, anchor: HTMLElement): void {
+  const rect = anchor.getBoundingClientRect();
+  const vh = document.documentElement.clientHeight;
+  const dropdownHeight = dropdown.offsetHeight;
+
+  let top = rect.bottom + GAP;
+  if (top + dropdownHeight > vh - EDGE) {
+    top = Math.max(EDGE, rect.top - dropdownHeight - GAP);
+  }
+  dropdown.style.position = 'fixed';
+  dropdown.style.left = `${rect.left}px`;
+  dropdown.style.top = `${top}px`;
+  dropdown.style.width = `${rect.width}px`;
+  dropdown.style.minWidth = `${rect.width}px`;
+}
+
+function buildContent(query: string, history: string[]): string {
+  const q = query.trim();
+  const hasQuery = q.length > 0;
+  const qLower = q.toLowerCase();
+  const filteredHistory =
+    hasQuery ? history.filter((h) => h.toLowerCase().includes(qLower)) : history;
+  const rows: string[] = [];
+
+  if (hasQuery) {
+    rows.push(
+      `<button type="button" class="search-dropdown__option" data-tab="releases"><span class="search-dropdown__query">${esc(q)}</span><span class="search-dropdown__hint">по тайтлам</span></button>`,
+      `<button type="button" class="search-dropdown__option" data-tab="collections"><span class="search-dropdown__query">${esc(q)}</span><span class="search-dropdown__hint">по коллекциям</span></button>`,
+      `<button type="button" class="search-dropdown__option" data-tab="profiles"><span class="search-dropdown__query">${esc(q)}</span><span class="search-dropdown__hint">по пользователям</span></button>`,
+    );
+  }
+
+  if (filteredHistory.length > 0) {
+    if (hasQuery) rows.push('<div class="search-dropdown__divider" aria-hidden="true"></div>');
+    rows.push('<div class="search-dropdown__section">Недавние запросы</div>');
+    filteredHistory.forEach((h) => {
+      rows.push(`<button type="button" class="search-dropdown__history-item">${esc(h)}</button>`);
+    });
+  } else if (!hasQuery) {
+    rows.push('<div class="search-dropdown__empty">Нет недавних запросов</div>');
+  } else if (hasQuery) {
+    rows.push('<div class="search-dropdown__empty">Нет подходящих запросов</div>');
+  }
+
+  return rows.join('');
+}
+
+export function openSearchDropdown(
+  anchor: HTMLElement,
+  input: HTMLInputElement,
+  onSelect: (params: SearchDropdownSelect) => void,
+): () => void {
+  closeSearchDropdown();
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'search-dropdown';
+  dropdown.setAttribute('role', 'listbox');
+
+  const history = getSearchHistory();
+
+  let currentIndex = -1;
+
+  function getItems(): HTMLButtonElement[] {
+    return Array.from(
+      dropdown.querySelectorAll<HTMLButtonElement>('.search-dropdown__option, .search-dropdown__history-item'),
+    );
+  }
+
+  function setActive(index: number): void {
+    const items = getItems();
+    items.forEach((el, i) => {
+      el.classList.toggle('search-dropdown__item--active', i === index);
+    });
+    // Фокус не переносим — остаётся в инпуте, чтобы не слетал при ↑/↓
+  }
+
+  function render(): void {
+    const q = input.value.trim();
+    dropdown.innerHTML = buildContent(q || '', history);
+    dropdown.querySelectorAll('.search-dropdown__option').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const tab = (e.currentTarget as HTMLElement).dataset.tab as SearchDropdownTab | undefined;
+        const query = input.value.trim();
+        close();
+        onSelect({ query: query || (history[0] ?? ''), tab });
+      });
+    });
+    dropdown.querySelectorAll('.search-dropdown__history-item').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const query = (e.currentTarget as HTMLElement).textContent?.trim() ?? '';
+        close();
+        onSelect({ query });
+      });
+    });
+
+    const items = getItems();
+    if (!items.length) {
+      currentIndex = -1;
+    } else if (currentIndex >= items.length) {
+      currentIndex = items.length - 1;
+    }
+    if (currentIndex >= 0) {
+      setActive(currentIndex);
+    }
+  }
+
+  render();
+  input.addEventListener('input', render);
+
+  document.body.appendChild(dropdown);
+  positionDropdown(dropdown, anchor);
+
+  function close(): void {
+    input.removeEventListener('input', render);
+    if (dropdown.parentElement) dropdown.parentElement.removeChild(dropdown);
+    document.removeEventListener('keydown', onKeyDown);
+    document.removeEventListener('mousedown', onMouseDown);
+    if (activeClose === close) activeClose = null;
+  }
+
+  function onKeyDown(e: KeyboardEvent): void {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+      return;
+    }
+
+    const items = getItems();
+    if (!items.length) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      currentIndex = (currentIndex + 1 + items.length) % items.length;
+      setActive(currentIndex);
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      currentIndex = (currentIndex - 1 + items.length) % items.length;
+      setActive(currentIndex);
+      return;
+    }
+
+    if (e.key === 'Enter' && currentIndex >= 0) {
+      e.preventDefault();
+      const target = items[currentIndex];
+      target.click();
+    }
+  }
+
+  function onMouseDown(e: MouseEvent): void {
+    const target = e.target as Node;
+    if (dropdown.contains(target) || anchor.contains(target)) return;
+    close();
+  }
+
+  document.addEventListener('keydown', onKeyDown);
+  document.addEventListener('mousedown', onMouseDown);
+  activeClose = close;
+
+  return close;
+}

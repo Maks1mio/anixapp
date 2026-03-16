@@ -1,0 +1,314 @@
+@use 'variables' as *;
+
+.view-uikit {
+  max-width: 56rem;
+  margin: 0 auto;
+  width: 100%;
+  padding-bottom: 3rem;
+}
+
+.uikit-header {
+  margin-bottom: 2.5rem;
+}
+
+.uikit-title {
+  margin: 0 0 0.35rem;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.uikit-desc {
+  margin: 0;
+  color: $color-text-muted;
+  font-size: 1rem;
+}
+
+.uikit-section {
+  margin-bottom: 2.5rem;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.uikit-section__title {
+  margin: 0 0 0.35rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: $color-text-muted;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.uikit-section__desc {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: $color-text-muted;
+}
+
+.uikit-catalog-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 100%;
+}
+
+// ——— Basic Tabs (анимированный фон на выбранный таб) ———
+.uikit-tabs-demo {
+  .tabs {
+    display: inline-flex;
+    position: relative;
+    padding: 4px;
+    border-radius: $radius-lg;
+    background: $color-bg;
+    gap: 2px;
+  }
+
+  .tabs__slider {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 4px;
+    width: 0;
+    border-radius: 6px;
+    background: $color-surface-hover;
+    pointer-events: none;
+    transition: left 0.25s ease, width 0.25s ease;
+    z-index: 0;
+  }
+
+  .tabs__tab {
+    position: relative;
+    z-index: 1;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: $color-text-muted;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: color $transition;
+
+    &:hover {
+      color: $color-text;
+    }
+
+    &--active {
+      color: #fff;
+    }
+  }
+}
+
+.uikit-dots-menu-demo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.uikit-rating-demo {
+  margin-bottom: 0.75rem;
+}
+
+.uikit-rating-demo__control {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+  color: $color-text-muted;
+
+  span:first-child {
+    min-width: 7rem;
+  }
+
+  input[type='range'] {
+    flex: 1;
+  }
+}
+
+.uikit-rating-demo__value {
+  font-variant-numeric: tabular-nums;
+  min-width: 3.2rem;
+  text-align: right;
+  color: $color-text;
+}
+
+.uikit-tooltip-demo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.uikit-tooltip-trigger {
+  position: relative;
+}
+
+// ——— Цвета ———
+.uikit-colors {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 0.75rem;
+}
+
+.uikit-color {
+  aspect-ratio: 1;
+  border-radius: $radius-md;
+  border: 1px solid $color-border;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+
+  span {
+    opacity: 0.95;
+  }
+
+  &--bg { background: $color-bg; color: $color-text; }
+  &--surface { background: $color-surface; }
+  &--surface-hover { background: $color-surface-hover; }
+  &--border { background: $color-border; }
+  &--text { background: $color-text; }
+  &--text-muted { background: $color-text-muted; }
+  &--accent { background: $color-accent; }
+  &--success { background: $color-success; }
+  &--error { background: $color-error; }
+}
+
+// ——— Типографика ———
+.uikit-typo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.uikit-typo__h1 {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.uikit-typo__h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.uikit-typo__h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.uikit-typo__body {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.uikit-typo__muted {
+  margin: 0;
+  color: $color-text-muted;
+  font-size: 0.95rem;
+}
+
+.uikit-typo__small {
+  margin: 0;
+  font-size: 0.9rem;
+  color: $color-text-muted;
+}
+
+// ——— Кнопки ———
+.uikit-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+// ——— Формы ———
+.uikit-form-demo {
+  max-width: 22rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.uikit-input--error {
+  border-color: $color-error !important;
+}
+
+// ——— Ссылки ———
+.uikit-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.uikit-link {
+  color: $color-accent;
+  text-decoration: none;
+  font-size: 0.95rem;
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+// ——— Карточки ———
+.uikit-cards {
+  max-width: 100%;
+}
+
+.uikit-collections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+}
+
+.uikit-franchise {
+  max-width: 32rem;
+}
+
+// ——— Радиусы / отступы ———
+.uikit-spacing {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.uikit-box {
+  width: 80px;
+  height: 80px;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: $color-text-muted;
+  text-align: center;
+  padding: 0.5rem;
+
+  &--sm { border-radius: $radius-sm; }
+  &--md { border-radius: $radius-md; }
+  &--lg { border-radius: $radius-lg; }
+}
+
+// ——— Состояния ———
+.uikit-states {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.uikit-states .feed-loading,
+.uikit-states .feed-empty,
+.uikit-states .feed-error {
+  padding: 0.75rem 0;
+  margin: 0;
+}

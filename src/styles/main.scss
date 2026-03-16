@@ -1,0 +1,72 @@
+@use 'variables' as *;
+@use 'titlebar';
+@use 'layout';
+@use 'page';
+@use 'settings-modal';
+@use 'notifications-modal';
+@use 'lobby-modal';
+@use 'views';
+@use 'profile';
+@use 'select';
+@use 'dots-menu';
+@use 'release-card-h';
+@use 'release-card-v';
+@use 'collection-card';
+@use 'collection-page';
+@use 'tooltip';
+@use 'search';
+@use 'search-dropdown';
+@use 'watch-modal';
+@use 'watch';
+@use 'uikit';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: $font-sans;
+  background: $color-surface;
+  color: $color-text;
+}
+
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+a {
+  color: $color-accent;
+  text-decoration: none;
+  transition: color $transition;
+  &:hover {
+    color: $color-accent-hover;
+  }
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}

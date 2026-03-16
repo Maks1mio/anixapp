@@ -1,0 +1,20 @@
+// AnixApp — тёмная минималистичная ч/б палитра
+$font-sans: 'Segoe UI', system-ui, -apple-system, sans-serif;
+$font-mono: 'Consolas', 'Monaco', monospace;
+
+$color-bg: #0a0a0a;
+$color-surface: #141414;
+$color-surface-hover: #1a1a1a;
+$color-border: #262626;
+$color-text: #e5e5e5;
+$color-text-muted: #737373;
+$color-accent: #e35689;
+$color-accent-hover: #eb7aa3;
+$color-success: #22c55e;
+$color-error: #ef4444;
+
+$radius-sm: 4px;
+$radius-md: 6px;
+$radius-lg: 8px;
+$shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
+$transition: 0.2s ease;

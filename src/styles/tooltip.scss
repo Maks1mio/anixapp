@@ -1,0 +1,63 @@
+@use 'variables' as *;
+
+// Триггер — иконка или элемент, при наведении на который показывается тултип
+.tooltip-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: help;
+  color: $color-text-muted;
+  flex-shrink: 0;
+
+  &:hover,
+  &:focus {
+    color: $color-text;
+  }
+}
+
+// Отступ от триггера (как у меню/селектора), анимация появления (opacity)
+$tooltip-gap: 8px;
+
+.tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  margin-bottom: $tooltip-gap;
+  padding: 0.6rem 1rem;
+  width: max-content;
+  min-width: auto;
+  max-width: 740px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #e8e8e8;
+  background: #252525;
+  border: 1px solid $color-border;
+  border-radius: 6px;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 100;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  transform: translateX(-50%) translateX(var(--tooltip-dx, 0px));
+  transition: opacity 0.2s ease, visibility 0.2s;
+}
+
+.tooltip-trigger:hover .tooltip,
+.tooltip-trigger:focus .tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+// Показ снизу триггера, если сверху нет места (задаётся JS)
+.tooltip--below {
+  bottom: auto;
+  top: 100%;
+  margin-bottom: 0;
+  margin-top: $tooltip-gap;
+}
+
+.tooltip--animated {
+  transition: opacity 0.22s ease, visibility 0.22s;
+}

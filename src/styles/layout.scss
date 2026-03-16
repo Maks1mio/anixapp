@@ -1,0 +1,120 @@
+@use 'variables' as *;
+
+.layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.layout__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 3.25rem;
+  flex-shrink: 0;
+  background: $color-surface;
+  display: flex;
+  flex-direction: column;
+  padding: 0.35rem 0;
+  align-items: center;
+}
+
+.sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  align-items: center;
+  width: 100%;
+}
+
+.sidebar__link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  font-size: 0;
+  color: $color-text-muted;
+  text-decoration: none;
+  border-radius: $radius-sm;
+  transition: color $transition, background $transition;
+  background: none;
+  border: none;
+  cursor: pointer;
+
+  .icon {
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    color: $color-text;
+    background: $color-surface-hover;
+  }
+
+  &--active {
+    color: $color-text;
+    background: $color-surface-hover;
+  }
+}
+
+.sidebar__bottom {
+  margin-top: auto;
+  padding: 0.35rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  align-items: center;
+  width: 100%;
+}
+
+.sidebar__link--logout:hover {
+  color: $color-error;
+}
+
+// ——— Закруглённое окно контента (стиль JB) ———
+.content-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 0 0.75rem 0.75rem 0;
+  background: $color-bg;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.content-panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.content-panel__body .page {
+  border-radius: 0;
+}
+
+.layout__main {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}

@@ -1,0 +1,194 @@
+@use 'variables' as *;
+
+.release-card-h {
+  background: transparent;
+  border: none;
+  overflow: visible;
+}
+
+.release-card-h__link {
+  display: flex;
+  align-items: stretch;
+  gap: 1.25rem;
+  min-height: 200px;
+  color: inherit;
+  text-decoration: none;
+  padding: 0;
+}
+
+.release-card-h__poster {
+  width: 160px;
+  min-width: 160px;
+  aspect-ratio: 2/3;
+  background: $color-surface-hover;
+  overflow: hidden;
+  flex-shrink: 0;
+  border-radius: 10px;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: inherit;
+  }
+}
+
+.release-card-h__no-poster {
+  width: 100%;
+  height: 100%;
+  background: $color-border;
+  border-radius: inherit;
+}
+
+.release-card-h__body {
+  flex: 1;
+  min-width: 0;
+  padding: 0.15rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.release-card-h__title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.release-card-h__title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #fff;
+}
+
+.release-card-h__title-info {
+  margin-top: 0.1rem;
+}
+
+.release-card-h__menu-slot {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+// Статус «в списке» — только плашка внизу постера, без обводки
+.release-card-h--status .release-card-h__poster {
+  position: relative;
+}
+
+.release-card-h__status-badge {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+// Мягкие цвета статусов
+.release-card-h--status-watching .release-card-h__status-badge {
+  background: rgba(56, 161, 105, 0.85);
+}
+
+.release-card-h--status-planned .release-card-h__status-badge {
+  background: rgba(139, 92, 246, 0.85);
+}
+
+.release-card-h--status-completed .release-card-h__status-badge {
+  background: rgba(59, 130, 246, 0.85);
+}
+
+.release-card-h--status-on_hold .release-card-h__status-badge {
+  background: rgba(180, 143, 59, 0.85);
+}
+
+.release-card-h--status-dropped .release-card-h__status-badge {
+  background: rgba(185, 68, 68, 0.85);
+}
+
+// Мета и описание — светлее, чтобы читалось на тёмной карточке (без контейнеров)
+.release-card-h__meta {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #b8b8b8;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.release-card-h__meta-dot {
+  color: #888;
+  margin: 0 0.1rem;
+}
+
+.release-card-h__rating-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #111;
+  // цвет задаём инлайном через style по hue от оценки
+}
+
+.release-card-h__rating-chip-votes {
+  font-size: 0.8rem;
+  opacity: 0.9;
+}
+
+.release-card-h__favorite {
+  display: inline-flex;
+  align-items: center;
+  color: $color-accent;
+
+  .icon {
+    vertical-align: middle;
+  }
+}
+
+.release-card-h__genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
+}
+
+.release-card-h__tag {
+  display: inline-block;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.75rem;
+  color: #c0c0c0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  line-height: 1.2;
+}
+
+.release-card-h__desc {
+  margin: 0.6rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: #b0b0b0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.release-card-h .icon {
+  vertical-align: middle;
+  display: inline-block;
+}

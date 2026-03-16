@@ -1,0 +1,251 @@
+@use 'variables' as *;
+
+.notifications-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10010;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 3rem 1.5rem 1.5rem;
+  background: transparent;
+  pointer-events: none;
+}
+
+.notifications-modal-overlay--open {
+  // маркер класса нужен только для анимации панели
+}
+
+.notifications-modal-overlay--closing {
+  // см. анимацию панели ниже
+}
+
+.notifications-modal-panel {
+  width: 380px;
+  max-width: 100%;
+  max-height: 520px;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  box-shadow: $shadow;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: translateY(-6px);
+  opacity: 0;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+  pointer-events: auto;
+}
+
+.notifications-modal-overlay--open .notifications-modal-panel {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.notifications-modal-overlay--closing .notifications-modal-panel {
+  transform: translateY(-6px);
+  opacity: 0;
+}
+
+.notifications-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid $color-border;
+  flex-shrink: 0;
+}
+
+.notifications-modal__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.notifications-modal__close {
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border-radius: $radius-md;
+  background: transparent;
+  color: $color-text-muted;
+  cursor: pointer;
+  position: relative;
+  transition: background $transition, color $transition;
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 0.9rem;
+    height: 2px;
+    background: currentColor;
+    transform: translate(-50%, -50%) rotate(45deg);
+  }
+  &::after {
+    transform: translate(-50%, -50%) rotate(-45deg);
+  }
+
+  &:hover {
+    background: $color-surface-hover;
+    color: $color-text;
+  }
+}
+
+.notifications-modal__body {
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+// Отступ кастомного скролла от края (число в px — можно менять под себя)
+.notifications-modal__page {
+  flex: 1;
+  min-height: 0;
+  --page-scrollbar-offset: 0.35rem 0.4rem 0.5rem;
+  --page-scrollbar-offset: 1px;
+}
+
+.notifications-modal__loading,
+.notifications-modal__empty,
+.notifications-modal__error {
+  margin: 0.4rem 0.5rem 0.5rem;
+  font-size: 0.85rem;
+  color: $color-text-muted;
+}
+
+.notifications-modal__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.notifications-modal__item {
+  display: flex;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border-radius: $radius-md;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  border: none;
+  transition: background $transition, transform 0.12s ease;
+
+  &:hover {
+    background: $color-surface-hover;
+    transform: translateX(-2px);
+  }
+}
+
+.notifications-modal__thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: $radius-md;
+  background-size: cover;
+  background-position: center;
+  background-color: $color-surface-hover;
+  flex-shrink: 0;
+  margin-right: 0.6rem;
+  position: relative;
+}
+
+.notifications-modal__thumb--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  color: $color-text-muted;
+}
+
+.notifications-modal__content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.notifications-modal__row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.notifications-modal__title {
+  font-size: 0.9rem;
+  font-weight: 550;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notifications-modal__subtitle {
+  font-size: 0.8rem;
+  color: $color-text-muted;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notifications-modal__meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.05rem;
+  font-size: 0.75rem;
+  color: $color-text-muted;
+}
+
+.notifications-modal__meta-left {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 0.5rem;
+}
+
+.notifications-modal__meta-time {
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.notifications-modal__badge {
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: rgba($color-accent, 0.15);
+  color: $color-accent;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.notifications-modal__marker {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 2px $color-surface;
+
+  .icon {
+    width: 10px;
+    height: 10px;
+  }
+}
+
+.notifications-modal__marker--episode {
+  background: $color-accent;
+  color: #000;
+}
+
+.notifications-modal__marker--related {
+  background: #f6a623;
+  color: #000;
+}
+

@@ -1,0 +1,236 @@
+@use 'variables' as *;
+
+.lobby-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10010;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 3rem 1.5rem 1.5rem;
+  background: transparent;
+  pointer-events: none;
+}
+
+.lobby-modal-panel {
+  width: 380px;
+  max-width: 100%;
+  max-height: 520px;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  box-shadow: $shadow;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: translateY(-6px);
+  opacity: 0;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+  pointer-events: auto;
+}
+
+.lobby-modal-overlay--open .lobby-modal-panel {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.lobby-modal-overlay--closing .lobby-modal-panel {
+  transform: translateY(-6px);
+  opacity: 0;
+}
+
+.lobby-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid $color-border;
+  flex-shrink: 0;
+}
+
+.lobby-modal__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.lobby-modal__close {
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border-radius: $radius-md;
+  background: transparent;
+  color: $color-text-muted;
+  cursor: pointer;
+  position: relative;
+  transition: background $transition, color $transition;
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 12px;
+    height: 1px;
+    background: currentColor;
+    transform: translate(-50%, -50%) rotate(45deg);
+  }
+  &::after {
+    transform: translate(-50%, -50%) rotate(-45deg);
+  }
+  &:hover {
+    background: $color-surface-hover;
+    color: $color-text;
+  }
+}
+
+.lobby-modal__body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.lobby-modal__page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.lobby-modal__page .page__scroll {
+  padding: 0.75rem 0.9rem;
+  overflow-y: auto;
+}
+
+.lobby-modal__section {
+  margin-bottom: 1rem;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.lobby-modal__label {
+  display: block;
+  font-size: 0.8rem;
+  color: $color-text-muted;
+  margin-bottom: 0.35rem;
+}
+
+.lobby-modal__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  border-radius: $radius-md;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border: 1px solid $color-border;
+  background: $color-surface;
+  color: $color-text;
+  transition: background $transition, border-color $transition, color $transition;
+
+  &:hover {
+    background: $color-surface-hover;
+    border-color: $color-border;
+  }
+}
+
+.lobby-modal__btn--primary {
+  background: $color-accent;
+  border-color: $color-accent;
+  color: #fff;
+
+  &:hover {
+    filter: brightness(1.08);
+  }
+}
+
+.lobby-modal__btn--outline {
+  width: 100%;
+}
+
+.lobby-modal__join-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.lobby-modal__input {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  background: $color-bg;
+  color: $color-text;
+  font-size: 0.9rem;
+
+  &::placeholder {
+    color: $color-text-muted;
+  }
+}
+
+.lobby-modal__code {
+  font-family: ui-monospace, monospace;
+  font-size: 1.1rem;
+  letter-spacing: 0.1em;
+  padding: 0.5rem 0.75rem;
+  background: $color-bg;
+  border-radius: $radius-md;
+  border: 1px solid $color-border;
+}
+
+.lobby-modal__participants {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.lobby-modal__participant {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.5rem;
+  border: none;
+  border-radius: $radius-md;
+  background: transparent;
+  color: $color-text;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.9rem;
+  transition: background $transition;
+
+  &:hover {
+    background: $color-surface-hover;
+  }
+}
+
+.lobby-modal__participant-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: $color-text-muted;
+  background-size: cover;
+  background-position: center;
+}
+
+.lobby-modal__participant-avatar--img {
+  background-color: $color-border;
+}
+
+.lobby-modal__participant-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lobby-modal__loading,
+.lobby-modal__muted {
+  margin: 0;
+  font-size: 0.9rem;
+  color: $color-text-muted;
+}

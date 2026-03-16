@@ -1,0 +1,62 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+release/
+out/
+*.tsbuildinfo
+
+# Electron / electron-builder
+release/
+*.exe
+*.dmg
+*.AppImage
+*.snap
+*.deb
+*.rpm
+
+# Logs and debug
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local env and secrets
+.env
+.env.local
+.env.*.local
+auth.json
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Cache
+.cache/
+.vite/
+.parcel-cache/
+.eslintcache
+*.cache
+
+# Optional: тесты и покрытие (если появятся)
+coverage/
+.nyc_output/
+*.lcov
+
+# Временные файлы
+tmp/
+temp/
+*.tmp
+*.temp

@@ -1,0 +1,54 @@
+{
+  "name": "anixapp",
+  "version": "0.1.0",
+  "description": "Быстрый клиент для просмотра аниме на базе Anixart API",
+  "main": "electron/main.js",
+  "scripts": {
+    "install:no-esbuild-postinstall": "cross-env ESBUILD_SKIP_POSTINSTALL=1 yarn install",
+    "dev": "vite",
+    "build:icon": "node scripts/build-icon.js",
+    "build": "vite build && yarn build:icon && electron-builder",
+    "build:vite": "vite build",
+    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
+    "electron:build": "vite build && yarn build:icon && electron-builder",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "anime",
+    "anixart",
+    "electron"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "sass": "^1.77.8",
+    "to-ico": "^1.1.5",
+    "vite": "^6.0.3",
+    "wait-on": "^8.0.1"
+  },
+  "dependencies": {
+    "anixartjs": "^0.1.6",
+    "hls.js": "^1.6.15",
+    "lucide": "^0.577.0"
+  },
+  "build": {
+    "appId": "com.anixapp.client",
+    "productName": "AnixApp",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "public/logo/**/*"
+    ],
+    "icon": "public/logo/512x512.png",
+    "win": {
+      "icon": "public/logo/icon.ico"
+    }
+  }
+}

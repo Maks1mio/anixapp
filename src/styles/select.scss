@@ -1,0 +1,117 @@
+@use 'sass:color';
+@use 'variables' as *;
+
+.custom-select {
+  display: block;
+  max-width: 22rem;
+}
+
+.custom-select__label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.9rem;
+  color: $color-text-muted;
+}
+
+.custom-select__trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  font-size: 1rem;
+  font-family: inherit;
+  color: $color-text;
+  text-align: left;
+  background: $color-bg;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  cursor: pointer;
+  transition: border-color $transition;
+
+  &:hover {
+    border-color: color.adjust($color-border, $lightness: -4%);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: $color-accent;
+  }
+}
+
+.custom-select__trigger-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-select__trigger-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: $color-text-muted;
+  transition: transform 0.2s ease;
+
+  .icon {
+    vertical-align: middle;
+  }
+}
+
+.custom-select__trigger[aria-expanded="true"] .custom-select__trigger-icon {
+  transform: rotate(180deg);
+}
+
+// Dropdown — в body, отступ от кнопки, появляется (opacity), умное размещение вверх/вниз
+.custom-select__dropdown {
+  position: fixed;
+  z-index: 11000;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.custom-select__dropdown--open {
+  opacity: 1;
+}
+
+.custom-select__dropdown--closing {
+  opacity: 0;
+}
+
+.custom-select__list {
+  margin-top: 2px;
+  padding: 4px 0;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  box-shadow: $shadow;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.custom-select__option {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.95rem;
+  color: $color-text;
+  cursor: pointer;
+  transition: background $transition;
+
+  &:hover {
+    background: $color-surface-hover;
+  }
+
+  &--selected {
+    background: $color-surface-hover;
+    color: $color-accent;
+  }
+
+  &--disabled {
+    color: $color-text-muted;
+    cursor: not-allowed;
+    &:hover {
+      background: transparent;
+    }
+  }
+}

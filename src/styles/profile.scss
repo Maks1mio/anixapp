@@ -1,0 +1,438 @@
+@use 'variables' as *;
+
+.view-profile {
+  max-width: 50rem;
+  margin: 0 auto;
+  width: 100%;
+}
+
+// ——— Hero ———
+.profile__hero {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid $color-border;
+  margin-bottom: 1.5rem;
+}
+
+.profile__avatar-wrap {
+  flex-shrink: 0;
+  position: relative;
+}
+
+.profile__avatar {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  background-color: $color-surface-hover;
+  &--placeholder { background: $color-border; }
+}
+
+.profile__avatar-online {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: $color-success;
+  border: 3px solid $color-bg;
+}
+
+.profile__hero-info {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding-top: 0.25rem;
+}
+
+.profile__name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.profile__name {
+  margin: 0;
+  font-size: 1.65rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: $color-text;
+}
+
+.profile__badge {
+  display: inline-flex;
+  align-items: center;
+  img { height: 20px; width: auto; display: block; }
+}
+
+.profile__status {
+  margin: 0;
+  font-size: 0.9rem;
+  color: $color-text-muted;
+  line-height: 1.4;
+  &--muted { font-style: italic; }
+}
+
+.profile__roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.profile__role {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: $radius-sm;
+  background: rgba(255,255,255,0.06);
+}
+
+.profile__meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: $color-text-muted;
+  margin-top: 0.15rem;
+}
+
+.profile__meta-dot { opacity: 0.3; }
+
+.profile__online {
+  color: $color-success;
+  font-weight: 600;
+}
+
+// ——— Social links (inside hero) ———
+.profile__socials {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+.profile__social-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: $color-text-muted;
+  background: $color-surface-hover;
+  border-radius: $radius-sm;
+  transition: background $transition, color $transition;
+
+  &:hover {
+    background: $color-border;
+    color: $color-text;
+  }
+}
+
+// ——— Stats ———
+.profile__stats-grid { margin-bottom: 1.5rem; }
+
+.profile__stats-bar {
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: $color-surface-hover;
+  margin-bottom: 1rem;
+}
+
+.profile__bar-seg {
+  min-width: 4px;
+  transition: width 0.4s ease;
+}
+
+.profile__stats-items {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.65rem;
+}
+
+.profile__stat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.88rem;
+}
+
+.profile__stat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.profile__stat-label {
+  color: $color-text-muted;
+  flex: 1;
+  min-width: 0;
+}
+
+.profile__stat-value {
+  color: $color-text;
+  font-weight: 600;
+}
+
+// ——— Watch info ———
+.profile__watch-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.profile__wi {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.65rem 1rem;
+  background: $color-surface;
+  border-radius: $radius-md;
+  border: 1px solid $color-border;
+  min-width: 7rem;
+}
+
+.profile__wi-val {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: $color-text;
+  line-height: 1.2;
+}
+
+.profile__wi-label {
+  font-size: 0.75rem;
+  color: $color-text-muted;
+}
+
+// ——— Sections ———
+.profile__section { margin-bottom: 1.5rem; }
+
+.profile__section-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: $color-text;
+}
+
+// ——— osu!-style line chart ———
+.profile__chart-wrap {
+  position: relative;
+  width: 100%;
+  border-radius: $radius-md;
+  overflow: hidden;
+  background: $color-surface;
+  border: 1px solid $color-border;
+}
+
+.profile__chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.profile__chart-grid {
+  stroke: $color-border;
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.profile__chart-area {
+  fill: rgba($color-accent, 0.15);
+}
+
+.profile__chart-line {
+  fill: none;
+  stroke: $color-accent;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.profile__chart-label {
+  fill: $color-text-muted;
+  font-size: 9px;
+  font-family: inherit;
+  text-anchor: start;
+}
+
+.profile__chart-tooltip {
+  position: fixed;
+  pointer-events: none;
+  padding: 0.25rem 0.5rem;
+  background: rgba(0,0,0,0.88);
+  color: $color-text;
+  font-size: 0.72rem;
+  font-weight: 500;
+  border-radius: $radius-sm;
+  white-space: nowrap;
+  transition: left 0.08s ease, top 0.08s ease, opacity 0.12s ease;
+  z-index: 99999;
+  opacity: 1;
+
+  &[hidden] {
+    display: block !important;
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+// ——— Horizontal scroll ———
+.profile__hscroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin: 0 -0.25rem;
+  padding: 0 0.25rem;
+  scrollbar-width: thin;
+  scrollbar-color: $color-border transparent;
+
+  &::-webkit-scrollbar { height: 4px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb {
+    background: $color-border;
+    border-radius: 2px;
+  }
+}
+
+.profile__hscroll-track {
+  display: flex;
+  gap: 0.75rem;
+  padding-bottom: 0.5rem;
+}
+
+// ——— Profile card (vertical mini) ———
+.profile__card {
+  display: flex;
+  flex-direction: column;
+  width: 130px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  text-align: left;
+
+  &:hover .profile__card-poster {
+    opacity: 0.85;
+    transform: translateY(-2px);
+  }
+}
+
+.profile__card-poster {
+  width: 130px;
+  height: 185px;
+  border-radius: $radius-md;
+  background-size: cover;
+  background-position: center;
+  background-color: $color-surface-hover;
+  transition: opacity $transition, transform $transition;
+  flex-shrink: 0;
+}
+
+.profile__card-body {
+  padding: 0.4rem 0.1rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.profile__card-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: $color-text;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.profile__card-stars {
+  display: flex;
+  gap: 1px;
+  color: #fbbf24;
+  .icon { flex-shrink: 0; }
+}
+
+.profile__card-sub {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: $color-text;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile__card-meta {
+  font-size: 0.68rem;
+  color: $color-text-muted;
+  line-height: 1;
+}
+
+// ——— Friends (clickable) ———
+.profile__friends-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.profile__friend {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  width: 4.5rem;
+  position: relative;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+
+  &:hover .profile__friend-avatar {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+.profile__friend-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  background-color: $color-surface-hover;
+  transition: opacity $transition, transform $transition;
+}
+
+.profile__friend-name {
+  font-size: 0.72rem;
+  color: $color-text;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.profile__friend-online {
+  position: absolute;
+  top: 34px;
+  right: 12px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: $color-success;
+  border: 2px solid $color-bg;
+}

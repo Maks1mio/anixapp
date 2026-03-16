@@ -1,0 +1,271 @@
+@use 'variables' as *;
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+  min-height: 40px;
+  background: $color-surface;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.titlebar__drag {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1rem;
+  -webkit-app-region: drag;
+}
+
+.titlebar__logo {
+  width: 22px;
+  height: 22px;
+  background: $color-text-muted;
+  border-radius: 5px;
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .titlebar__logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+}
+
+.titlebar__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: $color-text-muted;
+}
+
+// ——— Navigation buttons ———
+
+.titlebar__nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 0.5rem;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar__nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: $radius-sm;
+  background: transparent;
+  color: $color-text-muted;
+  cursor: pointer;
+  transition: background $transition, color $transition;
+
+  &:hover {
+    background: $color-surface-hover;
+    color: $color-text;
+  }
+
+  &:active {
+    transform: scale(0.92);
+  }
+}
+
+// ——— Search trigger ———
+
+.titlebar__search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  max-width: 420px;
+  min-width: 100px;
+  height: 28px;
+  margin: auto;
+  padding: 0 0.5rem 0 0.625rem;
+  border-radius: $radius-md;
+  background: rgba($color-text, 0.06);
+  border: 1px solid transparent;
+  color: $color-text-muted;
+  cursor: text;
+  -webkit-app-region: no-drag;
+  transition: background $transition, border-color $transition;
+
+  &:hover {
+    background: rgba($color-text, 0.09);
+    border-color: rgba($color-text, 0.08);
+  }
+
+  &:focus-within {
+    background: rgba($color-text, 0.08);
+    border-color: rgba($color-text, 0.12);
+  }
+}
+
+.titlebar__search-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.titlebar__search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: $color-text;
+  background: transparent;
+  border: none;
+  outline: none;
+
+  &::placeholder {
+    color: $color-text-muted;
+  }
+}
+
+.titlebar__search-kbd {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  font-family: inherit;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba($color-text, 0.08);
+  color: $color-text-muted;
+  border: 1px solid rgba($color-text, 0.06);
+  line-height: 1.5;
+}
+
+.titlebar__menu {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: auto;
+  padding: 0 0.5rem;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar__menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: $radius-md;
+  background: transparent;
+  color: $color-text-muted;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background $transition, color $transition;
+
+  .icon {
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    background: $color-surface-hover;
+    color: $color-text;
+  }
+}
+
+.titlebar__menu-item--avatar {
+  padding: 0;
+}
+
+.titlebar__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: $color-surface-hover;
+  overflow: hidden;
+}
+
+.titlebar__avatar--placeholder {
+  color: $color-text-muted;
+}
+
+.titlebar__avatar--image {
+  background-size: cover;
+  background-position: center;
+}
+
+.titlebar__controls {
+  display: flex;
+  align-items: stretch;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar__btn {
+  width: 46px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: $color-text-muted;
+  cursor: pointer;
+  transition: background $transition, color $transition;
+
+  &:hover {
+    background: $color-surface-hover;
+    color: $color-text;
+  }
+}
+
+.titlebar__btn--close {
+  position: relative;
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    width: 13px;
+    height: 1px;
+    background: currentColor;
+  }
+
+  &::before {
+    transform: rotate(45deg);
+  }
+
+  &::after {
+    transform: rotate(-45deg);
+  }
+
+  &:hover {
+    background: $color-error;
+    color: #fff;
+  }
+}
+
+.titlebar__btn--min::before {
+  content: '';
+  width: 10px;
+  height: 1px;
+  background: currentColor;
+}
+
+.titlebar__btn--max::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border: 1px solid currentColor;
+  box-sizing: border-box;
+}

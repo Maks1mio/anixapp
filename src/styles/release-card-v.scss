@@ -1,0 +1,147 @@
+@use 'variables' as *;
+
+.release-card-v {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.release-card-v__link {
+  display: flex;
+  flex-direction: column;
+  color: inherit;
+  text-decoration: none;
+  border-radius: $radius-lg;
+  overflow: hidden;
+  transition: opacity $transition;
+
+  &:hover {
+    opacity: 0.88;
+  }
+}
+
+.release-card-v__poster {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  background: $color-surface-hover;
+  border-radius: $radius-lg;
+  overflow: hidden;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+}
+
+.release-card-v__no-poster {
+  width: 100%;
+  height: 100%;
+  background: $color-border;
+}
+
+.release-card-v__badge {
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  bottom: 6px;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  text-transform: lowercase;
+}
+
+.release-card-v__body {
+  padding: 0.5rem 0.15rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.release-card-v__title {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: $color-text;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.release-card-v__meta {
+  margin: 0;
+  font-size: 0.75rem;
+  color: $color-text-muted;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+  line-height: 1.4;
+}
+
+.release-card-v__dot {
+  color: #555;
+  margin: 0 0.1rem;
+}
+
+.release-card-v__rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  font-weight: 700;
+  font-size: 0.75rem;
+
+  .icon {
+    vertical-align: middle;
+  }
+}
+
+.release-card-v__favorite {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.25rem;
+  color: $color-accent;
+
+  .icon {
+    vertical-align: middle;
+  }
+}
+
+.release-card-v__menu-slot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+
+  .dots-menu__trigger {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(4px);
+    color: rgba(255, 255, 255, 0.95);
+
+    &:hover {
+      background: rgba(0, 0, 0, 0.6);
+      color: #fff;
+    }
+  }
+}
+
+// Сетка карточек
+.release-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 1.25rem 1rem;
+}

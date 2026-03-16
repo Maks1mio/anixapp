@@ -1,0 +1,119 @@
+@use 'sass:color';
+@use 'variables' as *;
+
+.dots-menu {
+  display: inline-flex;
+}
+
+.dots-menu__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 1px solid $color-border;
+  border-radius: 999px;
+  background: $color-bg;
+  color: $color-text-muted;
+  cursor: pointer;
+  transition: border-color $transition, color $transition;
+
+  &:hover {
+    border-color: color.adjust($color-border, $lightness: -4%);
+    color: $color-text;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: $color-accent;
+  }
+
+  .icon {
+    vertical-align: middle;
+  }
+}
+
+// Панель — фиксированная, в body
+.dots-menu__panel {
+  position: fixed;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.dots-menu__panel--open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.dots-menu__panel--closing {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dots-menu__list {
+  padding: 0.35rem 0;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  box-shadow: $shadow;
+  max-height: 320px;
+  overflow-y: auto;
+  min-width: 10rem;
+}
+
+.dots-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: $color-text;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background $transition;
+
+  &:hover {
+    background: $color-surface-hover;
+  }
+
+  &--disabled {
+    color: $color-text-muted;
+    cursor: not-allowed;
+    &:hover {
+      background: transparent;
+    }
+  }
+}
+
+.dots-menu__item-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dots-menu__item-text {
+  flex: 1;
+}
+
+.dots-menu__divider {
+  height: 1px;
+  margin: 0.35rem 0.5rem;
+  background: $color-border;
+}
+
+.dots-menu__label {
+  padding: 0.35rem 1rem 0.2rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: $color-text-muted;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}

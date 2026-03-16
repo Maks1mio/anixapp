@@ -1,0 +1,161 @@
+@use 'variables' as *;
+
+.page {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  // Базовые CSS‑переменные: можно переопределять на конкретной странице/контейнере.
+  --page-scrollbar-offset: 14px;
+  --page-scroll-padding: 0;
+}
+
+.page__scroll {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: var(--page-scroll-padding);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+}
+
+.page--padded {
+  --page-scroll-padding: 1.5rem;
+}
+
+// Вертикальный скроллбар — справа, всегда едва видим
+.page__v-track {
+  position: absolute;
+  top: var(--page-scrollbar-offset);
+  right: var(--page-scrollbar-offset);
+  bottom: var(--page-scrollbar-offset);
+  width: 10px;
+  padding: 4px 0;
+  opacity: 0.22;
+  pointer-events: auto;
+  transition: opacity 0.2s ease;
+  cursor: grab;
+}
+
+.page--v-scrollbar-visible .page__v-track {
+  opacity: 1;
+}
+
+.page__v-track:active {
+  cursor: grabbing;
+}
+
+.page__v-thumb {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  min-height: 24px;
+  background: $color-border;
+  border-radius: 4px;
+  cursor: grab;
+  transition: background $transition, left $transition, right $transition;
+
+  &:hover {
+    background: $color-text-muted;
+  }
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  &--active {
+    left: 0;
+    right: 0;
+    background: $color-accent !important;
+    animation: page-thumb-bounce 0.4s ease;
+  }
+
+  &--release {
+    animation: page-thumb-release 0.35s ease forwards;
+  }
+}
+
+// Горизонтальный скроллбар — показываем только при реальном горизонтальном overflow
+.page:not(.page--has-h-scroll) .page__h-track {
+  display: none;
+}
+
+.page__h-track {
+  position: absolute;
+  left: var(--page-scrollbar-offset);
+  right: var(--page-scrollbar-offset);
+  bottom: var(--page-scrollbar-offset);
+  height: 10px;
+  padding: 0 4px;
+  opacity: 0.22;
+  pointer-events: auto;
+  transition: opacity 0.2s ease;
+  cursor: grab;
+}
+
+.page--h-scrollbar-visible .page__h-track {
+  opacity: 1;
+}
+
+.page__h-track:active {
+  cursor: grabbing;
+}
+
+.page--v-scrollbar-visible .page__h-track {
+  right: calc(var(--page-scrollbar-offset) + 10px);
+}
+
+.page--h-scrollbar-visible .page__v-track {
+  bottom: calc(var(--page-scrollbar-offset) + 10px);
+}
+
+.page__h-thumb {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  min-width: 24px;
+  background: $color-border;
+  border-radius: 4px;
+  cursor: grab;
+  transition: background $transition, top $transition, bottom $transition;
+
+  &:hover {
+    background: $color-text-muted;
+  }
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  &--active {
+    top: 0;
+    bottom: 0;
+    background: $color-accent !important;
+    animation: page-thumb-bounce 0.4s ease;
+  }
+
+  &--release {
+    animation: page-thumb-release 0.35s ease forwards;
+  }
+}
+
+@keyframes page-thumb-bounce {
+  0%   { box-shadow: 0 0 0 0 rgba($color-accent, 0.55); }
+  50%  { box-shadow: 0 0 0 10px rgba($color-accent, 0); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+@keyframes page-thumb-release {
+  0%   { box-shadow: 0 0 0 0 rgba($color-accent, 0.4); }
+  50%  { box-shadow: 0 0 0 8px rgba($color-accent, 0); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}

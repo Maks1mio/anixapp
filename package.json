@@ -23,7 +23,7 @@
   "devDependencies": {
     "concurrently": "^9.1.0",
     "cross-env": "^7.0.3",
-    "electron": "^33.2.0",
+    "electron": "^35.7.5",
     "electron-builder": "^25.1.8",
     "sass": "^1.77.8",
     "to-ico": "^1.1.5",

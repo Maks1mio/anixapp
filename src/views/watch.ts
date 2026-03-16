@@ -708,6 +708,8 @@ export function renderWatch(): HTMLElement {
 
   const goToEpisode = (ep: number) => {
     closePopover();
+    // Важно сначала обновить локальное состояние, чтобы в payload улетел правильный ep.
+    state.ep = ep;
     loadEpisodeInPlace(releaseIdNum, parseInt(state.sourceId, 10), ep, state.title, state.sourceName, state.dubberId);
     sendCommandToLobby('changeEpisode');
   };

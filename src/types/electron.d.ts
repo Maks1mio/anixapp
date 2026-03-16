@@ -37,6 +37,9 @@ declare global {
       sendPlayerState: (playback: LobbyPlaybackPayload) => void;
       startUpdateDownload?: () => Promise<void>;
       installUpdate?: () => Promise<void>;
+      // Lobby proposal IPC
+      sendProposalToPlayer?: (data: Record<string, unknown>) => void;
+      sendLobbyVote?: (proposalId: string, accept: boolean) => void;
     };
   }
 }

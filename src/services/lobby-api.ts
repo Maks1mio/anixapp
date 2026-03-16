@@ -11,6 +11,7 @@ export interface LobbyParticipant {
   peerId?: string;
   login: string;
   avatar?: string | null;
+  deviceId?: string | null;
 }
 
 export interface LobbyPlayback {
@@ -44,8 +45,15 @@ async function fetchLobby(path: string, options: RequestInit = {}): Promise<Resp
   return res;
 }
 
+type LobbyProfilePayload = {
+  profileId?: number;
+  login?: string;
+  avatar?: string | null;
+  deviceId?: string | null;
+};
+
 /** Создать комнату. Возвращает roomId, code и myPeerId (для WebRTC). */
-export async function createRoom(profile: { profileId?: number; login?: string; avatar?: string | null }): Promise<{ roomId: string; code: string; myPeerId?: string }> {
+export async function createRoom(profile: LobbyProfilePayload): Promise<{ roomId: string; code: string; myPeerId?: string }> {
   const res = await fetchLobby('/create', {
     method: 'POST',
     body: JSON.stringify(profile),
@@ -56,10 +64,7 @@ export async function createRoom(profile: { profileId?: number; login?: string; 
 }
 
 /** Присоединиться по коду. */
-export async function joinRoom(
-  code: string,
-  profile: { profileId?: number; login?: string; avatar?: string | null }
-): Promise<LobbyRoom> {
+export async function joinRoom(code: string, profile: LobbyProfilePayload): Promise<LobbyRoom> {
   const res = await fetchLobby('/join', {
     method: 'POST',
     body: JSON.stringify({ code: code.trim(), ...profile }),
@@ -108,4 +113,13 @@ export async function getSignals(roomId: string, peerId: string): Promise<Array<
   const data = (await res.json()) as { signals?: Array<{ fromPeerId: string; type: string; payload: string }> };
   const list = data?.signals ?? [];
   return list.map((s) => ({ fromPeerId: s.fromPeerId, type: s.type as 'offer' | 'answer' | 'ice', payload: s.payload ?? '' }));
+}
+
+/** Покинуть комнату по deviceId (очистка участника на сервере). */
+export async function leaveRoom(roomId: string, deviceId: string): Promise<void> {
+  if (!roomId || !deviceId) return;
+  await fetchLobby(`/room/${encodeURIComponent(roomId)}/leave`, {
+    method: 'POST',
+    body: JSON.stringify({ deviceId }),
+  }).catch(() => undefined);
 }

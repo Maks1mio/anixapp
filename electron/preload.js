@@ -12,12 +12,23 @@ ipcRenderer.on('lobby:playerStateChanged', (_, playback) => {
   window.dispatchEvent(new CustomEvent('lobby:playerStateChanged', { detail: playback }));
 });
 
+// Proposal events: main window → player window
+ipcRenderer.on('lobby:proposal', (_, data) => {
+  window.dispatchEvent(new CustomEvent('lobby:proposal', { detail: data }));
+});
+
+// Vote result from player → main window
+ipcRenderer.on('lobby:voteFromPlayer', (_, data) => {
+  window.dispatchEvent(new CustomEvent('lobby:voteFromPlayer', { detail: data }));
+});
+
 ipcRenderer.on('app:update-progress', (_, payload) => {
   window.dispatchEvent(new CustomEvent('app-update-progress', { detail: payload }));
 });
 
 contextBridge.exposeInMainWorld('electron', {
   getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
+  getDeviceId: () => ipcRenderer.invoke('app:getDeviceId'),
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),
     maximize: () => ipcRenderer.send('window:maximize'),
@@ -31,6 +42,9 @@ contextBridge.exposeInMainWorld('electron', {
   sendPlayerState: (playback) => ipcRenderer.send('player:stateChanged', playback),
   startUpdateDownload: () => ipcRenderer.invoke('app:startUpdateDownload'),
   installUpdate: () => ipcRenderer.invoke('app:installUpdate'),
+  // Lobby proposal IPC
+  sendProposalToPlayer: (data) => ipcRenderer.send('lobby:proposalToPlayer', data),
+  sendLobbyVote: (proposalId, accept) => ipcRenderer.send('lobby:voteFromPlayer', proposalId, accept),
 });
 
 contextBridge.exposeInMainWorld('anix', {

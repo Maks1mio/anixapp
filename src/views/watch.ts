@@ -296,6 +296,22 @@ export function renderWatch(): HTMLElement {
 
   let applyVideoAndUI: (playUrl: string, useVideo: boolean, ep: number, titleStr: string, sourceNameStr: string, dubberIdStr: string, seekTime?: number, initialPaused?: boolean) => void = () => {};
   let isApplyingSync = false;
+  let applySyncTimer: ReturnType<typeof setTimeout> | null = null;
+  // Если первый sync от сервера говорит "пауза", не даём автоплею
+  // тут же перезапустить видео.
+  let preventAutoPlayDueToInitialSyncPause = false;
+  let pendingSync:
+    | {
+        releaseId?: string;
+        sourceId?: string;
+        ep?: string;
+        dubberId?: string;
+        title?: string;
+        sourceName?: string;
+        paused?: boolean;
+        currentTime?: number;
+      }
+    | null = null;
   const getPlaybackPayload = (): { releaseId: string; sourceId: string; ep: string; dubberId?: string; title: string; sourceName: string; paused: boolean; currentTime: number } => ({
     releaseId: state.releaseId,
     sourceId: state.sourceId,
@@ -306,9 +322,13 @@ export function renderWatch(): HTMLElement {
     paused: !!(videoEl && !videoEl.hidden && videoEl.paused),
     currentTime: videoEl && !videoEl.hidden && !isNaN(videoEl.currentTime) ? videoEl.currentTime : 0,
   });
-  const sendPlaybackToLobby = () => {
+  const sendCommandToLobby = (action: 'play' | 'pause' | 'seek' | 'changeEpisode') => {
     if (isApplyingSync || !window.electron?.sendPlayerState) return;
-    window.electron.sendPlayerState(getPlaybackPayload());
+    const playback = getPlaybackPayload();
+    // Оборачиваем в объект с action, но тип в preload
+    // объявлен как принимающий только LobbyPlaybackPayload,
+    // поэтому приводим к unknown, чтобы не ругался TS.
+    window.electron.sendPlayerState({ action, playback } as unknown as Parameters<typeof window.electron.sendPlayerState>[0]);
   };
 
   window.anix.getEpisode(releaseIdNum, sourceIdNum, epNum).then(async (res: { episode?: { url: string; iframe: boolean } }) => {
@@ -370,9 +390,39 @@ export function renderWatch(): HTMLElement {
           };
           timeEl.textContent = `0:00 / ${fmt(videoEl.duration || 0)}`;
         }
+        // Если sync пришёл до того, как видео было готово — применяем его сейчас.
+        if (pendingSync && pendingSync.releaseId && pendingSync.sourceId && pendingSync.ep) {
+          const sameReleaseAndEpisode =
+            state.releaseId === pendingSync.releaseId &&
+            state.sourceId === pendingSync.sourceId &&
+            state.ep === Number(pendingSync.ep) &&
+            (state.dubberId || '') === (pendingSync.dubberId || '');
+          if (sameReleaseAndEpisode && !videoEl.hidden && videoEl.readyState >= 2) {
+            // Block video events (play/pause) during sync application
+            isApplyingSync = true;
+            const remoteTime = typeof pendingSync.currentTime === 'number' ? pendingSync.currentTime : 0;
+            const clampedRemote = Math.min(remoteTime, videoEl.duration || Infinity);
+            videoEl.currentTime = clampedRemote;
+            const shouldBePaused = !!pendingSync.paused;
+            if (shouldBePaused && !videoEl.paused) {
+              videoEl.pause();
+              preventAutoPlayDueToInitialSyncPause = true;
+            } else if (!shouldBePaused && videoEl.paused) {
+              videoEl.play().catch(() => {});
+            }
+            // Keep isApplyingSync=true to absorb async video events from seek
+            if (applySyncTimer) clearTimeout(applySyncTimer);
+            applySyncTimer = setTimeout(() => {
+              isApplyingSync = false;
+              applySyncTimer = null;
+            }, 2000);
+            pendingSync = null;
+          }
+          // If readyState < 2, keep pendingSync for canplay to try again
+        }
       });
     };
-    const updatePlayPauseUI = () => {
+      const updatePlayPauseUI = () => {
       if (videoEl.paused) {
         centerPlay?.classList.remove('watch-page__center-play--hidden');
         if (btnPlay) {
@@ -425,7 +475,7 @@ export function renderWatch(): HTMLElement {
           const restoreTime = () => {
             videoEl.currentTime = Math.min(seekTime, videoEl.duration || Infinity);
             if (initialPaused) videoEl.pause();
-            setTimeout(sendPlaybackToLobby, 200);
+            sendCommandToLobby('seek');
           };
           videoEl.addEventListener('loadeddata', restoreTime, { once: true });
           videoEl.addEventListener('canplay', restoreTime, { once: true });
@@ -465,15 +515,50 @@ export function renderWatch(): HTMLElement {
       bindTimeUpdate();
       videoEl.addEventListener('play', () => {
         updatePlayPauseUI();
-        sendPlaybackToLobby();
+        sendCommandToLobby('play');
       });
       videoEl.addEventListener('pause', () => {
         updatePlayPauseUI();
-        sendPlaybackToLobby();
+        sendCommandToLobby('pause');
       });
       btnPlayCenter?.addEventListener('click', () => videoEl.play());
       updatePlayPauseUI();
-      const doAutoPlay = () => { videoEl.play().catch(() => {}); };
+      /** Пытается применить pendingSync, если видео готово. Возвращает true если sync применён. */
+      const tryApplyPendingSync = (): boolean => {
+        if (!pendingSync || !pendingSync.releaseId || !pendingSync.sourceId || !pendingSync.ep) return false;
+        if (videoEl.readyState < 2) return false;
+        const sameRE =
+          state.releaseId === pendingSync.releaseId &&
+          state.sourceId === pendingSync.sourceId &&
+          state.ep === Number(pendingSync.ep) &&
+          (state.dubberId || '') === (pendingSync.dubberId || '');
+        if (!sameRE || videoEl.hidden) return false;
+        isApplyingSync = true;
+        const remoteTime = typeof pendingSync.currentTime === 'number' ? pendingSync.currentTime : 0;
+        videoEl.currentTime = Math.min(remoteTime, videoEl.duration || Infinity);
+        const shouldBePaused = !!pendingSync.paused;
+        if (shouldBePaused && !videoEl.paused) {
+          videoEl.pause();
+          preventAutoPlayDueToInitialSyncPause = true;
+        } else if (!shouldBePaused && videoEl.paused) {
+          videoEl.play().catch(() => {});
+        }
+        if (applySyncTimer) clearTimeout(applySyncTimer);
+        applySyncTimer = setTimeout(() => { isApplyingSync = false; applySyncTimer = null; }, 2000);
+        pendingSync = null;
+        return true;
+      };
+      const doAutoPlay = () => {
+        // Если есть pendingSync — применяем его вместо обычного автоплея.
+        if (pendingSync && tryApplyPendingSync()) return;
+        // Если серверный sync сказал "пауза", не запускаем автоплей.
+        if (preventAutoPlayDueToInitialSyncPause) {
+          return;
+        }
+        // Если мы в процессе применения sync, не запускаем автоплей.
+        if (isApplyingSync) return;
+        videoEl.play().catch(() => {});
+      };
       videoEl.addEventListener('canplay', doAutoPlay, { once: true });
       videoEl.addEventListener('loadeddata', doAutoPlay, { once: true });
       videoEl.addEventListener('playing', doAutoPlay, { once: true });
@@ -492,7 +577,7 @@ export function renderWatch(): HTMLElement {
       const x = (e.clientX - rect.left) / rect.width;
       if (!isNaN(videoEl.duration)) {
         videoEl.currentTime = x * videoEl.duration;
-        setTimeout(sendPlaybackToLobby, 100);
+        sendCommandToLobby('seek');
       }
     });
   }
@@ -593,6 +678,7 @@ export function renderWatch(): HTMLElement {
   btnSkip?.addEventListener('click', () => {
     if (videoEl && !videoEl.hidden && !isNaN(videoEl.duration)) {
       videoEl.currentTime = Math.min(videoEl.currentTime + 85, videoEl.duration);
+      sendCommandToLobby('seek');
     }
   });
 
@@ -609,6 +695,7 @@ export function renderWatch(): HTMLElement {
   const goToEpisode = (ep: number) => {
     closePopover();
     loadEpisodeInPlace(releaseIdNum, parseInt(state.sourceId, 10), ep, state.title, state.sourceName, state.dubberId);
+    sendCommandToLobby('changeEpisode');
   };
 
   const switchToDubbing = (newSourceId: number, newSourceName: string, newDubberId: number) => {
@@ -618,6 +705,7 @@ export function renderWatch(): HTMLElement {
     state.sourceName = newSourceName;
     state.dubberId = String(newDubberId);
     loadEpisodeInPlace(releaseIdNum, newSourceId, state.ep, title, newSourceName, String(newDubberId), savedTime);
+    sendCommandToLobby('changeEpisode');
   };
 
   btnNext?.addEventListener('click', () => {
@@ -636,6 +724,161 @@ export function renderWatch(): HTMLElement {
     volumeInput.addEventListener('click', (e) => e.stopPropagation());
   }
 
+  // ── Lobby Vote UI (в правом верхнем углу плеера) ──
+  const voteContainer = document.createElement('div');
+  voteContainer.className = 'player-vote';
+  voteContainer.hidden = true;
+  playerWrap.appendChild(voteContainer);
+
+  let voteCountdownTimer: ReturnType<typeof setInterval> | null = null;
+
+  const hideVoteUI = () => {
+    if (voteCountdownTimer) {
+      clearInterval(voteCountdownTimer);
+      voteCountdownTimer = null;
+    }
+    voteContainer.hidden = true;
+    voteContainer.innerHTML = '';
+    voteContainer.className = 'player-vote';
+  };
+
+  const showVoteUI = (data: { proposalId: string; proposerLogin: string; playback: { title?: string; ep?: string; sourceName?: string } }) => {
+    hideVoteUI();
+    voteContainer.hidden = false;
+    voteContainer.className = 'player-vote player-vote--visible';
+
+    const animeTitle = data.playback?.title || 'Неизвестное аниме';
+    const epText = data.playback?.ep ? `${data.playback.ep} серия` : '';
+    const srcText = data.playback?.sourceName || '';
+    const meta = [epText, srcText].filter(Boolean).join(' · ');
+
+    voteContainer.innerHTML = `
+      <div class="player-vote__card">
+        <div class="player-vote__header">
+          <div class="player-vote__icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+          <span class="player-vote__label">Голосование</span>
+          <div class="player-vote__timer" data-vote-countdown>30</div>
+        </div>
+        <div class="player-vote__body">
+          <div class="player-vote__proposer"><span class="player-vote__name">${escapeHtml(data.proposerLogin)}</span> предлагает:</div>
+          <div class="player-vote__anime">
+            <div class="player-vote__anime-title">${escapeHtml(animeTitle)}</div>
+            ${meta ? `<div class="player-vote__anime-meta">${escapeHtml(meta)}</div>` : ''}
+          </div>
+          <div class="player-vote__progress">
+            <div class="player-vote__progress-bar" data-vote-progress></div>
+          </div>
+        </div>
+        <div class="player-vote__actions">
+          <button class="player-vote__btn player-vote__btn--accept" data-vote-accept>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Принять
+          </button>
+          <button class="player-vote__btn player-vote__btn--reject" data-vote-reject>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            Отмена
+          </button>
+        </div>
+      </div>
+    `;
+
+    const acceptBtn = voteContainer.querySelector('[data-vote-accept]') as HTMLButtonElement;
+    const rejectBtn = voteContainer.querySelector('[data-vote-reject]') as HTMLButtonElement;
+    const countdownEl = voteContainer.querySelector('[data-vote-countdown]') as HTMLElement;
+    const progressBarEl = voteContainer.querySelector('[data-vote-progress]') as HTMLElement;
+
+    const startTime = Date.now();
+    const VOTE_TIMEOUT = 30;
+
+    voteCountdownTimer = setInterval(() => {
+      const elapsed = (Date.now() - startTime) / 1000;
+      const remaining = Math.max(0, VOTE_TIMEOUT - Math.floor(elapsed));
+      const progress = Math.max(0, 1 - elapsed / VOTE_TIMEOUT);
+      if (countdownEl) countdownEl.textContent = String(remaining);
+      if (progressBarEl) progressBarEl.style.transform = `scaleX(${progress})`;
+      if (remaining <= 0) hideVoteUI();
+    }, 250);
+
+    acceptBtn?.addEventListener('click', () => {
+      window.electron?.sendLobbyVote?.(data.proposalId, true);
+      acceptBtn.disabled = true;
+      rejectBtn.disabled = true;
+      acceptBtn.classList.add('player-vote__btn--voted');
+      acceptBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Голос принят';
+    });
+
+    rejectBtn?.addEventListener('click', () => {
+      window.electron?.sendLobbyVote?.(data.proposalId, false);
+      hideVoteUI();
+    });
+  };
+
+  const showWaitingUI = (data: { newPlayback?: { title?: string; ep?: string } }) => {
+    hideVoteUI();
+    voteContainer.hidden = false;
+    voteContainer.className = 'player-vote player-vote--visible player-vote--waiting';
+
+    const animeTitle = data.newPlayback?.title || 'новое аниме';
+
+    voteContainer.innerHTML = `
+      <div class="player-vote__card">
+        <div class="player-vote__header">
+          <div class="player-vote__icon player-vote__icon--waiting">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+          <span class="player-vote__label">Ожидание</span>
+        </div>
+        <div class="player-vote__body">
+          <div class="player-vote__waiting-text">Ожидаем ответа на смену:</div>
+          <div class="player-vote__anime">
+            <div class="player-vote__anime-title">${escapeHtml(animeTitle)}</div>
+          </div>
+          <div class="player-vote__spinner"></div>
+        </div>
+      </div>
+    `;
+  };
+
+  const showResultToast = (text: string, type: 'accepted' | 'rejected') => {
+    hideVoteUI();
+    voteContainer.hidden = false;
+    voteContainer.className = `player-vote player-vote--visible player-vote--toast player-vote--toast-${type}`;
+    voteContainer.innerHTML = `<div class="player-vote__toast">${escapeHtml(text)}</div>`;
+    setTimeout(() => {
+      hideVoteUI();
+    }, 3000);
+  };
+
+  // Слушаем proposal-события из IPC
+  window.addEventListener('lobby:proposal', ((e: CustomEvent) => {
+    const data = e.detail as { type: string; proposalId?: string; proposerLogin?: string; playback?: any; newPlayback?: any; reason?: string };
+    if (!data) return;
+
+    if (data.type === 'vote' && data.proposalId) {
+      showVoteUI({
+        proposalId: data.proposalId,
+        proposerLogin: data.proposerLogin ?? 'Участник',
+        playback: data.playback ?? {},
+      });
+    } else if (data.type === 'waiting') {
+      showWaitingUI({ newPlayback: data.newPlayback });
+    } else if (data.type === 'accepted') {
+      showResultToast('Смена аниме одобрена!', 'accepted');
+    } else if (data.type === 'rejected') {
+      const text = data.reason === 'timeout' ? 'Время голосования истекло' : 'Смена аниме отклонена';
+      showResultToast(text, 'rejected');
+    }
+  }) as EventListener);
+
   window.addEventListener('player:applySync', ((e: CustomEvent) => {
     const p = e.detail as { releaseId?: string; sourceId?: string; ep?: string; dubberId?: string; title?: string; sourceName?: string; paused?: boolean; currentTime?: number };
     if (!p || !p.releaseId || !p.sourceId || !p.ep) return;
@@ -647,9 +890,20 @@ export function renderWatch(): HTMLElement {
       (state.dubberId || '') === (p.dubberId || '');
     if (sameReleaseAndEpisode && videoEl && !videoEl.hidden && videoEl.readyState >= 2) {
       const remoteTime = typeof p.currentTime === 'number' ? p.currentTime : 0;
-      videoEl.currentTime = Math.min(remoteTime, videoEl.duration || Infinity);
-      if (p.paused) videoEl.pause();
-      else videoEl.play().catch(() => {});
+      const clampedRemote = Math.min(remoteTime, videoEl.duration || Infinity);
+      // Для жёсткой синхронизации всегда доверяем времени сервера.
+      videoEl.currentTime = clampedRemote;
+      const shouldBePaused = !!p.paused;
+      if (shouldBePaused && !videoEl.paused) {
+        videoEl.pause();
+        // Первый authoritative sync зафиксировал "пауза" — блокируем автоплей.
+        preventAutoPlayDueToInitialSyncPause = true;
+      } else if (!shouldBePaused && videoEl.paused) {
+        videoEl.play().catch(() => {});
+      }
+    } else if (sameReleaseAndEpisode && videoEl && !videoEl.hidden && videoEl.readyState < 2) {
+      // Видео ещё не готово — сохраняем sync и применим его после loadedmetadata.
+      pendingSync = p;
     } else if (!sameReleaseAndEpisode && window.anix?.getEpisode) {
       loadEpisodeInPlace(
         parseInt(p.releaseId, 10),
@@ -662,9 +916,17 @@ export function renderWatch(): HTMLElement {
         !!p.paused
       );
     }
-    setTimeout(() => {
+    // Use a long debounce to prevent echo — video play/pause events
+    // fire asynchronously after we set currentTime / call play()/pause().
+    // Also covers the case when pending sync is stored and applied later
+    // (on loadedmetadata) — we keep isApplyingSync=true to block commands
+    // from the initial video load events (play at 0:00).
+    if (applySyncTimer) clearTimeout(applySyncTimer);
+    const debounceMs = pendingSync ? 3000 : 1500;
+    applySyncTimer = setTimeout(() => {
       isApplyingSync = false;
-    }, 500);
+      applySyncTimer = null;
+    }, debounceMs);
   }) as EventListener);
 
   return wrap;

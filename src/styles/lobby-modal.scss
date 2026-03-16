@@ -1,5 +1,7 @@
 @use 'variables' as *;
 
+// ─── Overlay ────────────────────────────────────────────────────────
+
 .lobby-modal-overlay {
   position: fixed;
   inset: 0;
@@ -12,39 +14,61 @@
   pointer-events: none;
 }
 
+// ─── Panel ──────────────────────────────────────────────────────────
+
 .lobby-modal-panel {
-  width: 380px;
+  width: 400px;
   max-width: 100%;
-  max-height: 520px;
+  max-height: 560px;
   background: $color-surface;
   border: 1px solid $color-border;
-  border-radius: $radius-lg;
-  box-shadow: $shadow;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.03);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transform: translateY(-6px);
+  transform: translateY(-8px) scale(0.98);
   opacity: 0;
-  transition: transform 0.18s ease, opacity 0.18s ease;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease;
   pointer-events: auto;
 }
 
 .lobby-modal-overlay--open .lobby-modal-panel {
-  transform: translateY(0);
+  transform: translateY(0) scale(1);
   opacity: 1;
 }
 
 .lobby-modal-overlay--closing .lobby-modal-panel {
-  transform: translateY(-6px);
+  transform: translateY(-6px) scale(0.98);
   opacity: 0;
 }
+
+// ─── Header ─────────────────────────────────────────────────────────
 
 .lobby-modal__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 0.9rem;
+  padding: 0.85rem 1rem;
   border-bottom: 1px solid $color-border;
+  flex-shrink: 0;
+}
+
+.lobby-modal__header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.lobby-modal__header-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba($color-accent, 0.12);
+  color: $color-accent;
   flex-shrink: 0;
 }
 
@@ -52,18 +76,20 @@
   margin: 0;
   font-size: 0.95rem;
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .lobby-modal__close {
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 28px;
+  height: 28px;
   padding: 0;
-  border-radius: $radius-md;
+  border: none;
+  border-radius: 6px;
   background: transparent;
   color: $color-text-muted;
   cursor: pointer;
   position: relative;
-  transition: background $transition, color $transition;
+  transition: background 0.15s, color 0.15s;
 
   &::before,
   &::after {
@@ -72,8 +98,9 @@
     left: 50%;
     top: 50%;
     width: 12px;
-    height: 1px;
+    height: 1.5px;
     background: currentColor;
+    border-radius: 1px;
     transform: translate(-50%, -50%) rotate(45deg);
   }
   &::after {
@@ -84,6 +111,8 @@
     color: $color-text;
   }
 }
+
+// ─── Body / Page ────────────────────────────────────────────────────
 
 .lobby-modal__body {
   flex: 1;
@@ -101,136 +130,558 @@
 }
 
 .lobby-modal__page .page__scroll {
-  padding: 0.75rem 0.9rem;
+  padding: 1rem;
   overflow-y: auto;
 }
 
-.lobby-modal__section {
-  margin-bottom: 1rem;
+// ─── Welcome / Initial Screen ───────────────────────────────────────
 
-  &:last-child {
-    margin-bottom: 0;
-  }
+.lobby-modal__welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0.75rem 0 1.25rem;
 }
 
-.lobby-modal__label {
-  display: block;
-  font-size: 0.8rem;
-  color: $color-text-muted;
-  margin-bottom: 0.35rem;
-}
-
-.lobby-modal__btn {
-  display: inline-flex;
+.lobby-modal__welcome-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba($color-accent, 0.15) 0%, rgba($color-accent, 0.05) 100%);
+  display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0.5rem 1rem;
-  border-radius: $radius-md;
-  font-size: 0.9rem;
-  cursor: pointer;
-  border: 1px solid $color-border;
-  background: $color-surface;
-  color: $color-text;
-  transition: background $transition, border-color $transition, color $transition;
-
-  &:hover {
-    background: $color-surface-hover;
-    border-color: $color-border;
-  }
+  color: $color-accent;
+  margin-bottom: 0.85rem;
 }
 
-.lobby-modal__btn--primary {
-  background: $color-accent;
-  border-color: $color-accent;
-  color: #fff;
-
-  &:hover {
-    filter: brightness(1.08);
-  }
+.lobby-modal__welcome-text {
+  margin: 0;
+  font-size: 0.85rem;
+  color: $color-text-muted;
+  line-height: 1.45;
+  max-width: 260px;
 }
 
-.lobby-modal__btn--outline {
-  width: 100%;
+// ─── Actions (Create / Join) ────────────────────────────────────────
+
+.lobby-modal__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.lobby-modal__divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.lobby-modal__divider-line {
+  flex: 1;
+  height: 1px;
+  background: $color-border;
+}
+
+.lobby-modal__divider-text {
+  font-size: 0.75rem;
+  color: $color-text-muted;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+}
+
+.lobby-modal__join-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.lobby-modal__join-label {
+  font-size: 0.8rem;
+  color: $color-text-muted;
+  font-weight: 500;
 }
 
 .lobby-modal__join-row {
   display: flex;
   gap: 0.5rem;
-  align-items: center;
+  align-items: stretch;
 }
 
-.lobby-modal__input {
-  flex: 1;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid $color-border;
-  border-radius: $radius-md;
-  background: $color-bg;
-  color: $color-text;
-  font-size: 0.9rem;
+.lobby-modal__join-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: $color-text-muted;
+  transition: color 0.15s;
+}
 
-  &::placeholder {
-    color: $color-text-muted;
+.lobby-modal__join-hint--error {
+  color: $color-error;
+}
+
+// ─── Buttons ────────────────────────────────────────────────────────
+
+.lobby-modal__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid $color-border;
+  background: $color-surface;
+  color: $color-text;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  position: relative;
+
+  svg {
+    flex-shrink: 0;
+    opacity: 0.7;
+  }
+
+  &:hover {
+    background: $color-surface-hover;
+    border-color: lighten($color-border, 5%);
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 }
 
-.lobby-modal__code {
-  font-family: ui-monospace, monospace;
-  font-size: 1.1rem;
-  letter-spacing: 0.1em;
-  padding: 0.5rem 0.75rem;
-  background: $color-bg;
-  border-radius: $radius-md;
-  border: 1px solid $color-border;
+.lobby-modal__btn--loading {
+  color: transparent;
+  pointer-events: none;
+
+  svg { opacity: 0; }
+
+  &::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border: 2px solid $color-text-muted;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: lobby-spin 0.6s linear infinite;
+  }
 }
 
-.lobby-modal__participants {
+@keyframes lobby-spin {
+  to { transform: rotate(360deg); }
+}
+
+.lobby-modal__btn--create {
+  width: 100%;
+  padding: 0.7rem 1rem;
+  background: $color-accent;
+  border-color: $color-accent;
+  color: #fff;
+  font-size: 0.9rem;
+
+  svg { opacity: 1; }
+
+  &:hover {
+    background: $color-accent-hover;
+    border-color: $color-accent-hover;
+  }
+
+  &.lobby-modal__btn--loading::after {
+    border-color: rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+  }
+}
+
+.lobby-modal__btn--join {
+  padding: 0.55rem 0.85rem;
+  background: $color-accent;
+  border-color: $color-accent;
+  color: #fff;
+  flex-shrink: 0;
+
+  svg { opacity: 1; }
+
+  &:hover {
+    background: $color-accent-hover;
+    border-color: $color-accent-hover;
+  }
+
+  &.lobby-modal__btn--loading::after {
+    border-color: rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+  }
+}
+
+.lobby-modal__btn--leave {
+  flex: 1;
+  background: transparent;
+  border-color: rgba($color-error, 0.25);
+  color: $color-error;
+
+  &:hover {
+    background: rgba($color-error, 0.08);
+    border-color: rgba($color-error, 0.4);
+  }
+}
+
+.lobby-modal__btn--logs {
+  background: transparent;
+  border-color: $color-border;
+  color: $color-text-muted;
+  flex-shrink: 0;
+
+  &:hover {
+    color: $color-text;
+    background: $color-surface-hover;
+  }
+}
+
+.lobby-modal__btn--active {
+  background: $color-surface-hover;
+  color: $color-accent;
+  border-color: rgba($color-accent, 0.25);
+}
+
+// ─── Input ──────────────────────────────────────────────────────────
+
+.lobby-modal__input {
+  flex: 1;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid $color-border;
+  border-radius: 8px;
+  background: $color-bg;
+  color: $color-text;
+  font-size: 0.9rem;
+  font-family: ui-monospace, 'Consolas', monospace;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  transition: border-color 0.15s;
+
+  &::placeholder {
+    color: darken($color-text-muted, 10%);
+    letter-spacing: 0.1em;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: rgba($color-accent, 0.5);
+  }
+}
+
+// ─── Room View ──────────────────────────────────────────────────────
+
+.lobby-modal__room {
   display: flex;
   flex-direction: column;
+  gap: 1rem;
+}
+
+// ─── Code Section ───────────────────────────────────────────────────
+
+.lobby-modal__code-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.lobby-modal__code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lobby-modal__code-label {
+  font-size: 0.78rem;
+  color: $color-text-muted;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lobby-modal__code-block {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 0.85rem;
+  background: $color-bg;
+  border: 1px solid $color-border;
+  border-radius: 10px;
+}
+
+.lobby-modal__code-value {
+  flex: 1;
+  font-family: ui-monospace, 'Consolas', monospace;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: $color-text;
+}
+
+.lobby-modal__copy-btn {
+  display: inline-flex;
+  align-items: center;
   gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid $color-border;
+  border-radius: 6px;
+  background: $color-surface;
+  color: $color-text-muted;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  &:hover {
+    background: $color-surface-hover;
+    color: $color-text;
+    border-color: lighten($color-border, 5%);
+  }
+}
+
+.lobby-modal__copy-btn--done {
+  color: $color-success;
+  border-color: rgba($color-success, 0.3);
+}
+
+// ─── Status ─────────────────────────────────────────────────────────
+
+.lobby-modal__status {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.lobby-modal__status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: $color-text-muted;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+.lobby-modal__status--connected .lobby-modal__status-dot {
+  background: $color-success;
+  box-shadow: 0 0 6px rgba($color-success, 0.4);
+}
+
+.lobby-modal__status--connecting .lobby-modal__status-dot {
+  background: #f6a623;
+  animation: lobby-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes lobby-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.lobby-modal__status-text {
+  font-size: 0.72rem;
+  color: $color-text-muted;
+  font-weight: 500;
+}
+
+// ─── Participants ───────────────────────────────────────────────────
+
+.lobby-modal__participants-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.lobby-modal__participants-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.lobby-modal__participants-label {
+  font-size: 0.78rem;
+  color: $color-text-muted;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lobby-modal__participants-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba($color-accent, 0.15);
+  color: $color-accent;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.lobby-modal__participants-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lobby-modal__empty-participants {
+  padding: 1.25rem 0;
+  text-align: center;
+  font-size: 0.82rem;
+  color: $color-text-muted;
 }
 
 .lobby-modal__participant {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.4rem 0.5rem;
+  gap: 0.65rem;
+  padding: 0.45rem 0.55rem;
   border: none;
-  border-radius: $radius-md;
+  border-radius: 8px;
   background: transparent;
   color: $color-text;
   cursor: pointer;
   text-align: left;
-  font-size: 0.9rem;
-  transition: background $transition;
+  font-size: 0.88rem;
+  transition: background 0.12s;
 
   &:hover {
     background: $color-surface-hover;
   }
 }
 
-.lobby-modal__participant-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+.lobby-modal__participant-avatar-wrap {
+  position: relative;
   flex-shrink: 0;
-  background: $color-text-muted;
+}
+
+.lobby-modal__participant-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: $color-surface-hover;
   background-size: cover;
   background-position: center;
+  display: block;
 }
 
 .lobby-modal__participant-avatar--img {
   background-color: $color-border;
 }
 
+.lobby-modal__participant-online {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: $color-success;
+  border: 2px solid $color-surface;
+  box-shadow: 0 0 4px rgba($color-success, 0.3);
+}
+
 .lobby-modal__participant-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 500;
 }
 
-.lobby-modal__loading,
-.lobby-modal__muted {
-  margin: 0;
-  font-size: 0.9rem;
+// ─── Room Footer ────────────────────────────────────────────────────
+
+.lobby-modal__room-footer {
+  display: flex;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+}
+
+// ─── Logs ───────────────────────────────────────────────────────────
+
+.lobby-modal__log-section {
+  margin-top: -0.25rem;
+}
+
+.lobby-modal__log {
+  max-height: 160px;
+  padding: 0.5rem;
+  border-radius: 8px;
+  border: 1px solid $color-border;
+  background: $color-bg;
+  overflow-y: auto;
+  font-size: 0.72rem;
+  font-family: ui-monospace, 'Consolas', monospace;
+}
+
+.lobby-modal__log-empty {
+  padding: 0.5rem;
+  color: $color-text-muted;
+  text-align: center;
+}
+
+.lobby-modal__log-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.35rem;
+  border-radius: 4px;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  & + & {
+    margin-top: 1px;
+  }
+}
+
+.lobby-modal__log-time {
+  color: darken($color-text-muted, 10%);
+  font-variant-numeric: tabular-nums;
+}
+
+.lobby-modal__log-author {
+  color: $color-accent;
+  font-weight: 500;
+}
+
+.lobby-modal__log-type {
+  color: $color-text-muted;
+}
+
+.lobby-modal__log-tag {
+  display: inline-block;
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+  background: $color-surface;
+  color: $color-text-muted;
+  font-size: 0.68rem;
+}
+
+.lobby-modal__log-note {
+  color: darken($color-text-muted, 5%);
+  font-size: 0.68rem;
+}
+
+// ─── Loading ────────────────────────────────────────────────────────
+
+.lobby-modal__loading {
+  padding: 2rem;
+  text-align: center;
+  font-size: 0.85rem;
   color: $color-text-muted;
 }

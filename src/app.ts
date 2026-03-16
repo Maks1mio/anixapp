@@ -3,7 +3,7 @@ import { handleRoute, getPath } from './router';
 import { initTooltipPlacement } from './utils/tooltip-place';
 import { renderLogin } from './views/login';
 import { renderWatch } from './views/watch';
-import { getCurrentRoomId, pushPlayback } from './services/lobby-state';
+import { getCurrentRoomId, pushCommand, voteOnProposal } from './services/lobby-state';
 
 function showLoginScreen(): void {
   const app = document.getElementById('app');
@@ -42,29 +42,126 @@ function showMainApp(): void {
     if (c) handleRoute(c);
   }
 
+  // ── Proposal events → forward to player via IPC ──
+
+  // Proposer: отправили предложение — откатить плеер и показать "ожидание"
+  window.addEventListener('lobby:proposalSentLocal', ((e: CustomEvent) => {
+    const { oldPlayback, newPlayback } = e.detail ?? {};
+    if (oldPlayback && window.electron?.syncPlayerState) {
+      // Откатываем плеер на старое аниме
+      window.electron.syncPlayerState(oldPlayback);
+    }
+    // Показать "ожидание голосов" в плеере
+    if (window.electron?.sendProposalToPlayer) {
+      window.electron.sendProposalToPlayer({
+        type: 'waiting',
+        newPlayback: newPlayback ?? null,
+      });
+    }
+  }) as EventListener);
+
+  // Другие получили предложение — показать голосование в плеере
+  window.addEventListener('lobby:proposalNew', ((e: CustomEvent) => {
+    if (window.electron?.sendProposalToPlayer) {
+      window.electron.sendProposalToPlayer({
+        type: 'vote',
+        proposalId: e.detail?.proposalId,
+        proposerLogin: e.detail?.proposerLogin ?? 'Участник',
+        playback: e.detail?.playback ?? null,
+      });
+    }
+  }) as EventListener);
+
+  // Предложение принято
+  window.addEventListener('lobby:proposalAccepted', ((e: CustomEvent) => {
+    if (window.electron?.sendProposalToPlayer) {
+      window.electron.sendProposalToPlayer({
+        type: 'accepted',
+        proposalId: e.detail?.proposalId,
+        playback: e.detail?.playback ?? null,
+      });
+    }
+  }) as EventListener);
+
+  // Предложение отклонено
+  window.addEventListener('lobby:proposalRejected', ((e: CustomEvent) => {
+    if (window.electron?.sendProposalToPlayer) {
+      window.electron.sendProposalToPlayer({
+        type: 'rejected',
+        proposalId: e.detail?.proposalId,
+        reason: e.detail?.reason ?? '',
+      });
+    }
+  }) as EventListener);
+
+  // Голос пришёл из плеера — пересылаем в lobby-state
+  window.addEventListener('lobby:voteFromPlayer', ((e: CustomEvent) => {
+    const { proposalId, accept } = e.detail ?? {};
+    if (proposalId) {
+      voteOnProposal(proposalId, accept === true);
+    }
+  }) as EventListener);
+
   window.addEventListener('lobby:remotePlayback', ((e: CustomEvent) => {
-    const raw = e.detail;
-    console.log('[lobby] remotePlayback получен', raw ? { releaseId: raw.releaseId, ep: raw.ep } : 'пусто');
-    if (!raw || !window.electron?.syncPlayerState) {
+    const raw = e.detail as { playback?: unknown; fromPeerId?: string | null } | null;
+    const rawPlayback = raw && typeof raw === 'object' ? (raw as any).playback : raw;
+    console.log(
+      '[lobby] remotePlayback получен',
+      rawPlayback ? { releaseId: (rawPlayback as any).releaseId, ep: (rawPlayback as any).ep, fromPeerId: (raw as any)?.fromPeerId ?? null } : 'пусто'
+    );
+    if (!rawPlayback || !window.electron?.syncPlayerState) {
       if (!window.electron?.syncPlayerState) console.warn('[lobby] syncPlayerState недоступен (не Electron?)');
       return;
     }
     const playback = {
-      releaseId: String(raw.releaseId ?? ''),
-      sourceId: String(raw.sourceId ?? ''),
-      ep: String(raw.ep ?? ''),
-      dubberId: raw.dubberId != null ? String(raw.dubberId) : undefined,
-      title: String(raw.title ?? ''),
-      sourceName: String(raw.sourceName ?? ''),
-      paused: Boolean(raw.paused),
-      currentTime: Number(raw.currentTime) || 0,
+      releaseId: String((rawPlayback as any).releaseId ?? ''),
+      sourceId: String((rawPlayback as any).sourceId ?? ''),
+      ep: String((rawPlayback as any).ep ?? ''),
+      dubberId: (rawPlayback as any).dubberId != null ? String((rawPlayback as any).dubberId) : undefined,
+      title: String((rawPlayback as any).title ?? ''),
+      sourceName: String((rawPlayback as any).sourceName ?? ''),
+      paused: Boolean((rawPlayback as any).paused),
+      currentTime: Number((rawPlayback as any).currentTime) || 0,
     };
     window.electron.syncPlayerState(playback);
   }) as EventListener);
 
-  window.addEventListener('lobby:playerStateChanged', ((e: CustomEvent) => {
-    if (getCurrentRoomId()) pushPlayback(e.detail);
-  }) as EventListener);
+  window.addEventListener(
+    'lobby:playerStateChanged',
+    ((e: CustomEvent) => {
+      if (!getCurrentRoomId()) return;
+      const detail = e.detail as
+        | { action?: string; playback?: unknown }
+        | unknown;
+      let action: 'play' | 'pause' | 'seek' | 'changeEpisode' = 'play';
+      let rawPlayback: any = detail;
+      if (detail && typeof detail === 'object' && (detail as any).playback) {
+        const d = detail as any;
+        rawPlayback = d.playback;
+        if (typeof d.action === 'string') {
+          if (d.action === 'pause' || d.action === 'seek' || d.action === 'changeEpisode' || d.action === 'play') {
+            action = d.action;
+          }
+        }
+      }
+      if (!rawPlayback || typeof rawPlayback !== 'object') return;
+      if (!('releaseId' in rawPlayback) || !('sourceId' in rawPlayback) || !('ep' in rawPlayback)) return;
+      if (action === 'play' || action === 'pause') {
+        action = rawPlayback.paused ? 'pause' : 'play';
+      }
+      const playback = {
+        releaseId: String((rawPlayback as any).releaseId ?? ''),
+        sourceId: String((rawPlayback as any).sourceId ?? ''),
+        ep: String((rawPlayback as any).ep ?? ''),
+        dubberId: (rawPlayback as any).dubberId != null ? String((rawPlayback as any).dubberId) : undefined,
+        title: String((rawPlayback as any).title ?? ''),
+        sourceName: String((rawPlayback as any).sourceName ?? ''),
+        paused: Boolean((rawPlayback as any).paused),
+        currentTime: Number((rawPlayback as any).currentTime) || 0,
+      };
+      pushCommand(action, playback);
+    }) as EventListener,
+  );
 
   function onPopState() {
     const c = document.getElementById('content');

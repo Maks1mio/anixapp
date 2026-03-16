@@ -72,6 +72,7 @@ function loadConfig() {
         profileLogin: data.profileLogin || null,
         profileAvatar: data.profileAvatar || null,
         profileRaw: data.profileRaw || null,
+        deviceId: data.deviceId || null,
       };
     }
   } catch (_) {}
@@ -82,6 +83,7 @@ function loadConfig() {
     profileLogin: null,
     profileAvatar: null,
     profileRaw: null,
+    deviceId: null,
   };
 }
 
@@ -93,6 +95,22 @@ function saveConfig(updates) {
     fs.writeFileSync(p, JSON.stringify(next), 'utf8');
   } catch (err) {
     console.error('Failed to save config', err);
+  }
+}
+
+function getOrCreateDeviceId() {
+  try {
+    const current = loadConfig();
+    if (current.deviceId && typeof current.deviceId === 'string') {
+      return current.deviceId;
+    }
+    const { randomBytes } = require('crypto');
+    const id = randomBytes(16).toString('hex');
+    saveConfig({ deviceId: id });
+    return id;
+  } catch (err) {
+    console.error('Failed to get/create deviceId', err);
+    return 'unknown-device';
   }
 }
 
@@ -293,6 +311,10 @@ ipcMain.handle('anix:setBaseUrl', (_, baseUrl) => {
   saveConfig({ baseUrl });
   anixart = null;
   return undefined;
+});
+
+ipcMain.handle('app:getDeviceId', () => {
+  return getOrCreateDeviceId();
 });
 
 ipcMain.handle('anix:selfProfile', async () => {
@@ -517,7 +539,26 @@ ipcMain.on('player:syncState', async (_, playback) => {
   createPlayerWindow(params);
 });
 
-ipcMain.on('player:stateChanged', (event, playback) => {
+// ── Lobby proposal IPC forwarding ──
+// Main window → Player window (proposal events)
+ipcMain.on('lobby:proposalToPlayer', (_, data) => {
+  if (playerWindowRef && !playerWindowRef.isDestroyed()) {
+    playerWindowRef.webContents.send('lobby:proposal', data);
+  }
+});
+
+// Player window → Main window (vote)
+ipcMain.on('lobby:voteFromPlayer', (_, proposalId, accept) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('lobby:voteFromPlayer', { proposalId, accept });
+  }
+});
+
+ipcMain.on('player:stateChanged', (event, payload) => {
+  let playback = payload;
+  if (payload && typeof payload === 'object' && payload.playback) {
+    playback = payload.playback;
+  }
   if (playback && typeof playback === 'object') {
     currentPlayerPlayback = {
       releaseId: String(playback.releaseId ?? ''),
@@ -527,7 +568,7 @@ ipcMain.on('player:stateChanged', (event, playback) => {
     };
   }
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('lobby:playerStateChanged', playback);
+    mainWindow.webContents.send('lobby:playerStateChanged', payload);
   }
 });
 

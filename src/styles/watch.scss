@@ -34,6 +34,15 @@ $player-overlay-bg: rgba(0, 0, 0, 0.4);
   height: 100%;
 }
 
+.watch-page__player-wrap--cursor-hidden {
+  cursor: none;
+
+  .watch-page__tap-overlay,
+  .watch-page__tap-layer {
+    cursor: none;
+  }
+}
+
 .watch-page__player-loading,
 .watch-page__player-error {
   position: absolute;

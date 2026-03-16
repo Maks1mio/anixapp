@@ -4,6 +4,7 @@
  */
 
 import { renderPage } from './page';
+import { getCurrentRoomId, getCurrentParticipants } from '../services/lobby-state';
 
 function escapeHtml(s: string): string {
   const div = document.createElement('div');
@@ -87,6 +88,16 @@ export function openWatchModal(options: WatchModalOptions): void {
 
   const footer = document.createElement('div');
   footer.className = 'watch-modal__footer';
+
+  const isInLobbyWithOthers = (): boolean => {
+    const roomId = getCurrentRoomId();
+    if (!roomId) return false;
+    const participants = getCurrentParticipants();
+    return participants.length > 1;
+  };
+
+  const getPlayButtonLabel = (): string => (isInLobbyWithOthers() ? 'Предложить' : 'Воспроизвести');
+
   footer.innerHTML = `
     <div class="watch-modal__player-select-wrap">
       <label class="watch-modal__label">Плеер</label>
@@ -95,7 +106,7 @@ export function openWatchModal(options: WatchModalOptions): void {
       </select>
     </div>
     <button type="button" class="watch-modal__play-btn" data-play-btn disabled>
-      Воспроизвести
+      ${getPlayButtonLabel()}
     </button>
   `;
 
@@ -160,7 +171,15 @@ export function openWatchModal(options: WatchModalOptions): void {
 
   function updatePlayButton() {
     playBtn.disabled = !(selectedSource && selectedEpisode);
+    playBtn.textContent = getPlayButtonLabel();
   }
+
+  window.addEventListener(
+    'lobby:participantsChanged',
+    (() => {
+      updatePlayButton();
+    }) as EventListener,
+  );
 
   function renderDubbers(list: Array<Record<string, unknown> & { id: number; name: string }>) {
     sourcesLoad.hidden = true;

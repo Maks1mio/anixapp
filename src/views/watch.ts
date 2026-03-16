@@ -141,11 +141,13 @@ export function renderWatch(): HTMLElement {
   createIcons({ icons, root: wrap });
 
   const IDLE_HIDE_MS = 3000;
+  const VOLUME_STORAGE_KEY = 'anixapp_player_volume';
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
   const scheduleHideOverlay = () => {
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
       guiOverlay?.classList.add('watch-page__gui-overlay--hidden');
+      playerWrap?.classList.add('watch-page__player-wrap--cursor-hidden');
       idleTimer = null;
     }, IDLE_HIDE_MS);
   };
@@ -153,6 +155,7 @@ export function renderWatch(): HTMLElement {
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = null;
     guiOverlay?.classList.remove('watch-page__gui-overlay--hidden');
+    playerWrap?.classList.remove('watch-page__player-wrap--cursor-hidden');
   };
   playerWrap?.addEventListener('mousemove', () => {
     showOverlay();
@@ -175,6 +178,17 @@ export function renderWatch(): HTMLElement {
     scheduleHideOverlay();
     togglePlayPause();
   });
+
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.code === 'Space' || e.key === ' ') {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable) return;
+      e.preventDefault();
+      togglePlayPause();
+    }
+  };
+  window.addEventListener('keydown', onKeyDown);
 
   let popoverDocumentClick: ((e: MouseEvent) => void) | null = null;
   let currentPopoverType: 'series' | 'dubbing' | null = null;
@@ -717,9 +731,26 @@ export function renderWatch(): HTMLElement {
   });
 
   if (volumeInput && videoEl) {
+    try {
+      const stored = window.localStorage.getItem(VOLUME_STORAGE_KEY);
+      const volNum = stored != null ? Number(stored) : NaN;
+      if (!Number.isNaN(volNum) && volNum >= 0 && volNum <= 100) {
+        volumeInput.value = String(volNum);
+        videoEl.volume = volNum / 100;
+      }
+    } catch {
+      // ignore localStorage errors
+    }
+
     volumeInput.addEventListener('input', () => {
       const v = Number(volumeInput.value) / 100;
-      videoEl.volume = Math.max(0, Math.min(1, v));
+      const clamped = Math.max(0, Math.min(1, v));
+      videoEl.volume = clamped;
+      try {
+        window.localStorage.setItem(VOLUME_STORAGE_KEY, String(Math.round(clamped * 100)));
+      } catch {
+        // ignore localStorage errors
+      }
     });
     volumeInput.addEventListener('click', (e) => e.stopPropagation());
   }

@@ -1,4 +1,4 @@
-# AnixApp
+# AnixApp Beta
 
 Быстрый десктоп-клиент для просмотра аниме на базе [AnixartJS](https://github.com/theDesConnet/AnixartJS) API.
 

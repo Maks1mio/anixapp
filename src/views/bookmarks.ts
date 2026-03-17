@@ -121,7 +121,7 @@ export function renderBookmarks(): HTMLElement {
   }
 
   function loadMore() {
-    if (!window.anix || !hasMore || isLoadingMore) return;
+    if (!window.anixApi || !hasMore || isLoadingMore) return;
     const tab = TABS.find((t) => t.id === currentTab)!;
     isLoadingMore = true;
     if (moreEl) {
@@ -147,7 +147,7 @@ export function renderBookmarks(): HTMLElement {
     };
 
     if (tab.id === 'favorites') {
-      window.anix.getFavorites(nextPage).then((data: any) => {
+      window.anixApi.favorites.all(nextPage).then((data: any) => {
         const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
         onLoaded(content);
       }).catch(onError);
@@ -158,7 +158,7 @@ export function renderBookmarks(): HTMLElement {
       onError(null);
       return;
     }
-    window.anix.getBookmarks(profileId, tab.type!, nextPage).then((data: any) => {
+    window.anixApi.profile.getBookmarks(profileId, tab.type!, nextPage).then((data: any) => {
       const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
       onLoaded(content);
     }).catch(onError);
@@ -169,7 +169,7 @@ export function renderBookmarks(): HTMLElement {
     nextPage = 1;
     hasMore = true;
 
-    if (!window.anix) {
+    if (!window.anixApi) {
       setError('API недоступно (только в Electron).');
       return;
     }
@@ -178,8 +178,8 @@ export function renderBookmarks(): HTMLElement {
     const tab = TABS.find((t) => t.id === tabId)!;
 
     if (tab.id === 'favorites') {
-      window.anix
-        .getFavorites(0)
+      window.anixApi.favorites
+        .all(0)
         .then((data: any) => {
           const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
           if (!content.length) {
@@ -199,7 +199,7 @@ export function renderBookmarks(): HTMLElement {
       return;
     }
 
-    window.anix.getSelfProfile().then((selfRes: any) => {
+    window.anixApi.profile.self().then((selfRes: any) => {
       const profile = selfRes?.profile ?? selfRes;
       const profileId = profile?.id ?? (profile && (profile as { '@id'?: number })['@id']);
       if (typeof profileId !== 'number') {
@@ -207,7 +207,7 @@ export function renderBookmarks(): HTMLElement {
         return;
       }
       cachedProfileId = profileId;
-      window.anix!
+      window.anixApi!.profile
         .getBookmarks(profileId, tab.type!, 0)
         .then((data: any) => {
           const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];

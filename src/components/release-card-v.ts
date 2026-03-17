@@ -159,19 +159,12 @@ export function renderReleaseCardVertical(data: ReleaseCardData): HTMLElement {
       entries: menuEntries,
       iconSize: 18,
       onSelect(entryId) {
-        const anix = (window as unknown as {
-          anix?: {
-            addToFavorites?: (id: number) => Promise<unknown>;
-            removeFromFavorites?: (id: number) => Promise<unknown>;
-            setListStatus?: (id: number, status: string) => Promise<unknown>;
-            clearListStatus?: (id: number, status: string) => Promise<unknown>;
-          };
-        }).anix;
-        if (!id || !anix) return;
+        const api = window.anixApi;
+        if (!id || !api) return;
 
-        if (entryId === 'favorite' && anix.addToFavorites && anix.removeFromFavorites) {
+        if (entryId === 'favorite') {
           const next = !isFavorite;
-          (next ? anix.addToFavorites(id) : anix.removeFromFavorites(id))
+          (next ? api.release.addFavorite(id) : api.release.removeFavorite(id))
             .then(() => {
               isFavorite = next;
               const favEntry = menuEntries.find((e) => (e as { id?: string }).id === 'favorite') as { id: string; label: string; icon?: string } | undefined;
@@ -195,9 +188,9 @@ export function renderReleaseCardVertical(data: ReleaseCardData): HTMLElement {
           return;
         }
 
-        if (entryId === 'none' && currentStatusId && anix.clearListStatus) {
+        if (entryId === 'none' && currentStatusId) {
           const prev = currentStatusId;
-          anix.clearListStatus(id, prev).then(() => {
+          api.release.clearListStatus(id, prev as unknown as number).then(() => {
             currentStatusId = null;
             const posterEl = card.querySelector('.release-card-v__poster');
             const badge = posterEl?.querySelector('.release-card-v__badge');
@@ -213,9 +206,9 @@ export function renderReleaseCardVertical(data: ReleaseCardData): HTMLElement {
           return;
         }
 
-        if (LIST_STATUSES.some((s) => s.id === entryId) && anix.setListStatus) {
+        if (LIST_STATUSES.some((s) => s.id === entryId)) {
           const nextStatus = entryId as ListStatusId;
-          anix.setListStatus(id, nextStatus).then(() => {
+          api.release.setListStatus(id, nextStatus as unknown as number).then(() => {
             currentStatusId = nextStatus;
             const posterEl = card.querySelector('.release-card-v__poster');
             if (posterEl) {

@@ -1,9 +1,9 @@
 import { navigate } from '../app';
 import { renderReleaseCardHorizontal } from '../components/release-card-h';
 import { renderReleaseCardVertical } from '../components/release-card-v';
-import { renderDotsMenu, type DotsMenuEntry } from '../components/dots-menu';
 import { openWatchModal } from '../components/watch-modal';
-import { iconFlag, iconPlay, iconStar } from '../components/icons';
+import { renderSelect } from '../components/select';
+import { iconPlay, iconStar } from '../components/icons';
 import { ratingHue } from '../components/release-card-h';
 import { getCardLayout } from '../prefs';
 import { buildPosterUrl } from '../utils/posterUrl';
@@ -25,6 +25,7 @@ interface ReleaseApi {
   title_original?: string;
   title_alt?: string | null;
   description?: string | null;
+  note?: string | null;
   image?: string;
   poster?: string | { small?: { url?: string }; medium?: { url?: string }; original?: { url?: string } };
   grade?: number;
@@ -34,6 +35,7 @@ interface ReleaseApi {
   episodes_total?: number | null;
   duration?: number | null;
   year?: string | number;
+  season?: number | null;
   country?: string;
   genres?: string;
   studio?: string | null;
@@ -41,9 +43,11 @@ interface ReleaseApi {
   director?: string | null;
   source?: string | null;
   release_date?: string | null;
+  aired_on_date?: number | null;
   status?: { id?: number; name?: string };
   category?: { id?: number; name?: string };
   is_favorite?: boolean;
+  is_view_blocked?: boolean;
   profile_list_status?: number | null;
   comments?: Array<{ id?: number; profile?: { nickname?: string; avatar?: string }; message?: string; timestamp?: number }>;
   recommended_releases?: Array<Record<string, unknown>>;
@@ -56,7 +60,7 @@ interface ReleaseApi {
   completed_count?: number;
   watching_count?: number;
   comments_count?: number;
-  /** Возрастной рейтинг (0, 4, 6, 12, 16, 18 и т.д.) — показываем как «X+» */
+  /** Возрастной рейтинг (числовой код 1-5 из API): 1=0+, 2=6+, 3=12+, 4=16+, 5=18+ */
   age_rating?: number | string;
   is_adult?: boolean;
   vote_1_count?: number;
@@ -67,6 +71,30 @@ interface ReleaseApi {
   plan_count?: number;
   hold_on_count?: number;
   dropped_count?: number;
+}
+
+/** Конвертирует числовой код возрастного рейтинга (1–5 из Anixart API) в текстовый вид */
+function getAgeRateText(rate: number | string | undefined): string {
+  const n = typeof rate === 'string' ? parseInt(rate, 10) : rate;
+  switch (n) {
+    case 2: return '6+';
+    case 3: return '12+';
+    case 4: return '16+';
+    case 5: return '18+';
+    case 1:
+    default: return '0+';
+  }
+}
+
+/** Название сезона по числовому коду (1–4) */
+function getSeasonName(season: number | null | undefined): string {
+  switch (season) {
+    case 1: return 'Зима';
+    case 2: return 'Весна';
+    case 3: return 'Лето';
+    case 4: return 'Осень';
+    default: return '';
+  }
 }
 
 /** Подмена http на https для превью (CSP разрешает только https) */
@@ -110,6 +138,28 @@ function escapeHtml(s: string): string {
   const div = document.createElement('div');
   div.textContent = s;
   return div.innerHTML;
+}
+
+/** Strip HTML tags from API description (API sometimes returns <font> / <b> / <br> etc.) */
+function stripHtmlToText(html: string): string {
+  if (!html) return '';
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  return (tmp.textContent || tmp.innerText || '').trim();
+}
+
+/** Convert API description HTML to safe display HTML (render <br> as newlines, strip font/b/i/etc) */
+function sanitizeDescriptionHtml(raw: string): string {
+  if (!raw) return '';
+  // Normalize <br> / <br/> / <br /> to newlines
+  let s = raw.replace(/<br\s*\/?>/gi, '\n');
+  // Strip all HTML tags
+  const tmp = document.createElement('div');
+  tmp.innerHTML = s;
+  s = (tmp.textContent || tmp.innerText || '').trim();
+  // Escape for safe insertion, then convert newlines back to <br>
+  const escaped = escapeHtml(s);
+  return escaped.replace(/\n/g, '<br>');
 }
 
 function formatVoteCount(n: number): string {
@@ -188,15 +238,15 @@ export function renderRelease(id: number): HTMLElement {
   const loadEl = wrap.querySelector('#release-load') as HTMLElement;
   const contentEl = wrap.querySelector('#release-content') as HTMLElement;
 
-  console.log('[AnixApp] Страница релиза открыта, id:', id, 'API доступен:', !!window.anix);
+  console.log('[AnixApp] Страница релиза открыта, id:', id, 'API доступен:', !!window.anixApi);
 
-  if (!window.anix) {
+  if (!window.anixApi) {
     loadEl.textContent = 'API недоступно (только в Electron).';
     return wrap;
   }
 
-  window.anix
-    .getReleaseById(id, true)
+  window.anixApi.release
+    .info(id, true)
     .then((data: { release?: unknown } & Record<string, unknown>) => {
       // Вывод в консоль для отладки: что вернул API
       console.log('[AnixApp] API getReleaseById ответ:', data);
@@ -289,13 +339,22 @@ function buildReleaseBody(r: ReleaseApi): HTMLElement {
   const screenshotImages = r.screenshot_images ?? getField<string[]>(rec, 'screenshot_images', 'screenshotImages');
   const screenshotsRaw = r.screenshots ?? getField<string[]>(rec, 'screenshots', 'screenshots');
   const screenshots = screenshotImages ?? screenshotsRaw?.map((s) => (s.startsWith('http') ? s : `https://s.anixmirai.com/screenshots/${s}.jpg`)) ?? [];
+  const videoBanners = (r.video_banners ?? getField<Array<{ name?: string; image?: string; value?: string; action_id?: number }>>(rec, 'video_banners', 'videoBanners')) ?? [];
   const comments = (r.comments ?? getField(rec, 'comments', 'comments')) ?? [];
   const commentsCount = (r.comments_count ?? getField<number>(rec, 'comments_count', 'commentsCount')) ?? (Array.isArray(comments) ? comments.length : 0);
   const favoritesCount = (r.favorites_count ?? getField<number>(rec, 'favorites_count', 'favoritesCount')) ?? 0;
   const isAdult = !!(r.is_adult ?? getField<boolean>(rec, 'is_adult', 'isAdult'));
-  // Возрастной рейтинг: только 16+ или 18+ (не показываем 4+ из API)
-  const ageRating = isAdult ? 18 : 16;
+  const ageRatingRaw = r.age_rating ?? getField<number>(rec, 'age_rating', 'ageRating');
+  const ageRateText = isAdult ? '18+' : getAgeRateText(ageRatingRaw);
+  const ageIsRestricted = ageRateText === '16+' || ageRateText === '18+';
   const duration = r.duration ?? getField<number>(rec, 'duration', 'duration');
+  const season = r.season ?? getField<number>(rec, 'season', 'season');
+  const seasonName = getSeasonName(season);
+  const note = (r.note ?? getField<string>(rec, 'note', 'note')) ?? '';
+  const isViewBlocked = !!(r.is_view_blocked ?? getField<boolean>(rec, 'is_view_blocked', 'isViewBlocked'));
+  const airedOnDate = r.aired_on_date ?? getField<number>(rec, 'aired_on_date', 'airedOnDate');
+  const author = (r.author ?? getField<string>(rec, 'author', 'author')) ?? '';
+  const director = (r.director ?? getField<string>(rec, 'director', 'director')) ?? '';
   const vote1 = (r.vote_1_count ?? getField<number>(rec, 'vote_1_count', 'vote1Count')) ?? 0;
   const vote2 = (r.vote_2_count ?? getField<number>(rec, 'vote_2_count', 'vote2Count')) ?? 0;
   const vote3 = (r.vote_3_count ?? getField<number>(rec, 'vote_3_count', 'vote3Count')) ?? 0;
@@ -307,18 +366,52 @@ function buildReleaseBody(r: ReleaseApi): HTMLElement {
   const watchingCount = (r.watching_count ?? getField<number>(rec, 'watching_count', 'watchingCount')) ?? 0;
   const completedCount = (r.completed_count ?? getField<number>(rec, 'completed_count', 'completedCount')) ?? 0;
 
-  const metaParts: string[] = [];
-  if (year) metaParts.push(year);
-  if (country) metaParts.push(country);
-  if (episodesReleased != null || episodesTotal != null) {
-    const ep = episodesReleased ?? episodesTotal;
-    if (ep != null) metaParts.push(`${ep} эп.`);
+  // ── Build structured meta info rows (AniDesk-style) ──
+  const metaInfoRows: Array<{ icon: string; text: string }> = [];
+
+  // Country + year + season
+  {
+    const parts: string[] = [];
+    if (country) parts.push(country);
+    if (seasonName && year) parts.push(`${seasonName} ${year} г.`);
+    else if (year) parts.push(`${year} г.`);
+    if (parts.length) metaInfoRows.push({ icon: '🌍', text: parts.join(', ') });
   }
-  if (statusName) metaParts.push(statusName);
-  if (studio) metaParts.push(studio);
-  if (source) metaParts.push(source);
-  if (releaseDate) metaParts.push(releaseDate);
-  const metaLine = metaParts.join(' • ');
+
+  // Episodes + duration
+  {
+    const epRel = episodesReleased;
+    const epTot = episodesTotal;
+    let epText = '';
+    if (epRel != null && epTot != null && epTot > 0) epText = `${epRel} из ${epTot} эп.`;
+    else if (epRel != null) epText = `${epRel} эп.`;
+    else if (epTot != null) epText = `${epTot} эп.`;
+    if (duration && duration > 0) epText += epText ? ` по ~${duration} мин.` : `~${duration} мин.`;
+    if (epText) metaInfoRows.push({ icon: '🎬', text: epText });
+  }
+
+  // Category + status
+  {
+    const parts: string[] = [];
+    if (categoryName) parts.push(categoryName);
+    if (statusName) parts.push(statusName);
+    if (parts.length) metaInfoRows.push({ icon: '📺', text: parts.join(', ') });
+  }
+
+  // Studio + author + director
+  {
+    const parts: string[] = [];
+    if (studio) parts.push(`Студия ${studio}`);
+    if (author) parts.push(`автор ${author}`);
+    if (director) parts.push(`режиссёр ${director}`);
+    if (parts.length) metaInfoRows.push({ icon: '🎨', text: parts.join(', ') });
+  }
+
+  // Source
+  if (source) metaInfoRows.push({ icon: '📖', text: `Источник: ${source}` });
+
+  // Genres
+  if (genres) metaInfoRows.push({ icon: '🏷️', text: genres });
 
   const section = document.createElement('section');
   section.className = 'release-page';
@@ -333,41 +426,88 @@ function buildReleaseBody(r: ReleaseApi): HTMLElement {
     ratingChipHtml = `<span class="release-page__rating" style="background:${bg};color:${textColor}">${displayGrade} ${iconStar(14, true)}<span class="release-page__rating-votes">${escapeHtml(votesLabel)}</span></span>`;
   }
 
-  // Возрастной рейтинг: 18+ при is_adult, иначе 16+ (или из API)
-  const ageBadgeHtml = `<span class="release-page__age">${ageRating}+</span>`;
-  const durationStr = duration ? ` по ~${duration} мин.` : '';
-  const epStr = (episodesReleased ?? episodesTotal) != null ? `${episodesReleased ?? episodesTotal} эп.${durationStr}` : '';
+  // Age badge: color-code restricted ratings
+  const ageBadgeClass = ageIsRestricted ? 'release-page__age release-page__age--restricted' : 'release-page__age';
+  const ageBadgeHtml = `<span class="${ageBadgeClass}">${escapeHtml(ageRateText)}</span>`;
+
+  // Aired / release date display
+  let airedText = '';
+  if (airedOnDate && airedOnDate > 0) {
+    const d = new Date(airedOnDate * 1000);
+    airedText = `${d.getDate()} ${['янв.', 'февр.', 'мар.', 'апр.', 'мая', 'июн.', 'июл.', 'авг.', 'сен.', 'окт.', 'нояб.', 'дек.'][d.getMonth()]} ${d.getFullYear()} г.`;
+  } else if (releaseDate) {
+    airedText = releaseDate;
+  }
+
+  // Play button text (blocked / coming soon / play)
+  let playBtnText = 'Смотреть';
+  let playBtnDisabled = false;
+  if (isViewBlocked) {
+    playBtnText = 'Недоступно';
+    playBtnDisabled = true;
+  } else if (!episodesReleased || episodesReleased <= 0) {
+    playBtnText = airedText ? `Выход: ${airedText}` : 'Скоро';
+    playBtnDisabled = true;
+  }
+
+  // Description: strip HTML tags from API, check length for truncation
+  const descClean = stripHtmlToText(desc);
+  const descHtml = sanitizeDescriptionHtml(desc);
+  const descNeedsTruncate = descClean.length > 300;
+
+  // Favorite button icon (bookmark)
+  const favIconSvg = (filled: boolean) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>`;
 
   section.innerHTML = `
     <div class="release-page__head">
-      <div class="release-page__poster" data-poster-wrap>
-        ${posterUrl ? `<img src="${escapeHtml(posterUrl)}" alt="${escapeHtml(title)}" data-lightbox />` : '<div class="release-page__poster-placeholder"></div>'}
+      <div class="release-page__left">
+        <div class="release-page__poster" data-poster-wrap>
+          ${posterUrl ? `<img src="${escapeHtml(posterUrl)}" alt="${escapeHtml(title)}" data-lightbox />` : '<div class="release-page__poster-placeholder"></div>'}
+        </div>
+        <div class="release-page__play-row">
+          <button type="button" class="release-page__btn release-page__btn--play${playBtnDisabled ? ' release-page__btn--disabled' : ''}" data-watch-btn ${playBtnDisabled ? 'disabled' : ''}>
+            ${playBtnDisabled ? '' : `<span class="release-page__btn-icon">${iconPlay(20)}</span>`}
+            <span>${escapeHtml(playBtnText)}</span>
+          </button>
+        </div>
+        <div class="release-page__status-selector" data-status-selector></div>
       </div>
       <div class="release-page__info">
         <div class="release-page__title-row">
           <h1 class="release-page__title">${escapeHtml(titleRu || title)}</h1>
-          ${ageBadgeHtml}
         </div>
-        ${titleOriginal && titleOriginal !== titleRu ? `<p class="release-page__title-en">${escapeHtml(titleOriginal)}</p>` : ''}
+        ${titleOriginal && titleOriginal !== titleRu
+          ? `<p class="release-page__title-en">${escapeHtml(titleOriginal)} ${ageBadgeHtml}</p>`
+          : `<p class="release-page__title-en">${ageBadgeHtml}</p>`}
         <div class="release-page__meta-row">
           ${ratingChipHtml}
-          ${metaLine ? `<span class="release-page__meta">${escapeHtml(metaLine)}</span>` : ''}
-        </div>
-        <div class="release-page__play-row">
-          <button type="button" class="release-page__btn release-page__btn--play" data-watch-btn>
-            <span class="release-page__btn-icon">${iconPlay(20)}</span>
-            <span>Смотреть</span>
+          <button type="button" class="release-page__fav-btn${isFavorite ? ' release-page__fav-btn--active' : ''}" data-fav-btn title="${isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}">
+            <span data-fav-icon>${favIconSvg(isFavorite)}</span>
+            <span data-fav-count>${favoritesCount > 0 ? formatVoteCount(favoritesCount) : ''}</span>
           </button>
-          <div class="release-page__dots-slot" data-dots-slot></div>
         </div>
-        ${categoryName ? `<p class="release-page__category">${escapeHtml(categoryName)}</p>` : ''}
-        ${epStr ? `<p class="release-page__ep-duration">${escapeHtml(epStr)}</p>` : ''}
-        ${genres ? `<p class="release-page__genres">${escapeHtml(genres)}</p>` : ''}
-        ${desc ? `<div class="release-page__desc">${escapeHtml(desc)}</div>` : ''}
+        ${note ? `<div class="release-page__note">${escapeHtml(note)}</div>` : ''}
+        ${descClean ? `
+          <div class="release-page__desc${descNeedsTruncate ? ' release-page__desc--collapsed' : ''}" data-desc>
+            ${descHtml}
+          </div>
+          ${descNeedsTruncate ? `<button type="button" class="release-page__desc-toggle" data-desc-toggle>Показать полностью</button>` : ''}
+        ` : ''}
+        ${metaInfoRows.length > 0 ? `
+          <div class="release-page__meta-info">
+            ${metaInfoRows.map(row => `
+              <div class="release-page__meta-info-row">
+                <span class="release-page__meta-info-icon">${row.icon}</span>
+                <span class="release-page__meta-info-text">${escapeHtml(row.text)}</span>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
       </div>
     </div>
   `;
 
+  // ── Interactive bindings ──
   const posterWrap = section.querySelector('[data-poster-wrap]');
   if (posterWrap && posterUrl) {
     const img = posterWrap.querySelector('img[data-lightbox]');
@@ -377,8 +517,41 @@ function buildReleaseBody(r: ReleaseApi): HTMLElement {
     }
   }
 
-  const watchBtn = section.querySelector('[data-watch-btn]');
-  if (watchBtn && releaseId != null && window.electron?.openPlayerWindow) {
+  // Description expand/collapse with smooth animation
+  const descEl = section.querySelector('[data-desc]') as HTMLElement | null;
+  const descToggle = section.querySelector('[data-desc-toggle]') as HTMLElement | null;
+  if (descEl && descToggle) {
+    // Set initial max-height for collapsed state
+    if (descEl.classList.contains('release-page__desc--collapsed')) {
+      descEl.style.maxHeight = '6.6em';
+    }
+    descToggle.addEventListener('click', () => {
+      const isCollapsed = descEl.classList.contains('release-page__desc--collapsed');
+      if (isCollapsed) {
+        // Expand: measure full height, set it, then remove class
+        descEl.style.maxHeight = descEl.scrollHeight + 'px';
+        descEl.classList.remove('release-page__desc--collapsed');
+        descToggle.textContent = 'Свернуть';
+        // After transition completes, remove max-height limit
+        const onEnd = () => {
+          descEl.style.maxHeight = 'none';
+          descEl.removeEventListener('transitionend', onEnd);
+        };
+        descEl.addEventListener('transitionend', onEnd);
+      } else {
+        // Collapse: set current height explicitly first, then reduce
+        descEl.style.maxHeight = descEl.scrollHeight + 'px';
+        // Force reflow
+        void descEl.offsetHeight;
+        descEl.style.maxHeight = '6.6em';
+        descEl.classList.add('release-page__desc--collapsed');
+        descToggle.textContent = 'Показать полностью';
+      }
+    });
+  }
+
+  const watchBtn = section.querySelector('[data-watch-btn]') as HTMLButtonElement | null;
+  if (watchBtn && releaseId != null && !playBtnDisabled && window.electron?.openPlayerWindow) {
     watchBtn.addEventListener('click', () => {
       openWatchModal({
         releaseId,
@@ -386,59 +559,54 @@ function buildReleaseBody(r: ReleaseApi): HTMLElement {
         onOpenPlayer: (url) => window.electron?.openPlayerWindow?.(url),
       });
     });
-  } else if (watchBtn && releaseId != null) {
+  } else if (watchBtn && releaseId != null && !playBtnDisabled) {
     watchBtn.addEventListener('click', () => {
       window.open(`https://anixart.tv/release/${releaseId}`, '_blank', 'noopener,noreferrer');
     });
   }
 
-  const dotsSlot = section.querySelector('[data-dots-slot]') as HTMLElement;
-  if (dotsSlot && releaseId != null) {
+  // ── Favorite button (bookmark icon in meta row) ──
+  const favBtn = section.querySelector('[data-fav-btn]') as HTMLButtonElement | null;
+  if (favBtn && releaseId != null) {
     let currentFavorite = isFavorite;
-    let currentStatus: ListStatusId | null = numToStatusId(profileListStatus);
-    const updateMenu = () => {
-      const entries: DotsMenuEntry[] = [
-        {
-          id: 'favorite',
-          label: currentFavorite ? 'Убрать из избранного' : 'Добавить в избранное',
-          icon: iconFlag(16, currentFavorite),
-        },
-        { type: 'divider' },
-        { type: 'label', text: 'Статус' },
-        ...LIST_STATUSES.map((s) => ({
-          id: `status:${s.id}`,
-          label: s.label,
-          icon: currentStatus === s.id ? '✓' : undefined,
-        })),
-      ];
-      const menu = renderDotsMenu({
-        entries,
-        iconSize: 18,
-        onSelect(entryId) {
-          if (entryId === 'favorite') {
-            const api = (window as unknown as { anix?: { addToFavorites?: (id: number) => Promise<void>; removeFromFavorites?: (id: number) => Promise<void> } }).anix;
-            if (api?.addToFavorites && api?.removeFromFavorites) {
-              (currentFavorite ? api.removeFromFavorites(releaseId!) : api.addToFavorites(releaseId!)).then(() => {
-                currentFavorite = !currentFavorite;
-                updateMenu();
-              });
-            }
-          } else if (entryId.startsWith('status:')) {
-            const statusId = entryId.replace('status:', '') as ListStatusId;
-            const api = (window as unknown as { anix?: { setListStatus?: (id: number, status: string) => Promise<void> } }).anix;
-            if (api?.setListStatus) {
-              api.setListStatus(releaseId!, statusId).then(() => {
-                currentStatus = statusId;
-                updateMenu();
-              });
-            }
-          }
-        },
+    let currentFavCount = favoritesCount;
+    favBtn.addEventListener('click', () => {
+      if (!window.anixApi) return;
+      (currentFavorite ? window.anixApi.release.removeFavorite(releaseId!) : window.anixApi.release.addFavorite(releaseId!)).then(() => {
+        currentFavorite = !currentFavorite;
+        currentFavCount += currentFavorite ? 1 : -1;
+        if (currentFavCount < 0) currentFavCount = 0;
+        favBtn.classList.toggle('release-page__fav-btn--active', currentFavorite);
+        favBtn.title = currentFavorite ? 'Убрать из избранного' : 'Добавить в избранное';
+        const iconEl = favBtn.querySelector('[data-fav-icon]');
+        if (iconEl) iconEl.innerHTML = favIconSvg(currentFavorite);
+        const countEl = favBtn.querySelector('[data-fav-count]');
+        if (countEl) countEl.textContent = currentFavCount > 0 ? formatVoteCount(currentFavCount) : '';
       });
-      dotsSlot.innerHTML = '';
-      dotsSlot.appendChild(menu);
-    };
-    updateMenu();
+    });
+  }
+
+  // ── Status selector (custom dropdown under Watch button) ──
+  const statusSlot = section.querySelector('[data-status-selector]') as HTMLElement;
+  if (statusSlot && releaseId != null) {
+    let currentStatus: ListStatusId | null = numToStatusId(profileListStatus);
+    const selectOptions = [
+      { value: '', label: 'Не в списке' },
+      ...LIST_STATUSES.map(s => ({ value: s.id, label: s.label })),
+    ];
+    const selectEl = renderSelect({
+      placeholder: 'Добавить в список',
+      options: selectOptions,
+      value: currentStatus ?? '',
+      onChange(value) {
+        if (window.anixApi && value) {
+          window.anixApi.release.setListStatus(releaseId!, value as unknown as number).then(() => {
+            currentStatus = value as ListStatusId;
+          });
+        }
+      },
+    });
+    statusSlot.appendChild(selectEl);
   }
 
   // Блок «Рейтинг»: средний балл, распределение голосов 1–5, статистика по статусам просмотра

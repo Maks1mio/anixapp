@@ -223,14 +223,14 @@ export function renderLayout(onLogout: () => void): HTMLElement {
   });
 
   sidebar.querySelector('#sidebar-logout')?.addEventListener('click', () => {
-    if (window.anix) {
-      window.anix.logout().then(onLogout);
+    if (window.anixApi) {
+      window.anixApi.auth.logout().then(onLogout);
     }
   });
 
-  if (window.anix) {
-    window.anix
-      .getSelfProfile()
+  if (window.anixApi) {
+    window.anixApi.profile
+      .self()
       .then((data: any) => {
         const profile = data?.profile;
         if (!profile) return;

@@ -154,7 +154,7 @@ export function renderHome(): HTMLElement {
   requestAnimationFrame(attachScrollListener);
 
   function loadPage() {
-    if (!window.anix || isLoading || !hasMore) return;
+    if (!window.anixApi || isLoading || !hasMore) return;
     isLoading = true;
     const nextPage = page;
 
@@ -195,7 +195,7 @@ export function renderHome(): HTMLElement {
         break;
     }
 
-    window.anix.filterReleases(nextPage, filterArgs, true)
+    window.anixApi.release.filter(nextPage, filterArgs, true)
       .then((data: any) => {
         const content = (data?.content ?? []) as Record<string, unknown>[];
         if (!content.length) {
@@ -221,9 +221,9 @@ export function renderHome(): HTMLElement {
   }
 
   randomBtn?.addEventListener('click', async () => {
-    if (!window.anix) return;
+    if (!window.anixApi) return;
     try {
-      const data = await window.anix.getRandomRelease(true);
+      const data = await window.anixApi.release.random(true);
       const release = data?.release as { id?: number } | undefined;
       if (release?.id) navigate(`/release/${release.id}`);
     } catch {

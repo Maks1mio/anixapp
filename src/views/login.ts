@@ -56,7 +56,7 @@ export function renderLogin(onSuccess: () => void): HTMLElement {
   const errorEl = authWrap.querySelector('#auth-error') as HTMLElement;
   const submitBtn = authWrap.querySelector('#auth-submit') as HTMLButtonElement;
 
-  if (!window.anix) {
+  if (!window.anixApi) {
     errorEl.textContent = 'API доступно только в приложении Electron.';
     errorEl.hidden = false;
     return wrap;
@@ -73,7 +73,7 @@ export function renderLogin(onSuccess: () => void): HTMLElement {
     submitBtn.textContent = 'Вход…';
 
     try {
-      const result = await window.anix.login(login, password);
+      const result = await window.anixApi.auth.signIn(login, password);
       if (result?.success) {
         onSuccess();
         return;

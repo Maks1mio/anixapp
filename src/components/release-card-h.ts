@@ -206,19 +206,12 @@ export function renderReleaseCardHorizontal(data: ReleaseCardData): HTMLElement 
     const menuWrap = renderDotsMenu({
       entries: menuEntries,
       onSelect(entryId) {
-        const anix = (window as unknown as {
-          anix?: {
-            addToFavorites?: (id: number) => Promise<unknown>;
-            removeFromFavorites?: (id: number) => Promise<unknown>;
-            setListStatus?: (id: number, status: string) => Promise<unknown>;
-            clearListStatus?: (id: number, status: string) => Promise<unknown>;
-          };
-        }).anix;
-        if (!id || !anix) return;
+        const api = window.anixApi;
+        if (!id || !api) return;
 
-        if (entryId === 'favorite' && anix.addToFavorites && anix.removeFromFavorites) {
+        if (entryId === 'favorite') {
           const next = !isFavorite;
-          (next ? anix.addToFavorites(id) : anix.removeFromFavorites(id))
+          (next ? api.release.addFavorite(id) : api.release.removeFavorite(id))
             .then(() => {
               isFavorite = next;
               const favEntry = menuEntries.find((e) => (e as any).id === 'favorite') as {
@@ -261,10 +254,10 @@ export function renderReleaseCardHorizontal(data: ReleaseCardData): HTMLElement 
           return;
         }
 
-        if (entryId === 'none' && currentStatusId && anix.clearListStatus) {
+        if (entryId === 'none' && currentStatusId) {
           const prev = currentStatusId;
-          anix
-            .clearListStatus(id, prev)
+          api.release
+            .clearListStatus(id, prev as unknown as number)
             .then(() => {
               currentStatusId = null;
               card.classList.remove(
@@ -293,10 +286,10 @@ export function renderReleaseCardHorizontal(data: ReleaseCardData): HTMLElement 
           return;
         }
 
-        if (LIST_STATUSES.some((s) => s.id === entryId) && anix.setListStatus) {
+        if (LIST_STATUSES.some((s) => s.id === entryId)) {
           const nextStatus = entryId as ListStatusId;
-          anix
-            .setListStatus(id, nextStatus)
+          api.release
+            .setListStatus(id, nextStatus as unknown as number)
             .then(() => {
               currentStatusId = nextStatus;
               card.classList.remove(

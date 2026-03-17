@@ -50,25 +50,28 @@ declare global {
 }
 
 export interface DiscordUpdatePayload {
-  type: 'watching' | 'browsing' | 'release' | 'page' | 'profile';
+  type: 'watching' | 'browsing' | 'release' | 'page' | 'profile' | 'partyInfo' | 'posterUrl';
   // watching
   title?: string;
   ep?: string;
   sourceName?: string;
+  dubberName?: string;
   paused?: boolean;
   currentTime?: number;
   duration?: number;
-  partyId?: string;
-  partySize?: number;
-  joinSecret?: string;
-  joinUrl?: string;
   // release / watching
   posterUrl?: string;
+  // partyInfo
+  partyId?: string | null;
+  partySize?: number;
+  partyMax?: number;
+  joinSecret?: string;
   // page
   details?: string;
   state?: string;
   // profile
   username?: string;
+  avatarUrl?: string;
   isSelf?: boolean;
 }
 

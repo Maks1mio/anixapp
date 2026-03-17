@@ -84,13 +84,12 @@ export function renderCatalog(): HTMLElement {
   const listEl = wrap.querySelector('#catalog-list') as HTMLElement;
   const layout = getCardLayout();
 
-  if (!window.anix) {
+  if (!window.anixApi) {
     listEl.innerHTML = '<p class="feed-error">API доступно только в Electron.</p>';
     return wrap;
   }
 
-  const api = window.anix!;
-  api.getDiscoverRecommendations(0)
+  window.anixApi.discover.recommendations(0)
     .then((data) => {
       console.log('[Anix API] getDiscoverRecommendations', data);
       const content = (data?.content ?? []) as Record<string, unknown>[];

@@ -214,13 +214,13 @@ export function openNotificationsModal(): void {
 
   // Делаем close() доступным для повторных вызовов из toggle‑логики.
   (overlay as any)._close = close;
-  if (!window.anix) {
+  if (!window.anixApi) {
     scrollRoot.innerHTML = '<p class="notifications-modal__error">API недоступно (только в Electron).</p>';
     return;
   }
 
-  window.anix
-    .getNotifications(0)
+  window.anixApi.notification
+    .all(0)
     .then((data: any) => {
       console.log('[Anix API] notifications', data);
       const content = (data?.content ?? []) as AnyNotification[];

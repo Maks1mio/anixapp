@@ -44,8 +44,8 @@ export interface WatchModalOptions {
 
 export function openWatchModal(options: WatchModalOptions): void {
   const { releaseId, releaseTitle, onOpenPlayer } = options;
-  const api = window.anix;
-  if (!api?.getDubbers) {
+  const api = window.anixApi;
+  if (!api?.release?.getDubbers) {
     return;
   }
 
@@ -357,7 +357,7 @@ export function openWatchModal(options: WatchModalOptions): void {
     episodesLoad.textContent = 'Загрузка серий…';
     episodesList.hidden = true;
     showEpisodesView();
-    api.getDubberSources(releaseId, dubber.id).then((res: { sources?: Array<{ id: number; name: string; episode_count: number }> }) => {
+    api.release.getDubberSources(releaseId, dubber.id).then((res: { sources?: Array<{ id: number; name: string; episode_count: number }> }) => {
       const sources = res?.sources ?? [];
       if (sources.length === 0) {
         episodesLoad.textContent = 'Нет источников';
@@ -418,7 +418,7 @@ export function openWatchModal(options: WatchModalOptions): void {
     episodesLoad.textContent = 'Загрузка серий…';
     episodesList.hidden = true;
     if (!selectedDubber) return;
-    api.getEpisodes(releaseId, selectedDubber.id, source.id).then((res: { episodes?: Array<{ position: number; name: string; url: string; iframe: boolean; is_watched?: boolean }> }) => {
+    api.release.getEpisodes(releaseId, selectedDubber.id, source.id).then((res: { episodes?: Array<{ position: number; name: string; url: string; iframe: boolean; is_watched?: boolean }> }) => {
       episodes = res?.episodes ?? [];
       if (episodesCountEl) {
         episodesCountEl.textContent = episodes.length > 0 ? `(${episodes.length})` : '';
@@ -470,7 +470,7 @@ export function openWatchModal(options: WatchModalOptions): void {
             }
 
             const srcId = selectedSource.id;
-            window.anix?.markEpisodeAsWatched?.(releaseId, srcId, ep.position)
+            window.anixApi?.history?.markWatched?.(releaseId, srcId, ep.position)
               .then(() => {
                 item.classList.remove('watch-modal__episode-item--marking');
               })
@@ -499,7 +499,7 @@ export function openWatchModal(options: WatchModalOptions): void {
     });
   }
 
-  api.getDubbers(releaseId).then((res: { types?: Array<Record<string, unknown> & { id: number; name: string }> }) => {
+  api.release.getDubbers(releaseId).then((res: { types?: Array<Record<string, unknown> & { id: number; name: string }> }) => {
     const types = res?.types ?? [];
     if (types.length === 0) {
       sourcesLoad.textContent = 'Нет озвучек';

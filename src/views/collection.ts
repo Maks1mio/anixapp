@@ -138,14 +138,14 @@ export function renderCollection(collectionId: number): HTMLElement {
   const body = wrap.querySelector('#collection-body') as HTMLElement;
   const loading = wrap.querySelector('.collection-page__loading') as HTMLElement;
 
-  if (!window.anix) {
+  if (!window.anixApi) {
     if (loading) loading.textContent = 'API недоступно.';
     return wrap;
   }
 
   Promise.all([
-    window.anix.getCollectionById(collectionId),
-    window.anix.getCollectionReleases(collectionId, 0),
+    window.anixApi.collection.info(collectionId),
+    window.anixApi.collection.getReleases(collectionId, 0),
   ])
     .then(([infoRes, releasesRes]) => {
       const info = infoRes?.collection ?? infoRes;
@@ -237,9 +237,9 @@ export function renderCollection(collectionId: number): HTMLElement {
       if (bookmarkBtn) {
         updateBookmarkUi(isFavorite);
         bookmarkBtn.addEventListener('click', () => {
-          if (!window.anix) return;
+          if (!window.anixApi) return;
           const next = !bookmarkBtn.classList.contains('collection-info__action--active');
-          (next ? window.anix.addCollectionFavorite(collectionId) : window.anix.removeCollectionFavorite(collectionId))
+          (next ? window.anixApi.collection.addFavorite(collectionId) : window.anixApi.collection.removeFavorite(collectionId))
             .then(() => updateBookmarkUi(next))
             .catch(() => {});
         });
@@ -286,7 +286,7 @@ export function renderCollection(collectionId: number): HTMLElement {
       const randomBtn = wrap.querySelector('[data-action-random]');
       if (randomBtn) {
         randomBtn.addEventListener('click', () => {
-          window.anix!.getCollectionRandomRelease(collectionId).then((res: any) => {
+          window.anixApi!.collection.getRandomRelease(collectionId).then((res: any) => {
             const release = res?.release;
             const id = release?.id;
             if (id) navigate(`/release/${id}`);
@@ -322,13 +322,13 @@ export function renderCollection(collectionId: number): HTMLElement {
       let isLoadingMore = false;
 
       function loadMore() {
-        if (!hasMore || isLoadingMore || !window.anix) return;
+        if (!hasMore || isLoadingMore || !window.anixApi) return;
         isLoadingMore = true;
         if (moreEl) {
           moreEl.hidden = false;
           moreEl.textContent = 'Загрузка…';
         }
-        window.anix.getCollectionReleases(collectionId, nextPage).then((res: any) => {
+        window.anixApi.collection.getReleases(collectionId, nextPage).then((res: any) => {
           let content = res?.content ?? res?.releases;
           if (content && !Array.isArray(content) && Array.isArray(content.releases)) content = content.releases;
           const rawListNext = Array.isArray(content) ? content : [];

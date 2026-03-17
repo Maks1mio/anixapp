@@ -64,7 +64,7 @@ export function renderRelated(groupId: number): HTMLElement {
   const list = wrap.querySelector('#related-list') as HTMLElement | null;
   if (!list) return wrap;
 
-  if (!window.anix) {
+  if (!window.anixApi) {
     list.innerHTML = '<p class="related__error">API доступно только в приложении.</p>';
     return wrap;
   }
@@ -86,7 +86,7 @@ export function renderRelated(groupId: number): HTMLElement {
       list.appendChild(loader);
     }
 
-    window.anix.getRelatedReleases(groupId, page).then((data: any) => {
+    window.anixApi.release.related(groupId, page).then((data: any) => {
       console.log('[Anix API] relatedReleases', groupId, page, data);
       const content = (data?.content ?? []) as any[];
 

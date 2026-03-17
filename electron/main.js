@@ -711,15 +711,17 @@ ipcMain.on('player:stateChanged', (event, payload) => {
       dubberId: String(playback.dubberId ?? ''),
     };
     // Update Discord presence with current watching state
-    // (lobby/party info is updated separately via discord:update from renderer)
+    // Party info is managed separately via discord:partyInfo from renderer
     if (discordRpc) {
       discordRpc.setWatching({
         title: String(playback.title ?? ''),
         ep: String(playback.ep ?? ''),
         sourceName: String(playback.sourceName ?? ''),
+        dubberName: playback.dubberName ? String(playback.dubberName) : undefined,
         paused: !!playback.paused,
         currentTime: Number(playback.currentTime ?? 0),
         duration: playback.duration != null ? Number(playback.duration) : undefined,
+        posterUrl: playback.posterUrl ? String(playback.posterUrl) : undefined,
       });
     }
   }
@@ -738,14 +740,32 @@ ipcMain.on('discord:update', (_, data) => {
         title: String(data.title ?? ''),
         ep: String(data.ep ?? ''),
         sourceName: String(data.sourceName ?? ''),
+        dubberName: data.dubberName ? String(data.dubberName) : undefined,
         paused: !!data.paused,
         currentTime: Number(data.currentTime ?? 0),
         duration: data.duration != null ? Number(data.duration) : undefined,
-        partyId: data.partyId ? String(data.partyId) : null,
-        partySize: data.partySize ? Number(data.partySize) : null,
-        joinSecret: data.joinSecret ? String(data.joinSecret) : null,
-        joinUrl: data.joinUrl ? String(data.joinUrl) : null,
+        posterUrl: data.posterUrl ? String(data.posterUrl) : undefined,
       });
+    }
+  } else if (data.type === 'partyInfo') {
+    // Update persistent party info for Discord (from lobby-modal)
+    if (discordRpc) {
+      if (data.partyId) {
+        discordRpc.setPartyInfo({
+          partyId: String(data.partyId),
+          partySize: Number(data.partySize ?? 1),
+          partyMax: Number(data.partyMax ?? 10),
+          joinSecret: data.joinSecret ? String(data.joinSecret) : undefined,
+        });
+      } else {
+        // Clear party info (left lobby)
+        discordRpc.setPartyInfo(null);
+      }
+    }
+  } else if (data.type === 'posterUrl') {
+    // Remember poster URL for subsequent watching activities
+    if (discordRpc && data.posterUrl) {
+      discordRpc.setPosterUrl(String(data.posterUrl));
     }
   } else if (data.type === 'page') {
     if (discordRpc) {

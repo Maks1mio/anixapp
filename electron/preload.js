@@ -75,54 +75,95 @@ contextBridge.exposeInMainWorld('electron', {
   discordUpdate: (data) => ipcRenderer.send('discord:update', data),
 });
 
-contextBridge.exposeInMainWorld('anix', {
-  getAuthStatus: () => ipcRenderer.invoke('anix:getAuthStatus'),
-  checkConnection: () => ipcRenderer.invoke('anix:checkConnection'),
-  getBaseUrl: () => ipcRenderer.invoke('anix:getBaseUrl'),
-  setBaseUrl: (baseUrl) => ipcRenderer.invoke('anix:setBaseUrl', baseUrl),
-  pingBaseUrl: (baseUrl) => ipcRenderer.invoke('anix:pingBaseUrl', baseUrl),
-  // Dev‑хелпер: принудительно сымитировать сетевой обрыв и показать оффлайн‑страницу.
-  testOffline: () => ipcRenderer.invoke('anix:testOffline'),
-  getSelfProfile: () => ipcRenderer.invoke('anix:selfProfile'),
-  login: (username, password) => ipcRenderer.invoke('anix:login', username, password),
-  logout: () => ipcRenderer.invoke('anix:logout'),
-  getReleaseById: (id, extended = true) => ipcRenderer.invoke('anix:releaseById', id, extended),
-  getDubbers: (releaseId) => ipcRenderer.invoke('anix:getDubbers', releaseId),
-  getDubberSources: (releaseId, dubberId) => ipcRenderer.invoke('anix:getDubberSources', releaseId, dubberId),
-  getEpisodes: (releaseId, dubberId, sourceId, sort = 1) => ipcRenderer.invoke('anix:getEpisodes', releaseId, dubberId, sourceId, sort),
-  getEpisode: (releaseId, sourceId, episodePosition) => ipcRenderer.invoke('anix:getEpisode', releaseId, sourceId, episodePosition),
-  getDirectVideoLink: (embedUrl) => ipcRenderer.invoke('anix:getDirectVideoLink', embedUrl),
-  getVideos: (releaseId) => ipcRenderer.invoke('anix:getVideos', releaseId),
-  getVideoInCategory: (releaseId, categoryId, page = 1) => ipcRenderer.invoke('anix:getVideoInCategory', releaseId, categoryId, page),
-  getRandomRelease: (extended = true) => ipcRenderer.invoke('anix:randomRelease', extended),
-  getLatestFeed: (page = 1) => ipcRenderer.invoke('anix:latestFeed', page),
-  getDiscoverRecommendations: (page = 0) => ipcRenderer.invoke('anix:discoverRecommendations', page),
-  filterReleases: (page = 0, filterArgs = {}, extended = true) => ipcRenderer.invoke('anix:filterReleases', page, filterArgs, extended),
-  getArticleById: (id) => ipcRenderer.invoke('anix:articleById', id),
-  getChannelById: (id) => ipcRenderer.invoke('anix:channelById', id),
-  getProfileById: (id) => ipcRenderer.invoke('anix:profileById', id),
-  getCollectionById: (id) => ipcRenderer.invoke('anix:collectionById', id),
-  getCollectionReleases: (id, page = 0) => ipcRenderer.invoke('anix:collectionReleases', id, page),
-  getCollectionRandomRelease: (id) => ipcRenderer.invoke('anix:collectionRandomRelease', id),
-  addCollectionFavorite: (id) => ipcRenderer.invoke('anix:addCollectionFavorite', id),
-  removeCollectionFavorite: (id) => ipcRenderer.invoke('anix:removeCollectionFavorite', id),
-  getAllCollections: (page = 1, sort = 2) => ipcRenderer.invoke('anix:collectionsAll', page, sort),
-  getFavorites: (page = 0) => ipcRenderer.invoke('anix:favorites', page),
-  getBookmarks: (profileId, type, page = 0) => ipcRenderer.invoke('anix:getBookmarks', profileId, type, page),
-  getRelatedReleases: (releaseId, page = 0) => ipcRenderer.invoke('anix:relatedReleases', releaseId, page),
-  getNotifications: (page = 0) => ipcRenderer.invoke('anix:notificationsAll', page),
-  getNotificationsCount: () => ipcRenderer.invoke('anix:notificationsCount'),
-  getHistory: (page = 0) => ipcRenderer.invoke('anix:history', page),
-  addToHistory: (releaseId, sourceId, episodePosition) => ipcRenderer.invoke('anix:addToHistory', releaseId, sourceId, episodePosition),
-  markEpisodeAsWatched: (releaseId, sourceId, episodePosition) => ipcRenderer.invoke('anix:markEpisodeAsWatched', releaseId, sourceId, episodePosition),
-  unmarkEpisodeAsWatched: (releaseId, sourceId, episodePosition) => ipcRenderer.invoke('anix:unmarkEpisodeAsWatched', releaseId, sourceId, episodePosition),
-  getVotedReleases: (profileId, page = 0) => ipcRenderer.invoke('anix:votedReleases', profileId, page),
-  getFriends: (profileId, page = 0) => ipcRenderer.invoke('anix:friends', profileId, page),
-  searchReleases: (query, page = 0) => ipcRenderer.invoke('anix:searchReleases', query, page),
-  searchProfiles: (query, page = 0) => ipcRenderer.invoke('anix:searchProfiles', query, page),
-  searchCollections: (query, page = 0) => ipcRenderer.invoke('anix:searchCollections', query, page),
-  addToFavorites: (releaseId) => ipcRenderer.invoke('anix:addToFavorites', releaseId),
-  removeFromFavorites: (releaseId) => ipcRenderer.invoke('anix:removeFromFavorites', releaseId),
-  setListStatus: (releaseId, statusId) => ipcRenderer.invoke('anix:setListStatus', releaseId, statusId),
-  clearListStatus: (releaseId, statusId) => ipcRenderer.invoke('anix:clearListStatus', releaseId, statusId),
+// ── Structured API (anixApi) — grouped endpoints like AniDesk ──
+contextBridge.exposeInMainWorld('anixApi', {
+  client: {
+    get baseUrl() { return '(use anixApi.client.getBaseUrl())'; },
+    get token() { return '(use anixApi.client.getAuthStatus())'; },
+    getBaseUrl: () => ipcRenderer.invoke('anix:getBaseUrl'),
+    setBaseUrl: (baseUrl) => ipcRenderer.invoke('anix:setBaseUrl', baseUrl),
+    pingBaseUrl: (baseUrl) => ipcRenderer.invoke('anix:pingBaseUrl', baseUrl),
+    getAuthStatus: () => ipcRenderer.invoke('anix:getAuthStatus'),
+    checkConnection: () => ipcRenderer.invoke('anix:checkConnection'),
+    testOffline: () => ipcRenderer.invoke('anix:testOffline'),
+  },
+
+  auth: {
+    signIn: (username, password) => ipcRenderer.invoke('anix:login', username, password),
+    logout: () => ipcRenderer.invoke('anix:logout'),
+    getStatus: () => ipcRenderer.invoke('anix:getAuthStatus'),
+  },
+
+  profile: {
+    self: () => ipcRenderer.invoke('anix:selfProfile'),
+    info: (id) => ipcRenderer.invoke('anix:profileById', id),
+    getFriends: (profileId, page = 0) => ipcRenderer.invoke('anix:friends', profileId, page),
+    getBookmarks: (profileId, type, page = 0) => ipcRenderer.invoke('anix:getBookmarks', profileId, type, page),
+    getVotedReleases: (profileId, page = 0) => ipcRenderer.invoke('anix:votedReleases', profileId, page),
+  },
+
+  release: {
+    info: (id, extended = true) => ipcRenderer.invoke('anix:releaseById', id, extended),
+    filter: (page = 0, filterArgs = {}, extended = true) => ipcRenderer.invoke('anix:filterReleases', page, filterArgs, extended),
+    random: (extended = true) => ipcRenderer.invoke('anix:randomRelease', extended),
+    related: (releaseId, page = 0) => ipcRenderer.invoke('anix:relatedReleases', releaseId, page),
+    getDubbers: (releaseId) => ipcRenderer.invoke('anix:getDubbers', releaseId),
+    getDubberSources: (releaseId, dubberId) => ipcRenderer.invoke('anix:getDubberSources', releaseId, dubberId),
+    getEpisodes: (releaseId, dubberId, sourceId, sort = 1) => ipcRenderer.invoke('anix:getEpisodes', releaseId, dubberId, sourceId, sort),
+    getEpisode: (releaseId, sourceId, episodePosition) => ipcRenderer.invoke('anix:getEpisode', releaseId, sourceId, episodePosition),
+    getDirectVideoLink: (embedUrl) => ipcRenderer.invoke('anix:getDirectVideoLink', embedUrl),
+    getVideos: (releaseId) => ipcRenderer.invoke('anix:getVideos', releaseId),
+    getVideoInCategory: (releaseId, categoryId, page = 1) => ipcRenderer.invoke('anix:getVideoInCategory', releaseId, categoryId, page),
+    addFavorite: (releaseId) => ipcRenderer.invoke('anix:addToFavorites', releaseId),
+    removeFavorite: (releaseId) => ipcRenderer.invoke('anix:removeFromFavorites', releaseId),
+    setListStatus: (releaseId, statusId) => ipcRenderer.invoke('anix:setListStatus', releaseId, statusId),
+    clearListStatus: (releaseId, statusId) => ipcRenderer.invoke('anix:clearListStatus', releaseId, statusId),
+  },
+
+  feed: {
+    latest: (page = 1) => ipcRenderer.invoke('anix:latestFeed', page),
+  },
+
+  discover: {
+    recommendations: (page = 0) => ipcRenderer.invoke('anix:discoverRecommendations', page),
+  },
+
+  search: {
+    releases: (query, page = 0) => ipcRenderer.invoke('anix:searchReleases', query, page),
+    profiles: (query, page = 0) => ipcRenderer.invoke('anix:searchProfiles', query, page),
+    collections: (query, page = 0) => ipcRenderer.invoke('anix:searchCollections', query, page),
+  },
+
+  collection: {
+    info: (id) => ipcRenderer.invoke('anix:collectionById', id),
+    all: (page = 1, sort = 2) => ipcRenderer.invoke('anix:collectionsAll', page, sort),
+    getReleases: (id, page = 0) => ipcRenderer.invoke('anix:collectionReleases', id, page),
+    getRandomRelease: (id) => ipcRenderer.invoke('anix:collectionRandomRelease', id),
+    addFavorite: (id) => ipcRenderer.invoke('anix:addCollectionFavorite', id),
+    removeFavorite: (id) => ipcRenderer.invoke('anix:removeCollectionFavorite', id),
+  },
+
+  channel: {
+    info: (id) => ipcRenderer.invoke('anix:channelById', id),
+  },
+
+  notification: {
+    all: (page = 0) => ipcRenderer.invoke('anix:notificationsAll', page),
+    count: () => ipcRenderer.invoke('anix:notificationsCount'),
+  },
+
+  history: {
+    all: (page = 0) => ipcRenderer.invoke('anix:history', page),
+    add: (releaseId, sourceId, episodePosition) => ipcRenderer.invoke('anix:addToHistory', releaseId, sourceId, episodePosition),
+    markWatched: (releaseId, sourceId, episodePosition) => ipcRenderer.invoke('anix:markEpisodeAsWatched', releaseId, sourceId, episodePosition),
+    unmarkWatched: (releaseId, sourceId, episodePosition) => ipcRenderer.invoke('anix:unmarkEpisodeAsWatched', releaseId, sourceId, episodePosition),
+  },
+
+  favorites: {
+    all: (page = 0) => ipcRenderer.invoke('anix:favorites', page),
+  },
+
+  article: {
+    info: (id) => ipcRenderer.invoke('anix:articleById', id),
+  },
 });

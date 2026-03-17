@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "anixapp-dev",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite"],
+      "runtimeExecutable": "C:/Program Files/nodejs/npx.cmd",
+      "runtimeArgs": ["vite", "--port", "5173"],
       "port": 5173
     }
   ]

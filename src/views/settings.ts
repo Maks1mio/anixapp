@@ -30,13 +30,13 @@ export function renderSettingsContent(): HTMLElement {
   const cardsContainer = wrap.querySelector('#settings-cards-wrap') as HTMLElement;
   const cardsLoadEl = wrap.querySelector('#settings-cards-load') as HTMLElement;
 
-  if (typeof window.anix === 'undefined') {
+  if (typeof window.anixApi === 'undefined') {
     endpointLoadEl.textContent = 'API доступно только в приложении Electron.';
     cardsLoadEl.textContent = 'Настройки карточек доступны только в приложении.';
     return wrap;
   }
 
-  window.anix
+  window.anixApi.client
     .getBaseUrl()
     .then((currentBaseUrl) => {
       endpointLoadEl.remove();
@@ -50,7 +50,7 @@ export function renderSettingsContent(): HTMLElement {
         options: ENDPOINT_OPTIONS,
         onChange: (value) => {
           currentValue = value;
-          window.anix?.setBaseUrl(value);
+          window.anixApi?.client?.setBaseUrl(value);
           // После смены эндпоинта сразу показываем экран проверки соединения,
           // чтобы пользователь видел процесс переподключения.
           window.dispatchEvent(new CustomEvent('anix:offline'));
@@ -117,7 +117,7 @@ export function renderSettingsContent(): HTMLElement {
         await Promise.all(
           ENDPOINT_OPTIONS.map(async (opt) => {
             try {
-              const res = await window.anix!.pingBaseUrl(opt.value);
+              const res = await window.anixApi!.client.pingBaseUrl(opt.value);
               state[opt.value] = res;
             } catch {
               state[opt.value] = { ok: false, latencyMs: null };

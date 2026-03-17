@@ -2,7 +2,7 @@
 
 /**
  * Discord Rich Presence service for AnixApp.
- * Gracefully degrades if discord-rpc is not installed or Discord is not running.
+ * Gracefully degrades if @xhayper/discord-rpc is not installed or Discord is not running.
  *
  * App ID: 1483170633197027571
  * Required Discord assets (upload at discordapp.com/developers/applications):
@@ -12,14 +12,16 @@
  *
  * Activity types used:
  *   0 = Playing  → shown when browsing / viewing profiles / navigating pages
- *   3 = Watching → shown when watching an episode or viewing an anime release page
+ *   3 = Watching → shown when watching anime (Discord may show as Playing for RPC, that's a Discord limitation)
+ *
+ * NOTE: Discord's local RPC protocol may force type=0 (Playing) regardless of what we set.
+ *       We set type: 3 anyway in case Discord starts respecting it.
  */
 
 const CLIENT_ID = '1483170633197027571';
 
 let DiscordRpcLib = null;
 try {
-  // Use modern maintained RPC client (same as PulseSync mod)
   DiscordRpcLib = require('@xhayper/discord-rpc');
 } catch (_) {
   console.warn('[Discord RPC] @xhayper/discord-rpc module not found — Rich Presence disabled');
@@ -34,11 +36,18 @@ let mainWindowRef = null;
 // ── Context-aware activity slots ──────────────────────────────────────────────
 // We keep separate last-known activities for the main window and the player
 // window. When the user brings a window into focus, we switch Discord to the
-// activity that belongs to that window. This means switching tabs never shows
-// stale / wrong state.
+// activity that belongs to that window.
 let _mainActivity   = null;   // last activity set for the main (browser) context
 let _playerActivity = null;   // last activity set for the player context
 let _focusedContext = 'main'; // 'main' | 'player' — which window is in front
+
+// ── Persistent party info ─────────────────────────────────────────────────────
+// When in a lobby, party info must persist across player state updates.
+// Otherwise every play/pause would wipe the party/join info.
+let _partyInfo = null; // { partyId, partySize, partyMax, joinSecret }
+
+// ── Last known poster URL for the currently playing anime ─────────────────────
+let _lastPosterUrl = null;
 
 /** @returns {object|null} The activity that is currently visible in Discord. */
 function _currentActivity() {
@@ -47,7 +56,7 @@ function _currentActivity() {
 
 // ──────────────────────────────────────────────────────────────────────────────
 
-/** Pass the main BrowserWindow reference so JOIN_GAME can focus/open it. */
+/** Pass the main BrowserWindow reference so ACTIVITY_JOIN can focus/open it. */
 function setMainWindow(win) {
   mainWindowRef = win;
 }
@@ -62,14 +71,17 @@ async function connect() {
     rpc.on('ready', () => {
       connected = true;
       console.log('[Discord RPC] Connected as', rpc.user?.username);
+
+      // Subscribe to activity events for party invites
+      _subscribeEvents();
+
+      // Re-apply the currently visible activity after reconnect
       const act = _currentActivity();
       if (act) _applyActivity(act);
     });
 
     rpc.on('connected', () => {
       connected = true;
-      const act = _currentActivity();
-      if (act) _applyActivity(act);
     });
 
     rpc.on('disconnected', () => {
@@ -78,9 +90,9 @@ async function connect() {
       if (!destroyed) scheduleReconnect();
     });
 
-    // Game invite: when user clicks the Join button on our Rich Presence.
-    // @xhayper/discord-rpc forwards the underlying ACTIVITY_JOIN event.
-    rpc.on('ACTIVITY_JOIN', (secret) => {
+    // When someone clicks "Ask to Join" / accepts our invite in Discord
+    rpc.on('ACTIVITY_JOIN', (data) => {
+      const secret = typeof data === 'string' ? data : data?.secret;
       console.log('[Discord RPC] ACTIVITY_JOIN secret:', secret);
       if (mainWindowRef && !mainWindowRef.isDestroyed() && secret) {
         try {
@@ -91,12 +103,40 @@ async function connect() {
       }
     });
 
+    // Auto-accept join requests
+    rpc.on('ACTIVITY_JOIN_REQUEST', (data) => {
+      console.log('[Discord RPC] ACTIVITY_JOIN_REQUEST from:', data?.user?.username);
+      // Auto-accept: respond with SEND_ACTIVITY_JOIN_INVITE
+      try {
+        if (rpc && data?.user?.id) {
+          rpc.request('SEND_ACTIVITY_JOIN_INVITE', { user_id: data.user.id }).catch(() => {});
+        }
+      } catch (_) {}
+    });
+
     await rpc.login();
   } catch (err) {
     console.warn('[Discord RPC] Failed to connect:', err.message ?? String(err));
     rpc = null;
     connected = false;
     if (!destroyed) scheduleReconnect();
+  }
+}
+
+/** Subscribe to activity events so Discord sends join/spectate events to us. */
+async function _subscribeEvents() {
+  if (!rpc || !connected) return;
+  try {
+    await rpc.subscribe('ACTIVITY_JOIN');
+    console.log('[Discord RPC] Subscribed to ACTIVITY_JOIN');
+  } catch (e) {
+    console.warn('[Discord RPC] Failed to subscribe ACTIVITY_JOIN:', e.message);
+  }
+  try {
+    await rpc.subscribe('ACTIVITY_JOIN_REQUEST');
+    console.log('[Discord RPC] Subscribed to ACTIVITY_JOIN_REQUEST');
+  } catch (e) {
+    console.warn('[Discord RPC] Failed to subscribe ACTIVITY_JOIN_REQUEST:', e.message);
   }
 }
 
@@ -146,15 +186,20 @@ function focusWindow(context) {
   if (act) _applyActivity(act);
 }
 
-// ── Truncation helper (used by multiple functions below) ─────────────────────
+// ── Truncation helper ─────────────────────────────────────────────────────────
 const truncate = (s, max = 128) =>
   s && s.length > max ? s.substring(0, max - 1) + '…' : (s || '');
+
+// Ensure min length of 2 for Discord (they reject shorter strings)
+const safeStr = (s) => {
+  if (!s) return undefined;
+  return s.length < 2 ? s + ' ' : s;
+};
 
 // ── Public presence setters ───────────────────────────────────────────────────
 
 /**
  * User is browsing the app, not watching anything.
- * Activity type 0 = Playing → "Playing AnixApp"
  */
 function setBrowsing(startTimestamp) {
   _setForContext('main', {
@@ -170,13 +215,12 @@ function setBrowsing(startTimestamp) {
 
 /**
  * User is on a specific app page (not watching).
- * Activity type 0 = Playing → "Playing AnixApp"
  */
 function setPage({ details, state: pageState }) {
   _setForContext('main', {
     type: 0,
-    details: details || 'В приложении',
-    state: pageState || '',
+    details: safeStr(details) || 'В приложении',
+    state: safeStr(pageState) || undefined,
     largeImageKey: 'logo',
     largeImageText: 'AnixApp — Anixart клиент',
     startTimestamp: Math.floor(Date.now() / 1000),
@@ -186,18 +230,20 @@ function setPage({ details, state: pageState }) {
 
 /**
  * User is viewing an anime release page (not playing yet).
- * Activity type 3 = Watching → "Watching AnixApp"
+ * Shows poster as large image.
  *
  * @param {object}  opts
  * @param {string}        opts.title      Anime title
- * @param {string|null}   [opts.posterUrl] Full HTTPS URL of the poster (used as large image)
+ * @param {string|null}   [opts.posterUrl] Full HTTPS URL of the poster
  */
 function setViewingRelease({ title, posterUrl }) {
+  // Remember poster for when user starts watching
+  if (posterUrl) _lastPosterUrl = posterUrl;
+
   _setForContext('main', {
     type: 3,
-    details: truncate(title || 'Аниме'),
+    details: safeStr(truncate(title || 'Аниме')),
     state: 'Просматривает страницу аниме',
-    // Discord supports full HTTPS URLs as largeImageKey
     largeImageKey: posterUrl || 'logo',
     largeImageText: truncate(title || 'AnixApp', 128),
     smallImageKey: 'logo',
@@ -208,20 +254,19 @@ function setViewingRelease({ title, posterUrl }) {
 
 /**
  * User is viewing a profile page.
- * Activity type 0 = Playing → "Playing AnixApp"
- * The user's avatar is shown as the large image.
+ * Shows the user's avatar as large image.
  *
  * @param {object}  opts
  * @param {string}        opts.username   Profile login/name
  * @param {string|null}   [opts.avatarUrl] Full HTTPS URL of the user's avatar
- * @param {boolean}       [opts.isSelf]   true = own profile, false = another user's profile
+ * @param {boolean}       [opts.isSelf]   true = own profile
  */
 function setViewingProfile({ username, avatarUrl, isSelf }) {
   const displayName = truncate(username || 'Пользователь', 64);
   _setForContext('main', {
     type: 0,
     details: isSelf ? 'Свой профиль' : `Профиль: ${displayName}`,
-    state: isSelf ? 'Просматривает свой профиль' : 'Просматривает профиль пользователя',
+    state: isSelf ? 'Просматривает свой профиль' : 'Просматривает профиль',
     largeImageKey: avatarUrl || 'logo',
     largeImageText: displayName,
     smallImageKey: 'logo',
@@ -231,76 +276,99 @@ function setViewingProfile({ username, avatarUrl, isSelf }) {
 }
 
 /**
+ * Update persistent party info. Called when joining/creating a lobby or when
+ * participants change. Passing null clears party info.
+ *
+ * @param {object|null} info
+ * @param {string}      info.partyId    Lobby room ID
+ * @param {number}      info.partySize  Current participant count
+ * @param {number}      info.partyMax   Max participants (default 10)
+ * @param {string}      info.joinSecret Room code for "Ask to Join"
+ */
+function setPartyInfo(info) {
+  _partyInfo = info ? {
+    partyId: String(info.partyId),
+    partySize: info.partySize || 1,
+    partyMax: info.partyMax || Math.max(info.partySize || 1, 10),
+    joinSecret: info.joinSecret ? String(info.joinSecret) : undefined,
+  } : null;
+  console.log('[Discord RPC] Party info updated:', _partyInfo);
+
+  // If player is active, re-apply its activity with updated party info
+  if (_playerActivity && _focusedContext === 'player') {
+    // Rebuild the player activity with new party info
+    _applyActivity(_playerActivity);
+  }
+}
+
+/**
+ * Store the last poster URL (so watching can use it without needing it in every state update).
+ */
+function setPosterUrl(url) {
+  _lastPosterUrl = url || null;
+}
+
+/**
  * User is watching an episode (optionally in a lobby).
- * Activity type 3 = Watching → "Watching AnixApp"
+ * Type 3 = Watching.
  *
  * @param {object}  opts
  * @param {string}        opts.title        Release title
  * @param {string}        opts.ep           Episode number/position
- * @param {string}        opts.sourceName   Dubbing / source name
+ * @param {string}        [opts.sourceName] Source player name (e.g. "Kodik")
+ * @param {string}        [opts.dubberName] Dubbing studio name (e.g. "AniLib") — preferred for display
  * @param {boolean}       opts.paused
  * @param {number}        opts.currentTime  Playback position in seconds
  * @param {number|null}   [opts.duration]   Total episode duration in seconds (enables progress bar)
- * @param {string|null}   [opts.posterUrl]  Anime poster URL (for large image during watch)
- * @param {string|null}   [opts.partyId]    Lobby room ID (for Discord party)
- * @param {number|null}   [opts.partySize]  Number of lobby participants
- * @param {string|null}   [opts.joinSecret] Room invite code (legacy join, not used here)
- * @param {string|null}   [opts.joinUrl]    URL/protocol for "Join" button
+ * @param {string|null}   [opts.posterUrl]  Anime poster URL (overrides remembered poster)
  */
-function setWatching({ title, ep, sourceName, paused, currentTime, duration, posterUrl, partyId, partySize, joinSecret, joinUrl }) {
-  const nowMs = Date.now();
-  const ct    = Math.max(0, Math.floor(currentTime ?? 0));
+function setWatching({ title, ep, sourceName, dubberName, paused, currentTime, duration, posterUrl }) {
+  const ct = Math.max(0, Math.floor(currentTime ?? 0));
 
+  // Prefer dubber name over source name for the state line
+  const displayName = dubberName || sourceName || '';
   const epStr  = ep != null ? `Серия ${ep}` : '';
-  const srcStr = sourceName ? ` · Озвучка: ${sourceName}` : '';
-  const state  = truncate(`${epStr}${srcStr}` || 'Смотрит аниме');
+  const srcStr = displayName ? ` · ${displayName}` : '';
+  const stateText = safeStr(truncate(`${epStr}${srcStr}`) || 'Смотрит аниме');
+
+  // Use provided poster, or remembered poster from release page
+  const poster = posterUrl || _lastPosterUrl || 'logo';
+  if (posterUrl) _lastPosterUrl = posterUrl;
 
   const activity = {
-    type: 3,   // Watching → "Watching AnixApp"
-    details: truncate(title || 'Аниме'),
-    state,
-    // If a poster URL is supplied use it; otherwise fall back to logo asset
-    largeImageKey:  posterUrl || 'logo',
+    type: 3,   // Watching
+    details: safeStr(truncate(title || 'Аниме')),
+    state: stateText,
+    largeImageKey: poster,
     largeImageText: truncate(title || 'AnixApp', 128),
-    smallImageKey:  paused ? 'pause' : 'play',
+    smallImageKey: paused ? 'pause' : 'play',
     smallImageText: paused ? 'На паузе' : 'Воспроизводится',
     instance: false,
   };
 
-  // Прогресс‑бар: показываем только когда видео ИДЁТ.
-  // При паузе Discord не должен продолжать двигать таймер/полоску,
-  // поэтому таймштампы не ставим вовсе.
-  if (!paused && duration && duration > 0) {
-    const startMs = nowMs - ct * 1000;
+  // Progress bar: Discord shows a countdown bar when both start + end timestamps are set.
+  // start = now - currentTime (as if playback started at that moment)
+  // end   = start + totalDuration
+  // When paused: don't set timestamps (Discord would keep moving the bar)
+  if (!paused && duration && duration > 0 && ct < duration) {
+    const nowMs = Date.now();
+    const startMs = nowMs - (ct * 1000);
+    const endMs = startMs + Math.floor(duration) * 1000;
     activity.startTimestamp = new Date(startMs);
-    const durSec = Math.floor(duration);
-    const endMs = startMs + durSec * 1000;
     activity.endTimestamp = new Date(endMs);
+  } else if (!paused) {
+    // No duration known — just show elapsed time
+    activity.startTimestamp = Math.floor(Date.now() / 1000) - ct;
   }
 
-  // Discord party info (официальная схема RPC: party + secrets/buttons)
-  if (partyId && partySize && partySize > 0) {
-    activity.party = {
-      id: String(partyId),
-      size: [partySize, Math.max(partySize, 10)],
-    };
-  }
-
-  // Вариант 1: joinUrl → кнопка "Присоединиться"
-  if (joinUrl) {
-    activity.buttons = [
-      {
-        label: 'Присоединиться к совместному просмотру',
-        url: String(joinUrl),
-      },
-    ];
-    activity.instance = true;
-  } else if (joinSecret) {
-    // Вариант 2: joinSecret (старый flow)
-    activity.secrets = {
-      ...(activity.secrets || {}),
-      join: String(joinSecret),
-    };
+  // Merge persistent party info (from lobby)
+  if (_partyInfo) {
+    activity.partyId   = _partyInfo.partyId;
+    activity.partySize = _partyInfo.partySize;
+    activity.partyMax  = _partyInfo.partyMax;
+    if (_partyInfo.joinSecret) {
+      activity.joinSecret = _partyInfo.joinSecret;
+    }
     activity.instance = true;
   }
 
@@ -338,6 +406,8 @@ module.exports = {
   setPage,
   setViewingRelease,
   setViewingProfile,
+  setPartyInfo,
+  setPosterUrl,
   setWatching,
   clearActivity,
   destroy,

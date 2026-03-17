@@ -99,7 +99,7 @@ export function renderSearch(initialQuery = '', initialTab: SearchTab = 'release
   let scrollAttached = false;
 
   function performSearch(append: boolean) {
-    if (!window.anix || !currentQuery.trim()) return;
+    if (!window.anixApi || !currentQuery.trim()) return;
     if (isLoading || !hasMore) return;
     if (!append) addSearchHistory(currentQuery.trim());
     isLoading = true;
@@ -125,11 +125,11 @@ export function renderSearch(initialQuery = '', initialTab: SearchTab = 'release
 
     const pageToLoad = currentPage;
     if (currentTab === 'releases') {
-      promise = window.anix.searchReleases(q, pageToLoad);
+      promise = window.anixApi.search.releases(q, pageToLoad);
     } else if (currentTab === 'profiles') {
-      promise = window.anix.searchProfiles(q, pageToLoad);
+      promise = window.anixApi.search.profiles(q, pageToLoad);
     } else {
-      promise = window.anix.searchCollections(q, pageToLoad);
+      promise = window.anixApi.search.collections(q, pageToLoad);
     }
 
     promise.then((data: any) => {

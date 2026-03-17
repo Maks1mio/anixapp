@@ -760,33 +760,48 @@
   white-space: pre-wrap;
 }
 
-// ——— Release page (страница тайтла) ———
+// ——— Release page (страница тайтла) — полный redesign ———
 .release-page {
   padding: 0.5rem 0 2rem;
-  max-width: 56rem;
+  max-width: 60rem;
   margin: 0 auto;
 }
 
 .release-page__head {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: 260px 1fr;
   gap: 2rem;
   align-items: start;
   margin-bottom: 2.5rem;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 720px) {
   .release-page__head {
     grid-template-columns: 1fr;
   }
+  .release-page__left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .release-page__poster {
+    max-width: 260px;
+  }
+}
+
+.release-page__left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  position: sticky;
+  top: 1rem;
 }
 
 .release-page__poster {
-  border-radius: $radius-lg;
+  border-radius: 12px;
   overflow: hidden;
   background: $color-surface;
-  border: 1px solid $color-border;
-  box-shadow: $shadow;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
 
   img {
     width: 100%;
@@ -801,232 +816,280 @@
   background: $color-surface-hover;
 }
 
-.release-page__title-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.25rem;
-}
-
-.release-page__title {
-  margin: 0;
-  font-size: 1.75rem;
-  font-weight: 700;
-  line-height: 1.2;
-  color: $color-text;
-}
-
-.release-page__age {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.2rem 0.5rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #fff;
-  background: rgba($color-error, 0.85);
-  border-radius: $radius-sm;
-  flex-shrink: 0;
-}
-
-.release-page__title-en {
-  margin: 0 0 0.75rem;
-  font-size: 1rem;
-  color: $color-text-muted;
-}
-
 .release-page__poster--clickable {
   cursor: pointer;
-  transition: opacity $transition;
+  transition: transform $transition, box-shadow $transition;
   &:hover {
-    opacity: 0.92;
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
   }
-}
-
-.release-page__action-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
 }
 
 .release-page__play-row {
   display: flex;
-  align-items: center;
   gap: 0.5rem;
-  margin-bottom: 1rem;
 }
 
 .release-page__btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 1rem;
-  font-size: 0.9rem;
-  font-weight: 500;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 600;
   color: $color-text;
   background: $color-surface-hover;
   border: 1px solid $color-border;
   border-radius: $radius-md;
   text-decoration: none;
   cursor: pointer;
-  transition: background $transition, border-color $transition, color $transition;
-
-  &:not(a):not(button) {
-    cursor: default;
-  }
+  transition: background $transition, border-color $transition, color $transition, transform 0.15s ease;
 
   .release-page__btn-icon {
     display: inline-flex;
     align-items: center;
   }
 
-  .release-page__btn-count {
-    color: $color-text-muted;
-  }
-
-  &:hover {
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
     background: $color-border;
     border-color: $color-text-muted;
   }
 
-  &--play {
-    padding: 0.65rem 1.25rem;
-    font-size: 1rem;
-    background: $color-surface;
-    border-color: $color-border;
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
 
-    &:hover {
-      background: $color-accent;
-      border-color: $color-accent;
+  &--play {
+    width: 100%;
+    padding: 0.8rem 1.5rem;
+    font-size: 1.05rem;
+    background: $color-accent;
+    border-color: $color-accent;
+    color: #fff;
+    border-radius: 10px;
+
+    &:hover:not(:disabled) {
+      background: $color-accent-hover;
+      border-color: $color-accent-hover;
       color: #fff;
     }
   }
 
-  &--status {
-    background: $color-surface-hover;
-    border-color: $color-border;
-    color: $color-text-muted;
-
-    &:hover {
-      background: $color-border;
-      color: $color-text;
-    }
-
-    &.release-page__btn--status-watching {
-      background: rgba($color-success, 0.22);
-      border-color: rgba($color-success, 0.5);
-      color: $color-success;
-
-      &:hover {
-        background: rgba($color-success, 0.35);
-        border-color: $color-success;
-      }
-    }
-  }
-
-  &--secondary {
-    .release-page__btn-count {
-      margin-left: 0.15rem;
-    }
+  &--disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
   }
 }
 
-.release-page__btn-chevron {
-  font-size: 0.65rem;
-  opacity: 0.8;
-}
-
-.release-page__status-slot {
-  position: relative;
-}
-
-.release-page__status-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  margin-top: 0.25rem;
-  min-width: 10rem;
-  padding: 0.35rem 0;
-  background: $color-surface;
-  border: 1px solid $color-border;
-  border-radius: $radius-md;
-  box-shadow: $shadow;
-  z-index: 50;
-}
-
-.release-page__status-option {
-  display: block;
+// ── Status selector (custom UIKit select under Watch btn) ──
+.release-page__status-selector {
   width: 100%;
-  padding: 0.5rem 1rem;
-  text-align: left;
-  font-size: 0.9rem;
-  color: $color-text;
-  background: none;
-  border: none;
-  cursor: pointer;
-  transition: background $transition;
 
-  &:hover {
-    background: $color-surface-hover;
+  .custom-select {
+    width: 100%;
+  }
+
+  .custom-select__trigger {
+    width: 100%;
   }
 }
 
-.release-page__ep-duration {
-  margin: 0.25rem 0;
-  font-size: 0.9rem;
+// ── Right column: Info ──
+.release-page__info {
+  padding-top: 0.25rem;
+}
+
+.release-page__title-row {
+  margin-bottom: 0.15rem;
+}
+
+.release-page__title {
+  margin: 0;
+  font-size: 1.85rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: $color-text;
+  letter-spacing: -0.01em;
+}
+
+.release-page__title-en {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 500;
   color: $color-text-muted;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.release-page__age {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: $color-text;
+  background: $color-surface-hover;
+  border: 1px solid $color-border;
+  border-radius: $radius-sm;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+
+  &--restricted {
+    color: #fff;
+    background: rgba($color-error, 0.8);
+    border-color: $color-error;
+  }
 }
 
 .release-page__meta-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem 1rem;
-  margin-bottom: 0.5rem;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
 }
 
 .release-page__rating {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.25rem 0.5rem;
+  padding: 0.25rem 0.55rem;
   border-radius: $radius-sm;
   font-size: 0.95rem;
-  font-weight: 600;
+  font-weight: 700;
 
   .release-page__rating-votes {
     font-weight: 500;
-    opacity: 0.9;
+    opacity: 0.85;
+    font-size: 0.85rem;
   }
 }
 
-.release-page__meta {
+// Favorite button (bookmark icon)
+.release-page__fav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.55rem;
+  min-height: 1.9rem;
   font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1;
   color: $color-text-muted;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-sm;
+  cursor: pointer;
+  transition: color $transition, background $transition, border-color $transition;
+
+  svg { transition: color $transition, fill $transition; }
+
+  &:hover {
+    color: $color-accent;
+    background: rgba($color-accent, 0.1);
+    border-color: rgba($color-accent, 0.35);
+  }
+
+  &--active {
+    color: $color-accent;
+    background: rgba($color-accent, 0.12);
+    border-color: rgba($color-accent, 0.5);
+    svg { fill: $color-accent; stroke: $color-accent; }
+  }
 }
 
-.release-page__category,
-.release-page__genres {
-  margin: 0.25rem 0;
-  font-size: 0.9rem;
-  color: $color-text-muted;
+// ── Note block (warnings, etc) ──
+.release-page__note {
+  margin-bottom: 0.75rem;
+  padding: 0.65rem 1rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: $color-text;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-left: 3px solid $color-accent;
+  border-radius: $radius-md;
 }
 
-.release-page__actions {
-  margin: 1rem 0;
-}
-
-.release-page__dots-slot {
-  display: inline-block;
-}
-
+// ── Description with smooth collapse ──
 .release-page__desc {
-  margin-top: 1rem;
-  line-height: 1.6;
-  font-size: 0.95rem;
+  margin-bottom: 1rem;
+  line-height: 1.65;
+  font-size: 0.93rem;
+  color: rgba($color-text, 0.82);
+  transition: max-height 0.35s ease;
+  overflow: hidden;
+
+  &--collapsed {
+    max-height: 6.6em; // ~4 lines
+    position: relative;
+
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 2.5em;
+      background: linear-gradient(to bottom, transparent, $color-bg);
+      pointer-events: none;
+    }
+  }
+}
+
+.release-page__desc-toggle {
+  display: inline-block;
+  padding: 0;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: $color-accent;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color $transition;
+
+  &:hover {
+    color: $color-accent-hover;
+  }
+}
+
+// ── Structured meta info (AniDesk-style rows) ──
+.release-page__meta-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 1rem;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+}
+
+.release-page__meta-info-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.release-page__meta-info-icon {
+  flex-shrink: 0;
+  width: 1.25rem;
+  text-align: center;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  opacity: 0.75;
+}
+
+.release-page__meta-info-text {
   color: $color-text-muted;
-  white-space: pre-wrap;
 }
 
 .release-page__section {

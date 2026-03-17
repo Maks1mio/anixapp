@@ -234,54 +234,46 @@ function showMainApp(): void {
 
   // ── Discord Rich Presence — lobby state updates ──
 
-  /** Push party info to Discord RPC when lobby participants change (даже если playback ещё нет). */
-  const pushDiscordLobby = () => {
-    const playback = getLastPlayback();
+  /** Push party info to Discord RPC when lobby participants change. */
+  const pushDiscordPartyInfo = () => {
     const roomId = getCurrentRoomId();
     const code = getCurrentRoomCode();
     const parts = getCurrentParticipants();
-    if (!roomId) return;
-
-    const title = playback?.title ?? 'Совместный просмотр';
-    const ep = playback?.ep ?? '';
-    const sourceName = playback?.sourceName ?? '';
-    const paused = playback?.paused ?? true;
-    const currentTime = playback?.currentTime ?? 0;
-    const duration = (playback as any)?.duration;
-    const joinUrl = code ? `anixapp://join/${encodeURIComponent(code)}` : undefined;
 
     (window.electron as { discordUpdate?: (d: Record<string, unknown>) => void })?.discordUpdate?.({
-      type: 'watching',
-      title,
-      ep,
-      sourceName,
-      paused,
-      currentTime,
-      // duration нужен для отображения прогресс-бара и таймера в Discord.
-      duration,
-      partyId: roomId,
+      type: 'partyInfo',
+      partyId: roomId ?? undefined,
       partySize: parts.length,
+      partyMax: Math.max(parts.length, 10),
       joinSecret: code ?? undefined,
-      joinUrl,
     });
   };
 
-  window.addEventListener('lobby:participantsChanged', pushDiscordLobby as EventListener);
-  window.addEventListener('lobby:remotePlayback', pushDiscordLobby as EventListener);
+  window.addEventListener('lobby:participantsChanged', pushDiscordPartyInfo as EventListener);
+  window.addEventListener('lobby:remotePlayback', pushDiscordPartyInfo as EventListener);
 
-  /** When user leaves lobby, revert Discord to browsing (no party). */
+  /** When user leaves lobby, clear party info in Discord. */
   window.addEventListener('lobby:left', (() => {
-    (window.electron as { discordUpdate?: (d: Record<string, unknown>) => void })?.discordUpdate?.({ type: 'browsing' });
+    (window.electron as { discordUpdate?: (d: Record<string, unknown>) => void })?.discordUpdate?.({
+      type: 'partyInfo',
+      partyId: null,
+    });
   }) as EventListener);
 
   /** Show anime poster + title in Discord when viewing a release page. */
   window.addEventListener('discord:releaseView', ((e: CustomEvent) => {
     const { title, posterUrl } = (e.detail as { title?: string; posterUrl?: string }) ?? {};
-    (window.electron as { discordUpdate?: (d: Record<string, unknown>) => void })?.discordUpdate?.({
+    const el = (window.electron as { discordUpdate?: (d: Record<string, unknown>) => void });
+    // Update Discord activity for release page
+    el?.discordUpdate?.({
       type: 'release',
       title: title ?? '',
       posterUrl: posterUrl ?? undefined,
     });
+    // Also store the poster URL so it's remembered when the user starts watching
+    if (posterUrl) {
+      el?.discordUpdate?.({ type: 'posterUrl', posterUrl });
+    }
   }) as EventListener);
 
   /** Show user avatar + name in Discord when viewing any profile page. */
@@ -365,10 +357,10 @@ function showOfflineScreen(): void {
   `;
 
   const retry = async () => {
-    if (!window.anix) return;
+    if (!window.anixApi) return;
     try {
-      await window.anix.checkConnection();
-      const { hasToken } = await window.anix.getAuthStatus();
+      await window.anixApi.client.checkConnection();
+      const { hasToken } = await window.anixApi.auth.getStatus();
       clearOfflineRetryTimer();
       if (hasToken) {
         showMainApp();
@@ -395,7 +387,7 @@ export function initApp(): void {
 
   initTooltipPlacement();
 
-  if (typeof window.anix === 'undefined') {
+  if (typeof window.anixApi === 'undefined') {
     app.innerHTML = '';
     app.appendChild(renderLogin(() => {}));
     const err = app.querySelector('.auth-form__error') as HTMLElement;
@@ -417,10 +409,10 @@ export function initApp(): void {
   // затем пробуем проверить соединение и статус авторизации.
   showOfflineScreen();
 
-  window.anix
+  window.anixApi.client
     .checkConnection()
     .then(async () => {
-      const { hasToken } = await window.anix.getAuthStatus();
+      const { hasToken } = await window.anixApi.auth.getStatus();
       // Немного задерживаем переход, чтобы пользователь успел увидеть экран проверки соединения.
       window.setTimeout(() => {
         if (hasToken) {

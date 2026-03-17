@@ -16,13 +16,13 @@ export function renderNotifications(): HTMLElement {
 
   if (!listEl) return wrap;
 
-  if (!window.anix) {
+  if (!window.anixApi) {
     listEl.innerHTML = '<p class="notifications__error">API недоступно (только в Electron).</p>';
     return wrap;
   }
 
-  window.anix
-    .getNotifications(0)
+  window.anixApi.notification
+    .all(0)
     .then((data: any) => {
       console.log('[Anix API] notifications', data);
       const content = (data?.content ?? []) as any[];

@@ -244,7 +244,7 @@ export function renderWatch(): HTMLElement {
   };
   popoverClose?.addEventListener('click', closePopover);
 
-  if (!releaseId || !sourceId || !ep || !window.anix?.getEpisode) {
+  if (!releaseId || !sourceId || !ep || !window.anixApi?.release?.getEpisode) {
     if (playerLoading) playerLoading.textContent = 'Неверные параметры просмотра.';
     return wrap;
   }
@@ -304,9 +304,9 @@ export function renderWatch(): HTMLElement {
         }
       } catch (_) {}
     }
-    if (!useVideo && !isEmbedPage && window.anix?.getDirectVideoLink) {
+    if (!useVideo && !isEmbedPage && window.anixApi?.release?.getDirectVideoLink) {
       try {
-        const { directUrl } = await window.anix.getDirectVideoLink(url);
+        const { directUrl } = await window.anixApi.release.getDirectVideoLink(url);
         if (directUrl) {
           const raw = directUrl.startsWith('http') ? directUrl : `https:${directUrl}`;
           playUrl = stripKodikQueryParams(raw);
@@ -365,7 +365,7 @@ export function renderWatch(): HTMLElement {
     window.electron.sendPlayerState({ action, playback } as unknown as Parameters<typeof window.electron.sendPlayerState>[0]);
   };
 
-  window.anix.getEpisode(releaseIdNum, sourceIdNum, epNum).then(async (res: { episode?: { url: string; iframe: boolean } }) => {
+  window.anixApi.release.getEpisode(releaseIdNum, sourceIdNum, epNum).then(async (res: { episode?: { url: string; iframe: boolean } }) => {
     const episode = res?.episode;
     if (!episode?.url) {
       if (playerLoading) playerLoading.hidden = true;
@@ -560,8 +560,8 @@ export function renderWatch(): HTMLElement {
         videoEl.addEventListener('playing', () => {
           const rId = parseInt(state.releaseId, 10);
           const sId = parseInt(state.sourceId, 10);
-          window.anix?.addToHistory?.(rId, sId, ep);
-          window.anix?.markEpisodeAsWatched?.(rId, sId, ep).catch(() => {});
+          window.anixApi?.history?.add?.(rId, sId, ep);
+          window.anixApi?.history?.markWatched?.(rId, sId, ep).catch(() => {});
         }, { once: true });
         doPlay();
       } else {
@@ -570,8 +570,8 @@ export function renderWatch(): HTMLElement {
         if (videoEl) videoEl.hidden = true;
         const rId = parseInt(state.releaseId, 10);
         const sId = parseInt(state.sourceId, 10);
-        window.anix?.addToHistory?.(rId, sId, ep);
-        window.anix?.markEpisodeAsWatched?.(rId, sId, ep).catch(() => {});
+        window.anixApi?.history?.add?.(rId, sId, ep);
+        window.anixApi?.history?.markWatched?.(rId, sId, ep).catch(() => {});
       }
     };
 
@@ -675,14 +675,14 @@ export function renderWatch(): HTMLElement {
       return;
     }
     const dubberIdNum = state.dubberId ? parseInt(state.dubberId, 10) : 0;
-    if (!dubberIdNum || !window.anix?.getEpisodes) {
+    if (!dubberIdNum || !window.anixApi?.release?.getEpisodes) {
       const { scrollRoot, setLoading } = openPopover('Серии', 'series');
       setLoading('Нет данных об озвучке. Выберите озвучку.');
       return;
     }
     const { scrollRoot, setLoading } = openPopover('Серии', 'series');
     setLoading('Загрузка…');
-    window.anix.getEpisodes(releaseIdNum, dubberIdNum, parseInt(state.sourceId, 10)).then((res: { episodes?: Array<{ position: number; name: string; is_watched?: boolean }> }) => {
+    window.anixApi.release.getEpisodes(releaseIdNum, dubberIdNum, parseInt(state.sourceId, 10)).then((res: { episodes?: Array<{ position: number; name: string; is_watched?: boolean }> }) => {
       const episodes = res?.episodes ?? [];
       scrollRoot.innerHTML = '';
       if (episodes.length === 0) {
@@ -756,14 +756,14 @@ export function renderWatch(): HTMLElement {
 
   btnDub?.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (!popover || !state.releaseId || !window.anix?.getDubbers) return;
+    if (!popover || !state.releaseId || !window.anixApi?.release?.getDubbers) return;
     if (!popover.hidden && currentPopoverType === 'dubbing') {
       closePopover();
       return;
     }
     const { scrollRoot, setLoading } = openPopover('Озвучка', 'dubbing');
     setLoading('Загрузка…');
-    window.anix.getDubbers(releaseIdNum).then((res: { types?: Array<{ id: number; name: string }> }) => {
+    window.anixApi.release.getDubbers(releaseIdNum).then((res: { types?: Array<{ id: number; name: string }> }) => {
       const types = res?.types ?? [];
       const dubberIdNum = state.dubberId ? parseInt(state.dubberId, 10) : 0;
       scrollRoot.innerHTML = '';
@@ -790,7 +790,7 @@ export function renderWatch(): HTMLElement {
           list.querySelectorAll<HTMLButtonElement>('.watch-page__popover-item').forEach(b => { b.disabled = true; });
           btn.classList.add('watch-page__popover-item--loading');
           btn.innerHTML = `<span class="watch-page__popover-item-text">${escapeHtml(dubber.name)}</span><span class="watch-page__popover-spinner"></span>`;
-          window.anix?.getDubberSources(releaseIdNum, dubber.id).then((srcRes: { sources?: Array<{ id: number; name: string }> }) => {
+          window.anixApi?.release?.getDubberSources(releaseIdNum, dubber.id).then((srcRes: { sources?: Array<{ id: number; name: string }> }) => {
             const sources = srcRes?.sources ?? [];
             const first = sources[0];
             if (first) {
@@ -823,8 +823,8 @@ export function renderWatch(): HTMLElement {
   });
 
   const loadEpisodeInPlace = (rId: number, sId: number, ep: number, titleStr: string, sourceNameStr: string, dubberIdStr: string, seekTime?: number, initialPaused?: boolean) => {
-    if (!window.anix?.getEpisode) return;
-    window.anix.getEpisode(rId, sId, ep).then(async (res: { episode?: { url: string; iframe: boolean } }) => {
+    if (!window.anixApi?.release?.getEpisode) return;
+    window.anixApi.release.getEpisode(rId, sId, ep).then(async (res: { episode?: { url: string; iframe: boolean } }) => {
       const episode = res?.episode;
       if (!episode?.url) return;
       const { playUrl: resolvedUrl, useVideo: useVideoRes } = await resolveEpisodeUrl(episode.url, episode.iframe);
@@ -1119,7 +1119,7 @@ export function renderWatch(): HTMLElement {
     } else if (sameReleaseAndEpisode && videoEl && !videoEl.hidden && videoEl.readyState < 2) {
       // Видео ещё не готово — сохраняем sync и применим его после loadedmetadata.
       pendingSync = p;
-    } else if (!sameReleaseAndEpisode && window.anix?.getEpisode) {
+    } else if (!sameReleaseAndEpisode && window.anixApi?.release?.getEpisode) {
       // Update releaseId/sourceId in state (applyVideoAndUI doesn't do this)
       state.releaseId = p.releaseId;
       state.sourceId = p.sourceId;

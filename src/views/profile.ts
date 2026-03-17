@@ -244,15 +244,15 @@ export function renderProfile(userId?: number): HTMLElement {
     </div>
   `;
 
-  if (!window.anix) {
+  if (!window.anixApi) {
     const st = wrap.querySelector('.profile__status') as HTMLElement;
     if (st) st.textContent = 'API недоступно (только в Electron).';
     return wrap;
   }
 
   const profilePromise = userId
-    ? window.anix.getProfileById(userId)
-    : window.anix.getSelfProfile();
+    ? window.anixApi.profile.info(userId)
+    : window.anixApi.profile.self();
 
   profilePromise.then((data: any) => {
     console.log('[Anix API] profile', data);
@@ -435,10 +435,10 @@ export function renderProfile(userId?: number): HTMLElement {
     }
 
     // Friends — clickable
-    if (profile.friend_count > 0 && profile.id && window.anix) {
+    if (profile.friend_count > 0 && profile.id && window.anixApi) {
       const friendsSection = wrap.querySelector('.profile__section--friends') as HTMLElement;
       const friendsList = wrap.querySelector('.profile__friends-list') as HTMLElement;
-      window.anix.getFriends(profile.id, 0).then((fData: any) => {
+      window.anixApi.profile.getFriends(profile.id, 0).then((fData: any) => {
         const friends = (fData?.content ?? []) as any[];
         if (!friends.length) return;
         friendsSection.hidden = false;

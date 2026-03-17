@@ -82,6 +82,7 @@ contextBridge.exposeInMainWorld('anix', {
   getRandomRelease: (extended = true) => ipcRenderer.invoke('anix:randomRelease', extended),
   getLatestFeed: (page = 1) => ipcRenderer.invoke('anix:latestFeed', page),
   getDiscoverRecommendations: (page = 0) => ipcRenderer.invoke('anix:discoverRecommendations', page),
+  filterReleases: (page = 0, filterArgs = {}, extended = true) => ipcRenderer.invoke('anix:filterReleases', page, filterArgs, extended),
   getArticleById: (id) => ipcRenderer.invoke('anix:articleById', id),
   getChannelById: (id) => ipcRenderer.invoke('anix:channelById', id),
   getProfileById: (id) => ipcRenderer.invoke('anix:profileById', id),

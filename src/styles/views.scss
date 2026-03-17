@@ -114,28 +114,39 @@
   width: 100%;
 }
 
-.hero {
-  text-align: center;
-  padding: 3rem 1rem;
-}
-
-.hero__title {
-  font-size: 2.5rem;
-  margin: 0 0 0.5rem;
-  font-weight: 700;
-}
-
-.hero__subtitle {
-  color: $color-text-muted;
-  margin: 0 0 2rem;
-  font-size: 1.1rem;
-}
-
-.hero__actions {
+.releases-type {
+  position: sticky;
+  top: calc(-1 * var(--page-scroll-padding));
+  z-index: 10;
   display: flex;
-  gap: 1rem;
-  justify-content: center;
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0 1.5rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.5rem;
+  background: $color-bg;
+  border-bottom: 1px solid $color-border;
+  // Визуальный отступ сверху без «дыры» под табами:
+  // отрицательный margin поднимает блок, а padding-top возвращает фон.
+  // Больше визуальный отступ сверху без разрыва фона
+  margin-top: -0.5rem;
+  padding-top: 0.5rem;
+}
+
+.home-toolbar__random {
+  margin-left: auto;
+  margin-right: 0.75rem;
+  height: 2.1rem;
+  font-size: 0.9rem;
+  padding-inline: 0.9rem;
+}
+
+.tabs-bar__action {
+  margin-left: auto;
+}
+
+.tabs-bar__action + .tabs-bar__action {
+  margin-left: 0.5rem;
 }
 
 // ——— Feed ———
@@ -325,6 +336,8 @@
   padding-bottom: 0.5rem;
   border-bottom: 1px solid $color-border;
   background: $color-bg;
+  margin-top: -0.5rem;
+  padding-top: 0.5rem;
 }
 
 .bookmarks__tab {
@@ -367,12 +380,6 @@
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-
-  &.release-cards-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 1rem;
-  }
 }
 
 .bookmarks__loading,

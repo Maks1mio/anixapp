@@ -53,53 +53,6 @@
   max-width: 100%;
 }
 
-// ——— Basic Tabs (анимированный фон на выбранный таб) ———
-.uikit-tabs-demo {
-  .tabs {
-    display: inline-flex;
-    position: relative;
-    padding: 4px;
-    border-radius: $radius-lg;
-    background: $color-bg;
-    gap: 2px;
-  }
-
-  .tabs__slider {
-    position: absolute;
-    top: 4px;
-    bottom: 4px;
-    left: 4px;
-    width: 0;
-    border-radius: 6px;
-    background: $color-surface-hover;
-    pointer-events: none;
-    transition: left 0.25s ease, width 0.25s ease;
-    z-index: 0;
-  }
-
-  .tabs__tab {
-    position: relative;
-    z-index: 1;
-    padding: 0.5rem 1rem;
-    font-size: 0.9rem;
-    font-weight: 500;
-    color: $color-text-muted;
-    background: transparent;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: color $transition;
-
-    &:hover {
-      color: $color-text;
-    }
-
-    &--active {
-      color: #fff;
-    }
-  }
-}
-
 .uikit-dots-menu-demo {
   display: flex;
   flex-wrap: wrap;

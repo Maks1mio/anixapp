@@ -1,6 +1,5 @@
 import { navigate } from '../app';
-import { renderReleaseCardHorizontal } from '../components/release-card-h';
-import { renderReleaseCardVertical } from '../components/release-card-v';
+import { renderReleaseCardsGrid } from '../components/grid';
 import { renderSearchFranchise } from '../components/search-franchise';
 import { renderCollectionCard } from '../components/collection-card';
 import { getCardLayout } from '../prefs';
@@ -220,7 +219,7 @@ export function renderSearch(initialQuery = '', initialTab: SearchTab = 'release
     if (!wrap || !append) {
       wrap = document.createElement('div');
       wrap.dataset.searchRel = 'releases';
-      wrap.className = layout === 'mini' ? 'release-cards-grid' : 'search-page__results--wide';
+      wrap.className = 'search-page__results--wide';
       if (!append) {
         // при новом поиске заменяем контейнер
         const old = results.querySelector('[data-search-rel=\"releases\"]');
@@ -229,13 +228,9 @@ export function renderSearch(initialQuery = '', initialTab: SearchTab = 'release
       results.appendChild(wrap);
     }
 
-    content.forEach((raw: any) => {
-      const cardData = mapReleaseToCardData(raw);
-      const card = layout === 'mini'
-        ? renderReleaseCardVertical(cardData)
-        : renderReleaseCardHorizontal(cardData);
-      wrap.appendChild(card);
-    });
+    const cardsData = content.map((raw: any) => mapReleaseToCardData(raw));
+    const gridEl = renderReleaseCardsGrid({ items: cardsData, layout, className: layout === 'mini' ? 'release-cards-grid' : '' });
+    wrap.appendChild(gridEl);
   }
 
   function renderProfileResults(content: any[], append: boolean) {

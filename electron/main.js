@@ -799,6 +799,13 @@ ipcMain.handle('anix:discoverRecommendations', async (_, page = 0) => {
   return data;
 });
 
+ipcMain.handle('anix:filterReleases', async (_, page = 0, filterArgs = {}, extended = true) => {
+  const client = getAnixart();
+  // Поведение как в AniDesk: release.filter(page, filterArgs, extended)
+  const data = await client.endpoints.release.filter(page, filterArgs, extended);
+  return data;
+});
+
 ipcMain.handle('anix:articleById', async (_, id) => {
   const client = getAnixart();
   const data = await client.endpoints.channel.getArticle(id);

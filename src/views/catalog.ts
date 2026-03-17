@@ -1,5 +1,4 @@
-import { renderReleaseCardHorizontal } from '../components/release-card-h';
-import { renderReleaseCardVertical } from '../components/release-card-v';
+import { renderReleaseCardsGrid } from '../components/grid';
 import { getCardLayout } from '../prefs';
 import type { ReleaseCardData } from '../types/release';
 
@@ -84,9 +83,6 @@ export function renderCatalog(): HTMLElement {
 
   const listEl = wrap.querySelector('#catalog-list') as HTMLElement;
   const layout = getCardLayout();
-  if (layout === 'mini') {
-    listEl.classList.add('release-cards-grid');
-  }
 
   if (!window.anix) {
     listEl.innerHTML = '<p class="feed-error">API доступно только в Electron.</p>';
@@ -100,13 +96,9 @@ export function renderCatalog(): HTMLElement {
       const content = (data?.content ?? []) as Record<string, unknown>[];
       if (content.length > 0) {
         listEl.innerHTML = '';
-        content.forEach((raw) => {
-          const cardData = mapReleaseToCardData(raw);
-          const card = layout === 'mini'
-            ? renderReleaseCardVertical(cardData)
-            : renderReleaseCardHorizontal(cardData);
-          listEl.appendChild(card);
-        });
+        const cardsData = content.map((raw) => mapReleaseToCardData(raw));
+        const gridEl = renderReleaseCardsGrid({ items: cardsData, layout, className: 'catalog-list' });
+        listEl.appendChild(gridEl);
         return;
       }
       return api.getLatestFeed(1).then(async (feedData) => {
@@ -128,12 +120,8 @@ export function renderCatalog(): HTMLElement {
         );
         const cards: ReleaseCardData[] = results.filter(Boolean).map((raw) => mapReleaseToCardData(raw!));
         listEl.innerHTML = '';
-        cards.forEach((item) => {
-          const card = layout === 'mini'
-            ? renderReleaseCardVertical(item)
-            : renderReleaseCardHorizontal(item);
-          listEl.appendChild(card);
-        });
+        const gridEl = renderReleaseCardsGrid({ items: cards, layout, className: 'catalog-list' });
+        listEl.appendChild(gridEl);
       });
     })
     .catch((err) => {

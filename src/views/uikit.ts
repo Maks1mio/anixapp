@@ -5,6 +5,7 @@ import { ratingHue, renderReleaseCardHorizontal } from '../components/release-ca
 import { renderReleaseCardVertical } from '../components/release-card-v';
 import { renderCollectionCard } from '../components/collection-card';
 import { renderSearchFranchise } from '../components/search-franchise';
+import { renderReleaseCardsGrid } from '../components/grid';
 import { renderSelect } from '../components/select';
 import type { ReleaseCardData } from '../types/release';
 
@@ -56,9 +57,9 @@ export function renderUikit(): HTMLElement {
     </section>
 
     <section class="uikit-section">
-      <h2 class="uikit-section__title">Basic Tabs</h2>
-      <p class="uikit-section__desc">Табы с анимированным переходом фона на выбранный</p>
-      <div class="uikit-tabs-demo" id="uikit-tabs-demo"></div>
+      <h2 class="uikit-section__title">Tabs & Grid</h2>
+      <p class="uikit-section__desc">Комбинация tabs-bar и грида карточек как на главной/в закладках</p>
+      <div class="uikit-tabs-grid-demo" id="uikit-tabs-grid-demo"></div>
     </section>
 
     <section class="uikit-section">
@@ -211,50 +212,57 @@ export function renderUikit(): HTMLElement {
     selectDemo.appendChild(apiSelect);
   }
 
-  const tabsDemo = wrap.querySelector('#uikit-tabs-demo');
-  if (tabsDemo) {
-    const labels = ['Profile', 'Connections', 'Subscription', 'Security'];
+  const tabsGridDemo = wrap.querySelector('#uikit-tabs-grid-demo');
+  if (tabsGridDemo) {
     const tabsRoot = document.createElement('div');
-    tabsRoot.className = 'tabs';
-    tabsRoot.setAttribute('role', 'tablist');
-    const slider = document.createElement('div');
-    slider.className = 'tabs__slider';
-    slider.setAttribute('aria-hidden', 'true');
-    tabsRoot.appendChild(slider);
-    let activeIndex = 1;
-    labels.forEach((label, i) => {
+    tabsRoot.className = 'bookmarks__tabs';
+
+    const makeTab = (id: string, label: string, active: boolean) => {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'tabs__tab';
-      btn.setAttribute('role', 'tab');
-      btn.setAttribute('aria-selected', i === activeIndex ? 'true' : 'false');
+      btn.className = 'bookmarks__tab';
+      if (active) btn.classList.add('bookmarks__tab--active');
+      btn.dataset.tab = id;
       btn.textContent = label;
+      return btn;
+    };
+
+    const latestTab = makeTab('latest', 'Последние', true);
+    const ongoingTab = makeTab('ongoing', 'Онгоинги', false);
+    tabsRoot.appendChild(latestTab);
+    tabsRoot.appendChild(ongoingTab);
+    tabsGridDemo.appendChild(tabsRoot);
+
+    const gridHost = document.createElement('div');
+    gridHost.id = 'uikit-tabs-grid-host';
+    tabsGridDemo.appendChild(gridHost);
+
+    const latestItems: ReleaseCardData[] = [
+      { id: 1, titleRu: 'Адская девочка', rating: 4.23 },
+      { id: 2, titleRu: 'Провожающая в последний путь Фрирен', rating: 4.9 },
+    ];
+    const ongoingItems: ReleaseCardData[] = [
+      { id: 3, titleRu: 'Онгоинг пример 1', rating: 4.1 },
+      { id: 4, titleRu: 'Онгоинг пример 2', rating: 3.8 },
+    ];
+
+    const renderTabGrid = (which: 'latest' | 'ongoing') => {
+      gridHost.innerHTML = '';
+      const items = which === 'latest' ? latestItems : ongoingItems;
+      const gridEl = renderReleaseCardsGrid({ items, layout: 'wide', className: 'bookmarks__grid' });
+      gridHost.appendChild(gridEl);
+    };
+
+    renderTabGrid('latest');
+
+    [latestTab, ongoingTab].forEach((btn) => {
       btn.addEventListener('click', () => {
-        activeIndex = i;
-        labels.forEach((_, j) => {
-          const t = tabsRoot.querySelectorAll('.tabs__tab')[j] as HTMLElement;
-          if (t) t.setAttribute('aria-selected', j === i ? 'true' : 'false');
+        const id = btn.dataset.tab === 'ongoing' ? 'ongoing' : 'latest';
+        tabsRoot.querySelectorAll('.bookmarks__tab').forEach((el) => {
+          el.classList.toggle('bookmarks__tab--active', el === btn);
         });
-        tabsRoot.querySelectorAll('.tabs__tab').forEach((tab) => tab.classList.remove('tabs__tab--active'));
-        (tabsRoot.querySelectorAll('.tabs__tab')[i] as HTMLElement)?.classList.add('tabs__tab--active');
-        const tabEl = tabsRoot.querySelectorAll('.tabs__tab')[i] as HTMLElement;
-        if (tabEl && slider) {
-          const r = tabEl.getBoundingClientRect();
-          const parentR = tabsRoot.getBoundingClientRect();
-          slider.style.left = `${tabEl.offsetLeft}px`;
-          slider.style.width = `${tabEl.offsetWidth}px`;
-        }
+        renderTabGrid(id);
       });
-      tabsRoot.appendChild(btn);
-      if (i === activeIndex) btn.classList.add('tabs__tab--active');
-    });
-    tabsDemo.appendChild(tabsRoot);
-    requestAnimationFrame(() => {
-      const tabEl = tabsRoot.querySelectorAll('.tabs__tab')[activeIndex] as HTMLElement;
-      if (tabEl && slider) {
-        slider.style.left = `${tabEl.offsetLeft}px`;
-        slider.style.width = `${tabEl.offsetWidth}px`;
-      }
     });
   }
 

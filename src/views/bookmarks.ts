@@ -1,8 +1,8 @@
-import { renderReleaseCardHorizontal } from '../components/release-card-h';
-import { renderReleaseCardVertical } from '../components/release-card-v';
+import { renderReleaseCardsGrid } from '../components/grid';
 import { getCardLayout } from '../prefs';
 import type { ReleaseCardData } from '../types/release';
 import { buildPosterUrl } from '../utils/posterUrl';
+import { renderTabsBar } from '../components/tabs';
 
 type TabId = 'favorites' | 'watching' | 'planned' | 'completed' | 'on_hold' | 'dropped';
 
@@ -62,14 +62,7 @@ export function renderBookmarks(): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'view view-bookmarks';
 
-  const tabsHtml = TABS.map(
-    (t) => `<button type="button" class="bookmarks__tab" data-tab="${t.id}">${t.label}</button>`,
-  ).join('');
-
   wrap.innerHTML = `
-    <div class="bookmarks__tabs" role="tablist">
-      ${tabsHtml}
-    </div>
     <div class="bookmarks__content">
       <div class="bookmarks__grid" id="bookmarks-grid">
         <div class="bookmarks__loading">Загрузка…</div>
@@ -82,10 +75,16 @@ export function renderBookmarks(): HTMLElement {
   const moreEl = wrap.querySelector('#bookmarks-more') as HTMLElement;
   if (!grid) return wrap;
 
+  const tabsEl = renderTabsBar({
+    tabs: TABS.map((t) => ({ id: t.id, label: t.label })),
+    activeId: 'favorites',
+    onChange: (id) => {
+      loadTab(id as TabId);
+    },
+  });
+  wrap.insertBefore(tabsEl, wrap.firstChild);
+
   const layout = getCardLayout();
-  if (layout === 'mini') {
-    grid.classList.add('release-cards-grid');
-  }
 
   let currentTab: TabId = 'favorites';
   let nextPage = 1;
@@ -108,20 +107,17 @@ export function renderBookmarks(): HTMLElement {
     if (moreEl) moreEl.hidden = true;
   }
 
-  function appendCards(content: Record<string, unknown>[]) {
-    content.forEach((raw) => {
-      const cardData = mapReleaseToCardData(raw);
-      const card =
-        layout === 'mini'
-          ? renderReleaseCardVertical(cardData)
-          : renderReleaseCardHorizontal(cardData);
-      grid.appendChild(card);
+  function renderCards(content: Record<string, unknown>[], append = false) {
+    const cardsData = content.map((raw) => mapReleaseToCardData(raw));
+    const gridEl = renderReleaseCardsGrid({
+      items: cardsData,
+      layout,
+      className: 'bookmarks__grid',
     });
-  }
-
-  function renderCards(content: Record<string, unknown>[]) {
-    grid.innerHTML = '';
-    appendCards(content);
+    if (!append) {
+      grid.innerHTML = '';
+    }
+    grid.appendChild(gridEl);
   }
 
   function loadMore() {
@@ -134,7 +130,7 @@ export function renderBookmarks(): HTMLElement {
     }
 
     const onLoaded = (content: Record<string, unknown>[]) => {
-      appendCards(content);
+      renderCards(content, true);
       hasMore = content.length > 0;
       nextPage += 1;
       if (moreEl) {
@@ -172,9 +168,6 @@ export function renderBookmarks(): HTMLElement {
     currentTab = tabId;
     nextPage = 1;
     hasMore = true;
-    wrap.querySelectorAll('.bookmarks__tab').forEach((btn) => {
-      btn.classList.toggle('bookmarks__tab--active', (btn as HTMLElement).dataset.tab === tabId);
-    });
 
     if (!window.anix) {
       setError('API недоступно (только в Electron).');
@@ -263,13 +256,6 @@ export function renderBookmarks(): HTMLElement {
     });
   }
   requestAnimationFrame(attachScrollListener);
-
-  wrap.querySelectorAll('.bookmarks__tab').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const id = (btn as HTMLElement).dataset.tab as TabId;
-      if (id) loadTab(id);
-    });
-  });
 
   loadTab('favorites');
   return wrap;

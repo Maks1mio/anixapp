@@ -16,6 +16,7 @@ export interface AnixApi {
   getRandomRelease: (extended?: boolean) => Promise<{ release?: unknown }>;
   getLatestFeed: (page?: number) => Promise<{ content?: unknown[] }>;
   getDiscoverRecommendations: (page?: number) => Promise<{ content?: unknown[] }>;
+  filterReleases: (page?: number, filterArgs?: Record<string, unknown>, extended?: boolean) => Promise<{ content?: unknown[] }>;
   getArticleById: (id: number) => Promise<{ article?: unknown }>;
   getChannelById: (id: number) => Promise<{ channel?: unknown }>;
   getProfileById: (id: number) => Promise<{ profile?: unknown }>;

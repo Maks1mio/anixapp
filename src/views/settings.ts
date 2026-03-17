@@ -65,7 +65,13 @@ export function renderSettingsContent(): HTMLElement {
       const v = value === 'mini' ? 'mini' : 'wide';
       setCardLayout(v);
       const path = window.location.pathname + window.location.search;
-      if (path.startsWith('/catalog') || path.startsWith('/search')) {
+      // Перерисовываем страницы, которые зависят от раскладки карточек
+      if (
+        path === '/'
+        || path.startsWith('/catalog')
+        || path.startsWith('/search')
+        || path.startsWith('/bookmarks')
+      ) {
         navigate(path);
       }
     },

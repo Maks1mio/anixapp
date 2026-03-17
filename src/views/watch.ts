@@ -341,7 +341,7 @@ export function renderWatch(): HTMLElement {
         currentTime?: number;
       }
     | null = null;
-  const getPlaybackPayload = (): { releaseId: string; sourceId: string; ep: string; dubberId?: string; title: string; sourceName: string; paused: boolean; currentTime: number } => ({
+  const getPlaybackPayload = (): { releaseId: string; sourceId: string; ep: string; dubberId?: string; title: string; sourceName: string; paused: boolean; currentTime: number; duration?: number } => ({
     releaseId: state.releaseId,
     sourceId: state.sourceId,
     ep: String(state.ep),
@@ -350,6 +350,9 @@ export function renderWatch(): HTMLElement {
     sourceName: state.sourceName,
     paused: !!(videoEl && !videoEl.hidden && videoEl.paused),
     currentTime: videoEl && !videoEl.hidden && !isNaN(videoEl.currentTime) ? videoEl.currentTime : 0,
+    duration: videoEl && !videoEl.hidden && !isNaN(videoEl.duration) && isFinite(videoEl.duration) && videoEl.duration > 0
+      ? videoEl.duration
+      : undefined,
   });
   const sendCommandToLobby = (action: 'play' | 'pause' | 'seek' | 'changeEpisode', currentTimeOverride?: number) => {
     if (isApplyingSync || !window.electron?.sendPlayerState) return;
@@ -576,6 +579,18 @@ export function renderWatch(): HTMLElement {
 
     if (useVideo) {
       bindTimeUpdate();
+      // После загрузки метаданных (известна длительность) один раз шлём актуальный playback в main,
+      // чтобы Discord RPC получил корректный duration и сразу нарисовал таймлайн.
+      videoEl.addEventListener(
+        'loadedmetadata',
+        () => {
+          try {
+            const playbackWithDuration = getPlaybackPayload();
+            (window.electron as any)?.sendPlayerState?.(playbackWithDuration);
+          } catch (_) {}
+        },
+        { once: true },
+      );
       videoEl.addEventListener('play', () => {
         updatePlayPauseUI();
         sendCommandToLobby('play');

@@ -9,6 +9,7 @@
     "build:icon": "node scripts/build-icon.js",
     "build": "vite build && yarn build:icon && electron-builder",
     "build:vite": "vite build",
+    "rebuild:native": "electron-rebuild -f -w discord_bridge",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
     "electron:build": "vite build && yarn build:icon && electron-builder",
     "preview": "vite preview"
@@ -21,6 +22,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@electron/rebuild": "^4.0.3",
     "concurrently": "^9.1.0",
     "cross-env": "^7.0.3",
     "electron": "^35.7.5",
@@ -31,6 +33,7 @@
     "wait-on": "^8.0.1"
   },
   "dependencies": {
+    "@xhayper/discord-rpc": "^1.3.1",
     "anixartjs": "^0.1.6",
     "hls.js": "^1.6.15",
     "lucide": "^0.577.0"

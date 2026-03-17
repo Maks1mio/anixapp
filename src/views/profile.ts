@@ -280,6 +280,15 @@ export function renderProfile(userId?: number): HTMLElement {
     const nameEl = wrap.querySelector('.profile__name') as HTMLElement;
     if (nameEl) nameEl.textContent = profile.login || 'Профиль';
 
+    // Discord Rich Presence: show profile info (avatar + name)
+    window.dispatchEvent(new CustomEvent('discord:profileView', {
+      detail: {
+        username: profile.login || '',
+        avatarUrl: profile.avatar || null,
+        isSelf: !userId,
+      },
+    }));
+
     // Badge
     const badgeEl = wrap.querySelector('.profile__badge') as HTMLElement;
     if (badgeEl && profile.badge) {

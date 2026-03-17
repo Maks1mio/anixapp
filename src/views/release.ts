@@ -220,6 +220,21 @@ export function renderRelease(id: number): HTMLElement {
       loadEl.hidden = true;
       contentEl.hidden = false;
       contentEl.appendChild(buildReleaseBody(release));
+
+      // Discord Rich Presence — update when viewing an anime page
+      {
+        const title = release.title_ru || release.title_original || '';
+        const posterRaw =
+          typeof release.poster === 'string'
+            ? release.poster
+            : (release.poster as unknown as Record<string, { url?: string }>)?.original?.url
+              ?? (release.poster as unknown as Record<string, { url?: string }>)?.medium?.url
+              ?? (typeof release.image === 'string' ? release.image : '');
+        const posterUrl = buildPosterUrl(posterRaw ?? '');
+        window.dispatchEvent(
+          new CustomEvent('discord:releaseView', { detail: { title, posterUrl: posterUrl || undefined } }),
+        );
+      }
     })
     .catch((err) => {
       console.error('[AnixApp] Ошибка getReleaseById:', err);

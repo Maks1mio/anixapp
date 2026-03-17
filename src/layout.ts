@@ -1,4 +1,5 @@
 import { navigate } from './app';
+import type { AppUpdateProgress } from './types/electron';
 import {
   iconBookmark,
   iconBell,

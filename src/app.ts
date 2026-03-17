@@ -3,12 +3,55 @@ import { handleRoute, getPath } from './router';
 import { initTooltipPlacement } from './utils/tooltip-place';
 import { renderLogin } from './views/login';
 import { renderWatch } from './views/watch';
-import { getCurrentRoomId, pushCommand, voteOnProposal, getCurrentParticipants } from './services/lobby-state';
+import { getCurrentRoomId, pushCommand, voteOnProposal, getCurrentParticipants, getCurrentRoomCode, getLastPlayback } from './services/lobby-state';
 import { renderTitleBar } from './components/titlebar';
 import { iconSettings } from './components/icons';
 import { openSettingsModal } from './components/settings-modal';
 
 let offlineRetryTimer: number | null = null;
+
+/** Map a route path to Discord page presence text and send it. */
+function sendDiscordPagePresence(path: string): void {
+  const el = (window.electron as { discordUpdate?: (d: Record<string, unknown>) => void } | undefined);
+  if (!el?.discordUpdate) return;
+  let details = 'В приложении';
+  let state = 'Просматривает аниме';
+
+  if (path === '/' || path === '') {
+    details = 'На главной странице';
+    state = 'Просматривает аниме';
+  } else if (path === '/catalog') {
+    details = 'Каталог аниме';
+    state = 'Просматривает каталог';
+  } else if (path === '/bookmarks') {
+    details = 'Закладки';
+    state = 'Просматривает закладки';
+  } else if (path === '/notifications') {
+    details = 'Уведомления';
+    state = 'Читает уведомления';
+  } else if (path === '/profile') {
+    details = 'Свой профиль';
+    state = 'Просматривает профиль';
+  } else if (/^\/profile\/\d+$/.test(path)) {
+    details = 'Профиль пользователя';
+    state = 'Просматривает профиль';
+  } else if (path === '/search') {
+    details = 'Поиск';
+    state = 'Ищет аниме';
+  } else if (/^\/collection\/\d+$/.test(path)) {
+    details = 'Коллекция';
+    state = 'Просматривает коллекцию';
+  } else if (/^\/release\/\d+\/related$/.test(path)) {
+    details = 'Похожие аниме';
+    state = 'Просматривает похожие';
+  } else if (/^\/release\/\d+$/.test(path)) {
+    // Will be overridden by discord:releaseView once the page finishes loading
+    details = 'Страница аниме';
+    state = 'Просматривает аниме';
+  }
+
+  el.discordUpdate({ type: 'page', details, state });
+}
 
 function clearOfflineRetryTimer(): void {
   if (offlineRetryTimer !== null) {
@@ -43,6 +86,7 @@ function showMainApp(): void {
   const content = document.getElementById('content');
   if (content) {
     handleRoute(content);
+    sendDiscordPagePresence(getPath());
     window.removeEventListener('popstate', onPopState);
     window.addEventListener('popstate', onPopState);
     if (window.location.protocol === 'file:') {
@@ -52,6 +96,7 @@ function showMainApp(): void {
   }
 
   function onHashChange(): void {
+    sendDiscordPagePresence(getPath());
     const c = document.getElementById('content');
     if (c) handleRoute(c);
   }
@@ -187,7 +232,82 @@ function showMainApp(): void {
     }) as EventListener,
   );
 
+  // ── Discord Rich Presence — lobby state updates ──
+
+  /** Push party info to Discord RPC when lobby participants change (даже если playback ещё нет). */
+  const pushDiscordLobby = () => {
+    const playback = getLastPlayback();
+    const roomId = getCurrentRoomId();
+    const code = getCurrentRoomCode();
+    const parts = getCurrentParticipants();
+    if (!roomId) return;
+
+    const title = playback?.title ?? 'Совместный просмотр';
+    const ep = playback?.ep ?? '';
+    const sourceName = playback?.sourceName ?? '';
+    const paused = playback?.paused ?? true;
+    const currentTime = playback?.currentTime ?? 0;
+    const duration = (playback as any)?.duration;
+    const joinUrl = code ? `anixapp://join/${encodeURIComponent(code)}` : undefined;
+
+    (window.electron as { discordUpdate?: (d: Record<string, unknown>) => void })?.discordUpdate?.({
+      type: 'watching',
+      title,
+      ep,
+      sourceName,
+      paused,
+      currentTime,
+      // duration нужен для отображения прогресс-бара и таймера в Discord.
+      duration,
+      partyId: roomId,
+      partySize: parts.length,
+      joinSecret: code ?? undefined,
+      joinUrl,
+    });
+  };
+
+  window.addEventListener('lobby:participantsChanged', pushDiscordLobby as EventListener);
+  window.addEventListener('lobby:remotePlayback', pushDiscordLobby as EventListener);
+
+  /** When user leaves lobby, revert Discord to browsing (no party). */
+  window.addEventListener('lobby:left', (() => {
+    (window.electron as { discordUpdate?: (d: Record<string, unknown>) => void })?.discordUpdate?.({ type: 'browsing' });
+  }) as EventListener);
+
+  /** Show anime poster + title in Discord when viewing a release page. */
+  window.addEventListener('discord:releaseView', ((e: CustomEvent) => {
+    const { title, posterUrl } = (e.detail as { title?: string; posterUrl?: string }) ?? {};
+    (window.electron as { discordUpdate?: (d: Record<string, unknown>) => void })?.discordUpdate?.({
+      type: 'release',
+      title: title ?? '',
+      posterUrl: posterUrl ?? undefined,
+    });
+  }) as EventListener);
+
+  /** Show user avatar + name in Discord when viewing any profile page. */
+  window.addEventListener('discord:profileView', ((e: CustomEvent) => {
+    const { username, avatarUrl, isSelf } = (e.detail as { username?: string; avatarUrl?: string; isSelf?: boolean }) ?? {};
+    (window.electron as { discordUpdate?: (d: Record<string, unknown>) => void })?.discordUpdate?.({
+      type: 'profile',
+      username: username ?? '',
+      avatarUrl: avatarUrl ?? undefined,
+      isSelf: isSelf ?? false,
+    });
+  }) as EventListener);
+
+  // ── Discord RPC join via Discord party invite ──
+  // When someone clicks "Ask to Join" on Discord and the request is accepted,
+  // main.js fires this event with the room code to auto-join the lobby.
+  window.addEventListener('discord:joinLobby', ((e: CustomEvent) => {
+    const { roomCode } = (e.detail as { roomCode?: string }) ?? {};
+    if (!roomCode) return;
+    import('./components/lobby-modal').then(({ openLobbyModal }) => {
+      openLobbyModal(roomCode);
+    }).catch(() => {});
+  }) as EventListener);
+
   function onPopState() {
+    sendDiscordPagePresence(getPath());
     const c = document.getElementById('content');
     if (c) handleRoute(c);
   }
@@ -322,14 +442,17 @@ export function navigate(path: string, _state?: unknown): void {
     if (window.location.hash !== hash) {
       window.location.hash = hash;
       console.log('[navigate] file: set hash', hash);
+      // hashchange event will fire → sendDiscordPagePresence is called there
     } else {
       console.log('[navigate] file: hash уже равен, handleRoute');
       const content = document.getElementById('content');
       if (content) handleRoute(content);
+      sendDiscordPagePresence(getPath());
     }
     return;
   }
   window.history.pushState(_state ?? null, '', path);
   const content = document.getElementById('content');
   if (content) handleRoute(content);
+  sendDiscordPagePresence(getPath());
 }

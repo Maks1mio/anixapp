@@ -44,6 +44,11 @@ ipcRenderer.on('anix:offline', (_, payload) => {
   window.dispatchEvent(new CustomEvent('anix:offline', { detail: payload }));
 });
 
+// Discord RPC: join lobby via Discord party invite
+ipcRenderer.on('discord:joinLobby', (_, payload) => {
+  window.dispatchEvent(new CustomEvent('discord:joinLobby', { detail: payload }));
+});
+
 contextBridge.exposeInMainWorld('electron', {
   getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
   getDeviceId: () => ipcRenderer.invoke('app:getDeviceId'),
@@ -66,6 +71,8 @@ contextBridge.exposeInMainWorld('electron', {
   // Участники и события активности → плеер
   sendActivityToPlayer: (data) => ipcRenderer.send('lobby:activityToPlayer', data),
   sendParticipantsToPlayer: (participants) => ipcRenderer.send('lobby:participantsToPlayer', participants),
+  // Discord Rich Presence update from renderer
+  discordUpdate: (data) => ipcRenderer.send('discord:update', data),
 });
 
 contextBridge.exposeInMainWorld('anix', {

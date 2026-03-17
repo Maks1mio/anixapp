@@ -286,7 +286,9 @@ export function openWatchModal(options: WatchModalOptions): void {
       sourceId: String(selectedSource.id),
       ep: String(epPosition),
       title: releaseTitle,
-      sourceName: selectedSource.name,
+      // В Rich Presence и в заголовке плеера логичнее показывать студию озвучки,
+      // а не техническое имя источника (Kodik/Sibnet и т.п.).
+      sourceName: selectedDubber ? selectedDubber.name : selectedSource.name,
       ...(selectedDubber ? { dubberId: String(selectedDubber.id) } : {}),
     };
 

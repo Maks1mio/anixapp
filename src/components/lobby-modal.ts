@@ -40,7 +40,7 @@ function copyToClipboard(text: string, btn: HTMLElement): void {
   }).catch(() => {});
 }
 
-export function openLobbyModal(): void {
+export function openLobbyModal(prefilledCode?: string): void {
   const existing = document.querySelector('.lobby-modal-overlay') as HTMLElement | null;
   if (existing) {
     const closer = (existing as unknown as { _close?: () => void })._close;
@@ -120,8 +120,40 @@ export function openLobbyModal(): void {
 
   (overlay as unknown as { _close?: () => void })._close = close;
 
+  /** Auto-join lobby using a code from Discord party invite. */
+  function renderInitialWithCode(code: string) {
+    scrollRoot.innerHTML = '<div class="lobby-modal__loading">Подключаемся к комнате через Discord…</div>';
+    const baseProfile = getProfile();
+    const getDeviceId = (window as unknown as { electron?: { getDeviceId?: () => Promise<string> } }).electron?.getDeviceId;
+    const deviceIdPromise = typeof getDeviceId === 'function' ? getDeviceId().catch(() => null) : Promise.resolve(null);
+    deviceIdPromise
+      .then((deviceId) => joinRoom(code, { ...baseProfile, deviceId: deviceId ?? null }))
+      .then((room) => {
+        setLobbyRoom(room.roomId, {
+          myPeerId: room.myPeerId,
+          participants: room.participants ?? [],
+          playback: room.playback ?? undefined,
+          roomCode: room.code,
+        });
+        renderInRoom(room.roomId, scrollRoot, close, room.code, room.participants);
+      })
+      .catch(() => {
+        // Fallback to manual join screen with code pre-filled
+        renderInitial();
+        setTimeout(() => {
+          const input = scrollRoot.querySelector('[data-lobby-code]') as HTMLInputElement | null;
+          if (input) input.value = code;
+        }, 0);
+      });
+  }
+
   function renderInitial() {
     const currentRoomId = getCurrentRoomId();
+    if (prefilledCode && !currentRoomId) {
+      // Discord party invite — pre-fill the join code and auto-submit
+      renderInitialWithCode(prefilledCode);
+      return;
+    }
     if (currentRoomId) {
       scrollRoot.innerHTML = '<div class="lobby-modal__loading">Загрузка...</div>';
       getRoom(currentRoomId)
@@ -188,7 +220,7 @@ export function openLobbyModal(): void {
       deviceIdPromise
         .then((deviceId) => createRoom({ ...baseProfile, deviceId: deviceId ?? null }))
         .then(({ roomId: id, code, myPeerId: peerId }) => {
-          setLobbyRoom(id, { myPeerId: peerId, participants: [] });
+          setLobbyRoom(id, { myPeerId: peerId, participants: [], roomCode: code });
           renderInRoom(id, scrollRoot, close, code);
         })
         .catch(() => {
@@ -228,6 +260,7 @@ export function openLobbyModal(): void {
             myPeerId: room.myPeerId,
             participants: room.participants ?? [],
             playback: room.playback ?? undefined,
+            roomCode: room.code,
           });
           renderInRoom(room.roomId, scrollRoot, close, room.code, room.participants);
         })

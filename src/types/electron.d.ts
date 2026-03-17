@@ -43,8 +43,33 @@ declare global {
       // Lobby participant & activity feed → player window
       sendActivityToPlayer?: (data: Record<string, unknown>) => void;
       sendParticipantsToPlayer?: (participants: unknown[]) => void;
+      // Discord Rich Presence
+      discordUpdate?: (data: DiscordUpdatePayload) => void;
     };
   }
+}
+
+export interface DiscordUpdatePayload {
+  type: 'watching' | 'browsing' | 'release' | 'page' | 'profile';
+  // watching
+  title?: string;
+  ep?: string;
+  sourceName?: string;
+  paused?: boolean;
+  currentTime?: number;
+  duration?: number;
+  partyId?: string;
+  partySize?: number;
+  joinSecret?: string;
+  joinUrl?: string;
+  // release / watching
+  posterUrl?: string;
+  // page
+  details?: string;
+  state?: string;
+  // profile
+  username?: string;
+  isSelf?: boolean;
 }
 
 export {};

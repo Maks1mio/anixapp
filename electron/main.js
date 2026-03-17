@@ -4,6 +4,11 @@ const fs = require('fs');
 const { Anixart, KodikParser, SibnetParser, AniLibriaParser } = require('anixartjs');
 const { DefaultResult, BookmarkType, BookmarkSortType } = require('anixartjs');
 
+// ——— Discord Rich Presence (graceful — disabled if Discord is not running) ———
+let discordRpc = null;
+try { discordRpc = require('./discord-rpc'); } catch (_) {}
+let _discordSessionStart = Math.floor(Date.now() / 1000);
+
 /** Строковый id статуса из UI -> BookmarkType (число для API) */
 const LIST_STATUS_TO_TYPE = {
   watching: BookmarkType.Watching,
@@ -268,7 +273,16 @@ app.whenReady().then(() => {
   setupVideoRequestHeaders();
   createWindow();
   createTray();
+  // Discord RPC
+  if (discordRpc && mainWindow) {
+    discordRpc.setMainWindow(mainWindow);
+    discordRpc.setBrowsing(_discordSessionStart);
+    discordRpc.connect();
+    // Focus tracking: switch Discord activity when user moves between windows
+    mainWindow.on('focus', () => discordRpc.focusWindow('main'));
+  }
 });
+app.on('before-quit', () => { if (discordRpc) discordRpc.destroy(); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
@@ -549,8 +563,15 @@ function createPlayerWindow(params) {
   playerWindow.on('closed', () => {
     playerWindowRef = null;
     currentPlayerPlayback = null;
+    // Revert Discord presence to browsing when player is closed
+    if (discordRpc) {
+      discordRpc.focusWindow('main');
+      discordRpc.setBrowsing(_discordSessionStart);
+    }
   });
   playerWindow.once('ready-to-show', () => playerWindow.show());
+  // Focus tracking: when user brings the player window to front, switch Discord to watching activity
+  playerWindow.on('focus', () => { if (discordRpc) discordRpc.focusWindow('player'); });
   playerWindow.on('enter-full-screen', () => playerWindow.webContents.send('player:fullscreen', true));
   playerWindow.on('leave-full-screen', () => playerWindow.webContents.send('player:fullscreen', false));
 
@@ -689,9 +710,77 @@ ipcMain.on('player:stateChanged', (event, payload) => {
       ep: String(playback.ep ?? ''),
       dubberId: String(playback.dubberId ?? ''),
     };
+    // Update Discord presence with current watching state
+    // (lobby/party info is updated separately via discord:update from renderer)
+    if (discordRpc) {
+      discordRpc.setWatching({
+        title: String(playback.title ?? ''),
+        ep: String(playback.ep ?? ''),
+        sourceName: String(playback.sourceName ?? ''),
+        paused: !!playback.paused,
+        currentTime: Number(playback.currentTime ?? 0),
+        duration: playback.duration != null ? Number(playback.duration) : undefined,
+      });
+    }
   }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('lobby:playerStateChanged', payload);
+  }
+});
+
+// Renderer sends lobby state to update Discord party presence
+ipcMain.on('discord:update', (_, data) => {
+  if (!data || typeof data !== 'object') return;
+
+  if (data.type === 'watching') {
+    if (discordRpc) {
+      discordRpc.setWatching({
+        title: String(data.title ?? ''),
+        ep: String(data.ep ?? ''),
+        sourceName: String(data.sourceName ?? ''),
+        paused: !!data.paused,
+        currentTime: Number(data.currentTime ?? 0),
+        duration: data.duration != null ? Number(data.duration) : undefined,
+        partyId: data.partyId ? String(data.partyId) : null,
+        partySize: data.partySize ? Number(data.partySize) : null,
+        joinSecret: data.joinSecret ? String(data.joinSecret) : null,
+        joinUrl: data.joinUrl ? String(data.joinUrl) : null,
+      });
+    }
+  } else if (data.type === 'page') {
+    if (discordRpc) {
+      discordRpc.setPage({
+        details: String(data.details ?? ''),
+        state: String(data.state ?? ''),
+      });
+    }
+  } else if (data.type === 'release') {
+    if (discordRpc) {
+      discordRpc.setViewingRelease({
+        title: String(data.title ?? ''),
+        posterUrl: data.posterUrl ? String(data.posterUrl) : null,
+      });
+    }
+  } else if (data.type === 'profile') {
+    if (discordRpc) {
+      discordRpc.setViewingProfile({
+        username: data.username ? String(data.username) : '',
+        avatarUrl: data.avatarUrl ? String(data.avatarUrl) : null,
+        isSelf: !!data.isSelf,
+      });
+    }
+  } else if (data.type === 'browsing') {
+    if (discordRpc) {
+      discordRpc.setBrowsing(_discordSessionStart);
+    }
+    if (discordSocial) {
+      discordSocial.setActivity({
+        name: 'AnixApp',
+        details: 'Просматривает аниме',
+        state: 'В главном меню',
+        startTimestamp: _discordSessionStart,
+      });
+    }
   }
 });
 

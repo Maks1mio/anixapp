@@ -6,6 +6,8 @@ import { getRoom, type LobbyPlayback, type LobbyParticipant, type LobbyRoom } fr
 import { connect, disconnect, sendCommand, sendSyncReady, sendProposal, sendVote, type LobbyCommandAction } from './lobby-ws';
 
 let roomId: string | null = null;
+/** Short invite code — used as Discord joinSecret so others can join via Discord party invite. */
+let roomCode: string | null = null;
 let myPeerId: string | null = null;
 let participants: LobbyParticipant[] = [];
 let lastPlayback: LobbyPlayback | null = null;
@@ -236,12 +238,17 @@ function dispatchInitialPlayback(playback: LobbyPlayback): void {
   window.dispatchEvent(new CustomEvent('lobby:remotePlayback', { detail: meta }));
 }
 
+export function getCurrentRoomCode(): string | null {
+  return roomCode;
+}
+
 export function setLobbyRoom(
   id: string | null,
-  options?: { myPeerId?: string; participants?: LobbyRoom['participants']; playback?: LobbyRoom['playback'] }
+  options?: { myPeerId?: string; participants?: LobbyRoom['participants']; playback?: LobbyRoom['playback']; roomCode?: string }
 ): void {
   if (roomId) disconnect();
   roomId = id;
+  roomCode = options?.roomCode ?? null;
   myPeerId = options?.myPeerId ?? null;
   participants = options?.participants ? options.participants.slice() : [];
   lastPlayback = null;
@@ -349,6 +356,7 @@ export function leaveLobby(): void {
     });
   }
   roomId = null;
+  roomCode = null;
   myPeerId = null;
   participants = [];
   lastPlayback = null;

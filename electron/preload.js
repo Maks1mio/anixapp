@@ -8,6 +8,11 @@ ipcRenderer.on('player:applySync', (_, playback) => {
   window.dispatchEvent(new CustomEvent('player:applySync', { detail: playback }));
 });
 
+// Dynamic content change: main window → player window (no reload)
+ipcRenderer.on('player:changeContent', (_, params) => {
+  window.dispatchEvent(new CustomEvent('player:changeContent', { detail: params }));
+});
+
 ipcRenderer.on('lobby:playerStateChanged', (_, playback) => {
   window.dispatchEvent(new CustomEvent('lobby:playerStateChanged', { detail: playback }));
 });
@@ -20,6 +25,15 @@ ipcRenderer.on('lobby:proposal', (_, data) => {
 // Vote result from player → main window
 ipcRenderer.on('lobby:voteFromPlayer', (_, data) => {
   window.dispatchEvent(new CustomEvent('lobby:voteFromPlayer', { detail: data }));
+});
+
+// Участники и события активности от главного окна → плеер
+ipcRenderer.on('lobby:activityFeed', (_, data) => {
+  window.dispatchEvent(new CustomEvent('lobby:activityFeed', { detail: data }));
+});
+
+ipcRenderer.on('lobby:participantsList', (_, participants) => {
+  window.dispatchEvent(new CustomEvent('lobby:participantsList', { detail: participants }));
 });
 
 ipcRenderer.on('app:update-progress', (_, payload) => {
@@ -45,6 +59,9 @@ contextBridge.exposeInMainWorld('electron', {
   // Lobby proposal IPC
   sendProposalToPlayer: (data) => ipcRenderer.send('lobby:proposalToPlayer', data),
   sendLobbyVote: (proposalId, accept) => ipcRenderer.send('lobby:voteFromPlayer', proposalId, accept),
+  // Участники и события активности → плеер
+  sendActivityToPlayer: (data) => ipcRenderer.send('lobby:activityToPlayer', data),
+  sendParticipantsToPlayer: (participants) => ipcRenderer.send('lobby:participantsToPlayer', participants),
 });
 
 contextBridge.exposeInMainWorld('anix', {

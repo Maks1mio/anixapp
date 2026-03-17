@@ -2,7 +2,7 @@
  * Состояние лобби: только WebSocket через сервер. Прямое соединение, ретрансляция playback через сервер.
  */
 
-import type { LobbyPlayback, LobbyParticipant, LobbyRoom } from './lobby-api';
+import { getRoom, type LobbyPlayback, type LobbyParticipant, type LobbyRoom } from './lobby-api';
 import { connect, disconnect, sendCommand, sendSyncReady, sendProposal, sendVote, type LobbyCommandAction } from './lobby-ws';
 
 let roomId: string | null = null;
@@ -19,14 +19,48 @@ let syncReadyTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingProposalId: string | null = null;
 
 function handleParticipantsUpdate(list: LobbyParticipant[]): void {
+  const prevIds = new Set(participants.map(p => String(p.peerId ?? p.id)));
+  const newIds  = new Set(list.map(p => String(p.peerId ?? p.id)));
+
+  // Участники, которые только что вошли
+  for (const p of list) {
+    const id = String(p.peerId ?? p.id);
+    if (!prevIds.has(id) && id !== myPeerId) {
+      window.dispatchEvent(new CustomEvent('lobby:activityEvent', {
+        detail: { type: 'joined', login: p.login, avatar: p.avatar ?? null, peerId: p.peerId ?? null },
+      }));
+    }
+  }
+  // Участники, которые вышли
+  for (const p of participants) {
+    const id = String(p.peerId ?? p.id);
+    if (!newIds.has(id)) {
+      window.dispatchEvent(new CustomEvent('lobby:activityEvent', {
+        detail: { type: 'left', login: p.login, avatar: p.avatar ?? null, peerId: p.peerId ?? null },
+      }));
+    }
+  }
+
   participants = list.slice();
   window.dispatchEvent(new CustomEvent('lobby:participantsChanged', { detail: { participants: list } }));
 }
 
 // When server confirms join but room has no playback yet,
 // unblock local commands so the first user can start watching.
+// Fallback: in case the HTTP join or WS joined didn't include current playback,
+// fetch it from the server directly so the new participant's player can open.
 window.addEventListener('lobby:authoritativeConfirmed', () => {
   hasAuthoritativePlayback = true;
+  // If we still have no playback state, the HTTP join and WS joined both had no playback.
+  // Do one extra HTTP fetch to catch any playback the backend stores but didn't return.
+  if (roomId && !lastPlayback) {
+    getRoom(roomId).then((room) => {
+      if (room.playback && room.playback.releaseId && !lastPlayback) {
+        console.log('[lobby] authoritativeConfirmed fallback: got playback from HTTP', room.playback.releaseId);
+        dispatchInitialPlayback(room.playback);
+      }
+    }).catch(() => {});
+  }
 });
 
 // Server told us we need to send sync_ready after our player loads.
@@ -61,6 +95,17 @@ window.addEventListener('lobby:syncResume', () => {
 });
 
 // ── Proposal events ──
+
+// Пришло предложение от другого участника — показываем в логе
+window.addEventListener('lobby:proposalNew', ((e: CustomEvent) => {
+  const { proposerLogin, proposerPeerId } = e.detail ?? {};
+  if (proposerLogin && proposerPeerId !== myPeerId) {
+    const actor = participants.find(p => String(p.peerId ?? p.id) === proposerPeerId);
+    window.dispatchEvent(new CustomEvent('lobby:activityEvent', {
+      detail: { type: 'proposal', login: actor?.login ?? proposerLogin, avatar: actor?.avatar ?? null, peerId: proposerPeerId ?? null },
+    }));
+  }
+}) as EventListener);
 
 window.addEventListener('lobby:proposalCreated', ((e: CustomEvent) => {
   pendingProposalId = e.detail?.proposalId ?? null;
@@ -118,7 +163,7 @@ export function setLobbyParticipants(list: LobbyParticipant[]): void {
   participants = list.slice();
 }
 
-function dispatchRemotePlayback(playback: LobbyPlayback, fromPeerId?: string | null): void {
+function dispatchRemotePlayback(playback: LobbyPlayback, fromPeerId?: string | null, action?: string | null): void {
   const isFirstAuthoritative = !hasAuthoritativePlayback && roomHasPlayback;
   lastPlayback = playback;
   hasAuthoritativePlayback = true;
@@ -136,6 +181,19 @@ function dispatchRemotePlayback(playback: LobbyPlayback, fromPeerId?: string | n
       sendSyncReady();
       console.log('[lobby] initial sync block released, sent sync_ready');
     }, 5000);
+  }
+
+  // Отправляем событие активности в плеер (для лога действий)
+  if (fromPeerId && action && fromPeerId !== myPeerId) {
+    const actionTypes = ['play', 'pause', 'seek', 'changeEpisode'];
+    if (actionTypes.includes(action)) {
+      const actor = participants.find(p => String(p.peerId ?? p.id) === fromPeerId);
+      if (actor) {
+        window.dispatchEvent(new CustomEvent('lobby:activityEvent', {
+          detail: { type: action, login: actor.login, avatar: actor.avatar ?? null, peerId: fromPeerId },
+        }));
+      }
+    }
   }
 
   pushLog({
@@ -233,34 +291,10 @@ export function pushCommand(action: LobbyCommandAction, playback: LobbyPlayback)
   };
 
   // Если меняется аниме (другой releaseId) и в комнате больше одного участника —
-  // отправляем предложение вместо прямой команды.
+  // блокируем команду: смена аниме должна идти через кнопку "Предложить" в watch-modal.
   const isAnimeChange = lastPlayback && playback.releaseId && lastPlayback.releaseId !== playback.releaseId;
   if (isAnimeChange && participants.length > 1) {
-    // Не отправляем повторное предложение, если уже есть активное
-    if (pendingProposalId) {
-      console.log('[lobby] proposal already pending, ignoring duplicate anime change');
-      return;
-    }
-    console.log('[lobby] anime change detected, sending proposal instead of command', {
-      from: lastPlayback?.releaseId,
-      to: playback.releaseId,
-    });
-    pushLog({
-      ts: Date.now(),
-      type: 'local-playback',
-      playback,
-      note: 'proposal-sent',
-    });
-    // Сохраняем старый playback для реверта плеера
-    const oldPlayback = lastPlayback ? { ...lastPlayback } : null;
-    sendProposal(payload);
-    // Говорим приложению: "откати плеер обратно на старое аниме и покажи ожидание голосов"
-    window.dispatchEvent(new CustomEvent('lobby:proposalSentLocal', {
-      detail: {
-        oldPlayback,
-        newPlayback: playback,
-      },
-    }));
+    console.log('[lobby] anime change blocked in pushCommand — use proposeAnimeChange() via watch-modal instead');
     return;
   }
 
@@ -272,6 +306,28 @@ export function pushCommand(action: LobbyCommandAction, playback: LobbyPlayback)
     note: `command=${action}`,
   });
   sendCommand(action, payload);
+}
+
+/** Отправить предложение смены аниме напрямую (без изменения плеера). */
+export function proposeAnimeChange(playback: Partial<LobbyPlayback>): void {
+  if (!roomId) return;
+  if (pendingProposalId) {
+    console.log('[lobby] proposal already pending, ignoring duplicate');
+    return;
+  }
+  console.log('[lobby] proposing anime change directly:', playback.releaseId);
+  pushLog({
+    ts: Date.now(),
+    type: 'local-playback',
+    playback: playback as LobbyPlayback,
+    note: 'proposal-sent-direct',
+  });
+  sendProposal(playback);
+}
+
+/** Возвращает последний известный playback (текущее состояние комнаты). */
+export function getLastPlayback(): LobbyPlayback | null {
+  return lastPlayback ? { ...lastPlayback } : null;
 }
 
 /** Отправить голос за предложение. */

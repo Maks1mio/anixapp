@@ -40,6 +40,9 @@ declare global {
       // Lobby proposal IPC
       sendProposalToPlayer?: (data: Record<string, unknown>) => void;
       sendLobbyVote?: (proposalId: string, accept: boolean) => void;
+      // Lobby participant & activity feed → player window
+      sendActivityToPlayer?: (data: Record<string, unknown>) => void;
+      sendParticipantsToPlayer?: (participants: unknown[]) => void;
     };
   }
 }

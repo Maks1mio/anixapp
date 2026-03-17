@@ -20,7 +20,7 @@ function getWsUrl(): string {
 let ws: WebSocket | null = null;
 let roomId: string | null = null;
 let myPeerId: string | null = null;
-let onRemotePlayback: ((playback: LobbyPlayback, fromPeerId?: string | null) => void) | null = null;
+let onRemotePlayback: ((playback: LobbyPlayback, fromPeerId?: string | null, action?: string | null) => void) | null = null;
 let onParticipantsChanged: ((participants: LobbyParticipant[]) => void) | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let intentionalClose = false;
@@ -61,7 +61,7 @@ function handleMessage(e: MessageEvent): void {
     };
 
     if (msg.type === 'playback' && msg.playback && typeof msg.playback.releaseId !== 'undefined') {
-      onRemotePlayback?.(msg.playback, msg.fromPeerId ?? null);
+      onRemotePlayback?.(msg.playback, msg.fromPeerId ?? null, (msg as Record<string, unknown>).action as string ?? null);
       return;
     }
 
@@ -171,7 +171,7 @@ function handleMessage(e: MessageEvent): void {
 
 export function connect(
   rId: string,
-  onPlayback: (playback: LobbyPlayback, fromPeerId?: string | null) => void,
+  onPlayback: (playback: LobbyPlayback, fromPeerId?: string | null, action?: string | null) => void,
   peerId?: string | null,
   onParticipants?: (participants: LobbyParticipant[]) => void,
 ): void {

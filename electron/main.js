@@ -505,7 +505,6 @@ function waitPlayerClosed() {
 
 ipcMain.handle('player:openWindow', async (_, params) => {
   if (!params || typeof params !== 'object') return;
-  await waitPlayerClosed();
   const safe = {
     releaseId: String(params.releaseId ?? ''),
     sourceId: String(params.sourceId ?? ''),
@@ -514,6 +513,19 @@ ipcMain.handle('player:openWindow', async (_, params) => {
     sourceName: String(params.sourceName ?? ''),
     ...(params.dubberId != null && params.dubberId !== '' ? { dubberId: String(params.dubberId) } : {}),
   };
+  // If player window already exists — change content dynamically without closing/reopening
+  if (playerWindowRef && !playerWindowRef.isDestroyed()) {
+    currentPlayerPlayback = {
+      releaseId: safe.releaseId,
+      sourceId: safe.sourceId,
+      ep: safe.ep,
+      dubberId: safe.dubberId || '',
+    };
+    // local: true → player knows to send changeEpisode command to lobby
+    playerWindowRef.webContents.send('player:changeContent', { ...safe, local: true });
+    playerWindowRef.focus();
+    return;
+  }
   createPlayerWindow(safe);
 });
 
@@ -530,12 +542,19 @@ ipcMain.on('player:syncState', async (_, playback) => {
     currentTime: typeof playback.currentTime === 'number' ? playback.currentTime : 0,
   };
   const incomingContent = { releaseId: params.releaseId, sourceId: params.sourceId, ep: params.ep, dubberId: params.dubberId || '' };
-  const sameContent = isSamePlaybackContent(currentPlayerPlayback, incomingContent);
-  if (playerWindowRef && !playerWindowRef.isDestroyed() && sameContent) {
-    playerWindowRef.webContents.send('player:applySync', params);
+  if (playerWindowRef && !playerWindowRef.isDestroyed()) {
+    const sameContent = isSamePlaybackContent(currentPlayerPlayback, incomingContent);
+    if (sameContent) {
+      // Same content — just seek/pause sync
+      playerWindowRef.webContents.send('player:applySync', params);
+    } else {
+      // Different content — change dynamically without closing/reopening
+      currentPlayerPlayback = incomingContent;
+      playerWindowRef.webContents.send('player:changeContent', params);
+    }
     return;
   }
-  await waitPlayerClosed();
+  // No player window — create one
   createPlayerWindow(params);
 });
 
@@ -544,6 +563,19 @@ ipcMain.on('player:syncState', async (_, playback) => {
 ipcMain.on('lobby:proposalToPlayer', (_, data) => {
   if (playerWindowRef && !playerWindowRef.isDestroyed()) {
     playerWindowRef.webContents.send('lobby:proposal', data);
+  }
+});
+
+// Main window → Player window (activity feed & participant list)
+ipcMain.on('lobby:activityToPlayer', (_, data) => {
+  if (playerWindowRef && !playerWindowRef.isDestroyed()) {
+    playerWindowRef.webContents.send('lobby:activityFeed', data);
+  }
+});
+
+ipcMain.on('lobby:participantsToPlayer', (_, participants) => {
+  if (playerWindowRef && !playerWindowRef.isDestroyed()) {
+    playerWindowRef.webContents.send('lobby:participantsList', participants);
   }
 });
 

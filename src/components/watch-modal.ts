@@ -4,7 +4,7 @@
  */
 
 import { renderPage } from './page';
-import { getCurrentRoomId, getCurrentParticipants } from '../services/lobby-state';
+import { getCurrentRoomId, getCurrentParticipants, proposeAnimeChange, getLastPlayback } from '../services/lobby-state';
 
 function escapeHtml(s: string): string {
   const div = document.createElement('div');
@@ -96,7 +96,14 @@ export function openWatchModal(options: WatchModalOptions): void {
     return participants.length > 1;
   };
 
-  const getPlayButtonLabel = (): string => (isInLobbyWithOthers() ? 'Предложить' : 'Воспроизвести');
+  const getPlayButtonLabel = (): string => {
+    if (!isInLobbyWithOthers()) return 'Воспроизвести';
+    const cur = getLastPlayback();
+    // Only show "Предложить" when there IS an active playback with a different anime.
+    // If nobody is watching yet (cur === null) or same anime → "Воспроизвести".
+    if (cur && String(cur.releaseId) !== String(releaseId)) return 'Предложить';
+    return 'Воспроизвести';
+  };
 
   footer.innerHTML = `
     <div class="watch-modal__player-select-wrap">
@@ -312,15 +319,43 @@ export function openWatchModal(options: WatchModalOptions): void {
   }
 
   playBtn.addEventListener('click', () => {
-    if (!selectedSource || !selectedEpisode || !window.electron?.openPlayerWindow) return;
-    window.electron.openPlayerWindow({
+    if (!selectedSource || !selectedEpisode) return;
+
+    const params = {
       releaseId: String(releaseId),
       sourceId: String(selectedSource.id),
       ep: String(selectedEpisode.position),
       title: releaseTitle,
       sourceName: selectedSource.name,
       ...(selectedDubber ? { dubberId: String(selectedDubber.id) } : {}),
-    }).then(() => close()).catch(() => {});
+    };
+
+    if (isInLobbyWithOthers()) {
+      // В лобби с другими: отправляем предложение без смены плеера.
+      // Плеер остаётся на текущем аниме и показывает "ожидание голосов".
+      const currentPlayback = getLastPlayback();
+      // isDifferentAnime: только если в комнате УЖЕ есть активный playback с другим releaseId.
+      // Если currentPlayback === null — никто ещё не смотрит, открываем плеер напрямую.
+      const isDifferentAnime = currentPlayback != null && String(currentPlayback.releaseId) !== String(releaseId);
+
+      if (isDifferentAnime) {
+        // Другое аниме — голосование
+        proposeAnimeChange(params);
+        window.electron?.sendProposalToPlayer?.({
+          type: 'waiting',
+          newPlayback: { title: releaseTitle, ep: params.ep },
+        });
+      } else {
+        // Та же серия другого/того же эпизода — меняем динамически
+        window.electron?.openPlayerWindow?.(params).then(() => {}).catch(() => {});
+      }
+      close();
+      return;
+    }
+
+    // Не в лобби — открываем/меняем плеер динамически
+    if (!window.electron?.openPlayerWindow) return;
+    window.electron.openPlayerWindow(params).then(() => close()).catch(() => {});
   });
 
   api.getDubbers(releaseId).then((res: { types?: Array<Record<string, unknown> & { id: number; name: string }> }) => {

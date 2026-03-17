@@ -61,6 +61,11 @@ export function renderWatch(): HTMLElement {
             <p class="watch-page__dub-hint" data-watch-dub-hint>Если не загружается — выберите другую озвучку (кнопка «Озвучка»).</p>
           </div>
           <div class="watch-page__tap-layer" data-tap-layer></div>
+          <!-- Лобби: аватары + лог действий -->
+          <div class="watch-lobby-panel" data-lobby-panel hidden>
+            <div class="watch-lobby-panel__avatars" data-lobby-avatars></div>
+            <div class="watch-lobby-panel__log" data-lobby-log></div>
+          </div>
           <div class="watch-page__center-play" data-center-play>
             <button type="button" class="watch-page__center-play-btn" data-btn-play-center aria-label="Воспроизвести"></button>
           </div>
@@ -134,6 +139,9 @@ export function renderWatch(): HTMLElement {
   const popoverClose = wrap.querySelector('[data-popover-close]') as HTMLButtonElement;
   const popoverBody = wrap.querySelector('[data-popover-body]') as HTMLElement;
   const actionsRow = wrap.querySelector('[data-actions-row]') as HTMLElement;
+  const lobbyPanel = wrap.querySelector('[data-lobby-panel]') as HTMLElement;
+  const lobbyAvatarsEl = wrap.querySelector('[data-lobby-avatars]') as HTMLElement;
+  const lobbyLogEl = wrap.querySelector('[data-lobby-log]') as HTMLElement;
 
   if (guiOverlay) guiOverlay.hidden = true;
 
@@ -311,6 +319,8 @@ export function renderWatch(): HTMLElement {
   let applyVideoAndUI: (playUrl: string, useVideo: boolean, ep: number, titleStr: string, sourceNameStr: string, dubberIdStr: string, seekTime?: number, initialPaused?: boolean) => void = () => {};
   let isApplyingSync = false;
   let applySyncTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Таймер периодической проверки зависания HLS-стрима (stall detection). */
+  let stallCheckTimer: ReturnType<typeof setInterval> | null = null;
   // Если первый sync от сервера говорит "пауза", не даём автоплею
   // тут же перезапустить видео.
   let preventAutoPlayDueToInitialSyncPause = false;
@@ -336,9 +346,11 @@ export function renderWatch(): HTMLElement {
     paused: !!(videoEl && !videoEl.hidden && videoEl.paused),
     currentTime: videoEl && !videoEl.hidden && !isNaN(videoEl.currentTime) ? videoEl.currentTime : 0,
   });
-  const sendCommandToLobby = (action: 'play' | 'pause' | 'seek' | 'changeEpisode') => {
+  const sendCommandToLobby = (action: 'play' | 'pause' | 'seek' | 'changeEpisode', currentTimeOverride?: number) => {
     if (isApplyingSync || !window.electron?.sendPlayerState) return;
-    const playback = getPlaybackPayload();
+    const playback = currentTimeOverride !== undefined
+      ? { ...getPlaybackPayload(), currentTime: currentTimeOverride }
+      : getPlaybackPayload();
     // Оборачиваем в объект с action, но тип в preload
     // объявлен как принимающий только LobbyPlaybackPayload,
     // поэтому приводим к unknown, чтобы не ругался TS.
@@ -484,7 +496,8 @@ export function renderWatch(): HTMLElement {
         if (iframeEl) iframeEl.hidden = true;
         videoEl.src = '';
         if (volumeInput) videoEl.volume = Number(volumeInput.value) / 100;
-        const doPlay = () => videoEl.play().catch(() => {});
+        // Не запускаем воспроизведение если нужно начать на паузе (remote sync сказал paused=true)
+        const doPlay = () => { if (!initialPaused) videoEl.play().catch(() => {}); };
         if (seekTime != null && seekTime > 0) {
           const restoreTime = () => {
             videoEl.currentTime = Math.min(seekTime, videoEl.duration || Infinity);
@@ -498,15 +511,40 @@ export function renderWatch(): HTMLElement {
         const tryFallbackToIframe = () => {
           if (embedFallbackUrl) applyVideoAndUI(embedFallbackUrl, false, ep, titleStr, sourceNameStr, dubberIdStr);
         };
+        if (stallCheckTimer) { clearInterval(stallCheckTimer); stallCheckTimer = null; }
         if (isHlsUrl(playUrlArg) && Hls.isSupported()) {
           const hls = new Hls();
           hls.loadSource(playUrlArg);
           hls.attachMedia(videoEl);
           (videoEl as unknown as { _hls?: Hls })._hls = hls;
           hls.on(Hls.Events.MANIFEST_PARSED, () => doPlay());
+          let hlsRecoveryAttempts = 0;
+          const MAX_HLS_RECOVERY = 3;
           hls.on(Hls.Events.ERROR, (_, data) => {
-            if (data.fatal) tryFallbackToIframe();
+            if (data.fatal) {
+              if (data.type === Hls.ErrorTypes.MEDIA_ERROR && hlsRecoveryAttempts < MAX_HLS_RECOVERY) {
+                hlsRecoveryAttempts++;
+                hls.recoverMediaError();
+              } else if (data.type === Hls.ErrorTypes.NETWORK_ERROR && hlsRecoveryAttempts < MAX_HLS_RECOVERY) {
+                hlsRecoveryAttempts++;
+                hls.startLoad();
+              } else {
+                tryFallbackToIframe();
+              }
+            } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+              hls.recoverMediaError();
+            }
           });
+          // Stall detection: если currentTime не двигается пока идёт воспроизведение — перезапускаем загрузку
+          let lastStallTime = -1;
+          stallCheckTimer = setInterval(() => {
+            if (videoEl.paused || videoEl.ended || videoEl.hidden) { lastStallTime = -1; return; }
+            const ct = videoEl.currentTime;
+            if (lastStallTime >= 0 && ct === lastStallTime) {
+              try { hls.startLoad(ct); } catch (_) {}
+            }
+            lastStallTime = ct;
+          }, 5000);
         } else {
           videoEl.src = playUrlArg;
         }
@@ -711,17 +749,24 @@ export function renderWatch(): HTMLElement {
     // Важно сначала обновить локальное состояние, чтобы в payload улетел правильный ep.
     state.ep = ep;
     loadEpisodeInPlace(releaseIdNum, parseInt(state.sourceId, 10), ep, state.title, state.sourceName, state.dubberId);
-    sendCommandToLobby('changeEpisode');
+    // Передаём currentTime=0 чтобы все участники начинали серию с начала
+    sendCommandToLobby('changeEpisode', 0);
   };
 
   const switchToDubbing = (newSourceId: number, newSourceName: string, newDubberId: number) => {
     closePopover();
     const savedTime = videoEl && !videoEl.hidden && !isNaN(videoEl.currentTime) ? videoEl.currentTime : undefined;
+    // Запоминаем паузу ДО смены — чтобы после загрузки новой озвучки состояние воспроизведения совпало
+    const wasPaused = !!(videoEl && !videoEl.hidden && videoEl.paused);
     state.sourceId = String(newSourceId);
     state.sourceName = newSourceName;
     state.dubberId = String(newDubberId);
-    loadEpisodeInPlace(releaseIdNum, newSourceId, state.ep, title, newSourceName, String(newDubberId), savedTime);
+    // Сначала отправляем команду (пока isApplyingSync ещё false), затем блокируем исходящие события
     sendCommandToLobby('changeEpisode');
+    isApplyingSync = true;
+    loadEpisodeInPlace(releaseIdNum, newSourceId, state.ep, title, newSourceName, String(newDubberId), savedTime, wasPaused);
+    if (applySyncTimer) clearTimeout(applySyncTimer);
+    applySyncTimer = setTimeout(() => { isApplyingSync = false; applySyncTimer = null; }, 4000);
   };
 
   btnNext?.addEventListener('click', () => {
@@ -891,6 +936,55 @@ export function renderWatch(): HTMLElement {
     }, 3000);
   };
 
+  // ── Dynamic content change (no player reload) ──
+  window.addEventListener('player:changeContent', ((e: CustomEvent) => {
+    const p = e.detail as {
+      releaseId?: string; sourceId?: string; ep?: string; dubberId?: string;
+      title?: string; sourceName?: string; paused?: boolean; currentTime?: number;
+      local?: boolean; // true = user-initiated from main window; false = remote sync
+    };
+    if (!p || !p.releaseId || !p.sourceId || !p.ep) return;
+
+    // Update title in the UI header
+    const titleEl = wrap.querySelector('.watch-page__title') as HTMLElement | null;
+    if (titleEl && p.title) titleEl.textContent = p.title;
+
+    // Update state BEFORE loading (applyVideoAndUI doesn't update releaseId/sourceId)
+    state.releaseId = p.releaseId;
+    state.sourceId = p.sourceId;
+    state.ep = parseInt(p.ep, 10);
+    state.title = p.title || state.title;
+    state.sourceName = p.sourceName || '';
+    state.dubberId = p.dubberId || '';
+
+    // If local (user-initiated from main window), send changeEpisode to lobby BEFORE blocking
+    // Передаём currentTime из payload (или 0) чтобы все начинали с нужного момента
+    if (p.local) {
+      sendCommandToLobby('changeEpisode', typeof p.currentTime === 'number' ? p.currentTime : 0);
+    }
+
+    // Block outgoing commands while loading new content
+    isApplyingSync = true;
+
+    loadEpisodeInPlace(
+      parseInt(p.releaseId, 10),
+      parseInt(p.sourceId, 10),
+      parseInt(p.ep, 10),
+      p.title || state.title,
+      p.sourceName || '',
+      p.dubberId || '',
+      typeof p.currentTime === 'number' ? p.currentTime : undefined,
+      !!p.paused
+    );
+
+    // Keep isApplyingSync until the new video starts loading
+    if (applySyncTimer) clearTimeout(applySyncTimer);
+    applySyncTimer = setTimeout(() => {
+      isApplyingSync = false;
+      applySyncTimer = null;
+    }, 4000);
+  }) as EventListener);
+
   // Слушаем proposal-события из IPC
   window.addEventListener('lobby:proposal', ((e: CustomEvent) => {
     const data = e.detail as { type: string; proposalId?: string; proposerLogin?: string; playback?: any; newPlayback?: any; reason?: string };
@@ -938,6 +1032,9 @@ export function renderWatch(): HTMLElement {
       // Видео ещё не готово — сохраняем sync и применим его после loadedmetadata.
       pendingSync = p;
     } else if (!sameReleaseAndEpisode && window.anix?.getEpisode) {
+      // Update releaseId/sourceId in state (applyVideoAndUI doesn't do this)
+      state.releaseId = p.releaseId;
+      state.sourceId = p.sourceId;
       loadEpisodeInPlace(
         parseInt(p.releaseId, 10),
         parseInt(p.sourceId, 10),
@@ -960,6 +1057,94 @@ export function renderWatch(): HTMLElement {
       isApplyingSync = false;
       applySyncTimer = null;
     }, debounceMs);
+  }) as EventListener);
+
+  // ── Лобби: панель аватаров и лог действий ──
+
+  const LOBBY_LOG_MAX = 5;
+  const LOBBY_LOG_TTL = 10000;
+
+  type LobbyActivityEntry = { type: string; login: string; avatar?: string | null };
+
+  const lobbyActionText = (type: string): string => {
+    switch (type) {
+      case 'play':         return 'продолжил просмотр';
+      case 'pause':        return 'поставил на паузу';
+      case 'seek':         return 'перемотал';
+      case 'changeEpisode':return 'сменил серию/озвучку';
+      case 'joined':       return 'присоединился к просмотру';
+      case 'left':         return 'покинул комнату';
+      case 'proposal':     return 'предложил другое аниме';
+      default:             return type;
+    }
+  };
+
+  const addLobbyLogEntry = (entry: LobbyActivityEntry) => {
+    if (!lobbyLogEl) return;
+    const el = document.createElement('div');
+    el.className = 'watch-lobby-log__entry watch-lobby-log__entry--entering';
+    el.innerHTML = `<span class="watch-lobby-log__name">${escapeHtml(entry.login)}</span><span class="watch-lobby-log__action">${escapeHtml(lobbyActionText(entry.type))}</span>`;
+    lobbyLogEl.appendChild(el);
+
+    // Trigger enter animation on next frame
+    requestAnimationFrame(() => el.classList.remove('watch-lobby-log__entry--entering'));
+
+    // Remove entries beyond max visible
+    const allEntries = Array.from(lobbyLogEl.querySelectorAll<HTMLElement>('.watch-lobby-log__entry'));
+    if (allEntries.length > LOBBY_LOG_MAX) {
+      allEntries.slice(0, allEntries.length - LOBBY_LOG_MAX).forEach((old) => old.remove());
+    }
+
+    // Auto-expire
+    const expireTimer = setTimeout(() => {
+      el.classList.add('watch-lobby-log__entry--leaving');
+      setTimeout(() => { if (el.parentNode) el.remove(); }, 400);
+    }, LOBBY_LOG_TTL);
+    (el as unknown as { _expireTimer: ReturnType<typeof setTimeout> })._expireTimer = expireTimer;
+  };
+
+  const renderLobbyAvatars = (participants: Array<{ login: string; avatar?: string | null; peerId?: string | null }>) => {
+    if (!lobbyAvatarsEl) return;
+    lobbyAvatarsEl.innerHTML = '';
+    const MAX_SHOWN = 7;
+    const shown = participants.slice(0, MAX_SHOWN);
+    shown.forEach((p) => {
+      const av = document.createElement('div');
+      av.className = 'watch-lobby-avatar';
+      av.title = p.login;
+      if (p.avatar) {
+        const img = document.createElement('img');
+        img.src = p.avatar;
+        img.alt = p.login;
+        img.className = 'watch-lobby-avatar__img';
+        img.onerror = () => { img.remove(); av.textContent = (p.login[0] ?? '?').toUpperCase(); };
+        av.appendChild(img);
+      } else {
+        av.textContent = (p.login[0] ?? '?').toUpperCase();
+      }
+      lobbyAvatarsEl.appendChild(av);
+    });
+    if (participants.length > MAX_SHOWN) {
+      const more = document.createElement('div');
+      more.className = 'watch-lobby-avatar watch-lobby-avatar--more';
+      more.textContent = `+${participants.length - MAX_SHOWN}`;
+      lobbyAvatarsEl.appendChild(more);
+    }
+    if (lobbyPanel) lobbyPanel.hidden = participants.length === 0;
+  };
+
+  // Получаем список участников от главного окна
+  window.addEventListener('lobby:participantsList', ((e: CustomEvent) => {
+    const participants = Array.isArray(e.detail) ? e.detail : [];
+    renderLobbyAvatars(participants);
+  }) as EventListener);
+
+  // Получаем события действий (play/pause/seek/join/leave/proposal)
+  window.addEventListener('lobby:activityFeed', ((e: CustomEvent) => {
+    const data = e.detail as LobbyActivityEntry | null;
+    if (data?.type && data.login) {
+      addLobbyLogEntry(data);
+    }
   }) as EventListener);
 
   return wrap;

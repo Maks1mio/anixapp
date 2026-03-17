@@ -3,7 +3,7 @@ import { handleRoute, getPath } from './router';
 import { initTooltipPlacement } from './utils/tooltip-place';
 import { renderLogin } from './views/login';
 import { renderWatch } from './views/watch';
-import { getCurrentRoomId, pushCommand, voteOnProposal } from './services/lobby-state';
+import { getCurrentRoomId, pushCommand, voteOnProposal, getCurrentParticipants } from './services/lobby-state';
 
 function showLoginScreen(): void {
   const app = document.getElementById('app');
@@ -44,14 +44,11 @@ function showMainApp(): void {
 
   // ── Proposal events → forward to player via IPC ──
 
-  // Proposer: отправили предложение — откатить плеер и показать "ожидание"
+  // lobby:proposalSentLocal — fired from pushCommand as fallback (rarely used now).
+  // watch-modal's "Предложить" button handles the primary proposal flow directly.
+  // No player revert needed — player was never changed in the new flow.
   window.addEventListener('lobby:proposalSentLocal', ((e: CustomEvent) => {
-    const { oldPlayback, newPlayback } = e.detail ?? {};
-    if (oldPlayback && window.electron?.syncPlayerState) {
-      // Откатываем плеер на старое аниме
-      window.electron.syncPlayerState(oldPlayback);
-    }
-    // Показать "ожидание голосов" в плеере
+    const { newPlayback } = e.detail ?? {};
     if (window.electron?.sendProposalToPlayer) {
       window.electron.sendProposalToPlayer({
         type: 'waiting',
@@ -124,6 +121,19 @@ function showMainApp(): void {
       currentTime: Number((rawPlayback as any).currentTime) || 0,
     };
     window.electron.syncPlayerState(playback);
+    // Также пересылаем текущих участников в плеер при каждом sync
+    const currentParts = getCurrentParticipants();
+    window.electron?.sendParticipantsToPlayer?.(currentParts);
+  }) as EventListener);
+
+  // Пересылаем изменения участников в плеер
+  window.addEventListener('lobby:participantsChanged', ((e: CustomEvent) => {
+    window.electron?.sendParticipantsToPlayer?.(e.detail?.participants ?? []);
+  }) as EventListener);
+
+  // Пересылаем события активности в плеер (pause/play/join/leave/proposal)
+  window.addEventListener('lobby:activityEvent', ((e: CustomEvent) => {
+    window.electron?.sendActivityToPlayer?.(e.detail ?? {});
   }) as EventListener);
 
   window.addEventListener(

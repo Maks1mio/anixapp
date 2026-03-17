@@ -8,7 +8,7 @@ export interface AnixApi {
   getReleaseById: (id: number, extended?: boolean) => Promise<{ release?: unknown }>;
   getDubbers: (releaseId: number) => Promise<{ types?: Array<{ id: number; name: string; icon?: string; episode_count: number; view_count: number }> }>;
   getDubberSources: (releaseId: number, dubberId: number) => Promise<{ sources?: Array<{ id: number; name: string; episode_count: number }> }>;
-  getEpisodes: (releaseId: number, dubberId: number, sourceId: number, sort?: number) => Promise<{ episodes?: Array<{ position: number; name: string; url: string; iframe: boolean }> }>;
+  getEpisodes: (releaseId: number, dubberId: number, sourceId: number, sort?: number) => Promise<{ episodes?: Array<{ position: number; name: string; url: string; iframe: boolean; is_watched?: boolean }> }>;
   getEpisode: (releaseId: number, sourceId: number, episodePosition: number) => Promise<{ episode?: { position: number; name: string; url: string; iframe: boolean } }>;
   getDirectVideoLink: (embedUrl: string) => Promise<{ directUrl: string | null; quality: string | null }>;
   getVideos: (releaseId: number) => Promise<{ blocks?: Array<{ id: number; title: string; image: string; url: string; category?: { id: number; name: string } }> }>;
@@ -32,6 +32,8 @@ export interface AnixApi {
   getNotificationsCount: () => Promise<any>;
   getHistory: (page?: number) => Promise<any>;
   addToHistory: (releaseId: number, sourceId: number, episodePosition: number) => Promise<void>;
+  markEpisodeAsWatched: (releaseId: number, sourceId: number, episodePosition: number) => Promise<void>;
+  unmarkEpisodeAsWatched: (releaseId: number, sourceId: number, episodePosition: number) => Promise<void>;
   getVotedReleases: (profileId: number, page?: number) => Promise<any>;
   getFriends: (profileId: number, page?: number) => Promise<any>;
   searchReleases: (query: string, page?: number) => Promise<any>;

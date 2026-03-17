@@ -654,6 +654,10 @@ $player-overlay-bg: rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+
+  &--series {
+    width: min(480px, 92vw);
+  }
 }
 
 .watch-page__popover-head {
@@ -779,6 +783,116 @@ $player-overlay-bg: rgba(0, 0, 0, 0.4);
   margin-left: 6px;
   font-size: 0.85em;
   color: rgba(255, 255, 255, 0.6);
+}
+
+// ── Series popover: search input ──────────────────────────────────────────────
+
+.watch-page__popover-search-wrap {
+  padding: 8px 10px 4px;
+  flex-shrink: 0;
+}
+
+.watch-page__popover-search {
+  width: 100%;
+  padding: 7px 11px;
+  font-size: 0.88rem;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.92);
+  outline: none;
+  transition: border-color 0.18s;
+  box-sizing: border-box;
+
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.32);
+  }
+
+  &:focus {
+    border-color: rgba(255, 255, 255, 0.28);
+  }
+}
+
+// ── Series popover: episode grid ──────────────────────────────────────────────
+
+.watch-page__popover-ep-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+  gap: 4px;
+  padding: 6px 10px 10px;
+}
+
+.watch-page__popover-ep-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  padding: 0;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.16);
+  }
+
+  &--active {
+    background: rgba($color-accent, 0.28);
+    border-color: rgba($color-accent, 0.5);
+
+    .watch-page__popover-ep-num {
+      color: #fff;
+      font-weight: 700;
+    }
+  }
+
+  &--watched {
+    .watch-page__popover-ep-num {
+      color: rgba(255, 255, 255, 0.42);
+    }
+  }
+}
+
+.watch-page__popover-ep-num {
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.watch-page__popover-ep-check {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  font-size: 0.58rem;
+  color: rgba(255, 255, 255, 0.48);
+  line-height: 1;
+}
+
+// ── Dubbing popover: loading spinner ─────────────────────────────────────────
+
+@keyframes watch-popover-spin {
+  to { transform: rotate(360deg); }
+}
+
+.watch-page__popover-spinner {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  animation: watch-popover-spin 0.55s linear infinite;
+}
+
+.watch-page__popover-item--loading {
+  opacity: 0.8;
+  cursor: default;
 }
 
 // ── Лобби: панель участников (аватары + лог действий) ──

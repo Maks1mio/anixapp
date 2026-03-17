@@ -1,5 +1,34 @@
 @use 'variables' as *;
 
+// ── Animations ────────────────────────────────────────────────────────────────
+
+@keyframes watch-modal-in {
+  from { opacity: 0; transform: scale(0.97) translateY(4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes watch-modal-view-slide-in {
+  from { opacity: 0; transform: translateX(10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes watch-modal-view-slide-back {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes watch-checkmark-pop {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.35); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes watch-modal-spin {
+  to { transform: rotate(360deg); }
+}
+
+// ── Overlay ───────────────────────────────────────────────────────────────────
+
 .watch-modal {
   position: fixed;
   inset: 0;
@@ -8,43 +37,50 @@
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
-  animation: watch-modal-in 0.2s ease;
 }
 
 .watch-modal__backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(4px);
   cursor: pointer;
 }
+
+// ── Panel ─────────────────────────────────────────────────────────────────────
 
 .watch-modal__panel {
   position: relative;
   width: 100%;
-  max-width: 56rem;
-  max-height: 90vh;
+  max-width: 52rem;
+  max-height: 88vh;
   display: flex;
   flex-direction: column;
   background: $color-surface;
   border: 1px solid $color-border;
-  border-radius: $radius-lg;
-  box-shadow: $shadow;
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.02);
   overflow: hidden;
+  animation: watch-modal-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+// ── Header ────────────────────────────────────────────────────────────────────
 
 .watch-modal__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.25rem;
+  padding: 0.85rem 1.1rem;
   border-bottom: 1px solid $color-border;
   flex-shrink: 0;
+  background: $color-surface;
 }
 
 .watch-modal__title {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 0.95rem;
   font-weight: 600;
+  letter-spacing: -0.01em;
   color: $color-text;
 }
 
@@ -52,17 +88,34 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: none;
   border-radius: $radius-md;
   background: transparent;
   color: $color-text-muted;
-  font-size: 1.5rem;
-  line-height: 1;
   cursor: pointer;
+  position: relative;
   transition: background $transition, color $transition;
+  flex-shrink: 0;
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 12px;
+    height: 1.5px;
+    background: currentColor;
+    border-radius: 1px;
+    transform: translate(-50%, -50%) rotate(45deg);
+  }
+
+  &::after {
+    transform: translate(-50%, -50%) rotate(-45deg);
+  }
 
   &:hover {
     background: $color-surface-hover;
@@ -70,12 +123,13 @@
   }
 }
 
+// ── Body ──────────────────────────────────────────────────────────────────────
+
 .watch-modal__body {
   flex: 1;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  padding: 0;
   min-height: 0;
 }
 
@@ -89,18 +143,28 @@
   padding: 0;
 }
 
+// ── Views ─────────────────────────────────────────────────────────────────────
+
 .watch-modal__view {
-  padding: 1rem 1.25rem;
+  padding: 1rem 1.1rem;
   min-height: 200px;
+
+  &--entering {
+    animation: watch-modal-view-slide-in 0.18s ease;
+  }
+
+  &--entering-back {
+    animation: watch-modal-view-slide-back 0.18s ease;
+  }
 }
 
-.watch-modal__view--sources .watch-modal__col--sources {
-  max-width: 28rem;
-}
+// Sources column fills full width — no max-width constraint
 
 .watch-modal__view--episodes .watch-modal__col--episodes {
   min-height: 200px;
 }
+
+// ── Back button ───────────────────────────────────────────────────────────────
 
 .watch-modal__back-row {
   display: flex;
@@ -111,76 +175,206 @@
 .watch-modal__back {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.4rem 0.5rem 0.4rem 0;
-  border: none;
+  gap: 0.3rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
   background: transparent;
   color: $color-text-muted;
-  font-size: 0.95rem;
+  font-size: 0.82rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: color $transition;
+  transition: background $transition, color $transition, border-color $transition;
 
   &:hover {
+    background: $color-surface-hover;
     color: $color-text;
+    border-color: lighten($color-border, 5%);
   }
 }
+
+// ── Episodes toolbar (search + last-watched) ──────────────────────────────────
+
+.watch-modal__episodes-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.watch-modal__episodes-search {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.watch-modal__episodes-search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.42rem 0.7rem;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  background: $color-bg;
+  color: $color-text;
+  font-size: 0.85rem;
+  transition: border-color $transition;
+  appearance: textfield;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  &::placeholder {
+    color: $color-text-muted;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: rgba($color-accent, 0.45);
+  }
+}
+
+.watch-modal__episodes-search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.42rem 0.8rem;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  background: $color-surface-hover;
+  color: $color-text;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background $transition, border-color $transition;
+
+  &:hover {
+    background: lighten($color-surface-hover, 3%);
+    border-color: lighten($color-border, 5%);
+  }
+}
+
+.watch-modal__episodes-last-watched-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.42rem 0.8rem;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  background: transparent;
+  color: $color-text-muted;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background $transition, color $transition, border-color $transition;
+
+  &:hover {
+    background: $color-surface-hover;
+    color: $color-text;
+    border-color: lighten($color-border, 5%);
+  }
+}
+
+// ── Source sub-selector ───────────────────────────────────────────────────────
 
 .watch-modal__source-selector-wrap {
   margin-bottom: 0.75rem;
 }
 
+// Custom select inside watch-modal: remove max-width, use compact sizing
+.watch-modal__source-selector-custom {
+  max-width: none;
+
+  .custom-select__label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin-bottom: 0.4rem;
+  }
+
+  .custom-select__trigger {
+    font-size: 0.88rem;
+    padding: 0.45rem 0.7rem;
+  }
+}
+
+// ── Column titles ─────────────────────────────────────────────────────────────
+
 .watch-modal__col-title {
-  margin: 0 0 0.5rem;
-  font-size: 0.9rem;
+  margin: 0 0 0.6rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: $color-text-muted;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.07em;
 }
 
 .watch-modal__col-count {
   font-weight: 500;
   color: $color-text;
+  text-transform: none;
+  letter-spacing: 0;
 }
+
+// ── List / Loading ────────────────────────────────────────────────────────────
 
 .watch-modal__list {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 2px;
 }
 
 .watch-modal__loading {
   color: $color-text-muted;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   padding: 0.5rem 0;
 }
+
+// ── Source / Dubber items ─────────────────────────────────────────────────────
 
 .watch-modal__source-item {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.7rem;
   padding: 0.6rem 0.75rem;
+  width: 100%;
   text-align: left;
-  background: $color-surface-hover;
+  background: transparent;
   border: 1px solid transparent;
-  border-radius: $radius-md;
+  border-radius: $radius-lg;
   color: $color-text;
   font-size: 0.9rem;
   cursor: pointer;
-  transition: border-color $transition, background $transition;
+  transition: background $transition, border-color $transition;
 
   &:hover {
-    background: $color-border;
-    border-color: $color-text-muted;
+    background: $color-surface-hover;
+    border-color: $color-border;
   }
 
   &--active {
-    border-color: $color-accent;
-    background: rgba($color-accent, 0.12);
+    border-color: rgba($color-accent, 0.3);
+    background: rgba($color-accent, 0.06);
+
+    .watch-modal__source-name {
+      color: $color-accent;
+    }
   }
 }
+
+// ── Dubber avatar (with mic fallback) ─────────────────────────────────────────
 
 .watch-modal__source-avatar {
   width: 36px;
@@ -191,8 +385,20 @@
   background-size: cover;
   background-position: center;
 
-  &--no-icon {
-    background: $color-border;
+  &--mic {
+    background: $color-bg;
+    border: 1px solid $color-border;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: $color-text-muted;
+
+    svg {
+      width: 16px;
+      height: 16px;
+      display: block;
+      opacity: 0.55;
+    }
   }
 }
 
@@ -201,86 +407,186 @@
   flex-direction: column;
   align-items: flex-start;
   min-width: 0;
+  flex: 1;
 }
 
 .watch-modal__source-name {
   font-weight: 500;
+  font-size: 0.88rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  transition: color $transition;
 }
 
 .watch-modal__source-meta {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: $color-text-muted;
-  margin-top: 0.2rem;
+  margin-top: 0.15rem;
+}
+
+// ── Episodes grid ─────────────────────────────────────────────────────────────
+
+.watch-modal__episodes {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+  gap: 3px;
+  flex-direction: unset !important;
 }
 
 .watch-modal__episode-item {
+  position: relative;
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  padding: 0.6rem 0.75rem;
-  text-align: left;
+  justify-content: center;
+  padding: 0.55rem 0.25rem;
+  aspect-ratio: 1;
+  text-align: center;
   background: $color-surface-hover;
   border: 1px solid transparent;
-  border-radius: $radius-md;
+  border-radius: $radius-lg;
   color: $color-text;
-  font-size: 0.9rem;
   cursor: pointer;
   transition: border-color $transition, background $transition;
+  user-select: none;
 
   &:hover {
-    background: $color-border;
-    border-color: $color-text-muted;
+    background: lighten($color-surface-hover, 3%);
+    border-color: $color-border;
   }
 
   &--active {
     border-color: $color-accent;
-    background: rgba($color-accent, 0.12);
+    background: rgba($color-accent, 0.1);
+
+    .watch-modal__episode-num {
+      color: $color-accent;
+    }
   }
 
-  &--watched .watch-modal__episode-num {
-    color: $color-text-muted;
+  &--watched {
+    .watch-modal__episode-num {
+      color: $color-text-muted;
+    }
+  }
+
+  &--marking {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  &--highlight {
+    border-color: rgba($color-accent, 0.6);
+    background: rgba($color-accent, 0.12);
   }
 }
 
 .watch-modal__episode-num {
-  flex: 1;
+  font-weight: 600;
+  font-size: 0.88rem;
+  line-height: 1;
+  transition: color $transition;
 }
 
 .watch-modal__episode-watched {
-  flex-shrink: 0;
+  position: absolute;
+  top: 3px;
+  right: 3px;
   color: $color-success;
-  font-size: 1rem;
-  margin-left: 0.5rem;
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 1;
+  animation: watch-checkmark-pop 0.2s ease forwards;
 }
 
-.watch-modal__source-sublist {
-  margin-bottom: 0.75rem;
+// ── Confirm dialog ────────────────────────────────────────────────────────────
+
+.watch-modal__confirm {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba($color-surface, 0.94);
+  backdrop-filter: blur(2px);
+  border-radius: inherit;
+}
+
+.watch-modal__confirm-inner {
+  width: 100%;
+  max-width: 22rem;
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
+  text-align: center;
 }
 
-.watch-modal__sublist-label {
-  font-size: 0.85rem;
-  color: $color-text-muted;
-}
-
-.watch-modal__source-select {
-  padding: 0.35rem 0.5rem;
-  font-size: 0.85rem;
-  background: $color-bg;
-  border: 1px solid $color-border;
-  border-radius: $radius-sm;
+.watch-modal__confirm-title {
+  font-size: 0.95rem;
+  font-weight: 600;
   color: $color-text;
 }
+
+.watch-modal__confirm-text {
+  font-size: 0.85rem;
+  color: $color-text-muted;
+  line-height: 1.45;
+}
+
+.watch-modal__confirm-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+.watch-modal__confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1.1rem;
+  border-radius: $radius-lg;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background $transition, border-color $transition;
+
+  &--secondary {
+    border: 1px solid $color-border;
+    background: $color-surface-hover;
+    color: $color-text-muted;
+
+    &:hover {
+      background: lighten($color-surface-hover, 3%);
+      color: $color-text;
+      border-color: lighten($color-border, 5%);
+    }
+  }
+
+  &--primary {
+    border: 1px solid $color-accent;
+    background: $color-accent;
+    color: #fff;
+
+    &:hover {
+      background: $color-accent-hover;
+      border-color: $color-accent-hover;
+    }
+  }
+}
+
+// ── Footer ────────────────────────────────────────────────────────────────────
 
 .watch-modal__footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1rem 1.25rem;
+  padding: 0.75rem 1.1rem;
   border-top: 1px solid $color-border;
   flex-shrink: 0;
   background: $color-surface;
@@ -293,40 +599,75 @@
 }
 
 .watch-modal__label {
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   color: $color-text-muted;
 }
 
 .watch-modal__player-select {
-  padding: 0.4rem 0.6rem;
-  font-size: 0.9rem;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.82rem;
   background: $color-bg;
   border: 1px solid $color-border;
   border-radius: $radius-md;
   color: $color-text;
+  cursor: pointer;
+  transition: border-color $transition;
+
+  &:focus {
+    outline: none;
+    border-color: rgba($color-accent, 0.45);
+  }
 }
 
 .watch-modal__play-btn {
-  padding: 0.6rem 1.25rem;
-  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1.35rem;
+  font-size: 0.88rem;
   font-weight: 600;
   color: #fff;
   background: $color-accent;
-  border-radius: $radius-md;
+  border: 1px solid $color-accent;
+  border-radius: $radius-lg;
   cursor: pointer;
-  transition: background $transition;
+  transition: background $transition, border-color $transition, transform 0.1s ease, box-shadow $transition;
+  position: relative;
+  white-space: nowrap;
 
   &:hover:not(:disabled) {
     background: $color-accent-hover;
+    border-color: $color-accent-hover;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba($color-accent, 0.35);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: none;
   }
 
   &:disabled {
-    opacity: 0.5;
+    opacity: 0.38;
     cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
   }
-}
 
-@keyframes watch-modal-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  &--loading {
+    color: transparent;
+    pointer-events: none;
+
+    &::after {
+      content: '';
+      position: absolute;
+      width: 15px;
+      height: 15px;
+      border: 2px solid rgba(255, 255, 255, 0.35);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: watch-modal-spin 0.55s linear infinite;
+    }
+  }
 }

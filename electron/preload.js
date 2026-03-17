@@ -98,6 +98,8 @@ contextBridge.exposeInMainWorld('anix', {
   getNotificationsCount: () => ipcRenderer.invoke('anix:notificationsCount'),
   getHistory: (page = 0) => ipcRenderer.invoke('anix:history', page),
   addToHistory: (releaseId, sourceId, episodePosition) => ipcRenderer.invoke('anix:addToHistory', releaseId, sourceId, episodePosition),
+  markEpisodeAsWatched: (releaseId, sourceId, episodePosition) => ipcRenderer.invoke('anix:markEpisodeAsWatched', releaseId, sourceId, episodePosition),
+  unmarkEpisodeAsWatched: (releaseId, sourceId, episodePosition) => ipcRenderer.invoke('anix:unmarkEpisodeAsWatched', releaseId, sourceId, episodePosition),
   getVotedReleases: (profileId, page = 0) => ipcRenderer.invoke('anix:votedReleases', profileId, page),
   getFriends: (profileId, page = 0) => ipcRenderer.invoke('anix:friends', profileId, page),
   searchReleases: (query, page = 0) => ipcRenderer.invoke('anix:searchReleases', query, page),

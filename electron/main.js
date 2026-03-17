@@ -899,6 +899,16 @@ ipcMain.handle('anix:addToHistory', async (_, releaseId, sourceId, episodePositi
   await client.endpoints.release.addToHistory(releaseId, sourceId, episodePosition);
 });
 
+ipcMain.handle('anix:markEpisodeAsWatched', async (_, releaseId, sourceId, episodePosition) => {
+  const client = getAnixart();
+  await client.endpoints.release.markEpisodeAsWatched(releaseId, sourceId, episodePosition);
+});
+
+ipcMain.handle('anix:unmarkEpisodeAsWatched', async (_, releaseId, sourceId, episodePosition) => {
+  const client = getAnixart();
+  await client.endpoints.release.unmarkEpisodeAsWatched(releaseId, sourceId, episodePosition);
+});
+
 ipcMain.handle('anix:relatedReleases', async (_, releaseId, page = 0) => {
   const client = getAnixart();
   const data = await client.endpoints.release.getRelatedReleases(releaseId, page);

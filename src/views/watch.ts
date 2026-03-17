@@ -218,6 +218,11 @@ export function renderWatch(): HTMLElement {
     }
     popoverTitle.textContent = titleText;
     popoverBody.innerHTML = '';
+    const _panel = popover.querySelector('.watch-page__popover-panel') as HTMLElement | null;
+    if (_panel) {
+      _panel.classList.remove('watch-page__popover-panel--series', 'watch-page__popover-panel--dubbing');
+      _panel.classList.add(`watch-page__popover-panel--${type}`);
+    }
     const page = renderPage();
     page.classList.remove('page--padded');
     page.classList.add('watch-page__popover-page');
@@ -550,14 +555,20 @@ export function renderWatch(): HTMLElement {
         }
         videoEl.addEventListener('error', tryFallbackToIframe, { once: true });
         videoEl.addEventListener('playing', () => {
-          window.anix?.addToHistory?.(parseInt(state.releaseId, 10), parseInt(state.sourceId, 10), ep);
+          const rId = parseInt(state.releaseId, 10);
+          const sId = parseInt(state.sourceId, 10);
+          window.anix?.addToHistory?.(rId, sId, ep);
+          window.anix?.markEpisodeAsWatched?.(rId, sId, ep).catch(() => {});
         }, { once: true });
         doPlay();
       } else {
         iframeEl.src = playUrlArg;
         iframeEl.hidden = false;
         if (videoEl) videoEl.hidden = true;
-        window.anix?.addToHistory?.(parseInt(state.releaseId, 10), parseInt(state.sourceId, 10), ep);
+        const rId = parseInt(state.releaseId, 10);
+        const sId = parseInt(state.sourceId, 10);
+        window.anix?.addToHistory?.(rId, sId, ep);
+        window.anix?.markEpisodeAsWatched?.(rId, sId, ep).catch(() => {});
       }
     };
 
@@ -659,27 +670,70 @@ export function renderWatch(): HTMLElement {
     window.anix.getEpisodes(releaseIdNum, dubberIdNum, parseInt(state.sourceId, 10)).then((res: { episodes?: Array<{ position: number; name: string; is_watched?: boolean }> }) => {
       const episodes = res?.episodes ?? [];
       scrollRoot.innerHTML = '';
-      const list = document.createElement('div');
-      list.className = 'watch-page__popover-list';
-      episodes.forEach((item) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'watch-page__popover-item' + (item.position === state.ep ? ' watch-page__popover-item--active' : '');
-        btn.dataset.epPosition = String(item.position);
-        const watchedMark = (item.is_watched ?? (item as Record<string, unknown>).is_watched === true) ? '<span class="watch-page__popover-watched" title="Просмотрено">✓</span>' : '';
-        btn.innerHTML = `<span class="watch-page__popover-item-text">${item.position} серия</span>${watchedMark}`;
-        btn.addEventListener('click', () => {
-          closePopover();
-          goToEpisode(item.position);
-        });
-        list.appendChild(btn);
-      });
-      scrollRoot.appendChild(list);
-      if (episodes.length === 0) scrollRoot.innerHTML = '<div class="watch-page__popover-load">Нет серий</div>';
-      else {
-        const activeEl = scrollRoot.querySelector(`[data-ep-position="${state.ep}"]`);
-        if (activeEl) activeEl.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+      if (episodes.length === 0) {
+        scrollRoot.innerHTML = '<div class="watch-page__popover-load">Нет серий</div>';
+        return;
       }
+
+      // Search input
+      const searchWrap = document.createElement('div');
+      searchWrap.className = 'watch-page__popover-search-wrap';
+      const searchInput = document.createElement('input');
+      searchInput.type = 'text';
+      searchInput.inputMode = 'numeric';
+      searchInput.placeholder = 'Номер серии…';
+      searchInput.className = 'watch-page__popover-search';
+      searchInput.addEventListener('click', (ev) => ev.stopPropagation());
+      searchInput.addEventListener('keydown', (ev) => ev.stopPropagation());
+      searchWrap.appendChild(searchInput);
+      scrollRoot.appendChild(searchWrap);
+
+      // Episode grid
+      const grid = document.createElement('div');
+      grid.className = 'watch-page__popover-ep-grid';
+
+      const renderGrid = (filter: string) => {
+        grid.innerHTML = '';
+        const trimmed = filter.trim();
+        const filtered = trimmed !== '' ? episodes.filter(ep => String(ep.position).includes(trimmed)) : episodes;
+        filtered.forEach((item) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          const isActive = item.position === state.ep;
+          const isWatched = item.is_watched === true;
+          btn.className = 'watch-page__popover-ep-cell'
+            + (isActive ? ' watch-page__popover-ep-cell--active' : '')
+            + (isWatched ? ' watch-page__popover-ep-cell--watched' : '');
+          btn.dataset.epPosition = String(item.position);
+          btn.innerHTML = `<span class="watch-page__popover-ep-num">${item.position}</span>`;
+          if (isWatched) btn.innerHTML += '<span class="watch-page__popover-ep-check">✓</span>';
+          btn.addEventListener('click', () => {
+            closePopover();
+            goToEpisode(item.position);
+          });
+          grid.appendChild(btn);
+        });
+        if (filtered.length === 0) {
+          grid.innerHTML = '<div class="watch-page__popover-load">Нет результатов</div>';
+        }
+      };
+
+      renderGrid('');
+      scrollRoot.appendChild(grid);
+      searchInput.addEventListener('input', () => renderGrid(searchInput.value));
+
+      // Auto-scroll: prefer last watched episode, fallback to current
+      let scrollTarget = String(state.ep);
+      for (let i = episodes.length - 1; i >= 0; i--) {
+        if (episodes[i].is_watched) {
+          scrollTarget = String(episodes[i].position);
+          break;
+        }
+      }
+      setTimeout(() => {
+        const targetEl = grid.querySelector(`[data-ep-position="${scrollTarget}"]`);
+        if (targetEl) targetEl.scrollIntoView({ block: 'center', behavior: 'auto' });
+      }, 0);
     }).catch(() => {
       setLoading('Ошибка загрузки');
     });
@@ -698,6 +752,10 @@ export function renderWatch(): HTMLElement {
       const types = res?.types ?? [];
       const dubberIdNum = state.dubberId ? parseInt(state.dubberId, 10) : 0;
       scrollRoot.innerHTML = '';
+      if (types.length === 0) {
+        scrollRoot.innerHTML = '<div class="watch-page__popover-load">Нет озвучек</div>';
+        return;
+      }
       const list = document.createElement('div');
       list.className = 'watch-page__popover-list';
       types.forEach((dubber) => {
@@ -705,22 +763,37 @@ export function renderWatch(): HTMLElement {
         btn.type = 'button';
         const isActive = dubber.id === dubberIdNum;
         btn.className = 'watch-page__popover-item' + (isActive ? ' watch-page__popover-item--active' : '');
+        const restoreBtn = () => {
+          btn.disabled = false;
+          btn.classList.remove('watch-page__popover-item--loading');
+          btn.innerHTML = `<span class="watch-page__popover-item-text">${escapeHtml(dubber.name)}</span>${isActive ? '<span class="watch-page__popover-check"><i data-lucide="check"></i></span>' : ''}`;
+          if (isActive) createIcons({ icons: { Check }, root: btn });
+        };
         btn.innerHTML = `<span class="watch-page__popover-item-text">${escapeHtml(dubber.name)}</span>${isActive ? '<span class="watch-page__popover-check"><i data-lucide="check"></i></span>' : ''}`;
         btn.addEventListener('click', () => {
+          if (dubber.id === dubberIdNum) return; // already active, no need to switch
+          list.querySelectorAll<HTMLButtonElement>('.watch-page__popover-item').forEach(b => { b.disabled = true; });
+          btn.classList.add('watch-page__popover-item--loading');
+          btn.innerHTML = `<span class="watch-page__popover-item-text">${escapeHtml(dubber.name)}</span><span class="watch-page__popover-spinner"></span>`;
           window.anix?.getDubberSources(releaseIdNum, dubber.id).then((srcRes: { sources?: Array<{ id: number; name: string }> }) => {
             const sources = srcRes?.sources ?? [];
             const first = sources[0];
             if (first) {
               closePopover();
               switchToDubbing(first.id, first.name, dubber.id);
+            } else {
+              list.querySelectorAll<HTMLButtonElement>('.watch-page__popover-item').forEach(b => { b.disabled = false; });
+              restoreBtn();
             }
-          }).catch(() => {});
+          }).catch(() => {
+            list.querySelectorAll<HTMLButtonElement>('.watch-page__popover-item').forEach(b => { b.disabled = false; });
+            restoreBtn();
+          });
         });
         list.appendChild(btn);
       });
       scrollRoot.appendChild(list);
-      if (types.length > 0) createIcons({ icons: { Check }, root: list });
-      if (types.length === 0) scrollRoot.innerHTML = '<div class="watch-page__popover-load">Нет озвучек</div>';
+      createIcons({ icons: { Check }, root: list });
     }).catch(() => {
       setLoading('Ошибка загрузки');
     });

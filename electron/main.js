@@ -825,9 +825,35 @@ ipcMain.handle('shell:openExternal', (_, url) => {
 ipcMain.handle('app:getVersion', () => app.getVersion());
 
 // Простая система скачивания обновления с GitHub Releases.
-// Скачиваем первый .exe из assets последнего релиза и шлём прогресс в renderer.
+// Определяем платформу и скачиваем соответствующий пакет.
 let pendingInstallerPath = null;
 let updateDownloadState = { state: 'idle', received: 0, total: 0 };
+
+/** Возвращает regex-паттерн для поиска подходящего ассета в GitHub Releases. */
+function getUpdateAssetPattern() {
+  if (process.platform === 'linux') {
+    try {
+      require('child_process').execSync('which pacman', { stdio: 'ignore' });
+      return /\.(pacman|pkg\.tar\.zst)(\?|$)/i;
+    } catch {
+      return /\.deb(\?|$)/i;
+    }
+  }
+  return /\.exe(\?|$)/i;
+}
+
+/** Человекочитаемое расширение для логов. */
+function getUpdateAssetLabel() {
+  if (process.platform === 'linux') {
+    try {
+      require('child_process').execSync('which pacman', { stdio: 'ignore' });
+      return '.pacman/.pkg.tar.zst';
+    } catch {
+      return '.deb';
+    }
+  }
+  return '.exe';
+}
 
 function sendUpdateProgress(extra) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -869,12 +895,13 @@ async function fetchLatestInstallerUrl() {
           try {
             const data = JSON.parse(raw);
             const assets = Array.isArray(data.assets) ? data.assets : [];
-            const exe = assets.find((a) => typeof a.browser_download_url === 'string' && /\.exe(\?|$)/i.test(a.browser_download_url));
-            if (!exe) {
-              reject(new Error('No .exe asset in latest release'));
+            const pattern = getUpdateAssetPattern();
+            const asset = assets.find((a) => typeof a.browser_download_url === 'string' && pattern.test(a.browser_download_url));
+            if (!asset) {
+              reject(new Error(`No ${getUpdateAssetLabel()} asset in latest release`));
               return;
             }
-            resolve(exe.browser_download_url);
+            resolve(asset.browser_download_url);
           } catch (e) {
             reject(e);
           }
@@ -969,11 +996,32 @@ ipcMain.handle('app:installUpdate', async () => {
     return;
   }
   try {
-    const child = spawn(pendingInstallerPath, [], {
-      detached: true,
-      stdio: 'ignore',
-    });
-    child.unref();
+    if (process.platform === 'win32') {
+      // Windows: запускаем .exe инсталлятор
+      const child = spawn(pendingInstallerPath, [], {
+        detached: true,
+        stdio: 'ignore',
+      });
+      child.unref();
+    } else if (process.platform === 'linux') {
+      // Linux: устанавливаем через pkexec (графический sudo)
+      let installCmd, installArgs;
+      if (pendingInstallerPath.endsWith('.deb')) {
+        installCmd = 'pkexec';
+        installArgs = ['dpkg', '-i', pendingInstallerPath];
+      } else if (pendingInstallerPath.endsWith('.pkg.tar.zst') || pendingInstallerPath.endsWith('.pacman')) {
+        installCmd = 'pkexec';
+        installArgs = ['pacman', '-U', '--noconfirm', pendingInstallerPath];
+      } else {
+        console.error('Unknown Linux package format:', pendingInstallerPath);
+        return;
+      }
+      const child = spawn(installCmd, installArgs, {
+        detached: true,
+        stdio: 'ignore',
+      });
+      child.unref();
+    }
     isQuitting = true;
     app.quit();
   } catch (e) {

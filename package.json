@@ -8,6 +8,9 @@
     "dev": "vite",
     "build:icon": "node scripts/build-icon.js",
     "build": "vite build && yarn build:icon && electron-builder",
+    "build:win": "vite build && yarn build:icon && electron-builder --win",
+    "build:linux-deb": "vite build && yarn build:icon && electron-builder --linux deb",
+    "build:linux-arch": "vite build && yarn build:icon && electron-builder --linux pacman",
     "build:vite": "vite build",
     "rebuild:native": "electron-rebuild -f -w discord_bridge",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
@@ -52,6 +55,34 @@
     "icon": "public/logo/512x512.png",
     "win": {
       "icon": "public/logo/icon.ico"
+    },
+    "linux": {
+      "target": [
+        "deb",
+        "pacman"
+      ],
+      "icon": "public/logo",
+      "category": "Network",
+      "maintainer": "Maks1mio",
+      "executableName": "anixapp",
+      "desktop": {
+        "Name": "AnixApp",
+        "Comment": "Быстрый клиент для просмотра аниме",
+        "Terminal": "false",
+        "Categories": "Network;AudioVideo;"
+      }
+    },
+    "deb": {
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libsecret-1-0"
+      ]
     }
   }
 }

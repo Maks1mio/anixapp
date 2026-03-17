@@ -5,6 +5,7 @@ node_modules/
 dist/
 release/
 out/
+
 *.tsbuildinfo
 
 # Electron / electron-builder
@@ -32,6 +33,7 @@ auth.json
 # IDE
 .idea/
 .vscode/*
+.claude
 !.vscode/extensions.json
 !.vscode/settings.json
 *.swp

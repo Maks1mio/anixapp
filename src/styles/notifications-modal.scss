@@ -1,3 +1,4 @@
+@use 'sass:color';
 @use 'variables' as *;
 
 .notifications-modal-overlay {
@@ -280,7 +281,12 @@
   width: 0;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, $color-accent 0%, lighten($color-accent, 12%) 50%, $color-accent 100%);
+  background: linear-gradient(
+    90deg,
+    $color-accent 0%,
+    color.adjust($color-accent, $lightness: 12%) 50%,
+    $color-accent 100%
+  );
   transition: width 0.2s ease;
 }
 

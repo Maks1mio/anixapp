@@ -3,6 +3,7 @@
  * Рендерится в body, позиция и ширина по якорю (обёртка поиска).
  */
 
+import { renderPage } from './page';
 import { getSearchHistory } from '../utils/search-history';
 
 const GAP = 4;
@@ -51,24 +52,13 @@ function buildContent(query: string, history: string[]): string {
     hasQuery ? history.filter((h) => h.toLowerCase().includes(qLower)) : history;
   const rows: string[] = [];
 
-  if (hasQuery) {
-    rows.push(
-      `<button type="button" class="search-dropdown__option" data-tab="releases"><span class="search-dropdown__query">${esc(q)}</span><span class="search-dropdown__hint">по тайтлам</span></button>`,
-      `<button type="button" class="search-dropdown__option" data-tab="collections"><span class="search-dropdown__query">${esc(q)}</span><span class="search-dropdown__hint">по коллекциям</span></button>`,
-      `<button type="button" class="search-dropdown__option" data-tab="profiles"><span class="search-dropdown__query">${esc(q)}</span><span class="search-dropdown__hint">по пользователям</span></button>`,
-    );
-  }
-
   if (filteredHistory.length > 0) {
-    if (hasQuery) rows.push('<div class="search-dropdown__divider" aria-hidden="true"></div>');
     rows.push('<div class="search-dropdown__section">Недавние запросы</div>');
     filteredHistory.forEach((h) => {
       rows.push(`<button type="button" class="search-dropdown__history-item">${esc(h)}</button>`);
     });
   } else if (!hasQuery) {
     rows.push('<div class="search-dropdown__empty">Нет недавних запросов</div>');
-  } else if (hasQuery) {
-    rows.push('<div class="search-dropdown__empty">Нет подходящих запросов</div>');
   }
 
   return rows.join('');
@@ -84,6 +74,16 @@ export function openSearchDropdown(
   const dropdown = document.createElement('div');
   dropdown.className = 'search-dropdown';
   dropdown.setAttribute('role', 'listbox');
+
+  const page = renderPage();
+  const scrollEl = page.querySelector<HTMLElement>('#content');
+  if (!scrollEl) {
+    // Fallback: если по какой-то причине структура Page изменилась
+    activeClose = null;
+    return () => {};
+  }
+
+  dropdown.appendChild(page);
 
   const history = getSearchHistory();
 
@@ -105,17 +105,8 @@ export function openSearchDropdown(
 
   function render(): void {
     const q = input.value.trim();
-    dropdown.innerHTML = buildContent(q || '', history);
-    dropdown.querySelectorAll('.search-dropdown__option').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        const tab = (e.currentTarget as HTMLElement).dataset.tab as SearchDropdownTab | undefined;
-        const query = input.value.trim();
-        close();
-        onSelect({ query: query || (history[0] ?? ''), tab });
-      });
-    });
-    dropdown.querySelectorAll('.search-dropdown__history-item').forEach((btn) => {
+    scrollEl.innerHTML = buildContent(q || '', history);
+    scrollEl.querySelectorAll('.search-dropdown__history-item').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         const query = (e.currentTarget as HTMLElement).textContent?.trim() ?? '';
@@ -123,6 +114,14 @@ export function openSearchDropdown(
         onSelect({ query });
       });
     });
+
+    // Если после рендера нет ни одного элемента — скрываем контейнер полностью
+    if (!scrollEl.innerHTML.trim()) {
+      dropdown.style.display = 'none';
+    } else {
+      dropdown.style.display = 'block';
+      positionDropdown(dropdown, anchor);
+    }
 
     const items = getItems();
     if (!items.length) {
@@ -139,7 +138,6 @@ export function openSearchDropdown(
   input.addEventListener('input', render);
 
   document.body.appendChild(dropdown);
-  positionDropdown(dropdown, anchor);
 
   function close(): void {
     input.removeEventListener('input', render);

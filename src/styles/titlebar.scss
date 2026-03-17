@@ -198,10 +198,52 @@
   }
 }
 
+// ——— Inline update download state ———
+
+.titlebar__menu-item--update-downloading {
+  position: relative;
+  width: auto !important;
+  min-width: 110px;
+  padding: 0 10px !important;
+  gap: 6px;
+  overflow: hidden;
+  color: var(--color-accent, #7c8cff) !important;
+  cursor: default !important;
+  border-radius: $radius-md;
+
+  &:hover {
+    background: transparent !important;
+    color: var(--color-accent, #7c8cff) !important;
+  }
+}
+
+.titlebar__update-fill {
+  position: absolute;
+  inset: 0;
+  background: rgba(124, 140, 255, 0.13);
+  width: 0%;
+  transition: width 0.35s ease;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.titlebar__update-label {
+  position: relative;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  z-index: 1;
+  letter-spacing: 0.01em;
+}
+
 .titlebar__update-icon {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  z-index: 1;
+  flex-shrink: 0;
 }
 
 .titlebar__update-dot {

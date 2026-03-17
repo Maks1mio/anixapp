@@ -1,3 +1,4 @@
+@use 'sass:color';
 @use 'variables' as *;
 
 // ─── Overlay ────────────────────────────────────────────────────────
@@ -248,7 +249,7 @@
 
   &:hover {
     background: $color-surface-hover;
-    border-color: lighten($color-border, 5%);
+    border-color: color.adjust($color-border, $lightness: 5%);
   }
 
   &:active {
@@ -370,7 +371,7 @@
   transition: border-color 0.15s;
 
   &::placeholder {
-    color: darken($color-text-muted, 10%);
+    color: color.adjust($color-text-muted, $lightness: -10%);
     letter-spacing: 0.1em;
   }
 
@@ -448,7 +449,7 @@
   &:hover {
     background: $color-surface-hover;
     color: $color-text;
-    border-color: lighten($color-border, 5%);
+    border-color: color.adjust($color-border, $lightness: 5%);
   }
 }
 
@@ -650,7 +651,7 @@
 }
 
 .lobby-modal__log-time {
-  color: darken($color-text-muted, 10%);
+  color: color.adjust($color-text-muted, $lightness: -10%);
   font-variant-numeric: tabular-nums;
 }
 
@@ -673,7 +674,7 @@
 }
 
 .lobby-modal__log-note {
-  color: darken($color-text-muted, 5%);
+  color: color.adjust($color-text-muted, $lightness: -5%);
   font-size: 0.68rem;
 }
 

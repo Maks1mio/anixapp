@@ -97,7 +97,13 @@ export function renderReleaseCardHorizontal(data: ReleaseCardData): HTMLElement 
   const infoParts: string[] = [];
   if (data.year) infoParts.push(escapeHtml(data.year));
   if (data.country) infoParts.push(escapeHtml(data.country));
-  if (data.status) infoParts.push(escapeHtml(data.status));
+  if (data.status) {
+    const statusText = String(data.status);
+    // Не показываем статусы "Вышел" / "Выходит" в мета-информации карточки.
+    if (!/^\s*вышел\s*$/i.test(statusText) && !/^\s*выходит\s*$/i.test(statusText)) {
+      infoParts.push(escapeHtml(statusText));
+    }
+  }
   const infoStr = infoParts.length
     ? infoParts.join(' <span class="release-card-h__meta-dot">·</span> ')
     : '';

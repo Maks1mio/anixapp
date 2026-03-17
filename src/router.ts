@@ -1,4 +1,3 @@
-import { renderFeed } from './views/feed';
 import { renderRelease } from './views/release';
 import { renderRelated } from './views/related';
 import { renderHome } from './views/home';
@@ -82,13 +81,6 @@ export function handleRoute(container: HTMLElement): void {
 
   if (path === '/watch') {
     container.appendChild(renderWatch());
-    updateSidebarActive();
-    return;
-  }
-
-  if (path === '/feed') {
-    const page = parseInt(getSearchParams().get('page') || '1', 10);
-    container.appendChild(renderFeed(page));
     updateSidebarActive();
     return;
   }

@@ -23,7 +23,6 @@ import { checkForUpdate, type UpdateInfo } from './services/update-checker';
 
 const SIDEBAR_NAV: { href: string; label: string; icon: string }[] = [
   { href: '/', label: 'Главная', icon: iconHome(18) },
-  { href: '/feed', label: 'Обзор', icon: iconLayoutGrid(18) },
   { href: '/bookmarks', label: 'Закладки', icon: iconBookmark(18) },
 ];
 
@@ -78,6 +77,58 @@ export function renderLayout(onLogout: () => void): HTMLElement {
       <button type="button" class="titlebar__menu-item" id="titlebar-settings" aria-label="Настройки">${iconSettings(18)}</button>
     `;
     let updateInfo: { version: string; url: string } | null = null;
+    let updateDownloading = false;
+
+    const startInlineUpdate = (btn: HTMLElement) => {
+      if (updateDownloading) return;
+      updateDownloading = true;
+      btn.classList.add('titlebar__menu-item--update-downloading');
+      btn.classList.remove('tooltip-trigger');
+      btn.innerHTML = `
+        <span class="titlebar__update-fill" style="width:0%"></span>
+        <span class="titlebar__update-icon">${iconDownload(14)}</span>
+        <span class="titlebar__update-label">0%</span>
+      `;
+
+      const resetBtn = (errorText?: string) => {
+        updateDownloading = false;
+        btn.classList.remove('titlebar__menu-item--update-downloading');
+        btn.classList.add('tooltip-trigger');
+        btn.innerHTML = `
+          <span class="titlebar__update-icon">${iconDownload(18)}</span>
+          <span class="titlebar__update-dot" aria-hidden="true"></span>
+          <span class="tooltip tooltip--animated" data-update-tooltip>${errorText ?? `Доступна версия ${updateInfo?.version ?? ''}. Нажмите для загрузки.`}</span>
+        `;
+      };
+
+      const onProgress = (ev: Event) => {
+        const data = (ev as CustomEvent<AppUpdateProgress>).detail;
+        if (data.state === 'downloading') {
+          const pct = data.total > 0 ? Math.round((data.received / data.total) * 100) : data.percent || 0;
+          (btn.querySelector('.titlebar__update-fill') as HTMLElement | null)?.style.setProperty('width', `${pct}%`);
+          const lbl = btn.querySelector('.titlebar__update-label') as HTMLElement | null;
+          if (lbl) lbl.textContent = `${pct}%`;
+        } else if (data.state === 'ready') {
+          window.removeEventListener('app-update-progress', onProgress);
+          (btn.querySelector('.titlebar__update-fill') as HTMLElement | null)?.style.setProperty('width', '100%');
+          const lbl = btn.querySelector('.titlebar__update-label') as HTMLElement | null;
+          if (lbl) lbl.textContent = 'Устанавливаем…';
+          setTimeout(() => { (window.electron as { installUpdate?: () => Promise<void> })?.installUpdate?.(); }, 1200);
+        } else if (data.state === 'error') {
+          window.removeEventListener('app-update-progress', onProgress);
+          resetBtn('Ошибка загрузки. Нажмите для повтора');
+        }
+      };
+
+      window.addEventListener('app-update-progress', onProgress);
+      if (window.electron?.startUpdateDownload) {
+        window.electron.startUpdateDownload().catch(() => {
+          window.removeEventListener('app-update-progress', onProgress);
+          resetBtn('Ошибка. Нажмите для повтора');
+        });
+      }
+    };
+
     titlebarMenu.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
       const updateBtn = target.closest('#titlebar-update');
@@ -85,12 +136,9 @@ export function renderLayout(onLogout: () => void): HTMLElement {
       const notificationsBtn = target.closest('#titlebar-notifications');
       const profileBtn = target.closest('#titlebar-profile');
       const settingsBtn = target.closest('#titlebar-settings');
-      if (updateBtn && updateInfo) {
+      if (updateBtn && updateInfo && !updateDownloading) {
         e.preventDefault();
-        if (window.electron?.startUpdateDownload) {
-          window.electron.startUpdateDownload().catch(() => {});
-        }
-        openNotificationsModal();
+        startInlineUpdate(updateBtn as HTMLElement);
       } else if (lobbyBtn) {
         e.preventDefault();
         openLobbyModal();
@@ -120,7 +168,7 @@ export function renderLayout(onLogout: () => void): HTMLElement {
           if (btn) {
             btn.hidden = false;
             const tooltipEl = btn.querySelector('[data-update-tooltip]');
-            if (tooltipEl) tooltipEl.textContent = `Доступна версия ${info.version}. Нажмите, чтобы открыть страницу загрузки.`;
+            if (tooltipEl) tooltipEl.textContent = `Доступна версия ${info.version}. Нажмите для загрузки.`;
           }
         })
         .catch(() => {});

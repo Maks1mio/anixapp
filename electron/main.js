@@ -22,6 +22,27 @@ let tray = null;
 let anixart = null;
 let isQuitting = false;
 
+function handleAnixError(err, context) {
+  const msg = err && err.message ? String(err.message) : String(err);
+  const isNetwork =
+    msg.includes('fetch failed') ||
+    msg.includes('ENOTFOUND') ||
+    msg.includes('ECONNREFUSED') ||
+    msg.includes('ECONNRESET') ||
+    msg.includes('ETIMEDOUT');
+  if (isNetwork && mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      mainWindow.webContents.send('anix:offline', {
+        context,
+        message: msg,
+      });
+    } catch (_) {
+      // ignore
+    }
+  }
+  throw err;
+}
+
 function getIconPath() {
   const base = path.join(__dirname, '..', 'public', 'logo');
   const ico = path.join(base, 'icon.ico');
@@ -265,6 +286,24 @@ ipcMain.handle('anix:getAuthStatus', () => {
   return { hasToken: !!token };
 });
 
+// Лёгкая проверка соединения с API.
+// Если токена ещё нет (пользователь не залогинен) — считаем соединение доступным,
+// чтобы не блокировать экран логина.
+// Если сеть/сервер недоступны — промис отклонится.
+ipcMain.handle('anix:checkConnection', async () => {
+  try {
+    const token = loadSavedToken();
+    if (!token) {
+      return { ok: true };
+    }
+    const client = getAnixart();
+    await client.endpoints.feed.latest(1);
+    return { ok: true };
+  } catch (err) {
+    handleAnixError(err, 'checkConnection');
+  }
+});
+
 ipcMain.handle('anix:login', async (_, username, password) => {
   // Для логина используем отдельный клиент БЕЗ сохранённого токена,
   // чтобы старый токен не перезаписывал учётку.
@@ -313,6 +352,29 @@ ipcMain.handle('anix:setBaseUrl', (_, baseUrl) => {
   return undefined;
 });
 
+// Пинг произвольного эндпоинта без изменения глобального baseUrl и без оффлайн‑экрана.
+ipcMain.handle('anix:pingBaseUrl', async (_, baseUrl) => {
+  if (typeof baseUrl !== 'string' || !baseUrl) return { ok: false, latencyMs: null };
+  try {
+    const started = Date.now();
+    const client = new Anixart({ baseUrl, token: undefined });
+    await client.endpoints.feed.latest(1);
+    return { ok: true, latencyMs: Date.now() - started };
+  } catch (err) {
+    // Здесь намеренно НЕ вызываем handleAnixError, чтобы не включать глобальный оффлайн‑режим
+    // при проверке альтернативных эндпоинтов.
+    appendLog('endpoint_ping', { baseUrl, error: String(err) });
+    return { ok: false, latencyMs: null };
+  }
+});
+
+// Тестовый метод для проверки оффлайн‑экрана из renderer (dev).
+ipcMain.handle('anix:testOffline', async () => {
+  const err = new Error('TypeError: fetch failed (test)');
+  (err).code = 'ENOTFOUND';
+  handleAnixError(err, 'testOffline');
+});
+
 ipcMain.handle('app:getDeviceId', () => {
   return getOrCreateDeviceId();
 });
@@ -339,6 +401,7 @@ ipcMain.handle('anix:selfProfile', async () => {
       }
     } catch (err) {
       appendLog('profile', { event: 'selfProfile_api_error', profileId, error: String(err) });
+      handleAnixError(err, 'selfProfile');
     }
   }
 
@@ -363,39 +426,67 @@ ipcMain.handle('anix:selfProfile', async () => {
 // ——— Anixart API bridge (raw JSON responses for renderer) ———
 
 ipcMain.handle('anix:releaseById', async (_, id, extended = true) => {
-  const client = getAnixart();
-  const data = await client.endpoints.release.info(id, extended);
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.release.info(id, extended);
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'releaseById');
+  }
 });
 
 ipcMain.handle('anix:getVideos', async (_, releaseId) => {
-  const client = getAnixart();
-  return await client.endpoints.release.getVideos(releaseId);
+  try {
+    const client = getAnixart();
+    return await client.endpoints.release.getVideos(releaseId);
+  } catch (err) {
+    handleAnixError(err, 'getVideos');
+  }
 });
 
 ipcMain.handle('anix:getVideoInCategory', async (_, releaseId, categoryId, page = 1) => {
-  const client = getAnixart();
-  return await client.endpoints.release.getVideoInCategory({ id: releaseId, categoryId, page });
+  try {
+    const client = getAnixart();
+    return await client.endpoints.release.getVideoInCategory({ id: releaseId, categoryId, page });
+  } catch (err) {
+    handleAnixError(err, 'getVideoInCategory');
+  }
 });
 
 ipcMain.handle('anix:getDubbers', async (_, releaseId) => {
-  const client = getAnixart();
-  return await client.endpoints.release.getDubbers(releaseId);
+  try {
+    const client = getAnixart();
+    return await client.endpoints.release.getDubbers(releaseId);
+  } catch (err) {
+    handleAnixError(err, 'getDubbers');
+  }
 });
 
 ipcMain.handle('anix:getDubberSources', async (_, releaseId, dubberId) => {
-  const client = getAnixart();
-  return await client.endpoints.release.getDubberSources(releaseId, dubberId);
+  try {
+    const client = getAnixart();
+    return await client.endpoints.release.getDubberSources(releaseId, dubberId);
+  } catch (err) {
+    handleAnixError(err, 'getDubberSources');
+  }
 });
 
 ipcMain.handle('anix:getEpisodes', async (_, releaseId, dubberId, sourceId, sort = 1) => {
-  const client = getAnixart();
-  return await client.endpoints.release.getEpisodes(releaseId, dubberId, sourceId, sort);
+  try {
+    const client = getAnixart();
+    return await client.endpoints.release.getEpisodes(releaseId, dubberId, sourceId, sort);
+  } catch (err) {
+    handleAnixError(err, 'getEpisodes');
+  }
 });
 
 ipcMain.handle('anix:getEpisode', async (_, releaseId, sourceId, episodePosition) => {
-  const client = getAnixart();
-  return await client.endpoints.release.getEpisode(releaseId, sourceId, episodePosition);
+  try {
+    const client = getAnixart();
+    return await client.endpoints.release.getEpisode(releaseId, sourceId, episodePosition);
+  } catch (err) {
+    handleAnixError(err, 'getEpisode');
+  }
 });
 
 /** Прямые ссылки на видео (как в AniDesk): парсеры anixartjs, чтобы не грузить embed в iframe и не получать 500 от aniqit.com */
@@ -782,180 +873,288 @@ ipcMain.handle('app:installUpdate', async () => {
 });
 
 ipcMain.handle('anix:randomRelease', async (_, extended = true) => {
-  const client = getAnixart();
-  const data = await client.endpoints.release.getRandomRelease(extended);
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.release.getRandomRelease(extended);
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'randomRelease');
+  }
 });
 
 ipcMain.handle('anix:latestFeed', async (_, page = 1) => {
-  const client = getAnixart();
-  const data = await client.endpoints.feed.latest(page);
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.feed.latest(page);
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'latestFeed');
+  }
 });
 
 ipcMain.handle('anix:discoverRecommendations', async (_, page = 0) => {
-  const client = getAnixart();
-  const data = await client.endpoints.discover.getRecommendations(page);
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.discover.getRecommendations(page);
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'discoverRecommendations');
+  }
 });
 
 ipcMain.handle('anix:filterReleases', async (_, page = 0, filterArgs = {}, extended = true) => {
-  const client = getAnixart();
-  // Поведение как в AniDesk: release.filter(page, filterArgs, extended)
-  const data = await client.endpoints.release.filter(page, filterArgs, extended);
-  return data;
+  try {
+    const client = getAnixart();
+    // Поведение как в AniDesk: release.filter(page, filterArgs, extended)
+    const data = await client.endpoints.release.filter(page, filterArgs, extended);
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'filterReleases');
+  }
 });
 
 ipcMain.handle('anix:articleById', async (_, id) => {
-  const client = getAnixart();
-  const data = await client.endpoints.channel.getArticle(id);
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.channel.getArticle(id);
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'articleById');
+  }
 });
 
 ipcMain.handle('anix:channelById', async (_, id) => {
-  const client = getAnixart();
-  const data = await client.endpoints.channel.info(id);
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.channel.info(id);
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'channelById');
+  }
 });
 
 ipcMain.handle('anix:profileById', async (_, id) => {
-  const client = getAnixart();
-  const data = await client.endpoints.profile.info(id);
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.profile.info(id);
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'profileById');
+  }
 });
 
 ipcMain.handle('anix:collectionById', async (_, id) => {
-  const client = getAnixart();
-  const data = await client.endpoints.collection.info(id);
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.collection.info(id);
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'collectionById');
+  }
 });
 
 ipcMain.handle('anix:collectionReleases', async (_, id, page = 0) => {
-  const client = getAnixart();
-  const data = await client.endpoints.collection.getCollectionReleases(id, page);
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.collection.getCollectionReleases(id, page);
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'collectionReleases');
+  }
 });
 
 ipcMain.handle('anix:collectionRandomRelease', async (_, id) => {
-  const client = getAnixart();
-  const data = await client.endpoints.collection.getRandomRelease(id, true);
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.collection.getRandomRelease(id, true);
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'collectionRandomRelease');
+  }
 });
 
 ipcMain.handle('anix:addCollectionFavorite', async (_, id) => {
-  const client = getAnixart();
-  return await client.endpoints.collection.addCollectionFavorite(id);
+  try {
+    const client = getAnixart();
+    return await client.endpoints.collection.addCollectionFavorite(id);
+  } catch (err) {
+    handleAnixError(err, 'addCollectionFavorite');
+  }
 });
 
 ipcMain.handle('anix:removeCollectionFavorite', async (_, id) => {
-  const client = getAnixart();
-  return await client.endpoints.collection.removeCollectionFavorite(id);
+  try {
+    const client = getAnixart();
+    return await client.endpoints.collection.removeCollectionFavorite(id);
+  } catch (err) {
+    handleAnixError(err, 'removeCollectionFavorite');
+  }
 });
 
 ipcMain.handle('anix:collectionsAll', async (_, page = 1, sort = 2) => {
-  const client = getAnixart();
-  const data = await client.endpoints.collection.all(page, sort);
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.collection.all(page, sort);
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'collectionsAll');
+  }
 });
 
 ipcMain.handle('anix:favorites', async (_, page = 0) => {
-  const client = getAnixart();
-  const data = await client.endpoints.profile.getFavorites({
-    page,
-    sort: BookmarkSortType.NewToOldAddTime,
-    filter_announce: 0,
-    filter: 0,
-  });
-  appendLog('favorites', { page, response: data });
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.profile.getFavorites({
+      page,
+      sort: BookmarkSortType.NewToOldAddTime,
+      filter_announce: 0,
+      filter: 0,
+    });
+    appendLog('favorites', { page, response: data });
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'favorites');
+  }
 });
 
 ipcMain.handle('anix:getBookmarks', async (_, profileId, type, page = 0) => {
-  const client = getAnixart();
-  return await client.endpoints.profile.getBookmarks({
-    id: profileId,
-    type: type ?? BookmarkType.Watching,
-    page,
-    sort: BookmarkSortType.NewToOldAddTime,
-    filter_announce: 0,
-    filter: 0,
-  });
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profile.getBookmarks({
+      id: profileId,
+      type: type ?? BookmarkType.Watching,
+      page,
+      sort: BookmarkSortType.NewToOldAddTime,
+      filter_announce: 0,
+      filter: 0,
+    });
+  } catch (err) {
+    handleAnixError(err, 'getBookmarks');
+  }
 });
 
 ipcMain.handle('anix:notificationsAll', async (_, page = 0) => {
-  const client = getAnixart();
-  const data = await client.endpoints.notification.getNotifications(page);
-  appendLog('notifications', { page, response: data });
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.notification.getNotifications(page);
+    appendLog('notifications', { page, response: data });
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'notificationsAll');
+  }
 });
 
 ipcMain.handle('anix:notificationsCount', async () => {
-  const client = getAnixart();
-  const data = await client.endpoints.notification.countNotifications();
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.notification.countNotifications();
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'notificationsCount');
+  }
 });
 
 ipcMain.handle('anix:history', async (_, page = 0) => {
-  const client = getAnixart();
-  const data = await client.endpoints.release.getHistory(page);
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.release.getHistory(page);
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'history');
+  }
 });
 
 ipcMain.handle('anix:addToHistory', async (_, releaseId, sourceId, episodePosition) => {
-  const client = getAnixart();
-  await client.endpoints.release.addToHistory(releaseId, sourceId, episodePosition);
+  try {
+    const client = getAnixart();
+    await client.endpoints.release.addToHistory(releaseId, sourceId, episodePosition);
+  } catch (err) {
+    handleAnixError(err, 'addToHistory');
+  }
 });
 
 ipcMain.handle('anix:markEpisodeAsWatched', async (_, releaseId, sourceId, episodePosition) => {
-  const client = getAnixart();
-  await client.endpoints.release.markEpisodeAsWatched(releaseId, sourceId, episodePosition);
+  try {
+    const client = getAnixart();
+    await client.endpoints.release.markEpisodeAsWatched(releaseId, sourceId, episodePosition);
+  } catch (err) {
+    handleAnixError(err, 'markEpisodeAsWatched');
+  }
 });
 
 ipcMain.handle('anix:unmarkEpisodeAsWatched', async (_, releaseId, sourceId, episodePosition) => {
-  const client = getAnixart();
-  await client.endpoints.release.unmarkEpisodeAsWatched(releaseId, sourceId, episodePosition);
+  try {
+    const client = getAnixart();
+    await client.endpoints.release.unmarkEpisodeAsWatched(releaseId, sourceId, episodePosition);
+  } catch (err) {
+    handleAnixError(err, 'unmarkEpisodeAsWatched');
+  }
 });
 
 ipcMain.handle('anix:relatedReleases', async (_, releaseId, page = 0) => {
-  const client = getAnixart();
-  const data = await client.endpoints.release.getRelatedReleases(releaseId, page);
-  appendLog('relatedReleases', { releaseId, page, response: data });
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.release.getRelatedReleases(releaseId, page);
+    appendLog('relatedReleases', { releaseId, page, response: data });
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'relatedReleases');
+  }
 });
 
 ipcMain.handle('anix:votedReleases', async (_, profileId, page = 0) => {
-  const client = getAnixart();
-  const data = await client.endpoints.profile.getVotedReleases(profileId, page);
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.profile.getVotedReleases(profileId, page);
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'votedReleases');
+  }
 });
 
 ipcMain.handle('anix:friends', async (_, profileId, page = 0) => {
-  const client = getAnixart();
-  const data = await client.endpoints.profile.getFriends({ id: profileId, page });
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.profile.getFriends({ id: profileId, page });
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'friends');
+  }
 });
 
 // ——— Поиск ———
 
 ipcMain.handle('anix:searchReleases', async (_, query, page = 0) => {
-  const client = getAnixart();
-  const data = await client.endpoints.search.releases({ query, page, searchBy: 0 });
-  appendLog('searchReleases', { query, page, response: data });
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.search.releases({ query, page, searchBy: 0 });
+    appendLog('searchReleases', { query, page, response: data });
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'searchReleases');
+  }
 });
 
 ipcMain.handle('anix:searchProfiles', async (_, query, page = 0) => {
-  const client = getAnixart();
-  const data = await client.endpoints.search.profiles({ query, page, searchBy: 0 });
-  appendLog('searchProfiles', { query, page, response: data });
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.search.profiles({ query, page, searchBy: 0 });
+    appendLog('searchProfiles', { query, page, response: data });
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'searchProfiles');
+  }
 });
 
 ipcMain.handle('anix:searchCollections', async (_, query, page = 0) => {
-  const client = getAnixart();
-  const data = await client.endpoints.search.collections({ query, page, searchBy: 0 });
-  appendLog('searchCollections', { query, page, response: data });
-  return data;
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.search.collections({ query, page, searchBy: 0 });
+    appendLog('searchCollections', { query, page, response: data });
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'searchCollections');
+  }
 });
 
 // ——— Избранное и список (профиль) ———

@@ -1,5 +1,6 @@
 import { navigate } from '../app';
 import { renderReleaseCardsGrid } from '../components/grid';
+import { renderTabsBar } from '../components/tabs';
 import { renderSearchFranchise } from '../components/search-franchise';
 import { renderCollectionCard } from '../components/collection-card';
 import { getCardLayout } from '../prefs';
@@ -76,13 +77,11 @@ export function renderSearch(initialQuery = '', initialTab: SearchTab = 'release
   wrap.className = 'view view-search';
 
   const pageTitle = initialQuery ? `Поиск: ${initialQuery}` : 'Поиск';
-  const pageSubtitle = TAB_LABELS[initialTab];
 
   wrap.innerHTML = `
     <div class="search-page">
       <div class="view-header">
         <h1 class="view-header__title">${esc(pageTitle)}</h1>
-        <p class="view-header__subtitle">${esc(pageSubtitle)}</p>
       </div>
       <div class="search-page__results" id="search-results">
         <p class="search-page__hint">Введите запрос в поле выше и нажмите Enter</p>
@@ -110,9 +109,7 @@ export function renderSearch(initialQuery = '', initialTab: SearchTab = 'release
       const header = wrap.querySelector('.view-header');
       if (header) {
         const titleEl = header.querySelector('.view-header__title');
-        const subEl = header.querySelector('.view-header__subtitle');
         if (titleEl) titleEl.textContent = currentQuery ? `Поиск: ${currentQuery}` : 'Поиск';
-        if (subEl) subEl.textContent = TAB_LABELS[currentTab];
       }
       currentPage = 0;
       hasMore = true;
@@ -192,6 +189,32 @@ export function renderSearch(initialQuery = '', initialTab: SearchTab = 'release
       isLoading = false;
       results.innerHTML = `<p class="search-page__error">Ошибка: ${String(err)}</p>`;
     });
+  }
+
+  function applyTabChange(tab: SearchTab) {
+    if (currentTab === tab) return;
+    currentTab = tab;
+    currentPage = 0;
+    hasMore = true;
+    isLoading = false;
+    results.innerHTML = '<div class="search-page__loading">Поиск…</div>';
+    const params = new URLSearchParams(window.location.search || window.location.hash.split('?')[1] || '');
+    const q = params.get('q') || currentQuery || '';
+    navigate(q ? `/search?q=${encodeURIComponent(q)}&tab=${tab}` : `/search?tab=${tab}`);
+  }
+
+  const resultsParent = results.parentElement;
+  if (resultsParent) {
+    const tabsEl = renderTabsBar({
+      tabs: [
+        { id: 'releases', label: 'Тайтлы' },
+        { id: 'collections', label: 'Коллекции' },
+        { id: 'profiles', label: 'Пользователи' },
+      ],
+      activeId: initialTab,
+      onChange: (id) => applyTabChange(id as SearchTab),
+    });
+    resultsParent.insertBefore(tabsEl, resultsParent.firstElementChild?.nextSibling ?? resultsParent.firstChild);
   }
 
   function renderRelatedFranchise(related: any, releases: any[]) {

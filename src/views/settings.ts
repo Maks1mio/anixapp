@@ -6,6 +6,8 @@ const ENDPOINT_OPTIONS = [
   { value: 'https://api-s.anixsekai.com', label: 'api-s.anixsekai.com' },
   { value: 'https://api.anixart.app', label: 'api.anixart.app' },
   { value: 'https://api.anixart.tv', label: 'api.anixart.tv (Заблокирован в РФ)' },
+  // Специальный фейковый эндпоинт для проверки поведения при недоступном сервере.
+  { value: 'https://api.fake-anixapp.invalid', label: 'api.fake-anixapp.invalid (пример недоступного сервера)' },
 ];
 
 /** Контент настроек для модального окна (без обёртки страницы). */
@@ -34,21 +36,112 @@ export function renderSettingsContent(): HTMLElement {
     return wrap;
   }
 
-  window.anix.getBaseUrl().then((currentBaseUrl) => {
-    endpointLoadEl.remove();
-    const selectEl = renderSelect({
-      label: 'Эндпоинт API',
-      placeholder: 'Выберите эндпоинт',
-      value: currentBaseUrl || ENDPOINT_OPTIONS[0].value,
-      options: ENDPOINT_OPTIONS,
-      onChange: (value) => {
-        window.anix?.setBaseUrl(value);
-      },
+  window.anix
+    .getBaseUrl()
+    .then((currentBaseUrl) => {
+      endpointLoadEl.remove();
+
+      let currentValue = currentBaseUrl || ENDPOINT_OPTIONS[0].value;
+
+      const selectEl = renderSelect({
+        label: 'Эндпоинт API',
+        placeholder: 'Выберите эндпоинт',
+        value: currentValue,
+        options: ENDPOINT_OPTIONS,
+        onChange: (value) => {
+          currentValue = value;
+          window.anix?.setBaseUrl(value);
+          // После смены эндпоинта сразу показываем экран проверки соединения,
+          // чтобы пользователь видел процесс переподключения.
+          window.dispatchEvent(new CustomEvent('anix:offline'));
+        },
+      });
+      endpointContainer.appendChild(selectEl);
+
+      const triggerText = selectEl.querySelector('.custom-select__trigger-text') as HTMLElement | null;
+
+      // Базовые подписи без пинга (чтобы не накапливать " — xxx мс")
+      const baseLabels: Record<string, string> = {};
+      ENDPOINT_OPTIONS.forEach((o) => {
+        baseLabels[o.value] = o.label;
+      });
+
+      type PingState = { ok: boolean; latencyMs: number | null };
+      const state: Record<string, PingState> = {};
+
+      function formatLabel(value: string): { host: string; suffix: string | null } {
+        const base = baseLabels[value] ?? value;
+        const s = state[value];
+        if (!s) return { host: base, suffix: null };
+        if (s.ok && typeof s.latencyMs === 'number') {
+          return { host: base, suffix: `${s.latencyMs} мс` };
+        }
+        if (!s.ok) {
+          return { host: base, suffix: 'недоступен' };
+        }
+        return { host: base, suffix: null };
+      }
+
+      function qualityFor(value: string): string {
+        const s = state[value];
+        if (!s || !s.ok || typeof s.latencyMs !== 'number') return s && !s.ok ? 'offline' : '';
+        const ms = s.latencyMs;
+        if (ms < 150) return 'good';
+        if (ms < 300) return 'medium';
+        return 'bad';
+      }
+
+      function updateDisplay() {
+        ENDPOINT_OPTIONS.forEach((opt) => {
+          const { host, suffix } = formatLabel(opt.value);
+          const quality = qualityFor(opt.value);
+          const optionEls = document.querySelectorAll<HTMLElement>(
+            `.custom-select__option[data-value="${CSS.escape(opt.value)}"]`,
+          );
+          optionEls.forEach((el) => {
+            el.innerHTML = suffix
+              ? `<span class="endpoint-option__host">${host}</span><span class="endpoint-option__ping">${suffix}</span>`
+              : `<span class="endpoint-option__host">${host}</span>`;
+            if (quality) el.dataset.latencyQuality = quality;
+            else delete el.dataset.latencyQuality;
+          });
+          if (opt.value === currentValue && triggerText) {
+            triggerText.innerHTML = suffix
+              ? `<span class="endpoint-option__host">${host}</span><span class="endpoint-option__ping">${suffix}</span>`
+              : `<span class="endpoint-option__host">${host}</span>`;
+          }
+        });
+      }
+
+      async function pingOnce() {
+        await Promise.all(
+          ENDPOINT_OPTIONS.map(async (opt) => {
+            try {
+              const res = await window.anix!.pingBaseUrl(opt.value);
+              state[opt.value] = res;
+            } catch {
+              state[opt.value] = { ok: false, latencyMs: null };
+            }
+          }),
+        );
+        updateDisplay();
+      }
+
+      // Первый замер сразу при открытии настроек
+      void pingOnce();
+
+      // Обновляем пинг примерно раз в секунду, пока открыт селект.
+      const pingInterval = window.setInterval(() => {
+        if (!document.body.contains(selectEl)) {
+          window.clearInterval(pingInterval);
+          return;
+        }
+        void pingOnce();
+      }, 1000);
+    })
+    .catch(() => {
+      endpointLoadEl.textContent = 'Не удалось загрузить текущий эндпоинт.';
     });
-    endpointContainer.appendChild(selectEl);
-  }).catch(() => {
-    endpointLoadEl.textContent = 'Не удалось загрузить текущий эндпоинт.';
-  });
 
   // Настройки отображения карточек
   const currentLayout: CardLayout = getCardLayout();

@@ -1,9 +1,34 @@
 import { renderTitleBar } from '../components/titlebar';
+import { iconSettings } from '../components/icons';
+import { openSettingsModal } from '../components/settings-modal';
 
 export function renderLogin(onSuccess: () => void): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'view view-auth';
-  wrap.appendChild(renderTitleBar());
+  const titlebar = renderTitleBar();
+
+  // На странице входа не показываем стрелки "назад/вперёд" и поиск,
+  // но оставляем доступ к настройкам через отдельную кнопку.
+  const navEl = titlebar.querySelector('#titlebar-nav') as HTMLElement | null;
+  if (navEl) navEl.remove();
+  const searchWrap = titlebar.querySelector('#titlebar-search-wrap') as HTMLElement | null;
+  if (searchWrap) searchWrap.remove();
+  const menu = titlebar.querySelector('#titlebar-menu') as HTMLElement | null;
+  if (menu) {
+    menu.innerHTML = `
+      <button type="button" class="titlebar__menu-item" id="titlebar-login-settings" aria-label="Настройки">
+        ${iconSettings(18)}
+      </button>
+    `;
+    const btn = menu.querySelector('#titlebar-login-settings') as HTMLButtonElement | null;
+    if (btn) {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        openSettingsModal(() => {});
+      });
+    }
+  }
+  wrap.appendChild(titlebar);
 
   const authWrap = document.createElement('div');
   authWrap.className = 'view-auth__body';

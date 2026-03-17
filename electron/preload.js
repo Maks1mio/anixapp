@@ -40,6 +40,10 @@ ipcRenderer.on('app:update-progress', (_, payload) => {
   window.dispatchEvent(new CustomEvent('app-update-progress', { detail: payload }));
 });
 
+ipcRenderer.on('anix:offline', (_, payload) => {
+  window.dispatchEvent(new CustomEvent('anix:offline', { detail: payload }));
+});
+
 contextBridge.exposeInMainWorld('electron', {
   getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
   getDeviceId: () => ipcRenderer.invoke('app:getDeviceId'),
@@ -66,8 +70,12 @@ contextBridge.exposeInMainWorld('electron', {
 
 contextBridge.exposeInMainWorld('anix', {
   getAuthStatus: () => ipcRenderer.invoke('anix:getAuthStatus'),
+  checkConnection: () => ipcRenderer.invoke('anix:checkConnection'),
   getBaseUrl: () => ipcRenderer.invoke('anix:getBaseUrl'),
   setBaseUrl: (baseUrl) => ipcRenderer.invoke('anix:setBaseUrl', baseUrl),
+  pingBaseUrl: (baseUrl) => ipcRenderer.invoke('anix:pingBaseUrl', baseUrl),
+  // Dev‑хелпер: принудительно сымитировать сетевой обрыв и показать оффлайн‑страницу.
+  testOffline: () => ipcRenderer.invoke('anix:testOffline'),
   getSelfProfile: () => ipcRenderer.invoke('anix:selfProfile'),
   login: (username, password) => ipcRenderer.invoke('anix:login', username, password),
   logout: () => ipcRenderer.invoke('anix:logout'),

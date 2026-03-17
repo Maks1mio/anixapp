@@ -3,13 +3,22 @@
 .search-dropdown {
   position: fixed;
   z-index: 10000;
-  max-height: 340px;
-  overflow-y: auto;
-  padding: 0.5rem 0;
+  overflow: hidden;
+  padding: 0;
   border-radius: 10px;
   background: $color-surface;
   border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+// Внутри дропдауна используем кастомный скролл `Page`
+.search-dropdown .page {
+  --page-scrollbar-offset: 10px;
+  --page-scroll-padding: 0.5rem 0;
+}
+
+.search-dropdown .page__scroll {
+  max-height: 340px;
 }
 
 .search-dropdown__option,

@@ -1,6 +1,6 @@
 {
   "name": "anixapp",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Быстрый клиент для просмотра аниме на базе Anixart API",
   "main": "electron/main.js",
   "scripts": {

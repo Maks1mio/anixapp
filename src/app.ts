@@ -4,10 +4,23 @@ import { initTooltipPlacement } from './utils/tooltip-place';
 import { renderLogin } from './views/login';
 import { renderWatch } from './views/watch';
 import { getCurrentRoomId, pushCommand, voteOnProposal, getCurrentParticipants } from './services/lobby-state';
+import { renderTitleBar } from './components/titlebar';
+import { iconSettings } from './components/icons';
+import { openSettingsModal } from './components/settings-modal';
+
+let offlineRetryTimer: number | null = null;
+
+function clearOfflineRetryTimer(): void {
+  if (offlineRetryTimer !== null) {
+    window.clearInterval(offlineRetryTimer);
+    offlineRetryTimer = null;
+  }
+}
 
 function showLoginScreen(): void {
   const app = document.getElementById('app');
   if (!app) return;
+  clearOfflineRetryTimer();
   app.innerHTML = '';
   const loginView = renderLogin(showMainApp);
   app.appendChild(loginView);
@@ -16,6 +29,7 @@ function showLoginScreen(): void {
 function showMainApp(): void {
   const app = document.getElementById('app');
   if (!app) return;
+  clearOfflineRetryTimer();
   app.innerHTML = '';
 
   if (getPath() === '/watch') {
@@ -179,6 +193,82 @@ function showMainApp(): void {
   }
 }
 
+function showOfflineScreen(): void {
+  const app = document.getElementById('app');
+  if (!app) return;
+  clearOfflineRetryTimer();
+  app.innerHTML = '';
+
+  const layout = document.createElement('div');
+  layout.className = 'layout';
+
+  const titlebar = renderTitleBar();
+  layout.appendChild(titlebar);
+
+  // Для страницы проверки соединения скрываем стрелки и поиск,
+  // но показываем отдельную кнопку настроек.
+  const navEl = titlebar.querySelector('#titlebar-nav') as HTMLElement | null;
+  if (navEl) navEl.remove();
+  const searchWrap = titlebar.querySelector('#titlebar-search-wrap') as HTMLElement | null;
+  if (searchWrap) searchWrap.remove();
+  const menu = titlebar.querySelector('#titlebar-menu') as HTMLElement | null;
+  if (menu) {
+    menu.innerHTML = `
+      <button type="button" class="titlebar__menu-item" id="titlebar-offline-settings" aria-label="Настройки">
+        ${iconSettings(18)}
+      </button>
+    `;
+    const btn = menu.querySelector('#titlebar-offline-settings') as HTMLButtonElement | null;
+    if (btn) {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        openSettingsModal(() => {});
+      });
+    }
+  }
+
+  const wrap = document.createElement('div');
+  wrap.className = 'view-offline';
+  wrap.innerHTML = `
+    <div class="view-offline__body">
+      <div class="offline-card">
+        <div class="offline-card__spinner" aria-hidden="true"></div>
+        <h1 class="offline-card__title">Проверяем соединение с сервером…</h1>
+        <p class="offline-card__text">
+          С серверами Anixart сейчас могут быть проблемы. Пробуем подключиться.
+        </p>
+        <p class="offline-card__hint">
+          Проверяем соединение каждые несколько секунд. Вы можете оставить приложение открытым.
+        </p>
+      </div>
+    </div>
+  `;
+
+  const retry = async () => {
+    if (!window.anix) return;
+    try {
+      await window.anix.checkConnection();
+      const { hasToken } = await window.anix.getAuthStatus();
+      clearOfflineRetryTimer();
+      if (hasToken) {
+        showMainApp();
+      } else {
+        showLoginScreen();
+      }
+    } catch {
+      // остаёмся на оффлайн-экране
+    }
+  };
+
+  // Периодически пробуем переподключиться, без ручной кнопки.
+  offlineRetryTimer = window.setInterval(() => {
+    retry();
+  }, 7000);
+
+  layout.appendChild(wrap);
+  app.appendChild(layout);
+}
+
 export function initApp(): void {
   const app = document.getElementById('app');
   if (!app) return;
@@ -196,15 +286,33 @@ export function initApp(): void {
     return;
   }
 
-  window.anix.getAuthStatus().then(({ hasToken }) => {
-    if (hasToken) {
-      showMainApp();
-    } else {
-      showLoginScreen();
-    }
-  }).catch(() => {
-    showLoginScreen();
-  });
+  window.addEventListener(
+    'anix:offline',
+    (() => {
+      showOfflineScreen();
+    }) as EventListener,
+  );
+
+  // При старте всегда сначала показываем страницу лоадера,
+  // затем пробуем проверить соединение и статус авторизации.
+  showOfflineScreen();
+
+  window.anix
+    .checkConnection()
+    .then(async () => {
+      const { hasToken } = await window.anix.getAuthStatus();
+      // Немного задерживаем переход, чтобы пользователь успел увидеть экран проверки соединения.
+      window.setTimeout(() => {
+        if (hasToken) {
+          showMainApp();
+        } else {
+          showLoginScreen();
+        }
+      }, 500);
+    })
+    .catch(() => {
+      // Если нет ответа от API — просто остаёмся на оффлайн‑экране.
+    });
 }
 
 export function navigate(path: string, _state?: unknown): void {

@@ -79,7 +79,13 @@ export function renderReleaseCardVertical(data: ReleaseCardData): HTMLElement {
   if (epCount != null) metaParts.push(`${epCount} эп.`);
 
   if (data.year) metaParts.push(esc(data.year));
-  if (data.status) metaParts.push(esc(data.status));
+  if (data.status) {
+    const statusText = String(data.status);
+    // Не показываем статусы "Вышел" / "Выходит" на карточке — они и так очевидны из других данных.
+    if (!/^\s*вышел\s*$/i.test(statusText) && !/^\s*выходит\s*$/i.test(statusText)) {
+      metaParts.push(esc(statusText));
+    }
+  }
 
   // Рейтинг — отдельный span с цветом
   let ratingHtml = '';

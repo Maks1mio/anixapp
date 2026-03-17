@@ -107,6 +107,72 @@
   font-size: 1rem;
 }
 
+// ——— API Offline / Loader ———
+.view-offline {
+  display: flex;
+  min-height: 100vh;
+}
+
+.view-offline__body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.offline-card {
+  width: 100%;
+  max-width: 26rem;
+  padding: 2rem 2.25rem;
+  border-radius: $radius-lg;
+  border: 1px solid $color-border;
+  background: $color-surface;
+  box-shadow: $shadow;
+  text-align: center;
+}
+
+.offline-card__spinner {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 1.25rem;
+  border-radius: 999px;
+  border: 3px solid rgba($color-accent, 0.15);
+  border-top-color: $color-accent;
+  animation: offline-spin 0.9s linear infinite;
+}
+
+.offline-card__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.offline-card__text {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: $color-text-muted;
+}
+
+.offline-card__hint {
+  margin: 0 0 1.25rem;
+  font-size: 0.85rem;
+  color: $color-text-muted;
+}
+
+.offline-card__btn {
+  margin-top: 0.25rem;
+}
+
+@keyframes offline-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 // ——— Home ———
 .view-home {
   max-width: 56rem;
@@ -149,46 +215,7 @@
   margin-left: 0.5rem;
 }
 
-// ——— Feed ———
-.view-feed {
-  max-width: 72rem;
-  margin: 0 auto;
-  width: 100%;
-}
-
-.feed-header {
-  margin-bottom: 1.5rem;
-  display: flex;
-  align-items: baseline;
-  gap: 1rem;
-}
-
-.feed-title {
-  font-size: 1.75rem;
-  margin: 0;
-  font-weight: 600;
-}
-
-.feed-page {
-  color: $color-text-muted;
-  margin: 0;
-  font-size: 0.95rem;
-}
-
-.feed-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 1.25rem;
-}
-
-.feed-loading,
-.feed-error,
-.feed-empty {
-  grid-column: 1 / -1;
-  color: $color-text-muted;
-  padding: 2rem;
-  text-align: center;
-}
+// ——— Feed ——— (view удалён)
 
 .feed-error {
   color: $color-error;
@@ -559,6 +586,51 @@
 .release-poster__placeholder {
   aspect-ratio: 2/3;
   background: $color-surface-hover;
+}
+
+// ——— Settings: endpoint latency indicator in select ———
+.custom-select__option[data-latency-quality] {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.custom-select__option[data-latency-quality]::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: $color-border;
+}
+
+.custom-select__option[data-latency-quality='good']::before {
+  background: #3ddc84;
+}
+
+.custom-select__option[data-latency-quality='medium']::before {
+  background: #f4c02a;
+}
+
+.custom-select__option[data-latency-quality='bad']::before {
+  background: #f97316;
+}
+
+.custom-select__option[data-latency-quality='offline']::before {
+  background: $color-error;
+}
+
+.endpoint-option__host {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.endpoint-option__ping {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: $color-text-muted;
 }
 
 .release-info__head {

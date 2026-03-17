@@ -42,9 +42,10 @@
 
 .custom-select__trigger-text {
   flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .custom-select__trigger-icon {

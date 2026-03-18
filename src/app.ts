@@ -7,6 +7,10 @@ import { getCurrentRoomId, pushCommand, voteOnProposal, getCurrentParticipants, 
 import { renderTitleBar } from './components/titlebar';
 import { iconSettings } from './components/icons';
 import { openSettingsModal } from './components/settings-modal';
+import { initTheme, applyThemeById } from './services/themes';
+
+// Apply saved theme immediately before any rendering
+initTheme();
 
 let offlineRetryTimer: number | null = null;
 
@@ -273,6 +277,36 @@ function showMainApp(): void {
       type: 'partyInfo',
       partyId: null,
     });
+  }) as EventListener);
+
+  /** Re-apply theme when theme editor saves (main window receives IPC → CustomEvent). */
+  window.addEventListener('anix:themeEditorSaved', ((e: CustomEvent) => {
+    const { themeId } = (e.detail as { themeId?: string }) ?? {};
+    if (themeId) applyThemeById(themeId);
+  }) as EventListener);
+
+  /** Apply live theme vars from theme editor in real-time (before save). */
+  window.addEventListener('anix:themeEditorLiveUpdate', ((e: CustomEvent) => {
+    const vars = e.detail as Record<string, string> | undefined;
+    if (!vars) return;
+    const root = document.documentElement;
+    if (vars.colorBg)           root.style.setProperty('--color-bg',            vars.colorBg);
+    if (vars.colorSurface)      root.style.setProperty('--color-surface',       vars.colorSurface);
+    if (vars.colorSurfaceHover) root.style.setProperty('--color-surface-hover', vars.colorSurfaceHover);
+    if (vars.colorBorder)       root.style.setProperty('--color-border',        vars.colorBorder);
+    if (vars.colorText)         root.style.setProperty('--color-text',          vars.colorText);
+    if (vars.colorTextMuted)    root.style.setProperty('--color-text-muted',    vars.colorTextMuted);
+    if (vars.colorAccent)       root.style.setProperty('--color-accent',        vars.colorAccent);
+    if (vars.colorAccentHover)  root.style.setProperty('--color-accent-hover',  vars.colorAccentHover);
+    if (vars.fontFamily)        root.style.setProperty('--font-sans',           vars.fontFamily);
+  }) as EventListener);
+
+  /** When a custom theme is deleted: revert to auto if it was active. */
+  window.addEventListener('anix:themeEditorDeleted', ((e: CustomEvent) => {
+    const { themeId } = (e.detail as { themeId?: string }) ?? {};
+    if (themeId && themeId === localStorage.getItem('anixapp.activeTheme')) {
+      applyThemeById('auto');
+    }
   }) as EventListener);
 
   /** Show anime poster + title in Discord when viewing a release page. */

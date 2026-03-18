@@ -92,7 +92,7 @@
   margin: auto;
   padding: 0 0.5rem 0 0.625rem;
   border-radius: $radius-md;
-  background: rgba($color-text, 0.06);
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
   border: 1px solid transparent;
   color: $color-text-muted;
   cursor: text;
@@ -100,13 +100,13 @@
   transition: background $transition, border-color $transition;
 
   &:hover {
-    background: rgba($color-text, 0.09);
-    border-color: rgba($color-text, 0.08);
+    background: color-mix(in srgb, var(--color-text) 9%, transparent);
+    border-color: color-mix(in srgb, var(--color-text) 8%, transparent);
   }
 
   &:focus-within {
-    background: rgba($color-text, 0.08);
-    border-color: rgba($color-text, 0.12);
+    background: color-mix(in srgb, var(--color-text) 8%, transparent);
+    border-color: color-mix(in srgb, var(--color-text) 12%, transparent);
   }
 }
 
@@ -141,9 +141,9 @@
   font-family: inherit;
   padding: 1px 5px;
   border-radius: 3px;
-  background: rgba($color-text, 0.08);
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
   color: $color-text-muted;
-  border: 1px solid rgba($color-text, 0.06);
+  border: 1px solid color-mix(in srgb, var(--color-text) 6%, transparent);
   line-height: 1.5;
 }
 

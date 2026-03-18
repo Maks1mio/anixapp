@@ -56,7 +56,7 @@ $stack-offset-2: 4px;
   transition: border-color $transition, box-shadow $transition;
 
   &:hover {
-    border-color: rgba($color-text-muted, 0.3);
+    border-color: color-mix(in srgb, var(--color-text-muted) 30%, transparent);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
   }
 }
@@ -102,8 +102,8 @@ $stack-offset-2: 4px;
   color: $color-text-muted;
   &--in-bookmarks {
     color: $color-accent;
-    border-color: rgba($color-accent, 0.45);
-    background: rgba($color-accent, 0.12);
+    border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+    background: color-mix(in srgb, var(--color-accent) 12%, transparent);
     .collection-card__badge-icon {
       color: $color-accent;
     }

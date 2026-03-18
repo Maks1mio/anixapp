@@ -149,13 +149,13 @@
 }
 
 @keyframes page-thumb-bounce {
-  0%   { box-shadow: 0 0 0 0 rgba($color-accent, 0.55); }
-  50%  { box-shadow: 0 0 0 10px rgba($color-accent, 0); }
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 55%, transparent); }
+  50%  { box-shadow: 0 0 0 10px color-mix(in srgb, var(--color-accent) 0%, transparent); }
   100% { box-shadow: 0 0 0 0 transparent; }
 }
 
 @keyframes page-thumb-release {
-  0%   { box-shadow: 0 0 0 0 rgba($color-accent, 0.4); }
-  50%  { box-shadow: 0 0 0 8px rgba($color-accent, 0); }
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 40%, transparent); }
+  50%  { box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-accent) 0%, transparent); }
   100% { box-shadow: 0 0 0 0 transparent; }
 }

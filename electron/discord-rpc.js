@@ -278,7 +278,7 @@ function setViewingProfile({ username, avatarUrl, isSelf }) {
   const displayName = truncate(username || 'Пользователь', 64);
   _setForContext('main', {
     type: 0,
-    details: isSelf ? 'Свой профиль' : `Профиль: ${displayName}`,
+    details: `Профиль: ${displayName}`,
     state: isSelf ? 'Просматривает свой профиль' : 'Просматривает профиль',
     largeImageKey: avatarUrl || 'logo',
     largeImageText: displayName,

@@ -176,8 +176,8 @@ function buildLineChart(container: HTMLElement, dynamics: any[]) {
       <svg class="profile__chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
         <defs>
           <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#e35689" stop-opacity="0.35"/>
-            <stop offset="100%" stop-color="#e35689" stop-opacity="0.02"/>
+            <stop offset="0%" style="stop-color: var(--color-accent)" stop-opacity="0.35"/>
+            <stop offset="100%" style="stop-color: var(--color-accent)" stop-opacity="0.02"/>
           </linearGradient>
         </defs>
         ${grids}
@@ -295,6 +295,16 @@ export function renderProfile(userId?: number): HTMLElement {
       }
 
       const isMyProfile = !userId || !!(data as any)?.is_my_profile;
+
+      // Notify Discord RPC with the actual profile name and avatar
+      window.dispatchEvent(new CustomEvent('discord:profileView', {
+        detail: {
+          username:  profile.login  ?? '',
+          avatarUrl: profile.avatar ?? null,
+          isSelf:    isMyProfile,
+        },
+      }));
+
       const coverFromData: string | null =
         (data as any)?.blogInfo?.channel?.cover
         || (data as any)?.blog_info?.channel?.cover

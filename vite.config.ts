@@ -14,6 +14,7 @@ export default defineConfig({
       input: [
         resolve(__dirname, 'index.html'),
         resolve(__dirname, 'player.html'),
+        resolve(__dirname, 'theme-editor.html'),
       ],
     },
   },

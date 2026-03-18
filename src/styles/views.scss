@@ -137,7 +137,7 @@
   height: 40px;
   margin: 0 auto 1.25rem;
   border-radius: 999px;
-  border: 3px solid rgba($color-accent, 0.15);
+  border: 3px solid color-mix(in srgb, var(--color-accent) 15%, transparent);
   border-top-color: $color-accent;
   animation: offline-spin 0.9s linear infinite;
 }
@@ -941,7 +941,7 @@
 
   &--restricted {
     color: #fff;
-    background: rgba($color-error, 0.8);
+    background: color-mix(in srgb, var(--color-error) 80%, transparent);
     border-color: $color-error;
   }
 }
@@ -992,14 +992,14 @@
 
   &:hover {
     color: $color-accent;
-    background: rgba($color-accent, 0.1);
-    border-color: rgba($color-accent, 0.35);
+    background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+    border-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
   }
 
   &--active {
     color: $color-accent;
-    background: rgba($color-accent, 0.12);
-    border-color: rgba($color-accent, 0.5);
+    background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+    border-color: color-mix(in srgb, var(--color-accent) 50%, transparent);
     svg { fill: $color-accent; stroke: $color-accent; }
   }
 }
@@ -1022,7 +1022,7 @@
   margin-bottom: 1rem;
   line-height: 1.65;
   font-size: 0.93rem;
-  color: rgba($color-text, 0.82);
+  color: color-mix(in srgb, var(--color-text) 82%, transparent);
   transition: max-height 0.35s ease;
   overflow: hidden;
 

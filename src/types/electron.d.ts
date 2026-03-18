@@ -55,6 +55,11 @@ declare global {
       sendParticipantsToPlayer?: (participants: unknown[]) => void;
       // Discord Rich Presence
       discordUpdate?: (data: DiscordUpdatePayload) => void;
+      // Theme editor
+      openThemeEditor?: (opts: { themeId?: string; isNew?: boolean }) => Promise<void>;
+      themeEditorSaved?: (themeId: string) => void;
+      themeEditorLiveUpdate?: (vars: Record<string, string>) => void;
+      themeEditorDeleted?: (themeId: string) => void;
     };
   }
 }

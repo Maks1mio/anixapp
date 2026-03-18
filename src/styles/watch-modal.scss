@@ -190,7 +190,7 @@
   &:hover {
     background: $color-surface-hover;
     color: $color-text;
-    border-color: color.adjust($color-border, $lightness: 5%);
+    border-color: color-mix(in srgb, var(--color-border) 87%, white);
   }
 }
 
@@ -236,7 +236,7 @@
 
   &:focus {
     outline: none;
-    border-color: rgba($color-accent, 0.45);
+    border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
   }
 }
 
@@ -257,8 +257,8 @@
   transition: background $transition, border-color $transition;
 
   &:hover {
-    background: color.adjust($color-surface-hover, $lightness: 3%);
-    border-color: color.adjust($color-border, $lightness: 5%);
+    background: color-mix(in srgb, var(--color-surface-hover) 92%, white);
+    border-color: color-mix(in srgb, var(--color-border) 87%, white);
   }
 }
 
@@ -281,7 +281,7 @@
   &:hover {
     background: $color-surface-hover;
     color: $color-text;
-    border-color: color.adjust($color-border, $lightness: 5%);
+    border-color: color-mix(in srgb, var(--color-border) 87%, white);
   }
 }
 
@@ -366,8 +366,8 @@
   }
 
   &--active {
-    border-color: rgba($color-accent, 0.3);
-    background: rgba($color-accent, 0.06);
+    border-color: color-mix(in srgb, var(--color-accent) 30%, transparent);
+    background: color-mix(in srgb, var(--color-accent) 6%, transparent);
 
     .watch-modal__source-name {
       color: $color-accent;
@@ -454,13 +454,13 @@
   user-select: none;
 
   &:hover {
-    background: color.adjust($color-surface-hover, $lightness: 3%);
+    background: color-mix(in srgb, var(--color-surface-hover) 92%, white);
     border-color: $color-border;
   }
 
   &--active {
     border-color: $color-accent;
-    background: rgba($color-accent, 0.1);
+    background: color-mix(in srgb, var(--color-accent) 10%, transparent);
 
     .watch-modal__episode-num {
       color: $color-accent;
@@ -479,8 +479,8 @@
   }
 
   &--highlight {
-    border-color: rgba($color-accent, 0.6);
-    background: rgba($color-accent, 0.12);
+    border-color: color-mix(in srgb, var(--color-accent) 60%, transparent);
+    background: color-mix(in srgb, var(--color-accent) 12%, transparent);
   }
 }
 
@@ -512,7 +512,7 @@
   align-items: center;
   justify-content: center;
   padding: 1.25rem;
-  background: rgba($color-surface, 0.94);
+  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
   backdrop-filter: blur(2px);
   border-radius: inherit;
 }
@@ -562,9 +562,9 @@
     color: $color-text-muted;
 
     &:hover {
-      background: color.adjust($color-surface-hover, $lightness: 3%);
+      background: color-mix(in srgb, var(--color-surface-hover) 92%, white);
       color: $color-text;
-      border-color: color.adjust($color-border, $lightness: 5%);
+      border-color: color-mix(in srgb, var(--color-border) 87%, white);
     }
   }
 
@@ -616,7 +616,7 @@
 
   &:focus {
     outline: none;
-    border-color: rgba($color-accent, 0.45);
+    border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
   }
 }
 
@@ -641,7 +641,7 @@
     background: $color-accent-hover;
     border-color: $color-accent-hover;
     transform: translateY(-1px);
-    box-shadow: 0 4px 14px rgba($color-accent, 0.35);
+    box-shadow: 0 4px 14px color-mix(in srgb, var(--color-accent) 35%, transparent);
   }
 
   &:active:not(:disabled) {

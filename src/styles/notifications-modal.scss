@@ -216,7 +216,7 @@
 .notifications-modal__badge {
   padding: 0.05rem 0.35rem;
   border-radius: 999px;
-  background: rgba($color-accent, 0.15);
+  background: color-mix(in srgb, var(--color-accent) 15%, transparent);
   color: $color-accent;
   font-size: 0.7rem;
   font-weight: 500;
@@ -294,7 +294,7 @@
   background: linear-gradient(
     90deg,
     $color-accent 0%,
-    color.adjust($color-accent, $lightness: 12%) 50%,
+    color-mix(in srgb, var(--color-accent) 70%, white) 50%,
     $color-accent 100%
   );
   transition: width 0.2s ease;

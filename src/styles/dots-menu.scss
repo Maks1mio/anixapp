@@ -20,7 +20,7 @@
   transition: border-color $transition, color $transition;
 
   &:hover {
-    border-color: color.adjust($color-border, $lightness: -4%);
+    border-color: color-mix(in srgb, var(--color-border) 90%, black);
     color: $color-text;
   }
 

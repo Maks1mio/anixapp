@@ -123,9 +123,9 @@
   border-radius: 22%;
   background-size: cover;
   background-position: center;
-  background-color: #1a1a1a;
+  background-color: $color-bg;
   display: block;
-  outline: 6px solid #141414;
+  outline: 6px solid $color-surface;
 
   &--placeholder,
   &--empty {
@@ -438,8 +438,8 @@
     border-color: $color-accent;
 
     &:hover {
-      background: #c4396e;
-      border-color: #c4396e;
+      background: $color-accent-hover;
+      border-color: $color-accent-hover;
       transform: translateY(-1px);
     }
   }
@@ -703,7 +703,8 @@
   position: fixed;
   pointer-events: none;
   padding: 0.25rem 0.6rem;
-  background: rgba(0, 0, 0, 0.9);
+  background: $color-surface;
+  border: 1px solid $color-border;
   color: $color-text;
   font-size: 0.72rem;
   font-weight: 500;

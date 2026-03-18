@@ -1544,3 +1544,71 @@ ipcMain.handle('anix:clearListStatus', async (_, releaseId, statusId) => {
   const res = await client.endpoints.release.removeFromProfileList(releaseId, type);
   return res?.code === DefaultResult.Ok ? undefined : Promise.reject(new Error(res?.code ?? 'fail'));
 });
+
+// ——— Theme editor window ———
+
+let themeEditorWindow = null;
+
+function createThemeEditorWindow(themeId, isNew) {
+  if (themeEditorWindow && !themeEditorWindow.isDestroyed()) {
+    themeEditorWindow.focus();
+    return;
+  }
+  const iconPath = getIconPath();
+  themeEditorWindow = new BrowserWindow({
+    width: 680,
+    height: 560,
+    minWidth: 560,
+    minHeight: 440,
+    frame: false,
+    titleBarStyle: 'hidden',
+    title: 'AnixApp — Редактор темы',
+    show: false,
+    resizable: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+    ...(iconPath && { icon: iconPath }),
+  });
+  themeEditorWindow.on('closed', () => { themeEditorWindow = null; });
+  themeEditorWindow.once('ready-to-show', () => themeEditorWindow.show());
+
+  const query = new URLSearchParams();
+  if (themeId) query.set('id', themeId);
+  if (isNew)   query.set('new', '1');
+  const qs = query.toString();
+
+  if (isDev) {
+    themeEditorWindow.loadURL('http://localhost:5173/theme-editor.html' + (qs ? '?' + qs : ''));
+  } else {
+    const p = path.join(__dirname, '../dist/theme-editor.html');
+    themeEditorWindow.loadFile(p, qs ? { query: Object.fromEntries(query) } : {});
+  }
+}
+
+ipcMain.handle('theme-editor:open', (_, { themeId, isNew } = {}) => {
+  createThemeEditorWindow(themeId, isNew);
+});
+
+// Theme editor → main window: theme was saved, re-apply it
+ipcMain.on('theme-editor:saved', (_, themeId) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('theme-editor:saved', themeId);
+  }
+});
+
+// Theme editor → main window: live color update while editing
+ipcMain.on('theme-editor:liveUpdate', (_, vars) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('theme-editor:liveUpdate', vars);
+  }
+});
+
+// Theme editor → main window: theme was deleted
+ipcMain.on('theme-editor:deleted', (_, themeId) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('theme-editor:deleted', themeId);
+  }
+});

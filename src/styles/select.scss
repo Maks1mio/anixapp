@@ -31,7 +31,7 @@
   transition: border-color $transition;
 
   &:hover {
-    border-color: color.adjust($color-border, $lightness: -4%);
+    border-color: color-mix(in srgb, var(--color-border) 90%, black);
   }
 
   &:focus {

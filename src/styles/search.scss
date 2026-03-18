@@ -20,7 +20,7 @@
 .search-page__tabs {
   display: flex;
   gap: 2px;
-  background: rgba($color-text, 0.04);
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
   border-radius: $radius-md;
   padding: 3px;
 }
@@ -80,7 +80,7 @@
 
   &:hover {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-    border-color: rgba($color-accent, 0.4);
+    border-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
 
     .search-franchise__thumb {
       transform: translateX(0) scale(1);

@@ -68,7 +68,7 @@
   width: 30px;
   height: 30px;
   border-radius: 8px;
-  background: rgba($color-accent, 0.12);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
   color: $color-accent;
   flex-shrink: 0;
 }
@@ -149,7 +149,7 @@
   width: 64px;
   height: 64px;
   border-radius: 16px;
-  background: linear-gradient(135deg, rgba($color-accent, 0.15) 0%, rgba($color-accent, 0.05) 100%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 15%, transparent) 0%, color-mix(in srgb, var(--color-accent) 5%, transparent) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -249,7 +249,7 @@
 
   &:hover {
     background: $color-surface-hover;
-    border-color: color.adjust($color-border, $lightness: 5%);
+    border-color: color-mix(in srgb, var(--color-border) 87%, white);
   }
 
   &:active {
@@ -328,12 +328,12 @@
 .lobby-modal__btn--leave {
   flex: 1;
   background: transparent;
-  border-color: rgba($color-error, 0.25);
+  border-color: color-mix(in srgb, var(--color-error) 25%, transparent);
   color: $color-error;
 
   &:hover {
-    background: rgba($color-error, 0.08);
-    border-color: rgba($color-error, 0.4);
+    background: color-mix(in srgb, var(--color-error) 8%, transparent);
+    border-color: color-mix(in srgb, var(--color-error) 40%, transparent);
   }
 }
 
@@ -352,7 +352,7 @@
 .lobby-modal__btn--active {
   background: $color-surface-hover;
   color: $color-accent;
-  border-color: rgba($color-accent, 0.25);
+  border-color: color-mix(in srgb, var(--color-accent) 25%, transparent);
 }
 
 // ─── Input ──────────────────────────────────────────────────────────
@@ -371,13 +371,13 @@
   transition: border-color 0.15s;
 
   &::placeholder {
-    color: color.adjust($color-text-muted, $lightness: -10%);
+    color: color-mix(in srgb, var(--color-text-muted) 75%, black);
     letter-spacing: 0.1em;
   }
 
   &:focus {
     outline: none;
-    border-color: rgba($color-accent, 0.5);
+    border-color: color-mix(in srgb, var(--color-accent) 50%, transparent);
   }
 }
 
@@ -449,13 +449,13 @@
   &:hover {
     background: $color-surface-hover;
     color: $color-text;
-    border-color: color.adjust($color-border, $lightness: 5%);
+    border-color: color-mix(in srgb, var(--color-border) 87%, white);
   }
 }
 
 .lobby-modal__copy-btn--done {
   color: $color-success;
-  border-color: rgba($color-success, 0.3);
+  border-color: color-mix(in srgb, var(--color-success) 30%, transparent);
 }
 
 // ─── Status ─────────────────────────────────────────────────────────
@@ -477,7 +477,7 @@
 
 .lobby-modal__status--connected .lobby-modal__status-dot {
   background: $color-success;
-  box-shadow: 0 0 6px rgba($color-success, 0.4);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--color-success) 40%, transparent);
 }
 
 .lobby-modal__status--connecting .lobby-modal__status-dot {
@@ -526,7 +526,7 @@
   height: 18px;
   padding: 0 5px;
   border-radius: 999px;
-  background: rgba($color-accent, 0.15);
+  background: color-mix(in srgb, var(--color-accent) 15%, transparent);
   color: $color-accent;
   font-size: 0.7rem;
   font-weight: 600;
@@ -592,7 +592,7 @@
   border-radius: 50%;
   background: $color-success;
   border: 2px solid $color-surface;
-  box-shadow: 0 0 4px rgba($color-success, 0.3);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--color-success) 30%, transparent);
 }
 
 .lobby-modal__participant-name {
@@ -651,7 +651,7 @@
 }
 
 .lobby-modal__log-time {
-  color: color.adjust($color-text-muted, $lightness: -10%);
+  color: color-mix(in srgb, var(--color-text-muted) 75%, black);
   font-variant-numeric: tabular-nums;
 }
 
@@ -674,7 +674,7 @@
 }
 
 .lobby-modal__log-note {
-  color: color.adjust($color-text-muted, $lightness: -5%);
+  color: color-mix(in srgb, var(--color-text-muted) 87%, black);
   font-size: 0.68rem;
 }
 

@@ -42,7 +42,7 @@
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: rgba($color-accent, 0.15);
+  background: color-mix(in srgb, var(--color-accent) 15%, transparent);
   color: $color-accent;
   display: flex;
   align-items: center;
@@ -181,7 +181,7 @@
   }
 
   &--voted {
-    background: rgba($color-success, 0.15) !important;
+    background: color-mix(in srgb, var(--color-success) 15%, transparent) !important;
     color: $color-success !important;
   }
 }
@@ -238,14 +238,14 @@
   }
 
   &.player-vote--toast-accepted .player-vote__toast {
-    background: rgba($color-success, 0.15);
-    border: 1px solid rgba($color-success, 0.25);
+    background: color-mix(in srgb, var(--color-success) 15%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-success) 25%, transparent);
     color: $color-success;
   }
 
   &.player-vote--toast-rejected .player-vote__toast {
-    background: rgba($color-error, 0.15);
-    border: 1px solid rgba($color-error, 0.25);
+    background: color-mix(in srgb, var(--color-error) 15%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-error) 25%, transparent);
     color: $color-error;
   }
 }

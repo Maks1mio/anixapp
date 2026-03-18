@@ -76,6 +76,26 @@ contextBridge.exposeInMainWorld('electron', {
   sendParticipantsToPlayer: (participants) => ipcRenderer.send('lobby:participantsToPlayer', participants),
   // Discord Rich Presence update from renderer
   discordUpdate: (data) => ipcRenderer.send('discord:update', data),
+  // Theme editor
+  openThemeEditor: (opts) => ipcRenderer.invoke('theme-editor:open', opts ?? {}),
+  themeEditorSaved: (themeId) => ipcRenderer.send('theme-editor:saved', themeId),
+  themeEditorLiveUpdate: (vars) => ipcRenderer.send('theme-editor:liveUpdate', vars),
+  themeEditorDeleted: (themeId) => ipcRenderer.send('theme-editor:deleted', themeId),
+});
+
+// Main window receives notification when theme editor saves a theme
+ipcRenderer.on('theme-editor:saved', (_, themeId) => {
+  window.dispatchEvent(new CustomEvent('anix:themeEditorSaved', { detail: { themeId } }));
+});
+
+// Main window receives live theme vars from theme editor (for real-time preview)
+ipcRenderer.on('theme-editor:liveUpdate', (_, vars) => {
+  window.dispatchEvent(new CustomEvent('anix:themeEditorLiveUpdate', { detail: vars }));
+});
+
+// Main window receives notification when theme editor deletes a theme
+ipcRenderer.on('theme-editor:deleted', (_, themeId) => {
+  window.dispatchEvent(new CustomEvent('anix:themeEditorDeleted', { detail: { themeId } }));
 });
 
 // ── Structured API (anixApi) — grouped endpoints like AniDesk ──

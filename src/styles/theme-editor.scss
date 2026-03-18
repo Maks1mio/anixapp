@@ -1,0 +1,322 @@
+@use 'variables' as *;
+
+// ── Reset ─────────────────────────────────────────────────────────────────────
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: $font-sans;
+  background: $color-bg;
+  color: $color-text;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+#app { height: 100%; display: flex; flex-direction: column; }
+
+// ── Root ──────────────────────────────────────────────────────────────────────
+.te-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+// ── Title bar ─────────────────────────────────────────────────────────────────
+.te-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  height: 44px;
+  flex-shrink: 0;
+  background: $color-surface;
+  border-bottom: 1px solid $color-border;
+  -webkit-app-region: drag;
+
+  &__name-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: $color-text-muted;
+    -webkit-app-region: no-drag;
+
+    svg { opacity: 0.4; flex-shrink: 0; }
+  }
+
+  &__name {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: $color-text;
+    outline: none;
+    border-bottom: 1px dashed transparent;
+    cursor: text;
+    min-width: 40px;
+    max-width: 280px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: border-color 0.15s, background 0.15s;
+
+    &:focus {
+      border-bottom-color: $color-accent;
+      background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+    }
+  }
+
+  &__win-btns {
+    display: flex;
+    gap: 6px;
+    -webkit-app-region: no-drag;
+  }
+}
+
+.te-win-btn {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+  color: $color-text-muted;
+  transition: background 0.15s, color 0.15s;
+  cursor: pointer;
+  border: none; background: none;
+
+  &--close:hover {
+    background: var(--color-error, #ef4444);
+    color: #fff;
+  }
+}
+
+// ── Body ──────────────────────────────────────────────────────────────────────
+.te-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+// ── Left panel (full width — no right preview) ────────────────────────────────
+.te-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  padding: 16px;
+  scrollbar-width: thin;
+  scrollbar-color: $color-border transparent;
+}
+
+.te-section-label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: $color-text-muted;
+  margin: 8px 0 6px;
+}
+
+// ── Color rows ────────────────────────────────────────────────────────────────
+.te-color-rows { display: flex; flex-direction: column; gap: 4px; }
+
+.te-color-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: $radius-md;
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:hover { background: $color-surface-hover; }
+}
+
+.te-color-swatch {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  border: 2px solid $color-border;
+  flex-shrink: 0;
+  cursor: pointer;
+  overflow: hidden;
+  position: relative;
+  transition: border-color 0.15s;
+
+  &:hover { border-color: $color-accent; }
+}
+
+.te-color-input {
+  position: absolute;
+  inset: -4px;
+  opacity: 0;
+  cursor: pointer;
+  width: 140%;
+  height: 140%;
+}
+
+.te-color-label {
+  flex: 1;
+  font-size: 0.8125rem;
+  color: $color-text;
+}
+
+.te-color-value {
+  font-size: 0.75rem;
+  color: $color-text-muted;
+  font-family: 'Consolas', monospace;
+}
+
+// ── Font selector ─────────────────────────────────────────────────────────────
+.te-font-row { display: flex; flex-direction: column; gap: 8px; }
+
+.te-font-select {
+  width: 100%;
+  padding: 7px 10px;
+  background: $color-surface-hover;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  color: $color-text;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+
+  &:focus { border-color: $color-accent; }
+
+  option { background: var(--color-surface, #141414); }
+}
+
+// ── Seed ──────────────────────────────────────────────────────────────────────
+.te-seed-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.te-seed-value {
+  flex: 1;
+  padding: 6px 8px;
+  background: $color-surface-hover;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  color: $color-text;
+  font-size: 0.6875rem;
+  font-family: 'Consolas', monospace;
+  outline: none;
+  cursor: text;
+  user-select: all;
+  transition: border-color 0.15s;
+
+  &:focus { border-color: $color-accent; }
+}
+
+.te-seed-copy-btn {
+  flex-shrink: 0;
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  background: $color-surface-hover;
+  border: 1px solid $color-border;
+  color: $color-text-muted;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+
+  &:hover { background: $color-border; color: $color-text; }
+  &--copied { color: $color-accent; border-color: $color-accent; }
+}
+
+.te-seed-import-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.te-seed-import-input {
+  flex: 1;
+  padding: 6px 8px;
+  background: $color-surface-hover;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  color: $color-text;
+  font-size: 0.6875rem;
+  font-family: 'Consolas', monospace;
+  outline: none;
+  transition: border-color 0.15s;
+
+  &:focus { border-color: $color-accent; }
+  &--error { border-color: var(--color-error, #ef4444) !important; }
+  &::placeholder { color: $color-text-muted; opacity: 1; }
+}
+
+.te-seed-apply-btn {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-radius: $radius-md;
+  background: $color-surface-hover;
+  border: 1px solid $color-border;
+  color: $color-text;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+
+  &:hover { background: $color-border; }
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+.te-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid $color-border;
+}
+
+.te-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: $radius-md;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+
+  &--primary {
+    background: $color-accent;
+    color: #fff;
+    &:hover { opacity: 0.88; }
+  }
+
+  &--secondary {
+    background: $color-surface-hover;
+    color: $color-text;
+    border: 1px solid $color-border;
+    &:hover { background: $color-border; }
+  }
+
+  &--danger {
+    background: transparent;
+    color: var(--color-error, #ef4444);
+    border: 1px solid color-mix(in srgb, var(--color-error, #ef4444) 40%, transparent);
+    &:hover { background: color-mix(in srgb, var(--color-error, #ef4444) 12%, transparent); }
+  }
+
+  &--danger-confirm {
+    background: color-mix(in srgb, var(--color-error, #ef4444) 15%, transparent);
+    font-weight: 600;
+  }
+}
+
+// ── Danger zone (delete) ──────────────────────────────────────────────────────
+.te-danger-zone {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid $color-border;
+
+  .te-btn--danger { width: 100%; }
+}
+

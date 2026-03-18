@@ -131,11 +131,11 @@
   }
   &--active {
     color: $color-accent;
-    background: rgba($color-accent, 0.12);
-    border-color: rgba($color-accent, 0.35);
+    background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+    border-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
     &:hover {
-      background: rgba($color-accent, 0.2);
-      border-color: rgba($color-accent, 0.5);
+      background: color-mix(in srgb, var(--color-accent) 20%, transparent);
+      border-color: color-mix(in srgb, var(--color-accent) 50%, transparent);
       color: $color-accent;
     }
   }
@@ -239,11 +239,11 @@
   border: none;
   cursor: pointer;
   transition: background $transition, transform 0.15s ease;
-  box-shadow: 0 2px 8px rgba($color-accent, 0.35);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-accent) 35%, transparent);
   &:hover {
     background: $color-accent-hover;
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba($color-accent, 0.4);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--color-accent) 40%, transparent);
   }
   &:active {
     transform: translateY(0);

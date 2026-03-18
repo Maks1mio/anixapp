@@ -1,20 +1,35 @@
-// AnixApp — тёмная минималистичная ч/б палитра
-$font-sans: 'Segoe UI', system-ui, -apple-system, sans-serif;
-$font-mono: 'Consolas', 'Monaco', monospace;
+// ── Runtime theme: CSS custom properties (override at will) ──────────────────
+:root {
+  --color-bg:            #0d0d0d;
+  --color-surface:       #1a1a1a;
+  --color-surface-hover: #121212;
+  --color-border:        #212121;
+  --color-text:          #c2c2c2;
+  --color-text-muted:    #8f8f8f;
+  --color-accent:        #e35454;
+  --color-accent-hover:  #ec7e7e;
+  --color-success:       #22c55e;
+  --color-error:         #ef4444;
+  --font-sans:           'Segoe UI', system-ui, -apple-system, sans-serif;
+}
 
-$color-bg: #0a0a0a;
-$color-surface: #141414;
-$color-surface-hover: #1a1a1a;
-$color-border: #262626;
-$color-text: #e5e5e5;
-$color-text-muted: #737373;
-$color-accent: #e35689;
-$color-accent-hover: #eb7aa3;
-$color-success: #22c55e;
-$color-error: #ef4444;
+// ── SCSS aliases → CSS custom properties ─────────────────────────────────────
+$font-sans:           var(--font-sans);
+$font-mono:           'Consolas', 'Monaco', monospace;
 
-$radius-sm: 4px;
-$radius-md: 6px;
-$radius-lg: 8px;
-$shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
+$color-bg:            var(--color-bg);
+$color-surface:       var(--color-surface);
+$color-surface-hover: var(--color-surface-hover);
+$color-border:        var(--color-border);
+$color-text:          var(--color-text);
+$color-text-muted:    var(--color-text-muted);
+$color-accent:        var(--color-accent);
+$color-accent-hover:  var(--color-accent-hover);
+$color-success:       var(--color-success);
+$color-error:         var(--color-error);
+
+$radius-sm:  4px;
+$radius-md:  6px;
+$radius-lg:  8px;
+$shadow:     0 2px 16px rgba(0, 0, 0, 0.5);
 $transition: 0.2s ease;

@@ -1,6 +1,11 @@
 import { renderSelect } from '../components/select';
 import { getCardLayout, setCardLayout, type CardLayout } from '../prefs';
 import { navigate } from '../app';
+import {
+  getAllThemes, getActiveThemeId, applyThemeById,
+  createCustomTheme, deleteCustomTheme,
+  BUILT_IN_THEMES, type Theme,
+} from '../services/themes';
 
 const ENDPOINT_OPTIONS = [
   { value: 'https://api-s.anixsekai.com', label: 'api-s.anixsekai.com' },
@@ -143,37 +148,206 @@ export function renderConnectionTab(): HTMLElement {
 export function renderAppearanceTab(): HTMLElement {
   const wrap = document.createElement('div');
 
-  const section = document.createElement('div');
-  section.className = 'settings-section';
-  section.innerHTML = `<p class="settings-section__label">Отображение карточек</p>`;
-  wrap.appendChild(section);
+  // ── 1. Card layout toggle ─────────────────────────────────────────────────
+  const cardSection = document.createElement('div');
+  cardSection.className = 'settings-section';
+  cardSection.innerHTML = `<p class="settings-section__label">Отображение карточек</p>`;
 
-  const currentLayout: CardLayout = getCardLayout();
-  const layoutSelect = renderSelect({
-    label: 'Вид карточек',
-    placeholder: 'Выберите вариант',
-    value: currentLayout,
-    options: [
-      { value: 'wide', label: 'Широкая карточка (список)' },
-      { value: 'mini', label: 'Мини-карточка (сетка)' },
-    ],
-    onChange: (value) => {
-      const v = value === 'mini' ? 'mini' : 'wide';
-      setCardLayout(v);
-      const path = window.location.pathname + window.location.search;
-      if (
-        path === '/'
-        || path.startsWith('/catalog')
-        || path.startsWith('/search')
-        || path.startsWith('/bookmarks')
-      ) {
-        navigate(path);
+  const toggleWrap = document.createElement('div');
+  toggleWrap.className = 'settings-card-layout-toggle';
+
+  function makeLayoutBtn(value: CardLayout, label: string, iconHtml: string): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `settings-card-layout-btn${getCardLayout() === value ? ' settings-card-layout-btn--active' : ''}`;
+    btn.dataset['layout'] = value;
+    btn.innerHTML = `
+      <div class="settings-card-layout-btn__preview">${iconHtml}</div>
+      <span>${label}</span>
+    `;
+    btn.addEventListener('click', () => {
+      setCardLayout(value);
+      toggleWrap.querySelectorAll('.settings-card-layout-btn').forEach(b => b.classList.remove('settings-card-layout-btn--active'));
+      btn.classList.add('settings-card-layout-btn--active');
+      const p = window.location.pathname + window.location.search;
+      if (p === '/' || p.startsWith('/catalog') || p.startsWith('/search') || p.startsWith('/bookmarks')) {
+        navigate(p);
       }
-    },
-  });
-  section.appendChild(layoutSelect);
+    });
+    return btn;
+  }
+
+  const listIcon = `
+    <svg viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="8" y="10" width="28" height="6" rx="2" fill="currentColor" opacity="0.7"/>
+      <rect x="8" y="20" width="28" height="6" rx="2" fill="currentColor" opacity="0.7"/>
+      <rect x="8" y="30" width="28" height="6" rx="2" fill="currentColor" opacity="0.7"/>
+    </svg>`;
+  const gridIcon = `
+    <svg viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="7"  y="7"  width="13" height="13" rx="2" fill="currentColor" opacity="0.7"/>
+      <rect x="24" y="7"  width="13" height="13" rx="2" fill="currentColor" opacity="0.7"/>
+      <rect x="7"  y="24" width="13" height="13" rx="2" fill="currentColor" opacity="0.7"/>
+      <rect x="24" y="24" width="13" height="13" rx="2" fill="currentColor" opacity="0.7"/>
+    </svg>`;
+
+  toggleWrap.appendChild(makeLayoutBtn('wide', 'Списком',    listIcon));
+  toggleWrap.appendChild(makeLayoutBtn('mini', 'Карточками', gridIcon));
+  cardSection.appendChild(toggleWrap);
+  wrap.appendChild(cardSection);
+
+  // ── 2. Built-in themes ────────────────────────────────────────────────────
+  const themeSection = document.createElement('div');
+  themeSection.className = 'settings-section';
+  themeSection.innerHTML = `<p class="settings-section__label">Тема оформления</p>`;
+
+  const builtInGrid = document.createElement('div');
+  builtInGrid.className = 'settings-theme-grid';
+  renderThemeTiles(builtInGrid, BUILT_IN_THEMES);
+  themeSection.appendChild(builtInGrid);
+  wrap.appendChild(themeSection);
+
+  // ── 3. Custom themes ──────────────────────────────────────────────────────
+  const customSection = document.createElement('div');
+  customSection.className = 'settings-section';
+  customSection.innerHTML = `<p class="settings-section__label">Пользовательские темы</p>`;
+
+  const customGrid = document.createElement('div');
+  customGrid.className = 'settings-theme-grid';
+
+  const refreshCustomGrid = () => {
+    customGrid.innerHTML = '';
+    const customs = getAllThemes().filter(t => !t.builtIn);
+    renderThemeTiles(customGrid, customs, true, refreshCustomGrid);
+    // "+ Создать тему" tile
+    const addTile = document.createElement('button');
+    addTile.type = 'button';
+    addTile.className = 'settings-theme-tile settings-theme-tile--add';
+    addTile.innerHTML = `<span class="settings-theme-tile__plus">+</span><span>Создать тему</span>`;
+    addTile.addEventListener('click', () => {
+      const newTheme = createCustomTheme();
+      refreshCustomGrid(); // show tile immediately before editor opens
+      openThemeEditor(newTheme.id, true);
+    });
+    customGrid.appendChild(addTile);
+  };
+  refreshCustomGrid();
+
+  // Listen for saves/deletes coming back from theme editor window
+  window.addEventListener('anix:themeEditorSaved', ((e: CustomEvent) => {
+    refreshCustomGrid();
+    // Re-highlight active tile in built-in grid too
+    builtInGrid.querySelectorAll('.settings-theme-tile').forEach(t => {
+      const el = t as HTMLElement;
+      el.classList.toggle('settings-theme-tile--active', el.dataset['themeId'] === getActiveThemeId());
+    });
+  }) as EventListener);
+
+  window.addEventListener('anix:themeEditorDeleted', (() => {
+    refreshCustomGrid();
+  }) as EventListener);
+
+  customSection.appendChild(customGrid);
+  wrap.appendChild(customSection);
 
   return wrap;
+}
+
+// ── Theme tile renderer ───────────────────────────────────────────────────────
+function renderThemeTiles(
+  grid: HTMLElement,
+  themes: Theme[],
+  editable = false,
+  onRefresh?: () => void,
+): void {
+  themes.forEach(theme => {
+    const tile = document.createElement('button');
+    tile.type = 'button';
+    tile.className = `settings-theme-tile${theme.id === getActiveThemeId() ? ' settings-theme-tile--active' : ''}`;
+    tile.dataset['themeId'] = theme.id;
+
+    // Mini color preview
+    const preview = document.createElement('div');
+    preview.className = 'settings-theme-tile__preview';
+
+    if (theme.id === 'auto') {
+      // Split preview: left half dark, right half light
+      preview.style.background = 'linear-gradient(to right, #1a1a1a 50%, #f0f0f0 50%)';
+      preview.style.border = '1px solid #888';
+      // Auto icon (sun/moon)
+      preview.innerHTML = `<svg class="settings-theme-tile__auto-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        <path d="M12 2a10 10 0 0 1 0 20" stroke-dasharray="3 2" opacity=".4"/>
+      </svg>`;
+    } else {
+      preview.style.background = theme.vars.colorSurface;
+      preview.style.border = `1px solid ${theme.vars.colorBorder}`;
+
+      const accent = document.createElement('div');
+      accent.className = 'settings-theme-tile__accent';
+      accent.style.background = theme.vars.colorAccent;
+      preview.appendChild(accent);
+
+      const bar1 = document.createElement('div');
+      bar1.className = 'settings-theme-tile__bar';
+      bar1.style.background = theme.vars.colorText;
+      const bar2 = document.createElement('div');
+      bar2.className = 'settings-theme-tile__bar settings-theme-tile__bar--short';
+      bar2.style.background = theme.vars.colorTextMuted;
+      preview.appendChild(bar1);
+      preview.appendChild(bar2);
+    }
+    tile.appendChild(preview);
+
+    // Active check
+    const check = document.createElement('div');
+    check.className = 'settings-theme-tile__check';
+    check.innerHTML = `<svg viewBox="0 0 16 16" fill="none"><polyline points="3,8 6.5,11.5 13,5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    tile.appendChild(check);
+
+    const name = document.createElement('span');
+    name.className = 'settings-theme-tile__name';
+    name.textContent = theme.name;
+    tile.appendChild(name);
+
+    // Edit/delete buttons for custom themes
+    if (editable) {
+      const actions = document.createElement('div');
+      actions.className = 'settings-theme-tile__actions';
+
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'settings-theme-tile__action-btn';
+      editBtn.title = 'Редактировать';
+      editBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M11 2l3 3-8.5 8.5L2 14l.5-3.5L11 2z"/></svg>`;
+      editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openThemeEditor(theme.id, false);
+      });
+
+      actions.appendChild(editBtn);
+      tile.appendChild(actions);
+    }
+
+    tile.addEventListener('click', () => {
+      applyThemeById(theme.id);
+      grid.closest('.settings-section')?.parentElement?.querySelectorAll('.settings-theme-tile').forEach(t => {
+        (t as HTMLElement).classList.toggle('settings-theme-tile--active', (t as HTMLElement).dataset['themeId'] === theme.id);
+      });
+      // Also deselect built-in tiles when a custom is picked and vice versa
+      document.querySelectorAll('.settings-theme-tile').forEach(t => {
+        (t as HTMLElement).classList.toggle('settings-theme-tile--active', (t as HTMLElement).dataset['themeId'] === theme.id);
+      });
+    });
+
+    grid.appendChild(tile);
+  });
+}
+
+function openThemeEditor(themeId: string, isNew: boolean): void {
+  const el = window.electron as { openThemeEditor?: (opts: object) => void } | undefined;
+  el?.openThemeEditor?.({ themeId, isNew });
 }
 
 // ── Поведение ─────────────────────────────────────────────────────────────────

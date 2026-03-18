@@ -61,7 +61,15 @@ window.addEventListener('lobby:authoritativeConfirmed', () => {
         console.log('[lobby] authoritativeConfirmed fallback: got playback from HTTP', room.playback.releaseId);
         dispatchInitialPlayback(room.playback);
       }
-    }).catch(() => {});
+    }).catch((err: unknown) => {
+      // Room is gone on the server (404) — stop WS reconnect loop
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('404') && roomId) {
+        console.warn('[lobby] room 404 after WS join, stopping reconnects');
+        leaveLobby();
+        window.dispatchEvent(new CustomEvent('lobby:roomGone'));
+      }
+    });
   }
 });
 
@@ -354,6 +362,7 @@ export function leaveLobby(): void {
       type: 'leave',
       note: `Выход из комнаты ${roomId}`,
     });
+    window.dispatchEvent(new CustomEvent('lobby:left'));
   }
   roomId = null;
   roomCode = null;

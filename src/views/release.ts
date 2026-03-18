@@ -162,6 +162,34 @@ function sanitizeDescriptionHtml(raw: string): string {
   return escaped.replace(/\n/g, '<br>');
 }
 
+/**
+ * Sanitize API rich HTML (notes, announcements) for safe innerHTML insertion.
+ * Keeps formatting tags (<b>, <i>, <br>, <font color="...">, <span>) but
+ * removes dangerous elements (script, iframe, img, …) and all event handlers.
+ */
+function sanitizeRichHtml(raw: string): string {
+  if (!raw) return '';
+  const root = document.createElement('div');
+  root.innerHTML = raw;
+
+  // Remove entire dangerous subtrees
+  const DENY_TAGS = ['script', 'iframe', 'object', 'embed', 'video', 'audio',
+                     'form', 'input', 'button', 'link', 'meta', 'style', 'img', 'svg'];
+  DENY_TAGS.forEach(tag => root.querySelectorAll(tag).forEach(el => el.remove()));
+
+  // Strip event handlers and javascript: hrefs from every remaining element
+  root.querySelectorAll('*').forEach(el => {
+    for (const attr of [...el.attributes]) {
+      if (attr.name.startsWith('on')) { el.removeAttribute(attr.name); continue; }
+      if (attr.name === 'href' && /^\s*javascript:/i.test(attr.value)) {
+        el.removeAttribute(attr.name);
+      }
+    }
+  });
+
+  return root.innerHTML;
+}
+
 function formatVoteCount(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
   if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
@@ -450,10 +478,12 @@ function buildReleaseBody(r: ReleaseApi): HTMLElement {
     playBtnDisabled = true;
   }
 
-  // Description: strip HTML tags from API, check length for truncation
+  // Description: sanitize with rich formatting preserved, check length for truncation
   const descClean = stripHtmlToText(desc);
-  const descHtml = sanitizeDescriptionHtml(desc);
+  const descHtml = sanitizeRichHtml(desc);
   const descNeedsTruncate = descClean.length > 300;
+  // Note: sanitize with rich formatting (font colors, bold, line breaks)
+  const noteHtml = sanitizeRichHtml(note);
 
   // Favorite button icon (bookmark)
   const favIconSvg = (filled: boolean) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>`;
@@ -486,7 +516,7 @@ function buildReleaseBody(r: ReleaseApi): HTMLElement {
             <span data-fav-count>${favoritesCount > 0 ? formatVoteCount(favoritesCount) : ''}</span>
           </button>
         </div>
-        ${note ? `<div class="release-page__note">${escapeHtml(note)}</div>` : ''}
+        ${noteHtml ? `<div class="release-page__note">${noteHtml}</div>` : ''}
         ${descClean ? `
           <div class="release-page__desc${descNeedsTruncate ? ' release-page__desc--collapsed' : ''}" data-desc>
             ${descHtml}

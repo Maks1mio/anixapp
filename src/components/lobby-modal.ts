@@ -88,6 +88,12 @@ export function openLobbyModal(prefilledCode?: string): void {
   function close() {
     if (closed) return;
     closed = true;
+    // Stop room-level polling and event listeners if modal is closed externally (X / Escape / outside click)
+    const roomCleanup = (scrollRoot as unknown as { _lobbyOnClose?: () => void })._lobbyOnClose;
+    if (roomCleanup) {
+      (scrollRoot as unknown as { _lobbyOnClose?: () => void })._lobbyOnClose = undefined;
+      roomCleanup();
+    }
     overlay.classList.remove('lobby-modal-overlay--open');
     overlay.classList.add('lobby-modal-overlay--closing');
     const done = () => {
@@ -221,6 +227,9 @@ export function openLobbyModal(prefilledCode?: string): void {
         .then((deviceId) => createRoom({ ...baseProfile, deviceId: deviceId ?? null }))
         .then(({ roomId: id, code, myPeerId: peerId }) => {
           setLobbyRoom(id, { myPeerId: peerId, participants: [], roomCode: code });
+          // Immediately fire participantsChanged so Discord party info is set
+          // before any page navigation (don't wait for WS handshake).
+          window.dispatchEvent(new CustomEvent('lobby:participantsChanged', { detail: { participants: [] } }));
           renderInRoom(id, scrollRoot, close, code);
         })
         .catch(() => {
@@ -402,6 +411,7 @@ function renderInRoom(
         return undefined;
       })
       .finally(() => {
+        cleanupRoom();
         leaveLobby();
         scrollRoot.innerHTML = '';
         openLobbyModal();
@@ -412,6 +422,8 @@ function renderInRoom(
   const logBtn = scrollRoot.querySelector('[data-lobby-log-toggle]') as HTMLButtonElement | null;
   const logSection = scrollRoot.querySelector('[data-lobby-log-section]') as HTMLElement | null;
   const logContainer = scrollRoot.querySelector('[data-lobby-log]') as HTMLElement | null;
+
+  let onLogUpdated: (() => void) | null = null;
 
   if (logBtn && logSection && logContainer) {
     const renderLog = () => {
@@ -465,7 +477,7 @@ function renderInRoom(
       }
     });
 
-    const onLogUpdated = () => {
+    onLogUpdated = () => {
       if (!logSection.hidden) renderLog();
     };
     window.addEventListener('lobby:logUpdated', onLogUpdated as EventListener);
@@ -485,6 +497,27 @@ function renderInRoom(
   const POLL_INTERVAL_MS = 10000;
   let pollTimer: ReturnType<typeof setInterval> | null = null;
 
+  const stopPolling = () => {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  };
+
+  // Cleanup: stop all timers and event listeners without closing the modal.
+  // Called both on modal close (X/Escape/outside) and on explicit "Покинуть".
+  const cleanupRoom = () => {
+    if (destroyed) return;
+    destroyed = true;
+    stopPolling();
+    clearInterval(statusInterval);
+    window.removeEventListener('lobby:participantsChanged', onWsParticipants);
+    if (onLogUpdated) {
+      window.removeEventListener('lobby:logUpdated', onLogUpdated as EventListener);
+      onLogUpdated = null;
+    }
+  };
+
   const startPolling = () => {
     if (pollTimer) return;
     pollTimer = setInterval(() => {
@@ -496,27 +529,21 @@ function renderInRoom(
           setLobbyParticipants(list);
           renderParticipants(list);
         })
-        .catch(() => {});
+        .catch((err: unknown) => {
+          // Room gone on server (404) — stop everything and close the modal
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes('404') && !destroyed) {
+            console.warn('[lobby] room 404 in poll, leaving lobby');
+            cleanupRoom();
+            leaveLobby();
+            onClose();
+          }
+        });
     }, POLL_INTERVAL_MS);
-  };
-
-  const stopPolling = () => {
-    if (pollTimer) {
-      clearInterval(pollTimer);
-      pollTimer = null;
-    }
   };
 
   startPolling();
 
-  const originalOnClose = onClose;
-  const safeClose = () => {
-    if (destroyed) return;
-    destroyed = true;
-    stopPolling();
-    clearInterval(statusInterval);
-    window.removeEventListener('lobby:participantsChanged', onWsParticipants);
-    originalOnClose();
-  };
-  (scrollRoot as unknown as { _lobbyOnClose?: () => void })._lobbyOnClose = safeClose;
+  // Register cleanup so openLobbyModal's close() can call it on X/Escape/outside-click
+  (scrollRoot as unknown as { _lobbyOnClose?: () => void })._lobbyOnClose = cleanupRoom;
 }

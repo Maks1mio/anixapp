@@ -51,6 +51,21 @@ function sendDiscordPagePresence(path: string): void {
   }
 
   el.discordUpdate({ type: 'page', details, state });
+
+  // If currently in a lobby, re-send party info so the invite button stays
+  // visible on every page regardless of WS connection timing.
+  const roomId = getCurrentRoomId();
+  if (roomId) {
+    const code = getCurrentRoomCode();
+    const parts = getCurrentParticipants();
+    el.discordUpdate({
+      type: 'partyInfo',
+      partyId: roomId,
+      partySize: parts.length,
+      partyMax: Math.max(parts.length, 10),
+      joinSecret: code ?? undefined,
+    });
+  }
 }
 
 function clearOfflineRetryTimer(): void {

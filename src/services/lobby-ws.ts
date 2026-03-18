@@ -24,8 +24,12 @@ let onRemotePlayback: ((playback: LobbyPlayback, fromPeerId?: string | null, act
 let onParticipantsChanged: ((participants: LobbyParticipant[]) => void) | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let intentionalClose = false;
+let reconnectAttempts = 0;
 
 const RECONNECT_DELAY_MS = 3000;
+// Stop reconnecting after this many consecutive failures (~24 seconds).
+// If the room is gone the polling logic in lobby-modal will detect 404 and call leaveLobby().
+const MAX_RECONNECT_ATTEMPTS = 8;
 
 function clearReconnect(): void {
   if (reconnectTimer) {
@@ -36,6 +40,12 @@ function clearReconnect(): void {
 
 function scheduleReconnect(): void {
   if (intentionalClose || !roomId) return;
+  reconnectAttempts++;
+  if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+    console.warn('[lobby-ws] max reconnect attempts reached, giving up');
+    roomId = null;
+    return;
+  }
   clearReconnect();
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
@@ -192,6 +202,7 @@ export function connect(
 
   ws.onopen = () => {
     clearReconnect();
+    reconnectAttempts = 0;
     ws?.send(JSON.stringify({ type: 'join', roomId: rId, peerId: myPeerId ?? undefined }));
   };
 
@@ -209,6 +220,7 @@ export function connect(
 
 export function disconnect(): void {
   intentionalClose = true;
+  reconnectAttempts = 0;
   clearReconnect();
   if (ws) {
     try {

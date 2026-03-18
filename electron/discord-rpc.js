@@ -148,10 +148,23 @@ function scheduleReconnect() {
   }, 30_000);
 }
 
+/** Merge current party info into any activity before sending to Discord. */
+function _mergeParty(activity) {
+  if (!_partyInfo) return activity;
+  return {
+    ...activity,
+    partyId:    _partyInfo.partyId,
+    partySize:  _partyInfo.partySize,
+    partyMax:   _partyInfo.partyMax,
+    joinSecret: _partyInfo.joinSecret || undefined,
+    instance:   true,
+  };
+}
+
 async function _applyActivity(activity) {
   if (!connected || !rpc) return;
   try {
-    await rpc.user.setActivity(activity);
+    await rpc.user.setActivity(_mergeParty(activity));
   } catch (err) {
     console.warn('[Discord RPC] setActivity error:', err.message ?? String(err));
   }
@@ -241,7 +254,7 @@ function setViewingRelease({ title, posterUrl }) {
   if (posterUrl) _lastPosterUrl = posterUrl;
 
   _setForContext('main', {
-    type: 3,
+    type: 0,
     details: safeStr(truncate(title || 'Аниме')),
     state: 'Просматривает страницу аниме',
     largeImageKey: posterUrl || 'logo',
@@ -294,11 +307,11 @@ function setPartyInfo(info) {
   } : null;
   console.log('[Discord RPC] Party info updated:', _partyInfo);
 
-  // If player is active, re-apply its activity with updated party info
-  if (_playerActivity && _focusedContext === 'player') {
-    // Rebuild the player activity with new party info
-    _applyActivity(_playerActivity);
-  }
+  // Re-apply whichever activity is currently visible in Discord so party info
+  // (joinSecret / partyId) is added/removed immediately — regardless of whether
+  // the player is open or the user is just browsing the main window.
+  const act = _currentActivity();
+  if (act) _applyActivity(act);
 }
 
 /**
@@ -359,17 +372,6 @@ function setWatching({ title, ep, sourceName, dubberName, paused, currentTime, d
   } else if (!paused) {
     // No duration known — just show elapsed time
     activity.startTimestamp = Math.floor(Date.now() / 1000) - ct;
-  }
-
-  // Merge persistent party info (from lobby)
-  if (_partyInfo) {
-    activity.partyId   = _partyInfo.partyId;
-    activity.partySize = _partyInfo.partySize;
-    activity.partyMax  = _partyInfo.partyMax;
-    if (_partyInfo.joinSecret) {
-      activity.joinSecret = _partyInfo.joinSecret;
-    }
-    activity.instance = true;
   }
 
   _setForContext('player', activity);

@@ -51,6 +51,7 @@ ipcRenderer.on('discord:joinLobby', (_, payload) => {
 
 contextBridge.exposeInMainWorld('electron', {
   getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
+  getVersions: () => ipcRenderer.invoke('app:getVersions'),
   getDeviceId: () => ipcRenderer.invoke('app:getDeviceId'),
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),
@@ -168,5 +169,18 @@ contextBridge.exposeInMainWorld('anixApi', {
 
   article: {
     info: (id) => ipcRenderer.invoke('anix:articleById', id),
+  },
+
+  settings: {
+    getProfileSettings: () => ipcRenderer.invoke('anix:getProfileSettings'),
+    setStatus: (status) => ipcRenderer.invoke('anix:setStatus', status),
+    getSocial: () => ipcRenderer.invoke('anix:getSocial'),
+    setSocial: (data) => ipcRenderer.invoke('anix:setSocial', data),
+    setPrivacyStats: (state) => ipcRenderer.invoke('anix:setPrivacyStats', state),
+    setPrivacyCounts: (state) => ipcRenderer.invoke('anix:setPrivacyCounts', state),
+    setPrivacySocial: (state) => ipcRenderer.invoke('anix:setPrivacySocial', state),
+    setPrivacyFriendRequests: (state) => ipcRenderer.invoke('anix:setPrivacyFriendRequests', state),
+    getLoginInfo: () => ipcRenderer.invoke('anix:getLoginInfo'),
+    changeLogin: (newLogin) => ipcRenderer.invoke('anix:changeLogin', newLogin),
   },
 });

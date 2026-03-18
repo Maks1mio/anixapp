@@ -1,78 +1,347 @@
 @use 'variables' as *;
 
-.settings-modal-overlay {
+// ═══════════════════════════════════════════════════════════════════════════════
+// Discord-style settings modal
+// Centered floating panel: [sidebar 240px | content area]
+// All colors use UIKit variables from _variables.scss
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Backdrop ──────────────────────────────────────────────────────────────────
+.settings-overlay {
   position: fixed;
   inset: 0;
   z-index: 10000;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.7);
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.2s ease, visibility 0.2s ease;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+
+  &--open {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  &--closing {
+    opacity: 0;
+    visibility: hidden;
+  }
 }
 
-.settings-modal-overlay--open {
-  opacity: 1;
-  visibility: visible;
-}
-
-.settings-modal-overlay--closing {
-  opacity: 0;
-  visibility: hidden;
-}
-
-.settings-modal-panel {
-  width: 100%;
-  max-width: 28rem;
-  max-height: 90vh;
-  margin: 1rem;
-  background: $color-surface;
-  border: 1px solid $color-border;
+// ── Panel ─────────────────────────────────────────────────────────────────────
+.settings-panel {
+  display: flex;
+  width: 94vw;
+  max-width: 1060px;
+  height: 88vh;
+  max-height: 780px;
   border-radius: $radius-lg;
+  overflow: hidden;
   box-shadow: $shadow;
+  border: 1px solid $color-border;
+  transform: scale(0.96) translateY(10px);
+  transition: transform 0.15s ease;
+
+  .settings-overlay--open & {
+    transform: scale(1) translateY(0);
+  }
+
+  .settings-overlay--closing & {
+    transform: scale(0.96) translateY(10px);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SIDEBAR
+// ═══════════════════════════════════════════════════════════════════════════════
+.settings-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: $color-surface;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  transform: scale(0.96);
-  transition: transform 0.2s ease;
+  border-right: 1px solid $color-border;
 }
 
-.settings-modal-overlay--open .settings-modal-panel {
-  transform: scale(1);
+.settings-sidebar__scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 8px 8px;
+  scrollbar-width: thin;
+  scrollbar-color: $color-border transparent;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: $color-border;
+    border-radius: 2px;
+  }
 }
 
-.settings-modal-overlay--closing .settings-modal-panel {
-  transform: scale(0.96);
-}
-
-.settings-modal__header {
+// User card
+.settings-sidebar__user {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid $color-border;
+  gap: 10px;
+  padding: 10px;
+  margin-bottom: 6px;
+  border-radius: $radius-md;
+  cursor: pointer;
+  transition: background $transition;
+
+  &:hover {
+    background: $color-surface-hover;
+  }
+}
+
+.settings-sidebar__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: $color-border;
+  background-size: cover;
+  background-position: center;
   flex-shrink: 0;
 }
 
-.settings-modal__title {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
+.settings-sidebar__user-info {
+  min-width: 0;
+  flex: 1;
 }
 
-.settings-modal__close {
-  width: 2rem;
-  height: 2rem;
-  padding: 0;
+.settings-sidebar__username {
+  display: block;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: $color-text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.settings-sidebar__user-sub {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.6875rem;
+  color: $color-text-muted;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  svg {
+    flex-shrink: 0;
+    opacity: 0.5;
+    width: 12px;
+    height: 12px;
+  }
+}
+
+// Section labels
+.settings-nav__section {
+  padding: 16px 10px 4px;
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: $color-text-muted;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+// Nav items
+.settings-nav__item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  margin-bottom: 2px;
   border: none;
-  border-radius: $radius-md;
+  border-radius: $radius-sm;
   background: transparent;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: $color-text-muted;
+  text-align: left;
+  cursor: pointer;
+  transition: background $transition, color $transition;
+  user-select: none;
+  line-height: 1.4;
+
+  &:hover {
+    background: $color-surface-hover;
+    color: $color-text;
+  }
+
+  &--active {
+    background: $color-surface-hover;
+    color: $color-text;
+  }
+
+  &--active:hover {
+    background: $color-surface-hover;
+    color: $color-text;
+  }
+
+  &--icon {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+
+    svg {
+      flex-shrink: 0;
+      opacity: 0.6;
+      width: 16px;
+      height: 16px;
+    }
+
+    &.settings-nav__item--active svg {
+      opacity: 1;
+    }
+  }
+}
+
+// Separator
+.settings-nav__sep {
+  height: 1px;
+  background: $color-border;
+  margin: 8px 10px;
+}
+
+// Footer section with logout + version + links
+.settings-sidebar__footer-section {
+  flex-shrink: 0;
+  border-top: 1px solid $color-border;
+  padding: 8px;
+}
+
+.settings-nav__item--logout {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  color: $color-error !important;
+  width: 100%;
+
+  svg {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+  }
+
+  &:hover {
+    background: rgba($color-error, 0.1) !important;
+    color: $color-error !important;
+  }
+}
+
+.settings-sidebar__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px 2px;
+}
+
+.settings-sidebar__meta-version {
+  font-size: 0.6875rem;
+  color: $color-text-muted;
+  user-select: text;
+}
+
+.settings-sidebar__meta-links {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-sidebar__meta-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: $radius-sm;
+  color: $color-text-muted;
+  transition: color $transition, background $transition;
+  text-decoration: none;
+
+  &:hover {
+    color: $color-text;
+    background: $color-surface-hover;
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.settings-sidebar__meta-components {
+  font-size: 0.625rem;
+  color: $color-text-muted;
+  padding: 0 10px 4px;
+  user-select: text;
+  line-height: 1.6;
+}
+
+// Legacy footer (kept for backward compat)
+.settings-sidebar__footer {
+  padding: 8px 16px 10px;
+  border-top: 1px solid $color-border;
+  font-size: 0.6875rem;
+  color: $color-text-muted;
+  user-select: text;
+  line-height: 1.5;
+  flex-shrink: 0;
+  opacity: 0.4;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONTENT AREA
+// ═══════════════════════════════════════════════════════════════════════════════
+.settings-content {
+  flex: 1;
+  min-width: 0;
+  background: $color-bg;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+// Header row: title + close button
+.settings-content__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 20px;
+  border-bottom: 1px solid $color-border;
+  margin-bottom: 4px;
+  flex-shrink: 0;
+}
+
+.settings-content__title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: $color-text;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.settings-close-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: $color-surface-hover;
   color: $color-text-muted;
   cursor: pointer;
   position: relative;
   transition: background $transition, color $transition;
+  flex-shrink: 0;
 
   &::before,
   &::after {
@@ -80,67 +349,557 @@
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 1rem;
-    height: 2px;
+    width: 12px;
+    height: 1.5px;
     background: currentColor;
+    border-radius: 1px;
     transform: translate(-50%, -50%) rotate(45deg);
   }
+
   &::after {
     transform: translate(-50%, -50%) rotate(-45deg);
   }
 
   &:hover {
-    background: $color-surface-hover;
+    background: $color-border;
     color: $color-text;
   }
 }
 
-.settings-modal__body {
-  padding: 1.25rem;
-  overflow-y: auto;
+// Page component wrapper inside settings content
+.settings-content__page-wrap {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
+  position: relative;
 }
 
-.settings-modal-content__desc {
-  margin: 0 0 1rem;
-  font-size: 0.9rem;
-  color: $color-text-muted;
-}
+// Page component adapted for settings modal
+.settings-page {
+  height: 100%;
+  padding: 0;
 
-.settings-modal__uikit {
-  margin-top: 1.5rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid $color-border;
-}
-
-.settings-modal__uikit-desc {
-  margin: 0 0 0.5rem;
-  font-size: 0.875rem;
-  color: $color-text-muted;
-}
-
-.settings-modal__uikit-link {
-  display: inline-block;
-  padding: 0.4rem 0.75rem;
-  font-size: 0.9rem;
-  background: $color-surface-hover;
-  color: $color-accent;
-  border-radius: $radius-md;
-  text-decoration: none;
-  transition: background $transition;
-
-  &:hover {
-    background: $color-border;
+  .page__scroll {
+    padding: 20px 20px 40px;
   }
 }
 
-.settings-modal-content .settings-section {
-  margin-bottom: 0;
+// Legacy scrollable body (fallback)
+.settings-content__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 20px 40px;
+  scrollbar-width: thin;
+  scrollbar-color: $color-border transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: $color-border;
+    border-radius: 3px;
+  }
 }
 
-.settings-modal-content .custom-select {
-  margin-bottom: 0;
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB CONTENT
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Shared section wrapper
+.settings-section {
+  margin-bottom: 28px;
+}
+
+.settings-section__label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: $color-text-muted;
+  margin: 0 0 8px;
+}
+
+.settings-section__desc {
+  font-size: 0.8125rem;
+  color: $color-text-muted;
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+.settings-section__body {
+  background: $color-surface;
+  border-radius: $radius-lg;
+  border: 1px solid $color-border;
+  overflow: hidden;
+}
+
+// Row: label + description + control
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 16px;
+
+  & + & {
+    border-top: 1px solid $color-border;
+  }
+}
+
+.settings-row__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-row__label {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: $color-text;
+  line-height: 1.3;
+}
+
+.settings-row__desc {
+  font-size: 0.8125rem;
+  color: $color-text-muted;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.settings-row__control {
+  flex-shrink: 0;
+}
+
+// ── Account card ──────────────────────────────────────────────────────────────
+.settings-account-card {
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.settings-account-card__banner {
+  height: 100px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #12162e 50%, #0d1520 100%);
+  background-size: cover;
+  background-position: center;
+}
+
+.settings-account-card__body {
+  padding: 0 16px 16px;
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+.settings-account-card__avatar-wrap {
+  margin-top: -30px;
+  flex-shrink: 0;
+}
+
+.settings-account-card__avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: $color-border;
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 0 0 6px $color-surface;
+}
+
+.settings-account-card__info {
+  padding-bottom: 6px;
+  min-width: 0;
+}
+
+.settings-account-card__name {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: $color-text;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-account-card__meta {
+  font-size: 0.8125rem;
+  color: $color-text-muted;
+  margin-top: 2px;
+}
+
+.settings-account-coming-soon {
+  font-size: 0.875rem;
+  color: $color-text-muted;
+  padding: 14px 16px;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  line-height: 1.5;
+}
+
+// ── Toggle switch ─────────────────────────────────────────────────────────────
+.settings-toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 2.75rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  cursor: pointer;
+  vertical-align: middle;
+
+  input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+  }
+
+  &__track {
+    position: absolute;
+    inset: 0;
+    border-radius: 1rem;
+    background: $color-border;
+    transition: background $transition;
+  }
+
+  &__thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 1.125rem;
+    height: 1.125rem;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform $transition;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+
+  input:checked ~ .settings-toggle-switch__track {
+    background: $color-success;
+  }
+
+  input:checked ~ .settings-toggle-switch__thumb {
+    transform: translateX(1.25rem);
+  }
+}
+
+// ── Input / button controls ───────────────────────────────────────────────────
+.settings-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.settings-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: $radius-md;
+  border: 1px solid $color-border;
+  background: $color-bg;
+  color: $color-text;
+  font-size: 0.875rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color $transition;
+
+  &::placeholder {
+    color: $color-text-muted;
+  }
+
+  &:focus {
+    border-color: $color-accent;
+  }
+
+  &--sm {
+    width: 180px;
+    flex: none;
+  }
+}
+
+.settings-btn {
+  padding: 8px 16px;
+  border-radius: $radius-md;
+  border: none;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background $transition, opacity $transition;
+  flex-shrink: 0;
+  user-select: none;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  &--primary {
+    background: $color-accent;
+    color: #fff;
+
+    &:hover:not(:disabled) {
+      background: $color-accent-hover;
+    }
+  }
+}
+
+.settings-feedback {
+  font-size: 0.8125rem;
+  min-height: 1.2em;
+  margin-top: 4px;
+  transition: color $transition;
+
+  &--ok {
+    color: $color-success;
+  }
+
+  &--err {
+    color: $color-error;
+  }
+}
+
+.settings-row--column {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.settings-row--end {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid $color-border;
+}
+
+.settings-row__control--wide {
+  flex-shrink: 0;
+  min-width: 180px;
+}
+
+// ── About tab ────────────────────────────────────────────────────────────────
+.settings-about {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.settings-about__logo {
+  margin-bottom: 16px;
+}
+
+.settings-about__logo-img {
+  width: 80px;
+  height: 80px;
+  border-radius: $radius-lg;
+}
+
+.settings-about__name {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: $color-text;
+  margin: 0 0 4px;
+}
+
+.settings-about__version {
+  font-size: 0.9375rem;
+  color: $color-text-muted;
+  margin: 0 0 16px;
+}
+
+.settings-about__desc {
+  font-size: 0.875rem;
+  color: $color-text-muted;
+  line-height: 1.6;
+  max-width: 420px;
+  margin: 0 0 16px;
+}
+
+.settings-about__inline-link {
+  color: $color-accent;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color $transition;
+
+  &:hover {
+    color: $color-accent-hover;
+    text-decoration: underline;
+  }
+}
+
+.settings-about__star-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: $radius-md;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  color: $color-text;
+  text-decoration: none;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background $transition, border-color $transition, color $transition;
+  margin-bottom: 20px;
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  &:hover {
+    background: $color-surface-hover;
+    border-color: $color-text-muted;
+    color: #f5c518;
+  }
+}
+
+.settings-about__components {
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  padding: 4px 0;
+  width: 100%;
+  max-width: 340px;
+}
+
+.settings-about__component {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+
+  & + & {
+    border-top: 1px solid $color-border;
+  }
+}
+
+.settings-about__component-label {
+  font-size: 0.8125rem;
+  color: $color-text-muted;
+}
+
+.settings-about__component-value {
+  font-size: 0.8125rem;
+  color: $color-text;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-about__component-link {
+  font-size: 0.8125rem;
+  color: $color-accent;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color $transition;
+
+  &:hover {
+    color: $color-accent-hover;
+    text-decoration: underline;
+  }
+}
+
+// Developer card
+.settings-about__dev-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  width: 100%;
+  max-width: 400px;
+  text-align: left;
+}
+
+.settings-about__dev-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: $color-border;
+  background-size: cover;
+  background-position: center;
+  flex-shrink: 0;
+}
+
+.settings-about__dev-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-about__dev-name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: $color-text;
+  margin: 0;
+}
+
+.settings-about__dev-tag {
+  font-weight: 400;
+  color: $color-text-muted;
+  font-size: 0.8125rem;
+}
+
+.settings-about__dev-role {
+  font-size: 0.8125rem;
+  color: $color-text-muted;
+  margin: 2px 0 0;
+}
+
+.settings-about__dev-github {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: $radius-sm;
+  color: $color-text-muted;
+  text-decoration: none;
+  transition: color $transition, background $transition;
+  flex-shrink: 0;
+
+  &:hover {
+    color: $color-text;
+    background: $color-surface-hover;
+  }
+}
+
+// ── Endpoint ping ─────────────────────────────────────────────────────────────
+.endpoint-option__ping {
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  color: $color-text-muted;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-latency-quality='good'] .endpoint-option__ping {
+  color: $color-success;
+}
+
+[data-latency-quality='medium'] .endpoint-option__ping {
+  color: #f59e0b;
+}
+
+[data-latency-quality='bad'] .endpoint-option__ping {
+  color: $color-error;
+}
+
+[data-latency-quality='offline'] .endpoint-option__ping {
+  color: $color-error;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LEGACY (kept for backward compat)
+// ═══════════════════════════════════════════════════════════════════════════════
+.settings-modal-overlay {
+  display: none;
 }
 
 .settings-toggle {
@@ -170,6 +929,7 @@
 
 .settings-toggle__switch {
   position: relative;
+  display: inline-block;
   width: 2.5rem;
   height: 1.375rem;
   flex-shrink: 0;
@@ -199,7 +959,7 @@
     border-radius: 50%;
     background: #fff;
     transition: transform $transition;
-    box-shadow: 0 1px 3px rgba(0,0,0,.3);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   }
 
   input:checked ~ .settings-toggle__switch-track {
@@ -209,4 +969,14 @@
   input:checked ~ .settings-toggle__switch-thumb {
     transform: translateX(1.125rem);
   }
+}
+
+.settings-modal-content__desc,
+.settings-modal__uikit,
+.settings-modal__uikit-desc,
+.settings-modal__uikit-link,
+.settings-modal-content .settings-section,
+.settings-modal-content .custom-select {
+  // legacy no-op (keep selector for backwards-compat)
+  display: unset;
 }

@@ -1,5 +1,6 @@
 import { navigate } from '../app';
 import { iconStar } from '../components/icons';
+import { openSettingsModal } from '../components/settings-modal';
 
 // ——— Helpers ———
 
@@ -66,13 +67,13 @@ function si(path: string, size = 16): string {
 
 const ICON_VK   = si('<path d="M15.07 2H8.93C3.33 2 2 3.33 2 8.93v6.14C2 20.67 3.33 22 8.93 22h6.14c5.6 0 6.93-1.33 6.93-6.93V8.93C22 3.33 20.67 2 15.07 2zm2.92 13.36h-1.5c-.57 0-.74-.45-1.76-1.48-.88-.86-1.27-.97-1.49-.97-.3 0-.39.09-.39.51v1.35c0 .36-.11.58-1.07.58-1.58 0-3.33-.96-4.57-2.74C5.81 10.4 5.37 8.5 5.37 8.08c0-.22.09-.42.51-.42h1.5c.38 0 .52.17.67.58.74 2.13 1.97 4 2.48 4 .19 0 .28-.09.28-.57V9.34c-.06-1.01-.59-1.1-.59-1.46 0-.17.14-.35.38-.35h2.35c.32 0 .43.17.43.55v2.97c0 .32.14.44.23.44.19 0 .35-.12.7-.47 1.07-1.2 1.84-3.06 1.84-3.06.1-.22.28-.42.65-.42h1.5c.45 0 .55.23.45.55-.19.87-2.02 3.45-2.02 3.45-.16.26-.22.38 0 .67.16.22.68.67 1.03 1.07.64.73 1.13 1.33 1.26 1.75.14.42-.07.64-.49.64z"/>');
 const ICON_TG   = si('<path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>');
-const ICON_DS   = si('<path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057.1 18.082.118 18.105.14 18.12a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>');
 const ICON_TT   = si('<path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.79 1.53V6.77a4.85 4.85 0 0 1-1.02-.08z"/>');
 const ICON_INST = si('<path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/>');
 
 const ICON_VERIFIED  = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke="#60a5fa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const ICON_USER_PLUS = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>`;
 const ICON_USER_MINUS= `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="22" y1="11" x2="16" y2="11"/></svg>`;
+const ICON_PENCIL    = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>`;
 
 // ——— Card / grid helpers ———
 
@@ -245,7 +246,7 @@ export function renderProfile(userId?: number): HTMLElement {
           <div class="profile__avatar-wrap">
             <div class="profile__avatar profile__skel"></div>
           </div>
-          <div class="profile__hero-meta">
+          <div class="profile__hero-info">
             <div class="profile__skel profile__skel--line" style="width:160px;height:24px;margin-bottom:10px"></div>
             <div class="profile__skel profile__skel--line" style="width:240px;height:13px;margin-bottom:8px"></div>
             <div class="profile__skel profile__skel--line" style="width:100px;height:13px"></div>
@@ -289,10 +290,6 @@ export function renderProfile(userId?: number): HTMLElement {
         || (channelData as any)?.channel?.cover
         || null;
 
-      window.dispatchEvent(new CustomEvent('discord:profileView', {
-        detail: { username: profile.login || '', avatarUrl: profile.avatar || null, isSelf: isMyProfile },
-      }));
-
       // Badge
       const badgeHtml = profile.badge?.image_url
         ? `<img class="profile__badge-img" src="${esc(profile.badge.image_url)}" alt="${esc(profile.badge.name || '')}" />`
@@ -330,7 +327,6 @@ export function renderProfile(userId?: number): HTMLElement {
       const socialMap = [
         { field: 'vk_page',      icon: ICON_VK,   cls: 'vk',   type: 'url',  url: `https://vk.com/${profile.vk_page}` },
         { field: 'tg_page',      icon: ICON_TG,   cls: 'tg',   type: 'url',  url: `https://t.me/${profile.tg_page}` },
-        { field: 'discord_page', icon: ICON_DS,   cls: 'ds',   type: 'copy', url: profile.discord_page },
         { field: 'tt_page',      icon: ICON_TT,   cls: 'tt',   type: 'url',  url: `https://tiktok.com/@${profile.tt_page}` },
         { field: 'inst_page',    icon: ICON_INST, cls: 'inst', type: 'url',  url: `https://instagram.com/${profile.inst_page}` },
       ];
@@ -350,6 +346,15 @@ export function renderProfile(userId?: number): HTMLElement {
             <span>${isFriend ? 'Удалить из друзей' : 'Добавить в друзья'}</span>
           </button>`;
       }
+
+      // Edit profile button (only for self)
+      const editBtnHtml = isMyProfile
+        ? `
+          <button type="button" class="profile__friend-btn profile__friend-btn--add" data-profile-edit="1">
+            ${ICON_PENCIL}
+            <span>Редактировать профиль</span>
+          </button>`
+        : '';
 
       // Ban / privacy
       const banHtml = profile.is_banned
@@ -458,7 +463,7 @@ export function renderProfile(userId?: number): HTMLElement {
                 </div>
                 ${statusHtml}
                 ${rolesHtml}
-                ${(socialsHtml || friendBtnHtml) ? `<div class="profile__social-actions">${friendBtnHtml}${socialsHtml}</div>` : ''}
+                ${(socialsHtml || friendBtnHtml || editBtnHtml) ? `<div class="profile__social-actions">${editBtnHtml}${friendBtnHtml}${socialsHtml}</div>` : ''}
               </div>
             </div>
           </div>
@@ -496,16 +501,14 @@ export function renderProfile(userId?: number): HTMLElement {
         btn.addEventListener('click', () => {
           const type = btn.getAttribute('data-stype');
           const val  = btn.getAttribute('data-sval') || '';
-          if (type === 'copy') {
-            navigator.clipboard.writeText(val).catch(() => {});
-            const toast = document.createElement('div');
-            toast.className = 'profile__toast';
-            toast.textContent = 'Discord скопирован!';
-            document.body.appendChild(toast);
-            setTimeout(() => { toast.classList.add('toast--out'); setTimeout(() => toast.remove(), 280); }, 2000);
-          } else {
-            window.electron?.openExternal(val);
-          }
+          window.electron?.openExternal(val);
+        });
+      });
+
+      // Bind "Edit profile" button (self) → открывает настройки на вкладке "Моя учётная запись"
+      wrap.querySelectorAll('[data-profile-edit]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          openSettingsModal(() => {}, 'account');
         });
       });
 

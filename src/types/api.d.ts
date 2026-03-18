@@ -90,6 +90,55 @@ export interface AnixApi {
   article: {
     info: (id: number) => Promise<{ article?: unknown }>;
   };
+
+  settings: {
+    getProfileSettings: () => Promise<{
+      code?: number;
+      avatar: string;
+      status: string;
+      vkPage: string;
+      tgPage: string;
+      is_private: boolean;
+      privacy_stats: number;
+      privacy_counts: number;
+      privacy_social: number;
+      privacy_friend_requests: number;
+      is_vk_bound: boolean;
+      is_login_changed: boolean;
+      is_change_login_banned: boolean;
+      is_change_avatar_banned: boolean;
+      channel_id: number;
+    }>;
+    setStatus: (status: string) => Promise<{ code?: number }>;
+    getSocial: () => Promise<{
+      code?: number;
+      vk_page: string;
+      tg_page: string;
+      inst_page: string;
+      tt_page: string;
+      discord_page: string;
+    }>;
+    setSocial: (data: {
+      vk_page: string;
+      tg_page: string;
+      inst_page: string;
+      tt_page: string;
+      discord_page: string;
+    }) => Promise<{ code?: number }>;
+    setPrivacyStats: (state: number) => Promise<{ code?: number }>;
+    setPrivacyCounts: (state: number) => Promise<{ code?: number }>;
+    setPrivacySocial: (state: number) => Promise<{ code?: number }>;
+    setPrivacyFriendRequests: (state: number) => Promise<{ code?: number }>;
+    getLoginInfo: () => Promise<{
+      code?: number;
+      login: string;
+      avatar: string;
+      is_change_avaliable: boolean;
+      last_change_at: number;
+      next_change_avaliable_at: number;
+    }>;
+    changeLogin: (newLogin: string) => Promise<{ code?: number }>;
+  };
 }
 
 declare global {

@@ -28,6 +28,13 @@ declare global {
   interface Window {
     electron?: {
       getAppVersion: () => Promise<string>;
+      getVersions: () => Promise<{
+        app: string;
+        electron: string;
+        chrome: string;
+        node: string;
+        anixartjs: string;
+      }>;
       window: ElectronWindowAPI;
       openPlayerWindow: (params: { releaseId: string; sourceId: string; ep: string; title: string; sourceName: string; dubberId?: string }) => Promise<void>;
       closePlayerWindow: () => void;
@@ -38,8 +45,8 @@ declare global {
       startUpdateDownload?: () => Promise<void>;
       installUpdate?: () => Promise<void>;
       getDeviceId: () => Promise<string>;
-      getSettings?: () => Promise<{ minimizeToTray: boolean }>;
-      saveSettings?: (settings: { minimizeToTray?: boolean }) => Promise<void>;
+      getSettings?: () => Promise<{ minimizeToTray: boolean; adaptiveAcceleration?: boolean }>;
+      saveSettings?: (settings: { minimizeToTray?: boolean; adaptiveAcceleration?: boolean }) => Promise<void>;
       // Lobby proposal IPC
       sendProposalToPlayer?: (data: Record<string, unknown>) => void;
       sendLobbyVote?: (proposalId: string, accept: boolean) => void;

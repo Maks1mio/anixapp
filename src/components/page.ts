@@ -6,12 +6,28 @@
 const SCROLLBAR_PROXIMITY = 40;
 const THUMB_MIN = 24;
 
-export function renderPage(): HTMLElement {
+export interface PageOptions {
+  /** ID for the scroll element. Defaults to 'content' (used by the router). */
+  scrollId?: string;
+  /** Extra CSS class(es) to add to the root .page element. */
+  extraClass?: string;
+  /** If true, omits the `page--padded` class. */
+  noPadding?: boolean;
+}
+
+export function renderPage(opts?: PageOptions): HTMLElement {
   const page = document.createElement('div');
-  page.className = 'page page--padded';
+  const classes = ['page'];
+  if (!opts?.noPadding) classes.push('page--padded');
+  if (opts?.extraClass) classes.push(opts.extraClass);
+  page.className = classes.join(' ');
 
   const scrollEl = document.createElement('div');
-  scrollEl.id = 'content';
+  if (opts?.scrollId !== undefined) {
+    if (opts.scrollId) scrollEl.id = opts.scrollId;
+  } else {
+    scrollEl.id = 'content';
+  }
   scrollEl.className = 'page__scroll';
   scrollEl.setAttribute('data-page-scroll', '');
 
@@ -61,10 +77,13 @@ export function renderPage(): HTMLElement {
     if (scrollHeight <= clientHeight) {
       vThumb.style.display = 'none';
       vVisible = false;
+      // Prevent phantom interactions when there's no overflow.
+      vTrack.style.pointerEvents = 'none';
       return;
     }
     vVisible = true;
     vThumb.style.display = 'block';
+    vTrack.style.pointerEvents = 'auto';
     const ratio = clientHeight / scrollHeight;
     const thumbHeight = Math.max(THUMB_MIN, Math.round(trackHeight * ratio));
     const maxTop = trackHeight - thumbHeight;
@@ -81,10 +100,13 @@ export function renderPage(): HTMLElement {
     if (overflowX === 'hidden' || scrollWidth <= clientWidth) {
       hThumb.style.display = 'none';
       hVisible = false;
+      // Prevent phantom interactions when there's no overflow.
+      hTrack.style.pointerEvents = 'none';
       return;
     }
     hVisible = true;
     hThumb.style.display = 'block';
+    hTrack.style.pointerEvents = 'auto';
     const ratio = clientWidth / scrollWidth;
     const thumbWidth = Math.max(THUMB_MIN, Math.round(trackWidth * ratio));
     const maxLeft = trackWidth - thumbWidth;
@@ -149,67 +171,145 @@ export function renderPage(): HTMLElement {
     thumb.addEventListener('animationend', onEnd);
   }
 
+  // Drag state helpers (fix "phantom drag" when pointerup is missed)
+  let dragPointerId: number | null = null;
+  let dragRaf = 0;
+  let dragAxis: 'v' | 'h' | null = null;
+  let dragGrabOffsetRatio = 0;
+  let dragThumbEl: HTMLElement | null = null;
+
+  function applyDraggingStyles(on: boolean) {
+    document.body.style.cursor = on ? 'grabbing' : '';
+    document.body.style.userSelect = on ? 'none' : '';
+  }
+
+  function cancelDrag() {
+    if (!dragAxis) return;
+    isDraggingV = false;
+    isDraggingH = false;
+    applyDraggingStyles(false);
+    if (dragAxis === 'v') addReleaseAnimation(vThumb, 'page__v-thumb--active', 'page__v-thumb--release');
+    if (dragAxis === 'h') addReleaseAnimation(hThumb, 'page__h-thumb--active', 'page__h-thumb--release');
+    try {
+      if (dragThumbEl && dragPointerId != null) dragThumbEl.releasePointerCapture?.(dragPointerId);
+    } catch (_) {}
+    dragAxis = null;
+    dragPointerId = null;
+    dragThumbEl = null;
+    if (dragRaf) cancelAnimationFrame(dragRaf);
+    dragRaf = 0;
+    document.removeEventListener('pointermove', onPointerMove, true);
+    document.removeEventListener('pointerup', onPointerUp, true);
+    document.removeEventListener('pointercancel', onPointerUp, true);
+    document.removeEventListener('contextmenu', onContextMenu, true);
+    document.removeEventListener('keydown', onKeyDown, true);
+    window.removeEventListener('blur', cancelDrag);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+  }
+
+  function onVisibilityChange() {
+    if (document.visibilityState !== 'visible') cancelDrag();
+  }
+
+  function onPointerMove(ev: PointerEvent) {
+    if (dragPointerId == null || ev.pointerId !== dragPointerId) return;
+    if (dragRaf) return;
+    dragRaf = requestAnimationFrame(() => {
+      dragRaf = 0;
+      if (dragAxis === 'v') {
+        updateVThumb();
+        const trackRect = vTrack.getBoundingClientRect();
+        const trackHeight = vTrack.clientHeight;
+        const currentThumbHeight = vThumb.offsetHeight;
+        const grabOffsetPx = Math.max(0, Math.min(currentThumbHeight, dragGrabOffsetRatio * currentThumbHeight));
+        const maxThumbTop = Math.max(0, trackHeight - currentThumbHeight);
+        const yInTrack = ev.clientY - trackRect.top;
+        const desiredThumbTop = Math.max(0, Math.min(maxThumbTop, yInTrack - grabOffsetPx));
+        const { scrollHeight, clientHeight } = scrollEl;
+        const maxScroll = Math.max(0, scrollHeight - clientHeight);
+        const denom = maxThumbTop || 1;
+        scrollEl.scrollTop = (desiredThumbTop / denom) * maxScroll;
+      } else if (dragAxis === 'h') {
+        updateHThumb();
+        const trackRect = hTrack.getBoundingClientRect();
+        const trackWidth = hTrack.clientWidth;
+        const currentThumbWidth = hThumb.offsetWidth;
+        const grabOffsetPx = Math.max(0, Math.min(currentThumbWidth, dragGrabOffsetRatio * currentThumbWidth));
+        const maxThumbLeft = Math.max(0, trackWidth - currentThumbWidth);
+        const xInTrack = ev.clientX - trackRect.left;
+        const desiredThumbLeft = Math.max(0, Math.min(maxThumbLeft, xInTrack - grabOffsetPx));
+        const { scrollWidth, clientWidth } = scrollEl;
+        const maxScroll = Math.max(0, scrollWidth - clientWidth);
+        const denom = maxThumbLeft || 1;
+        scrollEl.scrollLeft = (desiredThumbLeft / denom) * maxScroll;
+      }
+    });
+  }
+
+  function onPointerUp(ev: PointerEvent) {
+    if (dragPointerId == null || ev.pointerId !== dragPointerId) return;
+    cancelDrag();
+  }
+
+  function onContextMenu() {
+    cancelDrag();
+  }
+
+  function onKeyDown(ev: KeyboardEvent) {
+    if (ev.key === 'Escape') cancelDrag();
+  }
+
+  function onLostPointerCapture(ev: PointerEvent) {
+    if (dragPointerId == null || ev.pointerId !== dragPointerId) return;
+    cancelDrag();
+  }
+
+  function startDrag(axis: 'v' | 'h', e: PointerEvent) {
+    // Only primary pointer + left button (prevents phantom drags via right click / pen hover / etc.)
+    if (!e.isPrimary) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    // If there's no actual overflow, do not allow dragging at all.
+    if (axis === 'v') {
+      if (scrollEl.scrollHeight <= scrollEl.clientHeight) return;
+    } else {
+      const overflowX = typeof getComputedStyle !== 'undefined' ? getComputedStyle(scrollEl).overflowX : '';
+      if (overflowX === 'hidden' || scrollEl.scrollWidth <= scrollEl.clientWidth) return;
+    }
+    e.preventDefault();
+    dragAxis = axis;
+    dragPointerId = e.pointerId;
+    setScrollbarsVisible(true);
+    applyDraggingStyles(true);
+    if (axis === 'v') {
+      isDraggingV = true;
+      vThumb.classList.add('page__v-thumb--active');
+      const thumbRect = vThumb.getBoundingClientRect();
+      dragGrabOffsetRatio = thumbRect.height > 0 ? (e.clientY - thumbRect.top) / thumbRect.height : 0;
+      dragThumbEl = vThumb;
+      vThumb.setPointerCapture?.(e.pointerId);
+      vThumb.addEventListener('lostpointercapture', onLostPointerCapture, { once: true });
+    } else {
+      isDraggingH = true;
+      hThumb.classList.add('page__h-thumb--active');
+      const thumbRect = hThumb.getBoundingClientRect();
+      dragGrabOffsetRatio = thumbRect.width > 0 ? (e.clientX - thumbRect.left) / thumbRect.width : 0;
+      dragThumbEl = hThumb;
+      hThumb.setPointerCapture?.(e.pointerId);
+      hThumb.addEventListener('lostpointercapture', onLostPointerCapture, { once: true });
+    }
+    document.addEventListener('pointermove', onPointerMove, true);
+    document.addEventListener('pointerup', onPointerUp, true);
+    document.addEventListener('pointercancel', onPointerUp, true);
+    document.addEventListener('contextmenu', onContextMenu, true);
+    document.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('blur', cancelDrag);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+  }
+
   // Drag vertical thumb
-  vThumb.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-    isDraggingV = true;
-    setScrollbarsVisible(true);
-    document.body.style.cursor = 'grabbing';
-    document.body.style.userSelect = 'none';
-    vThumb.classList.add('page__v-thumb--active');
-    const startY = e.clientY;
-    const startScrollTop = scrollEl.scrollTop;
-    const trackHeight = vTrack.clientHeight;
-    const { scrollHeight, clientHeight } = scrollEl;
-    const maxScroll = scrollHeight - clientHeight;
-
-    function onMove(ev: MouseEvent) {
-      const dy = ev.clientY - startY;
-      const ratio = maxScroll / (trackHeight - vThumb.offsetHeight);
-      scrollEl.scrollTop = Math.max(0, Math.min(maxScroll, startScrollTop + dy * (ratio || 1)));
-    }
-    function onUp() {
-      isDraggingV = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      addReleaseAnimation(vThumb, 'page__v-thumb--active', 'page__v-thumb--release');
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    }
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  });
-
+  vThumb.addEventListener('pointerdown', (e) => startDrag('v', e));
   // Drag horizontal thumb
-  hThumb.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-    isDraggingH = true;
-    setScrollbarsVisible(true);
-    document.body.style.cursor = 'grabbing';
-    document.body.style.userSelect = 'none';
-    hThumb.classList.add('page__h-thumb--active');
-    const startX = e.clientX;
-    const startScrollLeft = scrollEl.scrollLeft;
-    const trackWidth = hTrack.clientWidth;
-    const { scrollWidth, clientWidth } = scrollEl;
-    const maxScroll = scrollWidth - clientWidth;
-
-    function onMove(ev: MouseEvent) {
-      const dx = ev.clientX - startX;
-      const ratio = maxScroll / (trackWidth - hThumb.offsetWidth);
-      scrollEl.scrollLeft = Math.max(0, Math.min(maxScroll, startScrollLeft + dx * (ratio || 1)));
-    }
-    function onUp() {
-      isDraggingH = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      addReleaseAnimation(hThumb, 'page__h-thumb--active', 'page__h-thumb--release');
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    }
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  });
+  hThumb.addEventListener('pointerdown', (e) => startDrag('h', e));
 
   requestAnimationFrame(updateScrollbars);
   return page;

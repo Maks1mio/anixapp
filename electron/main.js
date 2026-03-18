@@ -88,6 +88,24 @@ function getMinimizeToTray() {
   return false;
 }
 
+function getAdaptiveAcceleration() {
+  try {
+    const p = getConfigPath();
+    if (fs.existsSync(p)) {
+      const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+      // default: enabled
+      return data.adaptiveAcceleration !== false;
+    }
+  } catch (_) {}
+  return true;
+}
+
+// Apply acceleration preference early (before app is ready).
+// If disabled — turn off Chromium hardware acceleration (restart needed to re-enable).
+if (!getAdaptiveAcceleration()) {
+  app.disableHardwareAcceleration();
+}
+
 const AUTH_FILE = 'auth.json';
 const DEFAULT_BASE_URL = 'https://api-s.anixsekai.com';
 const LOG_DIR = 'logs';
@@ -345,7 +363,7 @@ ipcMain.on('window:close', () => {
 // ——— App settings ———
 
 ipcMain.handle('app:getSettings', () => {
-  return { minimizeToTray: getMinimizeToTray() };
+  return { minimizeToTray: getMinimizeToTray(), adaptiveAcceleration: getAdaptiveAcceleration() };
 });
 
 ipcMain.handle('app:saveSettings', (_, settings) => {
@@ -885,6 +903,21 @@ ipcMain.handle('shell:openExternal', (_, url) => {
 
 ipcMain.handle('app:getVersion', () => app.getVersion());
 
+ipcMain.handle('app:getVersions', () => {
+  let anixartjsVersion = '';
+  try {
+    const pkg = require('anixartjs/package.json');
+    anixartjsVersion = pkg.version || '';
+  } catch (_) {}
+  return {
+    app: app.getVersion(),
+    electron: process.versions.electron,
+    chrome: process.versions.chrome,
+    node: process.versions.node,
+    anixartjs: anixartjsVersion,
+  };
+});
+
 // Простая система скачивания обновления с GitHub Releases.
 // Определяем платформу и скачиваем соответствующий пакет.
 let pendingInstallerPath = null;
@@ -1347,6 +1380,103 @@ ipcMain.handle('anix:friends', async (_, profileId, page = 0) => {
     return data;
   } catch (err) {
     handleAnixError(err, 'friends');
+  }
+});
+
+// ——— Настройки профиля ———
+
+ipcMain.handle('anix:getProfileSettings', async () => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.settings.getCurrentProfileSettings();
+  } catch (err) {
+    handleAnixError(err, 'getProfileSettings');
+  }
+});
+
+ipcMain.handle('anix:setStatus', async (_, status) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.settings.setStatus(status);
+  } catch (err) {
+    handleAnixError(err, 'setStatus');
+  }
+});
+
+ipcMain.handle('anix:getSocial', async () => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.settings.getSocial();
+  } catch (err) {
+    handleAnixError(err, 'getSocial');
+  }
+});
+
+ipcMain.handle('anix:setSocial', async (_, data) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.settings.setSocial(data);
+  } catch (err) {
+    handleAnixError(err, 'setSocial');
+  }
+});
+
+ipcMain.handle('anix:setPrivacyStats', async (_, state) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.settings.setPrivacyStats(state);
+  } catch (err) {
+    handleAnixError(err, 'setPrivacyStats');
+  }
+});
+
+ipcMain.handle('anix:setPrivacyCounts', async (_, state) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.settings.setPrivacyCounts(state);
+  } catch (err) {
+    handleAnixError(err, 'setPrivacyCounts');
+  }
+});
+
+ipcMain.handle('anix:setPrivacySocial', async (_, state) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.settings.setPrivacySocial(state);
+  } catch (err) {
+    handleAnixError(err, 'setPrivacySocial');
+  }
+});
+
+ipcMain.handle('anix:setPrivacyFriendRequests', async (_, state) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.settings.setPrivacyFriendRequests(state);
+  } catch (err) {
+    handleAnixError(err, 'setPrivacyFriendRequests');
+  }
+});
+
+ipcMain.handle('anix:getLoginInfo', async () => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.settings.getLoginInfo();
+  } catch (err) {
+    handleAnixError(err, 'getLoginInfo');
+  }
+});
+
+ipcMain.handle('anix:changeLogin', async (_, newLogin) => {
+  try {
+    const client = getAnixart();
+    const res = await client.endpoints.settings.changeLogin(newLogin);
+    // Update cached login in config if successful
+    if (res && res.code === 0) {
+      saveConfig({ profileLogin: newLogin });
+    }
+    return res;
+  } catch (err) {
+    handleAnixError(err, 'changeLogin');
   }
 });
 

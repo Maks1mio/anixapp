@@ -2,7 +2,7 @@
 
 .view-profile,
 .view-profile-subpage {
-  max-width: 52rem;
+  max-width: 56rem;
   margin: 0 auto;
   width: 100%;
   padding-bottom: 3rem;
@@ -94,37 +94,38 @@
   }
 }
 
-// Инфо-блок: фон карточки, аватар торчит вверх
+// Инфо-блок: контент справа от аватарки
+// padding-top = (120px аватарка − 52px заход в баннер) + 12px gap = 80px
+//   → гарантирует что аватарка не перекрывает текст
+// padding-left = 20px отступ + 120px аватарка + 12px gap = 152px ≈ 9.5rem
+//   → текст начинается правее аватарки
 .profile__hero-body {
   position: relative;
   z-index: 2;
-  display: flex;
-  align-items: flex-start;
-  gap: 1.1rem;
-  padding: 1.25rem 1.1rem 1.25rem 8.5rem;
-  // аватар на 52px выезжает вверх в баннер
-  padding-top: 0;
+  padding: 1rem 1.25rem 1rem 9.5rem;
 }
 
+// Аватарка позиционирована абсолютно относительно .profile__hero-body
+// top: -52px = выступает на 52px ВВЕРХ за пределы hero-body → перекрывает баннер
+// Позиция фиксирована и НЕ зависит от количества текста в info-блоке
 .profile__avatar-wrap {
-  flex-shrink: 0;
-  position: relative;
+  position: absolute;
+  left: 1rem;
+  bottom: 1rem;
+  width: 120px;
+  height: 120px;
   z-index: 3;
-  left: -7.5rem;
-  bottom: 1.25rem;
 }
 
 .profile__avatar {
-  position: absolute;
-  width: 120px;
-  height: 120px;
+  width: 100%;
+  height: 100%;
   border-radius: 22%;
   background-size: cover;
   background-position: center;
-  background-color: $color-surface-hover;
-  box-shadow:
-    0 0 0 8px #141414;
+  background-color: #1a1a1a;
   display: block;
+  outline: 6px solid #141414;
 
   &--placeholder,
   &--empty {
@@ -134,19 +135,18 @@
 
 .profile__online-dot {
   position: absolute;
-  bottom: -120px;
-  right: -120px;
-  width: 24px;
-  height: 24px;
+  bottom: -2px;
+  right: -2px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: #22c55e;
-  outline: 8px solid #141414;
+  outline: 4px solid $color-surface;
 }
 
 .profile__hero-info {
   flex: 1;
   min-width: 0;
-  padding-top: 0.6rem;
   display: flex;
   flex-direction: column;
   gap: 0.28rem;
@@ -505,7 +505,7 @@
 
 // ——— Section headers ———
 .profile__section {
-  margin-bottom: 1.75rem;
+  margin: 1.25rem 1.2rem;
 }
 
 .profile__section-hdr {

@@ -70,12 +70,22 @@ export function renderLayout(onLogout: () => void): HTMLElement {
         <span class="titlebar__update-dot" aria-hidden="true"></span>
         <span class="tooltip tooltip--animated" data-update-tooltip>Доступно обновление приложения</span>
       </button>
-      <button type="button" class="titlebar__menu-item" id="titlebar-lobby" aria-label="Совместный просмотр">${iconUsers(18)}</button>
-      <button type="button" class="titlebar__menu-item" id="titlebar-notifications" aria-label="Уведомления">${iconBell(18)}</button>
-      <button type="button" class="titlebar__menu-item titlebar__menu-item--avatar" id="titlebar-profile" aria-label="Профиль">
-        <span class="titlebar__avatar titlebar__avatar--placeholder">${iconUser(18)}</span>
+      <button type="button" class="titlebar__menu-item tooltip-trigger" id="titlebar-lobby" aria-label="Совместный просмотр">
+        ${iconUsers(18)}
+        <span class="tooltip tooltip--animated">Совместный просмотр</span>
       </button>
-      <button type="button" class="titlebar__menu-item" id="titlebar-settings" aria-label="Настройки">${iconSettings(18)}</button>
+      <button type="button" class="titlebar__menu-item tooltip-trigger" id="titlebar-notifications" aria-label="Уведомления">
+        ${iconBell(18)}
+        <span class="tooltip tooltip--animated">Уведомления</span>
+      </button>
+      <button type="button" class="titlebar__menu-item titlebar__menu-item--avatar tooltip-trigger" id="titlebar-profile" aria-label="Профиль">
+        <span class="titlebar__avatar titlebar__avatar--placeholder">${iconUser(18)}</span>
+        <span class="tooltip tooltip--animated">Профиль</span>
+      </button>
+      <button type="button" class="titlebar__menu-item tooltip-trigger" id="titlebar-settings" aria-label="Настройки">
+        ${iconSettings(18)}
+        <span class="tooltip tooltip--animated">Настройки</span>
+      </button>
     `;
     let updateInfo: { version: string; url: string } | null = null;
     let updateDownloading = false;
@@ -181,16 +191,17 @@ export function renderLayout(onLogout: () => void): HTMLElement {
 
   const navLinks = SIDEBAR_NAV.map(
     ({ href, label, icon }) =>
-      `<a href="${href}" class="sidebar__link" data-nav aria-label="${label}">${icon}</a>`,
+      `<a href="${href}" class="sidebar__link tooltip-trigger" data-nav aria-label="${label}">
+        ${icon}
+        <span class="tooltip tooltip--animated tooltip--right">${label}</span>
+      </a>`,
   ).join('');
 
   sidebar.innerHTML = `
     <nav class="sidebar__nav">
       ${navLinks}
     </nav>
-    <div class="sidebar__bottom">
-      <button type="button" class="sidebar__link sidebar__link--btn sidebar__link--logout" id="sidebar-logout" aria-label="Выйти">${iconLogOut(18)}</button>
-    </div>
+    <div class="sidebar__bottom"></div>
   `;
 
   const contentPanel = document.createElement('div');
@@ -222,11 +233,7 @@ export function renderLayout(onLogout: () => void): HTMLElement {
     });
   });
 
-  sidebar.querySelector('#sidebar-logout')?.addEventListener('click', () => {
-    if (window.anixApi) {
-      window.anixApi.auth.logout().then(onLogout);
-    }
-  });
+  // Logout button removed (available in settings).
 
   if (window.anixApi) {
     window.anixApi.profile

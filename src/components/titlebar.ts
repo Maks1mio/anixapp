@@ -14,8 +14,14 @@ export function renderTitleBar(): HTMLElement {
       <span class="titlebar__title">AnixApp</span>
     </div>
     <div class="titlebar__nav" id="titlebar-nav">
-      <button type="button" class="titlebar__nav-btn" id="titlebar-back" aria-label="Назад">${iconArrowLeft(16)}</button>
-      <button type="button" class="titlebar__nav-btn" id="titlebar-forward" aria-label="Вперёд">${iconArrowRight(16)}</button>
+      <button type="button" class="titlebar__nav-btn tooltip-trigger" id="titlebar-back" aria-label="Назад">
+        ${iconArrowLeft(16)}
+        <span class="tooltip tooltip--animated">Назад</span>
+      </button>
+      <button type="button" class="titlebar__nav-btn tooltip-trigger" id="titlebar-forward" aria-label="Вперёд">
+        ${iconArrowRight(16)}
+        <span class="tooltip tooltip--animated">Вперёд</span>
+      </button>
     </div>
     <div class="titlebar__search" id="titlebar-search-wrap">
       <span class="titlebar__search-icon">${iconSearch(14)}</span>
@@ -27,9 +33,15 @@ export function renderTitleBar(): HTMLElement {
     <div class="titlebar__menu" id="titlebar-menu"></div>
     ${hasWindowApi ? `
     <div class="titlebar__controls">
-      <button type="button" class="titlebar__btn titlebar__btn--min" aria-label="Свернуть"></button>
-      <button type="button" class="titlebar__btn titlebar__btn--max" aria-label="Развернуть"></button>
-      <button type="button" class="titlebar__btn titlebar__btn--close" aria-label="Закрыть"></button>
+      <button type="button" class="titlebar__btn titlebar__btn--min tooltip-trigger" aria-label="Свернуть">
+        <span class="tooltip tooltip--animated">Свернуть</span>
+      </button>
+      <button type="button" class="titlebar__btn titlebar__btn--max tooltip-trigger" aria-label="Развернуть">
+        <span class="tooltip tooltip--animated">Развернуть</span>
+      </button>
+      <button type="button" class="titlebar__btn titlebar__btn--close tooltip-trigger" aria-label="Закрыть">
+        <span class="tooltip tooltip--animated">Закрыть</span>
+      </button>
     </div>
     ` : ''}
   `;

@@ -1,6 +1,6 @@
 import { navigate } from '../app';
 import { renderPage } from '../components/page';
-import { iconPlay, iconBookmark, iconDownload, iconCheck } from '../components/icons';
+import { iconPlay, iconBookmark, iconDownload, iconCheck, iconUser } from '../components/icons';
 
 interface EpisodeNotification {
   type: 'episode';
@@ -127,6 +127,15 @@ function escHtml(s: string): string {
   return div.innerHTML;
 }
 
+function safeUrl(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const s = raw.trim();
+  if (!s) return '';
+  // allow only http(s) urls for inline styles
+  if (s.startsWith('http://') || s.startsWith('https://')) return s;
+  return '';
+}
+
 export function openNotificationsModal(): void {
   // Если уже открыта панель уведомлений — просим существующий экземпляр
   // красиво закрыться через его own close(), чтобы отработала анимация.
@@ -250,6 +259,7 @@ export function openNotificationsModal(): void {
         let metaLeft = '';
         let image = '';
         let releaseId: number | undefined;
+        let profileId: number | undefined;
         let markerHtml = '';
 
         if (type === 'episode') {
@@ -279,6 +289,24 @@ export function openNotificationsModal(): void {
           markerHtml = `<span class="notifications-modal__marker notifications-modal__marker--related">${iconBookmark(
             13,
           )}</span>`;
+        } else if (type === 'friend') {
+          const p = (raw as any).by_profile;
+          profileId = p?.id != null ? Number(p.id) : undefined;
+          image = safeUrl(p?.avatar);
+          const login = String(p?.login || 'Пользователь');
+          title = login;
+          const status = String((raw as any).status || '');
+          if (status === 'REQUEST') {
+            subtitle = 'Заявка в друзья';
+            markerHtml = `<span class="notifications-modal__marker notifications-modal__marker--friend">${iconUser(12)}</span>`;
+          } else if (status === 'ACCEPT') {
+            subtitle = 'Принял(а) вашу заявку';
+            markerHtml = `<span class="notifications-modal__marker notifications-modal__marker--friend-accept">${iconCheck(12)}</span>`;
+          } else {
+            subtitle = 'Уведомление о друзьях';
+            markerHtml = `<span class="notifications-modal__marker notifications-modal__marker--friend">${iconUser(12)}</span>`;
+          }
+          metaLeft = 'Друзья';
         } else if ((raw as any).release) {
           const rel = (raw as any).release;
           releaseId = rel?.id;
@@ -317,6 +345,11 @@ export function openNotificationsModal(): void {
           item.addEventListener('click', () => {
             close();
             navigate(`/release/${releaseId}`);
+          });
+        } else if (profileId) {
+          item.addEventListener('click', () => {
+            close();
+            navigate(`/profile/${profileId}`);
           });
         }
 

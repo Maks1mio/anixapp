@@ -177,6 +177,23 @@
   object-fit: contain;
 }
 
+// Badge animation (Lottie JSON): same size as image badge
+.profile__badge-lottie {
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+
+  svg,
+  canvas {
+    height: 22px;
+    width: auto;
+    display: block;
+  }
+}
+
 // Level badge e.g. "3ур"
 .profile__level {
   display: inline-flex;

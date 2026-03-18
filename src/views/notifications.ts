@@ -31,16 +31,29 @@ export function renderNotifications(): HTMLElement {
         listEl.innerHTML = '<p class="notifications__empty">Уведомлений пока нет.</p>';
         return;
       }
+      content.sort((a, b) => (Number(b?.timestamp ?? 0) - Number(a?.timestamp ?? 0)));
       const list = document.createElement('ul');
       list.className = 'notifications__list';
       content.forEach((n) => {
         const li = document.createElement('li');
         li.className = 'notifications__item';
-        const title = n.title || n.text || 'Уведомление';
+        let title = n.title || n.text || 'Уведомление';
+        let subtitle = '';
+        if (n?.type === 'friend') {
+          const login = n?.by_profile?.login ? String(n.by_profile.login) : 'Пользователь';
+          title = login;
+          const status = String(n?.status || '');
+          subtitle = status === 'REQUEST'
+            ? 'Заявка в друзья'
+            : status === 'ACCEPT'
+              ? 'Принял(а) вашу заявку'
+              : 'Уведомление о друзьях';
+        }
         const time = n.time || n.timestamp;
         li.innerHTML = `
           <div class="notifications__item-main">
             <span class="notifications__item-title">${escapeHtml(String(title))}</span>
+            ${subtitle ? `<span class="notifications__item-sub">${escapeHtml(subtitle)}</span>` : ''}
             ${time ? `<span class="notifications__item-time">${new Date(time * 1000).toLocaleString()}</span>` : ''}
           </div>
         `;

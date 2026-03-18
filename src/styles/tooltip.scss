@@ -6,12 +6,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  cursor: help;
+  cursor: pointer;
   color: $color-text-muted;
   flex-shrink: 0;
 
-  &:hover,
-  &:focus {
+  &:hover {
     color: $color-text;
   }
 }
@@ -44,8 +43,18 @@ $tooltip-gap: 8px;
   transition: opacity 0.2s ease, visibility 0.2s;
 }
 
-.tooltip-trigger:hover .tooltip,
-.tooltip-trigger:focus .tooltip {
+// Tooltip справа от триггера (для сайдбара-иконок)
+.tooltip--right {
+  bottom: auto;
+  left: 100%;
+  top: 50%;
+  margin-bottom: 0;
+  margin-top: 0;
+  margin-left: $tooltip-gap;
+  transform: translateY(-50%);
+}
+
+.tooltip-trigger:hover .tooltip {
   opacity: 1;
   visibility: visible;
 }

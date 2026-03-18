@@ -59,6 +59,11 @@ function posterUrl(raw: string | undefined): string {
   return `https://s.anixmirai.com/posters/${s}`;
 }
 
+function isLottieBadgeUrl(url: string): boolean {
+  const u = url.trim().toLowerCase();
+  return u.endsWith('.json');
+}
+
 // ——— Inline SVG social icons ———
 
 function si(path: string, size = 16): string {
@@ -238,6 +243,14 @@ export function renderProfile(userId?: number): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'view view-profile';
 
+  let badgeAnim: { destroy?: () => void } | null = null;
+  let badgeAnimToken = 0;
+
+  const destroyBadgeAnim = () => {
+    if (badgeAnim?.destroy) badgeAnim.destroy();
+    badgeAnim = null;
+  };
+
   wrap.innerHTML = `
     <div class="profile profile--loading">
       <div class="profile__hero">
@@ -291,8 +304,13 @@ export function renderProfile(userId?: number): HTMLElement {
         || null;
 
       // Badge
-      const badgeHtml = profile.badge?.image_url
-        ? `<img class="profile__badge-img" src="${esc(profile.badge.image_url)}" alt="${esc(profile.badge.name || '')}" />`
+      const badgeUrlRaw = (profile.badge?.image_url as string | undefined) ?? '';
+      const badgeName = (profile.badge?.name as string | undefined) ?? '';
+      const badgeUrl = badgeUrlRaw?.trim?.() ? badgeUrlRaw.trim() : '';
+      const badgeHtml = badgeUrl
+        ? (isLottieBadgeUrl(badgeUrl)
+          ? `<span class="profile__badge-lottie" data-badge-lottie="${esc(badgeUrl)}" title="${esc(badgeName)}" aria-label="${esc(badgeName)}"></span>`
+          : `<img class="profile__badge-img" src="${esc(badgeUrl)}" alt="${esc(badgeName)}" />`)
         : '';
 
       // Level
@@ -437,6 +455,9 @@ export function renderProfile(userId?: number): HTMLElement {
 
       // ——— Render ———
       const renderProfileView = (coverUrl: string | null) => {
+        destroyBadgeAnim();
+        const myToken = ++badgeAnimToken;
+
         const coverHtml = coverUrl
           ? `<div class="profile__hero-cover"><img src="${esc(coverUrl)}" alt="${esc(profile.login || 'Профиль')}" /></div>`
           : '';
@@ -476,6 +497,43 @@ export function renderProfile(userId?: number): HTMLElement {
           ${historyHtml}
           <div id="profile-friends-wrap"></div>
         </div>`;
+
+        const badgeEl = wrap.querySelector<HTMLElement>('[data-badge-lottie]');
+        if (badgeEl) {
+          const url = badgeEl.getAttribute('data-badge-lottie') || '';
+          const target = badgeEl;
+          target.textContent = '';
+
+          (async () => {
+            try {
+              const res = await fetch(url, { cache: 'force-cache' });
+              if (!res.ok) throw new Error(`badge fetch failed: ${res.status}`);
+              const json = await res.json();
+              if (!json || typeof json !== 'object') throw new Error('badge json invalid');
+              if ((json as any).tgs !== 1 && !(json as any).layers) {
+                throw new Error('badge json not lottie');
+              }
+
+              const mod: any = await import('lottie-web');
+              const lottie = mod?.default ?? mod;
+              if (!lottie?.loadAnimation) throw new Error('lottie-web missing loadAnimation');
+              if (myToken !== badgeAnimToken) return;
+
+              badgeAnim = lottie.loadAnimation({
+                container: target,
+                renderer: 'svg',
+                loop: true,
+                autoplay: true,
+                animationData: json,
+                rendererSettings: {
+                  preserveAspectRatio: 'xMidYMid meet',
+                },
+              });
+            } catch (_e) {
+              // If badge failed to load, just keep it empty (no layout shift).
+            }
+          })();
+        }
       };
 
       renderProfileView(coverFromData);

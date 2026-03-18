@@ -7,6 +7,9 @@ function updateTooltipPlacement(trigger: HTMLElement): void {
   const tooltip = trigger.querySelector<HTMLElement>('.tooltip');
   if (!tooltip) return;
 
+  // Для "правых" тултипов (например, сайдбар) не применяем логику above/below + dx
+  if (tooltip.classList.contains('tooltip--right')) return;
+
   const triggerRect = trigger.getBoundingClientRect();
   const vw = window.innerWidth;
   const vh = window.innerHeight;

@@ -126,6 +126,15 @@
   gap: 0.25rem;
 }
 
+.release-card-h__my-vote {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #fff;
+  font: inherit;
+  white-space: nowrap;
+}
+
 .release-card-h__meta-dot {
   color: #888;
   margin: 0 0.1rem;
@@ -192,3 +201,19 @@
   vertical-align: middle;
   display: inline-block;
 }
+
+// Личная оценка пользователя (строка под заголовком)
+.release-card-h__my-vote-label {
+  font-size: inherit;
+  color: inherit;
+  font-weight: 500;
+}
+
+.release-card-h__my-vote-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.release-card-h__star--on  { color: #fbbf24; }
+.release-card-h__star--off { color: rgba(255, 255, 255, 0.15); }

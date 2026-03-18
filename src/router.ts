@@ -6,6 +6,7 @@ import { renderCatalog } from './views/catalog';
 import { renderBookmarks } from './views/bookmarks';
 import { renderNotifications } from './views/notifications';
 import { renderProfile } from './views/profile';
+import { renderProfileVotes, renderProfileFriends } from './views/profileMore';
 import { renderSearch } from './views/search';
 import { renderCollection } from './views/collection';
 import { renderWatch } from './views/watch';
@@ -111,6 +112,32 @@ export function handleRoute(container: HTMLElement): void {
 
   if (path === '/profile') {
     container.appendChild(renderProfile());
+    updateSidebarActive();
+    return;
+  }
+
+  if (path === '/profile/votes') {
+    container.appendChild(renderProfileVotes());
+    updateSidebarActive();
+    return;
+  }
+
+  if (path === '/profile/friends') {
+    container.appendChild(renderProfileFriends());
+    updateSidebarActive();
+    return;
+  }
+
+  const profileVotesMatch = path.match(/^\/profile\/(\d+)\/votes$/);
+  if (profileVotesMatch) {
+    container.appendChild(renderProfileVotes(parseInt(profileVotesMatch[1], 10)));
+    updateSidebarActive();
+    return;
+  }
+
+  const profileFriendsMatch = path.match(/^\/profile\/(\d+)\/friends$/);
+  if (profileFriendsMatch) {
+    container.appendChild(renderProfileFriends(parseInt(profileFriendsMatch[1], 10)));
     updateSidebarActive();
     return;
   }

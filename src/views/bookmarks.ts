@@ -258,5 +258,9 @@ export function renderBookmarks(): HTMLElement {
   requestAnimationFrame(attachScrollListener);
 
   loadTab('favorites');
+  window.addEventListener('anix:cardLayoutChanged', () => {
+    if (!wrap.isConnected) return;
+    loadTab(currentTab);
+  });
   return wrap;
 }

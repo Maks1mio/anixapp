@@ -270,6 +270,7 @@ export function renderUikit(): HTMLElement {
   const cardDemo = wrap.querySelector('#uikit-release-card-demo');
   const ratingRange = wrap.querySelector('#uikit-rating-range') as HTMLInputElement | null;
   const ratingValueEl = wrap.querySelector('#uikit-rating-value') as HTMLElement | null;
+  const miniDemo = wrap.querySelector('#uikit-mini-cards-demo');
   if (cardDemo) {
     const baseCardData: ReleaseCardData = {
       id: 2,
@@ -322,7 +323,6 @@ export function renderUikit(): HTMLElement {
   }
 
   // Демо мини-карточки (вертикальные)
-  const miniDemo = wrap.querySelector('#uikit-mini-cards-demo');
   if (miniDemo) {
     const samples: ReleaseCardData[] = [
       {
@@ -425,6 +425,17 @@ export function renderUikit(): HTMLElement {
         navigate(a.getAttribute('href')!);
       }
     });
+  });
+
+  window.addEventListener('anix:cardLayoutChanged', () => {
+    if (!wrap.isConnected || !miniDemo) return;
+    const layout = getCardLayout();
+    miniDemo.innerHTML = '';
+    const samples: ReleaseCardData[] = [
+      { id: 1, titleRu: 'Кае не страшно', poster: 'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg', rating: 4.7, episodesReleased: 10, episodesTotal: 12, isFavorite: true },
+      { id: 2, titleRu: 'Ты и я — полные противоположности', poster: 'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg', rating: 2.8, episodesReleased: 10, episodesTotal: 12 },
+    ];
+    miniDemo.appendChild(renderReleaseCardsGrid({ items: samples, layout, className: layout === 'mini' ? 'release-cards-grid' : '' }));
   });
 
   return wrap;

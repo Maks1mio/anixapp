@@ -18,6 +18,20 @@ const LIST_STATUS_TO_TYPE = {
   dropped: BookmarkType.Dropped,
 };
 
+// ——— Single instance lock ———
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
+
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 let mainWindow = null;
 let playerWindowRef = null;
@@ -52,9 +66,26 @@ function getIconPath() {
   const base = path.join(__dirname, '..', 'public', 'logo');
   const ico = path.join(base, 'icon.ico');
   const png = path.join(base, '512x512.png');
+  // On Linux prefer PNG — ICO files may not render correctly in system tray
+  if (process.platform === 'linux') {
+    if (fs.existsSync(png)) return png;
+    if (fs.existsSync(ico)) return ico;
+    return null;
+  }
   if (fs.existsSync(ico)) return ico;
   if (fs.existsSync(png)) return png;
   return null;
+}
+
+function getMinimizeToTray() {
+  try {
+    const p = getConfigPath();
+    if (fs.existsSync(p)) {
+      const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+      return data.minimizeToTray === true;
+    }
+  } catch (_) {}
+  return false;
 }
 
 const AUTH_FILE = 'auth.json';
@@ -166,16 +197,24 @@ function createTray() {
   if (!iconPath) return;
   const image = nativeImage.createFromPath(iconPath);
   if (image.isEmpty()) return;
-  tray = new Tray(image.resize({ width: 16, height: 16 }));
+  // Linux tray icons are typically 22px; Windows/macOS use 16px
+  const traySize = process.platform === 'linux' ? 22 : 16;
+  tray = new Tray(image.resize({ width: traySize, height: traySize }));
   tray.setToolTip('AnixApp');
-  tray.on('click', () => {
+
+  const showWindow = () => {
     if (mainWindow) {
       mainWindow.show();
       mainWindow.focus();
     }
-  });
+  };
+
+  tray.on('click', showWindow);
+  // On some Linux DEs (e.g. KDE) only double-click fires; add it as fallback
+  tray.on('double-click', showWindow);
+
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Показать', click: () => mainWindow && mainWindow.show() },
+    { label: 'Показать', click: showWindow },
     { type: 'separator' },
     { label: 'Выход', click: () => { isQuitting = true; app.quit(); } },
   ]));
@@ -212,8 +251,11 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => mainWindow.show());
   mainWindow.on('close', (e) => {
     if (!isQuitting) {
-      e.preventDefault();
-      mainWindow.hide();
+      if (getMinimizeToTray()) {
+        e.preventDefault();
+        mainWindow.hide();
+      }
+      // If minimizeToTray is off — let the window close naturally (quit)
     }
   });
   mainWindow.on('closed', () => { mainWindow = null; });
@@ -291,7 +333,26 @@ ipcMain.on('window:maximize', () => {
   if (mainWindow?.isMaximized()) mainWindow.unmaximize();
   else mainWindow?.maximize();
 });
-ipcMain.on('window:close', () => mainWindow?.hide());
+ipcMain.on('window:close', () => {
+  if (getMinimizeToTray()) {
+    mainWindow?.hide();
+  } else {
+    isQuitting = true;
+    app.quit();
+  }
+});
+
+// ——— App settings ———
+
+ipcMain.handle('app:getSettings', () => {
+  return { minimizeToTray: getMinimizeToTray() };
+});
+
+ipcMain.handle('app:saveSettings', (_, settings) => {
+  if (settings && typeof settings === 'object') {
+    saveConfig(settings);
+  }
+});
 
 // ——— Auth ———
 
@@ -1087,6 +1148,16 @@ ipcMain.handle('anix:channelById', async (_, id) => {
     return data;
   } catch (err) {
     handleAnixError(err, 'channelById');
+  }
+});
+
+ipcMain.handle('anix:channelBlog', async (_, id) => {
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.channel.getBlog(id);
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'channelBlog');
   }
 });
 

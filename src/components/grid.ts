@@ -36,6 +36,8 @@ export function renderReleaseCardsGrid(options: ReleaseCardsGridOptions): HTMLEl
 
   if (effectiveLayout === 'mini') {
     root.classList.add('release-cards-grid');
+  } else {
+    root.classList.add('release-cards-grid-root--wide');
   }
 
   items.forEach((data) => {

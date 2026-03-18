@@ -1,168 +1,580 @@
 @use 'variables' as *;
 
-.view-profile {
-  max-width: 50rem;
+.view-profile,
+.view-profile-subpage {
+  max-width: 52rem;
   margin: 0 auto;
   width: 100%;
+  padding-bottom: 3rem;
 }
 
-// ——— Hero ———
+.view-profile-subpage {
+  max-width: 56rem;
+}
+
+// ——— Skeleton ———
+@keyframes skel-shimmer {
+  from {
+    background-position: -400px 0;
+  }
+
+  to {
+    background-position: 400px 0;
+  }
+}
+
+.profile__skel {
+  background: $color-surface;
+  border-radius: $radius-md;
+  overflow: hidden;
+
+  &--line {
+    background: linear-gradient(90deg,
+        $color-surface-hover 25%,
+        #202020 50%,
+        $color-surface-hover 75%);
+    background-size: 800px 100%;
+    animation: skel-shimmer 1.4s infinite linear;
+    border-radius: $radius-sm;
+    height: 1em;
+    display: block;
+  }
+}
+
+// ——— Hero: Discord-style (баннер сверху + инфо снизу) ———
 .profile__hero {
+  position: relative;
+  border-radius: $radius-lg;
+  background: $color-surface;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+// Баннер-изображение — только верхняя часть
+.profile__hero-cover {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 175px;
+  overflow: hidden;
+  border-radius: $radius-lg $radius-lg 0 0;
+}
+
+.profile__hero-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+  display: block;
+}
+
+// Сама зона баннера (задаёт высоту + плейсхолдер без обложки)
+.profile__hero-banner {
+  position: relative;
+  width: 100%;
+  height: 175px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #12162e 40%, #0d1520 100%);
+  flex-shrink: 0;
+  border-radius: $radius-lg $radius-lg 0 0;
+  overflow: hidden;
+
+  &--with-cover {
+    background: transparent;
+  }
+
+  // Тонкий градиент только у нижнего края — плавный переход в инфо-блок
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 50px;
+    background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.3));
+  }
+}
+
+// Инфо-блок: фон карточки, аватар торчит вверх
+.profile__hero-body {
+  position: relative;
+  z-index: 2;
   display: flex;
-  gap: 1.5rem;
   align-items: flex-start;
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid $color-border;
-  margin-bottom: 1.5rem;
+  gap: 1.1rem;
+  padding: 1.25rem 1.1rem 1.25rem 8.5rem;
+  // аватар на 52px выезжает вверх в баннер
+  padding-top: 0;
 }
 
 .profile__avatar-wrap {
   flex-shrink: 0;
   position: relative;
+  z-index: 3;
+  left: -7.5rem;
+  bottom: 1.25rem;
 }
 
 .profile__avatar {
-  width: 96px;
-  height: 96px;
-  border-radius: 50%;
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border-radius: 22%;
   background-size: cover;
   background-position: center;
   background-color: $color-surface-hover;
-  &--placeholder { background: $color-border; }
+  box-shadow:
+    0 0 0 8px #141414;
+  display: block;
+
+  &--placeholder,
+  &--empty {
+    background: $color-border;
+  }
 }
 
-.profile__avatar-online {
+.profile__online-dot {
   position: absolute;
-  bottom: 4px;
-  right: 4px;
-  width: 16px;
-  height: 16px;
+  bottom: -120px;
+  right: -120px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  background: $color-success;
-  border: 3px solid $color-bg;
+  background: #22c55e;
+  outline: 8px solid #141414;
 }
 
 .profile__hero-info {
-  min-width: 0;
   flex: 1;
+  min-width: 0;
+  padding-top: 0.6rem;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  padding-top: 0.25rem;
+  gap: 0.28rem;
 }
 
 .profile__name-row {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.45rem;
+  flex-wrap: wrap;
 }
 
 .profile__name {
   margin: 0;
-  font-size: 1.65rem;
-  font-weight: 700;
-  line-height: 1.2;
+  font-size: 1.45rem;
+  font-weight: 800;
+  line-height: 1.15;
   color: $color-text;
+  letter-spacing: 0.01em;
 }
 
-.profile__badge {
+// Badge image: small inline icon
+.profile__badge-img {
+  height: 22px;
+  width: auto;
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+// Level badge e.g. "3ур"
+.profile__level {
   display: inline-flex;
   align-items: center;
-  img { height: 20px; width: auto; display: block; }
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.13rem 0.42rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.65);
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.profile__verified {
+  display: inline-flex;
+  align-items: center;
+  color: #60a5fa;
+  filter: drop-shadow(0 0 4px rgba(96, 165, 250, 0.5));
+
+  svg {
+    display: block;
+  }
+}
+
+.profile__rep {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.14rem 0.42rem;
+  border-radius: 999px;
+  line-height: 1;
+
+  &--pos {
+    background: rgba(34, 197, 94, 0.18);
+    color: #4ade80;
+  }
+
+  &--neg {
+    background: rgba(239, 68, 68, 0.18);
+    color: #f87171;
+  }
+
+  &--zero {
+    background: rgba(255, 255, 255, 0.08);
+    color: $color-text-muted;
+  }
+}
+
+.profile__online-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: $color-success;
+
+  &::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 6px currentColor;
+    flex-shrink: 0;
+  }
+}
+
+.profile__activity-text {
+  font-size: 0.8rem;
+  color: $color-text-muted;
+  margin: 0;
 }
 
 .profile__status {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: $color-text-muted;
+  font-style: italic;
   line-height: 1.4;
-  &--muted { font-style: italic; }
 }
 
+// ——— Roles ———
 .profile__roles {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+  margin-top: 0.1rem;
 }
 
 .profile__role {
-  font-size: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  padding: 0.1rem 0.5rem;
-  border-radius: $radius-sm;
-  background: rgba(255,255,255,0.06);
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  border: 1.5px solid;
+  background: rgba(255, 255, 255, 0.04);
 }
 
-.profile__meta-line {
+.profile__role-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+// ——— Social icon buttons ———
+.profile__socials {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
+}
+
+.profile__social {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  color: #fff;
+  transition: transform $transition, filter $transition;
+  flex-shrink: 0;
+
+  svg {
+    display: block;
+    pointer-events: none;
+  }
+
+  &:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.18);
+  }
+
+  &--vk {
+    background: #0077FF;
+  }
+
+  &--tg {
+    background: #26A5E4;
+  }
+
+  &--ds {
+    background: #5865F2;
+  }
+
+  &--tt {
+    background: #111;
+  }
+
+  &--inst {
+    background: linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+  }
+}
+
+// ——— profileMore: header user row (avatar + name) ———
+.profile-more__user {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.profile-more__avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  background-color: $color-surface-hover;
+  flex-shrink: 0;
+}
+
+.profile-more__friends-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  padding: 0 0.35rem;
+  margin-left: 0.35rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: $color-text-muted;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+// ——— Social actions row (socials + friend btn on same line) ———
+.profile__social-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.8rem;
-  color: $color-text-muted;
-  margin-top: 0.15rem;
-}
+  margin-top: 0.2rem;
 
-.profile__meta-dot { opacity: 0.3; }
+  .profile__socials {
+    margin-top: 0;
+    flex-wrap: wrap;
+  }
 
-.profile__online {
-  color: $color-success;
-  font-weight: 600;
-}
-
-// ——— Social links (inside hero) ———
-.profile__socials {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-top: 0.25rem;
-}
-
-.profile__social-link {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.2rem 0.55rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: $color-text-muted;
-  background: $color-surface-hover;
-  border-radius: $radius-sm;
-  transition: background $transition, color $transition;
-
-  &:hover {
-    background: $color-border;
-    color: $color-text;
+  .profile__friend-btn {
+    height: 34px;
+    padding: 0 0.75rem;
+    border-radius: 8px;
+    margin-top: 0;
+    align-self: auto;
   }
 }
 
-// ——— Stats ———
-.profile__stats-grid { margin-bottom: 1.5rem; }
+// ——— Friend button ———
+.profile__friend-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 1rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+  border-radius: $radius-sm;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: background $transition, border-color $transition, transform $transition;
+  line-height: 1;
+  margin-top: 0.25rem;
+  align-self: flex-start;
 
-.profile__stats-bar {
-  display: flex;
-  height: 6px;
-  border-radius: 3px;
-  overflow: hidden;
-  background: $color-surface-hover;
-  margin-bottom: 1rem;
+  svg {
+    flex-shrink: 0;
+    display: block;
+  }
+
+  &--add {
+    background: $color-accent;
+    color: #fff;
+    border-color: $color-accent;
+
+    &:hover {
+      background: #c4396e;
+      border-color: #c4396e;
+      transform: translateY(-1px);
+    }
+  }
+
+  &--remove {
+    background: transparent;
+    color: $color-text-muted;
+    border-color: $color-border;
+
+    &:hover {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: #ef4444;
+      color: #ef4444;
+      transform: translateY(-1px);
+    }
+  }
 }
 
-.profile__bar-seg {
-  min-width: 4px;
-  transition: width 0.4s ease;
+// ——— Ban / Privacy notices ———
+.profile__ban {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: $radius-md;
+  font-size: 0.85rem;
+  color: #ef4444;
+  margin: 0.5rem 0 1rem;
+  line-height: 1.5;
+}
+
+.profile__privacy {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1rem;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  font-size: 0.84rem;
+  color: $color-text-muted;
+  margin: 0.5rem 0 1rem;
+}
+
+// ——— Watch info cards ———
+.profile__wi-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-bottom: 1.5rem;
+}
+
+.profile__wi {
+  flex: 1 1 100px;
+  min-width: 90px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.7rem 1rem;
+  background: $color-surface;
+  border-radius: $radius-md;
+  border: 1px solid $color-border;
+}
+
+.profile__wi-val {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: $color-text;
+  line-height: 1.2;
+}
+
+.profile__wi-label {
+  font-size: 0.73rem;
+  color: $color-text-muted;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+// ——— Section headers ———
+.profile__section {
+  margin-bottom: 1.75rem;
+}
+
+.profile__section-hdr {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.85rem;
+}
+
+.profile__section-title {
+  margin: 0 0 0.85rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: $color-text;
+
+  .profile__section-hdr & {
+    margin-bottom: 0;
+    flex: 1;
+  }
+}
+
+.profile__count-chip {
+  font-size: 0.73rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: $color-text-muted;
+}
+
+.profile__view-all {
+  font-size: 0.78rem;
+  color: $color-accent;
+  text-decoration: none;
+  font-weight: 600;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  white-space: nowrap;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+// ——— Stats: list + donut ———
+.profile__stats-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 148px minmax(220px, 0.95fr);
+  align-items: stretch;
+  justify-content: center;
+  gap: 1.25rem 1.5rem;
 }
 
 .profile__stats-items {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  justify-content: center;
+  align-self: center;
 }
 
 .profile__stat-item {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  font-size: 0.88rem;
+  gap: 0.5rem;
+  font-size: 0.87rem;
+  min-height: 1.4rem;
 }
 
 .profile__stat-dot {
@@ -172,58 +584,60 @@
   flex-shrink: 0;
 }
 
-.profile__stat-label {
+.profile__stat-lbl {
   color: $color-text-muted;
   flex: 1;
   min-width: 0;
 }
 
-.profile__stat-value {
+.profile__stat-val {
   color: $color-text;
-  font-weight: 600;
+  font-weight: 700;
+  min-width: 2rem;
+  text-align: right;
 }
 
-// ——— Watch info ———
-.profile__watch-info {
+// ——— Donut chart ———
+.profile__donut-wrap {
+  flex-shrink: 0;
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
 }
 
-.profile__wi {
+.profile__stats-wi {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
-  padding: 0.65rem 1rem;
-  background: $color-surface;
-  border-radius: $radius-md;
-  border: 1px solid $color-border;
-  min-width: 7rem;
+  align-content: start;
+  justify-content: space-between;
+  min-width: 0;
+  align-self: stretch;
+  height: 100%;
 }
 
-.profile__wi-val {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: $color-text;
-  line-height: 1.2;
+.profile__stat-item--muted .profile__stat-dot {
+  background: #6b7280;
 }
 
-.profile__wi-label {
-  font-size: 0.75rem;
+.profile__stat-item--muted .profile__stat-lbl {
   color: $color-text-muted;
 }
 
-// ——— Sections ———
-.profile__section { margin-bottom: 1.5rem; }
-
-.profile__section-title {
-  margin: 0 0 0.75rem;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: $color-text;
+.profile__stat-item--muted .profile__stat-val {
+  font-size: 0.95rem;
+  font-weight: 700;
 }
 
-// ——— osu!-style line chart ———
+.profile__donut {
+  display: block;
+  overflow: visible;
+  width: 148px;
+  height: 148px;
+  margin: 0 auto;
+}
+
+// ——— Line chart (watch dynamics) ———
 .profile__chart-wrap {
   position: relative;
   width: 100%;
@@ -237,16 +651,7 @@
   display: block;
   width: 100%;
   height: auto;
-}
-
-.profile__chart-grid {
-  stroke: $color-border;
-  stroke-width: 1;
-  stroke-dasharray: 4 4;
-}
-
-.profile__chart-area {
-  fill: rgba($color-accent, 0.15);
+  min-height: 80px;
 }
 
 .profile__chart-line {
@@ -255,28 +660,40 @@
   stroke-width: 2;
   stroke-linejoin: round;
   stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
 }
 
 .profile__chart-label {
   fill: $color-text-muted;
-  font-size: 9px;
+  font-size: 8px;
   font-family: inherit;
-  text-anchor: start;
+}
+
+.profile__chart-dot {
+  fill: $color-accent;
+  cursor: crosshair;
+  opacity: 0.7;
+  transition: opacity 0.15s, r 0.15s;
+  vector-effect: non-scaling-stroke;
+
+  &:hover {
+    opacity: 1;
+    r: 5;
+  }
 }
 
 .profile__chart-tooltip {
   position: fixed;
   pointer-events: none;
-  padding: 0.25rem 0.5rem;
-  background: rgba(0,0,0,0.88);
+  padding: 0.25rem 0.6rem;
+  background: rgba(0, 0, 0, 0.9);
   color: $color-text;
   font-size: 0.72rem;
   font-weight: 500;
   border-radius: $radius-sm;
   white-space: nowrap;
-  transition: left 0.08s ease, top 0.08s ease, opacity 0.12s ease;
   z-index: 99999;
-  opacity: 1;
+  transform: translateX(-50%);
 
   &[hidden] {
     display: block !important;
@@ -285,7 +702,7 @@
   }
 }
 
-// ——— Horizontal scroll ———
+// ——— Horizontal scroll (votes, history) ———
 .profile__hscroll {
   overflow-x: auto;
   overflow-y: hidden;
@@ -294,8 +711,14 @@
   scrollbar-width: thin;
   scrollbar-color: $color-border transparent;
 
-  &::-webkit-scrollbar { height: 4px; }
-  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
   &::-webkit-scrollbar-thumb {
     background: $color-border;
     border-radius: 2px;
@@ -308,7 +731,7 @@
   padding-bottom: 0.5rem;
 }
 
-// ——— Profile card (vertical mini) ———
+// ——— Profile card (anime mini card) ———
 .profile__card {
   display: flex;
   flex-direction: column;
@@ -352,6 +775,7 @@
   color: $color-text;
   line-height: 1.3;
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -361,7 +785,6 @@
   display: flex;
   gap: 1px;
   color: #fbbf24;
-  .icon { flex-shrink: 0; }
 }
 
 .profile__card-sub {
@@ -380,59 +803,226 @@
   line-height: 1;
 }
 
-// ——— Friends (clickable) ———
-.profile__friends-list {
-  display: flex;
-  flex-wrap: wrap;
+// ——— Media grid (votes/history in profile page) ———
+.profile__media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.75rem;
+
+  .profile__card {
+    width: 100%;
+    flex-shrink: 1;
+  }
+
+  .profile__card-poster {
+    width: 100%;
+    height: 0;
+    padding-bottom: 142%;
+    position: relative;
+    background-size: cover;
+    background-position: center;
+    background-color: $color-surface-hover;
+    border-radius: $radius-md;
+    transition: opacity $transition, transform $transition;
+  }
+
+  .profile__card:hover .profile__card-poster {
+    opacity: 0.85;
+    transform: translateY(-2px);
+  }
+}
+
+// ——— Release grid (votes full page) ———
+.profile__release-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 1rem;
+}
+
+// ——— Friends grid ———
+.profile__friends-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
   gap: 0.75rem;
 }
 
-.profile__friend {
+.profile__friend-card {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.3rem;
-  width: 4.5rem;
-  position: relative;
-  background: none;
-  border: none;
-  padding: 0;
+  padding: 0.65rem 0.4rem 0.5rem;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
   cursor: pointer;
   color: inherit;
+  text-decoration: none;
+  transition: background $transition, border-color $transition, transform $transition;
+  position: relative;
+  text-align: center;
 
-  &:hover .profile__friend-avatar {
-    opacity: 0.8;
-    transform: scale(1.05);
+  &:hover {
+    background: $color-surface-hover;
+    border-color: rgba(255, 255, 255, 0.12);
+    transform: translateY(-2px);
   }
 }
 
-.profile__friend-avatar {
-  width: 48px;
-  height: 48px;
+.profile__friend-av {
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   background-size: cover;
   background-position: center;
   background-color: $color-surface-hover;
-  transition: opacity $transition, transform $transition;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.profile__friend-online {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: $color-success;
+  border: 2px solid $color-surface;
 }
 
 .profile__friend-name {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
+  font-weight: 600;
   color: $color-text;
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
+  line-height: 1.3;
 }
 
-.profile__friend-online {
-  position: absolute;
-  top: 34px;
-  right: 12px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: $color-success;
-  border: 2px solid $color-bg;
+.profile__friend-sub {
+  font-size: 0.68rem;
+  color: $color-text-muted;
+  line-height: 1.2;
+}
+
+// ——— Load more button ———
+.profile__load-more {
+  display: block;
+  width: 100%;
+  padding: 0.55rem 1rem;
+  margin-top: 0.75rem;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  color: $color-text-muted;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background $transition, color $transition;
+  text-align: center;
+
+  &:hover {
+    background: $color-surface-hover;
+    color: $color-text;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// ——— Sub-page (votes, friends full page) ———
+.profile-subpage {
+  &__hdr {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.75rem;
+  }
+
+  &__title {
+    font-size: 1.65rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+}
+
+.profile-subpage__content {
+  min-height: 120px;
+}
+
+.profile-subpage__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.profile-subpage__friends-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 0.75rem;
+}
+
+// ——— Error state ———
+.profile__error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 3rem 1rem;
+  color: $color-text-muted;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+// ——— Toast notification ———
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-8px);
+  }
+}
+
+.profile__toast {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.5rem 1.25rem;
+  background: rgba(0, 0, 0, 0.9);
+  color: #fff;
+  font-size: 0.84rem;
+  font-weight: 500;
+  border-radius: 999px;
+  white-space: nowrap;
+  z-index: 99999;
+  pointer-events: none;
+  animation: toast-in 0.2s ease forwards;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+
+  &.toast--out {
+    animation: toast-out 0.25s ease forwards;
+  }
 }

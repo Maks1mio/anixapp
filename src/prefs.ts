@@ -13,5 +13,6 @@ export function getCardLayout(): CardLayout {
 export function setCardLayout(layout: CardLayout): void {
   if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return;
   window.localStorage.setItem(CARD_LAYOUT_KEY, layout);
+  window.dispatchEvent(new CustomEvent('anix:cardLayoutChanged', { detail: { layout } }));
 }
 

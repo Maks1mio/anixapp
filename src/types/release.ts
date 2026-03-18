@@ -24,4 +24,6 @@ export interface ReleaseCardData {
   isFavorite?: boolean;
   /** Статус в списке профиля (BookmarkType: watching/planned/...) */
   listStatus?: 'watching' | 'planned' | 'completed' | 'on_hold' | 'dropped';
+  /** Личная оценка текущего пользователя (1–5, my_vote из API) */
+  myVote?: number;
 }

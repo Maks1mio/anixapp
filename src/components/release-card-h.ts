@@ -110,6 +110,17 @@ export function renderReleaseCardHorizontal(data: ReleaseCardData): HTMLElement 
   if (infoStr) metaParts.push(infoStr);
 
   const metaHtml = metaParts.join(' <span class="release-card-h__meta-dot">·</span> ') || '—';
+
+  // Личная оценка пользователя — в той же строке, что и мета карточки
+  const myVote = typeof data.myVote === 'number' && data.myVote > 0 ? data.myVote : null;
+  const myVoteMetaHtml = myVote != null
+    ? `<span class="release-card-h__my-vote">
+        <span class="release-card-h__my-vote-label">Ваша оценка</span>
+        <span class="release-card-h__my-vote-stars">${Array.from({length: 5}, (_, i) =>
+          `<span class="release-card-h__star${i < myVote ? '--on' : '--off'}">★</span>`
+        ).join('')}</span>
+      </span>`
+    : '';
   const genreTags =
     data.genres
       ?.split(',')
@@ -170,7 +181,7 @@ export function renderReleaseCardHorizontal(data: ReleaseCardData): HTMLElement 
           ${titleTooltipHtml}
           <span class="release-card-h__menu-slot"></span>
         </div>
-        <p class="release-card-h__meta">${metaHtml}</p>
+        <p class="release-card-h__meta">${metaHtml}${myVoteMetaHtml ? ` <span class="release-card-h__meta-dot">·</span> ${myVoteMetaHtml}` : ''}</p>
         ${genresHtml}
         ${desc ? `<p class="release-card-h__desc">${escapeHtml(desc)}</p>` : ''}
       </div>

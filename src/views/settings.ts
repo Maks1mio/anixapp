@@ -23,6 +23,7 @@ export function renderSettingsContent(): HTMLElement {
     <div class="settings-section" id="settings-cards-wrap">
       <div class="settings-loading" id="settings-cards-load">Загрузка…</div>
     </div>
+    <div class="settings-section" id="settings-behavior-wrap"></div>
   `;
 
   const endpointContainer = wrap.querySelector('#settings-endpoint-wrap') as HTMLElement;
@@ -170,6 +171,38 @@ export function renderSettingsContent(): HTMLElement {
     },
   });
   cardsContainer.appendChild(layoutSelect);
+
+  // ——— Поведение при закрытии (minimizeToTray) ———
+  const behaviorContainer = wrap.querySelector('#settings-behavior-wrap') as HTMLElement;
+
+  if (window.electron?.getSettings) {
+    void window.electron.getSettings().then((settings) => {
+      const toggleRow = document.createElement('div');
+      toggleRow.className = 'settings-toggle';
+
+      let checked = settings.minimizeToTray;
+
+      toggleRow.innerHTML = `
+        <div class="settings-toggle__info">
+          <div class="settings-toggle__label">Сворачивать в трей при закрытии</div>
+          <div class="settings-toggle__desc">Если включено — окно скрывается в системный трей вместо выхода</div>
+        </div>
+        <label class="settings-toggle__switch" aria-label="Сворачивать в трей">
+          <input type="checkbox" id="toggle-minimize-tray" ${checked ? 'checked' : ''}>
+          <span class="settings-toggle__switch-track"></span>
+          <span class="settings-toggle__switch-thumb"></span>
+        </label>
+      `;
+
+      const input = toggleRow.querySelector('#toggle-minimize-tray') as HTMLInputElement;
+      input.addEventListener('change', () => {
+        checked = input.checked;
+        window.electron?.saveSettings?.({ minimizeToTray: checked });
+      });
+
+      behaviorContainer.appendChild(toggleRow);
+    });
+  }
 
   return wrap;
 }

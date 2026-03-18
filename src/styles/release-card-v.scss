@@ -139,6 +139,17 @@
   }
 }
 
+// Личная оценка (★★★☆☆)
+.release-card-v__my-vote {
+  display: inline-flex;
+  gap: 1px;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.release-card-v__star--on  { color: #fbbf24; }
+.release-card-v__star--off { color: rgba(255, 255, 255, 0.18); }
+
 // Сетка карточек
 .release-cards-grid {
   display: grid;

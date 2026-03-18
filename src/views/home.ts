@@ -126,6 +126,11 @@ export function renderHome(): HTMLElement {
     listEl.appendChild(gridEl);
   }
 
+  function refreshForLayoutChange() {
+    if (!wrap.isConnected || !allContent.length) return;
+    renderCurrentTab();
+  }
+
   function loadMoreIfNeeded() {
     const scrollEl = wrap.closest('.page__scroll') as HTMLElement | null
       ?? document.getElementById('content');
@@ -233,6 +238,8 @@ export function renderHome(): HTMLElement {
 
   setActiveTab('latest');
   loadPage();
+
+  window.addEventListener('anix:cardLayoutChanged', refreshForLayoutChange);
 
   return wrap;
 }

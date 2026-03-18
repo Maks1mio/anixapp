@@ -68,6 +68,7 @@ export interface AnixApi {
 
   channel: {
     info: (id: number) => Promise<{ channel?: unknown }>;
+    getBlog?: (id: number) => Promise<{ channel?: unknown; blogInfo?: unknown }>;
   };
 
   notification: {

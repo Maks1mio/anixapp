@@ -98,6 +98,16 @@ export function renderReleaseCardVertical(data: ReleaseCardData): HTMLElement {
       `${ratingValue.toFixed(1)} ${iconStar(12, true)}</span>`;
   }
 
+  // Личная оценка пользователя (заменяет стандартную мету когда присутствует)
+  const myVote = typeof data.myVote === 'number' && data.myVote > 0 ? data.myVote : null;
+  const myVoteHtml = myVote != null
+    ? `<span class="release-card-v__my-vote">${
+        Array.from({length: 5}, (_, i) =>
+          `<span class="release-card-v__star${i < myVote ? '--on' : '--off'}">★</span>`
+        ).join('')
+      }</span>`
+    : '';
+
   // Индикатор избранного — маленький флажок рядом с метой
   let favoriteHtml = '';
   if (isFavorite) {
@@ -126,7 +136,7 @@ export function renderReleaseCardVertical(data: ReleaseCardData): HTMLElement {
       </div>
       <div class="release-card-v__body">
         <h3 class="release-card-v__title">${esc(title)}</h3>
-        <p class="release-card-v__meta">${metaStr}${ratingHtml ? (metaStr ? ' <span class="release-card-v__dot">·</span> ' : '') + ratingHtml : ''}${favoriteHtml}</p>
+        <p class="release-card-v__meta">${myVoteHtml || (metaStr + (ratingHtml ? (metaStr ? ' <span class="release-card-v__dot">·</span> ' : '') + ratingHtml : '') + favoriteHtml)}</p>
       </div>
     </a>
   `;

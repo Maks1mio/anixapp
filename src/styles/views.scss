@@ -1340,6 +1340,12 @@
   }
 }
 
+.release-cards-grid-root--wide {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 .release-page__comments {
   display: flex;
   flex-direction: column;

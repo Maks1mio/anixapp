@@ -65,6 +65,8 @@ contextBridge.exposeInMainWorld('electron', {
   sendPlayerState: (playback) => ipcRenderer.send('player:stateChanged', playback),
   startUpdateDownload: () => ipcRenderer.invoke('app:startUpdateDownload'),
   installUpdate: () => ipcRenderer.invoke('app:installUpdate'),
+  getSettings: () => ipcRenderer.invoke('app:getSettings'),
+  saveSettings: (settings) => ipcRenderer.invoke('app:saveSettings', settings),
   // Lobby proposal IPC
   sendProposalToPlayer: (data) => ipcRenderer.send('lobby:proposalToPlayer', data),
   sendLobbyVote: (proposalId, accept) => ipcRenderer.send('lobby:voteFromPlayer', proposalId, accept),
@@ -145,6 +147,7 @@ contextBridge.exposeInMainWorld('anixApi', {
 
   channel: {
     info: (id) => ipcRenderer.invoke('anix:channelById', id),
+    getBlog: (id) => ipcRenderer.invoke('anix:channelBlog', id),
   },
 
   notification: {

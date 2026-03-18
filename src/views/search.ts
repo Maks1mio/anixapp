@@ -318,6 +318,14 @@ export function renderSearch(initialQuery = '', initialTab: SearchTab = 'release
     });
   }
 
+  function refreshForLayoutChange() {
+    if (!wrap.isConnected || !currentQuery.trim()) return;
+    isLoading = false;
+    hasMore = true;
+    currentPage = 0;
+    performSearch(false);
+  }
+
   function attachInfiniteScroll() {
     if (scrollAttached) return;
     const scrollEl = wrap.closest('.page__scroll') as HTMLElement | null;
@@ -336,6 +344,8 @@ export function renderSearch(initialQuery = '', initialTab: SearchTab = 'release
     currentQuery = initialQuery;
     performSearch(false);
   }
+
+  window.addEventListener('anix:cardLayoutChanged', refreshForLayoutChange);
 
   return wrap;
 }

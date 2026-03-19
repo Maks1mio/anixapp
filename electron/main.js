@@ -363,7 +363,18 @@ ipcMain.on('window:close', () => {
 // ——— App settings ———
 
 ipcMain.handle('app:getSettings', () => {
-  return { minimizeToTray: getMinimizeToTray(), adaptiveAcceleration: getAdaptiveAcceleration() };
+  try {
+    const p = getConfigPath();
+    const data = fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : {};
+    return {
+      minimizeToTray: getMinimizeToTray(),
+      adaptiveAcceleration: getAdaptiveAcceleration(),
+      upscaleEnabled: data.upscaleEnabled === true,
+      upscaleMode: typeof data.upscaleMode === 'number' ? data.upscaleMode : 15,
+    };
+  } catch (_) {
+    return { minimizeToTray: getMinimizeToTray(), adaptiveAcceleration: getAdaptiveAcceleration(), upscaleEnabled: false, upscaleMode: 15 };
+  }
 });
 
 ipcMain.handle('app:saveSettings', (_, settings) => {
@@ -747,6 +758,13 @@ ipcMain.on('player:syncState', async (_, playback) => {
   }
   // No player window — create one
   createPlayerWindow(params);
+});
+
+// ── Upscale settings sync: Main window → Player window ──
+ipcMain.on('upscale:applySettings', (_, settings) => {
+  if (playerWindowRef && !playerWindowRef.isDestroyed()) {
+    playerWindowRef.webContents.send('upscale:settingsChanged', settings);
+  }
 });
 
 // ── Lobby proposal IPC forwarding ──
@@ -1590,6 +1608,76 @@ function createThemeEditorWindow(themeId, isNew) {
 
 ipcMain.handle('theme-editor:open', (_, { themeId, isNew } = {}) => {
   createThemeEditorWindow(themeId, isNew);
+});
+
+// ——— Upscale Preview Tool ———
+let upscaleToolWindow = null;
+
+function createUpscaleToolWindow() {
+  if (upscaleToolWindow && !upscaleToolWindow.isDestroyed()) {
+    upscaleToolWindow.focus();
+    return;
+  }
+  const _toolIcon = getIconPath();
+  upscaleToolWindow = new BrowserWindow({
+    width: 1280,
+    height: 800,
+    minWidth: 900,
+    minHeight: 600,
+    title: 'Предпросмотр моделей',
+    backgroundColor: '#0e0e0e',
+    frame: false,
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+    ...(_toolIcon && { icon: _toolIcon }),
+  });
+  upscaleToolWindow.on('closed', () => { upscaleToolWindow = null; });
+  upscaleToolWindow.once('ready-to-show', () => upscaleToolWindow.show());
+  upscaleToolWindow.on('maximize',   () => { if (upscaleToolWindow) upscaleToolWindow.webContents.send('tool:windowState', { isMaximized: true }); });
+  upscaleToolWindow.on('unmaximize', () => { if (upscaleToolWindow) upscaleToolWindow.webContents.send('tool:windowState', { isMaximized: false }); });
+
+  if (isDev) {
+    upscaleToolWindow.loadURL('http://localhost:5173/upscale-tool.html');
+  } else {
+    upscaleToolWindow.loadFile(path.join(__dirname, '../dist/upscale-tool.html'));
+  }
+}
+
+ipcMain.handle('tool:openUpscale', () => {
+  createUpscaleToolWindow();
+});
+
+// Window controls for frameless tool window
+ipcMain.handle('tool:minimize', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) win.minimize();
+});
+ipcMain.handle('tool:toggleMaximize', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return;
+  win.isMaximized() ? win.unmaximize() : win.maximize();
+});
+ipcMain.handle('tool:close', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) win.close();
+});
+
+ipcMain.handle('tool:saveScreenshot', async (_, dataUrl, filename) => {
+  const screenshotsDir = path.join(app.getPath('desktop'), 'upscale-screenshots');
+  try {
+    if (!fs.existsSync(screenshotsDir)) fs.mkdirSync(screenshotsDir, { recursive: true });
+    const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
+    const filePath = path.join(screenshotsDir, filename);
+    fs.writeFileSync(filePath, Buffer.from(base64, 'base64'));
+    return filePath;
+  } catch (err) {
+    console.error('[UpscaleTool] Failed to save screenshot:', err);
+    throw err;
+  }
 });
 
 // Theme editor → main window: theme was saved, re-apply it

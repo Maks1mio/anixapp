@@ -49,6 +49,11 @@ ipcRenderer.on('discord:joinLobby', (_, payload) => {
   window.dispatchEvent(new CustomEvent('discord:joinLobby', { detail: payload }));
 });
 
+// Upscale settings sync from main window → player window
+ipcRenderer.on('upscale:settingsChanged', (_, settings) => {
+  window.dispatchEvent(new CustomEvent('anix:upscaleChanged', { detail: settings }));
+});
+
 contextBridge.exposeInMainWorld('electron', {
   getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
   getVersions: () => ipcRenderer.invoke('app:getVersions'),
@@ -81,6 +86,16 @@ contextBridge.exposeInMainWorld('electron', {
   themeEditorSaved: (themeId) => ipcRenderer.send('theme-editor:saved', themeId),
   themeEditorLiveUpdate: (vars) => ipcRenderer.send('theme-editor:liveUpdate', vars),
   themeEditorDeleted: (themeId) => ipcRenderer.send('theme-editor:deleted', themeId),
+  // Upscale settings sync to player window
+  sendUpscaleSettings: (settings) => ipcRenderer.send('upscale:applySettings', settings),
+  // Upscale Preview Tool
+  openUpscaleTool: () => ipcRenderer.invoke('tool:openUpscale'),
+  saveToolScreenshot: (dataUrl, filename) => ipcRenderer.invoke('tool:saveScreenshot', dataUrl, filename),
+  // Window controls (frameless)
+  minimizeToolWindow:      () => ipcRenderer.invoke('tool:minimize'),
+  toggleMaximizeToolWindow:() => ipcRenderer.invoke('tool:toggleMaximize'),
+  closeToolWindow:         () => ipcRenderer.invoke('tool:close'),
+  onToolWindowState: (cb) => ipcRenderer.on('tool:windowState', (_, state) => cb(state)),
 });
 
 // Main window receives notification when theme editor saves a theme

@@ -4,7 +4,7 @@
  */
 
 import { navigate } from '../app';
-import { renderConnectionTab, renderAppearanceTab, renderBehaviorTab } from '../views/settings';
+import { renderConnectionTab, renderAppearanceTab, renderBehaviorTab, renderPlaybackTab } from '../views/settings';
 import { renderSelect } from './select';
 import { renderPage } from './page';
 import {
@@ -20,15 +20,17 @@ import {
   ExternalLink,
   Pencil,
   Github,
+  Tv,
 } from 'lucide';
 
-export type SettingsTab = 'account' | 'appearance' | 'connection' | 'behavior' | 'uikit' | 'about';
+export type SettingsTab = 'account' | 'appearance' | 'connection' | 'behavior' | 'playback' | 'uikit' | 'about';
 
 const TAB_TITLES: Record<SettingsTab, string> = {
   account:    'Моя учётная запись',
   appearance: 'Внешний вид',
   connection: 'Соединение',
   behavior:   'Поведение',
+  playback:   'Воспроизведение',
   uikit:      'UI Kit',
   about:      'О программе',
 };
@@ -53,7 +55,7 @@ const PRIVACY_FRIEND_REQUEST_OPTIONS = [
 /** Initialize all Lucide icons inside a root element */
 function initIcons(root: HTMLElement): void {
   createIcons({
-    icons: { User, Palette, Globe, SlidersHorizontal, Info, LayoutGrid, LogOut, Star, ExternalLink, Pencil, Github },
+    icons: { User, Palette, Globe, SlidersHorizontal, Info, LayoutGrid, LogOut, Star, ExternalLink, Pencil, Github, Tv },
     root,
   });
 }
@@ -521,6 +523,7 @@ export function openSettingsModal(onClose: () => void, initialTab: SettingsTab =
           <button class="settings-nav__item settings-nav__item--icon" data-tab="appearance"><i data-lucide="palette"></i><span>Внешний вид</span></button>
           <button class="settings-nav__item settings-nav__item--icon" data-tab="connection"><i data-lucide="globe"></i><span>Соединение</span></button>
           <button class="settings-nav__item settings-nav__item--icon" data-tab="behavior"><i data-lucide="sliders-horizontal"></i><span>Поведение</span></button>
+          <button class="settings-nav__item settings-nav__item--icon" data-tab="playback"><i data-lucide="tv"></i><span>Воспроизведение</span></button>
 
           <div class="settings-nav__sep"></div>
 
@@ -636,6 +639,9 @@ export function openSettingsModal(onClose: () => void, initialTab: SettingsTab =
         break;
       case 'behavior':
         bodyEl.appendChild(renderBehaviorTab());
+        break;
+      case 'playback':
+        bodyEl.appendChild(renderPlaybackTab());
         break;
       case 'about':
         bodyEl.appendChild(renderAboutTab());

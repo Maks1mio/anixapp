@@ -15,6 +15,7 @@ export default defineConfig({
         resolve(__dirname, 'index.html'),
         resolve(__dirname, 'player.html'),
         resolve(__dirname, 'theme-editor.html'),
+        resolve(__dirname, 'upscale-tool.html'),
       ],
     },
   },

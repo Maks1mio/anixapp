@@ -1159,3 +1159,37 @@
     &--del:hover { color: $color-error; }
   }
 }
+
+// ── Upscale / Playback tab ─────────────────────────────────────────────────────
+.settings-upscale-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid $color-border;
+  font-size: 0.8125rem;
+  color: $color-text-muted;
+  line-height: 1.5;
+  margin-bottom: 12px;
+
+  svg {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    margin-top: 1px;
+    color: $color-accent;
+  }
+
+  &--warn {
+    border-color: rgba(255, 160, 60, 0.4);
+    background: rgba(255, 160, 60, 0.06);
+    svg { color: #ffa03c; }
+  }
+}
+
+.custom-select--disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}

@@ -7,7 +7,13 @@ import Hls from 'hls.js';
 import { KodikParser } from 'anixartjs';
 import { getWatchParams } from '../router';
 import { renderPage } from '../components/page';
-import { createIcons, Play, Pause, Volume2, Maximize, List, Headphones, SkipForward, Check, ChevronRight } from 'lucide';
+import { createIcons, Play, Pause, Volume2, Maximize, List, Headphones, SkipForward, Check, ChevronRight, Zap } from 'lucide';
+import {
+  DoG, BilateralMean, CNNM, CNNSoftM, CNNSoftVL, CNNVL, CNNUL, GANUUL,
+  CNNx2M, CNNx2VL, DenoiseCNNx2VL, CNNx2UL, GANx3L, GANx4UUL,
+  ModeA, ModeB, ModeC, ModeAA, ModeBB, ModeCA,
+  Original, render as anime4kRender,
+} from 'anime4k-webgpu';
 
 function isHlsUrl(url: string): boolean {
   return /\.m3u8/i.test(url) || url.includes(':hls:manifest');
@@ -50,7 +56,8 @@ export function renderWatch(): HTMLElement {
         <div class="watch-page__player-loading" data-player-loading>Загрузка…</div>
         <div class="watch-page__player-area" data-player-area hidden>
           <iframe data-iframe class="watch-page__iframe" allow="autoplay; fullscreen"></iframe>
-          <video data-video class="watch-page__video" crossorigin="anonymous" playsinline></video>
+          <video data-video class="watch-page__video" playsinline></video>
+          <canvas data-upscale-canvas class="watch-page__upscale-canvas" hidden></canvas>
         </div>
         <div class="watch-page__player-error" data-player-error hidden></div>
         <div class="watch-page__tap-overlay" data-tap-overlay></div>
@@ -85,6 +92,7 @@ export function renderWatch(): HTMLElement {
                   <i data-lucide="volume-2"></i>
                   <input type="range" class="watch-page__volume" data-volume min="0" max="100" value="100" title="Громкость">
                 </div>
+                <button type="button" class="watch-page__icon-btn watch-page__icon-btn--upscale" data-btn-upscale title="Улучшение качества (Anime4K)"><i data-lucide="zap"></i></button>
                 <button type="button" class="watch-page__icon-btn" data-btn-fullscreen title="Полный экран"><i data-lucide="maximize"></i></button>
               </div>
               <div class="watch-page__row watch-page__row--actions watch-page__row--popover-anchor" data-actions-row>
@@ -142,10 +150,108 @@ export function renderWatch(): HTMLElement {
   const lobbyPanel = wrap.querySelector('[data-lobby-panel]') as HTMLElement;
   const lobbyAvatarsEl = wrap.querySelector('[data-lobby-avatars]') as HTMLElement;
   const lobbyLogEl = wrap.querySelector('[data-lobby-log]') as HTMLElement;
+  const upscaleCanvas = wrap.querySelector('[data-upscale-canvas]') as HTMLCanvasElement;
+  const btnUpscale = wrap.querySelector('[data-btn-upscale]') as HTMLButtonElement;
 
   if (guiOverlay) guiOverlay.hidden = true;
 
-  const icons = { Play, Pause, Volume2, Maximize, List, Headphones, SkipForward, ChevronRight };
+  // ── Anime4K / WebGPU upscale ──────────────────────────────────────────────
+  const upscaleModeMap: Record<number, new (opts: { device: GPUDevice; inputTexture: GPUTexture; nativeDimensions: { width: number; height: number }; targetDimensions: { width: number; height: number } }) => unknown> = {
+    0: DoG, 1: BilateralMean, 2: CNNM, 3: CNNSoftM, 4: CNNSoftVL,
+    5: CNNVL, 6: CNNUL, 7: GANUUL,
+    8: CNNx2M, 9: CNNx2VL, 10: DenoiseCNNx2VL, 11: CNNx2UL, 12: GANx3L, 13: GANx4UUL,
+    14: ModeA, 15: ModeB, 16: ModeC, 17: ModeAA, 18: ModeBB, 19: ModeCA,
+  };
+
+  const gpuAvailable = typeof navigator.gpu !== 'undefined';
+
+  let upscaleEnabled = false;
+  let upscaleMode = 15;
+  let upscaleStopFn: (() => void) | null = null;
+
+  function updateUpscaleBtn() {
+    if (!btnUpscale) return;
+    btnUpscale.classList.toggle('watch-page__icon-btn--upscale-active', upscaleEnabled && gpuAvailable);
+    btnUpscale.title = upscaleEnabled ? 'Anime4K включён' : 'Улучшение качества (Anime4K)';
+  }
+
+  function stopUpscale() {
+    if (upscaleStopFn) { try { upscaleStopFn(); } catch (_) {} upscaleStopFn = null; }
+    if (upscaleCanvas) upscaleCanvas.hidden = true;
+    if (videoEl) videoEl.classList.remove('watch-page__video--hidden-for-upscale');
+  }
+
+  async function startUpscale() {
+    if (!gpuAvailable || !upscaleEnabled || !upscaleCanvas || !videoEl) return;
+    stopUpscale();
+    if (videoEl.readyState < 1) return;
+
+    const w = videoEl.videoWidth || videoEl.clientWidth || 1920;
+    const h = videoEl.videoHeight || videoEl.clientHeight || 1080;
+    upscaleCanvas.width = w;
+    upscaleCanvas.height = h;
+
+    const ModeClass = upscaleModeMap[upscaleMode] ?? ModeB;
+    try {
+      const stop = await anime4kRender({
+        video: videoEl,
+        canvas: upscaleCanvas,
+        pipelineBuilder: (device: GPUDevice, inputTexture: GPUTexture) => {
+          const nativeDimensions = { width: videoEl.videoWidth || w, height: videoEl.videoHeight || h };
+          const targetDimensions = { width: upscaleCanvas.width, height: upscaleCanvas.height };
+          return [new ModeClass({ device, inputTexture, nativeDimensions, targetDimensions }) as any];
+        },
+      });
+      upscaleStopFn = stop as () => void;
+      // Show canvas and hide video only AFTER GPU pipeline is ready — prevents black flash during init
+      upscaleCanvas.hidden = false;
+      videoEl.classList.add('watch-page__video--hidden-for-upscale');
+    } catch (err) {
+      console.warn('[Anime4K] Failed to start upscale:', err);
+      stopUpscale();
+    }
+  }
+
+  // Load saved upscale settings and initialize button
+  if (gpuAvailable && window.electron?.getSettings) {
+    window.electron.getSettings().then((s) => {
+      const ss = s as { upscaleEnabled?: boolean; upscaleMode?: number };
+      upscaleEnabled = ss.upscaleEnabled ?? false;
+      upscaleMode    = ss.upscaleMode    ?? 15;
+      updateUpscaleBtn();
+      // Start upscale if enabled and video is already ready (loadedmetadata may have fired before settings loaded)
+      if (upscaleEnabled && videoEl.readyState >= 1) startUpscale().catch(() => {});
+    }).catch(() => {});
+  } else {
+    if (btnUpscale) btnUpscale.hidden = true;
+  }
+
+  if (btnUpscale) {
+    btnUpscale.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!gpuAvailable) return;
+      upscaleEnabled = !upscaleEnabled;
+      window.electron?.saveSettings?.({ upscaleEnabled, upscaleMode } as Parameters<typeof window.electron.saveSettings>[0]);
+      updateUpscaleBtn();
+      if (upscaleEnabled) {
+        startUpscale().catch(() => {});
+      } else {
+        stopUpscale();
+      }
+    });
+  }
+
+  // Listen for changes from settings panel
+  window.addEventListener('anix:upscaleChanged', ((e: CustomEvent) => {
+    const d = e.detail as { upscaleEnabled?: boolean; upscaleMode?: number };
+    if (typeof d.upscaleEnabled === 'boolean') upscaleEnabled = d.upscaleEnabled;
+    if (typeof d.upscaleMode === 'number') upscaleMode = d.upscaleMode;
+    updateUpscaleBtn();
+    if (upscaleEnabled) startUpscale().catch(() => {});
+    else stopUpscale();
+  }) as EventListener);
+
+  const icons = { Play, Pause, Volume2, Maximize, List, Headphones, SkipForward, ChevronRight, Zap };
   createIcons({ icons, root: wrap });
 
   const IDLE_HIDE_MS = 3000;
@@ -588,6 +694,8 @@ export function renderWatch(): HTMLElement {
             const playbackWithDuration = getPlaybackPayload();
             (window.electron as any)?.sendPlayerState?.(playbackWithDuration);
           } catch (_) {}
+          // Start upscale pipeline after video dimensions are known
+          if (upscaleEnabled && gpuAvailable) startUpscale().catch(() => {});
         },
         { once: true },
       );

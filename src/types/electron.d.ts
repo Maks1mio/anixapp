@@ -45,8 +45,9 @@ declare global {
       startUpdateDownload?: () => Promise<void>;
       installUpdate?: () => Promise<void>;
       getDeviceId: () => Promise<string>;
-      getSettings?: () => Promise<{ minimizeToTray: boolean; adaptiveAcceleration?: boolean }>;
-      saveSettings?: (settings: { minimizeToTray?: boolean; adaptiveAcceleration?: boolean }) => Promise<void>;
+      getSettings?: () => Promise<{ minimizeToTray: boolean; adaptiveAcceleration?: boolean; upscaleEnabled?: boolean; upscaleMode?: number }>;
+      saveSettings?: (settings: { minimizeToTray?: boolean; adaptiveAcceleration?: boolean; upscaleEnabled?: boolean; upscaleMode?: number }) => Promise<void>;
+      sendUpscaleSettings?: (settings: { upscaleEnabled: boolean; upscaleMode: number }) => void;
       // Lobby proposal IPC
       sendProposalToPlayer?: (data: Record<string, unknown>) => void;
       sendLobbyVote?: (proposalId: string, accept: boolean) => void;

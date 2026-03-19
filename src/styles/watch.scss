@@ -1004,3 +1004,35 @@ $player-overlay-bg: rgba(0, 0, 0, 0.4);
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+// ── Anime4K / WebGPU upscale ──────────────────────────────────────────────────
+.watch-page__upscale-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+  display: block;
+
+  // `display: block` above overrides the HTML `hidden` attribute's `display: none`.
+  // This rule restores correct hiding behaviour when `hidden` is set.
+  &[hidden] {
+    display: none;
+  }
+}
+
+// When upscale is active — hide the original video element visually
+// (video stays playing as a WebGPU source, just not visible)
+.watch-page__video--hidden-for-upscale {
+  visibility: hidden;
+}
+
+// Upscale toggle button active state
+.watch-page__icon-btn--upscale-active {
+  color: $color-accent !important;
+  border-color: $color-accent !important;
+  background: rgba(0, 0, 0, 0.55) !important;
+
+  svg { filter: drop-shadow(0 0 4px $color-accent); }
+}

@@ -1,8 +1,10 @@
 import { iconChevronDown } from './icons';
+import { renderPage } from './page';
 
 export interface SelectOption {
   value: string;
   label: string;
+  desc?: string;
   disabled?: boolean;
 }
 
@@ -84,26 +86,50 @@ function createDropdown(
   const dropdown = document.createElement('div');
   dropdown.className = DROPDOWN_CLASS;
   dropdown.setAttribute('role', 'listbox');
-  // Позиция после append и измерения
 
-  const list = document.createElement('div');
-  list.className = 'custom-select__list';
+  // Page component — кастомный скролл
+  const pageEl = renderPage({ scrollId: '', noPadding: true });
+  pageEl.classList.add('custom-select__page');
+
+  const listEl = pageEl.querySelector<HTMLElement>('[data-page-scroll]')!;
+  listEl.classList.add('custom-select__list');
+
+  let selectedItem: HTMLElement | null = null;
+
   options.forEach((opt) => {
     const item = document.createElement('div');
     item.className = 'custom-select__option';
     if (opt.disabled) item.classList.add('custom-select__option--disabled');
-    if (opt.value === value) item.classList.add('custom-select__option--selected');
+    if (opt.value === value) {
+      item.classList.add('custom-select__option--selected');
+      selectedItem = item;
+    }
     item.setAttribute('role', 'option');
     item.setAttribute('data-value', opt.value);
-    item.textContent = opt.label;
+
+    if (opt.desc) {
+      item.classList.add('custom-select__option--with-desc');
+      const labelEl = document.createElement('span');
+      labelEl.className = 'custom-select__option-label';
+      labelEl.textContent = opt.label;
+      const descEl = document.createElement('span');
+      descEl.className = 'custom-select__option-desc';
+      descEl.textContent = opt.desc;
+      item.appendChild(labelEl);
+      item.appendChild(descEl);
+    } else {
+      item.textContent = opt.label;
+    }
+
     item.addEventListener('click', () => {
       if (opt.disabled) return;
       onSelect(opt.value);
       handleClose();
     });
-    list.appendChild(item);
+    listEl.appendChild(item);
   });
-  dropdown.appendChild(list);
+
+  dropdown.appendChild(pageEl);
 
   function onScrollOrResize() {
     if (!document.body.contains(dropdown)) return;
@@ -145,7 +171,11 @@ function createDropdown(
 
   document.body.appendChild(dropdown);
   updateDropdownPosition(dropdown, trigger);
-  requestAnimationFrame(() => requestAnimationFrame(() => dropdown.classList.add(DROPDOWN_OPEN)));
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    dropdown.classList.add(DROPDOWN_OPEN);
+    // Прокрутить до выбранного элемента
+    if (selectedItem) selectedItem.scrollIntoView({ block: 'nearest' });
+  }));
   document.addEventListener('click', closeOnOutside);
   document.addEventListener('keydown', closeOnEscape);
   window.addEventListener('scroll', onScrollOrResize, true);
@@ -180,7 +210,24 @@ export function renderSelect(opts: SelectOptions): HTMLElement {
 
   function updateTriggerLabel() {
     const selected = options.find((o) => o.value === currentValue);
-    triggerText.textContent = selected ? selected.label : opts.placeholder ?? 'Выберите…';
+    triggerText.innerHTML = '';
+    if (selected) {
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'custom-select__trigger-label';
+      labelSpan.textContent = selected.label;
+      triggerText.appendChild(labelSpan);
+      if (selected.desc) {
+        const descSpan = document.createElement('span');
+        descSpan.className = 'custom-select__trigger-desc';
+        descSpan.textContent = selected.desc;
+        triggerText.appendChild(descSpan);
+      }
+    } else {
+      const placeholder = document.createElement('span');
+      placeholder.className = 'custom-select__trigger-label';
+      placeholder.textContent = opts.placeholder ?? 'Выберите…';
+      triggerText.appendChild(placeholder);
+    }
     trigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
   }
 

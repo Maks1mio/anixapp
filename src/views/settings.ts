@@ -191,7 +191,7 @@ export function renderAppearanceTab(): HTMLElement {
       <rect x="24" y="24" width="13" height="13" rx="2" fill="currentColor" opacity="0.7"/>
     </svg>`;
 
-  toggleWrap.appendChild(makeLayoutBtn('wide', 'Списком',    listIcon));
+  toggleWrap.appendChild(makeLayoutBtn('wide', 'Списком', listIcon));
   toggleWrap.appendChild(makeLayoutBtn('mini', 'Карточками', gridIcon));
   cardSection.appendChild(toggleWrap);
   wrap.appendChild(cardSection);
@@ -418,6 +418,160 @@ export function renderBehaviorTab(): HTMLElement {
 
     section.appendChild(body);
     wrap.appendChild(section);
+  });
+
+  return wrap;
+}
+
+// ── Воспроизведение ───────────────────────────────────────────────────────────
+const UPSCALE_MODES: { id: number; label: string; desc: string }[] = [
+  { id: 14, label: 'ModeA [Preset]', desc: 'Быстрый пресет с умеренным восстановлением и апскейлом.' },
+  { id: 15, label: 'ModeB [Preset]', desc: 'Сбалансированный пресет с акцентом на детализацию.' },
+  { id: 16, label: 'ModeC [Preset]', desc: 'Качественный пресет с более агрессивным улучшением.' },
+  { id: 17, label: 'ModeA+A [Preset]', desc: 'Расширенный ModeA с дополнительной обработкой.' },
+  { id: 18, label: 'ModeB+B [Preset]', desc: 'Улучшенный ModeB, обеспечивает более высокое качество.' },
+  { id: 19, label: 'ModeC+A [Preset]', desc: 'Комбинированный пресет с высокой чёткостью и восстановлением.' },
+  { id: 0, label: 'DoG [Deblur]', desc: 'Удаление размытия и усиление границ с помощью фильтра разности Гауссиан.' },
+  { id: 1, label: 'BilateralMean [Denoise]', desc: 'Снижение шума без потери резкости с помощью билинейного среднего.' },
+  { id: 2, label: 'CNNM [Restore]', desc: 'Нейросетевое восстановление с умеренной глубиной, хорошо для общего улучшения.' },
+  { id: 3, label: 'CNNSoftM [Restore]', desc: 'Более мягкое восстановление, минимизирующее артефакты и перегибы.' },
+  { id: 4, label: 'CNNSoftVLM [Restore]', desc: 'Очень лёгкое и мягкое восстановление, подходит для слабых устройств.' },
+  { id: 5, label: 'CNNVL [Restore]', desc: 'Восстановление с малой задержкой и быстрой обработкой.' },
+  { id: 6, label: 'CNNUL [Restore]', desc: 'Универсальное восстановление с акцентом на стабильность.' },
+  { id: 7, label: 'GANUUL [Restore]', desc: 'GAN-реконструкция изображения для высокого качества.' },
+  { id: 8, label: 'CNNx2M [Upscale]', desc: 'Апскейл ×2 с сохранением структуры кадра.' },
+  { id: 9, label: 'CNNx2VL [Upscale]', desc: 'Быстрый апскейл ×2 для слабых систем.' },
+  { id: 10, label: 'DenoiseCNNx2VL [Upscale]', desc: 'Апскейл ×2 с предварительным шумоподавлением.' },
+  { id: 11, label: 'CNNx2UL [Upscale]', desc: 'Универсальный сбалансированный апскейл ×2.' },
+  { id: 12, label: 'GANx3L [Upscale]', desc: 'GAN апскейл ×3 для высокого качества.' },
+  { id: 13, label: 'GANx4UUL [Upscale]', desc: 'GAN апскейл ×4 — максимальное качество.' },
+];
+
+export function renderPlaybackTab(): HTMLElement {
+  const wrap = document.createElement('div');
+
+  if (!window.electron?.getSettings) {
+    wrap.innerHTML = `<p class="settings-account-coming-soon">Настройки воспроизведения доступны только в приложении Electron.</p>`;
+    return wrap;
+  }
+
+  const gpuAvailable = typeof navigator.gpu !== 'undefined';
+
+  void window.electron.getSettings().then((settings) => {
+    let upscaleEnabled = (settings as { upscaleEnabled?: boolean; upscaleMode?: number }).upscaleEnabled ?? false;
+    let upscaleMode = (settings as { upscaleEnabled?: boolean; upscaleMode?: number }).upscaleMode ?? 15;
+
+    const section = document.createElement('div');
+    section.className = 'settings-section';
+    section.innerHTML = `<p class="settings-section__label">Улучшение качества (Anime4K / WebGPU)</p>`;
+
+    const body = document.createElement('div');
+    body.className = 'settings-section__body';
+
+    if (!gpuAvailable) {
+      const notice = document.createElement('div');
+      notice.className = 'settings-upscale-notice settings-upscale-notice--warn';
+      notice.innerHTML = `
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <circle cx="10" cy="10" r="8"/><line x1="10" y1="6" x2="10" y2="10.5"/><circle cx="10" cy="13.5" r=".7" fill="currentColor" stroke="none"/>
+        </svg>
+        <span>Ваш GPU не поддерживает WebGPU — улучшение качества недоступно.</span>
+      `;
+      body.appendChild(notice);
+    }
+
+    // Info box
+    const infoBox = document.createElement('div');
+    infoBox.className = 'settings-upscale-notice';
+    infoBox.innerHTML = `
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <circle cx="10" cy="10" r="8"/><line x1="10" y1="9" x2="10" y2="14"/><circle cx="10" cy="6.5" r=".7" fill="currentColor" stroke="none"/>
+      </svg>
+      <span>Технология Anime4K улучшает видео в реальном времени, используя WebGPU. Она повышает резкость, убирает шум и улучшает общую чёткость изображения. Не добавляет новых деталей — улучшает уже имеющиеся.</span>
+    `;
+    body.appendChild(infoBox);
+
+    // Toggle row
+    const toggleRow = document.createElement('div');
+    toggleRow.className = 'settings-row';
+    toggleRow.innerHTML = `
+      <div class="settings-row__info">
+        <div class="settings-row__label">Включить улучшение качества</div>
+        <div class="settings-row__desc">Активирует улучшение через GPU с использованием WebGPU и Anime4K.</div>
+      </div>
+      <div class="settings-row__control">
+        <label class="settings-toggle-switch" aria-label="Улучшение качества">
+          <input type="checkbox" id="upscale-toggle" ${upscaleEnabled ? 'checked' : ''} ${!gpuAvailable ? 'disabled' : ''}>
+          <span class="settings-toggle-switch__track"></span>
+          <span class="settings-toggle-switch__thumb"></span>
+        </label>
+      </div>
+    `;
+    body.appendChild(toggleRow);
+
+    const toggleInput = toggleRow.querySelector('#upscale-toggle') as HTMLInputElement;
+
+    // Mode select
+    const modeSection = document.createElement('div');
+    modeSection.className = 'settings-section';
+    modeSection.innerHTML = `<p class="settings-section__label">Режим улучшения</p>`;
+
+    const modeSelectEl = renderSelect({
+      options: UPSCALE_MODES.map(m => ({ value: String(m.id), label: m.label, desc: m.desc })),
+      value: String(upscaleMode),
+      onChange: (value) => {
+        upscaleMode = Number(value);
+        window.electron?.saveSettings?.({ upscaleEnabled, upscaleMode } as Parameters<typeof window.electron.saveSettings>[0]);
+        window.electron?.sendUpscaleSettings?.({ upscaleEnabled, upscaleMode });
+        window.dispatchEvent(new CustomEvent('anix:upscaleChanged', { detail: { upscaleEnabled, upscaleMode } }));
+      },
+    });
+
+    const setModeSelectDisabled = (disabled: boolean) => {
+      const btn = modeSelectEl.querySelector<HTMLButtonElement>('.custom-select__trigger');
+      if (btn) btn.disabled = disabled;
+      modeSelectEl.classList.toggle('custom-select--disabled', disabled);
+    };
+    setModeSelectDisabled(!gpuAvailable || !upscaleEnabled);
+
+    toggleInput.addEventListener('change', () => {
+      upscaleEnabled = toggleInput.checked;
+      setModeSelectDisabled(!upscaleEnabled || !gpuAvailable);
+      window.electron?.saveSettings?.({ upscaleEnabled, upscaleMode } as Parameters<typeof window.electron.saveSettings>[0]);
+      window.electron?.sendUpscaleSettings?.({ upscaleEnabled, upscaleMode });
+      window.dispatchEvent(new CustomEvent('anix:upscaleChanged', { detail: { upscaleEnabled, upscaleMode } }));
+    });
+
+    modeSection.appendChild(modeSelectEl);
+
+    // Preview tool button
+    const toolSection = document.createElement('div');
+    toolSection.className = 'settings-section';
+    toolSection.innerHTML = `<p class="settings-section__label">Инструменты разработки</p>`;
+    const toolBody = document.createElement('div');
+    toolBody.className = 'settings-section__body';
+    const toolRow = document.createElement('div');
+    toolRow.className = 'settings-row';
+    toolRow.innerHTML = `
+      <div class="settings-row__info">
+        <div class="settings-row__label">Предпросмотр моделей</div>
+        <div class="settings-row__desc">Открыть инструмент сравнения — 5 пресетов аниме, split-ползунок для сравнения оригинала и фильтра в реальном времени.</div>
+      </div>
+      <div class="settings-row__control">
+        <button class="settings-btn settings-btn--primary" id="open-upscale-tool">Открыть</button>
+      </div>
+    `;
+    const toolBtn = toolRow.querySelector('#open-upscale-tool') as HTMLButtonElement;
+    toolBtn.addEventListener('click', () => {
+      (window.electron as { openUpscaleTool?: () => void })?.openUpscaleTool?.();
+    });
+    toolBody.appendChild(toolRow);
+    toolSection.appendChild(toolBody);
+
+    section.appendChild(body);
+    wrap.appendChild(section);
+    wrap.appendChild(modeSection);
+    wrap.appendChild(toolSection);
   });
 
   return wrap;

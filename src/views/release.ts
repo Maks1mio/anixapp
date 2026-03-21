@@ -1,4 +1,4 @@
-import { navigate } from '../app';
+import { navigate } from '../stores/navigation';
 import { renderReleaseCardHorizontal } from '../components/release-card-h';
 import { renderReleaseCardVertical } from '../components/release-card-v';
 import { openWatchModal } from '../components/watch-modal';

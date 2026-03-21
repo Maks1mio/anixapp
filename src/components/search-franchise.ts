@@ -1,4 +1,4 @@
-import { navigate } from '../app';
+import { navigate } from '../stores/navigation';
 
 function esc(s: string): string {
   const d = document.createElement('div');

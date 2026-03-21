@@ -1,7 +1,7 @@
 import './styles/main.scss';
-import { initApp } from './app';
+import { mount } from 'svelte';
+import App from './App.svelte';
 
-/** Логирование кликов для отладки (в билде можно отключить). */
 function initClickLogging(): void {
   document.addEventListener(
     'click',
@@ -12,14 +12,7 @@ function initClickLogging(): void {
       const cls = t?.className?.toString().slice(0, 80) ?? '';
       const href = (t?.closest?.('a') as HTMLAnchorElement)?.getAttribute?.('href') ?? '';
       const dataNav = t?.closest?.('[data-nav]') ? 'data-nav' : '';
-      console.log('[click]', {
-        tag,
-        id: id || undefined,
-        class: cls || undefined,
-        href: href || undefined,
-        dataNav: dataNav || undefined,
-        defaultPrevented: e.defaultPrevented,
-      });
+      console.log('[click]', { tag, id: id || undefined, class: cls || undefined, href: href || undefined, dataNav: dataNav || undefined, defaultPrevented: e.defaultPrevented });
     },
     true
   );
@@ -27,5 +20,5 @@ function initClickLogging(): void {
 
 document.addEventListener('DOMContentLoaded', () => {
   initClickLogging();
-  initApp();
+  mount(App, { target: document.getElementById('app')! });
 });

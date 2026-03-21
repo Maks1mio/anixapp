@@ -1,4 +1,4 @@
-import { navigate } from '../app';
+import { navigate } from '../stores/navigation';
 import { iconHeart } from '../components/icons';
 import { renderDotsMenu } from '../components/dots-menu';
 import { ratingHue, renderReleaseCardHorizontal } from '../components/release-card-h';

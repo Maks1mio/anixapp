@@ -2,7 +2,7 @@
  * Модальное окно лобби: создать комнату, присоединиться по коду, участники.
  */
 
-import { navigate } from '../app';
+import { navigate } from '../stores/navigation';
 import { renderPage } from './page';
 import { createRoom, joinRoom, getRoom, leaveRoom as apiLeaveRoom, type LobbyParticipant, type LobbyRoom } from '../services/lobby-api';
 import { setLobbyRoom, leaveLobby, getCurrentRoomId, getCurrentParticipants, getLobbyLog, setLobbyParticipants } from '../services/lobby-state';

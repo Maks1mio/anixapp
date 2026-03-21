@@ -1,4 +1,4 @@
-import { navigate } from '../app';
+import { navigate } from '../stores/navigation';
 import { iconCheck, iconFlag, iconInfo, iconStar } from './icons';
 import { renderDotsMenu, type DotsMenuEntry } from './dots-menu';
 import type { ReleaseCardData } from '../types/release';

@@ -3,7 +3,7 @@
  * Постер, бейдж статуса, опционное меню (три точки), название, мета-строка.
  */
 
-import { navigate } from '../app';
+import { navigate } from '../stores/navigation';
 import { iconCheck, iconFlag, iconStar } from './icons';
 import { renderDotsMenu, type DotsMenuEntry } from './dots-menu';
 import { ratingHue } from './release-card-h';

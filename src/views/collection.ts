@@ -1,4 +1,4 @@
-import { navigate } from '../app';
+import { navigate } from '../stores/navigation';
 import { renderReleaseCardHorizontal } from '../components/release-card-h';
 import { iconFlag } from '../components/icons';
 import type { ReleaseCardData } from '../types/release';

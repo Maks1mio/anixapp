@@ -1,4 +1,4 @@
-import { navigate } from '../app';
+import { navigate } from '../stores/navigation';
 import { renderReleaseCardsGrid } from '../components/grid';
 import { getCardLayout } from '../prefs';
 import type { ReleaseCardData } from '../types/release';

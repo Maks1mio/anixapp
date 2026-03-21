@@ -3,7 +3,7 @@
  * Sidebar (240px) | Content area с заголовком и кнопкой закрытия.
  */
 
-import { navigate } from '../app';
+import { navigate } from '../stores/navigation';
 import { renderConnectionTab, renderAppearanceTab, renderBehaviorTab, renderPlaybackTab } from '../views/settings';
 import { renderSelect } from './select';
 import { renderPage } from './page';

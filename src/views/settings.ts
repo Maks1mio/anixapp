@@ -1,6 +1,6 @@
 import { renderSelect } from '../components/select';
 import { getCardLayout, setCardLayout, type CardLayout } from '../prefs';
-import { navigate } from '../app';
+import { navigate } from '../stores/navigation';
 import {
   getAllThemes, getActiveThemeId, applyThemeById,
   createCustomTheme, deleteCustomTheme,

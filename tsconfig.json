@@ -8,7 +8,7 @@
     "noEmit": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "types": ["vite/client"]
+    "types": ["vite/client", "svelte"]
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "src/**/*.svelte"]
 }

@@ -1,4 +1,4 @@
-import { navigate } from '../app';
+import { navigate } from '../stores/navigation';
 import { iconBookmark, iconFlag } from './icons';
 
 function esc(s: string): string {

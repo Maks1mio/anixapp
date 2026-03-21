@@ -1,4 +1,4 @@
-import { navigate } from '../app';
+import { navigate } from '../stores/navigation';
 import { renderPage } from '../components/page';
 import { iconPlay, iconBookmark, iconDownload, iconCheck, iconUser } from '../components/icons';
 

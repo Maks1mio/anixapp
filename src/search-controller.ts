@@ -1,4 +1,4 @@
-import { navigate } from './app';
+import { navigate } from './stores/navigation';
 import { getPath } from './router';
 
 export function openSearch(): void {

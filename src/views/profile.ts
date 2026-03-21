@@ -1,4 +1,4 @@
-import { navigate } from '../app';
+import { navigate } from '../stores/navigation';
 import { iconStar } from '../components/icons';
 import { openSettingsModal } from '../components/settings-modal';
 

@@ -1045,58 +1045,77 @@ async function downloadInstaller() {
   const fs = require('fs');
   const https = require('https');
 
+  let file = null;
+  let destPath = null;
+
   try {
     updateDownloadState = { state: 'downloading', received: 0, total: 0 };
     sendUpdateProgress();
+
     const downloadUrl = await fetchLatestInstallerUrl();
     const updatesDir = path.join(app.getPath('userData'), 'updates');
     if (!fs.existsSync(updatesDir)) fs.mkdirSync(updatesDir, { recursive: true });
+
     const fileName = path.basename(downloadUrl.split('?')[0] || 'AnixApp-Setup.exe');
-    const destPath = path.join(updatesDir, fileName);
-    const file = fs.createWriteStream(destPath);
+    destPath = path.join(updatesDir, fileName);
+
+    // Remove stale partial downloads
+    if (fs.existsSync(destPath)) {
+      try { fs.unlinkSync(destPath); } catch (_) {}
+    }
+
+    file = fs.createWriteStream(destPath);
 
     await new Promise((resolve, reject) => {
+      // Surface WriteStream errors — unhandled 'error' on a stream crashes the process
+      file.on('error', (err) => {
+        reject(new Error(`File write error: ${err.message}`));
+      });
+
       const maxRedirects = 5;
       function doRequest(url, redirectsLeft) {
         const req = https.get(
           url,
-          {
-            headers: {
-              'User-Agent': 'AnixApp-Updater',
-            },
-          },
+          { headers: { 'User-Agent': 'AnixApp-Updater' } },
           (res) => {
-            // GitHub assets обычно отдают 302/301 на CDN — поддерживаем редиректы.
+            // GitHub assets redirect 302 → CDN — follow redirects
             if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+              res.resume();
               if (redirectsLeft <= 0) {
                 reject(new Error('Too many redirects while downloading update'));
-                res.resume();
                 return;
               }
-              const nextUrl = res.headers.location;
-              res.resume();
-              doRequest(nextUrl, redirectsLeft - 1);
+              doRequest(res.headers.location, redirectsLeft - 1);
               return;
             }
             if (res.statusCode !== 200) {
-              reject(new Error(`Download status ${res.statusCode}`));
               res.resume();
+              reject(new Error(`Download status ${res.statusCode}`));
               return;
             }
+
             const total = parseInt(res.headers['content-length'] || '0', 10) || 0;
             updateDownloadState.total = total;
+
+            // Propagate response stream errors
+            res.on('error', (err) => reject(new Error(`Response stream error: ${err.message}`)));
+
             res.on('data', (chunk) => {
+              // file.write() can return false (backpressure) but never throws synchronously;
+              // errors are emitted on the 'error' event above.
               file.write(chunk);
               updateDownloadState.received += chunk.length;
               sendUpdateProgress();
             });
+
             res.on('end', () => {
               file.end(() => resolve());
             });
           },
         );
-        req.on('error', reject);
+        req.on('error', (err) => reject(new Error(`Request error: ${err.message}`)));
       }
+
       doRequest(downloadUrl, maxRedirects);
     });
 
@@ -1107,14 +1126,21 @@ async function downloadInstaller() {
     console.error('Updater download error', e);
     updateDownloadState = { state: 'error', received: 0, total: 0 };
     sendUpdateProgress({ errorMessage: String(e) });
+
+    // Clean up partial file
+    if (file) { try { file.destroy(); } catch (_) {} }
+    if (destPath) { try { if (fs.existsSync(destPath)) fs.unlinkSync(destPath); } catch (_) {} }
   }
 }
 
 ipcMain.handle('app:startUpdateDownload', async () => {
-  if (updateDownloadState.state === 'downloading') {
-    return;
-  }
-  downloadInstaller();
+  if (updateDownloadState.state === 'downloading') return;
+  // downloadInstaller is a floating promise — catch here so unhandled rejection never crashes main.
+  downloadInstaller().catch((e) => {
+    console.error('Updater unexpected error', e);
+    updateDownloadState = { state: 'error', received: 0, total: 0 };
+    sendUpdateProgress({ errorMessage: String(e) });
+  });
 });
 
 ipcMain.handle('app:installUpdate', async () => {
@@ -1125,35 +1151,37 @@ ipcMain.handle('app:installUpdate', async () => {
   }
   try {
     if (process.platform === 'win32') {
-      // Windows: запускаем .exe инсталлятор
+      // Windows: run NSIS installer — it re-launches the app itself after install.
       const child = spawn(pendingInstallerPath, [], {
         detached: true,
         stdio: 'ignore',
+        shell: false,
       });
       child.unref();
+      isQuitting = true;
+      app.quit();
     } else if (process.platform === 'linux') {
-      // Linux: устанавливаем через pkexec (графический sudo)
-      let installCmd, installArgs;
-      if (pendingInstallerPath.endsWith('.deb')) {
-        installCmd = 'pkexec';
-        installArgs = ['dpkg', '-i', pendingInstallerPath];
-      } else if (pendingInstallerPath.endsWith('.pkg.tar.zst') || pendingInstallerPath.endsWith('.pacman')) {
-        installCmd = 'pkexec';
-        installArgs = ['pacman', '-U', '--noconfirm', pendingInstallerPath];
-      } else {
-        console.error('Unknown Linux package format:', pendingInstallerPath);
+      // Linux: open the package file with xdg-open so the system's package manager
+      // handles authentication (pkexec, pamac, gdebi, etc.).
+      // We do NOT quit immediately — the package manager needs the display server
+      // connection to stay alive while it prompts for the password.
+      const { shell: electronShell } = require('electron');
+      const opened = await electronShell.openPath(pendingInstallerPath);
+      if (opened) {
+        // openPath returns an error string on failure
+        console.error('Failed to open installer with xdg-open:', opened);
+        sendUpdateProgress({ state: 'error', errorMessage: `Не удалось открыть установщик: ${opened}` });
         return;
       }
-      const child = spawn(installCmd, installArgs, {
-        detached: true,
-        stdio: 'ignore',
-      });
-      child.unref();
+      // Give the package manager ~3 s to appear before we exit.
+      setTimeout(() => {
+        isQuitting = true;
+        app.quit();
+      }, 3000);
     }
-    isQuitting = true;
-    app.quit();
   } catch (e) {
     console.error('Failed to start installer', e);
+    sendUpdateProgress({ state: 'error', errorMessage: String(e) });
   }
 });
 

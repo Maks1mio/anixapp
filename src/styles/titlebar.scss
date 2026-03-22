@@ -228,6 +228,20 @@
   z-index: 0;
 }
 
+.titlebar__menu-item--update-ready {
+  color: #5cb85c !important;
+  cursor: pointer !important;
+
+  .titlebar__update-fill {
+    background: rgba(92, 184, 92, 0.15);
+  }
+
+  &:hover {
+    color: #4cae4c !important;
+    background: rgba(92, 184, 92, 0.08) !important;
+  }
+}
+
 .titlebar__update-label {
   position: relative;
   font-size: 0.72rem;

@@ -60,7 +60,8 @@
       } else if (data.state === 'ready') {
         updateState = 'ready';
         updatePct = 100;
-        setTimeout(() => { (window.electron as any)?.installUpdate?.(); }, 1200);
+        // Don't auto-install — on Linux the package manager needs the user
+        // to explicitly confirm (polkit dialog). The button changes to "Установить".
       } else if (data.state === 'error') {
         updateState = 'error';
         updateDownloading = false;
@@ -76,6 +77,11 @@
   });
 
   function handleStartUpdate() {
+    if (updateState === 'ready') {
+      // Download done — now install
+      (window.electron as any)?.installUpdate?.();
+      return;
+    }
     if (updateDownloading || !updateInfo) return;
     updateDownloading = true;
     updateState = 'downloading';
@@ -143,19 +149,31 @@
   <div class="titlebar__menu" id="titlebar-menu">
     <!-- Update button -->
     {#if updateInfo}
-      {#if updateDownloading && updateState !== 'idle'}
+      {#if updateState === 'downloading'}
+        <!-- Downloading: inline progress bar, no click -->
         <button
           type="button"
           class="titlebar__menu-item titlebar__menu-item--update titlebar__menu-item--update-downloading"
-          aria-label="Загрузка обновления"
+          aria-label="Загрузка обновления {updatePct}%"
         >
           <span class="titlebar__update-fill" style="width:{updatePct}%"></span>
           {@html iconDownload(14)}
-          <span class="titlebar__update-label">
-            {updateState === 'ready' ? 'Устанавливаем…' : `${updatePct}%`}
-          </span>
+          <span class="titlebar__update-label">{updatePct}%</span>
+        </button>
+      {:else if updateState === 'ready'}
+        <!-- Downloaded: click to install -->
+        <button
+          type="button"
+          class="titlebar__menu-item titlebar__menu-item--update titlebar__menu-item--update-downloading titlebar__menu-item--update-ready"
+          aria-label="Установить обновление"
+          onclick={handleStartUpdate}
+        >
+          <span class="titlebar__update-fill" style="width:100%"></span>
+          {@html iconDownload(14)}
+          <span class="titlebar__update-label">Установить</span>
         </button>
       {:else}
+        <!-- Idle / error: click to start download -->
         <button
           type="button"
           class="titlebar__menu-item titlebar__menu-item--update tooltip-trigger"
@@ -166,7 +184,9 @@
           <span class="titlebar__update-icon">{@html iconDownload(18)}</span>
           <span class="titlebar__update-dot" aria-hidden="true"></span>
           <span class="tooltip tooltip--animated">
-            {updateState === 'error' ? 'Ошибка загрузки. Нажмите для повтора' : `Доступна версия ${updateInfo.version}. Нажмите для загрузки.`}
+            {updateState === 'error'
+              ? 'Ошибка загрузки. Нажмите для повтора'
+              : `Доступна версия ${updateInfo.version}. Нажмите для загрузки.`}
           </span>
         </button>
       {/if}

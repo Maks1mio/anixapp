@@ -14,6 +14,9 @@
   border-radius: $radius-lg;
   overflow: hidden;
   transition: opacity $transition;
+  // Pre-promote to a GPU compositor layer so the opacity transition
+  // doesn't cause a flash on the very first hover (Chromium 130 / Electron 41+).
+  will-change: opacity;
 
   &:hover {
     opacity: 0.88;
@@ -128,12 +131,14 @@
     padding: 0;
     border: none;
     border-radius: 50%;
-    background: rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(4px);
+    // backdrop-filter removed — it forces a GPU layer re-promotion on every hover
+    // in Chromium 130 (Electron 41+), causing visible screen flicker.
+    // A slightly more opaque solid background achieves the same visual result.
+    background: rgba(0, 0, 0, 0.62);
     color: rgba(255, 255, 255, 0.95);
 
     &:hover {
-      background: rgba(0, 0, 0, 0.6);
+      background: rgba(0, 0, 0, 0.78);
       color: #fff;
     }
   }

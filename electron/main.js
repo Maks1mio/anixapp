@@ -62,6 +62,26 @@ function handleAnixError(err, context) {
   throw err;
 }
 
+// ——— Config constants (must be before any config reads) ———
+const AUTH_FILE = 'auth.json';
+const DEFAULT_BASE_URL = 'https://api-s.anixsekai.com';
+const LOG_DIR = 'logs';
+
+/** In-memory config cache — loaded once at startup, kept in sync on every saveConfig(). */
+let _configCache = null;
+
+function getConfigPath() {
+  return path.join(app.getPath('userData'), AUTH_FILE);
+}
+
+function _readConfigFromDisk() {
+  try {
+    const p = getConfigPath();
+    if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
+  } catch (_) {}
+  return {};
+}
+
 function getIconPath() {
   const base = path.join(__dirname, '..', 'public', 'logo');
   const ico = path.join(base, 'icon.ico');
@@ -78,37 +98,27 @@ function getIconPath() {
 }
 
 function getMinimizeToTray() {
-  try {
-    const p = getConfigPath();
-    if (fs.existsSync(p)) {
-      const data = JSON.parse(fs.readFileSync(p, 'utf8'));
-      return data.minimizeToTray === true;
-    }
-  } catch (_) {}
-  return false;
+  const data = _configCache ?? _readConfigFromDisk();
+  return data.minimizeToTray === true;
 }
 
 function getAdaptiveAcceleration() {
-  try {
-    const p = getConfigPath();
-    if (fs.existsSync(p)) {
-      const data = JSON.parse(fs.readFileSync(p, 'utf8'));
-      // default: enabled
-      return data.adaptiveAcceleration !== false;
-    }
-  } catch (_) {}
-  return true;
+  const data = _configCache ?? _readConfigFromDisk();
+  // default: enabled (true means hardware acceleration ON)
+  return data.adaptiveAcceleration !== false;
 }
 
 // Apply acceleration preference early (before app is ready).
-// If disabled — turn off Chromium hardware acceleration (restart needed to re-enable).
+// AUTH_FILE / getConfigPath() are now defined above, so no TDZ issue.
+// If adaptiveAcceleration === false — turn off HW acceleration (restart required to re-enable).
 if (!getAdaptiveAcceleration()) {
   app.disableHardwareAcceleration();
 }
 
-const AUTH_FILE = 'auth.json';
-const DEFAULT_BASE_URL = 'https://api-s.anixsekai.com';
-const LOG_DIR = 'logs';
+// GPU command-line tweaks to reduce flickering on problematic drivers.
+// These are safe no-ops on drivers that don't need them.
+app.commandLine.appendSwitch('disable-gpu-vsync');
+app.commandLine.appendSwitch('enable-zero-copy');
 
 function getLogDir() {
   const dir = path.join(app.getPath('userData'), LOG_DIR);
@@ -131,43 +141,30 @@ function appendLog(name, payload) {
   }
 }
 
-function getConfigPath() {
-  return path.join(app.getPath('userData'), AUTH_FILE);
-}
-
 function loadConfig() {
-  try {
-    const p = getConfigPath();
-    if (fs.existsSync(p)) {
-      const data = JSON.parse(fs.readFileSync(p, 'utf8'));
-      return {
-        token: data.token || null,
-        baseUrl: data.baseUrl || DEFAULT_BASE_URL,
-        profileId: data.profileId ?? null,
-        profileLogin: data.profileLogin || null,
-        profileAvatar: data.profileAvatar || null,
-        profileRaw: data.profileRaw || null,
-        deviceId: data.deviceId || null,
-      };
-    }
-  } catch (_) {}
-  return {
-    token: null,
-    baseUrl: DEFAULT_BASE_URL,
-    profileId: null,
-    profileLogin: null,
-    profileAvatar: null,
-    profileRaw: null,
-    deviceId: null,
+  const raw = _readConfigFromDisk();
+  const cfg = {
+    token: raw.token || null,
+    baseUrl: raw.baseUrl || DEFAULT_BASE_URL,
+    profileId: raw.profileId ?? null,
+    profileLogin: raw.profileLogin || null,
+    profileAvatar: raw.profileAvatar || null,
+    profileRaw: raw.profileRaw || null,
+    deviceId: raw.deviceId || null,
   };
+  // Prime the cache on first load after app is ready (getPath is reliable then).
+  if (_configCache === null) _configCache = raw;
+  return cfg;
 }
 
 function saveConfig(updates) {
   try {
     const p = getConfigPath();
-    const current = loadConfig();
-    const next = { ...current, ...updates };
+    const raw = _configCache ?? _readConfigFromDisk();
+    const next = { ...raw, ...updates };
     fs.writeFileSync(p, JSON.stringify(next), 'utf8');
+    // Keep in-memory cache in sync — avoids a disk read on next access.
+    _configCache = next;
   } catch (err) {
     console.error('Failed to save config', err);
   }
@@ -210,14 +207,24 @@ function getAnixart() {
   return anixart;
 }
 
-function createTray() {
+let _trayImage = null;
+
+function getTrayImage() {
+  if (_trayImage) return _trayImage;
   const iconPath = getIconPath();
-  if (!iconPath) return;
+  if (!iconPath) return null;
   const image = nativeImage.createFromPath(iconPath);
-  if (image.isEmpty()) return;
+  if (image.isEmpty()) return null;
   // Linux tray icons are typically 22px; Windows/macOS use 16px
   const traySize = process.platform === 'linux' ? 22 : 16;
-  tray = new Tray(image.resize({ width: traySize, height: traySize }));
+  _trayImage = image.resize({ width: traySize, height: traySize });
+  return _trayImage;
+}
+
+function createTray() {
+  const image = getTrayImage();
+  if (!image) return;
+  tray = new Tray(image);
   tray.setToolTip('AnixApp');
 
   const showWindow = () => {
@@ -247,11 +254,17 @@ function createWindow() {
     minHeight: 600,
     frame: false,
     titleBarStyle: 'hidden',
+    // Dark background prevents the white flash that appears between window creation
+    // and the first painted frame — especially visible with frameless windows.
+    backgroundColor: '#0d0d0d',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      // Keep background throttling off to prevent animation glitches when the
+      // window loses focus momentarily (e.g. opening a system dialog).
+      backgroundThrottling: false,
     },
     title: 'AnixApp',
     show: false,
@@ -330,6 +343,9 @@ function setupVideoRequestHeaders() {
 }
 
 app.whenReady().then(() => {
+  // Prime the config cache now that userData path is fully reliable.
+  if (_configCache === null) _configCache = _readConfigFromDisk();
+
   setupVideoRequestHeaders();
   createWindow();
   createTray();

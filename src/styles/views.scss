@@ -227,6 +227,7 @@
   overflow: hidden;
   border: 1px solid $color-border;
   transition: border-color $transition, transform $transition;
+  will-change: transform;
   &:hover {
     border-color: $color-accent;
     transform: translateY(-2px);
@@ -819,6 +820,7 @@
 .release-page__poster--clickable {
   cursor: pointer;
   transition: transform $transition, box-shadow $transition;
+  will-change: transform;
   &:hover {
     transform: translateY(-2px);
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
@@ -845,6 +847,7 @@
   text-decoration: none;
   cursor: pointer;
   transition: background $transition, border-color $transition, color $transition, transform 0.15s ease;
+  will-change: transform;
 
   .release-page__btn-icon {
     display: inline-flex;
@@ -1299,6 +1302,7 @@
   color: inherit;
   transition: border-color $transition, background $transition, transform $transition;
   display: block;
+  will-change: transform;
 
   &:hover {
     border-color: $color-accent;
@@ -1549,6 +1553,7 @@
   text-decoration: none;
   color: inherit;
   transition: border-color $transition, transform $transition;
+  will-change: transform;
 
   &:hover {
     border-color: $color-accent;

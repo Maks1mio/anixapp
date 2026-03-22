@@ -4,6 +4,9 @@ import { getPath } from '../router';
 export const currentPath = writable<string>(getPath());
 
 export function navigate(path: string, _state?: unknown): void {
+  // Emit for logger before changing location
+  window.dispatchEvent(new CustomEvent('anix:navigate', { detail: path }));
+
   if (window.location.protocol === 'file:') {
     const hash = path && path !== '/' ? (path.startsWith('#') ? path : '#' + path) : '#/';
     if (window.location.hash !== hash) {

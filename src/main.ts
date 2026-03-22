@@ -1,6 +1,10 @@
 import './styles/main.scss';
 import { mount } from 'svelte';
 import App from './App.svelte';
+import { initRendererLogging } from './services/logger';
+
+// Init renderer-side logging before anything else
+initRendererLogging();
 
 function initClickLogging(): void {
   document.addEventListener(

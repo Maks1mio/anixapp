@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { Anixart, KodikParser, SibnetParser, AniLibriaParser } = require('anixartjs');
 const { DefaultResult, BookmarkType, BookmarkSortType } = require('anixartjs');
+const logger = require('./logger');
 
 // ——— Discord Rich Presence (graceful — disabled if Discord is not running) ———
 let discordRpc = null;
@@ -49,6 +50,14 @@ function handleAnixError(err, context) {
     msg.includes('ECONNREFUSED') ||
     msg.includes('ECONNRESET') ||
     msg.includes('ETIMEDOUT');
+
+  // Always log API errors — they're the most important for debugging
+  logger.error('api', `${context}: ${msg}`, {
+    context,
+    network: isNetwork,
+    stack: err && err.stack ? String(err.stack).slice(0, 600) : undefined,
+  });
+
   if (isNetwork && mainWindow && !mainWindow.isDestroyed()) {
     try {
       mainWindow.webContents.send('anix:offline', {
@@ -60,6 +69,36 @@ function handleAnixError(err, context) {
     }
   }
   throw err;
+}
+
+/**
+ * Wrap an async IPC handler with automatic logging:
+ * - Logs every call with args (sanitised) and duration
+ * - Logs errors before rethrowing
+ */
+function loggedHandle(channel, fn) {
+  return ipcMain.handle(channel, async (event, ...args) => {
+    const t0 = Date.now();
+    // Sanitise args — never log passwords/tokens
+    const safeArgs = args.map((a, i) => {
+      if (channel === 'anix:login' && i === 1) return '[PASSWORD]';
+      if (typeof a === 'string' && a.length > 120) return a.slice(0, 120) + '…';
+      return a;
+    });
+    logger.ipc(channel, '→', safeArgs.length ? { args: safeArgs } : undefined);
+    try {
+      const result = await fn(event, ...args);
+      logger.ipc(channel, '←', { ms: Date.now() - t0 });
+      return result;
+    } catch (err) {
+      const msg = err && err.message ? String(err.message) : String(err);
+      logger.error('ipc', `${channel} failed: ${msg}`, {
+        ms: Date.now() - t0,
+        stack: err && err.stack ? String(err.stack).slice(0, 400) : undefined,
+      });
+      throw err;
+    }
+  });
 }
 
 // ——— Config constants (must be before any config reads) ———
@@ -271,6 +310,7 @@ function createWindow() {
   };
   if (iconPath) winOpts.icon = iconPath;
   mainWindow = new BrowserWindow(winOpts);
+  logger.info('main', 'window created');
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
@@ -279,7 +319,10 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.once('ready-to-show', () => {
+    logger.info('main', 'window ready-to-show');
+    mainWindow.show();
+  });
   mainWindow.on('close', (e) => {
     if (!isQuitting) {
       if (getMinimizeToTray()) {
@@ -346,6 +389,10 @@ app.whenReady().then(() => {
   // Prime the config cache now that userData path is fully reliable.
   if (_configCache === null) _configCache = _readConfigFromDisk();
 
+  logger.init(app.getPath('userData'), app.getVersion(), process.versions.electron);
+  logger.patchConsole();
+  logger.info('main', 'app ready', { platform: process.platform, version: app.getVersion(), electron: process.versions.electron });
+
   setupVideoRequestHeaders();
   createWindow();
   createTray();
@@ -358,7 +405,7 @@ app.whenReady().then(() => {
     mainWindow.on('focus', () => discordRpc.focusWindow('main'));
   }
 });
-app.on('before-quit', () => { if (discordRpc) discordRpc.destroy(); });
+app.on('before-quit', () => { logger.info('main', 'app before-quit'); if (discordRpc) discordRpc.destroy(); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
@@ -410,7 +457,7 @@ ipcMain.handle('anix:getAuthStatus', () => {
 // Если токена ещё нет (пользователь не залогинен) — считаем соединение доступным,
 // чтобы не блокировать экран логина.
 // Если сеть/сервер недоступны — промис отклонится.
-ipcMain.handle('anix:checkConnection', async () => {
+loggedHandle('anix:checkConnection', async () => {
   try {
     const token = loadSavedToken();
     if (!token) {
@@ -424,16 +471,17 @@ ipcMain.handle('anix:checkConnection', async () => {
   }
 });
 
-ipcMain.handle('anix:login', async (_, username, password) => {
+loggedHandle('anix:login', async (_, username, password) => {
   // Для логина используем отдельный клиент БЕЗ сохранённого токена,
   // чтобы старый токен не перезаписывал учётку.
   const { baseUrl } = loadConfig();
   const loginClient = new Anixart({ baseUrl });
   const res = await loginClient.endpoints.auth.signIn({ login: username, password });
-  appendLog('auth', { event: 'login', code: res?.code, profile: res?.profile, profileToken: res?.profileToken });
   const code = res?.code;
   const profile = res?.profile;
   const profileToken = res?.profileToken;
+  // Log auth result but never the token/password
+  logger.info('auth', 'login attempt', { code, profileId: profile?.id, login: profile?.login });
   if (code === DefaultResult.Ok && profileToken?.token) {
     saveConfig({
       token: profileToken.token,
@@ -442,14 +490,15 @@ ipcMain.handle('anix:login', async (_, username, password) => {
       profileAvatar: profile?.avatar ?? null,
       profileRaw: profile || null,
     });
-    // Пересоздаём основной клиент с новым токеном
+    logger.info('auth', 'login success', { profileId: profile?.id, login: profile?.login });
     anixart = new Anixart({ baseUrl, token: profileToken.token });
     return { success: true };
   }
+  logger.warn('auth', 'login failed', { code });
   return { success: false, code };
 });
 
-ipcMain.handle('anix:logout', () => {
+loggedHandle('anix:logout', async () => {
   saveConfig({
     token: null,
     profileId: null,
@@ -457,6 +506,7 @@ ipcMain.handle('anix:logout', () => {
     profileAvatar: null,
     profileRaw: null,
   });
+  logger.info('auth', 'logout');
   anixart = null;
   return undefined;
 });
@@ -545,7 +595,7 @@ ipcMain.handle('anix:selfProfile', async () => {
 
 // ——— Anixart API bridge (raw JSON responses for renderer) ———
 
-ipcMain.handle('anix:releaseById', async (_, id, extended = true) => {
+loggedHandle('anix:releaseById', async (_, id, extended = true) => {
   try {
     const client = getAnixart();
     const data = await client.endpoints.release.info(id, extended);
@@ -937,6 +987,47 @@ ipcMain.handle('shell:openExternal', (_, url) => {
 
 ipcMain.handle('app:getVersion', () => app.getVersion());
 
+ipcMain.handle('log:renderer', (_, entry) => {
+  if (entry && typeof entry === 'object') {
+    logger.renderer(entry.level || 'INFO', entry.ch || 'unknown', entry.msg || '', entry.data);
+  }
+});
+
+ipcMain.handle('log:getSessions', () => logger.getSessions().map(s => ({ id: s.id, ts: s.ts })));
+
+ipcMain.handle('log:getSessionLog', (_, sessionId, file, limit) => {
+  const allowed = ['main', 'ipc', 'renderer', 'errors'];
+  const safeFile = allowed.includes(file) ? file : 'main';
+  return logger.getSessionLog(sessionId, safeFile, limit || 500);
+});
+
+ipcMain.handle('log:getSystemInfo', () => logger.getSystemInfo());
+
+ipcMain.handle('log:collectZip', async () => {
+  try {
+    const buf = logger.collectZip();
+    const dir = logger.getCurrentSessionDir() || app.getPath('temp');
+    const zipPath = path.join(dir, `anixapp-logs-${Date.now()}.zip`);
+    fs.writeFileSync(zipPath, buf);
+    return { ok: true, path: zipPath };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
+ipcMain.handle('log:openZip', async (_, zipPath) => {
+  const { shell: s } = require('electron');
+  if (zipPath && fs.existsSync(zipPath)) {
+    await s.showItemInFolder(zipPath);
+  }
+});
+
+ipcMain.handle('log:openFolder', async () => {
+  const { shell: s } = require('electron');
+  const dir = logger.getCurrentSessionDir();
+  if (dir) await s.openPath(path.dirname(dir));
+});
+
 ipcMain.handle('app:getVersions', () => {
   let anixartjsVersion = '';
   try {
@@ -1215,10 +1306,9 @@ ipcMain.handle('anix:discoverRecommendations', async (_, page = 0) => {
   }
 });
 
-ipcMain.handle('anix:filterReleases', async (_, page = 0, filterArgs = {}, extended = true) => {
+loggedHandle('anix:filterReleases', async (_, page = 0, filterArgs = {}, extended = true) => {
   try {
     const client = getAnixart();
-    // Поведение как в AniDesk: release.filter(page, filterArgs, extended)
     const data = await client.endpoints.release.filter(page, filterArgs, extended);
     return data;
   } catch (err) {
@@ -1544,11 +1634,11 @@ ipcMain.handle('anix:changeLogin', async (_, newLogin) => {
 
 // ——— Поиск ———
 
-ipcMain.handle('anix:searchReleases', async (_, query, page = 0) => {
+loggedHandle('anix:searchReleases', async (_, query, page = 0) => {
   try {
     const client = getAnixart();
     const data = await client.endpoints.search.releases({ query, page, searchBy: 0 });
-    appendLog('searchReleases', { query, page, response: data });
+    logger.info('search', 'releases', { query, page, total: data?.total });
     return data;
   } catch (err) {
     handleAnixError(err, 'searchReleases');

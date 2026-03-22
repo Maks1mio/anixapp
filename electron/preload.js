@@ -96,6 +96,14 @@ contextBridge.exposeInMainWorld('electron', {
   toggleMaximizeToolWindow:() => ipcRenderer.invoke('tool:toggleMaximize'),
   closeToolWindow:         () => ipcRenderer.invoke('tool:close'),
   onToolWindowState: (cb) => ipcRenderer.on('tool:windowState', (_, state) => cb(state)),
+  // Logging
+  logRenderer:      (entry) => ipcRenderer.invoke('log:renderer', entry),
+  logGetSessions:   ()      => ipcRenderer.invoke('log:getSessions'),
+  logGetSessionLog: (sessionId, file, limit) => ipcRenderer.invoke('log:getSessionLog', sessionId, file, limit),
+  logGetSystemInfo: ()      => ipcRenderer.invoke('log:getSystemInfo'),
+  logCollectZip:    ()      => ipcRenderer.invoke('log:collectZip'),
+  logOpenZip:       (p)     => ipcRenderer.invoke('log:openZip', p),
+  logOpenFolder:    ()      => ipcRenderer.invoke('log:openFolder'),
 });
 
 // Main window receives notification when theme editor saves a theme

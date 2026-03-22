@@ -1,3 +1,6 @@
+> [!CAUTION]  
+> Обновление с работающим плеером будет 23 марта, может быть 22.
+
 <img width="3792" height="2032" alt="image" src="https://github.com/user-attachments/assets/61c16e7f-9821-4e8f-ad2e-da7cd7ecfb62" />
 
 # AnixApp Beta

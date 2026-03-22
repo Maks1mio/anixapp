@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { appScreen } from './stores/auth';
   import { currentPath, navigate } from './stores/navigation';
-  import { openLobbyModal, settingsModalOpen, lobbyModalOpen, lobbyModalInitialCode, notificationsModalOpen } from './stores/modals';
+  import { openLobbyModal, settingsModalOpen, lobbyModalOpen, lobbyModalInitialCode, notificationsModalOpen, watchModalOpen, watchModalReleaseId, watchModalReleaseTitle } from './stores/modals';
   import { getPath, getSearchParams } from './router';
   import { initTheme, applyThemeById } from './services/themes';
   import { getCurrentRoomId, getCurrentRoomCode, getCurrentParticipants, pushCommand, voteOnProposal } from './services/lobby-state';
@@ -26,6 +26,7 @@
   import SettingsModal from './components/SettingsModal.svelte';
   import LobbyModal from './components/LobbyModal.svelte';
   import NotificationsModal from './components/NotificationsModal.svelte';
+  import WatchModal from './components/WatchModal.svelte';
 
   initTheme();
 
@@ -244,19 +245,31 @@
   <Login onSuccess={() => appScreen.set('main')} />
 
 {:else}
-  <Layout currentPath={path}>
+  <Layout currentPath={path} searchQ={searchQ}>
     {#if relatedMatch}
-      <Related id={parseInt(relatedMatch[1], 10)} />
+      {#key relatedMatch[1]}
+        <Related id={parseInt(relatedMatch[1], 10)} />
+      {/key}
     {:else if releaseMatch}
-      <Release id={parseInt(releaseMatch[1], 10)} />
+      {#key releaseMatch[1]}
+        <Release id={parseInt(releaseMatch[1], 10)} />
+      {/key}
     {:else if profileVotesMatch}
-      <ProfileVotes id={parseInt(profileVotesMatch[1], 10)} />
+      {#key profileVotesMatch[1]}
+        <ProfileVotes id={parseInt(profileVotesMatch[1], 10)} />
+      {/key}
     {:else if profileFriendsMatch}
-      <ProfileFriends id={parseInt(profileFriendsMatch[1], 10)} />
+      {#key profileFriendsMatch[1]}
+        <ProfileFriends id={parseInt(profileFriendsMatch[1], 10)} />
+      {/key}
     {:else if profileMatch}
-      <Profile id={parseInt(profileMatch[1], 10)} />
+      {#key profileMatch[1]}
+        <Profile id={parseInt(profileMatch[1], 10)} />
+      {/key}
     {:else if collectionMatch}
-      <Collection id={parseInt(collectionMatch[1], 10)} />
+      {#key collectionMatch[1]}
+        <Collection id={parseInt(collectionMatch[1], 10)} />
+      {/key}
     {:else if path === '/catalog'}
       <Catalog />
     {:else if path === '/bookmarks'}
@@ -286,5 +299,12 @@
   {/if}
   {#if $notificationsModalOpen}
     <NotificationsModal onClose={() => notificationsModalOpen.set(false)} />
+  {/if}
+  {#if $watchModalOpen}
+    <WatchModal
+      releaseId={$watchModalReleaseId}
+      releaseTitle={$watchModalReleaseTitle}
+      onClose={() => watchModalOpen.set(false)}
+    />
   {/if}
 {/if}

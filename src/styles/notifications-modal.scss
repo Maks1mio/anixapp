@@ -10,7 +10,7 @@
   justify-content: flex-end;
   padding: 3rem 1.5rem 1.5rem;
   background: transparent;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .notifications-modal-overlay--open {

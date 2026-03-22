@@ -90,6 +90,9 @@
     dropdown.className = DROPDOWN_CLASS;
     dropdown.setAttribute('role', 'listbox');
 
+    const pageEl = document.createElement('div');
+    pageEl.className = 'custom-select__page';
+
     const listEl = document.createElement('div');
     listEl.className = 'custom-select__list';
 
@@ -128,7 +131,8 @@
       listEl.appendChild(item);
     });
 
-    dropdown.appendChild(listEl);
+    pageEl.appendChild(listEl);
+    dropdown.appendChild(pageEl);
 
     function onScrollOrResize() {
       if (!document.body.contains(dropdown)) return;

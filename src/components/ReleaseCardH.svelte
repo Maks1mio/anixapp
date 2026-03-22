@@ -39,40 +39,45 @@
 
   let { data }: { data: ReleaseCardData } = $props();
 
-  const id = data.id;
-  const title = data.titleRu || data.titleEn || 'Без названия';
-  const poster = data.poster || '';
-  const ratingValue = typeof data.rating === 'number' ? data.rating : null;
-  const voteCount = data.voteCount;
-  const epCount = data.episodesReleased ?? data.episodesTotal ?? null;
-  const desc = data.description ? truncate(data.description, DESC_MAX_LENGTH) : '';
-  const myVote = typeof data.myVote === 'number' && data.myVote > 0 ? data.myVote : null;
+  const id = $derived(data.id);
+  const title = $derived(data.titleRu || data.titleEn || 'Без названия');
+  const poster = $derived(data.poster || '');
+  const ratingValue = $derived(typeof data.rating === 'number' ? data.rating : null);
+  const voteCount = $derived(data.voteCount);
+  const epCount = $derived(data.episodesReleased ?? data.episodesTotal ?? null);
+  const desc = $derived(data.description ? truncate(data.description, DESC_MAX_LENGTH) : '');
+  const myVote = $derived(typeof data.myVote === 'number' && data.myVote > 0 ? data.myVote : null);
 
-  const genreTags = data.genres
-    ?.split(',')
-    .map((g) => g.trim())
-    .filter(Boolean)
-    .slice(0, 5) ?? [];
+  const genreTags = $derived(
+    data.genres
+      ?.split(',')
+      .map((g) => g.trim())
+      .filter(Boolean)
+      .slice(0, 5) ?? []
+  );
 
-  const hasRating = ratingValue != null && ratingValue > 0 && (voteCount ?? 0) > 0;
-  const ratingHue_val = hasRating && ratingValue != null ? ratingHue(ratingValue) : 0;
-  const ratingBg = hasRating ? `hsl(${ratingHue_val}, 95%, 52%)` : '';
-  const ratingTextColor = hasRating ? (ratingHue_val >= 28 ? '#0b0b0b' : '#f5f5f5') : '';
-  const votesLabel = voteCount != null ? formatVoteCount(voteCount) : '';
+  const hasRating = $derived(ratingValue != null && ratingValue > 0 && (voteCount ?? 0) > 0);
+  const ratingHue_val = $derived(hasRating && ratingValue != null ? ratingHue(ratingValue) : 0);
+  const ratingBg = $derived(hasRating ? `hsl(${ratingHue_val}, 95%, 52%)` : '');
+  const ratingTextColor = $derived(hasRating ? (ratingHue_val >= 28 ? '#0b0b0b' : '#f5f5f5') : '');
+  const votesLabel = $derived(voteCount != null ? formatVoteCount(voteCount) : '');
 
-  const titleTooltipLines: string[] = [];
-  if (data.titleRu) titleTooltipLines.push(`Русское: ${data.titleRu}`);
-  if (data.titleEn) titleTooltipLines.push(`Оригинал: ${data.titleEn}`);
-  if (data.titleAlt) titleTooltipLines.push(`Альт: ${data.titleAlt}`);
-  const hasTitleTooltip = titleTooltipLines.length > 0;
+  const titleTooltipLines = $derived((() => {
+    const lines: string[] = [];
+    if (data.titleRu) lines.push(`Русское: ${data.titleRu}`);
+    if (data.titleEn) lines.push(`Оригинал: ${data.titleEn}`);
+    if (data.titleAlt) lines.push(`Альт: ${data.titleAlt}`);
+    return lines;
+  })());
+  const hasTitleTooltip = $derived(titleTooltipLines.length > 0);
 
   let currentStatusId: ListStatusId | null = $state(
     (data.listStatus as ListStatusId | undefined) ?? null
   );
-  let isFavorite = $state(!!data.isFavorite);
+  let isFavorite = $state(data.isFavorite ?? false);
   let posterError = $state(false);
 
-  const infoParts = $derived(() => {
+  const infoParts = $derived((() => {
     const parts: string[] = [];
     if (data.year) parts.push(data.year);
     if (data.country) parts.push(data.country);
@@ -83,7 +88,7 @@
       }
     }
     return parts;
-  });
+  })());
 
   const statusLabel = $derived(currentStatusId ? STATUS_LABEL_BY_ID[currentStatusId] : null);
   const statusClass = $derived(
@@ -217,11 +222,11 @@
               {#if data.releaseDate}<span class="release-card-h__meta-dot">·</span>{/if}{epCount} эп.
             {/if}
           {/if}
-          {#if infoParts().length > 0}
+          {#if infoParts.length > 0}
             {#if hasRating || data.releaseDate || epCount != null}<span class="release-card-h__meta-dot">·</span>{/if}
-            {#each infoParts() as part, i}{#if i > 0}<span class="release-card-h__meta-dot">·</span>{/if}{part}{/each}
+            {#each infoParts as part, i}{#if i > 0}<span class="release-card-h__meta-dot">·</span>{/if}{part}{/each}
           {/if}
-          {#if !hasRating && !data.releaseDate && epCount == null && infoParts().length === 0}—{/if}
+          {#if !hasRating && !data.releaseDate && epCount == null && infoParts.length === 0}—{/if}
         {/snippet}
         {@render metaBody()}
         {#if myVote != null}

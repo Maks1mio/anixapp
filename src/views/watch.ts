@@ -23,7 +23,7 @@ function isHlsUrl(url: string): boolean {
 function stripKodikQueryParams(url: string): string {
   try {
     const u = new URL(url);
-    if (/kodik\.info|aniqit\.com|anixis\.com|aniqart\.com/i.test(u.hostname)) {
+    if (/kodikplayer\.com|kodik\.info|aniqit\.com|anixis\.com|aniqart\.com/i.test(u.hostname)) {
       return u.origin + u.pathname;
     }
     return url;
@@ -374,7 +374,7 @@ export function renderWatch(): HTMLElement {
     }
     let playUrl = url;
     let useVideo = !iframe;
-    const isEmbedPage = /aniqit\.com|anixis\.com|aniqart\.com|kodik\.info/i.test(host);
+    const isEmbedPage = /aniqit\.com|anixis\.com|aniqart\.com|kodikplayer\.com|kodik\.info/i.test(host);
     if (isEmbedPage) {
       try {
         const links = await KodikParser.getDirectLinks(url);

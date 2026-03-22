@@ -1,5 +1,5 @@
 <script lang="ts">
-  import ReleaseCardV from "../components/ReleaseCardV.svelte";
+  import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import { onMount, onDestroy } from 'svelte';
   import type { ReleaseCardData } from '../types/release';
 
@@ -99,9 +99,7 @@
       <p class="feed-empty">Нет записей в каталоге.</p>
     {:else}
       <div class="bookmarks__grid">
-        {#each items as item (item.id)}
-          <ReleaseCardV data={item} />
-        {/each}
+        <ReleaseCardsGrid items={items} />
       </div>
     {/if}
   </div>

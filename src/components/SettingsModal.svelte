@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import Page from './Page.svelte';
   import { navigate } from '../stores/navigation';
   import {
     renderConnectionTab,
@@ -417,8 +418,9 @@
   function switchTab(tab: SettingsTab) {
     activeTab = tab;
     if (!bodyEl) return;
+    const scrollEl = bodyEl.parentElement as HTMLElement | null;
     bodyEl.innerHTML = '';
-    bodyEl.scrollTop = 0;
+    scrollEl?.scrollTo({ top: 0 });
 
     switch (tab) {
       case 'account':
@@ -640,7 +642,9 @@
         <button class="settings-close-btn" aria-label="Закрыть" onclick={close}></button>
       </div>
       <div class="settings-content__page-wrap">
-        <div class="settings-page" bind:this={bodyEl}></div>
+        <Page scrollId="settings-scroll" noPadding={true} extraClass="settings-page">
+          <div bind:this={bodyEl}></div>
+        </Page>
       </div>
     </div>
 

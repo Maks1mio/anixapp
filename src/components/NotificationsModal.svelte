@@ -9,6 +9,7 @@
     iconUser,
   } from './icons';
   import type { AppUpdateProgress } from '../types/electron';
+    import Page from './Page.svelte';
 
   interface Props {
     onClose: () => void;
@@ -283,6 +284,7 @@
       <button type="button" class="notifications-modal__close" aria-label="Закрыть" onclick={close}></button>
     </div>
 
+    <Page noPadding={true}>
     <div class="notifications-modal__body">
       <!-- App update card slot -->
       {#if updateCard}
@@ -394,5 +396,6 @@
         </div>
       {/if}
     </div>
+    </Page>
   </div>
 </div>

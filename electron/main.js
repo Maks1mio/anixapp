@@ -311,7 +311,7 @@ function setupVideoRequestHeaders() {
       upsertHeader(requestHeaders, 'Referer', details.url);
     }
     if (host.endsWith('kodik-cdn.com')) {
-      upsertHeader(requestHeaders, 'Referer', 'https://aniqit.com/');
+      upsertHeader(requestHeaders, 'Referer', 'https://kodikplayer.com/');
     }
     if (host !== 'kodikplayer.com' && host !== 'video.sibnet.ru') {
       upsertHeader(requestHeaders, 'User-Agent', ANIXART_UA);

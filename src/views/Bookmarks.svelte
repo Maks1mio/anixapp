@@ -1,5 +1,5 @@
 <script lang="ts">
-  import ReleaseCardV from "../components/ReleaseCardV.svelte";
+  import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import { onMount, onDestroy } from 'svelte';
   import Tabs from '../components/Tabs.svelte';
   import { buildPosterUrl } from '../utils/posterUrl';
@@ -219,9 +219,7 @@
       {:else if loadState === 'empty'}
         <p class="bookmarks__empty">Здесь пока ничего нет.</p>
       {:else}
-        {#each items as item (item.id)}
-          <ReleaseCardV data={item} />
-        {/each}
+        <ReleaseCardsGrid items={items} />
       {/if}
     </div>
     {#if showEnd}

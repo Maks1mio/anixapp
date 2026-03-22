@@ -109,7 +109,8 @@ export function openSearchDropdown(
     scrollEl.querySelectorAll('.search-dropdown__history-item').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
-        const query = (e.currentTarget as HTMLElement).textContent?.trim() ?? '';
+        // Capture textContent before close() removes the element from DOM.
+        const query = (btn as HTMLElement).textContent?.trim() ?? '';
         close();
         onSelect({ query });
       });
@@ -142,7 +143,7 @@ export function openSearchDropdown(
   function close(): void {
     input.removeEventListener('input', render);
     if (dropdown.parentElement) dropdown.parentElement.removeChild(dropdown);
-    document.removeEventListener('keydown', onKeyDown);
+    document.removeEventListener('keydown', onKeyDown, true);
     document.removeEventListener('mousedown', onMouseDown);
     if (activeClose === close) activeClose = null;
   }
@@ -173,6 +174,7 @@ export function openSearchDropdown(
 
     if (e.key === 'Enter' && currentIndex >= 0) {
       e.preventDefault();
+      e.stopPropagation(); // prevent Layout.svelte's Enter handler from also firing
       const target = items[currentIndex];
       target.click();
     }
@@ -184,7 +186,10 @@ export function openSearchDropdown(
     close();
   }
 
-  document.addEventListener('keydown', onKeyDown);
+  // Use capture phase so this fires before the input element's own keydown handlers.
+  // This lets us intercept Enter on a highlighted item before Layout.svelte reads
+  // the (potentially empty) input value.
+  document.addEventListener('keydown', onKeyDown, true);
   document.addEventListener('mousedown', onMouseDown);
   activeClose = close;
 

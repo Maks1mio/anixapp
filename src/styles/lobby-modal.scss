@@ -12,7 +12,7 @@
   justify-content: flex-end;
   padding: 3rem 1.5rem 1.5rem;
   background: transparent;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 // ─── Panel ──────────────────────────────────────────────────────────
@@ -685,4 +685,67 @@
   text-align: center;
   font-size: 0.85rem;
   color: $color-text-muted;
+}
+
+
+// ─── Temporarily unavailable ─────────────────────────────────────────
+.lobby-modal__unavailable {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 2rem 1.5rem;
+}
+
+.lobby-modal__unavailable-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $color-text-muted;
+  margin-bottom: 1rem;
+}
+
+.lobby-modal__unavailable-title {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: $color-text;
+}
+
+.lobby-modal__unavailable-desc {
+  margin: 0;
+  font-size: 0.85rem;
+  color: $color-text-muted;
+  line-height: 1.5;
+  max-width: 280px;
+}
+
+// ─── Maintenance banner ──────────────────────────────────────────────
+.lobby-modal__maintenance-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 1rem 0;
+  padding: 0.55rem 0.75rem;
+  background: color-mix(in srgb, #f59e0b 12%, transparent);
+  border: 1px solid color-mix(in srgb, #f59e0b 35%, transparent);
+  border-radius: $radius-md;
+  font-size: 0.8rem;
+  color: #f59e0b;
+  line-height: 1.4;
+
+  svg {
+    flex-shrink: 0;
+  }
+}
+
+// ─── Disabled actions state ──────────────────────────────────────────
+.lobby-modal__actions--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+  user-select: none;
 }

@@ -83,7 +83,6 @@ export function openLobbyModal(prefilledCode?: string): void {
   requestAnimationFrame(() => overlay.classList.add('lobby-modal-overlay--open'));
 
   let closed = false;
-  let onDocumentClick: ((e: MouseEvent) => void) | null = null;
 
   function close() {
     if (closed) return;
@@ -100,15 +99,17 @@ export function openLobbyModal(prefilledCode?: string): void {
       if (!overlay.parentNode) return;
       overlay.remove();
       document.removeEventListener('keydown', onKey);
-      if (onDocumentClick) {
-        document.removeEventListener('click', onDocumentClick, true);
-        onDocumentClick = null;
-      }
       (overlay as unknown as { _close?: () => void })._close = undefined;
     };
     overlay.addEventListener('transitionend', done, { once: true });
     setTimeout(done, 260);
   }
+
+  // Закрытие по клику вне панели
+  overlay.addEventListener('click', (e) => {
+    if (panel.contains(e.target as Node)) return;
+    close();
+  });
 
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Escape') close();
@@ -116,13 +117,6 @@ export function openLobbyModal(prefilledCode?: string): void {
   document.addEventListener('keydown', onKey);
 
   panel.querySelector('.lobby-modal__close')?.addEventListener('click', close);
-
-  onDocumentClick = (e: MouseEvent) => {
-    const target = e.target as HTMLElement | null;
-    if (target && panel.contains(target)) return;
-    close();
-  };
-  document.addEventListener('click', onDocumentClick, true);
 
   (overlay as unknown as { _close?: () => void })._close = close;
 
@@ -285,8 +279,46 @@ export function openLobbyModal(prefilledCode?: string): void {
     });
   }
 
-  renderInitial();
+  // Совместный просмотр на техническом обслуживании — показываем UI но заблокированным
+  scrollRoot.innerHTML = `
+    <div class="lobby-modal__maintenance-banner">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Техническое обслуживание — функция временно недоступна
+    </div>
+
+    <div class="lobby-modal__welcome">
+      <div class="lobby-modal__welcome-icon">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><polygon points="10 8 16 11 10 14 10 8" fill="currentColor" stroke="none"/></svg>
+      </div>
+      <p class="lobby-modal__welcome-text">Смотрите аниме вместе с друзьями в реальном времени</p>
+    </div>
+
+    <div class="lobby-modal__actions lobby-modal__actions--disabled">
+      <button type="button" class="lobby-modal__btn lobby-modal__btn--create" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        Создать комнату
+      </button>
+
+      <div class="lobby-modal__divider">
+        <span class="lobby-modal__divider-line"></span>
+        <span class="lobby-modal__divider-text">или</span>
+        <span class="lobby-modal__divider-line"></span>
+      </div>
+
+      <div class="lobby-modal__join-group">
+        <label class="lobby-modal__join-label">Присоединиться по коду</label>
+        <div class="lobby-modal__join-row">
+          <input type="text" class="lobby-modal__input" placeholder="ABC123" maxlength="12" disabled />
+          <button type="button" class="lobby-modal__btn lobby-modal__btn--join" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+            Войти
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
 }
+
 
 function renderInRoom(
   id: string,

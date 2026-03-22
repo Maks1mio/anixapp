@@ -1,9 +1,13 @@
 <script lang="ts">
-  import ReleaseCardV from "../components/ReleaseCardV.svelte";
   import { onMount } from 'svelte';
   import { navigate } from '../stores/navigation';
+  import { openWatchModal } from '../stores/modals';
   import { buildPosterUrl } from '../utils/posterUrl';
   import type { ReleaseCardData } from '../types/release';
+  import Select from '../components/Select.svelte';
+  import type { SelectOption } from '../components/Select.svelte';
+  import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
+  import { iconPlay, iconStar } from '../components/icons';
 
   interface Props {
     id: number;
@@ -28,6 +32,7 @@
       case 3: return '12+';
       case 4: return '16+';
       case 5: return '18+';
+      case 1:
       default: return '0+';
     }
   }
@@ -89,8 +94,7 @@
 
   function ratingHue(grade: number): number {
     const clamped = Math.max(0, Math.min(5, grade));
-    if (clamped <= 2.5) return Math.round((clamped / 2.5) * 30);
-    return Math.round(30 + ((clamped - 2.5) / 2.5) * 90);
+    return (clamped / 5) * 48;
   }
 
   function openImageLightbox(imageUrl: string) {
@@ -98,7 +102,10 @@
     overlay.className = 'release-lightbox';
     overlay.setAttribute('role', 'dialog');
     overlay.setAttribute('aria-modal', 'true');
-    overlay.innerHTML = `<div class="release-lightbox__backdrop"></div><div class="release-lightbox__content"><img src="${imageUrl}" alt="" /></div>`;
+    const div = document.createElement('div');
+    div.textContent = imageUrl;
+    const safeUrl = div.innerHTML;
+    overlay.innerHTML = `<div class="release-lightbox__backdrop"></div><div class="release-lightbox__content"><img src="${safeUrl}" alt="" /></div>`;
     const backdrop = overlay.querySelector('.release-lightbox__backdrop');
     const close = () => {
       overlay.remove();
@@ -114,12 +121,12 @@
     if (img) img.addEventListener('click', (e) => e.stopPropagation());
   }
 
-  // State
+  // ── State ──
   let loadState = $state<'loading' | 'error' | 'ready'>('loading');
   let errorMsg = $state('');
   let release = $state<Record<string, unknown> | null>(null);
 
-  // Derived fields
+  // ── Derived fields ──
   let posterUrl = $derived.by(() => {
     if (!release) return '';
     const r = release;
@@ -207,16 +214,103 @@
 
   let playBtnText = $derived.by(() => {
     if (isViewBlocked) return 'Недоступно';
-    if (!episodesReleased || episodesReleased <= 0) return airedText ? `Выход: ${airedText}` : 'Скоро';
-    return 'Смотреть';
+    if (!episodesReleased || episodesReleased <= 0) return airedText ? `${airedText}` : 'Скоро';
+    return 'Воспроизвести';
   });
   let playBtnDisabled = $derived(isViewBlocked || !episodesReleased || episodesReleased <= 0);
 
-  let descCollapsed = $state(true);
+  // Rating chip derived colors
+  let ratingHueVal = $derived(grade != null && grade > 0 ? ratingHue(grade) : 0);
+  let ratingBg = $derived(grade != null && grade > 0 ? `hsl(${ratingHueVal}, 95%, 52%)` : 'rgba(255,255,255,0.12)');
+  let ratingTextColor = $derived(grade != null && grade > 0 && ratingHueVal >= 28 ? '#0b0b0b' : '#f5f5f5');
 
-  function toggleDesc() {
-    descCollapsed = !descCollapsed;
+  // Meta-info rows (emoji + text, same as TS version)
+  let metaInfoRows = $derived.by(() => {
+    const rows: Array<{ icon: string; text: string }> = [];
+    const parts: string[] = [];
+    if (country) parts.push(country);
+    if (seasonName && year) parts.push(`${seasonName} ${year} г.`);
+    else if (year) parts.push(`${year} г.`);
+    if (parts.length) rows.push({ icon: '🌍', text: parts.join(', ') });
+
+    let epText = '';
+    if (episodesReleased != null && episodesTotal != null && episodesTotal > 0) epText = `${episodesReleased} из ${episodesTotal} эп.`;
+    else if (episodesReleased != null) epText = `${episodesReleased} эп.`;
+    else if (episodesTotal != null) epText = `${episodesTotal} эп.`;
+    if (duration && duration > 0) epText += epText ? ` по ~${duration} мин.` : `~${duration} мин.`;
+    if (epText) rows.push({ icon: '🎬', text: epText });
+
+    const catParts: string[] = [];
+    if (categoryName) catParts.push(categoryName);
+    if (statusName) catParts.push(statusName);
+    if (catParts.length) rows.push({ icon: '📺', text: catParts.join(', ') });
+
+    const studioParts: string[] = [];
+    if (studio) studioParts.push(`Студия ${studio}`);
+    if (author) studioParts.push(`автор ${author}`);
+    if (director) studioParts.push(`режиссёр ${director}`);
+    if (studioParts.length) rows.push({ icon: '🎨', text: studioParts.join(', ') });
+
+    if (source) rows.push({ icon: '📖', text: `Источник: ${source}` });
+    if (genres) rows.push({ icon: '🏷️', text: genres });
+
+    return rows;
+  });
+
+  // Status select options
+  let selectOptions = $derived([
+    { value: '', label: 'Не в списке' },
+    ...LIST_STATUSES.map(s => ({ value: s.id, label: s.label })),
+  ] as SelectOption[]);
+
+  // Release card data for grids
+  function mapCardData(raw: Record<string, unknown>): ReleaseCardData {
+    const p = raw.poster as Record<string, { url?: string }> | undefined;
+    const posterRaw =
+      p?.original?.url ?? p?.medium?.url ?? p?.small?.url
+      ?? (typeof raw.poster === 'string' ? raw.poster : undefined)
+      ?? (typeof raw.image === 'string' ? raw.image : undefined);
+    const posterStr = typeof posterRaw === 'string' ? posterRaw : undefined;
+    const poster = posterStr ? buildPosterUrl(posterStr) || undefined : undefined;
+    const statusObj = raw.status as { name?: string } | undefined;
+    const categoryObj = raw.category as { name?: string } | undefined;
+    const profileListStatus = typeof raw.profile_list_status === 'number' ? raw.profile_list_status : undefined;
+    let listStatus: ReleaseCardData['listStatus'];
+    switch (profileListStatus) {
+      case 1: listStatus = 'watching'; break;
+      case 2: listStatus = 'planned'; break;
+      case 3: listStatus = 'completed'; break;
+      case 4: listStatus = 'on_hold'; break;
+      case 5: listStatus = 'dropped'; break;
+    }
+    return {
+      id: raw.id as number | undefined,
+      titleRu: (raw.title_ru ?? raw.titleRu) as string | undefined,
+      titleEn: (raw.title_original ?? raw.titleEn) as string | undefined,
+      titleAlt: (raw.title_alt as string) || undefined,
+      description: (raw.description as string) || undefined,
+      poster: poster || undefined,
+      rating: typeof raw.grade === 'number' ? raw.grade : undefined,
+      voteCount: typeof raw.vote_count === 'number' ? raw.vote_count : undefined,
+      episodesReleased: typeof raw.episodes_released === 'number' ? raw.episodes_released : undefined,
+      episodesTotal: typeof raw.episodes_total === 'number' ? raw.episodes_total : undefined,
+      year: typeof raw.year === 'string' ? raw.year : (typeof raw.year === 'number' ? String(raw.year) : undefined),
+      country: (raw.country as string) || undefined,
+      genres: (raw.genres as string) || undefined,
+      status: statusObj?.name,
+      studio: (raw.studio as string) || undefined,
+      category: categoryObj?.name,
+      releaseDate: (raw.release_date as string) || undefined,
+      isFavorite: !!(raw.is_favorite),
+      listStatus,
+    };
   }
+
+  let relatedCards = $derived(relatedReleases.map(r => mapCardData(r)));
+  let recommendedCards = $derived(recommended.map(r => mapCardData(r)));
+
+  let descCollapsed = $state(true);
+  function toggleDesc() { descCollapsed = !descCollapsed; }
 
   async function toggleFavorite() {
     if (!window.anixApi || !releaseId) return;
@@ -231,15 +325,10 @@
     } catch { /* ignore */ }
   }
 
-  async function handleWatch() {
+  function handleWatch() {
     if (!releaseId) return;
     if (window.electron?.openPlayerWindow) {
-      const { openWatchModal } = await import('../components/watch-modal');
-      openWatchModal({
-        releaseId,
-        releaseTitle: titleRu || title || titleOriginal || 'Без названия',
-        onOpenPlayer: (url: string) => window.electron?.openPlayerWindow?.(url),
-      });
+      openWatchModal(releaseId, titleRu || title || titleOriginal || 'Без названия');
     } else {
       window.open(`https://anixart.tv/release/${releaseId}`, '_blank', 'noopener,noreferrer');
     }
@@ -258,32 +347,12 @@
     currentStatus = value as ListStatusId;
   }
 
-  function mapCardData(raw: Record<string, unknown>): ReleaseCardData {
-    const p = raw.poster as Record<string, { url?: string }> | undefined;
-    const posterRaw =
-      p?.original?.url ?? p?.medium?.url ?? p?.small?.url
-      ?? (typeof raw.poster === 'string' ? raw.poster : undefined)
-      ?? (typeof raw.image === 'string' ? raw.image : undefined);
-    const posterStr = typeof posterRaw === 'string' ? posterRaw : undefined;
-    const poster = posterStr ? buildPosterUrl(posterStr) || undefined : undefined;
-    return {
-      id: raw.id as number | undefined,
-      titleRu: (raw.title_ru ?? raw.titleRu) as string | undefined,
-      titleEn: (raw.title_original ?? raw.titleEn) as string | undefined,
-      poster: poster || undefined,
-      rating: typeof raw.grade === 'number' ? raw.grade : undefined,
-      isFavorite: !!(raw.is_favorite),
-    };
-  }
-
-
   onMount(async () => {
     if (!window.anixApi) {
       errorMsg = 'API недоступно (только в Electron).';
       loadState = 'error';
       return;
     }
-
     try {
       const data = await window.anixApi.release.info(id, true) as any;
       const raw = data?.release ?? data;
@@ -298,7 +367,6 @@
       currentStatus = numToStatusId(raw.profile_list_status as number | null | undefined);
       loadState = 'ready';
 
-      // Discord RPC
       const posterVal = buildPosterUrl(
         typeof raw.poster === 'string' ? raw.poster :
         (raw.poster as any)?.original?.url ?? (raw.poster as any)?.medium?.url ?? (typeof raw.image === 'string' ? raw.image : '')
@@ -320,13 +388,15 @@
     <div class="release-loading">{errorMsg}</div>
   {:else if release}
     <section class="release-page">
-      <!-- Head -->
+
+      <!-- ── Head: left (poster/buttons) + right (info) ── -->
       <div class="release-page__head">
-        <!-- Left column: poster + play + status -->
+
+        <!-- Left column -->
         <div class="release-page__left">
           <div
             class="release-page__poster{posterUrl ? ' release-page__poster--clickable' : ''}"
-            role="button"
+            role={posterUrl ? 'button' : undefined}
             tabindex={posterUrl ? 0 : -1}
             onclick={() => posterUrl && openImageLightbox(posterUrl)}
             onkeydown={(e) => e.key === 'Enter' && posterUrl && openImageLightbox(posterUrl)}
@@ -346,26 +416,20 @@
               onclick={handleWatch}
             >
               {#if !playBtnDisabled}
-                <span class="release-page__btn-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
-                </span>
+                <span class="release-page__btn-icon">{@html iconPlay(20)}</span>
               {/if}
               <span>{playBtnText}</span>
             </button>
           </div>
 
-          <!-- Status selector -->
+          <!-- Status selector (custom Select component, same as TS renderSelect) -->
           <div class="release-page__status-selector">
-            <select
-              class="custom-select__trigger"
+            <Select
+              options={selectOptions}
               value={currentStatus ?? ''}
-              onchange={(e) => setStatus((e.target as HTMLSelectElement).value)}
-            >
-              <option value="">Не в списке</option>
-              {#each LIST_STATUSES as s}
-                <option value={s.id}>{s.label}</option>
-              {/each}
-            </select>
+              placeholder="Добавить в список"
+              onChange={setStatus}
+            />
           </div>
         </div>
 
@@ -386,15 +450,12 @@
             </p>
           {/if}
 
-          <!-- Rating + favorite -->
+          <!-- Rating chip + Favorite button -->
           <div class="release-page__meta-row">
             {#if hasRating && grade != null}
-              {@const hue = grade > 0 ? ratingHue(grade) : 0}
-              {@const bg = grade > 0 ? `hsl(${hue}, 95%, 52%)` : 'rgba(255,255,255,0.12)'}
-              {@const textColor = grade > 0 && hue >= 28 ? '#0b0b0b' : '#f5f5f5'}
-              <span class="release-page__rating" style="background:{bg};color:{textColor}">
+              <span class="release-page__rating" style="background:{ratingBg};color:{ratingTextColor}">
                 {grade.toFixed(2)}
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>
+                {@html iconStar(14, true)}
                 <span class="release-page__rating-votes">{formatVoteCount(voteCount)}</span>
               </span>
             {/if}
@@ -405,21 +466,26 @@
               title={isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}
               onclick={toggleFavorite}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/>
-              </svg>
-              {#if favoritesCount > 0}
-                <span>{formatVoteCount(favoritesCount)}</span>
-              {/if}
+              <span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/>
+                </svg>
+              </span>
+              <span>{favoritesCount > 0 ? formatVoteCount(favoritesCount) : ''}</span>
             </button>
           </div>
 
+          <!-- Note -->
           {#if noteHtml}
             <div class="release-page__note">{@html noteHtml}</div>
           {/if}
 
+          <!-- Description -->
           {#if descClean}
-            <div class="release-page__desc{descCollapsed && descNeedsTruncate ? ' release-page__desc--collapsed' : ''}" style={descCollapsed && descNeedsTruncate ? 'max-height:6.6em;overflow:hidden' : ''}>
+            <div
+              class="release-page__desc{descCollapsed && descNeedsTruncate ? ' release-page__desc--collapsed' : ''}"
+              style={descCollapsed && descNeedsTruncate ? 'max-height:6.6em;overflow:hidden' : ''}
+            >
               {@html descHtml}
             </div>
             {#if descNeedsTruncate}
@@ -429,63 +495,21 @@
             {/if}
           {/if}
 
-          <!-- Meta info rows -->
-          <div class="release-page__meta-info">
-            {#if country || seasonName || year}
-              <div class="release-page__meta-info-row">
-                <span class="release-page__meta-info-icon">🌍</span>
-                <span class="release-page__meta-info-text">
-                  {[country, seasonName && year ? `${seasonName} ${year} г.` : year ? `${year} г.` : ''].filter(Boolean).join(', ')}
-                </span>
-              </div>
-            {/if}
-            {#if episodesReleased != null || episodesTotal != null || duration}
-              {@const epText = (() => {
-                let t = '';
-                if (episodesReleased != null && episodesTotal != null && episodesTotal > 0) t = `${episodesReleased} из ${episodesTotal} эп.`;
-                else if (episodesReleased != null) t = `${episodesReleased} эп.`;
-                else if (episodesTotal != null) t = `${episodesTotal} эп.`;
-                if (duration && duration > 0) t += t ? ` по ~${duration} мин.` : `~${duration} мин.`;
-                return t;
-              })()}
-              {#if epText}
+          <!-- Meta-info rows (emoji icons, same as TS) -->
+          {#if metaInfoRows.length > 0}
+            <div class="release-page__meta-info">
+              {#each metaInfoRows as row}
                 <div class="release-page__meta-info-row">
-                  <span class="release-page__meta-info-icon">🎬</span>
-                  <span class="release-page__meta-info-text">{epText}</span>
+                  <span class="release-page__meta-info-icon">{row.icon}</span>
+                  <span class="release-page__meta-info-text">{row.text}</span>
                 </div>
-              {/if}
-            {/if}
-            {#if categoryName || statusName}
-              <div class="release-page__meta-info-row">
-                <span class="release-page__meta-info-icon">📺</span>
-                <span class="release-page__meta-info-text">{[categoryName, statusName].filter(Boolean).join(', ')}</span>
-              </div>
-            {/if}
-            {#if studio || author || director}
-              <div class="release-page__meta-info-row">
-                <span class="release-page__meta-info-icon">🎨</span>
-                <span class="release-page__meta-info-text">
-                  {[studio ? `Студия ${studio}` : '', author ? `автор ${author}` : '', director ? `режиссёр ${director}` : ''].filter(Boolean).join(', ')}
-                </span>
-              </div>
-            {/if}
-            {#if source}
-              <div class="release-page__meta-info-row">
-                <span class="release-page__meta-info-icon">📖</span>
-                <span class="release-page__meta-info-text">Источник: {source}</span>
-              </div>
-            {/if}
-            {#if genres}
-              <div class="release-page__meta-info-row">
-                <span class="release-page__meta-info-icon">🏷️</span>
-                <span class="release-page__meta-info-text">{genres}</span>
-              </div>
-            {/if}
-          </div>
+              {/each}
+            </div>
+          {/if}
         </div>
       </div>
 
-      <!-- Rating block -->
+      <!-- ── Rating block (vote distribution + list stats) ── -->
       {#if voteCount > 0 || totalList > 0}
         <div class="release-page__section release-page__rating-block">
           <h2 class="release-page__section-title">Рейтинг</h2>
@@ -514,8 +538,8 @@
             {@const lp = (n: number) => totalList > 0 ? (n / totalList) * 100 : 0}
             <div class="release-page__list-stats">
               <div class="release-page__list-stats-bar">
-                <div class="release-page__list-stats-seg release-page__list-stats-seg--watching" style="width:{lp(watchingCount)}%" title="Смотрю: {watchingCount.toLocaleString('ru-RU')}"></div>
-                <div class="release-page__list-stats-seg release-page__list-stats-seg--planned"   style="width:{lp(planCount)}%"     title="В планах: {planCount.toLocaleString('ru-RU')}"></div>
+                <div class="release-page__list-stats-seg release-page__list-stats-seg--watching"  style="width:{lp(watchingCount)}%"  title="Смотрю: {watchingCount.toLocaleString('ru-RU')}"></div>
+                <div class="release-page__list-stats-seg release-page__list-stats-seg--planned"   style="width:{lp(planCount)}%"      title="В планах: {planCount.toLocaleString('ru-RU')}"></div>
                 <div class="release-page__list-stats-seg release-page__list-stats-seg--completed" style="width:{lp(completedCount)}%" title="Просмотрено: {completedCount.toLocaleString('ru-RU')}"></div>
                 <div class="release-page__list-stats-seg release-page__list-stats-seg--on_hold"   style="width:{lp(holdOnCount)}%"   title="Отложено: {holdOnCount.toLocaleString('ru-RU')}"></div>
                 <div class="release-page__list-stats-seg release-page__list-stats-seg--dropped"   style="width:{lp(droppedCount)}%"  title="Брошено: {droppedCount.toLocaleString('ru-RU')}"></div>
@@ -532,7 +556,7 @@
         </div>
       {/if}
 
-      <!-- Screenshots -->
+      <!-- ── Screenshots ── -->
       {#if screenshots.length > 0}
         <div class="release-page__section">
           <h2 class="release-page__section-title">Скриншоты</h2>
@@ -551,8 +575,8 @@
         </div>
       {/if}
 
-      <!-- Related releases -->
-      {#if related?.id && (relatedReleases.length > 0 || (related.release_count ?? 0) > 0)}
+      <!-- ── Related releases ── -->
+      {#if related?.id && (relatedCards.length > 0 || (related.release_count ?? 0) > 0)}
         <div class="release-page__section">
           <h2 class="release-page__section-title">
             <a
@@ -560,29 +584,21 @@
               class="release-page__section-link"
               onclick={(e) => { e.preventDefault(); navigate(`/release/${related!.id}/related`); }}
             >{related.name_ru || 'Франшиза'}</a>
-            {#if relatedReleases.length > 0} · Связанные релизы{/if}
+            {#if relatedCards.length > 0} · Связанные релизы{/if}
           </h2>
-          <div class="release-page__grid release-page__grid--related">
-            {#each relatedReleases.slice(0, 12) as rel}
-              <ReleaseCardV data={mapCardData(rel as Record<string, unknown>)} />
-            {/each}
-          </div>
+          <ReleaseCardsGrid items={relatedCards.slice(0, 12)} />
         </div>
       {/if}
 
-      <!-- Recommendations -->
-      {#if recommended.length > 0}
+      <!-- ── Recommendations ── -->
+      {#if recommendedCards.length > 0}
         <div class="release-page__section">
           <h2 class="release-page__section-title">Рекомендации</h2>
-          <div class="release-page__grid release-page__grid--recommended">
-            {#each recommended as rel}
-              <ReleaseCardV data={mapCardData(rel as Record<string, unknown>)} />
-            {/each}
-          </div>
+          <ReleaseCardsGrid items={recommendedCards} />
         </div>
       {/if}
 
-      <!-- Comments -->
+      <!-- ── Comments ── -->
       {#if comments.length > 0}
         <div class="release-page__section" id="comments">
           <h2 class="release-page__section-title">Комментарии ({comments.length})</h2>
@@ -605,6 +621,7 @@
           </div>
         </div>
       {/if}
+
     </section>
   {/if}
 </div>

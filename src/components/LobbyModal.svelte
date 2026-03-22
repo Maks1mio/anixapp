@@ -19,6 +19,7 @@
     setLobbyParticipants,
   } from '../services/lobby-state';
   import { isConnected } from '../services/lobby-ws';
+    import Page from './Page.svelte';
 
   interface Props {
     initialCode?: string;
@@ -349,6 +350,7 @@
       <button type="button" class="lobby-modal__close" aria-label="Закрыть" onclick={close}></button>
     </div>
 
+    <Page>
     <div class="lobby-modal__body">
       {#if view === 'loading'}
         <div class="lobby-modal__loading">{loadingText}</div>
@@ -551,5 +553,6 @@
         </div>
       {/if}
     </div>
+    </Page>
   </div>
 </div>

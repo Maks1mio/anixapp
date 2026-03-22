@@ -1,9 +1,10 @@
 <script lang="ts">
-  import ReleaseCardV from "../components/ReleaseCardV.svelte";
-  import { onMount, onDestroy } from 'svelte';
+  import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
   import { navigate } from '../stores/navigation';
   import Tabs from '../components/Tabs.svelte';
   import { addSearchHistory } from '../utils/search-history';
+  import { iconBookmark, iconFlag } from '../components/icons';
   import type { ReleaseCardData } from '../types/release';
 
   type SearchTab = 'releases' | 'profiles' | 'collections';
@@ -75,11 +76,15 @@
   let currentTab = $state<SearchTab>(tab);
   let currentQuery = $state(q);
 
-  // Sync when parent navigates to a new search (different q/tab props)
+  // Sync when parent navigates to a new search (different q/tab props).
+  // Use untrack() to read currentQuery/currentTab without creating reactive
+  // dependencies — otherwise setting them inside the effect would re-trigger it.
   $effect(() => {
     const newQ = q;
     const newTab = tab;
-    if (newQ !== currentQuery || newTab !== currentTab) {
+    const prevQ = untrack(() => currentQuery);
+    const prevTab = untrack(() => currentTab);
+    if (newQ !== prevQ || newTab !== prevTab) {
       currentQuery = newQ;
       currentTab = newTab ?? 'releases';
       currentPage = 0;
@@ -88,28 +93,37 @@
       releaseResults = [];
       profileResults = [];
       collectionResults = [];
+      franchiseData = null;
       showEnd = false;
       if (newQ) performSearch(false);
       else loadState = 'hint';
     }
   });
+
   let currentPage = $state(0);
   let isLoading = $state(false);
   let hasMore = $state(true);
   let loadState = $state<'hint' | 'loading' | 'error' | 'empty' | 'ready'>('hint');
   let errorMsg = $state('');
 
-  // Typed results
   let releaseResults = $state<ReleaseCardData[]>([]);
   let profileResults = $state<any[]>([]);
   let collectionResults = $state<any[]>([]);
   let showEnd = $state(false);
 
+  interface FranchiseData {
+    images: string[];
+    name: string;
+    releaseCount?: number;
+    relatedId?: number;
+    firstReleaseId?: number;
+  }
+  let franchiseData = $state<FranchiseData | null>(null);
+
   let scrollEl: HTMLElement | null = null;
   let scrollListener: (() => void) | null = null;
   let scrollAttached = false;
   let wrapEl: HTMLElement | undefined = $state();
-
 
   function getScrollEl(): HTMLElement | null {
     return wrapEl?.closest('.page__scroll') as HTMLElement | null;
@@ -149,6 +163,7 @@
       releaseResults = [];
       profileResults = [];
       collectionResults = [];
+      franchiseData = null;
       showEnd = false;
     }
 
@@ -182,7 +197,20 @@
       }
 
       if (currentTab === 'releases') {
-        releaseResults = append ? [...releaseResults, ...content.map(mapReleaseToCardData)] : content.map(mapReleaseToCardData);
+        // Extract franchise data on first page
+        if (!append && data?.related) {
+          const rel = data.related;
+          franchiseData = {
+            images: Array.isArray(rel.images) ? rel.images : [],
+            name: rel.name_ru || rel.name || '',
+            releaseCount: typeof rel.release_count === 'number' ? rel.release_count : undefined,
+            relatedId: typeof rel.id === 'number' ? rel.id : undefined,
+            firstReleaseId: content[0] && typeof content[0].id === 'number' ? content[0].id : undefined,
+          };
+        }
+        releaseResults = append
+          ? [...releaseResults, ...content.map(mapReleaseToCardData)]
+          : content.map(mapReleaseToCardData);
       } else if (currentTab === 'profiles') {
         profileResults = append ? [...profileResults, ...content] : content;
       } else {
@@ -210,6 +238,7 @@
     releaseResults = [];
     profileResults = [];
     collectionResults = [];
+    franchiseData = null;
     navigate(currentQuery ? `/search?q=${encodeURIComponent(currentQuery)}&tab=${newTab}` : `/search?tab=${newTab}`);
     if (currentQuery) performSearch(false);
     else loadState = 'hint';
@@ -223,14 +252,35 @@
     performSearch(false);
   }
 
+  function onSearchRequest(e: Event) {
+    const detail = (e as CustomEvent<{ q: string; tab: SearchTab }>).detail ?? {};
+    const newQ = detail.q ?? '';
+    const newTab: SearchTab = (detail.tab as SearchTab) ?? 'releases';
+    currentQuery = newQ;
+    currentTab = newTab;
+    currentPage = 0;
+    hasMore = true;
+    isLoading = false;
+    scrollAttached = false;
+    releaseResults = [];
+    profileResults = [];
+    collectionResults = [];
+    franchiseData = null;
+    showEnd = false;
+    if (newQ) performSearch(false);
+    else loadState = 'hint';
+  }
+
   onMount(() => {
     window.addEventListener('anix:cardLayoutChanged', onLayoutChanged);
+    window.addEventListener('anix:searchRequest', onSearchRequest);
     if (currentQuery) performSearch(false);
   });
 
   onDestroy(() => {
     detachScroll();
     window.removeEventListener('anix:cardLayoutChanged', onLayoutChanged);
+    window.removeEventListener('anix:searchRequest', onSearchRequest);
   });
 
   const pageTitle = $derived(currentQuery ? `Поиск: ${currentQuery}` : 'Поиск');
@@ -259,12 +309,35 @@
         <p class="search-page__empty">Ничего не найдено</p>
       {:else}
         {#if currentTab === 'releases'}
+          {#if franchiseData}
+            <button
+              type="button"
+              class="search-franchise"
+              onclick={() => {
+                const targetId = franchiseData?.relatedId ?? franchiseData?.firstReleaseId;
+                if (targetId) navigate(`/release/${targetId}/related`);
+              }}
+            >
+              <div class="search-franchise__thumbs">
+                {#each franchiseData.images.slice(0, 3) as img}
+                  <div class="search-franchise__thumb" style="background-image:url('{img}')"></div>
+                {/each}
+              </div>
+              <div class="search-franchise__content">
+                <span class="search-franchise__title">{franchiseData.name || 'Франшиза'}</span>
+                <span class="search-franchise__meta">
+                  {#if typeof franchiseData.releaseCount === 'number' && franchiseData.releaseCount > 0}
+                    {franchiseData.releaseCount} релизов во франшизе
+                  {:else}
+                    Релизы во франшизе
+                  {/if}
+                </span>
+              </div>
+              <span class="search-franchise__action">Перейти</span>
+            </button>
+          {/if}
           <div class="search-page__results--wide" data-search-rel="releases">
-            <div class="bookmarks__grid">
-              {#each releaseResults as item (item.id)}
-                <ReleaseCardV data={item} />
-              {/each}
-            </div>
+            <ReleaseCardsGrid items={releaseResults} />
           </div>
         {:else if currentTab === 'profiles'}
           <div class="search-page__profiles" data-search-rel="profiles">
@@ -293,16 +366,53 @@
         {:else}
           <div class="search-page__collections search-page__collections-grid" data-search-rel="collections">
             {#each collectionResults as c}
-              <button
-                type="button"
-                class="collection-card"
-                onclick={() => navigate(`/collection/${c.id}`)}
-              >
-                <div class="collection-card__title">{c.title || c.name || 'Без названия'}</div>
-                {#if c.description}
-                  <div class="collection-card__desc">{c.description}</div>
-                {/if}
-              </button>
+              <article class="collection-card">
+                <span class="collection-card__page collection-card__page--back-2" aria-hidden="true"></span>
+                <span class="collection-card__page collection-card__page--back-1" aria-hidden="true"></span>
+                <!-- svelte-ignore a11y_invalid_attribute -->
+                <a
+                  href="/collection/{c.id}"
+                  class="collection-card__link"
+                  onclick={(e) => { e.preventDefault(); navigate(`/collection/${c.id}`); }}
+                >
+                  <div class="collection-card__poster">
+                    {#if c.image}
+                      <img src={c.image} alt="" loading="lazy" />
+                    {:else}
+                      <div class="collection-card__poster-placeholder"></div>
+                    {/if}
+                    <div class="collection-card__badges">
+                      {#if typeof c.notes_count === 'number'}
+                        <div class="collection-card__badge">
+                          <span class="collection-card__badge-icon">💬</span>
+                          <span class="collection-card__badge-text">{c.notes_count}</span>
+                        </div>
+                      {/if}
+                      {#if typeof c.bookmarks_count === 'number'}
+                        <div class="collection-card__badge">
+                          <span class="collection-card__badge-icon">{@html iconBookmark(14)}</span>
+                          <span class="collection-card__badge-text">{c.bookmarks_count}</span>
+                        </div>
+                      {/if}
+                      {#if typeof c.favorites_count === 'number'}
+                        <div class="collection-card__badge collection-card__badge--favorites{c.is_favorite ? ' collection-card__badge--in-bookmarks' : ''}">
+                          <span class="collection-card__badge-icon">{@html iconFlag(14, !!c.is_favorite)}</span>
+                          <span class="collection-card__badge-text">{c.favorites_count}</span>
+                        </div>
+                      {/if}
+                    </div>
+                  </div>
+                  <div class="collection-card__footer">
+                    <h3 class="collection-card__title">{c.title || c.name || 'Без названия'}</h3>
+                    {#if c.description}
+                      <p class="collection-card__desc">{c.description}</p>
+                    {/if}
+                    {#if typeof c.release_count === 'number'}
+                      <span class="collection-card__meta">{c.release_count} релизов</span>
+                    {/if}
+                  </div>
+                </a>
+              </article>
             {/each}
           </div>
         {/if}

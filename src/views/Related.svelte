@@ -1,6 +1,6 @@
 <script lang="ts">
-  import ReleaseCardV from "../components/ReleaseCardV.svelte";
-  import { onMount } from 'svelte';
+  import ReleaseCardH from "../components/ReleaseCardH.svelte";
+  import { onMount, onDestroy } from 'svelte';
   import { buildPosterUrl } from '../utils/posterUrl';
   import type { ReleaseCardData } from '../types/release';
 
@@ -53,7 +53,6 @@
   let scrollEl: HTMLElement | null = null;
   let scrollListener: (() => void) | null = null;
 
-
   async function loadPage() {
     if (loading || !hasMore) return;
     loading = true;
@@ -103,6 +102,10 @@
     loadPage();
     requestAnimationFrame(attachScroll);
   });
+
+  onDestroy(() => {
+    if (scrollEl && scrollListener) scrollEl.removeEventListener('scroll', scrollListener);
+  });
 </script>
 
 <div class="view view-related" bind:this={wrapEl}>
@@ -121,9 +124,7 @@
         <p class="related__empty">Связанных релизов не найдено.</p>
       {:else}
         {#each items as item (item.id)}
-          <div class="related__item">
-            <ReleaseCardV data={item} />
-          </div>
+          <ReleaseCardH data={item} />
         {/each}
         {#if loading}
           <div class="related__loading">Загрузка…</div>

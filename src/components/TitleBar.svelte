@@ -31,11 +31,25 @@
   let avatarUrl: string | null = $state(null);
   let avatarInitials: string = $state('');
 
+  function syncAvatarFromGlobalProfile() {
+    const profile = (window as any).__anixProfile;
+    avatarUrl = profile?.avatar ?? null;
+  }
+
+  async function loadUpdateInfo() {
+    const currentVersion =
+      (await window.electron?.getVersions?.().then((v: any) => v?.app).catch(() => undefined))
+      ?? (await window.electron?.getAppVersion?.().catch(() => undefined));
+    if (!currentVersion) return;
+    const info = await checkForUpdate(String(currentVersion)).catch(() => null);
+    if (info) updateInfo = info;
+  }
+
   onMount(() => {
+    syncAvatarFromGlobalProfile();
+
     // Check for app updates
-    checkForUpdate().then((info) => {
-      if (info) updateInfo = info;
-    }).catch(() => {});
+    void loadUpdateInfo();
 
     // App update progress listener
     const onProgress = (ev: Event) => {
@@ -53,8 +67,12 @@
       }
     };
     window.addEventListener('app-update-progress', onProgress);
+    window.addEventListener('anix:profileUpdated', syncAvatarFromGlobalProfile as EventListener);
 
-    return () => window.removeEventListener('app-update-progress', onProgress);
+    return () => {
+      window.removeEventListener('app-update-progress', onProgress);
+      window.removeEventListener('anix:profileUpdated', syncAvatarFromGlobalProfile as EventListener);
+    };
   });
 
   function handleStartUpdate() {
@@ -74,13 +92,6 @@
   function handleMaximize() { (window as any).electron?.window?.maximize(); }
   function handleClose() { (window as any).electron?.window?.close(); }
 
-  // Allow parent to update avatar via __anixProfile
-  $effect(() => {
-    const profile = (window as any).__anixProfile;
-    if (profile?.avatar) {
-      avatarUrl = profile.avatar;
-    }
-  });
 </script>
 
 <div class="titlebar">

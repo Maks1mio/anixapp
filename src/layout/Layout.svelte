@@ -14,9 +14,10 @@
   interface Props {
     children?: Snippet;
     currentPath?: string;
+    searchQ?: string;
   }
 
-  let { children, currentPath = '/' }: Props = $props();
+  let { children, currentPath = '/', searchQ = '' }: Props = $props();
 
   const SIDEBAR_NAV = [
     { href: '/', label: 'Главная', icon: iconHome(18) },
@@ -30,6 +31,15 @@
   let searchInputEl: HTMLInputElement | null = $state(null);
   let searchWrapEl: HTMLElement | null = $state(null);
 
+  // Sync titlebar input value whenever the search query changes from navigation
+  $effect(() => {
+    const q = searchQ;
+    const el = searchInputEl;
+    if (el && document.activeElement !== el) {
+      el.value = q;
+    }
+  });
+
   onMount(() => {
     if (searchWrapEl && searchInputEl) {
       const searchKbd = searchWrapEl.querySelector('.titlebar__search-kbd') as HTMLElement | null;
@@ -40,8 +50,16 @@
         if (searchKbd) searchKbd.textContent = 'Enter';
         openSearchDropdown(searchWrapEl!, searchInputEl!, ({ query, tab }) => {
           if (query) addSearchHistory(query);
+          // Immediately show the selected query in the input so the user
+          // sees it even before the page re-renders.
+          if (searchInputEl) searchInputEl.value = query;
           const tabParam = tab && tab !== 'releases' ? `&tab=${tab}` : '';
           navigate(query ? `/search?q=${encodeURIComponent(query)}${tabParam}` : '/search');
+          // Dispatch directly so Search.svelte always reacts, even if the URL
+          // path didn't change (same /search path, only query params differ).
+          window.dispatchEvent(new CustomEvent('anix:searchRequest', {
+            detail: { q: query, tab: tab || 'releases' },
+          }));
         });
       });
 
@@ -56,6 +74,12 @@
           if (q) addSearchHistory(q);
           closeSearchDropdown();
           navigate(q ? `/search?q=${encodeURIComponent(q)}` : '/search');
+          // Always dispatch so Search.svelte reacts even when the URL path
+          // stays the same (pushState with same /search path won't trigger
+          // the store/effect chain that updates the `q` prop).
+          window.dispatchEvent(new CustomEvent('anix:searchRequest', {
+            detail: { q, tab: 'releases' },
+          }));
         }
       });
     }
@@ -73,6 +97,7 @@
           login: profile.login ?? profile.nickname ?? undefined,
           avatar: profile.avatar ?? null,
         };
+        window.dispatchEvent(new CustomEvent('anix:profileUpdated'));
       }).catch(() => {});
     }
   });

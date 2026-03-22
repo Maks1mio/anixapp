@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import Page from '../components/Page.svelte';
   import { navigate } from '../stores/navigation';
   import {
     getAllThemes, getActiveThemeId, applyThemeById,
-    createCustomTheme, deleteCustomTheme,
+    createCustomTheme,
     BUILT_IN_THEMES, type Theme,
   } from '../services/themes';
   import { getCardLayout, setCardLayout, type CardLayout } from '../prefs';
@@ -24,7 +25,16 @@
     { id: 19, label: 'ModeC+A [Preset]',        desc: 'Комбинированный пресет с высокой чёткостью и восстановлением.' },
     { id: 0,  label: 'DoG [Deblur]',            desc: 'Удаление размытия и усиление границ.' },
     { id: 1,  label: 'BilateralMean [Denoise]', desc: 'Снижение шума без потери резкости.' },
+    { id: 2,  label: 'CNNM [Restore]',          desc: 'Нейросетевое восстановление с умеренной глубиной, хорошо для общего улучшения.' },
+    { id: 3,  label: 'CNNSoftM [Restore]',      desc: 'Более мягкое восстановление, минимизирующее артефакты и перегибы.' },
+    { id: 4,  label: 'CNNSoftVLM [Restore]',    desc: 'Очень лёгкое и мягкое восстановление, подходит для слабых устройств.' },
+    { id: 5,  label: 'CNNVL [Restore]',         desc: 'Восстановление с малой задержкой и быстрой обработкой.' },
+    { id: 6,  label: 'CNNUL [Restore]',         desc: 'Универсальное восстановление с акцентом на стабильность.' },
+    { id: 7,  label: 'GANUUL [Restore]',        desc: 'GAN-реконструкция изображения для высокого качества.' },
     { id: 8,  label: 'CNNx2M [Upscale]',        desc: 'Апскейл ×2 с сохранением структуры кадра.' },
+    { id: 9,  label: 'CNNx2VL [Upscale]',       desc: 'Быстрый апскейл ×2 для слабых систем.' },
+    { id: 10, label: 'DenoiseCNNx2VL [Upscale]', desc: 'Апскейл ×2 с предварительным шумоподавлением.' },
+    { id: 11, label: 'CNNx2UL [Upscale]',       desc: 'Универсальный сбалансированный апскейл ×2.' },
     { id: 12, label: 'GANx3L [Upscale]',        desc: 'GAN апскейл ×3 для высокого качества.' },
     { id: 13, label: 'GANx4UUL [Upscale]',      desc: 'GAN апскейл ×4 — максимальное качество.' },
   ];
@@ -35,6 +45,7 @@
   // ── Connection tab ─────────────────────────────────────────────────────────
   let currentEndpoint = $state('');
   let endpointLoaded = $state(false);
+  let endpointLoadError = $state(false);
   type PingState = { ok: boolean; latencyMs: number | null };
   let pingState = $state<Record<string, PingState>>({});
   let pingInterval: ReturnType<typeof setInterval> | null = null;
@@ -45,21 +56,27 @@
       const url = await window.anixApi.client.getBaseUrl() as string;
       currentEndpoint = url || ENDPOINT_OPTIONS[0].value;
       endpointLoaded = true;
+      endpointLoadError = false;
       void pingOnce();
-      pingInterval = setInterval(() => pingOnce(), 5000);
-    } catch { /* ignore */ }
+      pingInterval = setInterval(() => pingOnce(), 1000);
+    } catch {
+      endpointLoaded = true;
+      endpointLoadError = true;
+    }
   }
 
   async function pingOnce() {
     if (!window.anixApi) return;
+    const nextState: Record<string, PingState> = { ...pingState };
     await Promise.all(ENDPOINT_OPTIONS.map(async (opt) => {
       try {
         const res = await window.anixApi!.client.pingBaseUrl(opt.value) as PingState;
-        pingState = { ...pingState, [opt.value]: res };
+        nextState[opt.value] = res;
       } catch {
-        pingState = { ...pingState, [opt.value]: { ok: false, latencyMs: null } };
+        nextState[opt.value] = { ok: false, latencyMs: null };
       }
     }));
+    pingState = nextState;
   }
 
   function setEndpoint(value: string) {
@@ -151,7 +168,7 @@
 
   async function loadPlayback() {
     if (!window.electron?.getSettings) return;
-    gpuAvailable = typeof navigator.gpu !== 'undefined';
+    gpuAvailable = 'gpu' in navigator;
     const settings = await window.electron.getSettings() as any;
     upscaleEnabled = settings.upscaleEnabled ?? false;
     upscaleMode = settings.upscaleMode ?? 15;
@@ -190,7 +207,7 @@
   ] as const;
 </script>
 
-<div class="view view-settings">
+<Page scrollId="content-settings" extraClass="view view-settings">
   <header class="settings-header">
     <h1 class="settings-title">Настройки</h1>
   </header>
@@ -215,6 +232,11 @@
         <div class="settings-section">
           <p class="settings-section__label">Эндпоинт API</p>
           <div style="font-size:0.875rem;color:#737373;">Загрузка…</div>
+        </div>
+      {:else if endpointLoadError}
+        <div class="settings-section">
+          <p class="settings-section__label">Эндпоинт API</p>
+          <p style="font-size:0.875rem;color:#737373;">Не удалось загрузить текущий эндпоинт.</p>
         </div>
       {:else}
         <div class="settings-section">
@@ -316,11 +338,13 @@
         <p class="settings-section__label">Пользовательские темы</p>
         <div class="settings-theme-grid">
           {#each customThemes as theme}
-            <button
-              type="button"
+            <div
+              role="button"
+              tabindex="0"
               class="settings-theme-tile{activeThemeId === theme.id ? ' settings-theme-tile--active' : ''}"
               data-theme-id={theme.id}
               onclick={() => selectTheme(theme.id)}
+              onkeydown={(e) => ((e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), selectTheme(theme.id)))}
             >
               <div class="settings-theme-tile__preview" style="background:{(theme as any).vars?.colorSurface};border:1px solid {(theme as any).vars?.colorBorder}">
                 <div class="settings-theme-tile__accent" style="background:{(theme as any).vars?.colorAccent}"></div>
@@ -341,7 +365,7 @@
                   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M11 2l3 3-8.5 8.5L2 14l.5-3.5L11 2z"/></svg>
                 </button>
               </div>
-            </button>
+            </div>
           {/each}
           <button type="button" class="settings-theme-tile settings-theme-tile--add" onclick={addCustomTheme}>
             <span class="settings-theme-tile__plus">+</span>
@@ -465,4 +489,4 @@
       {/if}
     </div>
   {/if}
-</div>
+</Page>

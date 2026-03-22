@@ -4,6 +4,9 @@ export const settingsModalOpen = writable(false);
 export const lobbyModalOpen = writable(false);
 export const lobbyModalInitialCode = writable<string | null>(null);
 export const notificationsModalOpen = writable(false);
+export const watchModalOpen = writable(false);
+export const watchModalReleaseId = writable<number>(0);
+export const watchModalReleaseTitle = writable<string>('');
 
 export function openSettingsModal(_unused?: unknown): void {
   settingsModalOpen.set(true);
@@ -26,4 +29,13 @@ export function openNotificationsModal(): void {
 }
 export function closeNotificationsModal(): void {
   notificationsModalOpen.set(false);
+}
+
+export function openWatchModal(releaseId: number, releaseTitle: string): void {
+  watchModalReleaseId.set(releaseId);
+  watchModalReleaseTitle.set(releaseTitle);
+  watchModalOpen.set(true);
+}
+export function closeWatchModal(): void {
+  watchModalOpen.set(false);
 }

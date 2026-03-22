@@ -1,5 +1,6 @@
 <script lang="ts">
   import ReleaseCardV from "../components/ReleaseCardV.svelte";
+  import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import { onMount } from 'svelte';
   import { navigate } from '../stores/navigation';
   import type { ReleaseCardData } from '../types/release';
@@ -190,9 +191,7 @@
         <button type="button" class="bookmarks__tab{tabsDemoActive === 'ongoing' ? ' bookmarks__tab--active' : ''}" onclick={() => (tabsDemoActive = 'ongoing')}>Онгоинги</button>
       </div>
       <div class="bookmarks__grid">
-        {#each tabsDemoItems as item (item.id)}
-          <ReleaseCardV data={item} />
-        {/each}
+        <ReleaseCardsGrid items={tabsDemoItems} />
       </div>
     </div>
   </section>

@@ -184,7 +184,6 @@ export function openNotificationsModal(): void {
   requestAnimationFrame(() => overlay.classList.add('notifications-modal-overlay--open'));
 
   let closed = false;
-  let onDocumentClick: ((e: MouseEvent) => void) | null = null;
 
   function close() {
     if (closed) return;
@@ -195,15 +194,17 @@ export function openNotificationsModal(): void {
       if (!overlay.parentNode) return;
       overlay.remove();
       document.removeEventListener('keydown', onKey);
-      if (onDocumentClick) {
-        document.removeEventListener('click', onDocumentClick, true);
-        onDocumentClick = null;
-      }
       (overlay as any)._close = undefined;
     };
     overlay.addEventListener('transitionend', done, { once: true });
     setTimeout(done, 260);
   }
+
+  // Закрытие по клику вне панели (overlay перекрывает весь экран)
+  overlay.addEventListener('click', (e) => {
+    if (panel.contains(e.target as Node)) return;
+    close();
+  });
 
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Escape') close();
@@ -211,15 +212,6 @@ export function openNotificationsModal(): void {
   document.addEventListener('keydown', onKey);
 
   panel.querySelector('.notifications-modal__close')?.addEventListener('click', close);
-
-  // Закрытие по клику вне панели, не блокируя сами клики:
-  // слушаем document в capture‑фазе, но не мешаем событию дальше.
-  onDocumentClick = (e: MouseEvent) => {
-    const target = e.target as HTMLElement | null;
-    if (target && panel.contains(target)) return;
-    close();
-  };
-  document.addEventListener('click', onDocumentClick, true);
 
   // Делаем close() доступным для повторных вызовов из toggle‑логики.
   (overlay as any)._close = close;

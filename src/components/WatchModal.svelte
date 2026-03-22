@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { getCurrentRoomId, getCurrentParticipants, proposeAnimeChange, getLastPlayback } from '../services/lobby-state';
-  import { renderSelect } from './select';
+  import Select from './Select.svelte';
+  import type { SelectOption } from './Select.svelte';
 
   interface Props {
     releaseId: number;
@@ -67,9 +68,12 @@
   let showConfirm = $state(false);
   let confirmCallback = $state<(() => void) | null>(null);
 
+  // Source selector (Svelte Select component)
+  let sourceSelectOptions = $state<SelectOption[]>([]);
+  let sourceSelectValue = $state('');
+
   // DOM refs
   let episodesListEl = $state<HTMLElement | null>(null);
-  let sourceSelectorWrapEl = $state<HTMLElement | null>(null);
 
   // ── helpers ───────────────────────────────────────────────────────────────────
   const micIconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>`;
@@ -169,30 +173,22 @@
 
   // ── source selector ───────────────────────────────────────────────────────────
   function buildSourceSelector(srcs: Source[], currentSrcId: number) {
-    if (!sourceSelectorWrapEl) return;
     if (srcs.length <= 1) {
-      sourceSelectorWrapEl.hidden = true;
-      sourceSelectorWrapEl.innerHTML = '';
+      sourceSelectOptions = [];
+      sourceSelectValue = '';
       return;
     }
-    sourceSelectorWrapEl.hidden = false;
-    sourceSelectorWrapEl.innerHTML = '';
-    const selectOptions = srcs.map((s) => {
+    sourceSelectOptions = srcs.map((s) => {
       const srcEp = normalizeEpisodeCount(s as Record<string, unknown>);
       const srcEpText = srcEp != null ? `${srcEp} эп.` : '';
       return { value: String(s.id), label: srcEpText ? `${s.name} (${srcEpText})` : s.name };
     });
-    const selectEl = renderSelect({
-      label: 'Источник',
-      options: selectOptions,
-      value: String(currentSrcId),
-      onChange: (value) => {
-        const s = srcs.find((x) => String(x.id) === value);
-        if (s) selectSource(s);
-      },
-    });
-    selectEl.classList.add('watch-modal__source-selector-custom');
-    sourceSelectorWrapEl.appendChild(selectEl);
+    sourceSelectValue = String(currentSrcId);
+  }
+
+  function handleSourceSelectChange(value: string) {
+    const s = sources.find((x) => String(x.id) === value);
+    if (s) selectSource(s);
   }
 
   // ── actions ───────────────────────────────────────────────────────────────────
@@ -256,8 +252,7 @@
           episodesError = 'Нет источников';
           return;
         }
-        // Build source selector after DOM updates
-        setTimeout(() => buildSourceSelector(srcs, srcs[0].id), 0);
+        buildSourceSelector(srcs, srcs[0].id);
         selectSource(srcs[0]);
       })
       .catch(() => {
@@ -463,7 +458,16 @@
           </button>
         </div>
 
-        <div class="watch-modal__source-selector-wrap" bind:this={sourceSelectorWrapEl} hidden></div>
+        {#if sourceSelectOptions.length > 1}
+          <div class="watch-modal__source-selector-wrap">
+            <Select
+              options={sourceSelectOptions}
+              value={sourceSelectValue}
+              placeholder="Источник"
+              onChange={handleSourceSelectChange}
+            />
+          </div>
+        {/if}
 
         <div class="watch-modal__col watch-modal__col--episodes">
           <h3 class="watch-modal__col-title">

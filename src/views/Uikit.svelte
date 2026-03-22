@@ -1,6 +1,8 @@
 <script lang="ts">
   import ReleaseCardV from "../components/ReleaseCardV.svelte";
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
+  import Select from '../components/Select.svelte';
+  import type { SelectOption } from '../components/Select.svelte';
   import { onMount } from 'svelte';
   import { navigate } from '../stores/navigation';
   import type { ReleaseCardData } from '../types/release';
@@ -50,15 +52,26 @@
   // Rating slider
   let ratingValue = $state(4.23);
 
-  // Dynamic imports for vanilla components that haven't been Svelte-ified
+  // Dots menu demo (still vanilla — renderDotsMenu is a helper used by card components)
   let dotsMenuEl: HTMLElement | undefined = $state();
-  let selectDemoEl: HTMLElement | undefined = $state();
-  let collectionDemoEl: HTMLElement | undefined = $state();
-  let franchiseDemoEl: HTMLElement | undefined = $state();
 
+  // Select demo state
+  const SELECT_OPTIONS: SelectOption[] = [
+    { value: 'api-s.anixsekai.com', label: 'api-s.anixsekai.com' },
+    { value: 'api.anixart.app',     label: 'api.anixart.app' },
+    { value: 'api.anixart.tv',      label: 'api.anixart.tv (Заблокирован в РФ)' },
+  ];
+  let selectDemoValue = $state('api-s.anixsekai.com');
+
+  // Franchise demo images
+  const FRANCHISE_IMGS = [
+    'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg',
+    'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg',
+    'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg',
+  ];
 
   onMount(async () => {
-    // Dots menu demo (vanilla component)
+    // Dots menu demo (vanilla helper, still used by ReleaseCardH/V)
     if (dotsMenuEl) {
       const { renderDotsMenu } = await import('../components/dots-menu');
       const { iconHeart } = await import('../components/icons');
@@ -77,53 +90,6 @@
         onSelect: (id) => console.log('[Dots menu] Выбрано:', id),
       });
       dotsMenuEl.appendChild(menu);
-    }
-
-    // Select demo (vanilla component)
-    if (selectDemoEl) {
-      const { renderSelect } = await import('../components/select');
-      const sel = renderSelect({
-        label: 'Эндпоинт API',
-        placeholder: 'Выберите эндпоинт',
-        value: 'api-s.anixsekai.com',
-        options: [
-          { value: 'api-s.anixsekai.com', label: 'api-s.anixsekai.com' },
-          { value: 'api.anixart.app',     label: 'api.anixart.app' },
-          { value: 'api.anixart.tv',      label: 'api.anixart.tv (Заблокирован в РФ)' },
-        ],
-        onChange: (value) => console.log('Selected:', value),
-      });
-      selectDemoEl.appendChild(sel);
-    }
-
-    // Collection card demo (vanilla)
-    if (collectionDemoEl) {
-      const { renderCollectionCard } = await import('../components/collection-card');
-      const col = renderCollectionCard({
-        id: 1,
-        title: 'Этти 18+ Этти',
-        image: 'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg',
-        releaseCount: 42,
-        notesCount: 8,
-        bookmarksCount: 95,
-      });
-      collectionDemoEl.appendChild(col);
-    }
-
-    // Franchise card demo (vanilla)
-    if (franchiseDemoEl) {
-      const { renderSearchFranchise } = await import('../components/search-franchise');
-      const card = renderSearchFranchise({
-        images: [
-          'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg',
-          'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg',
-          'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg',
-        ],
-        name: 'black_clover',
-        releaseCount: 7,
-        firstReleaseId: 20055,
-      });
-      franchiseDemoEl.appendChild(card);
     }
   });
 
@@ -239,7 +205,14 @@
   <!-- Select demo -->
   <section class="uikit-section">
     <h2 class="uikit-section__title">Селектор</h2>
-    <div class="uikit-select-demo" bind:this={selectDemoEl}></div>
+    <div class="uikit-select-demo">
+      <Select
+        options={SELECT_OPTIONS}
+        value={selectDemoValue}
+        placeholder="Выберите эндпоинт"
+        onChange={(v) => { selectDemoValue = v; console.log('Selected:', v); }}
+      />
+    </div>
   </section>
 
   <!-- Dots menu -->
@@ -290,14 +263,46 @@
   <section class="uikit-section">
     <h2 class="uikit-section__title">Карточка коллекции</h2>
     <p class="uikit-section__desc">Горизонтальная карточка коллекции с постером и счётчиками</p>
-    <div class="uikit-collections" bind:this={collectionDemoEl}></div>
+    <div class="uikit-collections">
+      <article class="collection-card">
+        <span class="collection-card__page collection-card__page--back-2" aria-hidden="true"></span>
+        <span class="collection-card__page collection-card__page--back-1" aria-hidden="true"></span>
+        <!-- svelte-ignore a11y_invalid_attribute -->
+        <a href="/collection/1" class="collection-card__link" onclick={(e) => { e.preventDefault(); navigate('/collection/1'); }}>
+          <div class="collection-card__poster">
+            <img src="https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg" alt="" loading="lazy" />
+            <div class="collection-card__badges">
+              <div class="collection-card__badge"><span class="collection-card__badge-icon">💬</span><span class="collection-card__badge-text">8</span></div>
+              <div class="collection-card__badge"><span class="collection-card__badge-icon">🔖</span><span class="collection-card__badge-text">95</span></div>
+            </div>
+          </div>
+          <div class="collection-card__footer">
+            <h3 class="collection-card__title">Этти 18+ Этти</h3>
+            <span class="collection-card__meta">42 релизов</span>
+          </div>
+        </a>
+      </article>
+    </div>
   </section>
 
   <!-- Franchise card -->
   <section class="uikit-section">
     <h2 class="uikit-section__title">Франшиза в поиске</h2>
     <p class="uikit-section__desc">Компонент search-franchise с анимацией «колоды»</p>
-    <div class="uikit-franchise" bind:this={franchiseDemoEl}></div>
+    <div class="uikit-franchise">
+      <button type="button" class="search-franchise" onclick={() => navigate('/release/20055/related')}>
+        <div class="search-franchise__thumbs">
+          {#each FRANCHISE_IMGS as img}
+            <div class="search-franchise__thumb" style="background-image:url('{img}')"></div>
+          {/each}
+        </div>
+        <div class="search-franchise__content">
+          <span class="search-franchise__title">black_clover</span>
+          <span class="search-franchise__meta">7 релизов во франшизе</span>
+        </div>
+        <span class="search-franchise__action">Перейти</span>
+      </button>
+    </div>
   </section>
 
   <!-- Spacing -->

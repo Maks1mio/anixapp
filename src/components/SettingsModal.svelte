@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { get } from 'svelte/store';
   import Page from './Page.svelte';
   import { navigate } from '../stores/navigation';
+  import { settingsModalInitialTab } from '../stores/modals';
   import {
     renderConnectionTab,
     renderAppearanceTab,
@@ -55,7 +57,8 @@
 
   const isDev = import.meta.env.DEV;
 
-  let activeTab = $state<SettingsTab>('account');
+  const initialTab = get(settingsModalInitialTab) as SettingsTab | null;
+  let activeTab = $state<SettingsTab>(initialTab ?? 'appearance');
   let bodyEl = $state<HTMLElement | null>(null);
   let overlayEl = $state<HTMLElement | null>(null);
   let sidebarScrollEl = $state<HTMLElement | null>(null);
@@ -556,15 +559,6 @@
             <span class="settings-sidebar__username">{loginDisplay}</span>
             <span class="settings-sidebar__user-sub">Редактировать профи… <i data-lucide="pencil"></i></span>
           </div>
-        </button>
-
-        <p class="settings-nav__section">Настройки пользователя</p>
-        <button
-          class="settings-nav__item settings-nav__item--icon"
-          class:settings-nav__item--active={activeTab === 'account'}
-          onclick={() => switchTab('account')}
-        >
-          <i data-lucide="user"></i><span>Моя учётная запись</span>
         </button>
 
         <div class="settings-nav__sep"></div>

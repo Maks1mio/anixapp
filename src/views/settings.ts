@@ -558,7 +558,7 @@ export function renderPlaybackTab(): HTMLElement {
         <div class="settings-row__desc">Открыть инструмент сравнения — 5 пресетов аниме, split-ползунок для сравнения оригинала и фильтра в реальном времени.</div>
       </div>
       <div class="settings-row__control">
-        <button class="settings-btn settings-btn--primary" id="open-upscale-tool">Открыть</button>
+        <button class="settings-btn settings-btn--primary" disabled={true} id="open-upscale-tool">Открыть</button>
       </div>
     `;
     const toolBtn = toolRow.querySelector('#open-upscale-tool') as HTMLButtonElement;

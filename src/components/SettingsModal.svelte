@@ -844,6 +844,7 @@
   role="dialog"
   aria-modal="true"
   aria-label="Настройки"
+  tabindex="-1"
   bind:this={overlayEl}
   onclick={handleOverlayClick}
 >
@@ -932,9 +933,9 @@
         </button>
         <div class="settings-sidebar__meta">
           <span class="settings-sidebar__meta-version" id="s-version">AnixApp</span>
-          <a class="settings-sidebar__meta-icon" href="#" id="s-github-link" title="GitHub" onclick={handleGithubLink}>
+          <button type="button" class="settings-sidebar__meta-icon" id="s-github-link" title="GitHub" onclick={handleGithubLink}>
             <i data-lucide="github"></i>
-          </a>
+          </button>
         </div>
         <div class="settings-sidebar__meta-components" id="s-components"></div>
       </div>

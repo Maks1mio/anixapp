@@ -21,6 +21,7 @@
   }
 
   let effectiveLayout = $state(resolveLayout(layout));
+  $effect(() => { effectiveLayout = resolveLayout(layout); });
 
   function handleLayoutChanged(e: Event) {
     const detail = (e as CustomEvent<{ layout: 'mini' | 'wide' }>).detail;

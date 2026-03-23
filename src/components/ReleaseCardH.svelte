@@ -72,10 +72,12 @@
   })());
   const hasTitleTooltip = $derived(titleTooltipLines.length > 0);
 
-  let currentStatusId: ListStatusId | null = $state(
-    (data?.listStatus as ListStatusId | undefined) ?? null
-  );
-  let isFavorite = $state(data?.isFavorite ?? false);
+  let currentStatusId: ListStatusId | null = $state<ListStatusId | null>(null);
+  let isFavorite = $state(false);
+  $effect(() => {
+    currentStatusId = (data?.listStatus as ListStatusId | undefined) ?? null;
+    isFavorite = data?.isFavorite ?? false;
+  });
   let posterError = $state(false);
 
   const infoParts = $derived((() => {

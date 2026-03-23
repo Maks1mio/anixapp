@@ -212,10 +212,11 @@
 
 <div class="custom-select{className ? ' ' + className : ''}" {id}>
   {#if label}
-    <label class="custom-select__label">{label}</label>
+    <label class="custom-select__label" for="{id ?? 'select'}-trigger">{label}</label>
   {/if}
   <button
     bind:this={triggerEl}
+    id="{id ?? 'select'}-trigger"
     type="button"
     class="custom-select__trigger"
     aria-haspopup="listbox"

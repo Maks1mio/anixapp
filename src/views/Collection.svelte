@@ -262,17 +262,17 @@
             <h1 class="collection-info__title">{collectionTitle}</h1>
             <div class="collection-header__author">
               <span class="collection-header__author-label">Автор коллекции</span>
-              <a
-                href="#"
+              <button
+                type="button"
                 class="collection-header__author-link"
-                onclick={(e) => { e.preventDefault(); if (authorId) navigate(`/profile/${authorId}`); }}
+                onclick={() => { if (authorId) navigate(`/profile/${authorId}`); }}
               >
                 <span
                   class="collection-header__author-avatar{authorAvatar ? ' collection-header__author-avatar--img' : ''}"
                   style={authorAvatar ? `background-image:url(${authorAvatar})` : ''}
                 ></span>
                 <span class="collection-header__author-name">{authorName}</span>
-              </a>
+              </button>
             </div>
           </div>
           <p class="collection-info__date">{lastUpdateDate ? formatDate(lastUpdateDate) : ''}</p>

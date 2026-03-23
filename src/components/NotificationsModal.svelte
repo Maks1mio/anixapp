@@ -276,6 +276,7 @@
   class="notifications-modal-overlay notifications-modal-overlay--open"
   role="dialog"
   aria-label="Уведомления"
+  tabindex="-1"
   onclick={handleOverlayClick}
 >
   <div class="notifications-modal-panel">

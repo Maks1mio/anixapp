@@ -394,10 +394,11 @@
 
         <!-- Left column -->
         <div class="release-page__left">
+          <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
           <div
             class="release-page__poster{posterUrl ? ' release-page__poster--clickable' : ''}"
             role={posterUrl ? 'button' : undefined}
-            tabindex={posterUrl ? 0 : -1}
+            tabindex={posterUrl ? 0 : undefined}
             onclick={() => posterUrl && openImageLightbox(posterUrl)}
             onkeydown={(e) => e.key === 'Enter' && posterUrl && openImageLightbox(posterUrl)}
           >
@@ -563,13 +564,9 @@
           <div class="release-page__screenshots">
             {#each screenshots.slice(0, 8) as url}
               {@const fullUrl = url.startsWith('http') ? url : `https://s.anixmirai.com/screenshots/${url}.jpg`}
-              <img
-                src={fullUrl}
-                alt=""
-                loading="lazy"
-                style="cursor:pointer"
-                onclick={() => openImageLightbox(fullUrl)}
-              />
+              <button type="button" class="release-page__screenshot-btn" onclick={() => openImageLightbox(fullUrl)}>
+                <img src={fullUrl} alt="" loading="lazy" />
+              </button>
             {/each}
           </div>
         </div>
@@ -579,11 +576,11 @@
       {#if related?.id && (relatedCards.length > 0 || (related.release_count ?? 0) > 0)}
         <div class="release-page__section">
           <h2 class="release-page__section-title">
-            <a
-              href="#"
+            <button
+              type="button"
               class="release-page__section-link"
-              onclick={(e) => { e.preventDefault(); navigate(`/release/${related!.id}/related`); }}
-            >{related.name_ru || 'Франшиза'}</a>
+              onclick={() => navigate(`/release/${related!.id}/related`)}
+            >{related.name_ru || 'Франшиза'}</button>
             {#if relatedCards.length > 0} · Связанные релизы{/if}
           </h2>
           <ReleaseCardsGrid items={relatedCards.slice(0, 12)} />

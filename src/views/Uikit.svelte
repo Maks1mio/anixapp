@@ -187,11 +187,11 @@
     <h2 class="uikit-section__title">Тултип (кастомный, анимированный)</h2>
     <p class="uikit-section__desc">Наведи на элемент — появляется подсказка с плавной анимацией</p>
     <div class="uikit-tooltip-demo">
-      <span class="tooltip-trigger uikit-tooltip-trigger" tabindex="0">
+      <span class="tooltip-trigger uikit-tooltip-trigger" role="button" tabindex="0">
         Наведи на меня
         <span class="tooltip tooltip--animated">Обычный анимированный тултип</span>
       </span>
-      <span class="tooltip-trigger uikit-tooltip-trigger" tabindex="0">
+      <span class="tooltip-trigger uikit-tooltip-trigger" role="button" tabindex="0">
         Ещё пример
         <span class="tooltip tooltip--animated">Оригинал: Jigoku Shoujo<br />Альт: 地獄少女</span>
       </span>

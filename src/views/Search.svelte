@@ -73,7 +73,9 @@
     { id: 'profiles' as SearchTab,    label: 'Пользователи' },
   ];
 
+  // svelte-ignore state_referenced_locally
   let currentTab = $state<SearchTab>(tab);
+  // svelte-ignore state_referenced_locally
   let currentQuery = $state(q);
 
   // Sync when parent navigates to a new search (different q/tab props).

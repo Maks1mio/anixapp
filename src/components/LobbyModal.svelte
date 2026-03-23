@@ -332,6 +332,7 @@
   class="lobby-modal-overlay lobby-modal-overlay--open"
   role="dialog"
   aria-label="Лобби совместного просмотра"
+  tabindex="-1"
   onclick={handleOverlayClick}
 >
   <div class="lobby-modal-panel">
@@ -391,9 +392,10 @@
           </div>
 
           <div class="lobby-modal__join-group">
-            <label class="lobby-modal__join-label">Присоединиться по коду</label>
+            <label class="lobby-modal__join-label" for="lobby-join-code">Присоединиться по коду</label>
             <div class="lobby-modal__join-row">
               <input
+                id="lobby-join-code"
                 type="text"
                 class="lobby-modal__input"
                 placeholder="ABC123"

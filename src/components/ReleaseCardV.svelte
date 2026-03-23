@@ -40,10 +40,12 @@
   const ratingValue = $derived(typeof data?.rating === 'number' ? data.rating : null);
   const myVote = $derived(typeof data?.myVote === 'number' && data.myVote > 0 ? data.myVote : null);
 
-  let currentStatusId: ListStatusId | null = $state(
-    (data?.listStatus as ListStatusId | undefined) ?? null
-  );
-  let isFavorite = $state(!!data?.isFavorite);
+  let currentStatusId: ListStatusId | null = $state<ListStatusId | null>(null);
+  let isFavorite = $state(false);
+  $effect(() => {
+    currentStatusId = (data?.listStatus as ListStatusId | undefined) ?? null;
+    isFavorite = !!data?.isFavorite;
+  });
   let posterError = $state(false);
 
   // Computed

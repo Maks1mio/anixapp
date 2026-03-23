@@ -21,7 +21,7 @@
     CAUTION:    { label: 'Внимание',       color: '#f87171', icon: 'shield-alert' },
     DISCUSSION: { label: 'Обсуждение',     color: '#38bdf8', icon: 'message-circle' },
   };
-  const cfg = TYPE_CONFIG[announcement.type] ?? TYPE_CONFIG.NOTE;
+  const cfg = $derived(TYPE_CONFIG[announcement.type] ?? TYPE_CONFIG.NOTE);
 
   function getSelfId(): number | undefined {
     return (window as any).__anixProfile?.id;

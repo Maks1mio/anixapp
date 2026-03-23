@@ -22,6 +22,7 @@
   import Collection from './views/Collection.svelte';
   import Notifications from './views/Notifications.svelte';
   import Uikit from './views/Uikit.svelte';
+  import AnnouncementChat from './views/AnnouncementChat/page.svelte';
 
   import SettingsModal from './components/SettingsModal.svelte';
   import LobbyModal from './components/LobbyModal.svelte';
@@ -51,12 +52,13 @@
     }
   });
 
-  const releaseMatch    = $derived(path.match(/^\/release\/(\d+)$/));
-  const relatedMatch    = $derived(path.match(/^\/release\/(\d+)\/related$/));
-  const profileMatch    = $derived(path.match(/^\/profile\/(\d+)$/));
-  const profileVotesMatch   = $derived(path.match(/^\/profile\/(\d+)\/votes$/));
-  const profileFriendsMatch = $derived(path.match(/^\/profile\/(\d+)\/friends$/));
-  const collectionMatch = $derived(path.match(/^\/collection\/(\d+)$/));
+  const releaseMatch          = $derived(path.match(/^\/release\/(\d+)$/));
+  const relatedMatch          = $derived(path.match(/^\/release\/(\d+)\/related$/));
+  const profileMatch          = $derived(path.match(/^\/profile\/(\d+)$/));
+  const profileVotesMatch     = $derived(path.match(/^\/profile\/(\d+)\/votes$/));
+  const profileFriendsMatch   = $derived(path.match(/^\/profile\/(\d+)\/friends$/));
+  const collectionMatch       = $derived(path.match(/^\/collection\/(\d+)$/));
+  const announcementChatMatch = $derived(path.match(/^\/announcement\/([^/]+)\/chat$/));
 
   // ── App screen state machine ───────────────────────────────────────────────
   let offlineRetryTimer: number | null = null;
@@ -246,7 +248,11 @@
 
 {:else}
   <Layout currentPath={path} searchQ={searchQ}>
-    {#if relatedMatch}
+    {#if announcementChatMatch}
+      {#key announcementChatMatch[1]}
+        <AnnouncementChat id={announcementChatMatch[1]} />
+      {/key}
+    {:else if relatedMatch}
       {#key relatedMatch[1]}
         <Related id={parseInt(relatedMatch[1], 10)} />
       {/key}

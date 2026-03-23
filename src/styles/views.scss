@@ -180,6 +180,13 @@
   width: 100%;
 }
 
+.ann-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
 .releases-type {
   position: sticky;
   top: calc(-1 * var(--page-scroll-padding));

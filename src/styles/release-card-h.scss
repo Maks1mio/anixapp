@@ -217,3 +217,53 @@
 
 .release-card-h__star--on  { color: #fbbf24; }
 .release-card-h__star--off { color: rgba(255, 255, 255, 0.15); }
+
+// Скелетон загрузки
+.release-card-h__skeleton {
+  display: flex;
+  align-items: stretch;
+  gap: 1.25rem;
+  min-height: 200px;
+  cursor: default;
+  pointer-events: none;
+}
+
+.release-card-h__skeleton-poster {
+  width: 160px;
+  min-width: 160px;
+  aspect-ratio: 2/3;
+  background: $color-border;
+  border-radius: 10px;
+  animation: release-card-h-pulse 1.4s ease-in-out infinite;
+}
+
+.release-card-h__skeleton-title {
+  height: 22px;
+  width: 70%;
+  background: $color-border;
+  border-radius: 4px;
+  animation: release-card-h-pulse 1.4s ease-in-out infinite;
+}
+
+.release-card-h__skeleton-meta {
+  height: 16px;
+  width: 50%;
+  margin-top: 8px;
+  background: $color-border;
+  border-radius: 4px;
+  animation: release-card-h-pulse 1.4s ease-in-out infinite;
+}
+
+.release-card-h__skeleton-desc {
+  height: 14px;
+  width: 90%;
+  margin-top: 12px;
+  background: $color-border;
+  border-radius: 4px;
+  animation: release-card-h-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes release-card-h-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}

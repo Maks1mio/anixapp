@@ -32,24 +32,24 @@
     dropped: 'rgba(185, 68, 68, 0.85)',
   };
 
-  let { data }: { data: ReleaseCardData } = $props();
+  let { data, loading = false }: { data?: ReleaseCardData; loading?: boolean } = $props();
 
-  const id = $derived(data.id);
-  const title = $derived(data.titleRu || data.titleEn || 'Без названия');
-  const poster = $derived(data.poster || '');
-  const ratingValue = $derived(typeof data.rating === 'number' ? data.rating : null);
-  const myVote = $derived(typeof data.myVote === 'number' && data.myVote > 0 ? data.myVote : null);
+  const id = $derived(data?.id);
+  const title = $derived(data?.titleRu || data?.titleEn || 'Без названия');
+  const poster = $derived(data?.poster || '');
+  const ratingValue = $derived(typeof data?.rating === 'number' ? data.rating : null);
+  const myVote = $derived(typeof data?.myVote === 'number' && data.myVote > 0 ? data.myVote : null);
 
   let currentStatusId: ListStatusId | null = $state(
-    (data.listStatus as ListStatusId | undefined) ?? null
+    (data?.listStatus as ListStatusId | undefined) ?? null
   );
-  let isFavorite = $state(!!data.isFavorite);
+  let isFavorite = $state(!!data?.isFavorite);
   let posterError = $state(false);
 
   // Computed
-  const epCount = $derived(data.episodesReleased ?? data.episodesTotal ?? null);
+  const epCount = $derived(data?.episodesReleased ?? data?.episodesTotal ?? null);
   const hasRating = $derived(
-    ratingValue != null && ratingValue > 0 && (data.voteCount ?? 0) > 0
+    ratingValue != null && ratingValue > 0 && (data?.voteCount ?? 0) > 0
   );
   const ratingHtml = $derived(
     hasRating && ratingValue != null
@@ -57,6 +57,7 @@
       : ''
   );
   const metaParts = $derived((() => {
+    if (!data) return [];
     const parts: string[] = [];
     if (epCount != null) parts.push(`${epCount} эп.`);
     if (data.year) parts.push(data.year);
@@ -74,7 +75,7 @@
   let menuSlotEl: HTMLElement | undefined = $state();
 
   onMount(() => {
-    if (!menuSlotEl) return;
+    if (!menuSlotEl || loading) return;
 
     const buildEntries = (): DotsMenuEntry[] => [
       {
@@ -147,7 +148,16 @@
   }
 </script>
 
-<article class="release-card-v">
+<article class="release-card-v" class:release-card-v--skeleton={loading}>
+  {#if loading}
+    <div class="release-card-v__skeleton">
+      <div class="release-card-v__poster release-card-v__skeleton-poster"></div>
+      <div class="release-card-v__body">
+        <div class="release-card-v__skeleton-title"></div>
+        <div class="release-card-v__skeleton-meta"></div>
+      </div>
+    </div>
+  {:else}
   <!-- svelte-ignore a11y_invalid_attribute -->
   <a href={id ? `/release/${id}` : '#'} class="release-card-v__link" onclick={handleLinkClick}>
     <div class="release-card-v__poster">
@@ -188,4 +198,5 @@
       </p>
     </div>
   </a>
+  {/if}
 </article>

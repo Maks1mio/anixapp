@@ -32,6 +32,11 @@
   --page-scroll-padding: 1.5rem;
 }
 
+// Страница чата: padding только по горизонтали
+.page--chat .page__scroll {
+  padding: 0 0;
+}
+
 // Вертикальный скроллбар — справа, всегда едва видим
 .page__v-track {
   position: absolute;

@@ -155,6 +155,45 @@
 .release-card-v__star--on  { color: #fbbf24; }
 .release-card-v__star--off { color: rgba(255, 255, 255, 0.18); }
 
+// Скелетон загрузки
+.release-card-v__skeleton {
+  display: flex;
+  flex-direction: column;
+  color: inherit;
+  text-decoration: none;
+  border-radius: $radius-lg;
+  overflow: hidden;
+  cursor: default;
+  pointer-events: none;
+}
+
+.release-card-v__skeleton-poster {
+  background: $color-border;
+  animation: release-card-v-pulse 1.4s ease-in-out infinite;
+}
+
+.release-card-v__skeleton-title {
+  height: 16px;
+  width: 85%;
+  background: $color-border;
+  border-radius: 4px;
+  animation: release-card-v-pulse 1.4s ease-in-out infinite;
+}
+
+.release-card-v__skeleton-meta {
+  height: 12px;
+  width: 55%;
+  margin-top: 6px;
+  background: $color-border;
+  border-radius: 4px;
+  animation: release-card-v-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes release-card-v-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
 // Сетка карточек
 .release-cards-grid {
   display: grid;

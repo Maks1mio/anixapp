@@ -37,19 +37,19 @@
     return String(n);
   }
 
-  let { data }: { data: ReleaseCardData } = $props();
+  let { data, loading = false }: { data?: ReleaseCardData; loading?: boolean } = $props();
 
-  const id = $derived(data.id);
-  const title = $derived(data.titleRu || data.titleEn || 'Без названия');
-  const poster = $derived(data.poster || '');
-  const ratingValue = $derived(typeof data.rating === 'number' ? data.rating : null);
-  const voteCount = $derived(data.voteCount);
-  const epCount = $derived(data.episodesReleased ?? data.episodesTotal ?? null);
-  const desc = $derived(data.description ? truncate(data.description, DESC_MAX_LENGTH) : '');
-  const myVote = $derived(typeof data.myVote === 'number' && data.myVote > 0 ? data.myVote : null);
+  const id = $derived(data?.id);
+  const title = $derived(data?.titleRu || data?.titleEn || 'Без названия');
+  const poster = $derived(data?.poster || '');
+  const ratingValue = $derived(typeof data?.rating === 'number' ? data.rating : null);
+  const voteCount = $derived(data?.voteCount);
+  const epCount = $derived(data?.episodesReleased ?? data?.episodesTotal ?? null);
+  const desc = $derived(data?.description ? truncate(data.description, DESC_MAX_LENGTH) : '');
+  const myVote = $derived(typeof data?.myVote === 'number' && data.myVote > 0 ? data.myVote : null);
 
   const genreTags = $derived(
-    data.genres
+    data?.genres
       ?.split(',')
       .map((g) => g.trim())
       .filter(Boolean)
@@ -63,6 +63,7 @@
   const votesLabel = $derived(voteCount != null ? formatVoteCount(voteCount) : '');
 
   const titleTooltipLines = $derived((() => {
+    if (!data) return [];
     const lines: string[] = [];
     if (data.titleRu) lines.push(`Русское: ${data.titleRu}`);
     if (data.titleEn) lines.push(`Оригинал: ${data.titleEn}`);
@@ -72,12 +73,13 @@
   const hasTitleTooltip = $derived(titleTooltipLines.length > 0);
 
   let currentStatusId: ListStatusId | null = $state(
-    (data.listStatus as ListStatusId | undefined) ?? null
+    (data?.listStatus as ListStatusId | undefined) ?? null
   );
-  let isFavorite = $state(data.isFavorite ?? false);
+  let isFavorite = $state(data?.isFavorite ?? false);
   let posterError = $state(false);
 
   const infoParts = $derived((() => {
+    if (!data) return [];
     const parts: string[] = [];
     if (data.year) parts.push(data.year);
     if (data.country) parts.push(data.country);
@@ -100,7 +102,7 @@
   let menuSlotEl: HTMLElement | undefined = $state();
 
   onMount(() => {
-    if (!menuSlotEl) return;
+    if (!menuSlotEl || loading) return;
 
     const menuWrap = renderDotsMenu({
       entries: buildEntries(),
@@ -174,7 +176,17 @@
   }
 </script>
 
-<article class={statusClass}>
+<article class={statusClass} class:release-card-h--skeleton={loading}>
+  {#if loading}
+    <div class="release-card-h__skeleton">
+      <div class="release-card-h__poster release-card-h__skeleton-poster"></div>
+      <div class="release-card-h__body">
+        <div class="release-card-h__skeleton-title"></div>
+        <div class="release-card-h__skeleton-meta"></div>
+        <div class="release-card-h__skeleton-desc"></div>
+      </div>
+    </div>
+  {:else}
   <!-- svelte-ignore a11y_invalid_attribute -->
   <a href={id ? `/release/${id}` : '#'} class="release-card-h__link" onclick={handleLinkClick}>
     <div class="release-card-h__poster">
@@ -217,16 +229,16 @@
               <span class="release-card-h__meta-dot">·</span>{epCount} эп.
             {/if}
           {:else}
-            {#if data.releaseDate}{data.releaseDate}{/if}
+            {#if data?.releaseDate}{data.releaseDate}{/if}
             {#if epCount != null}
-              {#if data.releaseDate}<span class="release-card-h__meta-dot">·</span>{/if}{epCount} эп.
+              {#if data?.releaseDate}<span class="release-card-h__meta-dot">·</span>{/if}{epCount} эп.
             {/if}
           {/if}
           {#if infoParts.length > 0}
-            {#if hasRating || data.releaseDate || epCount != null}<span class="release-card-h__meta-dot">·</span>{/if}
+            {#if hasRating || data?.releaseDate || epCount != null}<span class="release-card-h__meta-dot">·</span>{/if}
             {#each infoParts as part, i}{#if i > 0}<span class="release-card-h__meta-dot">·</span>{/if}{part}{/each}
           {/if}
-          {#if !hasRating && !data.releaseDate && epCount == null && infoParts.length === 0}—{/if}
+          {#if !hasRating && !data?.releaseDate && epCount == null && infoParts.length === 0}—{/if}
         {/snippet}
         {@render metaBody()}
         {#if myVote != null}
@@ -255,4 +267,5 @@
       {/if}
     </div>
   </a>
+  {/if}
 </article>

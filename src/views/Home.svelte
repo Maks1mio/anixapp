@@ -5,6 +5,8 @@
   import Tabs from '../components/Tabs.svelte';
   import { buildPosterUrl } from '../utils/posterUrl';
   import type { ReleaseCardData } from '../types/release';
+  import { fetchAnnouncements, type Announcement } from '../services/announcements';
+  import AnnouncementBanner from '../components/AnnouncementBanner.svelte';
 
   type HomeTabId = 'latest' | 'ongoing' | 'announced' | 'completed' | 'movies';
 
@@ -71,6 +73,7 @@
   let scrollEl: HTMLElement | null = null;
   let scrollListener: (() => void) | null = null;
   let wrapEl: HTMLElement | undefined = $state();
+  let announcements = $state<Announcement[]>([]);
 
   function getFilterArgs(tab: HomeTabId) {
     const base = { sort: 0, status_id: null as number | null, category_id: null as number | null };
@@ -149,6 +152,11 @@
     loadPage();
   }
 
+  async function loadAnnouncements() {
+    const list = await fetchAnnouncements();
+    announcements = list;
+  }
+
   async function handleRandom() {
     if (!window.anixApi) return;
     try {
@@ -167,6 +175,7 @@
     requestAnimationFrame(attachScroll);
     loadPage();
     window.addEventListener('anix:cardLayoutChanged', onLayoutChanged);
+    loadAnnouncements();
   });
 
   onDestroy(() => {
@@ -178,6 +187,13 @@
 </script>
 
 <div class="view view-home" bind:this={wrapEl}>
+  {#if announcements.length > 0}
+    <div class="ann-list">
+      {#each announcements as ann (ann.id)}
+        <AnnouncementBanner announcement={ann} />
+      {/each}
+    </div>
+  {/if}
   <Tabs
     tabs={HOME_TABS}
     activeId={activeTab}

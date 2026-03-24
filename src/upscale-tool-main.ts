@@ -17,70 +17,46 @@ import './styles/titlebar.scss';
 // ── Пресеты ───────────────────────────────────────────────────────────────────
 interface Preset {
   label: string;
-  url: string;
-  start: number; // секунды
+  url?: string;
+  kodikPageUrl?: string;
+  start: number;
   end: number;
 }
 
 const PRESETS: Preset[] = [
-  {
-    label: 'Ван-Пис',
-    url: 'https://shadow.cloud.kodik-storage.com/useruploads/aa9fff72-8784-4a77-bc80-21193374e9ab/67fd892b01960ec56e2907e73889a667:2026031912/720.mp4:hls:manifest.m3u8',
-    start: 6 * 60 + 12,
-    end:   6 * 60 + 42,
-  },
-  {
-    label: 'Семья шпиона 2',
-    url: 'https://prism.cloud.kodik-storage.com/useruploads/df4c5e5c-dc90-4758-a385-9d00c7b9199b/eb500f01d1d41016561408601dab9829:2026031913/720.mp4:hls:manifest.m3u8',
-    start: 0 * 60 + 56,
-    end:   1 * 60 + 23,
-  },
-  {
-    label: 'Атака титанов: Финал',
-    url: 'https://viking.cloud.kodik-storage.com/useruploads/09f81946-b4d4-48da-8f2e-88863d0c303b/a1856cac54b1f7d5c2d51a7dfef9fe02:2026031913/720.mp4:hls:manifest.m3u8',
-    start: 56 * 60 + 42,
-    end:   56 * 60 + 50,
-  },
-  {
-    label: 'Богиня благословляет этот мир',
-    url: 'https://secret.cloud.kodik-storage.com/useruploads/fb64f6b7-577c-4014-85be-77155351c4cd/bca921d654135e505402d85363624f80:2026031913/720.mp4:hls:manifest.m3u8',
-    start: 9 * 60 +  5,
-    end:   9 * 60 + 19,
-  },
-  {
-    label: 'Ван-Пис: Письмо от поклонника',
-    url: 'https://ozzy.cloud.kodik-storage.com/useruploads/382392ef-08ae-4179-804e-cf82ebd9ef25/a988727bb9eb40068349236b22f0f21a:2026031913/720.mp4:hls:manifest.m3u8',
-    start: 0 * 60 + 43,
-    end:   1 * 60 + 14,
-  },
+  { label: 'ДжоДжо 1 серия', kodikPageUrl: 'https://kodikplayer.com/seria/1583465/da5c70be6ea53735ed3844d789941714/720p', start: 28, end: 70 },
+  { label: 'Ван-Пис 171 серия', kodikPageUrl: 'https://kodikplayer.com/seria/512025/e8177f2aca5e09f8f90167aff2ddd8e3/720p', start: 175, end: 189 },
+  { label: 'Ван-Пис: Письмо от поклонника', kodikPageUrl: 'https://kodikplayer.com/video/106704/235f5bfa32b527fb1c3ed5935719853e/720p', start: 14, end: 69 },
+  { label: 'Коносуба 2 серия', kodikPageUrl: 'https://kodikplayer.com/seria/630039/29e0f0e323046754d572ea8072007d2b/720p', start: 354, end: 404 },
+  { label: 'Семья шпиона 2 Опенинг', kodikPageUrl: 'https://kodikplayer.com/seria/1222385/a2bd04af3761c536aa7fca1beeed5c21/720p', start: 6, end: 96 },
 ];
 
 // ── Режимы Anime4K ────────────────────────────────────────────────────────────
-const MODES: { id: number; label: string; desc: string }[] = [
-  { id: -1, label: 'Оригинал (без фильтра)', desc: 'Исходный видеопоток без обработки.' },
-  { id: 14, label: 'ModeA [Preset]',          desc: 'Быстрый пресет с умеренным восстановлением и апскейлом.' },
-  { id: 15, label: 'ModeB [Preset]',          desc: 'Сбалансированный пресет с акцентом на детализацию.' },
-  { id: 16, label: 'ModeC [Preset]',          desc: 'Качественный пресет с более агрессивным улучшением.' },
-  { id: 17, label: 'ModeA+A [Preset]',        desc: 'Расширенный ModeA с дополнительной обработкой.' },
-  { id: 18, label: 'ModeB+B [Preset]',        desc: 'Улучшенный ModeB, обеспечивает более высокое качество.' },
-  { id: 19, label: 'ModeC+A [Preset]',        desc: 'Комбинированный пресет с высокой чёткостью и восстановлением.' },
-  { id: 0,  label: 'DoG [Deblur]',            desc: 'Удаление размытия и усиление границ (фильтр Гауссиан).' },
-  { id: 1,  label: 'BilateralMean [Denoise]', desc: 'Снижение шума без потери резкости.' },
-  { id: 2,  label: 'CNNM [Restore]',          desc: 'Нейросетевое восстановление, умеренная глубина.' },
-  { id: 3,  label: 'CNNSoftM [Restore]',      desc: 'Мягкое восстановление, минимум артефактов.' },
-  { id: 4,  label: 'CNNSoftVLM [Restore]',    desc: 'Очень лёгкое восстановление для слабых устройств.' },
-  { id: 5,  label: 'CNNVL [Restore]',         desc: 'Малая задержка и быстрая обработка.' },
-  { id: 6,  label: 'CNNUL [Restore]',         desc: 'Универсальное восстановление, акцент на стабильность.' },
-  { id: 7,  label: 'GANUUL [Restore]',        desc: 'GAN-реконструкция для высокого качества.' },
-  { id: 8,  label: 'CNNx2M [Upscale]',        desc: 'Апскейл ×2 с сохранением структуры кадра.' },
-  { id: 9,  label: 'CNNx2VL [Upscale]',       desc: 'Быстрый апскейл ×2 для слабых систем.' },
-  { id: 10, label: 'DenoiseCNNx2VL [Upscale]',desc: 'Апскейл ×2 с предварительным шумоподавлением.' },
-  { id: 11, label: 'CNNx2UL [Upscale]',       desc: 'Универсальный сбалансированный апскейл ×2.' },
-  { id: 12, label: 'GANx3L [Upscale]',        desc: 'GAN апскейл ×3 для высокого качества.' },
-  { id: 13, label: 'GANx4UUL [Upscale]',      desc: 'GAN апскейл ×4 — максимальное качество.' },
+const MODES: { id: number; label: string; desc: string; group: string }[] = [
+  { id: -1, label: 'Оригинал', desc: 'Без фильтра', group: '' },
+  { id: 14, label: 'ModeA', desc: 'Быстрый пресет', group: 'Preset' },
+  { id: 15, label: 'ModeB', desc: 'Сбалансированный', group: 'Preset' },
+  { id: 16, label: 'ModeC', desc: 'Качественный', group: 'Preset' },
+  { id: 17, label: 'ModeA+A', desc: 'Расширенный A', group: 'Preset' },
+  { id: 18, label: 'ModeB+B', desc: 'Улучшенный B', group: 'Preset' },
+  { id: 19, label: 'ModeC+A', desc: 'Комбинированный', group: 'Preset' },
+  { id: 0, label: 'DoG', desc: 'Deblur', group: 'Deblur' },
+  { id: 1, label: 'BilateralMean', desc: 'Denoise', group: 'Denoise' },
+  { id: 2, label: 'CNNM', desc: 'Restore', group: 'Restore' },
+  { id: 3, label: 'CNNSoftM', desc: 'Restore', group: 'Restore' },
+  { id: 4, label: 'CNNSoftVLM', desc: 'Restore', group: 'Restore' },
+  { id: 5, label: 'CNNVL', desc: 'Restore', group: 'Restore' },
+  { id: 6, label: 'CNNUL', desc: 'Restore', group: 'Restore' },
+  { id: 7, label: 'GANUUL', desc: 'Restore', group: 'Restore' },
+  { id: 8, label: 'CNNx2M', desc: 'Upscale ×2', group: 'Upscale' },
+  { id: 9, label: 'CNNx2VL', desc: 'Upscale ×2', group: 'Upscale' },
+  { id: 10, label: 'DenoiseCNNx2VL', desc: 'Upscale ×2', group: 'Upscale' },
+  { id: 11, label: 'CNNx2UL', desc: 'Upscale ×2', group: 'Upscale' },
+  { id: 12, label: 'GANx3L', desc: 'Upscale ×3', group: 'Upscale' },
+  { id: 13, label: 'GANx4UUL', desc: 'Upscale ×4', group: 'Upscale' },
 ];
 
-const MODE_MAP: Record<number, new (opts: { device: GPUDevice; inputTexture: GPUTexture; nativeDimensions: { width: number; height: number }; targetDimensions: { width: number; height: number } }) => unknown> = {
+const MODE_MAP: Record<number, new (opts: object) => unknown> = {
   0: DoG, 1: BilateralMean, 2: CNNM, 3: CNNSoftM, 4: CNNSoftVL,
   5: CNNVL, 6: CNNUL, 7: GANUUL,
   8: CNNx2M, 9: CNNx2VL, 10: DenoiseCNNx2VL, 11: CNNx2UL,
@@ -89,21 +65,23 @@ const MODE_MAP: Record<number, new (opts: { device: GPUDevice; inputTexture: GPU
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let currentModeId    = 15;
+let currentModeId = 15;
 let upscaleStopFn: (() => void) | null = null;
-let videoReady       = false;
-let splitPercent     = 50;
-let isDragging       = false;
+let videoReady = false;
+let splitPercent = 50;
+let isDragging = false;
 let currentPresetIdx = 0;
-let loopStart        = PRESETS[0].start;
-let loopEnd          = PRESETS[0].end;
+let loopStart = PRESETS[0].start;
+let loopEnd = PRESETS[0].end;
 let hlsInstance: Hls | null = null;
-let isRenderingFrame = false; // однокадровый рендер при паузе — кнопка не мигает
+let leftPanelOpen = true;
+let rightPanelOpen = true;
+let timelineRaf = 0;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function formatTime(s: number): string {
   const m = Math.floor(s / 60);
-  const sec = s % 60;
+  const sec = Math.floor(s % 60);
   return `${m}:${String(sec).padStart(2, '0')}`;
 }
 function parseTimecode(s: string): number {
@@ -113,21 +91,19 @@ function parseTimecode(s: string): number {
   return Number(parts[0]) || 0;
 }
 
-// ── Theme ─────────────────────────────────────────────────────────────────────
 initTheme();
 initTooltipSystem();
+
+// ── Groups for modes ───────────────────────────────────────────────────────────
+const MODE_GROUPS = ['', 'Preset', 'Deblur', 'Denoise', 'Restore', 'Upscale'];
 
 // ── DOM ───────────────────────────────────────────────────────────────────────
 const root = document.getElementById('app')!;
 root.innerHTML = `
 <div class="ut-root">
-
-  <!-- App titlebar -->
   <div class="titlebar">
     <div class="titlebar__drag">
-      <span class="titlebar__logo">
-        <img src="logo/512x512.png" alt="" class="titlebar__logo-img" />
-      </span>
+      <span class="titlebar__logo"><img src="logo/512x512.png" alt="" class="titlebar__logo-img" /></span>
       <span class="titlebar__title">Предпросмотр моделей</span>
     </div>
     <div class="titlebar__controls">
@@ -137,430 +113,414 @@ root.innerHTML = `
     </div>
   </div>
 
-<div class="ut-layout">
-  <!-- Sidebar: список режимов -->
-  <aside class="ut-sidebar">
-    <div class="ut-sidebar__header">
-      <span class="ut-sidebar__title">Режимы Anime4K</span>
-    </div>
-    <div class="ut-page">
-      <div class="ut-sidebar__list" id="mode-list"></div>
-    </div>
-  </aside>
-
-  <!-- Main area -->
-  <main class="ut-main">
-    <!-- Topbar: текущий режим + пресеты -->
-    <div class="ut-topbar">
-      <div class="ut-topbar__mode-info">
-        <div class="ut-topbar__mode" id="current-mode-label">ModeB [Preset]</div>
-        <div class="ut-topbar__desc" id="current-mode-desc">Сбалансированный пресет с акцентом на детализацию.</div>
+  <div class="ut-layout">
+    <!-- Left: Presets list (full height) -->
+    <aside class="ut-panel ut-panel--left" id="panel-left">
+      <button class="ut-panel__tog" id="tog-left" aria-label="Свернуть серии">‹</button>
+      <div class="ut-panel__inner">
+        <div class="ut-panel__title">Серии</div>
+        <div class="ut-list ut-list--presets" id="preset-list"></div>
       </div>
-      <div class="ut-topbar__right">
-        <div class="ut-status" id="status">Загрузка…</div>
-      </div>
-    </div>
+    </aside>
 
-    <!-- Preset bar -->
-    <div class="ut-presetbar" id="preset-bar">
-      ${PRESETS.map((p, i) => `<button class="ut-preset-btn${i === 0 ? ' ut-preset-btn--active' : ''}" data-idx="${i}">${p.label}</button>`).join('')}
-    </div>
-
-    <!-- Video container -->
-    <div class="ut-video-wrap" id="video-wrap">
-      <video id="video" crossorigin="anonymous" playsinline muted></video>
-      <canvas id="canvas" hidden></canvas>
-
-      <!-- Split divider -->
-      <div class="ut-split" id="split" hidden>
-        <div class="ut-split__line" id="split-line-el"></div>
-        <div class="ut-split__handle" id="split-handle">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path d="M7 5L2 10L7 15" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M13 5L18 10L13 15" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+    <!-- Center: Video -->
+    <main class="ut-main">
+      <div class="ut-video-wrap" id="video-wrap">
+        <video id="video" crossorigin="anonymous" playsinline muted></video>
+        <canvas id="canvas" hidden></canvas>
+        <div class="ut-split" id="split" hidden>
+          <div class="ut-split__line" id="split-line-el"></div>
+          <div class="ut-split__handle" id="split-handle">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M7 5L2 10L7 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M13 5L18 10L13 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <span class="ut-split__label ut-split__label--left" id="split-left-lbl">Оригинал</span>
+          <span class="ut-split__label ut-split__label--right" id="split-right-lbl">Фильтр</span>
         </div>
-        <span class="ut-split__label ut-split__label--left" id="split-left-lbl">Оригинал</span>
-        <span class="ut-split__label ut-split__label--right" id="split-right-lbl">Фильтр</span>
+        <div class="ut-overlay" id="overlay">
+          <div class="ut-spinner"></div>
+          <div id="overlay-text">Загрузка…</div>
+        </div>
       </div>
-
-      <!-- Loading overlay -->
-      <div class="ut-overlay" id="overlay">
-        <div class="ut-spinner"></div>
-        <div id="overlay-text">Загрузка видео…</div>
+      <div class="ut-controls">
+        <button class="ut-btn ut-btn--icon" id="btn-playpause" disabled title="Воспроизведение">▶</button>
+        <div class="ut-timeline" id="timeline">
+          <div class="ut-timeline__track"><div class="ut-timeline__playhead" id="timeline-playhead"></div></div>
+        </div>
+        <span class="ut-time" id="tc-display">0:00</span>
+        <input class="ut-tc-input" id="tc-input" type="text" value="0:00" title="Тайм-код">
+        <button class="ut-btn" id="btn-seek">Перейти</button>
       </div>
-    </div>
+    </main>
 
-    <!-- Bottom bar -->
-    <div class="ut-bottombar">
-      <button class="ut-playpause-btn" id="btn-playpause" disabled title="Пауза / Воспроизведение">⏸</button>
-      <span class="ut-bottombar__sep"></span>
-      <span class="ut-bottombar__label">Тайм-код:</span>
-      <input class="ut-tc-input" id="tc-input" type="text" value="${formatTime(PRESETS[0].start)}">
-      <button class="ut-tc-btn" id="btn-seek">Перейти</button>
-      <span class="ut-bottombar__hint" id="loop-hint">Цикл ${formatTime(PRESETS[0].start)} – ${formatTime(PRESETS[0].end)} · Тяни разделитель для сравнения</span>
-    </div>
-  </main>
-</div><!-- /ut-layout -->
-</div><!-- /ut-root -->
-`;
+    <!-- Right: Models list (full height) -->
+    <aside class="ut-panel ut-panel--right" id="panel-right">
+      <button class="ut-panel__tog" id="tog-right" aria-label="Свернуть модели">›</button>
+      <div class="ut-panel__inner">
+        <div class="ut-panel__title">Модели</div>
+        <div class="ut-list ut-list--modes" id="mode-groups"></div>
+        <div class="ut-status" id="status"></div>
+      </div>
+    </aside>
+  </div>
+</div>`;
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const style = document.createElement('style');
 style.textContent = `
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--color-bg); color: var(--color-text); font-family: var(--font-sans); height: 100vh; overflow: hidden; }
-
-/* ── Root wrapper ── */
 .ut-root { display: flex; flex-direction: column; height: 100vh; }
 .ut-layout { display: flex; flex: 1; min-height: 0; }
 
-/* ── Sidebar ── */
-.ut-sidebar {
-  width: 240px; flex-shrink: 0;
-  background: var(--color-surface); border-right: 1px solid var(--color-border);
-  display: flex; flex-direction: column; overflow: hidden;
-}
-.ut-sidebar__header {
-  padding: 13px 16px 9px;
-  border-bottom: 1px solid var(--color-border); flex-shrink: 0;
-}
-
-/* ── Page component (custom scroll) ── */
-.ut-page {
-  flex: 1; overflow: hidden; position: relative;
-}
-.ut-page > .ut-sidebar__list {
-  height: 100%; overflow-y: auto; padding: 4px 0;
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-border) transparent;
-}
-.ut-page > .ut-sidebar__list::-webkit-scrollbar { width: 3px; }
-.ut-page > .ut-sidebar__list::-webkit-scrollbar-track { background: transparent; }
-.ut-page > .ut-sidebar__list::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
-.ut-page > .ut-sidebar__list::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--color-text) 20%, transparent); }
-.ut-sidebar__title { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--color-text-muted); }
-.ut-sidebar__list { overflow-y: auto; flex: 1; padding: 4px 0; }
-.ut-mode-btn {
-  display: block; width: 100%; text-align: left;
-  padding: 7px 16px; border: none; background: none;
-  color: var(--color-text-muted); font-size: 0.79rem; cursor: pointer;
-  transition: background .1s, color .1s; line-height: 1.3;
-}
-.ut-mode-btn:hover { background: color-mix(in srgb, var(--color-text) 5%, transparent); color: var(--color-text); }
-.ut-mode-btn--active { background: color-mix(in srgb, var(--color-text) 9%, transparent); color: var(--color-text); font-weight: 600; }
-.ut-mode-btn__label { display: block; }
-.ut-mode-btn__type {
-  display: inline-block; font-size: 0.63rem; padding: 1px 5px;
-  border-radius: 3px; margin-top: 2px; opacity: .55;
-  background: color-mix(in srgb, var(--color-text) 8%, transparent);
-}
-
-/* ── Main ── */
-.ut-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-
-/* ── Topbar ── */
-.ut-topbar {
-  flex-shrink: 0; padding: 9px 16px;
-  border-bottom: 1px solid var(--color-border); background: var(--color-surface);
-  display: flex; align-items: center; gap: 12px;
-}
-.ut-topbar__mode-info { flex: 1; min-width: 0; }
-.ut-topbar__mode { font-size: 0.875rem; font-weight: 700; color: var(--color-text); white-space: nowrap; }
-.ut-topbar__desc { font-size: 0.74rem; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
-.ut-topbar__right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-.ut-status { font-size: 0.74rem; color: var(--color-text-muted); white-space: nowrap; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
-
-/* ── Preset bar ── */
-.ut-presetbar {
-  flex-shrink: 0;
-  display: flex; gap: 6px;
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg);
-  overflow-x: auto;
-}
-.ut-presetbar::-webkit-scrollbar { height: 3px; }
-.ut-presetbar::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
-.ut-preset-btn {
-  flex-shrink: 0;
-  padding: 5px 13px;
+.ut-panel {
   background: var(--color-surface); border: 1px solid var(--color-border);
-  border-radius: 20px; color: var(--color-text-muted); font-size: 0.78rem;
-  cursor: pointer; transition: background .12s, color .12s, border-color .12s;
-  white-space: nowrap;
+  display: flex; flex-direction: column; position: relative;
+  transition: width .2s ease;
 }
-.ut-preset-btn:hover { background: var(--color-surface-hover); color: var(--color-text); border-color: color-mix(in srgb, var(--color-text) 20%, transparent); }
-.ut-preset-btn--active {
-  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
-  border-color: var(--color-accent);
-  color: var(--color-accent); font-weight: 600;
+.ut-panel--left { border-right: none; width: 200px; }
+.ut-panel--right { border-left: none; width: 220px; }
+.ut-panel.collapsed { width: 0 !important; min-width: 0 !important; overflow: visible; flex-shrink: 0; }
+.ut-panel.collapsed .ut-panel__inner { display: none; }
+.ut-panel__tog {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 20px; height: 48px; border: none; border-radius: 0 4px 4px 0;
+  background: var(--color-surface-hover); color: var(--color-text-muted);
+  cursor: pointer; font-size: 1rem; z-index: 10;
+  display: flex; align-items: center; justify-content: center;
 }
+.ut-panel--left .ut-panel__tog { right: -20px; }
+.ut-panel--right .ut-panel__tog { left: -20px; border-radius: 4px 0 0 4px; }
+.ut-panel__tog:hover { background: var(--color-border); color: var(--color-text); }
+.ut-panel.collapsed .ut-panel__tog { width: 24px; height: 56px; }
+.ut-panel--left.collapsed .ut-panel__tog { right: auto; left: 0; border-radius: 0 6px 6px 0; }
+.ut-panel--right.collapsed .ut-panel__tog { left: auto; right: 0; border-radius: 6px 0 0 6px; }
+.ut-panel__inner { padding: 12px; flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.ut-panel__title { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--color-text-muted); margin-bottom: 8px; flex-shrink: 0; }
 
-/* ── Video wrap ── */
-.ut-video-wrap {
-  flex: 1; position: relative;
-  background: #000; overflow: hidden; min-height: 0;
-  user-select: none;
+.ut-list { flex: 1; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 2px; }
+.ut-list::-webkit-scrollbar { width: 5px; }
+.ut-list::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+.ut-list-item {
+  display: block; width: 100%; text-align: left; padding: 10px 12px;
+  border: none; background: none; border-radius: 6px; color: var(--color-text-muted);
+  font-size: 0.85rem; cursor: pointer; transition: background .12s, color .12s;
+  flex-shrink: 0;
 }
+.ut-list-item:hover { background: var(--color-surface-hover); color: var(--color-text); }
+.ut-list-item--active { background: color-mix(in srgb, var(--color-accent) 18%, transparent); color: var(--color-accent); font-weight: 600; }
+
+.ut-mode-groups { display: flex; flex-direction: column; gap: 2px; }
+.ut-mode-group { margin-bottom: 6px; }
+.ut-mode-group__head { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); padding: 4px 0; }
+.ut-mode-item {
+  display: block; width: 100%; text-align: left; padding: 8px 12px;
+  border: none; background: none; border-radius: 6px; color: var(--color-text-muted);
+  font-size: 0.82rem; cursor: pointer; transition: background .12s, color .12s;
+}
+.ut-mode-item:hover { background: var(--color-surface-hover); color: var(--color-text); }
+.ut-mode-item--active { background: color-mix(in srgb, var(--color-accent) 18%, transparent); color: var(--color-accent); font-weight: 600; }
+.ut-mode-item--upscale { border-left: 3px solid rgba(239,68,68,0.5); }
+
+.ut-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+.ut-video-wrap { flex: 1; position: relative; background: #000; min-height: 0; user-select: none; }
 #video, #canvas {
-  position: absolute; inset: 0;
-  width: 100%; height: 100%;
+  position: absolute; inset: 0; width: 100%; height: 100%;
   object-fit: contain; display: block;
 }
+#canvas { will-change: transform; transform: translateZ(0); backface-visibility: hidden; image-rendering: smooth; }
 #video { background: #000; }
 
-/* ── Split divider ── */
 .ut-split { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
-.ut-split__line {
-  position: absolute; top: 0; bottom: 0; left: 50%;
-  width: 2px; background: rgba(255,255,255,.85);
-  box-shadow: 0 0 8px rgba(0,0,0,.8);
-  transform: translateX(-50%);
-}
+.ut-split__line { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: rgba(255,255,255,.9); transform: translateX(-50%); }
 .ut-split__handle {
-  position: absolute; top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  width: 44px; height: 44px; border-radius: 50%;
-  background: #fff; box-shadow: 0 2px 16px rgba(0,0,0,.7);
-  display: flex; align-items: center; justify-content: center;
-  cursor: ew-resize; pointer-events: all;
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  width: 40px; height: 40px; border-radius: 50%; background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.6);
+  display: flex; align-items: center; justify-content: center; cursor: ew-resize; pointer-events: all; color: #333;
 }
-.ut-split__label {
-  position: absolute; top: 12px;
-  background: rgba(0,0,0,.6); backdrop-filter: blur(4px);
-  color: #fff; font-size: 0.7rem; font-weight: 600;
-  padding: 3px 8px; border-radius: 4px; white-space: nowrap;
-  pointer-events: none; letter-spacing: .02em;
-}
+.ut-split__label { position: absolute; top: 10px; background: rgba(0,0,0,.7); color: #fff; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+.ut-split__label--left { left: 10px; right: auto; }
+.ut-split__label--right { left: auto; right: 10px; }
 
-/* ── Overlay ── */
-.ut-overlay {
-  position: absolute; inset: 0;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 14px; background: rgba(0,0,0,.72);
-  z-index: 10; font-size: 0.875rem; color: var(--color-text-muted);
-  transition: opacity .25s;
-}
+.ut-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: rgba(0,0,0,.8); z-index: 10; font-size: 0.85rem; color: var(--color-text-muted); }
 .ut-overlay.hidden { opacity: 0; pointer-events: none; }
-.ut-spinner {
-  width: 36px; height: 36px; border-radius: 50%;
-  border: 3px solid color-mix(in srgb, var(--color-text) 8%, transparent);
-  border-top-color: var(--color-accent);
-  animation: spin .8s linear infinite;
-}
+.ut-spinner { width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; border-top-color: var(--color-accent); animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ── Bottombar ── */
-.ut-bottombar {
-  flex-shrink: 0; padding: 9px 16px;
-  border-top: 1px solid var(--color-border); background: var(--color-surface);
-  display: flex; align-items: center; gap: 9px; font-size: 0.79rem;
+.ut-controls {
+  flex-shrink: 0; padding: 8px 12px; background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  display: flex; align-items: center; gap: 10px; font-size: 0.8rem;
 }
-.ut-bottombar__sep  { width: 1px; height: 18px; background: var(--color-border); flex-shrink: 0; }
-.ut-bottombar__label{ color: var(--color-text-muted); white-space: nowrap; }
-.ut-bottombar__hint { color: color-mix(in srgb, var(--color-text-muted) 60%, transparent); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ut-playpause-btn {
-  width: 34px; height: 34px; flex-shrink: 0;
-  background: var(--color-surface); border: 1px solid var(--color-border);
-  border-radius: 8px; color: var(--color-text-muted); font-size: 1rem;
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
-  transition: background .1s, color .1s;
-}
-.ut-playpause-btn:hover:not(:disabled) { background: var(--color-surface-hover); color: var(--color-text); }
-.ut-playpause-btn:disabled { opacity: .3; cursor: default; }
-.ut-tc-input {
-  width: 58px; padding: 5px 8px;
-  background: var(--color-surface); border: 1px solid var(--color-border);
-  border-radius: 6px; color: var(--color-text); font-size: 0.78rem; text-align: center;
-}
+.ut-btn { padding: 6px 12px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 6px; color: var(--color-text); cursor: pointer; font-size: 0.78rem; }
+.ut-btn:hover:not(:disabled) { background: var(--color-surface-hover); }
+.ut-btn:disabled { opacity: .4; cursor: default; }
+.ut-btn--icon { width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; }
+.ut-timeline { flex: 1; min-width: 80px; cursor: pointer; }
+.ut-timeline__track { position: relative; height: 20px; background: var(--color-bg); border-radius: 4px; overflow: hidden; }
+.ut-timeline__playhead { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; background: var(--color-accent); border-radius: 2px; transition: none; }
+.ut-time { color: var(--color-text-muted); min-width: 36px; font-variant-numeric: tabular-nums; }
+.ut-tc-input { width: 52px; padding: 4px 6px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 4px; color: var(--color-text); font-size: 0.78rem; text-align: center; }
 .ut-tc-input:focus { outline: none; border-color: var(--color-accent); }
-.ut-tc-btn {
-  padding: 5px 12px; background: var(--color-surface); border: 1px solid var(--color-border);
-  border-radius: 6px; color: var(--color-text-muted); font-size: 0.76rem; cursor: pointer;
-  transition: background .1s;
-}
-.ut-tc-btn:hover { background: var(--color-surface-hover); }
+.ut-status { font-size: 0.72rem; color: var(--color-text-muted); margin-top: 8px; flex-shrink: 0; }
 `;
 document.head.appendChild(style);
 
 // ── Refs ──────────────────────────────────────────────────────────────────────
-const videoEl       = document.getElementById('video')          as HTMLVideoElement;
-const canvasEl      = document.getElementById('canvas')         as HTMLCanvasElement;
-const overlayEl     = document.getElementById('overlay')        as HTMLElement;
-const overlayTxt    = document.getElementById('overlay-text')   as HTMLElement;
-const statusEl      = document.getElementById('status')         as HTMLElement;
-const seekBtn       = document.getElementById('btn-seek')        as HTMLButtonElement;
-const tcInput       = document.getElementById('tc-input')        as HTMLInputElement;
-const modeList      = document.getElementById('mode-list')       as HTMLElement;
-const modeLabelEl   = document.getElementById('current-mode-label') as HTMLElement;
-const modeDescEl    = document.getElementById('current-mode-desc')  as HTMLElement;
-const videoWrap     = document.getElementById('video-wrap')      as HTMLElement;
-const splitEl       = document.getElementById('split')           as HTMLElement;
-const splitHandle   = document.getElementById('split-handle')    as HTMLElement;
-const splitLineEl   = document.getElementById('split-line-el')   as HTMLElement;
-const splitLeftLbl  = document.getElementById('split-left-lbl')  as HTMLElement;
+const videoEl = document.getElementById('video') as HTMLVideoElement;
+const canvasEl = document.getElementById('canvas') as HTMLCanvasElement;
+const overlayEl = document.getElementById('overlay') as HTMLElement;
+const overlayTxt = document.getElementById('overlay-text') as HTMLElement;
+const statusEl = document.getElementById('status') as HTMLElement;
+const presetList = document.getElementById('preset-list') as HTMLElement;
+const modeGroups = document.getElementById('mode-groups') as HTMLElement;
+const videoWrap = document.getElementById('video-wrap') as HTMLElement;
+const splitEl = document.getElementById('split') as HTMLElement;
+const splitHandle = document.getElementById('split-handle') as HTMLElement;
+const splitLineEl = document.getElementById('split-line-el') as HTMLElement;
+const splitLeftLbl = document.getElementById('split-left-lbl') as HTMLElement;
 const splitRightLbl = document.getElementById('split-right-lbl') as HTMLElement;
-const playPauseBtn  = document.getElementById('btn-playpause')   as HTMLButtonElement;
-const loopHint      = document.getElementById('loop-hint')       as HTMLElement;
-const presetBar     = document.getElementById('preset-bar')      as HTMLElement;
+const playPauseBtn = document.getElementById('btn-playpause') as HTMLButtonElement;
+const tcInput = document.getElementById('tc-input') as HTMLInputElement;
+const tcDisplay = document.getElementById('tc-display') as HTMLElement;
+const seekBtn = document.getElementById('btn-seek') as HTMLButtonElement;
+const timelineEl = document.getElementById('timeline') as HTMLElement;
+const timelinePh = document.getElementById('timeline-playhead') as HTMLElement;
+const panelLeft = document.getElementById('panel-left') as HTMLElement;
+const panelRight = document.getElementById('panel-right') as HTMLElement;
 
-// ── Mode sidebar ──────────────────────────────────────────────────────────────
-function getTypeTag(label: string): string {
-  if (label.includes('[Preset]'))  return 'Preset';
-  if (label.includes('[Deblur]'))  return 'Deblur';
-  if (label.includes('[Denoise]')) return 'Denoise';
-  if (label.includes('[Restore]')) return 'Restore';
-  if (label.includes('[Upscale]')) return 'Upscale';
-  return '';
+// ── Panel toggles (стрелка меняется: свернуто → раскрыть, открыто → свернуть) ───
+const togLeft = document.getElementById('tog-left') as HTMLButtonElement;
+const togRight = document.getElementById('tog-right') as HTMLButtonElement;
+function updateTogLabels() {
+  if (togLeft) togLeft.textContent = leftPanelOpen ? '‹' : '›';
+  if (togRight) togRight.textContent = rightPanelOpen ? '›' : '‹';
 }
+document.getElementById('tog-left')?.addEventListener('click', () => {
+  leftPanelOpen = !leftPanelOpen;
+  panelLeft.classList.toggle('collapsed', !leftPanelOpen);
+  updateTogLabels();
+});
+document.getElementById('tog-right')?.addEventListener('click', () => {
+  rightPanelOpen = !rightPanelOpen;
+  panelRight.classList.toggle('collapsed', !rightPanelOpen);
+  updateTogLabels();
+});
 
-function buildModeList() {
-  modeList.innerHTML = '';
-  MODES.forEach((m) => {
-    const btn = document.createElement('button');
-    btn.className = 'ut-mode-btn' + (m.id === currentModeId ? ' ut-mode-btn--active' : '');
-    btn.dataset.id = String(m.id);
-    const tag = getTypeTag(m.label);
-    const shortLabel = m.label.replace(/ \[.*\]/, '');
-    btn.innerHTML = `
-      <span class="ut-mode-btn__label">${shortLabel}</span>
-      ${tag ? `<span class="ut-mode-btn__type">${tag}</span>` : ''}
-    `;
-    btn.addEventListener('click', () => selectMode(m.id));
-    modeList.appendChild(btn);
+// ── Mode groups UI ─────────────────────────────────────────────────────────────
+function buildModeGroups() {
+  modeGroups.innerHTML = '';
+  MODE_GROUPS.forEach(group => {
+    const items = MODES.filter(m => m.group === group);
+    if (items.length === 0) return;
+    const div = document.createElement('div');
+    div.className = 'ut-mode-group';
+    div.innerHTML = `<div class="ut-mode-group__head">${group || 'Без фильтра'}</div>`;
+    items.forEach(m => {
+      const btn = document.createElement('button');
+      btn.className = 'ut-mode-item' + (m.id === currentModeId ? ' ut-mode-item--active' : '') + (m.group === 'Upscale' ? ' ut-mode-item--upscale' : '');
+      btn.textContent = m.label;
+      btn.dataset.id = String(m.id);
+      btn.addEventListener('click', () => selectMode(m.id));
+      div.appendChild(btn);
+    });
+    modeGroups.appendChild(div);
   });
 }
 
 function selectMode(id: number) {
   currentModeId = id;
-  modeList.querySelectorAll<HTMLElement>('.ut-mode-btn').forEach(btn => {
-    btn.classList.toggle('ut-mode-btn--active', Number(btn.dataset.id) === id);
+  modeGroups.querySelectorAll('.ut-mode-item').forEach(btn => {
+    const bid = Number((btn as HTMLElement).dataset.id);
+    btn.classList.toggle('ut-mode-item--active', bid === id);
   });
-  const m = MODES.find(x => x.id === id)!;
-  modeLabelEl.textContent = m.label;
-  modeDescEl.textContent  = m.desc;
-  if (videoReady) applyUpscale();
+  if (videoReady) {
+    void applyUpscale().then(() => {
+      requestAnimationFrame(() => requestAnimationFrame(() => playOneFrame()));
+    });
+  }
 }
 
-buildModeList();
+function playOneFrame() {
+  if (!videoReady || !videoEl) return;
+  const t = videoEl.currentTime;
+  const frameStep = 1 / 30;
+  let next = t + frameStep;
+  if (next >= loopEnd - 0.01) {
+    next = Math.max(loopStart, t - frameStep);
+  } else {
+    next = Math.min(next, loopEnd - 0.01);
+  }
+  if (Math.abs(next - t) < 0.001) {
+    next = t + 0.034;
+    if (next >= loopEnd - 0.01) next = Math.max(loopStart, t - 0.034);
+  }
+  videoEl.currentTime = next;
+  const wasPaused = videoEl.paused;
+  if (!wasPaused) return;
+  const stop = () => { videoEl.pause(); };
+  videoEl.play().then(() => {
+    if ('requestVideoFrameCallback' in videoEl) {
+      (videoEl as HTMLVideoElement & { requestVideoFrameCallback: (cb: () => void) => number })
+        .requestVideoFrameCallback(stop);
+    } else {
+      videoEl.addEventListener('timeupdate', stop, { once: true });
+      setTimeout(stop, 120);
+    }
+  }).catch(() => {});
+}
 
-// ── Preset bar ────────────────────────────────────────────────────────────────
-presetBar.querySelectorAll<HTMLButtonElement>('.ut-preset-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const idx = Number(btn.dataset.idx);
-    if (idx === currentPresetIdx) return;
-    loadPreset(idx);
+buildModeGroups();
+
+// ── Preset list (full height) ──────────────────────────────────────────────────
+function buildPresetList() {
+  presetList.innerHTML = '';
+  PRESETS.forEach((p, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'ut-list-item' + (i === currentPresetIdx ? ' ut-list-item--active' : '');
+    btn.textContent = p.label;
+    btn.dataset.idx = String(i);
+    btn.addEventListener('click', () => {
+      const idx = Number(btn.dataset.idx);
+      if (idx !== currentPresetIdx) loadPreset(idx);
+    });
+    presetList.appendChild(btn);
   });
-});
+}
 
-function loadPreset(idx: number) {
+function updatePresetListActive() {
+  presetList.querySelectorAll('.ut-list-item').forEach((btn, i) => {
+    btn.classList.toggle('ut-list-item--active', i === currentPresetIdx);
+  });
+}
+
+buildPresetList();
+
+async function resolvePresetUrl(preset: Preset): Promise<string> {
+  if (preset.url) return preset.url;
+  if (preset.kodikPageUrl && typeof (window as any).anixApi?.release?.getDirectVideoLink === 'function') {
+    const { directUrl } = await (window as any).anixApi.release.getDirectVideoLink(preset.kodikPageUrl);
+    if (directUrl) return (directUrl.startsWith('http') ? directUrl : `https:${directUrl}`).replace(/\?.*$/, '');
+  }
+  throw new Error('Не удалось получить ссылку с Kodik');
+}
+
+async function loadPreset(idx: number) {
   currentPresetIdx = idx;
   const preset = PRESETS[idx];
   loopStart = preset.start;
-  loopEnd   = preset.end;
+  loopEnd = preset.end;
 
-  // Update preset bar UI
-  presetBar.querySelectorAll('.ut-preset-btn').forEach((b, i) => {
-    b.classList.toggle('ut-preset-btn--active', i === idx);
-  });
-
-  // Update loop hint + timecode input
+  updatePresetListActive();
   tcInput.value = formatTime(preset.start);
-  loopHint.textContent = `Цикл ${formatTime(preset.start)} – ${formatTime(preset.end)} · Тяни разделитель для сравнения`;
+  tcDisplay.textContent = formatTime(preset.start);
 
-  // Reset state
   videoReady = false;
   playPauseBtn.disabled = true;
   overlayEl.classList.remove('hidden');
-  overlayTxt.textContent = 'Загрузка…';
-  setStatus('Загрузка пресета…');
+  overlayTxt.textContent = preset.kodikPageUrl ? 'Получение ссылки…' : 'Загрузка…';
+  statusEl.textContent = '';
 
-  // Stop upscale
   if (upscaleStopFn) { try { upscaleStopFn(); } catch (_) {} upscaleStopFn = null; }
   canvasEl.hidden = true;
-  videoEl.style.visibility = 'visible';
-  hideSplit();
-
-  // Destroy old HLS and init new
+  splitEl.hidden = true;
   if (hlsInstance) { try { hlsInstance.destroy(); } catch (_) {} hlsInstance = null; }
-  initHls(preset.url, preset.start);
+
+  try {
+    const playUrl = await resolvePresetUrl(preset);
+    overlayTxt.textContent = `Переход к ${formatTime(preset.start)}…`;
+    initHls(playUrl, preset.start);
+  } catch (err) {
+    overlayTxt.textContent = String(err?.message || err || 'Ошибка');
+    statusEl.textContent = 'Ошибка';
+  }
 }
 
-// ── HLS ───────────────────────────────────────────────────────────────────────
 function initHls(url: string, targetTime: number) {
   const hls = new Hls();
   hlsInstance = hls;
   hls.loadSource(url);
   hls.attachMedia(videoEl);
-
   hls.on(Hls.Events.MANIFEST_PARSED, () => {
     overlayTxt.textContent = `Переход к ${formatTime(targetTime)}…`;
     videoEl.currentTime = targetTime;
     videoEl.play().catch(() => {});
   });
-
   hls.on(Hls.Events.ERROR, (_, data) => {
-    if (!data.fatal) return;
-    if (hlsInstance !== hls) return;
-
-    // На ошибке делаем то же что кнопка «Перейти»: перезапускаем загрузку с тайм-кода
+    if (!data.fatal || hlsInstance !== hls) return;
     overlayEl.classList.remove('hidden');
-    overlayTxt.textContent = `Переход к ${formatTime(targetTime)}…`;
-    setStatus('');
-
-    if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-      hls.recoverMediaError();
-    } else {
-      hls.startLoad(targetTime); // возобновляем загрузку с нужной позиции
-    }
+    if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+    else hls.startLoad(targetTime);
     videoEl.currentTime = targetTime;
     videoEl.play().catch(() => {});
   });
 }
 
-// Initial load
-initHls(PRESETS[0].url, PRESETS[0].start);
-
-videoEl.addEventListener('canplay', () => {
-  if (!videoReady) overlayTxt.textContent = 'Буферизация…';
-});
+void loadPreset(0);
 
 videoEl.addEventListener('seeked', () => {
-  if (videoReady) return; // loop-seek или ручной seek — игнорировать
+  if (videoReady) return;
   videoReady = true;
   overlayEl.classList.add('hidden');
   playPauseBtn.disabled = false;
-  setStatus('');
+  statusEl.textContent = '';
   applyUpscale();
 });
 
-// ── Loop ──────────────────────────────────────────────────────────────────────
+// ── Timeline (throttled, no jitter) ────────────────────────────────────────────
+function updateTimeline() {
+  if (!videoReady || !timelineEl) return;
+  const t = videoEl.currentTime;
+  const duration = loopEnd - loopStart;
+  const pct = duration > 0 ? Math.max(0, Math.min(1, (t - loopStart) / duration)) : 0;
+  timelinePh.style.left = (pct * 100) + '%';
+  tcDisplay.textContent = formatTime(t);
+  tcInput.value = formatTime(t);
+}
+
 videoEl.addEventListener('timeupdate', () => {
   if (!videoReady) return;
   if (videoEl.currentTime >= loopEnd) {
     videoEl.currentTime = loopStart;
     if (!videoEl.paused) videoEl.play().catch(() => {});
   }
+  if (timelineRaf) return;
+  timelineRaf = requestAnimationFrame(() => {
+    timelineRaf = 0;
+    updateTimeline();
+  });
 });
 
-// ── Play / Pause ──────────────────────────────────────────────────────────────
+function seekFromTimeline(clientX: number) {
+  if (!timelineEl) return;
+  const rect = timelineEl.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  const t = loopStart + pct * (loopEnd - loopStart);
+  videoEl.currentTime = t;
+  updateTimeline();
+}
+
+timelineEl?.addEventListener('click', (e) => { if (videoReady) seekFromTimeline(e.clientX); });
+let timelineDragging = false;
+timelineEl?.addEventListener('mousedown', (e) => { if (videoReady && e.button === 0) timelineDragging = true; });
+document.addEventListener('mousemove', (e) => { if (timelineDragging && videoReady) seekFromTimeline(e.clientX); });
+document.addEventListener('mouseup', () => { timelineDragging = false; });
+
+// ── Play / Pause (без микро-seek — устраняет подёргивание) ─────────────────────
 playPauseBtn.addEventListener('click', () => {
   if (videoEl.paused) {
-    // Синхронизация: если тайм-код вышел за цикл — возвращаем в начало
-    if (videoEl.currentTime < loopStart || videoEl.currentTime >= loopEnd) {
-      videoEl.currentTime = loopStart;
-    }
+    let t = videoEl.currentTime;
+    if (t < loopStart || t >= loopEnd) { t = loopStart; videoEl.currentTime = t; }
     videoEl.play().catch(() => {});
   } else {
     videoEl.pause();
   }
 });
-videoEl.addEventListener('play',  () => { if (!isRenderingFrame) playPauseBtn.textContent = '⏸'; });
-videoEl.addEventListener('pause', () => { if (!isRenderingFrame) playPauseBtn.textContent = '▶'; });
+videoEl.addEventListener('play', () => { playPauseBtn.textContent = '⏸'; });
+videoEl.addEventListener('pause', () => {
+  playPauseBtn.textContent = '▶';
+  updateTimeline();
+});
 
-// ── Seek button ───────────────────────────────────────────────────────────────
 seekBtn.addEventListener('click', () => {
   const t = parseTimecode(tcInput.value);
   videoReady = false;
@@ -569,82 +529,101 @@ seekBtn.addEventListener('click', () => {
   overlayTxt.textContent = `Переход к ${tcInput.value}…`;
   if (upscaleStopFn) { try { upscaleStopFn(); } catch (_) {} upscaleStopFn = null; }
   canvasEl.hidden = true;
-  hideSplit();
-  videoEl.style.visibility = 'visible';
+  splitEl.hidden = true;
   videoEl.currentTime = t;
   videoEl.play().catch(() => {});
 });
 
-// ── Split divider ─────────────────────────────────────────────────────────────
+// ── Split ──────────────────────────────────────────────────────────────────────
 function applySplitPercent() {
-  const p    = splitPercent;
+  const p = splitPercent;
   const wrapW = videoWrap.clientWidth;
   const splitPx = (p / 100) * wrapW;
-  const GAP = 10;
-
-  splitLineEl.style.left  = p + '%';
-  splitHandle.style.left  = p + '%';
+  splitLineEl.style.left = p + '%';
+  splitHandle.style.left = p + '%';
   canvasEl.style.clipPath = `inset(0 0 0 ${p}%)`;
-
-  // Labels: left ends before the line, right starts after
-  const leftW  = splitLeftLbl.offsetWidth  || 65;
-  const rightW = splitRightLbl.offsetWidth || 65;
-
-  splitLeftLbl.style.right = '';
-  splitLeftLbl.style.left  = Math.max(8, splitPx - GAP - leftW) + 'px';
-
-  splitRightLbl.style.left  = '';
-  splitRightLbl.style.left  = Math.min(splitPx + GAP, wrapW - rightW - 8) + 'px';
+  splitLeftLbl.style.left = '12px';
+  splitLeftLbl.style.right = 'auto';
+  splitRightLbl.style.left = 'auto';
+  splitRightLbl.style.right = '12px';
 }
 
 splitHandle.addEventListener('mousedown', (e) => { isDragging = true; e.preventDefault(); });
-splitHandle.addEventListener('touchstart', (e) => { isDragging = true; e.preventDefault(); }, { passive: false });
-
 document.addEventListener('mousemove', (e) => {
   if (!isDragging) return;
   const rect = videoWrap.getBoundingClientRect();
   splitPercent = Math.max(5, Math.min(95, ((e.clientX - rect.left) / rect.width) * 100));
   applySplitPercent();
 });
-document.addEventListener('touchmove', (e) => {
-  if (!isDragging || !e.touches[0]) return;
-  const rect = videoWrap.getBoundingClientRect();
-  splitPercent = Math.max(5, Math.min(95, ((e.touches[0].clientX - rect.left) / rect.width) * 100));
-  applySplitPercent();
-}, { passive: true });
-document.addEventListener('mouseup',  () => { isDragging = false; });
-document.addEventListener('touchend', () => { isDragging = false; });
+document.addEventListener('mouseup', () => { isDragging = false; });
 
 function showSplit(modeLabel: string) {
-  splitRightLbl.textContent = modeLabel.replace(/ \[.*\]/, '');
+  splitRightLbl.textContent = modeLabel;
   splitEl.hidden = false;
   applySplitPercent();
 }
 function hideSplit() { splitEl.hidden = true; }
 
-// ── Upscale ───────────────────────────────────────────────────────────────────
+// ── Upscale (разрешение под 2K/4K, devicePixelRatio для чёткого отображения) ────
+function even(v: number): number {
+  return Math.floor(v / 2) * 2;
+}
+
+function getTargetDimensions(): { width: number; height: number } {
+  const vw = videoEl.videoWidth || 1280;
+  const vh = videoEl.videoHeight || 720;
+  const wrapW = videoWrap.clientWidth || vw;
+  const wrapH = videoWrap.clientHeight || vh;
+  const videoAspect = vw / vh;
+  const wrapAspect = wrapW / wrapH;
+  let displayW: number, displayH: number;
+  if (wrapAspect > videoAspect) {
+    displayH = wrapH;
+    displayW = wrapH * videoAspect;
+  } else {
+    displayW = wrapW;
+    displayH = wrapW / videoAspect;
+  }
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const maxW = 3840;
+  const maxH = 2160;
+  let outW: number, outH: number;
+  if (currentModeId >= 8 && currentModeId <= 13) {
+    const scale = currentModeId === 12 ? 3 : currentModeId === 13 ? 4 : 2;
+    outW = Math.min(even(vw * scale), maxW);
+    outH = Math.min(even(vh * scale), maxH);
+    const displayPx = displayW * dpr;
+    if (displayPx > outW) {
+      outW = Math.min(even(displayW * dpr), maxW);
+      outH = Math.min(even(displayH * dpr), maxH);
+    }
+  } else {
+    outW = Math.min(even(displayW * dpr), maxW);
+    outH = Math.min(even(displayH * dpr), maxH);
+  }
+  outW = Math.max(outW, vw);
+  outH = Math.max(outH, vh);
+  return { width: outW, height: outH };
+}
+
 async function applyUpscale() {
   if (upscaleStopFn) { try { upscaleStopFn(); } catch (_) {} upscaleStopFn = null; }
 
   const m = MODES.find(x => x.id === currentModeId)!;
-
   if (currentModeId === -1 || typeof navigator.gpu === 'undefined') {
     canvasEl.hidden = true;
-    videoEl.style.visibility = 'visible';
-    hideSplit();
-    setStatus(currentModeId === -1 ? 'Оригинал' : 'WebGPU недоступен');
+    splitEl.hidden = true;
+    statusEl.textContent = currentModeId === -1 ? 'Оригинал' : 'WebGPU недоступен';
     return;
   }
 
-  setStatus('Инициализация ' + m.label.replace(/ \[.*\]/, '') + '…');
-
-  const w = videoEl.videoWidth  || 1280;
-  const h = videoEl.videoHeight || 720;
-  canvasEl.width  = w;
-  canvasEl.height = h;
+  statusEl.textContent = 'Инициализация…';
+  const vw = videoEl.videoWidth || 1280;
+  const vh = videoEl.videoHeight || 720;
+  const target = getTargetDimensions();
+  canvasEl.width = target.width;
+  canvasEl.height = target.height;
   canvasEl.hidden = false;
-  videoEl.style.visibility = 'visible'; // видео нужно для split-левой стороны
-
   const ModeClass = MODE_MAP[currentModeId] ?? ModeB;
 
   try {
@@ -652,37 +631,30 @@ async function applyUpscale() {
       video: videoEl,
       canvas: canvasEl,
       pipelineBuilder: (device: GPUDevice, inputTexture: GPUTexture) => {
-        const native = { width: videoEl.videoWidth || w, height: videoEl.videoHeight || h };
-        const target = { width: canvasEl.width, height: canvasEl.height };
-        return [new ModeClass({ device, inputTexture, nativeDimensions: native, targetDimensions: target }) as any];
+        const native = { width: vw, height: vh };
+        const t = { width: canvasEl.width, height: canvasEl.height };
+        return [new ModeClass({ device, inputTexture, nativeDimensions: native, targetDimensions: t }) as any];
       },
     });
     upscaleStopFn = stop as () => void;
-    setStatus('✓ ' + m.label.replace(/ \[.*\]/, ''));
+    statusEl.textContent = '✓ ' + m.label;
     showSplit(m.label);
-
-    // Если видео на паузе — прокрутить один кадр чтобы фильтр отрисовался сразу
-    if (videoEl.paused) {
-      isRenderingFrame = true;
-      videoEl.requestVideoFrameCallback(() => {
-        videoEl.pause();
-        isRenderingFrame = false;
-      });
-      videoEl.play().catch(() => { isRenderingFrame = false; });
-    }
   } catch (err) {
     console.error('[Anime4K]', err);
     canvasEl.hidden = true;
-    hideSplit();
-    setStatus('Ошибка GPU: ' + String(err).slice(0, 50));
+    splitEl.hidden = true;
+    statusEl.textContent = 'Ошибка GPU';
   }
 }
 
-// ── Titlebar window controls ──────────────────────────────────────────────────
-const el = (window as any).electron as Record<string, (...a: any[]) => any> | undefined;
-document.getElementById('btn-tool-min')?.addEventListener('click',   () => el?.minimizeToolWindow?.());
-document.getElementById('btn-tool-max')?.addEventListener('click',   () => el?.toggleMaximizeToolWindow?.());
-document.getElementById('btn-tool-close')?.addEventListener('click', () => el?.closeToolWindow?.());
+let resizeTid = 0;
+new ResizeObserver(() => {
+  if (!videoReady || currentModeId === -1 || !upscaleStopFn) return;
+  clearTimeout(resizeTid);
+  resizeTid = window.setTimeout(() => void applyUpscale(), 150);
+}).observe(videoWrap);
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function setStatus(text: string) { statusEl.textContent = text; }
+document.getElementById('btn-tool-min')?.addEventListener('click', () => (window as any).electron?.minimizeToolWindow?.());
+document.getElementById('btn-tool-max')?.addEventListener('click', () => (window as any).electron?.toggleMaximizeToolWindow?.());
+document.getElementById('btn-tool-close')?.addEventListener('click', () => (window as any).electron?.closeToolWindow?.());
+function setStatus(t: string) { statusEl.textContent = t; }

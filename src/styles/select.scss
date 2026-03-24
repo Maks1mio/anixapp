@@ -93,12 +93,19 @@
 // ── Dropdown — fixed, появляется из кнопки ────────────────────────────────────
 .custom-select__dropdown {
   position: fixed;
-  z-index: 11000;
+  z-index: 100001;
   display: flex;
   flex-direction: column;
   max-height: 320px;
   opacity: 0;
   transition: opacity 0.2s ease;
+  // Твёрдый фон, чтобы dropdown не просвечивал через контент
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  box-shadow: $shadow;
+  overflow: hidden;
+  isolation: isolate;
 }
 
 .custom-select__dropdown--open {
@@ -109,15 +116,11 @@
   opacity: 0;
 }
 
-// ── Page-компонент внутри dropdown ────────────────────────────────────────────
+// ── Page с кастомным скроллом внутри dropdown ─────────────────────────────────
 .custom-select__page {
   flex: 1;
   min-height: 0;
   background: $color-surface;
-  border: 1px solid $color-border;
-  border-radius: $radius-md;
-  box-shadow: $shadow;
-  // Компактные отступы для скроллбара в dropdown
   --page-scrollbar-offset: 4px;
 }
 
@@ -177,6 +180,31 @@
   margin-top: 2px;
   line-height: 1.4;
   white-space: normal;
+}
+
+.custom-select__option-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border-left: 3px solid $color-error;
+  background: rgba(239, 68, 68, 0.1);
+  font-size: 0.7rem;
+  line-height: 1.3;
+  color: #f87171;
+}
+
+.custom-select__option-warning-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  color: $color-error;
+}
+
+.custom-select__option-warning-text {
+  flex: 1;
 }
 
 // ── Disabled state (whole select) ─────────────────────────────────────────────

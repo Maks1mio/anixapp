@@ -1,10 +1,13 @@
 <script lang="ts">
-  import { iconChevronDown } from './icons';
+  import { iconChevronDown, iconTriangleAlert } from './icons';
+  import { renderPage } from './page';
 
   export interface SelectOption {
     value: string;
     label: string;
     desc?: string;
+    /** Предупреждение для опции (иконка + текст, красная метка) */
+    warning?: string;
     disabled?: boolean;
   }
 
@@ -16,9 +19,10 @@
     onChange: (value: string) => void;
     className?: string;
     id?: string;
+    disabled?: boolean;
   }
 
-  let { label, placeholder = 'Выберите…', options, value, onChange, className, id }: Props = $props();
+  let { label, placeholder = 'Выберите…', options, value, onChange, className, id, disabled = false }: Props = $props();
 
   const DROPDOWN_CLASS = 'custom-select__dropdown';
   const DROPDOWN_OPEN = 'custom-select__dropdown--open';
@@ -90,8 +94,8 @@
     dropdown.className = DROPDOWN_CLASS;
     dropdown.setAttribute('role', 'listbox');
 
-    const pageEl = document.createElement('div');
-    pageEl.className = 'custom-select__page';
+    const pageEl = renderPage({ noPadding: true, extraClass: 'custom-select__page' });
+    const scrollEl = pageEl.querySelector('.page__scroll')!;
 
     const listEl = document.createElement('div');
     listEl.className = 'custom-select__list';
@@ -122,6 +126,13 @@
       } else {
         item.textContent = opt.label;
       }
+      if (opt.warning) {
+        item.classList.add('custom-select__option--with-warning');
+        const warnEl = document.createElement('span');
+        warnEl.className = 'custom-select__option-warning';
+        warnEl.innerHTML = `<span class="custom-select__option-warning-icon" aria-hidden="true">${iconTriangleAlert(12)}</span><span class="custom-select__option-warning-text">${opt.warning}</span>`;
+        item.appendChild(warnEl);
+      }
 
       item.addEventListener('click', () => {
         if (opt.disabled) return;
@@ -131,7 +142,7 @@
       listEl.appendChild(item);
     });
 
-    pageEl.appendChild(listEl);
+    scrollEl.appendChild(listEl);
     dropdown.appendChild(pageEl);
 
     function onScrollOrResize() {
@@ -191,6 +202,7 @@
 
   function handleTriggerClick(e: MouseEvent) {
     e.stopPropagation();
+    if (disabled) return;
     if (isOpen) {
       closeDropdown?.();
     } else {
@@ -210,7 +222,7 @@
   }
 </script>
 
-<div class="custom-select{className ? ' ' + className : ''}" {id}>
+<div class="custom-select{className ? ' ' + className : ''}{disabled ? ' custom-select--disabled' : ''}" {id}>
   {#if label}
     <label class="custom-select__label" for="{id ?? 'select'}-trigger">{label}</label>
   {/if}
@@ -221,6 +233,8 @@
     class="custom-select__trigger"
     aria-haspopup="listbox"
     aria-expanded={isOpen ? 'true' : 'false'}
+    aria-disabled={disabled ? 'true' : undefined}
+    disabled={disabled}
     onclick={handleTriggerClick}
   >
     <span class="custom-select__trigger-text">

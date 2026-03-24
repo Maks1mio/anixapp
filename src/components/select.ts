@@ -1,10 +1,12 @@
-import { iconChevronDown } from './icons';
+import { iconChevronDown, iconTriangleAlert } from './icons';
 import { renderPage } from './page';
 
 export interface SelectOption {
   value: string;
   label: string;
   desc?: string;
+  /** Предупреждение для опции (иконка + текст, красная метка) */
+  warning?: string;
   disabled?: boolean;
 }
 
@@ -119,6 +121,13 @@ function createDropdown(
       item.appendChild(descEl);
     } else {
       item.textContent = opt.label;
+    }
+    if (opt.warning) {
+      item.classList.add('custom-select__option--with-warning');
+      const warnEl = document.createElement('span');
+      warnEl.className = 'custom-select__option-warning';
+      warnEl.innerHTML = `<span class="custom-select__option-warning-icon" aria-hidden="true">${iconTriangleAlert(12)}</span><span class="custom-select__option-warning-text">${opt.warning}</span>`;
+      item.appendChild(warnEl);
     }
 
     item.addEventListener('click', () => {

@@ -186,10 +186,33 @@ export function renderWatch(): HTMLElement {
     stopUpscale();
     if (videoEl.readyState < 1) return;
 
-    const w = videoEl.videoWidth || videoEl.clientWidth || 1920;
-    const h = videoEl.videoHeight || videoEl.clientHeight || 1080;
-    upscaleCanvas.width = w;
-    upscaleCanvas.height = h;
+    // Video intrinsic resolution (source)
+    const videoW = videoEl.videoWidth  || videoEl.clientWidth  || 1920;
+    const videoH = videoEl.videoHeight || videoEl.clientHeight || 1080;
+    const aspect = videoW / videoH;
+
+    // Actual display pixel size of the player container (accounts for 2K/4K monitors + DPR)
+    const container = upscaleCanvas.parentElement ?? videoEl.parentElement;
+    const rect      = container?.getBoundingClientRect();
+    const dpr       = window.devicePixelRatio || 1;
+    const dispW     = rect ? Math.round(rect.width  * dpr) : videoW;
+    const dispH     = rect ? Math.round(rect.height * dpr) : videoH;
+
+    // Fit the video aspect ratio into the display area — no stretching
+    let targetW: number, targetH: number;
+    if (dispW / dispH > aspect) {
+      targetH = dispH;
+      targetW = Math.round(targetH * aspect);
+    } else {
+      targetW = dispW;
+      targetH = Math.round(targetW / aspect);
+    }
+    // Never go below native video resolution
+    targetW = Math.max(videoW, targetW);
+    targetH = Math.max(videoH, targetH);
+
+    upscaleCanvas.width  = targetW;
+    upscaleCanvas.height = targetH;
 
     const ModeClass = upscaleModeMap[upscaleMode] ?? ModeB;
     try {
@@ -197,7 +220,7 @@ export function renderWatch(): HTMLElement {
         video: videoEl,
         canvas: upscaleCanvas,
         pipelineBuilder: (device: GPUDevice, inputTexture: GPUTexture) => {
-          const nativeDimensions = { width: videoEl.videoWidth || w, height: videoEl.videoHeight || h };
+          const nativeDimensions = { width: videoEl.videoWidth || videoW, height: videoEl.videoHeight || videoH };
           const targetDimensions = { width: upscaleCanvas.width, height: upscaleCanvas.height };
           return [new ModeClass({ device, inputTexture, nativeDimensions, targetDimensions }) as any];
         },
@@ -972,6 +995,24 @@ export function renderWatch(): HTMLElement {
   btnFullscreen?.addEventListener('click', () => {
     window.electron?.togglePlayerFullScreen?.();
   });
+
+  // Restart upscale when the player container resizes (fullscreen toggle, window resize)
+  // so canvas dimensions always match the actual screen pixel count
+  if (upscaleCanvas) {
+    const container = upscaleCanvas.parentElement;
+    if (container && typeof ResizeObserver !== 'undefined') {
+      let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+      const ro = new ResizeObserver(() => {
+        if (!upscaleEnabled || !upscaleStopFn) return;
+        if (resizeTimer) clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+          resizeTimer = null;
+          if (upscaleEnabled) startUpscale().catch(() => {});
+        }, 200);
+      });
+      ro.observe(container);
+    }
+  }
 
   if (volumeInput && videoEl) {
     try {

@@ -24,6 +24,7 @@ import {
   Search,
   Settings,
   Star,
+  TriangleAlert,
   User,
   Users,
 } from 'lucide';
@@ -169,4 +170,9 @@ export function iconSearch(size = 20): string {
 /** Загрузка / обновление */
 export function iconDownload(size = 20): string {
   return toSvg(Download, size);
+}
+
+/** Предупреждение (треугольник с восклицательным знаком) */
+export function iconTriangleAlert(size = 16): string {
+  return toSvg(TriangleAlert, size);
 }

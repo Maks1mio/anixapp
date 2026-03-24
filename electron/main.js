@@ -337,7 +337,7 @@ function createWindow() {
 
 /** User-Agent и заголовки как в приложении Anixart (Android), чтобы видеоисточники отдавали поток */
 const ANIXART_UA = 'AnixartApp/9.0 BETA 3-25021818 (Android 9; SDK 28; x86_64; ROG ASUS AI2201_B; ru)';
-const VIDEO_HOSTS = ['anixis.com', 'aniqart.com', 'aniqit.com', 'video.sibnet.ru', 'sibnet.ru', 'kodikplayer.com', 'kodik-cdn.com', 'collaps.io'];
+const VIDEO_HOSTS = ['anixis.com', 'aniqart.com', 'aniqit.com', 'video.sibnet.ru', 'sibnet.ru', 'kodikplayer.com', 'kodik-cdn.com', 'collaps.io', 'aniliberty.top', 'anilibria.tv', 'libria.fun', 'cache.libria.fun'];
 
 function upsertHeader(headers, name, value) {
   const lower = name.toLowerCase();

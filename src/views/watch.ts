@@ -398,6 +398,9 @@ export function renderWatch(): HTMLElement {
     let playUrl = url;
     let useVideo = !iframe;
     const isEmbedPage = /aniqit\.com|anixis\.com|aniqart\.com|kodikplayer\.com|kodik\.info/i.test(host);
+    const isSibnet  = /sibnet\.ru/i.test(host);
+    const isLibria  = /aniliberty\.top|anilibria\.tv|libria\.fun/i.test(host);
+    const needsDirectFetch = isSibnet || isLibria;
     if (isEmbedPage) {
       try {
         const links = await KodikParser.getDirectLinks(url);
@@ -433,7 +436,7 @@ export function renderWatch(): HTMLElement {
         }
       } catch (_) {}
     }
-    if (!useVideo && !isEmbedPage && window.anixApi?.release?.getDirectVideoLink) {
+    if ((needsDirectFetch || (!useVideo && !isEmbedPage)) && window.anixApi?.release?.getDirectVideoLink) {
       try {
         const { directUrl } = await window.anixApi.release.getDirectVideoLink(url);
         if (directUrl) {

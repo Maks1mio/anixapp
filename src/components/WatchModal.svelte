@@ -189,7 +189,9 @@
 
   function handleSourceSelectChange(value: string) {
     const s = sources.find((x) => String(x.id) === value);
-    if (s) selectSource(s);
+    if (!s) return;
+    sourceSelectValue = String(s.id);
+    selectSource(s);
   }
 
   // ── actions ───────────────────────────────────────────────────────────────────

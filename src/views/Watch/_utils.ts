@@ -43,9 +43,13 @@ export async function resolveEpisodeUrl(
   let url = episodeUrl.startsWith('http') ? episodeUrl : `https:${episodeUrl}`;
   url = stripKodikQueryParams(url);
   const host = (url.match(/https?:\/\/([^/]+)/) || [])[1] || '';
-  const isAniqit  = /aniqit\.com|anixis\.com|aniqart\.com/i.test(host);
-  const isKodik   = /kodikplayer\.com|kodik\.info/i.test(host);
+  const isAniqit   = /aniqit\.com|anixis\.com|aniqart\.com/i.test(host);
+  const isKodik    = /kodikplayer\.com|kodik\.info/i.test(host);
+  const isSibnet   = /sibnet\.ru/i.test(host);
+  const isLibria   = /aniliberty\.top|anilibria\.tv|libria\.fun/i.test(host);
   const isEmbedPage = isAniqit || isKodik;
+  // Sibnet and Libria always need a direct-link fetch — ignore `iframe` flag
+  const needsDirectFetch = isSibnet || isLibria;
 
   if (isAniqit) {
     try { const u = new URL(url); url = u.origin + u.pathname; } catch {}
@@ -72,7 +76,7 @@ export async function resolveEpisodeUrl(
     if (!useVideo) { playUrl = url; useVideo = false; }
   }
 
-  if (!useVideo && !isEmbedPage && (window as any).anixApi?.release?.getDirectVideoLink) {
+  if ((needsDirectFetch || (!useVideo && !isEmbedPage)) && (window as any).anixApi?.release?.getDirectVideoLink) {
     try {
       const { directUrl } = await (window as any).anixApi.release.getDirectVideoLink(url);
       if (directUrl) {

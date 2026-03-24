@@ -167,7 +167,10 @@
         pushCommand(action, { releaseId: String(rp.releaseId ?? ''), sourceId: String(rp.sourceId ?? ''), ep: String(rp.ep ?? ''), dubberId: rp.dubberId != null ? String(rp.dubberId) : undefined, title: String(rp.title ?? ''), sourceName: String(rp.sourceName ?? ''), paused: Boolean(rp.paused), currentTime: Number(rp.currentTime) || 0 });
       }) as EventListener],
 
-      ['lobby:left', (() => { discordUpdate({ type: 'partyInfo', partyId: null }); }) as EventListener],
+      ['lobby:left', (() => {
+        window.electron?.sendParticipantsToPlayer?.([]);
+        discordUpdate({ type: 'partyInfo', partyId: null });
+      }) as EventListener],
 
       ['anix:themeEditorSaved', ((e: CustomEvent) => {
         const { themeId } = e.detail ?? {};

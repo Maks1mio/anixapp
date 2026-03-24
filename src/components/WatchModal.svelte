@@ -3,6 +3,7 @@
   import { getCurrentRoomId, getCurrentParticipants, proposeAnimeChange, getLastPlayback } from '../services/lobby-state';
   import Select from './Select.svelte';
   import type { SelectOption } from './Select.svelte';
+  import Page from './Page.svelte';
 
   interface Props {
     releaseId: number;
@@ -403,30 +404,32 @@
           {:else if sourcesError}
             <div class="watch-modal__loading">{sourcesError}</div>
           {:else}
-            <div class="watch-modal__list watch-modal__sources">
-              {#each dubbers as d}
-                {@const viewCountRaw = d.view_count ?? d.viewCount ?? 0}
-                {@const viewCount = typeof viewCountRaw === 'number' ? viewCountRaw : parseInt(String(viewCountRaw), 10) || 0}
-                {@const epCount = normalizeEpisodeCount(d as Record<string, unknown>)}
-                {@const epText = epCount != null ? `${epCount} эп.` : '— эп.'}
-                {@const iconUrl = d.icon ? ensureHttps(String(d.icon)) : ''}
-                <button
-                  type="button"
-                  class="watch-modal__source-item"
-                  onclick={() => selectDubber(d)}
-                >
-                  {#if iconUrl}
-                    <span class="watch-modal__source-avatar" style="background-image:url({iconUrl})"></span>
-                  {:else}
-                    <span class="watch-modal__source-avatar watch-modal__source-avatar--mic">{@html micIconSvg}</span>
-                  {/if}
-                  <span class="watch-modal__source-info">
-                    <span class="watch-modal__source-name">{d.name}</span>
-                    <span class="watch-modal__source-meta">{formatNum(viewCount)} просмотров · {epText}</span>
-                  </span>
-                </button>
-              {/each}
-            </div>
+            <Page noPadding extraClass="watch-modal__page">
+              <div class="watch-modal__sources-list">
+                {#each dubbers as d}
+                  {@const viewCountRaw = d.view_count ?? d.viewCount ?? 0}
+                  {@const viewCount = typeof viewCountRaw === 'number' ? viewCountRaw : parseInt(String(viewCountRaw), 10) || 0}
+                  {@const epCount = normalizeEpisodeCount(d as Record<string, unknown>)}
+                  {@const epText = epCount != null ? `${epCount} эп.` : '— эп.'}
+                  {@const iconUrl = d.icon ? ensureHttps(String(d.icon)) : ''}
+                  <button
+                    type="button"
+                    class="watch-modal__source-item"
+                    onclick={() => selectDubber(d)}
+                  >
+                    {#if iconUrl}
+                      <span class="watch-modal__source-avatar" style="background-image:url({iconUrl})"></span>
+                    {:else}
+                      <span class="watch-modal__source-avatar watch-modal__source-avatar--mic">{@html micIconSvg}</span>
+                    {/if}
+                    <span class="watch-modal__source-info">
+                      <span class="watch-modal__source-name">{d.name}</span>
+                      <span class="watch-modal__source-meta">{formatNum(viewCount)} просмотров · {epText}</span>
+                    </span>
+                  </button>
+                {/each}
+              </div>
+            </Page>
           {/if}
         </div>
       </div>
@@ -482,7 +485,9 @@
           {:else if episodesError}
             <div class="watch-modal__loading">{episodesError}</div>
           {:else}
-            <div class="watch-modal__list watch-modal__episodes" bind:this={episodesListEl}></div>
+            <Page noPadding extraClass="watch-modal__page">
+              <div class="watch-modal__episodes" bind:this={episodesListEl}></div>
+            </Page>
           {/if}
         </div>
       </div>

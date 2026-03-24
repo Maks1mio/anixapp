@@ -138,6 +138,7 @@
   flex: 1;
   min-height: 0;
   --page-scroll-padding: 0;
+  --page-scrollbar-offset: 4px;
 }
 
 .watch-modal__page .page__scroll {
@@ -147,8 +148,16 @@
 // ── Views ─────────────────────────────────────────────────────────────────────
 
 .watch-modal__view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
   padding: 1rem 1.1rem;
-  min-height: 200px;
+
+  &[hidden] {
+    display: none;
+  }
 
   &--entering {
     animation: watch-modal-view-slide-in 0.18s ease;
@@ -159,10 +168,18 @@
   }
 }
 
-// Sources column fills full width — no max-width constraint
+.watch-modal__col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 
-.watch-modal__view--episodes .watch-modal__col--episodes {
-  min-height: 200px;
+// fixed-height non-scrollable blocks in episodes view
+.watch-modal__back-row,
+.watch-modal__episodes-toolbar,
+.watch-modal__source-selector-wrap {
+  flex-shrink: 0;
 }
 
 // ── Back button ───────────────────────────────────────────────────────────────
@@ -312,6 +329,7 @@
 // ── Column titles ─────────────────────────────────────────────────────────────
 
 .watch-modal__col-title {
+  flex-shrink: 0;
   margin: 0 0 0.6rem;
   font-size: 0.75rem;
   font-weight: 600;
@@ -329,11 +347,12 @@
 
 // ── List / Loading ────────────────────────────────────────────────────────────
 
-.watch-modal__list {
-  overflow-y: auto;
+// Sources inner list (inside Page custom scroll)
+.watch-modal__sources-list {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding-bottom: 0.5rem;
 }
 
 .watch-modal__loading {
@@ -430,10 +449,10 @@
 // ── Episodes grid ─────────────────────────────────────────────────────────────
 
 .watch-modal__episodes {
-  display: grid !important;
+  display: grid;
   grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
   gap: 3px;
-  flex-direction: unset !important;
+  padding-bottom: 0.5rem;
 }
 
 .watch-modal__episode-item {

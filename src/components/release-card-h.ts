@@ -155,7 +155,7 @@ export function renderReleaseCardHorizontal(data: ReleaseCardData): HTMLElement 
     },
     { type: 'divider' },
     { type: 'label', text: 'СТАТУС' },
-    { id: 'none', label: 'Не смотрю' },
+    { id: 'none', label: 'Не в списке' },
     ...LIST_STATUSES.map((s) => ({
       id: s.id,
       label: s.label,

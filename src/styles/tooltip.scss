@@ -70,3 +70,38 @@ $tooltip-gap: 8px;
 .tooltip--animated {
   transition: opacity 0.22s ease, visibility 0.22s;
 }
+
+// ── Global body-level tooltip ──────────────────────────────────────────────
+#ui-tooltip-root {
+  position: fixed;
+  z-index: 10003;
+  top: 0;
+  left: 0;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: $color-text;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  // Hidden state
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(var(--tip-from-y, -4px));
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0s linear 0.15s;
+
+  &.ui-tooltip--visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0s linear 0s;
+  }
+}

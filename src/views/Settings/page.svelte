@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import Page from '../components/Page.svelte';
-  import { navigate } from '../stores/navigation';
+  import Page from '../../components/Page.svelte';
+  import { navigate } from '../../stores/navigation';
   import {
     getAllThemes, getActiveThemeId, applyThemeById,
     createCustomTheme,
     BUILT_IN_THEMES, type Theme,
-  } from '../services/themes';
-  import { getCardLayout, setCardLayout, type CardLayout } from '../prefs';
+  } from '../../services/themes';
+  import { getCardLayout, setCardLayout, type CardLayout } from '../../prefs';
 
   const ENDPOINT_OPTIONS = [
     { value: 'https://api-s.anixsekai.com',           label: 'api-s.anixsekai.com' },

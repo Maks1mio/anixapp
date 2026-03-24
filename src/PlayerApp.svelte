@@ -1,8 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Watch from './views/Watch.svelte';
+  import { initTooltipSystem } from './utils/body-tooltip';
 
   onMount(() => {
+    initTooltipSystem();
     document.getElementById('app')?.classList.add('app--player-window');
 
     const onFullscreen = ((e: CustomEvent<boolean>) => {

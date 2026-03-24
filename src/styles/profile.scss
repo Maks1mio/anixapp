@@ -175,6 +175,7 @@
   display: block;
   flex-shrink: 0;
   object-fit: contain;
+  align-self: center;
 }
 
 // Badge animation (Lottie JSON): same size as image badge
@@ -183,6 +184,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  align-self: center;
   flex-shrink: 0;
   overflow: hidden;
 
@@ -211,6 +213,7 @@
 .profile__verified {
   display: inline-flex;
   align-items: center;
+  align-self: center;
   color: #60a5fa;
   filter: drop-shadow(0 0 4px rgba(96, 165, 250, 0.5));
 
@@ -249,24 +252,28 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 600;
+  line-height: 1;
   color: $color-success;
+}
 
-  &::before {
-    content: '';
-    display: inline-block;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: currentColor;
-    box-shadow: 0 0 6px currentColor;
-    flex-shrink: 0;
-  }
+.profile__online-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+  flex-shrink: 0;
+}
+
+.profile__online-pill-text {
+  line-height: 1;
 }
 
 .profile__activity-text {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+  line-height: 1;
   color: $color-text-muted;
   margin: 0;
 }

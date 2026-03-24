@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ReleaseCardH from "../components/ReleaseCardH.svelte";
   import ReleaseCardV from "../components/ReleaseCardV.svelte";
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import Select from '../components/Select.svelte';
@@ -80,7 +81,7 @@
           { id: 'favorite', label: 'Добавить в избранное', icon: iconHeart(16, false) },
           { type: 'divider' },
           { type: 'label', text: 'СТАТУС' },
-          { id: 'none', label: 'Не смотрю' },
+          { id: 'none', label: 'Не в списке' },
           { id: 'watching', label: 'Смотрю' },
           { id: 'planned', label: 'В планах' },
           { id: 'completed', label: 'Просмотрено' },
@@ -244,7 +245,7 @@
       </label>
     </div>
     <div class="uikit-catalog-cards">
-      <ReleaseCardV data={{ ...SAMPLE_CARD, rating: ratingValue }} />
+      <ReleaseCardH data={{ ...SAMPLE_CARD, rating: ratingValue }} />
     </div>
   </section>
 

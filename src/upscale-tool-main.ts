@@ -11,6 +11,7 @@ import {
   render as anime4kRender,
 } from 'anime4k-webgpu';
 import { initTheme } from './services/themes';
+import { initTooltipSystem } from './utils/body-tooltip';
 import './styles/titlebar.scss';
 
 // ── Пресеты ───────────────────────────────────────────────────────────────────
@@ -114,6 +115,7 @@ function parseTimecode(s: string): number {
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 initTheme();
+initTooltipSystem();
 
 // ── DOM ───────────────────────────────────────────────────────────────────────
 const root = document.getElementById('app')!;

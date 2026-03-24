@@ -74,7 +74,7 @@ export function renderWatch(): HTMLElement {
             <div class="watch-lobby-panel__log" data-lobby-log></div>
           </div>
           <div class="watch-page__center-play" data-center-play>
-            <button type="button" class="watch-page__center-play-btn" data-btn-play-center aria-label="Воспроизвести"></button>
+            <button type="button" class="watch-page__center-play-btn" data-btn-play-center title="Воспроизвести"></button>
           </div>
           <div class="watch-page__controls watch-page__controls--overlay" data-controls-overlay>
             <div class="watch-page__bottom-bar watch-page__bottom-bar--anidesk">
@@ -88,20 +88,20 @@ export function renderWatch(): HTMLElement {
                     <div class="watch-page__timeline-dot" data-timeline-dot></div>
                   </div>
                 </div>
-                <div class="watch-page__icon-btn watch-page__btn--volume-wrap" data-btn-volume title="Громкость">
+                <div class="watch-page__icon-btn watch-page__btn--volume-wrap" data-btn-volume>
                   <i data-lucide="volume-2"></i>
-                  <input type="range" class="watch-page__volume" data-volume min="0" max="100" value="100" title="Громкость">
+                  <input type="range" class="watch-page__volume" data-volume min="0" max="100" value="100">
                 </div>
                 <button type="button" class="watch-page__icon-btn watch-page__icon-btn--upscale" data-btn-upscale title="Улучшение качества (Anime4K)"><i data-lucide="zap"></i></button>
                 <button type="button" class="watch-page__icon-btn" data-btn-fullscreen title="Полный экран"><i data-lucide="maximize"></i></button>
               </div>
               <div class="watch-page__row watch-page__row--actions watch-page__row--popover-anchor" data-actions-row>
                 <div class="watch-page__row-actions-left">
-                  <button type="button" class="watch-page__pill" data-btn-series title="Серии">Серии <i data-lucide="list"></i></button>
-                  <button type="button" class="watch-page__pill" data-btn-dub title="Озвучка">Озвучка <i data-lucide="headphones"></i></button>
+                  <button type="button" class="watch-page__pill" data-btn-series title="Серии"><i data-lucide="list"></i></button>
+                  <button type="button" class="watch-page__pill" data-btn-dub title="Озвучка"><i data-lucide="headphones"></i></button>
                 </div>
                 <div class="watch-page__row-actions-right">
-                  <button type="button" class="watch-page__pill" data-btn-skip title="Пропуск опенинга">Пропуск опенинга <i data-lucide="skip-forward"></i></button>
+                  <button type="button" class="watch-page__pill" data-btn-skip title="Пропуск опенинга"><i data-lucide="skip-forward"></i></button>
                   <button type="button" class="watch-page__pill watch-page__pill--next" data-btn-next title="Следующая серия">${Number(ep) + 1} серия <i data-lucide="chevron-right"></i></button>
                 </div>
                 <div class="watch-page__popover" data-popover hidden>

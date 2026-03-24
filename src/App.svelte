@@ -7,15 +7,16 @@
   import { initTheme, applyThemeById } from './services/themes';
   import { getCurrentRoomId, getCurrentRoomCode, getCurrentParticipants, pushCommand, voteOnProposal } from './services/lobby-state';
   import { initTooltipPlacement } from './utils/tooltip-place';
+  import { initBodyTooltip } from './utils/body-tooltip';
 
   import Layout from './layout/Layout.svelte';
   import Login from './views/Login.svelte';
   import Home from './views/Home.svelte';
   import Catalog from './views/Catalog.svelte';
-  import Release from './views/Release.svelte';
+  import Release from './views/Release/page.svelte';
   import Related from './views/Related.svelte';
   import Bookmarks from './views/Bookmarks.svelte';
-  import Profile from './views/Profile.svelte';
+  import Profile from './views/Profile/page.svelte';
   import ProfileVotes from './views/ProfileVotes.svelte';
   import ProfileFriends from './views/ProfileFriends.svelte';
   import Search from './views/Search.svelte';
@@ -28,6 +29,7 @@
   import LobbyModal from './components/LobbyModal.svelte';
   import NotificationsModal from './components/NotificationsModal.svelte';
   import WatchModal from './components/WatchModal.svelte';
+  import Toast from './components/Toast.svelte';
 
   initTheme();
 
@@ -79,6 +81,7 @@
 
   onMount(() => {
     initTooltipPlacement();
+    initBodyTooltip();
 
     if (!window.anixApi) {
       appScreen.set('login');
@@ -314,3 +317,6 @@
     />
   {/if}
 {/if}
+
+<Toast />
+<div id="ui-tooltip-root"></div>

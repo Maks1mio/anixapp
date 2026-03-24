@@ -21,7 +21,7 @@ export interface Theme {
 
 // ── Built-in themes ───────────────────────────────────────────────────────────
 
-const FONT_DEFAULT = "'Segoe UI', system-ui, -apple-system, sans-serif";
+const FONT_DEFAULT = "Calibri, 'Segoe UI', Candara, system-ui, -apple-system, sans-serif";
 
 /** Official dark theme vars (from the app design). */
 const DARK_VARS: ThemeVars = {

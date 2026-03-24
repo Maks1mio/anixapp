@@ -1,21 +1,29 @@
 export interface WatchState {
-  releaseId: string;
-  sourceId:  string;
-  ep:        number;
-  title:     string;
+  releaseId:  string;
+  sourceId:   string;
+  ep:         number;
+  title:      string;
   sourceName: string;
-  dubberId:  string;
+  dubberId:   string;
 }
 
 export interface EpisodeItem {
-  position:   number;
-  name:       string;
+  position:    number;
+  name:        string;
   is_watched?: boolean;
 }
 
 export interface DubberItem {
-  id:   number;
-  name: string;
+  id:            number;
+  name:          string;
+  /** Team icon/avatar URL */
+  icon?:         string;
+  /** Total episodes in this dub */
+  episode_count?: number;
+  /** Total view count */
+  view_count?:   number;
+  /** 0 = dub, 1 = sub (if provided by API) */
+  type?:         number;
 }
 
 export interface SourceItem {

@@ -492,10 +492,16 @@ $p-font-size:  16px;
   &:hover {
     background: rgba(20, 20, 20, 0.62);
 
+    .watch-page__vol-btn {
+      margin-right: 12px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+    }
+
     .watch-page__vol-slider-wrap {
-      max-width: 90px;
+      max-width: 100px;
       opacity: 1;
-      padding-right: 14px;
+      padding-right: 24px;
     }
   }
 }
@@ -504,6 +510,7 @@ $p-font-size:  16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.2s;
   width: 60px;
   height: 40px;
   padding: 0;
@@ -518,7 +525,6 @@ $p-font-size:  16px;
 .watch-page__vol-slider-wrap {
   max-width: 0;
   opacity: 0;
-  overflow: hidden;
   transition: max-width 0.25s ease, opacity 0.2s ease, padding 0.25s ease;
   display: flex;
   align-items: center;
@@ -547,25 +553,33 @@ $p-font-size:  16px;
   }
 }
 
-// ── Popover ────────────────────────────────────────────────────────────────────
+// ── Popover anchor + floating panel ───────────────────────────────────────────
 
-.watch-page__row--popover-anchor {
+.watch-page__popover-anchor {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
-.watch-page__popover {
+.watch-page__float-panel {
   position: absolute;
-  left: 0;
-  bottom: 100%;
-  margin-bottom: 8px;
-  z-index: 20;
-  pointer-events: none;
+  bottom: calc(100% + 12px);
+  right: 0;
+  width: min(340px, 90vw);
+  max-height: min(480px, 70vh);
+  z-index: 300;
+  filter: drop-shadow(0 12px 40px rgba(0, 0, 0, 0.8));
+  transform-origin: bottom right;
 
-  &[hidden] { display: none !important; }
-}
-
-.watch-page__popover:not([hidden]) {
-  pointer-events: auto;
+  // The inner watch-panel fills this container
+  .watch-panel {
+    position: relative;
+    top: auto; right: auto; bottom: auto;
+    width: 100%;
+    max-height: min(480px, 70vh);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+  }
 }
 
 .watch-page__popover-panel {
@@ -793,11 +807,215 @@ $p-font-size:  16px;
   cursor: default;
 }
 
+// ── Side panels: episodes / dubbing ──────────────────────────────────────────
+
+.watch-panel-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 190;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.watch-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(340px, 90%);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  background: rgba(12, 12, 12, 0.96);
+  backdrop-filter: blur(16px);
+  border-left: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 0 0 5px 0;
+  overflow: hidden;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 14px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    flex-shrink: 0;
+  }
+
+  &__header-left    { display: flex; align-items: center; gap: 8px; }
+  &__header-actions { display: flex; align-items: center; gap: 4px; }
+
+  &__title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  &__icon-btn {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.55);
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+
+    &:hover    { background: rgba(255,255,255,0.1);  color: #fff; }
+    &--active  { background: rgba(255,255,255,0.12); color: #fff; }
+  }
+
+  &__search-wrap {
+    padding: 8px 12px 4px;
+    flex-shrink: 0;
+  }
+
+  &__search {
+    width: 100%;
+    padding: 7px 12px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 0.875rem;
+    outline: none;
+    box-sizing: border-box;
+
+    &::placeholder { color: rgba(255, 255, 255, 0.35); }
+    &:focus        { border-color: rgba(255, 255, 255, 0.25); }
+  }
+
+  &__loading,
+  &__empty {
+    padding: 24px 16px;
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 0.875rem;
+    text-align: center;
+  }
+
+  // Custom Page scroll wrapper
+  &__scroll-page {
+    flex: 1;
+    min-height: 0;
+
+    // Inner page__scroll fills available space
+    .page__scroll {
+      padding: 0 !important;
+    }
+  }
+
+  // Episode row
+  &__ep-row {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    padding: 11px 14px;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 0.9rem;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s;
+
+    &:hover { background: rgba(255, 255, 255, 0.05); }
+
+    &--active {
+      background: rgba(255, 255, 255, 0.07);
+      color: #fff;
+      .watch-panel__ep-label { font-weight: 600; }
+    }
+  }
+
+  &__ep-icon  { flex-shrink: 0; display: flex; align-items: center; }
+  &__ep-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  // Dubbing section label
+  &__section {
+    padding: 10px 14px 5px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+  }
+
+  // Dubbing row
+  &__dub-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 14px;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.875rem;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s;
+
+    &:hover { background: rgba(255, 255, 255, 0.05); }
+
+    &--active {
+      background: rgba(255, 255, 255, 0.07);
+      .watch-panel__dub-name { color: #fff; font-weight: 600; }
+    }
+  }
+
+  &__dub-av {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  &__dub-img             { width: 100%; height: 100%; object-fit: cover; }
+  &__dub-av-placeholder  { font-size: 1rem; font-weight: 700; color: rgba(255,255,255,0.6); }
+
+  &__dub-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__dub-name {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__dub-meta  { color: rgba(255,255,255,0.45); font-size: 0.72rem; }
+
+  &__dub-views {
+    flex-shrink: 0;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.78rem;
+    font-weight: 600;
+    min-width: 28px;
+    text-align: right;
+  }
+
+  &__dub-eye { flex-shrink: 0; color: rgba(255,255,255,0.35); }
+}
+
 // ── Lobby: panel ──────────────────────────────────────────────────────────────
 
 .watch-lobby-panel {
   position: absolute;
-  top: 14px;
+  bottom: 120px; // above bottom controls (timeline + button row)
   left: 16px;
   z-index: 101;
   pointer-events: none;

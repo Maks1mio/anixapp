@@ -286,7 +286,7 @@
   }
 
   async function openSeriesPopover() {
-    if (popoverType === 'series') { popoverType = null; return; }
+    if (popoverType === 'series') return; // already open — hover handles close
     popoverType = 'series';
     if (episodes.length === 0) {
       popoverLoading = true;
@@ -296,13 +296,16 @@
   }
 
   async function openDubbingPopover() {
-    if (popoverType === 'dubbing') { popoverType = null; return; }
-    popoverType = 'dubbing'; dubbers = []; popoverLoading = true;
-    try {
-      const res = await (window as any).anixApi.release.getDubbers(parseInt(watchState.releaseId, 10));
-      dubbers = res?.types ?? [];
-    } catch {}
-    popoverLoading = false;
+    if (popoverType === 'dubbing') return; // already open — hover handles close
+    popoverType = 'dubbing';
+    if (dubbers.length === 0) { // only reload if empty
+      popoverLoading = true;
+      try {
+        const res = await (window as any).anixApi.release.getDubbers(parseInt(watchState.releaseId, 10));
+        dubbers = res?.types ?? [];
+      } catch {}
+      popoverLoading = false;
+    }
   }
 
   async function selectDubber(dubber: DubberItem) {
@@ -692,6 +695,7 @@
           </div>
 
         </div>
+
 
       {/if}
     </div>

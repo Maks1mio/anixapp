@@ -36,8 +36,55 @@
     ep:         initialEp,
     title:      initialTitle,
     sourceName: initialSrcName,
+    dubberName: '',
     dubberId:   initialDubId,
   });
+
+  /** Кэш списка озвучек для панели (пересчитывается при смене релиза/серии) */
+  let dubbersPickerCacheKey = '';
+  let dubbersPickerCache: DubberItem[] = [];
+
+  function invalidateDubbersPickerCache() {
+    dubbersPickerCacheKey = '';
+    dubbersPickerCache    = [];
+  }
+
+  function refreshDubberNameFromApi() {
+    const rId = parseInt(watchState.releaseId, 10);
+    const did = watchState.dubberId;
+    if (!did || !(window as any).anixApi?.release?.getDubbers) return;
+    (window as any).anixApi.release.getDubbers(rId).then((res: { types?: DubberItem[] }) => {
+      const match = (res?.types ?? []).find(d => String(d.id) === did);
+      if (match) watchState.dubberName = match.name;
+    }).catch(() => {});
+  }
+
+  /** Оставляем в выборе только озвучки, у которых есть текущая серия (как при переключении — первый источник). */
+  async function filterDubbersForCurrentEp(
+    all: DubberItem[],
+    rId: number,
+    ep: number,
+    currentDubberId: string,
+  ): Promise<DubberItem[]> {
+    const api = (window as any).anixApi?.release;
+    if (!api?.getDubberSources || !api?.getEpisode) return all;
+
+    const results = await Promise.all(
+      all.map(async (dub) => {
+        if (String(dub.id) === currentDubberId) return dub;
+        try {
+          const srcRes = await api.getDubberSources(rId, dub.id);
+          const first = srcRes?.sources?.[0];
+          if (!first) return null;
+          const epRes = await api.getEpisode(rId, first.id, ep);
+          return epRes?.episode?.url ? dub : null;
+        } catch {
+          return null;
+        }
+      }),
+    );
+    return results.filter((d): d is DubberItem => d != null);
+  }
 
   // ── Popovers ───────────────────────────────────────────────────────────────
   let popoverType    = $state<'series' | 'dubbing' | null>(null);
@@ -52,6 +99,90 @@
   const hasPrevEp = $derived(
     watchState.ep > 1 && (episodes.length === 0 || episodes.some(e => e.position === watchState.ep - 1)),
   );
+
+  /** Подпись «в озвучке (…)» для кнопки следующей серии */
+  const currentDubLabel = $derived((watchState.dubberName || watchState.sourceName || '').trim());
+
+  /** Следующая серия недоступна в текущей озвучке, но есть в другой — самая популярная по view_count */
+  let nextEpAltDub = $state<{
+    targetEp: number;
+    dubber: DubberItem;
+    sourceId: number;
+    sourceName: string;
+  } | null>(null);
+  let nextEpAltGen = 0;
+
+  function isVoiceoverDub(d: DubberItem): boolean {
+    return !(d.type === 1 || /субтитр/i.test(d.name));
+  }
+
+  async function refreshNextEpisodeAlternative() {
+    const gen = ++nextEpAltGen;
+    const nextEp = watchState.ep + 1;
+    const rId = parseInt(watchState.releaseId, 10);
+    const currentDubId = watchState.dubberId;
+    const api = (window as any).anixApi?.release;
+    if (!rId || !currentDubId || !api?.getDubbers || !api?.getDubberSources || !api?.getEpisode) {
+      if (gen === nextEpAltGen) nextEpAltDub = null;
+      return;
+    }
+    if (episodes.length === 0) {
+      if (gen === nextEpAltGen) nextEpAltDub = null;
+      return;
+    }
+    if (episodes.some(e => e.position === nextEp)) {
+      if (gen === nextEpAltGen) nextEpAltDub = null;
+      return;
+    }
+    try {
+      const res = await api.getDubbers(rId);
+      if (gen !== nextEpAltGen) return;
+      const all = (res?.types ?? []).filter(isVoiceoverDub);
+      type Cand = { dub: DubberItem; sourceId: number; sourceName: string };
+      const candidates: Cand[] = [];
+      await Promise.all(
+        all
+          .filter((d: DubberItem) => String(d.id) !== currentDubId)
+          .map(async (dub: DubberItem) => {
+            try {
+              const srcRes = await api.getDubberSources(rId, dub.id);
+              const first = srcRes?.sources?.[0];
+              if (!first) return;
+              const epRes = await api.getEpisode(rId, first.id, nextEp);
+              if (epRes?.episode?.url) {
+                candidates.push({ dub, sourceId: first.id, sourceName: first.name });
+              }
+            } catch {
+              /* skip */
+            }
+          }),
+      );
+      if (gen !== nextEpAltGen) return;
+      if (candidates.length === 0) {
+        nextEpAltDub = null;
+        return;
+      }
+      candidates.sort((a, b) => (b.dub.view_count ?? 0) - (a.dub.view_count ?? 0));
+      const best = candidates[0];
+      nextEpAltDub = {
+        targetEp: nextEp,
+        dubber: best.dub,
+        sourceId: best.sourceId,
+        sourceName: best.sourceName,
+      };
+    } catch {
+      if (gen === nextEpAltGen) nextEpAltDub = null;
+    }
+  }
+
+  $effect(() => {
+    const _ = watchState.ep;
+    const __ = watchState.dubberId;
+    const ___ = watchState.releaseId;
+    const ____ = episodes.length;
+    const _____ = episodes.map(e => e.position).join(',');
+    void refreshNextEpisodeAlternative();
+  });
 
   // ── DOM refs ───────────────────────────────────────────────────────────────
   let playerWrapEl: HTMLElement;
@@ -68,14 +199,25 @@
     player.overlayVisible = true;
   }
   function scheduleHide() {
+    if (popoverType != null) return; // не гасим интерфейс, пока открыты «Серии» / «Озвучка»
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => { player.overlayVisible = false; idleTimer = null; }, IDLE_MS);
   }
   function showAndSchedule() { showOverlay(); scheduleHide(); }
 
+  $effect(() => {
+    if (popoverType != null) {
+      if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+      player.overlayVisible = true;
+    }
+  });
+
   // ── Upscale ────────────────────────────────────────────────────────────────
   const gpuAvailable = typeof navigator !== 'undefined' && typeof (navigator as any).gpu !== 'undefined';
   let upscaleStopFn: (() => void) | null = null;
+  /** Счётчик запусков: отменяет устаревший anime4kRender при очередном resize/повторном старте */
+  let upscaleRunId = 0;
+  let upscaleLastError = $state('');
 
   const upscaleModeMap: Record<number, any> = {
     0: DoG, 1: BilateralMean, 2: CNNM, 3: CNNSoftM, 4: CNNSoftVL,
@@ -90,10 +232,97 @@
     videoEl?.classList.remove('watch-page__video--hidden-for-upscale');
   }
 
+  /** Счётчик тиков rAF, когда canvas апскейла реально показан (прокси «кадров вывода») */
+  let debugCanvasRafTicks = 0;
+
+  function buildDebugHud(): string {
+    const v = videoEl;
+    if (!v) return '';
+    const lines: string[] = [];
+    const vw = v.videoWidth || 0;
+    const vh = v.videoHeight || 0;
+    const cw = Math.round(v.clientWidth);
+    const ch = Math.round(v.clientHeight);
+    lines.push(`Поток: ${vw}×${vh} · окно: ${cw}×${ch}`);
+    const hls = (v as any)._hls as Hls | undefined;
+    if (hls?.levels?.length) {
+      const ci = hls.currentLevel;
+      const li = ci >= 0 ? ci : (typeof hls.loadLevel === 'number' && hls.loadLevel >= 0 ? hls.loadLevel : -1);
+      const lv = li >= 0 ? hls.levels[li] : null;
+      if (lv) {
+        const kbps = Math.round((lv.bitrate || 0) / 1000);
+        lines.push(`HLS: ${kbps} kb/s · ${lv.width}×${lv.height} · ур. ${li}/${hls.levels.length - 1}${ci < 0 ? ' (auto)' : ''}`);
+      } else {
+        lines.push(`HLS: уровни ${hls.levels.length} · auto`);
+      }
+    }
+    try {
+      const q = (v as any).getVideoPlaybackQuality?.() as
+        | { totalVideoFrames?: number; droppedVideoFrames?: number }
+        | undefined;
+      if (q && (q.totalVideoFrames != null || q.droppedVideoFrames != null)) {
+        lines.push(`Кадры видео (decode): ${q.totalVideoFrames ?? '—'} · потери ${q.droppedVideoFrames ?? 0}`);
+      }
+    } catch {
+      /* optional API */
+    }
+    if (canvasEl && !canvasEl.hidden && upscaleStopFn) {
+      lines.push(`Кадры вывода (canvas rAF): ${debugCanvasRafTicks}`);
+    }
+    const buf = v.buffered.length ? v.buffered.end(v.buffered.length - 1) : 0;
+    const dur = v.duration && isFinite(v.duration) ? v.duration : 0;
+    const bufPct = dur > 0 ? Math.round((buf / dur) * 100) : 0;
+    lines.push(`Буфер: ~${bufPct}% · ${v.paused ? 'пауза' : 'воспроизведение'} · ×${v.playbackRate.toFixed(2)}`);
+    lines.push(`Состояние: readyState ${v.readyState} · network ${v.networkState}`);
+    if (player.upscaleEnabled && gpuAvailable && canvasEl && !canvasEl.hidden && upscaleStopFn) {
+      lines.push(`Anime4K: активен · режим ${player.upscaleMode} · canvas ${canvasEl.width}×${canvasEl.height}`);
+    } else if (player.upscaleEnabled && gpuAvailable) {
+      const err = upscaleLastError.trim();
+      lines.push(
+        err
+          ? `Anime4K: ошибка · режим ${player.upscaleMode} — ${err.slice(0, 120)}`
+          : `Anime4K: запуск… · режим ${player.upscaleMode}`,
+      );
+    } else {
+      lines.push(`Anime4K: ${gpuAvailable ? 'выкл' : 'нет WebGPU'} · режим ${player.upscaleMode}`);
+    }
+    lines.push(`WebGPU: ${gpuAvailable ? 'да' : 'нет'} · DPR ${typeof window !== 'undefined' ? window.devicePixelRatio : 1}`);
+    return lines.join('\n');
+  }
+
+  let debugHudText = $state('');
+  $effect(() => {
+    if (!player.debugOverlay || !player.useVideo) {
+      debugHudText = '';
+      debugCanvasRafTicks = 0;
+      return;
+    }
+    let rafId = 0;
+    let alive = true;
+    const rafStep = () => {
+      if (!alive) return;
+      rafId = requestAnimationFrame(() => {
+        if (!alive) return;
+        if (canvasEl && !canvasEl.hidden && upscaleStopFn) debugCanvasRafTicks++;
+        rafStep();
+      });
+    };
+    rafStep();
+    const id = window.setInterval(() => { debugHudText = buildDebugHud(); }, 300);
+    debugHudText = buildDebugHud();
+    return () => {
+      alive = false;
+      cancelAnimationFrame(rafId);
+      window.clearInterval(id);
+    };
+  });
+
   async function startUpscale() {
     if (!gpuAvailable || !player.upscaleEnabled || !canvasEl || !videoEl) return;
     stopUpscale();
     if (videoEl.readyState < 1) return;
+
+    const myRun = ++upscaleRunId;
 
     const videoW = videoEl.videoWidth  || videoEl.clientWidth  || 1920;
     const videoH = videoEl.videoHeight || videoEl.clientHeight || 1080;
@@ -113,6 +342,7 @@
 
     const ModeClass = upscaleModeMap[player.upscaleMode] ?? ModeB;
     try {
+      upscaleLastError = '';
       const stop = await anime4kRender({
         video: videoEl,
         canvas: canvasEl,
@@ -122,10 +352,17 @@
           return [new ModeClass({ device, inputTexture, nativeDimensions: native, targetDimensions: target }) as any];
         },
       });
+      if (myRun !== upscaleRunId) {
+        try { (stop as () => void)(); } catch { /* stale pipeline */ }
+        return;
+      }
       upscaleStopFn = stop as () => void;
       canvasEl.hidden = false;
       videoEl.classList.add('watch-page__video--hidden-for-upscale');
+      debugCanvasRafTicks = 0;
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      upscaleLastError = msg || 'unknown';
       console.warn('[Anime4K]', err);
       stopUpscale();
     }
@@ -147,6 +384,7 @@
       sourceId:    watchState.sourceId,
       ep:          String(watchState.ep),
       dubberId:    watchState.dubberId || undefined,
+      dubberName:  watchState.dubberName || undefined,
       title:       watchState.title,
       sourceName:  watchState.sourceName,
       paused:      videoEl ? videoEl.paused : true,
@@ -242,9 +480,10 @@
     }, { once: true });
   }
 
-  function loadEpisode(rId: number, sId: number, ep: number, titleStr: string, srcName: string, dubId: string, seekTime?: number, initialPaused?: boolean) {
-    if (!(window as any).anixApi?.release?.getEpisode) return;
-    (window as any).anixApi.release.getEpisode(rId, sId, ep).then(async (res: any) => {
+  function loadEpisode(rId: number, sId: number, ep: number, titleStr: string, srcName: string, dubId: string, seekTime?: number, initialPaused?: boolean): Promise<void> {
+    const api = (window as any).anixApi?.release;
+    if (!api?.getEpisode) return Promise.resolve();
+    return api.getEpisode(rId, sId, ep).then(async (res: any) => {
       const episode = res?.episode;
       if (!episode?.url) return;
       const { playUrl: pUrl, useVideo: uv } = await resolveEpisodeUrl(episode.url, episode.iframe);
@@ -254,23 +493,35 @@
 
   function goToEpisode(ep: number) {
     popoverType = null;
+    invalidateDubbersPickerCache();
     watchState.ep = ep;
     loadEpisode(parseInt(watchState.releaseId, 10), parseInt(watchState.sourceId, 10), ep, watchState.title, watchState.sourceName, watchState.dubberId);
     sendToLobby('changeEpisode', 0);
   }
 
-  function switchDubbing(newSourceId: number, newSourceName: string, newDubberId: number) {
+  /** @param episodeOverride — если задан и отличается от текущей серии, воспроизведение с начала новой серии */
+  function switchDubbing(newSourceId: number, newSourceName: string, newDubberId: number, newDubberName: string, episodeOverride?: number) {
     popoverType = null;
-    const savedTime = videoEl && !isNaN(videoEl.currentTime) ? videoEl.currentTime : undefined;
-    const wasPaused = !!(videoEl?.paused);
+    const targetEp = episodeOverride !== undefined ? episodeOverride : watchState.ep;
+    const switchingEpisode = episodeOverride !== undefined && episodeOverride !== watchState.ep;
+    const savedTime = switchingEpisode ? undefined : (videoEl && !isNaN(videoEl.currentTime) ? videoEl.currentTime : undefined);
+    const wasPaused = switchingEpisode ? false : !!(videoEl?.paused);
     watchState.sourceId = String(newSourceId);
     watchState.sourceName = newSourceName;
     watchState.dubberId = String(newDubberId);
+    watchState.dubberName = newDubberName;
     sendToLobby('changeEpisode');
     isApplyingSync = true;
-    loadEpisode(parseInt(watchState.releaseId, 10), newSourceId, watchState.ep, watchState.title, newSourceName, String(newDubberId), savedTime, wasPaused);
+    loadEpisode(parseInt(watchState.releaseId, 10), newSourceId, targetEp, watchState.title, newSourceName, String(newDubberId), savedTime, wasPaused)
+      .then(() => fetchEpisodesSilently())
+      .catch(() => {});
     if (applySyncTimer) clearTimeout(applySyncTimer);
     applySyncTimer = setTimeout(() => { isApplyingSync = false; applySyncTimer = null; }, 4000);
+  }
+
+  function goToNextEpisodeInAltDub(alt: NonNullable<typeof nextEpAltDub>) {
+    invalidateDubbersPickerCache();
+    switchDubbing(alt.sourceId, alt.sourceName, alt.dubber.id, alt.dubber.name, alt.targetEp);
   }
 
   // ── Popover openers ────────────────────────────────────────────────────────
@@ -288,24 +539,29 @@
   async function openSeriesPopover() {
     if (popoverType === 'series') return; // already open — hover handles close
     popoverType = 'series';
-    if (episodes.length === 0) {
-      popoverLoading = true;
-      await fetchEpisodesSilently();
-      popoverLoading = false;
-    }
+    popoverLoading = true;
+    await fetchEpisodesSilently();
+    popoverLoading = false;
   }
 
   async function openDubbingPopover() {
     if (popoverType === 'dubbing') return; // already open — hover handles close
     popoverType = 'dubbing';
-    if (dubbers.length === 0) { // only reload if empty
-      popoverLoading = true;
-      try {
-        const res = await (window as any).anixApi.release.getDubbers(parseInt(watchState.releaseId, 10));
-        dubbers = res?.types ?? [];
-      } catch {}
-      popoverLoading = false;
+    const key = `${watchState.releaseId}:${watchState.ep}`;
+    if (dubbersPickerCacheKey === key && dubbersPickerCache.length > 0) {
+      dubbers = dubbersPickerCache;
+      return;
     }
+    popoverLoading = true;
+    try {
+      const rId = parseInt(watchState.releaseId, 10);
+      const res = await (window as any).anixApi.release.getDubbers(rId);
+      const all = res?.types ?? [];
+      dubbers = await filterDubbersForCurrentEp(all, rId, watchState.ep, watchState.dubberId);
+      dubbersPickerCacheKey = key;
+      dubbersPickerCache    = dubbers;
+    } catch {}
+    popoverLoading = false;
   }
 
   async function selectDubber(dubber: DubberItem) {
@@ -313,7 +569,7 @@
     try {
       const res = await (window as any).anixApi.release.getDubberSources(parseInt(watchState.releaseId, 10), dubber.id);
       const first = res?.sources?.[0];
-      if (first) switchDubbing(first.id, first.name, dubber.id);
+      if (first) switchDubbing(first.id, first.name, dubber.id, dubber.name);
     } catch {}
   }
 
@@ -392,18 +648,29 @@
     videoEl?.play().catch(() => {});
   }
 
-  // ── ResizeObserver for upscale ─────────────────────────────────────────────
+  // ── ResizeObserver + window resize: пересчёт апскейла при смене размера окна
   let ro: ResizeObserver | null = null;
   let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+  let winResizeHandler: (() => void) | null = null;
+
+  function scheduleUpscaleResize() {
+    if (!player.upscaleEnabled || !gpuAvailable) return;
+    if (!videoEl || videoEl.readyState < 1) return;
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      resizeTimer = null;
+      if (player.upscaleEnabled && videoEl?.readyState >= 1) startUpscale();
+    }, 380);
+  }
 
   function initResizeObserver() {
-    if (!canvasEl?.parentElement || typeof ResizeObserver === 'undefined') return;
-    ro = new ResizeObserver(() => {
-      if (!player.upscaleEnabled || !upscaleStopFn) return;
-      if (resizeTimer) clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => { resizeTimer = null; if (player.upscaleEnabled) startUpscale(); }, 200);
-    });
-    ro.observe(canvasEl.parentElement);
+    if (typeof ResizeObserver === 'undefined') return;
+    ro?.disconnect();
+    ro = new ResizeObserver(() => scheduleUpscaleResize());
+    const area = canvasEl?.parentElement;
+    if (area) ro.observe(area);
+    winResizeHandler = () => scheduleUpscaleResize();
+    window.addEventListener('resize', winResizeHandler);
   }
 
   // ── onMount ────────────────────────────────────────────────────────────────
@@ -414,11 +681,14 @@
       if (!isNaN(v) && v >= 0 && v <= 100) player.volume = v;
     } catch {}
 
-    if (gpuAvailable && (window as any).electron?.getSettings) {
+    if ((window as any).electron?.getSettings) {
       (window as any).electron.getSettings().then((s: any) => {
-        player.upscaleEnabled = s?.upscaleEnabled ?? false;
-        player.upscaleMode    = s?.upscaleMode    ?? 15;
-        if (player.upscaleEnabled && videoEl?.readyState >= 1) startUpscale();
+        player.debugOverlay = s?.playerDebugOverlay === true;
+        if (gpuAvailable) {
+          player.upscaleEnabled = s?.upscaleEnabled ?? false;
+          player.upscaleMode    = s?.upscaleMode    ?? 15;
+          if (player.upscaleEnabled && videoEl?.readyState >= 1) startUpscale();
+        }
       }).catch(() => {});
     }
 
@@ -438,6 +708,7 @@
       player.loadState = 'ready';
       await tick();
       applyVideoAndUI(pUrl, uv, watchState.ep, watchState.title, watchState.sourceName, watchState.dubberId);
+      refreshDubberNameFromApi();
       fetchEpisodesSilently();
 
       if (uv) {
@@ -471,6 +742,11 @@
         if (player.upscaleEnabled) startUpscale(); else stopUpscale();
       }) as EventListener],
 
+      ['anix:playerDebugChanged', ((e: CustomEvent) => {
+        const d = e.detail as { playerDebugOverlay?: boolean };
+        if (typeof d?.playerDebugOverlay === 'boolean') player.debugOverlay = d.playerDebugOverlay;
+      }) as EventListener],
+
       ['player:changeContent', ((e: CustomEvent) => {
         const p = e.detail as any;
         if (!p?.releaseId || !p.sourceId || !p.ep) return;
@@ -480,9 +756,14 @@
         watchState.title      = p.title      || watchState.title;
         watchState.sourceName = p.sourceName || '';
         watchState.dubberId   = p.dubberId   || '';
+        watchState.dubberName = p.dubberName != null && p.dubberName !== '' ? String(p.dubberName) : '';
+        invalidateDubbersPickerCache();
+        if (!watchState.dubberName && watchState.dubberId) refreshDubberNameFromApi();
         if (p.local) sendToLobby('changeEpisode', typeof p.currentTime === 'number' ? p.currentTime : 0);
         isApplyingSync = true;
-        loadEpisode(parseInt(p.releaseId, 10), parseInt(p.sourceId, 10), parseInt(p.ep, 10), p.title || watchState.title, p.sourceName || '', p.dubberId || '', typeof p.currentTime === 'number' ? p.currentTime : undefined, !!p.paused);
+        loadEpisode(parseInt(p.releaseId, 10), parseInt(p.sourceId, 10), parseInt(p.ep, 10), p.title || watchState.title, p.sourceName || '', p.dubberId || '', typeof p.currentTime === 'number' ? p.currentTime : undefined, !!p.paused)
+          .then(() => fetchEpisodesSilently())
+          .catch(() => {});
         if (applySyncTimer) clearTimeout(applySyncTimer);
         applySyncTimer = setTimeout(() => { isApplyingSync = false; applySyncTimer = null; }, 4000);
       }) as EventListener],
@@ -500,7 +781,12 @@
           pendingSync = p;
         } else if (!same) {
           watchState.releaseId = p.releaseId; watchState.sourceId = p.sourceId;
-          loadEpisode(parseInt(p.releaseId, 10), parseInt(p.sourceId, 10), parseInt(p.ep, 10), p.title || watchState.title, p.sourceName || watchState.sourceName, p.dubberId || '', typeof p.currentTime === 'number' ? p.currentTime : undefined, !!p.paused);
+          watchState.dubberName = p.dubberName != null && p.dubberName !== '' ? String(p.dubberName) : '';
+          invalidateDubbersPickerCache();
+          if (!watchState.dubberName && (p.dubberId || '')) refreshDubberNameFromApi();
+          loadEpisode(parseInt(p.releaseId, 10), parseInt(p.sourceId, 10), parseInt(p.ep, 10), p.title || watchState.title, p.sourceName || watchState.sourceName, p.dubberId || '', typeof p.currentTime === 'number' ? p.currentTime : undefined, !!p.paused)
+            .then(() => fetchEpisodesSilently())
+            .catch(() => {});
         }
         if (applySyncTimer) clearTimeout(applySyncTimer);
         applySyncTimer = setTimeout(() => { isApplyingSync = false; applySyncTimer = null; }, pendingSync ? 3000 : 1500);
@@ -544,6 +830,7 @@
       window.removeEventListener('keydown', onKeyDown);
       stopUpscale();
       ro?.disconnect();
+      if (winResizeHandler) window.removeEventListener('resize', winResizeHandler);
       lobby.destroy();
       if (stallCheckTimer) clearInterval(stallCheckTimer);
       if (applySyncTimer)  clearTimeout(applySyncTimer);
@@ -557,6 +844,7 @@
 <div class="view view-watch">
   <div
     class="watch-page watch-page--anidesk {!player.useVideo ? 'watch-page--iframe-mode' : ''}"
+    class:watch-page--chrome-hidden={player.loadState === 'ready' && !player.overlayVisible}
     bind:this={playerWrapEl}
     onmousemove={showAndSchedule}
     onmouseleave={scheduleHide}
@@ -592,7 +880,7 @@
             {#if hasPrevEp}
               <button
                 type="button"
-                class="watch-page__ep-nav"
+                class="watch-page__ep-nav watch-page__ep-nav--alt-next watch-page__ep-nav--alt-prev"
                 onclick={(e) => { e.stopPropagation(); goToEpisode(watchState.ep - 1); }}
               >
                 <!-- Lucide: SkipBack -->
@@ -600,7 +888,12 @@
                   <polygon points="19 20 9 12 19 4 19 20"/>
                   <line x1="5" y1="19" x2="5" y2="5"/>
                 </svg>
-                Серия {watchState.ep - 1}
+                <span class="watch-page__ep-nav-alt-inner">
+                  <span class="watch-page__ep-nav-main">Серия {watchState.ep - 1}</span>
+                  {#if currentDubLabel}
+                    <span class="watch-page__ep-nav-sub">в озвучке ({currentDubLabel})</span>
+                  {/if}
+                </span>
               </button>
             {:else}
               <div class="watch-page__ep-nav-placeholder"></div>
@@ -610,9 +903,9 @@
               <h1 class="watch-page__title">{watchState.title}</h1>
               <div class="watch-page__title-meta">
                 <span>{watchState.ep} Серия</span>
-                {#if watchState.sourceName}
+                {#if watchState.dubberName || watchState.sourceName}
                   <span class="watch-page__title-sep"></span>
-                  <span>{watchState.sourceName}</span>
+                  <span>{watchState.dubberName || watchState.sourceName}</span>
                 {/if}
               </div>
               {#if !player.useVideo}
@@ -623,10 +916,32 @@
             {#if hasNextEp}
               <button
                 type="button"
-                class="watch-page__ep-nav"
+                class="watch-page__ep-nav watch-page__ep-nav--alt-next"
                 onclick={(e) => { e.stopPropagation(); goToEpisode(watchState.ep + 1); }}
               >
-                Серия {watchState.ep + 1}
+                <span class="watch-page__ep-nav-alt-inner">
+                  <span class="watch-page__ep-nav-main">Серия {watchState.ep + 1}</span>
+                  {#if currentDubLabel}
+                    <span class="watch-page__ep-nav-sub">в озвучке ({currentDubLabel})</span>
+                  {/if}
+                </span>
+                <!-- Lucide: SkipForward -->
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="5 4 15 12 5 20 5 4"/>
+                  <line x1="19" y1="5" x2="19" y2="19"/>
+                </svg>
+              </button>
+            {:else if nextEpAltDub}
+              {@const altNav = nextEpAltDub}
+              <button
+                type="button"
+                class="watch-page__ep-nav watch-page__ep-nav--alt-next"
+                onclick={(e) => { e.stopPropagation(); goToNextEpisodeInAltDub(altNav); }}
+              >
+                <span class="watch-page__ep-nav-alt-inner">
+                  <span class="watch-page__ep-nav-main">Серия {altNav.targetEp}</span>
+                  <span class="watch-page__ep-nav-sub">в озвучке ({altNav.dubber.name})</span>
+                </span>
                 <!-- Lucide: SkipForward -->
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polygon points="5 4 15 12 5 20 5 4"/>
@@ -696,6 +1011,9 @@
 
         </div>
 
+        {#if player.debugOverlay && player.useVideo}
+          <pre class="watch-page__debug-hud">{debugHudText}</pre>
+        {/if}
 
       {/if}
     </div>

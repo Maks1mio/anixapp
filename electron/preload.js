@@ -54,6 +54,13 @@ ipcRenderer.on('upscale:settingsChanged', (_, settings) => {
   window.dispatchEvent(new CustomEvent('anix:upscaleChanged', { detail: settings }));
 });
 
+// Player debug HUD toggle (настройки → отдельное окно плеера)
+ipcRenderer.on('player:debugOverlay', (_, enabled) => {
+  window.dispatchEvent(
+    new CustomEvent('anix:playerDebugChanged', { detail: { playerDebugOverlay: !!enabled } }),
+  );
+});
+
 contextBridge.exposeInMainWorld('electron', {
   getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
   getVersions: () => ipcRenderer.invoke('app:getVersions'),

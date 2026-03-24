@@ -15,6 +15,8 @@ export class PlayerState {
   playUrl        = $state('');
   upscaleEnabled = $state(false);
   upscaleMode    = $state(15);
+  /** Оверлей отладки (настройки → воспроизведение) */
+  debugOverlay   = $state(false);
   overlayVisible = $state(false);
 
   currentTimeDisplay = $derived(fmtTime(this.currentTime));

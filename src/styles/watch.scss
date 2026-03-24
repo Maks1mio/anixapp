@@ -25,6 +25,18 @@ $p-font-size:  16px;
   min-height: 0;
 }
 
+// Скрытый интерфейс (idle) — без курсора, пока не подвинули мышь
+.watch-page--chrome-hidden {
+  cursor: none;
+
+  .watch-page__player-area,
+  .watch-page__iframe,
+  .watch-page__video,
+  .watch-page__upscale-canvas {
+    cursor: none;
+  }
+}
+
 // ── Player wrap ────────────────────────────────────────────────────────────────
 
 .watch-page--anidesk .watch-page__player-wrap {
@@ -106,6 +118,26 @@ $p-font-size:  16px;
 }
 
 .watch-page__video { background: #000; }
+
+.watch-page__debug-hud {
+  position: absolute;
+  left: 10px;
+  top: 90px;
+  z-index: 50;
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 0.62rem;
+  line-height: 1.4;
+  font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(0, 0, 0, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  pointer-events: none;
+  max-width: min(440px, 94vw);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 
 .watch-page__upscale-canvas {
   position: absolute;
@@ -258,6 +290,48 @@ $p-font-size:  16px;
   min-width: 120px;
   flex-shrink: 0;
   pointer-events: none;
+}
+
+// Two-line nav: «Серия N» + «в озвучке (…)» (prev / next / alt next)
+.watch-page__ep-nav--alt-next {
+  flex-direction: row;
+  align-items: center;
+  height: auto;
+  min-height: 40px;
+  padding: 6px 14px 6px 18px;
+  gap: 10px;
+}
+
+.watch-page__ep-nav--alt-prev {
+  padding: 6px 18px 6px 14px;
+
+  .watch-page__ep-nav-alt-inner {
+    align-items: flex-start;
+  }
+}
+
+.watch-page__ep-nav-alt-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+}
+
+.watch-page__ep-nav-main {
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.watch-page__ep-nav-sub {
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.15;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 // ── Tap layer (fills middle) ───────────────────────────────────────────────────
@@ -561,24 +635,52 @@ $p-font-size:  16px;
   align-items: center;
 }
 
+// Фиксированная высота: список не «прыгает» при поиске (мало строк)
+$watch-float-panel-height: min(480px, 70vh);
+
 .watch-page__float-panel {
   position: absolute;
   bottom: calc(100% + 12px);
   right: 0;
   width: min(340px, 90vw);
-  max-height: min(480px, 70vh);
+  height: $watch-float-panel-height;
+  min-height: $watch-float-panel-height;
+  max-height: $watch-float-panel-height;
   z-index: 300;
   filter: drop-shadow(0 12px 40px rgba(0, 0, 0, 0.8));
   transform-origin: bottom right;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
 
   // The inner watch-panel fills this container
   .watch-panel {
     position: relative;
     top: auto; right: auto; bottom: auto;
     width: 100%;
-    max-height: min(480px, 70vh);
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     border-radius: 12px;
     border: 1px solid rgba(255, 255, 255, 0.09);
+  }
+
+  .watch-panel__loading {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+  }
+
+  .watch-panel__scroll-page {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
   }
 }
 

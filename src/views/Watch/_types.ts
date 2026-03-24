@@ -4,6 +4,8 @@ export interface WatchState {
   ep:         number;
   title:      string;
   sourceName: string;
+  /** Озвучка / команда — для заголовка вместо имени источника (Kodik и т.п.) */
+  dubberName: string;
   dubberId:   string;
 }
 

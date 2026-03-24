@@ -434,15 +434,19 @@ ipcMain.handle('app:getSettings', () => {
       adaptiveAcceleration: getAdaptiveAcceleration(),
       upscaleEnabled: data.upscaleEnabled === true,
       upscaleMode: typeof data.upscaleMode === 'number' ? data.upscaleMode : 15,
+      playerDebugOverlay: data.playerDebugOverlay === true,
     };
   } catch (_) {
-    return { minimizeToTray: getMinimizeToTray(), adaptiveAcceleration: getAdaptiveAcceleration(), upscaleEnabled: false, upscaleMode: 15 };
+    return { minimizeToTray: getMinimizeToTray(), adaptiveAcceleration: getAdaptiveAcceleration(), upscaleEnabled: false, upscaleMode: 15, playerDebugOverlay: false };
   }
 });
 
 ipcMain.handle('app:saveSettings', (_, settings) => {
   if (settings && typeof settings === 'object') {
     saveConfig(settings);
+    if (typeof settings.playerDebugOverlay === 'boolean' && playerWindowRef && !playerWindowRef.isDestroyed()) {
+      playerWindowRef.webContents.send('player:debugOverlay', settings.playerDebugOverlay);
+    }
   }
 });
 

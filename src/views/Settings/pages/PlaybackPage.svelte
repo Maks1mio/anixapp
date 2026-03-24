@@ -29,14 +29,16 @@
   let gpuAvailable = $state(false);
   let upscaleEnabled = $state(false);
   let upscaleMode = $state(15);
+  let playerDebugOverlay = $state(false);
   let playbackLoaded = $state(false);
 
   async function loadPlayback() {
     if (!window.electron?.getSettings) return;
     gpuAvailable = 'gpu' in navigator;
-    const settings = (await window.electron.getSettings()) as { upscaleEnabled?: boolean; upscaleMode?: number };
+    const settings = (await window.electron.getSettings()) as { upscaleEnabled?: boolean; upscaleMode?: number; playerDebugOverlay?: boolean };
     upscaleEnabled = settings.upscaleEnabled ?? false;
     upscaleMode = settings.upscaleMode ?? 15;
+    playerDebugOverlay = settings.playerDebugOverlay === true;
     playbackLoaded = true;
   }
 
@@ -44,6 +46,11 @@
     window.electron?.saveSettings?.({ upscaleEnabled, upscaleMode } as Parameters<NonNullable<typeof window.electron.saveSettings>>[0]);
     (window.electron as { sendUpscaleSettings?: (opts: object) => void })?.sendUpscaleSettings?.({ upscaleEnabled, upscaleMode });
     window.dispatchEvent(new CustomEvent('anix:upscaleChanged', { detail: { upscaleEnabled, upscaleMode } }));
+  }
+
+  function savePlayerDebug() {
+    window.electron?.saveSettings?.({ playerDebugOverlay } as Parameters<NonNullable<typeof window.electron.saveSettings>>[0]);
+    window.dispatchEvent(new CustomEvent('anix:playerDebugChanged', { detail: { playerDebugOverlay } }));
   }
 
   onMount(() => void loadPlayback());
@@ -124,6 +131,32 @@
           <span>Модель сложная, может привести к зависанию</span>
         </div>
       {/if}
+    </div>
+
+    <div class="settings-section">
+      <p class="settings-section__label">Отладка плеера</p>
+      <div class="settings-section__body">
+        <div class="settings-row">
+          <div class="settings-row__info">
+            <div class="settings-row__label">HUD на экране плеера</div>
+            <div class="settings-row__desc">Разрешение потока и окна, битрейт HLS, кадры, состояние Anime4K / WebGPU и размер canvas.</div>
+          </div>
+          <div class="settings-row__control">
+            <label class="settings-toggle-switch" aria-label="Отладочный HUD плеера">
+              <input
+                type="checkbox"
+                checked={playerDebugOverlay}
+                onchange={(e) => {
+                  playerDebugOverlay = (e.target as HTMLInputElement).checked;
+                  savePlayerDebug();
+                }}
+              />
+              <span class="settings-toggle-switch__track"></span>
+              <span class="settings-toggle-switch__thumb"></span>
+            </label>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="settings-section">

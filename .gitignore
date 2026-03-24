@@ -3,13 +3,13 @@ node_modules/
 
 # Build
 dist/
-release/
+/release/
 out/
 
 *.tsbuildinfo
 
 # Electron / electron-builder
-release/
+/release/
 *.exe
 *.dmg
 *.AppImage

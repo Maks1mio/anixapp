@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { getCurrentRoomId, getCurrentParticipants, proposeAnimeChange, getLastPlayback } from '../services/lobby-state';
+  import { isDubberBlacklisted } from '../views/Watch/_utils';
   import Select from './Select.svelte';
   import type { SelectOption } from './Select.svelte';
   import Page from './Page.svelte';
@@ -361,7 +362,7 @@
 
     api.release.getDubbers(releaseId)
       .then((res: { types?: Dubber[] }) => {
-        const types = res?.types ?? [];
+        const types = (res?.types ?? []).filter(d => !isDubberBlacklisted(String(d.name ?? '')));
         sourcesLoading = false;
         if (types.length === 0) {
           sourcesError = 'Нет озвучек';

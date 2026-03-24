@@ -51,6 +51,13 @@ export interface LobbyActivityEntry {
   avatar?: string | null;
 }
 
-export type PopoverType      = 'series' | 'dubbing' | null;
+export interface NextEpAltDub {
+  targetEp:   number;
+  dubber:     DubberItem;
+  sourceId:   number;
+  sourceName: string;
+}
+
+export type PopoverType      = 'series' | 'dubbing' | 'settings' | null;
 export type PlayerLoadState  = 'loading' | 'ready' | 'error';
 export type VoteState        = 'hidden' | 'vote' | 'waiting' | 'result';

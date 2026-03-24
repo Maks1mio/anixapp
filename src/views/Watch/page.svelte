@@ -8,14 +8,16 @@
     render as anime4kRender,
   } from 'anime4k-webgpu';
   import { getWatchParams } from '../../router';
-  import type { WatchState, EpisodeItem, DubberItem, LobbyActivityEntry } from './_types';
-  import { isHlsUrl, stripKodikQueryParams, resolveEpisodeUrl } from './_utils';
+  import type { WatchState, EpisodeItem, DubberItem, LobbyActivityEntry, PopoverType, NextEpAltDub } from './_types';
+  import { isHlsUrl, stripKodikQueryParams, resolveEpisodeUrl, resolveEpisodeUrlWithRetry, isDubberBlacklisted } from './_utils';
   import { PlayerState } from './_usePlayer.svelte';
   import { LobbyState }  from './_useLobby.svelte';
   import LobbyPanel      from './components/LobbyPanel.svelte';
   import LobbyVote       from './components/LobbyVote.svelte';
   import ControlsBar     from './components/ControlsBar.svelte';
   import ActionsBar      from './components/ActionsBar.svelte';
+  import TopBar          from './components/TopBar.svelte';
+  import CenterPlay      from './components/CenterPlay.svelte';
 
   // ── URL params ─────────────────────────────────────────────────────────────
   const params          = getWatchParams();
@@ -70,7 +72,7 @@
     if (!api?.getDubberSources || !api?.getEpisode) return all;
 
     const results = await Promise.all(
-      all.map(async (dub) => {
+      all.filter(d => !isDubberBlacklisted(d.name)).map(async (dub) => {
         if (String(dub.id) === currentDubberId) return dub;
         try {
           const srcRes = await api.getDubberSources(rId, dub.id);
@@ -87,7 +89,7 @@
   }
 
   // ── Popovers ───────────────────────────────────────────────────────────────
-  let popoverType    = $state<'series' | 'dubbing' | null>(null);
+  let popoverType    = $state<PopoverType>(null);
   let popoverLoading = $state(false);
   let episodes       = $state<EpisodeItem[]>([]);
   let dubbers        = $state<DubberItem[]>([]);
@@ -97,19 +99,14 @@
     episodes.length === 0 || episodes.some(e => e.position === watchState.ep + 1),
   );
   const hasPrevEp = $derived(
-    watchState.ep > 1 && (episodes.length === 0 || episodes.some(e => e.position === watchState.ep - 1)),
+    watchState.ep > 0 && (episodes.length === 0 || episodes.some(e => e.position === watchState.ep - 1)),
   );
 
   /** Подпись «в озвучке (…)» для кнопки следующей серии */
   const currentDubLabel = $derived((watchState.dubberName || watchState.sourceName || '').trim());
 
   /** Следующая серия недоступна в текущей озвучке, но есть в другой — самая популярная по view_count */
-  let nextEpAltDub = $state<{
-    targetEp: number;
-    dubber: DubberItem;
-    sourceId: number;
-    sourceName: string;
-  } | null>(null);
+  let nextEpAltDub = $state<NextEpAltDub | null>(null);
   let nextEpAltGen = 0;
 
   function isVoiceoverDub(d: DubberItem): boolean {
@@ -137,7 +134,7 @@
     try {
       const res = await api.getDubbers(rId);
       if (gen !== nextEpAltGen) return;
-      const all = (res?.types ?? []).filter(isVoiceoverDub);
+      const all = (res?.types ?? []).filter((d: DubberItem) => isVoiceoverDub(d) && !isDubberBlacklisted(d.name));
       type Cand = { dub: DubberItem; sourceId: number; sourceName: string };
       const candidates: Cand[] = [];
       await Promise.all(
@@ -186,8 +183,11 @@
 
   // ── DOM refs ───────────────────────────────────────────────────────────────
   let playerWrapEl: HTMLElement;
+  // svelte-ignore non_reactive_update
   let videoEl: HTMLVideoElement;
+  // svelte-ignore non_reactive_update
   let canvasEl: HTMLCanvasElement;
+  // svelte-ignore non_reactive_update
   let iframeEl: HTMLIFrameElement;
 
   // ── Overlay idle-hide ──────────────────────────────────────────────────────
@@ -346,17 +346,17 @@
       const stop = await anime4kRender({
         video: videoEl,
         canvas: canvasEl,
-        pipelineBuilder: (device: GPUDevice, inputTexture: GPUTexture) => {
+        pipelineBuilder: (device: any, inputTexture: any) => {
           const native = { width: videoEl.videoWidth || videoW, height: videoEl.videoHeight || videoH };
           const target = { width: canvasEl.width, height: canvasEl.height };
           return [new ModeClass({ device, inputTexture, nativeDimensions: native, targetDimensions: target }) as any];
         },
       });
       if (myRun !== upscaleRunId) {
-        try { (stop as () => void)(); } catch { /* stale pipeline */ }
+        try { (stop as unknown as () => void)(); } catch { /* stale pipeline */ }
         return;
       }
-      upscaleStopFn = stop as () => void;
+      upscaleStopFn = stop as unknown as () => void;
       canvasEl.hidden = false;
       videoEl.classList.add('watch-page__video--hidden-for-upscale');
       debugCanvasRafTicks = 0;
@@ -375,6 +375,20 @@
   let preventAutoPause = false;
   let stallCheckTimer: ReturnType<typeof setInterval> | null = null;
   let origEpUrl        = '';
+
+  // ── Playback watchdog ─────────────────────────────────────────────────────
+  // Catches silent HLS failures: manifest loads but segments never arrive,
+  // so the video stays at 0:00 forever without any error event.
+  // Retries indefinitely ("до талого") — only stops when video actually plays
+  // or the user switches episode/source (generation counter changes).
+  let wdTimer: ReturnType<typeof setTimeout> | null = null;
+  let wdGen   = 0;   // incremented per applyVideoAndUI call — stale callbacks exit early
+  const WD_DELAY_MS      = 5_000;  // ms without `playing` before first trigger
+  const WD_RETRY_DELAY_MS = 4_000; // ms between subsequent retry attempts
+
+  function wdClear() {
+    if (wdTimer) { clearTimeout(wdTimer); wdTimer = null; }
+  }
 
   const VOLUME_KEY = 'anixapp_player_volume';
 
@@ -407,6 +421,10 @@
   ) {
     watchState.ep = ep; watchState.title = titleStr;
     watchState.sourceName = srcName; watchState.dubberId = dubId;
+
+    // ── Watchdog bookkeeping ─────────────────────────────────────────────────
+    wdClear();
+    const myGen = ++wdGen;
 
     const qs = new URLSearchParams({ releaseId: watchState.releaseId, sourceId: watchState.sourceId, ep: String(ep), title: titleStr, sourceName: srcName });
     if (dubId) qs.set('dubberId', dubId);
@@ -448,15 +466,38 @@
       hls.loadSource(pUrl);
       hls.attachMedia(videoEl);
       (videoEl as any)._hls = hls;
-      hls.on(Hls.Events.MANIFEST_PARSED, () => doPlay());
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        doPlay();
+        // Restore playback rate after HLS loads
+        if (player.playbackRate !== 1) videoEl.playbackRate = player.playbackRate;
+      });
       let attempts = 0;
+      let reResolveAttempts = 0;
       hls.on(Hls.Events.ERROR, (_, data) => {
-        if (data.fatal) {
-          if (data.type === Hls.ErrorTypes.MEDIA_ERROR && attempts++ < 3) hls.recoverMediaError();
-          else if (data.type === Hls.ErrorTypes.NETWORK_ERROR && attempts++ < 3) hls.startLoad();
-          else fallback();
-        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+        if (!data.fatal) {
+          if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+          return;
+        }
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && attempts++ < 3) {
           hls.recoverMediaError();
+        } else if (data.type === Hls.ErrorTypes.NETWORK_ERROR && attempts < 3) {
+          attempts++;
+          hls.startLoad(); // try resume current URL first
+        } else if (reResolveAttempts++ < 2) {
+          // URL may have expired — re-resolve fresh direct link and restart
+          const curEpUrl = origEpUrl;
+          if (!curEpUrl) { fallback(); return; }
+          const savedTime = videoEl && !isNaN(videoEl.currentTime) ? videoEl.currentTime : 0;
+          const wasPaused = videoEl?.paused ?? false;
+          resolveEpisodeUrlWithRetry(curEpUrl, false).then(res => {
+            if (!res.useVideo || !res.playUrl) { fallback(); return; }
+            player.availableQualities = res.qualityMap;
+            player.currentQuality     = res.currentQuality;
+            // Cleanly restart playback with new URL (applyVideoAndUI destroys existing HLS)
+            applyVideoAndUI(res.playUrl, true, ep, titleStr, srcName, dubId, savedTime, wasPaused);
+          }).catch(fallback);
+        } else {
+          fallback();
         }
       });
       let lastStall = -1;
@@ -472,12 +513,49 @@
     }
 
     videoEl.addEventListener('error', fallback, { once: true });
+
+    // On first `playing`: cancel watchdog, record history
     videoEl.addEventListener('playing', () => {
+      if (myGen === wdGen) wdClear();
       const rId = parseInt(watchState.releaseId, 10);
       const sId = parseInt(watchState.sourceId, 10);
       (window as any).anixApi?.history?.add?.(rId, sId, ep);
       (window as any).anixApi?.history?.markWatched?.(rId, sId, ep).catch?.(() => {});
     }, { once: true });
+
+    // Watchdog: if video doesn't start within WD_DELAY_MS, keep re-resolving the URL
+    // indefinitely ("до талого") until it succeeds. Only stops when:
+    //   • video actually plays (playing event above clears wdTimer)
+    //   • user navigates away (myGen !== wdGen exits the callback)
+    if (!initialPaused) {
+      const scheduleWd = (delay: number) => {
+        wdTimer = setTimeout(async () => {
+          wdTimer = null;
+          if (myGen !== wdGen) return;                      // superseded by newer load
+          if (!videoEl || videoEl.currentTime > 0) return; // already playing fine
+          const embedUrl = origEpUrl;
+          if (!embedUrl) return;
+          try {
+            const res = await resolveEpisodeUrlWithRetry(embedUrl, false, 3);
+            if (myGen !== wdGen) return; // superseded while awaiting resolve
+            if (res.useVideo && res.playUrl) {
+              player.availableQualities = res.qualityMap;
+              player.currentQuality     = res.currentQuality;
+              // applyVideoAndUI increments wdGen and arms its own watchdog —
+              // the retry loop continues naturally until video actually plays.
+              applyVideoAndUI(res.playUrl, true, ep, titleStr, srcName, dubId);
+            } else {
+              // URL resolve failed — schedule another attempt after short delay
+              if (myGen === wdGen) scheduleWd(WD_RETRY_DELAY_MS);
+            }
+          } catch {
+            // Network error — schedule another attempt after short delay
+            if (myGen === wdGen) scheduleWd(WD_RETRY_DELAY_MS);
+          }
+        }, delay);
+      };
+      scheduleWd(WD_DELAY_MS);
+    }
   }
 
   function loadEpisode(rId: number, sId: number, ep: number, titleStr: string, srcName: string, dubId: string, seekTime?: number, initialPaused?: boolean): Promise<void> {
@@ -486,7 +564,9 @@
     return api.getEpisode(rId, sId, ep).then(async (res: any) => {
       const episode = res?.episode;
       if (!episode?.url) return;
-      const { playUrl: pUrl, useVideo: uv } = await resolveEpisodeUrl(episode.url, episode.iframe);
+      const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq } = await resolveEpisodeUrlWithRetry(episode.url, episode.iframe);
+      player.availableQualities = qualityMap;
+      player.currentQuality = cq;
       applyVideoAndUI(pUrl, uv, ep, titleStr, srcName, dubId, seekTime, initialPaused);
     }).catch(() => {});
   }
@@ -556,7 +636,7 @@
     try {
       const rId = parseInt(watchState.releaseId, 10);
       const res = await (window as any).anixApi.release.getDubbers(rId);
-      const all = res?.types ?? [];
+      const all = (res?.types ?? []).filter((d: DubberItem) => !isDubberBlacklisted(d.name));
       dubbers = await filterDubbersForCurrentEp(all, rId, watchState.ep, watchState.dubberId);
       dubbersPickerCacheKey = key;
       dubbersPickerCache    = dubbers;
@@ -612,6 +692,62 @@
     player.upscaleEnabled = !player.upscaleEnabled;
     (window as any).electron?.saveSettings?.({ upscaleEnabled: player.upscaleEnabled, upscaleMode: player.upscaleMode });
     if (player.upscaleEnabled) startUpscale(); else stopUpscale();
+  }
+
+  function changePlaybackRate(rate: number) {
+    player.playbackRate = rate;
+    if (videoEl) videoEl.playbackRate = rate;
+  }
+
+  function changeAspectRatio(aspect: string) {
+    player.aspectRatio = aspect;
+  }
+
+  /** Switch to a different quality URL (e.g. "720", "480") — recreates HLS */
+  async function changeQuality(quality: string) {
+    const src = player.availableQualities[quality];
+    if (!src || quality === player.currentQuality) return;
+
+    const savedTime    = videoEl && !isNaN(videoEl.currentTime) ? videoEl.currentTime : 0;
+    const wasPaused    = videoEl?.paused ?? true;
+
+    // Destroy existing HLS
+    const hlsInst = (videoEl as any)?._hls as Hls | undefined;
+    if (hlsInst) { hlsInst.destroy(); (videoEl as any)._hls = undefined; }
+
+    player.currentQuality = quality;
+
+    if (!videoEl) return;
+    videoEl.src = '';
+
+    const doPlay = () => {
+      if (!wasPaused) videoEl.play().catch(() => {});
+    };
+
+    const restoreTime = () => {
+      if (savedTime > 0) videoEl.currentTime = Math.min(savedTime, videoEl.duration || Infinity);
+      if (wasPaused) videoEl.pause(); else doPlay();
+    };
+
+    if (isHlsUrl(src) && Hls.isSupported()) {
+      const hls = new Hls();
+      hls.loadSource(src);
+      hls.attachMedia(videoEl);
+      (videoEl as any)._hls = hls;
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        restoreTime();
+        if (player.playbackRate !== 1) videoEl.playbackRate = player.playbackRate;
+      });
+    } else {
+      videoEl.src = src;
+      videoEl.addEventListener('loadeddata', restoreTime, { once: true });
+      doPlay();
+    }
+  }
+
+  function openSettingsPopover() {
+    if (popoverType === 'settings') return;
+    popoverType = 'settings';
   }
 
   function skipOpening() {
@@ -692,7 +828,7 @@
       }).catch(() => {});
     }
 
-    if (!releaseId || !watchState.sourceId || !watchState.ep || !(window as any).anixApi?.release?.getEpisode) {
+    if (!releaseId || !watchState.sourceId || !Number.isFinite(watchState.ep) || !(window as any).anixApi?.release?.getEpisode) {
       player.loadState = 'error';
       player.errorText = 'Неверные параметры просмотра.';
       return;
@@ -704,7 +840,9 @@
       const episode = res?.episode;
       if (!episode?.url) { player.loadState = 'error'; player.errorText = 'Серия недоступна.'; return; }
       origEpUrl = stripKodikQueryParams(episode.url.startsWith('http') ? episode.url : `https:${episode.url}`);
-      const { playUrl: pUrl, useVideo: uv } = await resolveEpisodeUrl(episode.url, episode.iframe);
+      const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq } = await resolveEpisodeUrlWithRetry(episode.url, episode.iframe);
+      player.availableQualities = qualityMap;
+      player.currentQuality = cq;
       player.loadState = 'ready';
       await tick();
       applyVideoAndUI(pUrl, uv, watchState.ep, watchState.title, watchState.sourceName, watchState.dubberId);
@@ -869,89 +1007,33 @@
             title="Видео плеер"
           ></iframe>
           <!-- svelte-ignore a11y_media_has_caption -->
-          <video bind:this={videoEl} class="watch-page__video" playsinline hidden={!player.useVideo}></video>
+          <video
+            bind:this={videoEl}
+            class="watch-page__video {player.aspectRatio !== 'auto' ? `watch-page__video--ratio watch-page__video--ratio-${player.aspectRatio.replace('/', '-')}` : ''}"
+            playsinline
+            crossorigin="anonymous"
+            hidden={!player.useVideo}
+          ></video>
           <canvas bind:this={canvasEl} class="watch-page__upscale-canvas" hidden></canvas>
         </div>
 
         <div class="watch-page__gui-overlay" class:watch-page__gui-overlay--hidden={!player.overlayVisible}>
 
           <!-- ── Top bar: prev | title | next ──────────────────────────── -->
-          <div class="watch-page__top-bar">
-            {#if hasPrevEp}
-              <button
-                type="button"
-                class="watch-page__ep-nav watch-page__ep-nav--alt-next watch-page__ep-nav--alt-prev"
-                onclick={(e) => { e.stopPropagation(); goToEpisode(watchState.ep - 1); }}
-              >
-                <!-- Lucide: SkipBack -->
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polygon points="19 20 9 12 19 4 19 20"/>
-                  <line x1="5" y1="19" x2="5" y2="5"/>
-                </svg>
-                <span class="watch-page__ep-nav-alt-inner">
-                  <span class="watch-page__ep-nav-main">Серия {watchState.ep - 1}</span>
-                  {#if currentDubLabel}
-                    <span class="watch-page__ep-nav-sub">в озвучке ({currentDubLabel})</span>
-                  {/if}
-                </span>
-              </button>
-            {:else}
-              <div class="watch-page__ep-nav-placeholder"></div>
-            {/if}
-
-            <div class="watch-page__title-block">
-              <h1 class="watch-page__title">{watchState.title}</h1>
-              <div class="watch-page__title-meta">
-                <span>{watchState.ep} Серия</span>
-                {#if watchState.dubberName || watchState.sourceName}
-                  <span class="watch-page__title-sep"></span>
-                  <span>{watchState.dubberName || watchState.sourceName}</span>
-                {/if}
-              </div>
-              {#if !player.useVideo}
-                <p class="watch-page__dub-hint">Если не загружается — выберите другую озвучку.</p>
-              {/if}
-            </div>
-
-            {#if hasNextEp}
-              <button
-                type="button"
-                class="watch-page__ep-nav watch-page__ep-nav--alt-next"
-                onclick={(e) => { e.stopPropagation(); goToEpisode(watchState.ep + 1); }}
-              >
-                <span class="watch-page__ep-nav-alt-inner">
-                  <span class="watch-page__ep-nav-main">Серия {watchState.ep + 1}</span>
-                  {#if currentDubLabel}
-                    <span class="watch-page__ep-nav-sub">в озвучке ({currentDubLabel})</span>
-                  {/if}
-                </span>
-                <!-- Lucide: SkipForward -->
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polygon points="5 4 15 12 5 20 5 4"/>
-                  <line x1="19" y1="5" x2="19" y2="19"/>
-                </svg>
-              </button>
-            {:else if nextEpAltDub}
-              {@const altNav = nextEpAltDub}
-              <button
-                type="button"
-                class="watch-page__ep-nav watch-page__ep-nav--alt-next"
-                onclick={(e) => { e.stopPropagation(); goToNextEpisodeInAltDub(altNav); }}
-              >
-                <span class="watch-page__ep-nav-alt-inner">
-                  <span class="watch-page__ep-nav-main">Серия {altNav.targetEp}</span>
-                  <span class="watch-page__ep-nav-sub">в озвучке ({altNav.dubber.name})</span>
-                </span>
-                <!-- Lucide: SkipForward -->
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polygon points="5 4 15 12 5 20 5 4"/>
-                  <line x1="19" y1="5" x2="19" y2="19"/>
-                </svg>
-              </button>
-            {:else}
-              <div class="watch-page__ep-nav-placeholder"></div>
-            {/if}
-          </div>
+          <TopBar
+            ep={watchState.ep}
+            title={watchState.title}
+            dubberName={watchState.dubberName}
+            sourceName={watchState.sourceName}
+            useVideo={player.useVideo}
+            {hasPrevEp}
+            {hasNextEp}
+            {nextEpAltDub}
+            {currentDubLabel}
+            onprevEp={() => goToEpisode(watchState.ep - 1)}
+            onnextEp={() => goToEpisode(watchState.ep + 1)}
+            onnextAltDub={goToNextEpisodeInAltDub}
+          />
 
           <!-- ── Tap layer (fills middle) ───────────────────────────────── -->
           <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
@@ -961,16 +1043,10 @@
           <LobbyPanel participants={lobby.participants} activityLog={lobby.activityLog} />
 
           <!-- ── Center play button (absolute) ─────────────────────────── -->
-          <div class="watch-page__center-play" class:watch-page__center-play--hidden={!player.paused}>
-            <button
-              type="button"
-              class="watch-page__center-play-btn"
-              aria-label="Воспроизвести"
-              onclick={() => videoEl?.play().catch(() => {})}
-            >
-              <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
-            </button>
-          </div>
+          <CenterPlay
+            paused={player.paused}
+            onplay={() => videoEl?.play().catch(() => {})}
+          />
 
           <!-- ── Bottom controls ────────────────────────────────────────── -->
           <div class="watch-page__bottom-controls">
@@ -995,6 +1071,10 @@
               useVideo={player.useVideo}
               {gpuAvailable}
               upscaleEnabled={player.upscaleEnabled}
+              playbackRate={player.playbackRate}
+              aspectRatio={player.aspectRatio}
+              availableQualities={player.availableQualities}
+              currentQuality={player.currentQuality}
               ontogglePlay={togglePlay}
               ontoggleMute={toggleMute}
               onvolumechange={onVolumeChange}
@@ -1002,10 +1082,14 @@
               onskipOpening={skipOpening}
               onopenSeries={openSeriesPopover}
               onopenDubbing={openDubbingPopover}
+              onopenSettings={openSettingsPopover}
               onselectEp={goToEpisode}
               onselectDub={selectDubber}
               onclosePopover={() => popoverType = null}
               onfullscreen={toggleFullscreen}
+              onchangeRate={changePlaybackRate}
+              onchangeAspect={changeAspectRatio}
+              onchangeQuality={changeQuality}
             />
           </div>
 

@@ -143,7 +143,8 @@ export interface AnixApi {
 
 declare global {
   interface Window {
-    anixApi: AnixApi;
+    /** Present in Electron preload; absent in plain web builds */
+    anixApi?: AnixApi;
   }
 }
 

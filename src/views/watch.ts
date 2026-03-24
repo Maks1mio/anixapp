@@ -219,13 +219,13 @@ export function renderWatch(): HTMLElement {
       const stop = await anime4kRender({
         video: videoEl,
         canvas: upscaleCanvas,
-        pipelineBuilder: (device: GPUDevice, inputTexture: GPUTexture) => {
+        pipelineBuilder: (device: any, inputTexture: any) => {
           const nativeDimensions = { width: videoEl.videoWidth || videoW, height: videoEl.videoHeight || videoH };
           const targetDimensions = { width: upscaleCanvas.width, height: upscaleCanvas.height };
           return [new ModeClass({ device, inputTexture, nativeDimensions, targetDimensions }) as any];
         },
       });
-      upscaleStopFn = stop as () => void;
+      upscaleStopFn = stop as unknown as () => void;
       // Show canvas and hide video only AFTER GPU pipeline is ready — prevents black flash during init
       upscaleCanvas.hidden = false;
       videoEl.classList.add('watch-page__video--hidden-for-upscale');
@@ -1271,7 +1271,7 @@ export function renderWatch(): HTMLElement {
     } else if (sameReleaseAndEpisode && videoEl && !videoEl.hidden && videoEl.readyState < 2) {
       // Видео ещё не готово — сохраняем sync и применим его после loadedmetadata.
       pendingSync = p;
-    } else if (!sameReleaseAndEpisode && window.anixApi?.release?.getEpisode) {
+    } else if (!sameReleaseAndEpisode && (window as any).anixApi?.release?.getEpisode) {
       // Update releaseId/sourceId in state (applyVideoAndUI doesn't do this)
       state.releaseId = p.releaseId;
       state.sourceId = p.sourceId;

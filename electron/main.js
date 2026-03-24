@@ -337,6 +337,7 @@ function createWindow() {
 
 /** User-Agent и заголовки как в приложении Anixart (Android), чтобы видеоисточники отдавали поток */
 const ANIXART_UA = 'AnixartApp/9.0 BETA 3-25021818 (Android 9; SDK 28; x86_64; ROG ASUS AI2201_B; ru)';
+const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 const VIDEO_HOSTS = ['anixis.com', 'aniqart.com', 'aniqit.com', 'video.sibnet.ru', 'sibnet.ru', 'kodikplayer.com', 'kodik-cdn.com', 'collaps.io', 'aniliberty.top', 'anilibria.tv', 'libria.fun', 'cache.libria.fun'];
 
 function upsertHeader(headers, name, value) {
@@ -364,7 +365,11 @@ function setupVideoRequestHeaders() {
       if (lower === 'referer') { delete requestHeaders[k]; break; }
     }
     if (host === 'video.sibnet.ru') {
+      // Self-referrer for the main embed host
       upsertHeader(requestHeaders, 'Referer', details.url);
+    } else if (host.endsWith('.sibnet.ru')) {
+      // CDN subdomains (cdn.sibnet.ru, cvt1.sibnet.ru, etc.) need Referer from embed host
+      upsertHeader(requestHeaders, 'Referer', 'https://video.sibnet.ru/');
     }
     if (host.endsWith('kodik-cdn.com')) {
       upsertHeader(requestHeaders, 'Referer', 'https://kodikplayer.com/');
@@ -663,35 +668,109 @@ ipcMain.handle('anix:getEpisode', async (_, releaseId, sourceId, episodePosition
   }
 });
 
+/**
+ * Получает прямую ссылку на Sibnet-видео.
+ *
+ * Корень проблемы «раз через раз»: SibnetParser.srcMatch — статичный /g-регекс,
+ * он запоминает lastIndex между вызовами. Чётные вызовы ищут с нулевой позиции
+ * и находят src; нечётные начинают с lastIndex прошлого совпадения, не находят
+ * ничего и возвращают null. Сбрасываем lastIndex перед каждым вызовом.
+ *
+ * Два этапа:
+ *  1. SibnetParser.getDirectLink (с правильным lastIndex)
+ *  2. Собственный fetch с браузерным UA + такая же логика — парсим src из HTML,
+ *     затем следуем редиректу, чтобы получить финальный CDN-URL
+ */
+async function getSibnetDirectLink(embedUrl) {
+  const SIBNET_HEADERS = {
+    'User-Agent':      BROWSER_UA,
+    'Referer':         'https://sibnet.ru/',
+    'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8',
+  };
+
+  // Этап 1 — SibnetParser с принудительным сбросом lastIndex (/g-флаг!)
+  try {
+    if (SibnetParser.srcMatch) SibnetParser.srcMatch.lastIndex = 0;
+    const direct = await SibnetParser.getDirectLink(embedUrl);
+    if (direct && !direct.includes('404')) {
+      return direct.startsWith('http') ? direct : `https:${direct}`;
+    }
+  } catch {}
+
+  // Этап 2 — собственный fetch с браузерными заголовками
+  // Повторяет логику SibnetParser, но с нормальным User-Agent
+  try {
+    const pageRes = await fetch(embedUrl, { headers: SIBNET_HEADERS });
+    const html    = await pageRes.text();
+
+    // Sibnet кладёт src-путь видео в строку: src: "/shell.php?video_pid=...&d=...&s=..."
+    const SRC_RE = /src:\s*("\/[^"]+?")/i;
+    const m = SRC_RE.exec(html);
+    if (m) {
+      const srcPath   = m[1].replace(/"/g, '');
+      const videoUrl  = `https://video.sibnet.ru${srcPath}`;
+
+      // Следуем редиректу — финальный URL и есть прямая ссылка на поток
+      const streamRes = await fetch(videoUrl, {
+        headers:  { 'Referer': embedUrl, 'User-Agent': BROWSER_UA },
+        redirect: 'follow',
+      });
+      // streamRes.url — URL после всех редиректов (реальный CDN)
+      if (streamRes.url && streamRes.url !== videoUrl) return streamRes.url;
+      return videoUrl; // если редиректов нет — сам signed-URL уже работает
+    }
+  } catch {}
+
+  return null;
+}
+
 /** Прямые ссылки на видео (как в AniDesk): парсеры anixartjs, чтобы не грузить embed в iframe и не получать 500 от aniqit.com */
 ipcMain.handle('anix:getDirectVideoLink', async (_, embedUrl) => {
-  if (!embedUrl || typeof embedUrl !== 'string') return { directUrl: null, quality: null };
+  const EMPTY = { directUrl: null, quality: null, qualityMap: {} };
+  if (!embedUrl || typeof embedUrl !== 'string') return EMPTY;
   const url = embedUrl.startsWith('http') ? embedUrl : `https:${embedUrl}`;
   const host = (url.match(/https?:\/\/([^/]+)/) || [])[1] || '';
+  const toAbs = (src) => (!src ? null : src.startsWith('http') ? src : `https:${src}`);
+  const PRIO  = ['1080', '1080p', '720', '720p', '480', '480p', '360', '360p'];
+
   try {
+    // ── Kodik (array format: { "720": [{ src }], ... }) ─────────────────
     if (host.includes('kodik')) {
       const links = await KodikParser.getDirectLinks(url);
-      if (!links || typeof links !== 'object') return { directUrl: null, quality: null };
-      const q720 = links['720']?.[0]?.src || links['720p']?.[0]?.src;
-      const q1080 = links['1080']?.[0]?.src || links['1080p']?.[0]?.src;
-      const q480 = links['480']?.[0]?.src || links['480p']?.[0]?.src;
-      const src = q720 || q1080 || q480 || Object.values(links)[0]?.[0]?.src;
-      return { directUrl: src || null, quality: src ? (q1080 ? '1080' : q720 ? '720' : '480') : null };
+      if (!links || typeof links !== 'object') return EMPTY;
+      const qualityMap = {};
+      for (const [key, arr] of Object.entries(links)) {
+        const src = toAbs(arr?.[0]?.src);
+        if (src) qualityMap[key.replace('p', '')] = src; // normalise "720p" → "720"
+      }
+      const best = PRIO.find(k => qualityMap[k]) || Object.keys(qualityMap)[0];
+      return { directUrl: qualityMap[best] || null, quality: best || null, qualityMap };
     }
+
+    // ── Sibnet — трёхэтапный парсер с браузерными заголовками ───────────
     if (host.includes('sibnet')) {
-      const direct = await SibnetParser.getDirectLink(url);
-      return { directUrl: direct || null, quality: direct ? '720' : null };
+      const direct = await getSibnetDirectLink(url);
+      if (!direct) return EMPTY;
+      return { directUrl: direct, quality: '720', qualityMap: { '720': direct } };
     }
-    if (host.includes('aniliberty') || host.includes('libria')) {
+
+    // ── AniLibria (object format: { "720": { src }, "1080": { src }, ... }) ──
+    if (host.includes('aniliberty') || host.includes('anilibria') || host.includes('libria')) {
       const links = await AniLibriaParser.getDirectLinks(url);
-      if (!links || typeof links !== 'object') return { directUrl: null, quality: null };
-      const src = links['720']?.src || links['1080']?.src || links['480']?.src || Object.values(links)[0]?.src;
-      return { directUrl: src || null, quality: src ? '720' : null };
+      if (!links || typeof links !== 'object') return EMPTY;
+      const qualityMap = {};
+      for (const [key, val] of Object.entries(links)) {
+        const src = toAbs(val?.src);
+        if (src) qualityMap[key.replace('p', '')] = src;
+      }
+      const best = PRIO.find(k => qualityMap[k]) || Object.keys(qualityMap)[0];
+      return { directUrl: qualityMap[best] || null, quality: best || null, qualityMap };
     }
   } catch (e) {
-    console.error('getDirectVideoLink', e);
+    console.error('getDirectVideoLink error:', e?.message || e);
   }
-  return { directUrl: null, quality: null };
+  return EMPTY;
 });
 
 /** Создаёт отдельное окно только с плеером (загружает player.html), а не основное приложение */

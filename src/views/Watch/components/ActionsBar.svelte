@@ -1,8 +1,9 @@
 <script lang="ts">
   import { fade, scale } from 'svelte/transition';
   import type { EpisodeItem, DubberItem } from '../_types';
-  import EpisodesPopover from './EpisodesPopover.svelte';
-  import DubbingPopover  from './DubbingPopover.svelte';
+  import EpisodesPopover  from './EpisodesPopover.svelte';
+  import DubbingPopover   from './DubbingPopover.svelte';
+  import SettingsPopover  from './SettingsPopover.svelte';
 
   interface Props {
     paused:          boolean;
@@ -13,11 +14,15 @@
     dubbers:         DubberItem[];
     currentEp:       number;
     currentDubberId: string;
-    popoverType:     'series' | 'dubbing' | null;
+    popoverType:     'series' | 'dubbing' | 'settings' | null;
     popoverLoading:  boolean;
     useVideo:        boolean;
     gpuAvailable:    boolean;
     upscaleEnabled:  boolean;
+    playbackRate:    number;
+    aspectRatio:     string;
+    availableQualities: Record<string, string>;
+    currentQuality:     string;
     ontogglePlay:    () => void;
     ontoggleMute:    () => void;
     onvolumechange:  (e: Event) => void;
@@ -25,19 +30,25 @@
     onskipOpening:   () => void;
     onopenSeries:    () => void;
     onopenDubbing:   () => void;
+    onopenSettings:  () => void;
     onselectEp:      (ep: number) => void;
     onselectDub:     (dub: DubberItem) => void;
     onclosePopover:  () => void;
-    onfullscreen:    () => void;
+    onfullscreen:     () => void;
+    onchangeRate:     (r: number) => void;
+    onchangeAspect:   (a: string) => void;
+    onchangeQuality:  (q: string) => void;
   }
 
   let {
     paused, muted, volume, isFullscreen,
     episodes, dubbers, currentEp, currentDubberId,
     popoverType, popoverLoading, useVideo, gpuAvailable, upscaleEnabled,
+    playbackRate, aspectRatio, availableQualities, currentQuality,
     ontogglePlay, ontoggleMute, onvolumechange, ontoggleUpscale, onskipOpening,
-    onopenSeries, onopenDubbing, onselectEp, onselectDub,
-    onclosePopover, onfullscreen,
+    onopenSeries, onopenDubbing, onopenSettings,
+    onselectEp, onselectDub, onclosePopover, onfullscreen,
+    onchangeRate, onchangeAspect, onchangeQuality,
   }: Props = $props();
 
   const sliderValue = $derived(muted ? 0 : volume);
@@ -45,11 +56,12 @@
   // ── Hover popover logic ────────────────────────────────────────────────────
   let closeTimer: ReturnType<typeof setTimeout> | null = null;
 
-  function enterTrigger(type: 'series' | 'dubbing') {
+  function enterTrigger(type: 'series' | 'dubbing' | 'settings') {
     if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
     if (popoverType !== type) {
       if (type === 'series') onopenSeries();
-      else onopenDubbing();
+      else if (type === 'dubbing') onopenDubbing();
+      else onopenSettings();
     }
   }
 
@@ -230,21 +242,51 @@
       {/if}
     </div>
 
-    <!-- Anime4K — Sparkles -->
-    {#if gpuAvailable}
-      <button
-        type="button"
-        class="watch-page__ctrl-btn {upscaleEnabled ? 'watch-page__ctrl-btn--upscale-on' : ''}"
-        aria-label={upscaleEnabled ? 'Anime4K включён' : 'Anime4K выкл'}
-        onclick={(e) => { e.stopPropagation(); ontoggleUpscale(); }}
+    <!-- Настройки (hover-only) -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="watch-page__popover-anchor"
+      onmouseenter={() => enterTrigger('settings')}
+      onmouseleave={leaveArea}
+    >
+      <!-- svelte-ignore a11y_interactive_supports_focus -->
+      <div
+        role="button"
+        class="watch-page__ctrl-btn watch-page__ctrl-btn--text {popoverType === 'settings' ? 'watch-page__ctrl-btn--active' : ''}"
+        style="cursor: default;"
       >
-        <!-- Sparkles -->
+        <!-- Settings icon -->
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/>
-          <path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/>
+          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+          <circle cx="12" cy="12" r="3"/>
         </svg>
-      </button>
-    {/if}
+        Настройки
+      </div>
+
+      {#if popoverType === 'settings'}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="watch-page__float-panel watch-page__float-panel--settings"
+          onmouseenter={enterPanel}
+          onmouseleave={leaveArea}
+          in:scale={{ start: 0.94, duration: 160, opacity: 0 }}
+          out:fade={{ duration: 120 }}
+        >
+          <SettingsPopover
+            {gpuAvailable}
+            {upscaleEnabled}
+            {playbackRate}
+            {aspectRatio}
+            {availableQualities}
+            {currentQuality}
+            {ontoggleUpscale}
+            {onchangeRate}
+            {onchangeAspect}
+            {onchangeQuality}
+          />
+        </div>
+      {/if}
+    </div>
 
     <!-- Fullscreen — Maximize2 / Minimize2 -->
     <button

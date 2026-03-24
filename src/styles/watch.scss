@@ -684,6 +684,150 @@ $watch-float-panel-height: min(480px, 70vh);
   }
 }
 
+// ── Settings float panel (auto-height, no scroll needed) ──────────────────────
+
+.watch-page__float-panel--settings {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  width: min(300px, 90vw);
+
+  .watch-panel {
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    flex: 0 0 auto; // don't stretch
+  }
+}
+
+// ── Settings panel body ────────────────────────────────────────────────────────
+
+.watch-panel {
+
+  &__settings-body {
+    padding: 4px 0 6px;
+  }
+
+  // Row with chip options (column)
+  &__setting-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+
+    &:last-child { border-bottom: none; }
+
+    // Row with a toggle (label left, switch right)
+    &--toggle {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+    }
+  }
+
+  &__setting-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    svg { flex-shrink: 0; }
+  }
+
+  &__setting-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  &__chip {
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 13px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    white-space: nowrap;
+    line-height: 1;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.13);
+      color: #fff;
+    }
+
+    &--active {
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+      color: #fff;
+      font-weight: 600;
+    }
+  }
+
+  // iOS-style toggle switch
+  &__toggle {
+    width: 36px;
+    height: 20px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.18);
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+    transition: background 0.22s;
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.75);
+      transition: transform 0.22s, background 0.22s;
+    }
+
+    &--on {
+      background: var(--color-accent);
+
+      &::after {
+        transform: translateX(16px);
+        background: #fff;
+      }
+    }
+  }
+}
+
+// ── Forced aspect-ratio video classes ─────────────────────────────────────────
+// Mirror the competitor approach: height 100%, centered, width computed from ratio.
+// The base video is position:absolute; inset:0; width:100%; height:100%.
+// Overriding to height:100% + left:50% + translateX(-50%) + aspect-ratio
+// lets the browser compute the correct width automatically.
+
+.watch-page__video--ratio {
+  inset: auto !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: auto !important;
+  height: 100% !important;
+  overflow: hidden !important;
+
+  &-16-9 { aspect-ratio: 16 / 9; }
+  &-4-3  { aspect-ratio: 4 / 3;  }
+  &-21-9 { aspect-ratio: 21 / 9; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 .watch-page__popover-panel {
   width: min(360px, 90vw);
   max-height: min(420px, 60vh);

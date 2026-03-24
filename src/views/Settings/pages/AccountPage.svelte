@@ -72,9 +72,13 @@
   } : null);
 
   // Privacy bind:this containers
+  // svelte-ignore non_reactive_update
   let privacyStatsEl:  HTMLElement;
+  // svelte-ignore non_reactive_update
   let privacyCountsEl: HTMLElement;
+  // svelte-ignore non_reactive_update
   let privacySocialEl: HTMLElement;
+  // svelte-ignore non_reactive_update
   let privacyFrEl:     HTMLElement;
 
   // ── Handlers ───────────────────────────────────────────────────────────────
@@ -340,7 +344,7 @@
 <!-- ── Confirm nickname change dialog ───────────────────────────────────── -->
 {#if loginConfirmOpen}
   <div class="acc-confirm-backdrop" onclick={() => loginConfirmOpen = false} role="presentation">
-    <div class="acc-confirm" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+    <div class="acc-confirm" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" aria-modal="true" tabindex="-1">
       <p class="acc-confirm__title">Сменить никнейм?</p>
       <p class="acc-confirm__body">
         После смены никнейм можно будет изменить снова только через <strong>30 дней</strong>.

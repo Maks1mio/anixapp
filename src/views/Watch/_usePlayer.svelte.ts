@@ -19,6 +19,15 @@ export class PlayerState {
   debugOverlay   = $state(false);
   overlayVisible = $state(false);
 
+  // ── Playback settings ───────────────────────────────────────────────────
+  playbackRate       = $state(1);
+  /** 'auto' | '16/9' | '4/3' | '21/9' */
+  aspectRatio        = $state('auto');
+  /** Quality label → direct URL (e.g. { "720": "https://...720.m3u8" }) */
+  availableQualities = $state<Record<string, string>>({});
+  /** Currently selected quality label (e.g. "720") */
+  currentQuality     = $state('');
+
   currentTimeDisplay = $derived(fmtTime(this.currentTime));
   totalTimeDisplay   = $derived(fmtTime(this.duration));
   timeDisplay        = $derived(`${fmtTime(this.currentTime)} / ${fmtTime(this.duration)}`);

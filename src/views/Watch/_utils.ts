@@ -36,10 +36,19 @@ export function lobbyActionText(type: string): string {
   }
 }
 
+/** Dubbers that are permanently closed and should never appear in any picker */
+const DUBBER_BLACKLIST = /sovet.?romantica|\bsr\b/i;
+export function isDubberBlacklisted(name: string): boolean {
+  return DUBBER_BLACKLIST.test(name);
+}
+
+/** Quality label priorities when auto-selecting default */
+const QUALITY_PRIORITY = ['1080', '1080p', '720', '720p', '480', '480p', '360', '360p'];
+
 export async function resolveEpisodeUrl(
   episodeUrl: string,
   iframe: boolean,
-): Promise<{ playUrl: string; useVideo: boolean }> {
+): Promise<{ playUrl: string; useVideo: boolean; qualityMap: Record<string, string>; currentQuality: string }> {
   let url = episodeUrl.startsWith('http') ? episodeUrl : `https:${episodeUrl}`;
   url = stripKodikQueryParams(url);
   const host = (url.match(/https?:\/\/([^/]+)/) || [])[1] || '';
@@ -48,28 +57,41 @@ export async function resolveEpisodeUrl(
   const isSibnet   = /sibnet\.ru/i.test(host);
   const isLibria   = /aniliberty\.top|anilibria\.tv|libria\.fun/i.test(host);
   const isEmbedPage = isAniqit || isKodik;
-  // Sibnet and Libria always need a direct-link fetch — ignore `iframe` flag
   const needsDirectFetch = isSibnet || isLibria;
 
   if (isAniqit) {
     try { const u = new URL(url); url = u.origin + u.pathname; } catch {}
   }
 
-  let playUrl  = url;
-  let useVideo = !iframe;
+  let playUrl       = url;
+  let useVideo      = !iframe;
+  let qualityMap: Record<string, string> = {};
+  let currentQuality = '';
 
   if (isEmbedPage) {
     try {
       const links = await KodikParser.getDirectLinks(url);
       if (links && typeof links === 'object') {
-        const pick = (q: string) =>
-          (links as Record<string, { src: string }[]>)[q]?.[0]?.src;
-        const src = pick('720') || pick('720p') || pick('1080') || pick('1080p') || pick('480') || pick('480p')
-          || (Object.values(links)[0] as { src: string }[])?.[0]?.src;
-        if (src) {
-          const raw = src.startsWith('http') ? src : `https:${src}`;
-          playUrl  = stripKodikQueryParams(raw);
-          useVideo = true;
+        const rawLinks = links as Record<string, { src: string }[]>;
+
+        // Build quality map: label → direct URL
+        for (const [key, arr] of Object.entries(rawLinks)) {
+          const src = arr?.[0]?.src;
+          if (src) {
+            const raw = src.startsWith('http') ? src : `https:${src}`;
+            qualityMap[key] = stripKodikQueryParams(raw);
+          }
+        }
+
+        // Pick default quality (prefer 720, then 1080, then 480, etc.)
+        const best =
+          QUALITY_PRIORITY.find(k => qualityMap[k]) ||
+          Object.keys(qualityMap)[0];
+
+        if (best) {
+          playUrl        = qualityMap[best];
+          currentQuality = best;
+          useVideo       = true;
         }
       }
     } catch {}
@@ -78,15 +100,57 @@ export async function resolveEpisodeUrl(
 
   if ((needsDirectFetch || (!useVideo && !isEmbedPage)) && (window as any).anixApi?.release?.getDirectVideoLink) {
     try {
-      const { directUrl } = await (window as any).anixApi.release.getDirectVideoLink(url);
+      const res = await (window as any).anixApi.release.getDirectVideoLink(url);
+      const directUrl: string | null = res?.directUrl ?? null;
+      const remoteMap: Record<string, string> = res?.qualityMap ?? {};
+
       if (directUrl) {
         const raw = directUrl.startsWith('http') ? directUrl : `https:${directUrl}`;
-        playUrl  = stripKodikQueryParams(raw);
+
+        // Merge remote quality map (Libria returns multiple qualities)
+        if (Object.keys(remoteMap).length > 0) {
+          for (const [k, v] of Object.entries(remoteMap)) {
+            qualityMap[k] = (v as string).startsWith('http') ? (v as string) : `https:${v}`;
+          }
+          const best = QUALITY_PRIORITY.find(k => qualityMap[k]) || Object.keys(qualityMap)[0];
+          currentQuality = best || '';
+          playUrl  = currentQuality ? qualityMap[currentQuality] : stripKodikQueryParams(raw);
+        } else {
+          playUrl = stripKodikQueryParams(raw);
+          if (isSibnet) {
+            qualityMap     = { '720': playUrl };
+            currentQuality = '720';
+          }
+        }
         useVideo = true;
       }
     } catch {}
   }
 
   if (!useVideo && iframe) { playUrl = url; useVideo = false; }
-  return { playUrl, useVideo };
+  return { playUrl, useVideo, qualityMap, currentQuality };
+}
+
+/**
+ * Calls resolveEpisodeUrl with automatic fast retry.
+ * Retries immediately if the URL could not be resolved (useVideo=false or empty playUrl).
+ */
+export async function resolveEpisodeUrlWithRetry(
+  episodeUrl: string,
+  iframe: boolean,
+  maxAttempts = 4,
+): Promise<Awaited<ReturnType<typeof resolveEpisodeUrl>>> {
+  let lastResult = { playUrl: '', useVideo: false, qualityMap: {} as Record<string, string>, currentQuality: '' };
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const result = await resolveEpisodeUrl(episodeUrl, iframe);
+      if (result.useVideo && result.playUrl) return result;
+      lastResult = result;
+    } catch {
+      // swallow, retry
+    }
+    // Tiny delay between retries to avoid hammering the server
+    if (i < maxAttempts - 1) await new Promise<void>(r => setTimeout(r, 300));
+  }
+  return lastResult;
 }

@@ -97,7 +97,7 @@
         isMine={typeof selfId === 'number' && selfId === c.userId}
         profile={profileCache[c.userId]}
         {embed}
-        {replied}
+        replied={replied ?? null}
         {repliedProfile}
         {repliedEmbed}
         {showActions}

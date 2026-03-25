@@ -73,6 +73,7 @@ contextBridge.exposeInMainWorld('electron', {
   openPlayerWindow: (params) => ipcRenderer.invoke('player:openWindow', params),
   closePlayerWindow: () => ipcRenderer.send('player:close'),
   togglePlayerFullScreen: () => ipcRenderer.invoke('player:toggleFullScreen'),
+  togglePlayerAlwaysOnTop: () => ipcRenderer.invoke('player:toggleAlwaysOnTop'),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   syncPlayerState: (playback) => ipcRenderer.send('player:syncState', playback),
   sendPlayerState: (playback) => ipcRenderer.send('player:stateChanged', playback),

@@ -1,10 +1,10 @@
 /**
  * Конвертирует PNG-логотипы из public/logo/ в icon.ico для Windows.
- * Использует 512x512.png и to-ico с resize для получения мультиразмерного ICO.
+ * Использует 512x512.png и png2icons для получения мультиразмерного ICO.
  */
 const fs = require('fs');
 const path = require('path');
-const toIco = require('to-ico');
+const png2icons = require('png2icons');
 
 const rootDir = path.join(__dirname, '..');
 const logoDir = path.join(rootDir, 'public', 'logo');
@@ -17,10 +17,10 @@ async function main() {
     return;
   }
   const buf = fs.readFileSync(src512);
-  const ico = await toIco(buf, {
-    resize: true,
-    sizes: [16, 24, 32, 48, 64, 128, 256],
-  });
+  const ico = png2icons.createICO(buf, png2icons.BILINEAR, 0, true);
+  if (!ico) {
+    throw new Error('png2icons не смог создать ICO из 512x512.png');
+  }
   fs.writeFileSync(outIco, ico);
   console.log('icon.ico создан в public/logo/');
 }

@@ -203,6 +203,11 @@
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => { player.overlayVisible = false; idleTimer = null; }, IDLE_MS);
   }
+  function hideNow() {
+    if (popoverType != null) return; // не гасим, пока открыты поповеры
+    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+    player.overlayVisible = false;
+  }
   function showAndSchedule() { showOverlay(); scheduleHide(); }
 
   $effect(() => {
@@ -215,6 +220,10 @@
   // ── Upscale ────────────────────────────────────────────────────────────────
   const gpuAvailable = typeof navigator !== 'undefined' && typeof (navigator as any).gpu !== 'undefined';
   let upscaleStopFn: (() => void) | null = null;
+  /** GPU-устройство, перехваченное из anime4k-webgpu — чистим при stopUpscale */
+  let _capturedGpuDevice: GPUDevice | null = null;
+  /** Флаг: если true — requestVideoFrameCallback-loop внутри anime4k не будет продолжаться */
+  let _upscaleRenderStopped = false;
   /** Счётчик запусков: отменяет устаревший anime4kRender при очередном resize/повторном старте */
   let upscaleRunId = 0;
   let upscaleLastError = $state('');
@@ -227,8 +236,23 @@
   };
 
   function stopUpscale() {
+    // 1. Останавливаем render-loop (флаг проверяется в обёртке requestVideoFrameCallback)
+    _upscaleRenderStopped = true;
+    // 2. Вызываем stop-callback библиотеки (если есть)
     if (upscaleStopFn) { try { upscaleStopFn(); } catch {} upscaleStopFn = null; }
-    if (canvasEl) canvasEl.hidden = true;
+    // 3. Уничтожаем GPU-устройство — освобождаем всю GPU-память (текстуры, буферы, пайплайны)
+    if (_capturedGpuDevice) {
+      try { _capturedGpuDevice.destroy(); } catch {}
+      _capturedGpuDevice = null;
+    }
+    // 4. Сбрасываем canvas
+    if (canvasEl) {
+      canvasEl.hidden = true;
+      canvasEl.width = 1;
+      canvasEl.height = 1;
+      canvasEl.style.width = '';
+      canvasEl.style.height = '';
+    }
     videoEl?.classList.remove('watch-page__video--hidden-for-upscale');
   }
 
@@ -323,27 +347,76 @@
     if (videoEl.readyState < 1) return;
 
     const myRun = ++upscaleRunId;
+    _upscaleRenderStopped = false;
 
-    const videoW = videoEl.videoWidth  || videoEl.clientWidth  || 1920;
-    const videoH = videoEl.videoHeight || videoEl.clientHeight || 1080;
+    const videoW = videoEl.videoWidth  || 1920;
+    const videoH = videoEl.videoHeight || 1080;
     const aspect = videoW / videoH;
-    const rect   = canvasEl.parentElement?.getBoundingClientRect();
-    const dpr    = window.devicePixelRatio || 1;
-    const dispW  = rect ? Math.round(rect.width  * dpr) : videoW;
-    const dispH  = rect ? Math.round(rect.height * dpr) : videoH;
 
+    // Размер контейнера в CSS-пикселях (без DPR — экономит GPU-память)
+    const rect = canvasEl.parentElement?.getBoundingClientRect();
+    const containerW = rect ? Math.round(rect.width)  : 1920;
+    const containerH = rect ? Math.round(rect.height) : 1080;
+
+    // Размер области отрисовки с учётом aspect ratio (letterbox)
+    let cssW: number, cssH: number;
+    if (containerW / containerH > aspect) {
+      cssH = containerH;
+      cssW = Math.round(cssH * aspect);
+    } else {
+      cssW = containerW;
+      cssH = Math.round(cssW / aspect);
+    }
+
+    // Буфер WebGPU: не больше 2× от нативного разрешения видео и не больше контейнера
+    const maxBufferW = Math.min(videoW * 2, cssW);
+    const maxBufferH = Math.min(videoH * 2, cssH);
     let tW: number, tH: number;
-    if (dispW / dispH > aspect) { tH = dispH; tW = Math.round(tH * aspect); }
-    else                        { tW = dispW; tH = Math.round(tW / aspect); }
+    if (maxBufferW / maxBufferH > aspect) {
+      tH = maxBufferH; tW = Math.round(tH * aspect);
+    } else {
+      tW = maxBufferW; tH = Math.round(tW / aspect);
+    }
     tW = Math.max(videoW, tW);
     tH = Math.max(videoH, tH);
 
-    canvasEl.width = tW; canvasEl.height = tH;
+    canvasEl.width  = tW;
+    canvasEl.height = tH;
+    canvasEl.style.width  = cssW + 'px';
+    canvasEl.style.height = cssH + 'px';
+
+    // ── Перехват: anime4k-webgpu создаёт GPUDevice и render-loop внутри,
+    // но не предоставляет cleanup. Мы оборачиваем requestVideoFrameCallback
+    // и navigator.gpu чтобы перехватить ресурсы и мочь убить их при stop.
+    const origRVFC = videoEl.requestVideoFrameCallback.bind(videoEl);
+    let latestRvfcId: number | null = null;
+    videoEl.requestVideoFrameCallback = (cb: VideoFrameRequestCallback): number => {
+      const wrapped: VideoFrameRequestCallback = (now, meta) => {
+        if (_upscaleRenderStopped) return; // цепочка прервана
+        cb(now, meta);
+      };
+      const id = origRVFC(wrapped);
+      latestRvfcId = id;
+      return id;
+    };
+
+    const origRequestAdapter = navigator.gpu.requestAdapter.bind(navigator.gpu);
+    (navigator.gpu as any).requestAdapter = async (...args: any[]) => {
+      const adapter = await origRequestAdapter(...args);
+      if (!adapter) return adapter;
+      const origRD = adapter.requestDevice.bind(adapter);
+      adapter.requestDevice = async (...dArgs: any[]) => {
+        const device = await origRD(...dArgs);
+        _capturedGpuDevice = device;
+        return device;
+      };
+      return adapter;
+    };
 
     const ModeClass = upscaleModeMap[player.upscaleMode] ?? ModeB;
     try {
       upscaleLastError = '';
-      const stop = await anime4kRender({
+      await anime4kRender({
         video: videoEl,
         canvas: canvasEl,
         pipelineBuilder: (device: any, inputTexture: any) => {
@@ -352,15 +425,32 @@
           return [new ModeClass({ device, inputTexture, nativeDimensions: native, targetDimensions: target }) as any];
         },
       });
+
+      // Восстанавливаем оригинальные методы
+      videoEl.requestVideoFrameCallback = origRVFC;
+      navigator.gpu.requestAdapter = origRequestAdapter;
+
       if (myRun !== upscaleRunId) {
-        try { (stop as unknown as () => void)(); } catch { /* stale pipeline */ }
+        // Устаревший запуск — чистим
+        _upscaleRenderStopped = true;
+        if (latestRvfcId !== null) try { videoEl.cancelVideoFrameCallback(latestRvfcId); } catch {}
+        if (_capturedGpuDevice) { try { _capturedGpuDevice.destroy(); } catch {} _capturedGpuDevice = null; }
         return;
       }
-      upscaleStopFn = stop as unknown as () => void;
+
+      upscaleStopFn = () => {
+        _upscaleRenderStopped = true;
+        if (latestRvfcId !== null) {
+          try { videoEl.cancelVideoFrameCallback(latestRvfcId); } catch {}
+        }
+      };
       canvasEl.hidden = false;
       videoEl.classList.add('watch-page__video--hidden-for-upscale');
       debugCanvasRafTicks = 0;
     } catch (err) {
+      // Восстанавливаем оригинальные методы при ошибке тоже
+      videoEl.requestVideoFrameCallback = origRVFC;
+      navigator.gpu.requestAdapter = origRequestAdapter;
       const msg = err instanceof Error ? err.message : String(err);
       upscaleLastError = msg || 'unknown';
       console.warn('[Anime4K]', err);
@@ -738,9 +828,16 @@
         restoreTime();
         if (player.playbackRate !== 1) videoEl.playbackRate = player.playbackRate;
       });
+      // Перезапускаем апскейл после загрузки нового потока — размеры кадра могли измениться
+      videoEl.addEventListener('loadedmetadata', () => {
+        if (player.upscaleEnabled && gpuAvailable) startUpscale();
+      }, { once: true });
     } else {
       videoEl.src = src;
-      videoEl.addEventListener('loadeddata', restoreTime, { once: true });
+      videoEl.addEventListener('loadeddata', (e) => {
+        restoreTime();
+        if (player.upscaleEnabled && gpuAvailable) startUpscale();
+      }, { once: true });
       doPlay();
     }
   }
@@ -985,7 +1082,7 @@
     class:watch-page--chrome-hidden={player.loadState === 'ready' && !player.overlayVisible}
     bind:this={playerWrapEl}
     onmousemove={showAndSchedule}
-    onmouseleave={scheduleHide}
+    onmouseleave={hideNow}
     role="presentation"
   >
     <div class="watch-page__player-wrap">

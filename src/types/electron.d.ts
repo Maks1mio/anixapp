@@ -39,6 +39,7 @@ declare global {
       openPlayerWindow: (params: { releaseId: string; sourceId: string; ep: string; title: string; sourceName: string; dubberId?: string }) => Promise<void>;
       closePlayerWindow: () => void;
       togglePlayerFullScreen: () => Promise<boolean>;
+      togglePlayerAlwaysOnTop: () => Promise<boolean>;
       openExternal: (url: string) => void;
       syncPlayerState: (playback: LobbyPlaybackPayload) => void;
       sendPlayerState: (playback: LobbyPlaybackPayload) => void;

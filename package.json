@@ -35,7 +35,7 @@
         "sass": "^1.77.8",
         "svelte": "^5.0.0",
         "svelte-check": "^4.0.0",
-        "to-ico": "^1.1.5",
+        "png2icons": "^2.0.1",
         "vite": "^6.0.3",
         "wait-on": "^8.0.1"
     },
@@ -46,6 +46,9 @@
         "hls.js": "^1.6.15",
         "lottie-web": "^5.13.0",
         "lucide": "^0.577.0"
+    },
+    "resolutions": {
+        "undici": ">=6.24.1"
     },
     "build": {
         "appId": "com.anixapp.client",

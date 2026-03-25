@@ -102,6 +102,15 @@ body.player-fullscreen .player-titlebar {
   }
 }
 
+.player-titlebar__btn--pin {
+  i { display: flex; pointer-events: none; }
+  svg { width: 15px; height: 15px; }
+}
+
+.player-titlebar__btn--pin-active {
+  color: $color-text;
+}
+
 .player-titlebar__btn--close {
   position: relative;
 

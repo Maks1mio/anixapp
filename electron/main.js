@@ -755,15 +755,36 @@ ipcMain.handle('anix:getDirectVideoLink', async (_, embedUrl) => {
       return { directUrl: direct, quality: '720', qualityMap: { '720': direct } };
     }
 
-    // ── AniLibria (object format: { "720": { src }, "1080": { src }, ... }) ──
+    // ── AniLibria / AniLiberty ──────────────────────────────────────────────
+    // Не используем AniLibriaParser.getDirectLinks() из anixartjs — там regex с
+    // флагом /g хранит lastIndex как статическое поле класса, из-за чего каждый
+    // второй вызов возвращает null (lastIndex не сбрасывается между вызовами).
     if (host.includes('aniliberty') || host.includes('anilibria') || host.includes('libria')) {
-      const links = await AniLibriaParser.getDirectLinks(url);
-      if (!links || typeof links !== 'object') return EMPTY;
+      // Парсим id и ep из URL без /g-regex, чтобы избежать stateful lastIndex
+      const parsed   = new URL(url);
+      const releaseId = parsed.searchParams.get('id');
+      const epOrdinal = parsed.searchParams.get('ep');
+      if (!releaseId || !epOrdinal) return EMPTY;
+
+      // Определяем домен API (aniliberty.top или api.anilibria.tv)
+      const apiBase = host.includes('aniliberty') || host.includes('libria.fun')
+        ? 'https://aniliberty.top/api/v1/anime/releases'
+        : 'https://aniliberty.top/api/v1/anime/releases';
+
+      const apiResp = await fetch(`${apiBase}/${releaseId}`);
+      if (!apiResp.ok) return EMPTY;
+      const body = await apiResp.json();
+      if (!body?.episodes) return EMPTY;
+
+      const ep = body.episodes.find(e => String(e.ordinal) === String(parseInt(epOrdinal, 10)));
+      if (!ep) return EMPTY;
+
       const qualityMap = {};
-      for (const [key, val] of Object.entries(links)) {
-        const src = toAbs(val?.src);
-        if (src) qualityMap[key.replace('p', '')] = src;
-      }
+      if (ep.hls_1080) qualityMap['1080'] = toAbs(ep.hls_1080);
+      if (ep.hls_720)  qualityMap['720']  = toAbs(ep.hls_720);
+      if (ep.hls_480)  qualityMap['480']  = toAbs(ep.hls_480);
+      if (!Object.keys(qualityMap).length) return EMPTY;
+
       const best = PRIO.find(k => qualityMap[k]) || Object.keys(qualityMap)[0];
       return { directUrl: qualityMap[best] || null, quality: best || null, qualityMap };
     }
@@ -1061,6 +1082,14 @@ ipcMain.handle('player:toggleFullScreen', (event) => {
   const next = !win.isFullScreen();
   win.setFullScreen(next);
   event.sender.send('player:fullscreen', next);
+  return next;
+});
+
+ipcMain.handle('player:toggleAlwaysOnTop', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || win.isDestroyed()) return false;
+  const next = !win.isAlwaysOnTop();
+  win.setAlwaysOnTop(next, 'floating');
   return next;
 });
 

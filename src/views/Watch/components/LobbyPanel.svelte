@@ -16,7 +16,7 @@
 {#if participants.length > 0}
   <div class="watch-lobby-panel">
     <div class="watch-lobby-panel__avatars">
-      {#each shown as p (p.login)}
+      {#each shown as p, i (`${p.peerId ?? ''}:${p.login}:${i}`)}
         <div class="watch-lobby-avatar" data-tooltip={p.login}>
           {#if p.avatar}
             <img

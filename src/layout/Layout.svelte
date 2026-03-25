@@ -9,6 +9,7 @@
   import { iconHome, iconBookmark } from '../components/icons';
 
   import TitleBar from '../components/TitleBar.svelte';
+  import LobbyNowWatching from '../components/LobbyNowWatching.svelte';
   import Page from '../components/Page.svelte';
 
   interface Props {
@@ -114,6 +115,8 @@
     onSettings={() => openSettingsModal()}
     onProfile={() => navigate('/profile')}
   />
+
+  <LobbyNowWatching />
 
   <div class="layout__body">
     <aside class="sidebar">

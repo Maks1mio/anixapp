@@ -22,6 +22,24 @@ let roomId: string | null = null;
 let myPeerId: string | null = null;
 let onRemotePlayback: ((playback: LobbyPlayback, fromPeerId?: string | null, action?: string | null) => void) | null = null;
 let onParticipantsChanged: ((participants: LobbyParticipant[]) => void) | null = null;
+
+export type LobbySignalKind = 'offer' | 'answer' | 'ice';
+export type LobbySignalMessage = { kind: LobbySignalKind; fromPeerId: string; payload: string };
+let onSignal: ((msg: LobbySignalMessage) => void) | null = null;
+
+export function setSignalHandler(cb: ((msg: LobbySignalMessage) => void) | null): void {
+  onSignal = cb;
+}
+
+/** WebRTC SDP/ICE через WebSocket (мгновенно); иначе сервер кладёт в HTTP-очередь. */
+export function sendSignal(kind: 'signal_offer' | 'signal_answer' | 'signal_ice', toPeerId: string, payload: string): void {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !roomId) return;
+  try {
+    ws.send(JSON.stringify({ type: kind, toPeerId, payload }));
+  } catch (e) {
+    console.warn('[lobby-ws] sendSignal error', e);
+  }
+}
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let intentionalClose = false;
 let reconnectAttempts = 0;
@@ -70,6 +88,31 @@ function handleMessage(e: MessageEvent): void {
       totalVoters?: number;
     };
 
+    if (msg.type === 'signal_offer' && (msg as Record<string, unknown>).fromPeerId && (msg as Record<string, unknown>).payload != null) {
+      onSignal?.({
+        kind: 'offer',
+        fromPeerId: String((msg as Record<string, unknown>).fromPeerId),
+        payload: String((msg as Record<string, unknown>).payload),
+      });
+      return;
+    }
+    if (msg.type === 'signal_answer' && (msg as Record<string, unknown>).fromPeerId && (msg as Record<string, unknown>).payload != null) {
+      onSignal?.({
+        kind: 'answer',
+        fromPeerId: String((msg as Record<string, unknown>).fromPeerId),
+        payload: String((msg as Record<string, unknown>).payload),
+      });
+      return;
+    }
+    if (msg.type === 'signal_ice' && (msg as Record<string, unknown>).fromPeerId && (msg as Record<string, unknown>).payload != null) {
+      onSignal?.({
+        kind: 'ice',
+        fromPeerId: String((msg as Record<string, unknown>).fromPeerId),
+        payload: String((msg as Record<string, unknown>).payload),
+      });
+      return;
+    }
+
     if (msg.type === 'playback' && msg.playback && typeof msg.playback.releaseId !== 'undefined') {
       onRemotePlayback?.(msg.playback, msg.fromPeerId ?? null, (msg as Record<string, unknown>).action as string ?? null);
       return;
@@ -78,7 +121,12 @@ function handleMessage(e: MessageEvent): void {
     // Server sends current playback with the "joined" confirmation.
     // This is the authoritative sync that unblocks local commands.
     if (msg.type === 'joined') {
-      const syncing = !!(msg as Record<string, unknown>).syncing;
+      const rawJoined = msg as Record<string, unknown>;
+      const wRaw = rawJoined.watchingPeerIds;
+      const watchingPeerIds = Array.isArray(wRaw) ? wRaw.map((x) => String(x)) : [];
+      window.dispatchEvent(new CustomEvent('lobby:viewerState', { detail: { watchingPeerIds } }));
+
+      const syncing = !!rawJoined.syncing;
       if (msg.playback && typeof msg.playback.releaseId !== 'undefined') {
         onRemotePlayback?.(msg.playback, null);
         if (syncing) {
@@ -95,18 +143,33 @@ function handleMessage(e: MessageEvent): void {
       if (msg.participants) {
         onParticipantsChanged?.(msg.participants);
       }
+      window.dispatchEvent(new CustomEvent('lobby:wsJoined'));
       return;
     }
 
-    // Server paused playback because a new user is joining — apply pause.
+    // Server paused playback (новый участник или смена качества/озвучки у кого-то).
     if (msg.type === 'sync_pause') {
+      const raw = msg as Record<string, unknown>;
       if (msg.playback && typeof msg.playback.releaseId !== 'undefined') {
         onRemotePlayback?.(msg.playback, null);
       }
       if (msg.participants) {
         onParticipantsChanged?.(msg.participants);
       }
-      window.dispatchEvent(new CustomEvent('lobby:syncPause'));
+      const joinerPeerId = raw.joinerPeerId != null ? String(raw.joinerPeerId) : null;
+      const waitingLogin = raw.waitingLogin != null ? String(raw.waitingLogin) : null;
+      const waitingAvatar = raw.waitingAvatar != null ? String(raw.waitingAvatar) : null;
+      window.dispatchEvent(new CustomEvent('lobby:syncPause', {
+        detail: { joinerPeerId, waitingLogin, waitingAvatar },
+      }));
+      window.dispatchEvent(new CustomEvent('lobby:playerWaitingOverlay', {
+        detail: {
+          mode: 'peer',
+          login: waitingLogin ?? 'Участник',
+          avatar: waitingAvatar,
+          peerId: joinerPeerId,
+        },
+      }));
       return;
     }
 
@@ -116,6 +179,7 @@ function handleMessage(e: MessageEvent): void {
         onRemotePlayback?.(msg.playback, null);
       }
       window.dispatchEvent(new CustomEvent('lobby:syncResume'));
+      window.dispatchEvent(new CustomEvent('lobby:playerWaitingOverlay', { detail: null }));
       return;
     }
 
@@ -176,6 +240,14 @@ function handleMessage(e: MessageEvent): void {
       }));
       return;
     }
+
+    if (msg.type === 'viewer_state') {
+      const raw = msg as Record<string, unknown>;
+      const ids = raw.watchingPeerIds;
+      const watchingPeerIds = Array.isArray(ids) ? ids.map((x) => String(x)) : [];
+      window.dispatchEvent(new CustomEvent('lobby:viewerState', { detail: { watchingPeerIds } }));
+      return;
+    }
   } catch (_) {}
 }
 
@@ -232,6 +304,7 @@ export function disconnect(): void {
   myPeerId = null;
   onRemotePlayback = null;
   onParticipantsChanged = null;
+  onSignal = null;
 }
 
 export type LobbyCommandAction = 'play' | 'pause' | 'seek' | 'changeEpisode';
@@ -263,6 +336,26 @@ export function sendSyncReady(): void {
     ws.send(JSON.stringify({ type: 'sync_ready' }));
   } catch (e) {
     console.warn('[lobby-ws] sendSyncReady error', e);
+  }
+}
+
+/** Уведомить сервер: меняю качество/озвучку — пауза для всех до sync_ready. */
+export function sendBufferingStart(): void {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !roomId) return;
+  try {
+    ws.send(JSON.stringify({ type: 'buffering_start' }));
+  } catch (e) {
+    console.warn('[lobby-ws] sendBufferingStart error', e);
+  }
+}
+
+/** Отдельное окно плеера открыто/закрыто — сервер рассылает viewer_state всем. */
+export function sendPlayerViewActive(active: boolean): void {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !roomId) return;
+  try {
+    ws.send(JSON.stringify({ type: 'player_view', active }));
+  } catch (e) {
+    console.warn('[lobby-ws] sendPlayerViewActive error', e);
   }
 }
 

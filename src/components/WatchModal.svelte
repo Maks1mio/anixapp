@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { getCurrentRoomId, getCurrentParticipants, proposeAnimeChange, getLastPlayback } from '../services/lobby-state';
   import { isDubberBlacklisted } from '../views/Watch/_utils';
+  import { isPlayerWindowOpen } from '../stores/modals';
   import Select from './Select.svelte';
   import type { SelectOption } from './Select.svelte';
   import Page from './Page.svelte';
@@ -209,7 +210,10 @@
 
     const doOpenPlayer = () => {
       if (!window.electron?.openPlayerWindow) return;
-      window.electron.openPlayerWindow(params).then(() => close()).catch(() => {});
+      window.electron.openPlayerWindow(params).then(() => {
+        isPlayerWindowOpen.set(true);
+        close();
+      }).catch(() => {});
     };
 
     if (isInLobbyWithOthers()) {

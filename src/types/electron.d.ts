@@ -4,6 +4,15 @@ export interface ElectronWindowAPI {
   close: () => void;
 }
 
+export type LobbyWaitingOverlayPayload =
+  | null
+  | {
+      mode: 'peer' | 'localBuffering' | 'selfJoin';
+      login?: string;
+      avatar?: string | null;
+      peerId?: string | null;
+    };
+
 export interface LobbyPlaybackPayload {
   releaseId: string;
   sourceId: string;
@@ -40,6 +49,7 @@ declare global {
       closePlayerWindow: () => void;
       togglePlayerFullScreen: () => Promise<boolean>;
       togglePlayerAlwaysOnTop: () => Promise<boolean>;
+      isPlayerOpen: () => Promise<boolean>;
       openExternal: (url: string) => void;
       syncPlayerState: (playback: LobbyPlaybackPayload) => void;
       sendPlayerState: (playback: LobbyPlaybackPayload) => void;
@@ -55,6 +65,12 @@ declare global {
       // Lobby participant & activity feed → player window
       sendActivityToPlayer?: (data: Record<string, unknown>) => void;
       sendParticipantsToPlayer?: (participants: unknown[]) => void;
+      /** Окно плеера → главное: началась смена качества/озвучки в лобби */
+      lobbyNotifyBufferingStart?: () => void;
+      /** Окно плеера → главное: плеер готов после sync (sync_ready на сервер) */
+      lobbyPlayerSynced?: () => void;
+      /** Главное → плеер: оверлей «ожидаем пользователя» */
+      sendLobbyWaitingOverlayToPlayer?: (payload: LobbyWaitingOverlayPayload | null) => void;
       // Discord Rich Presence
       discordUpdate?: (data: DiscordUpdatePayload) => void;
       // Theme editor

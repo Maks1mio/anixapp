@@ -8,6 +8,7 @@
     render as anime4kRender,
   } from 'anime4k-webgpu';
   import { getWatchParams } from '../../router';
+  import { getCurrentRoomId } from '../../services/lobby-state';
   import type { WatchState, EpisodeItem, DubberItem, LobbyActivityEntry, PopoverType, NextEpAltDub } from './_types';
   import { isHlsUrl, stripKodikQueryParams, resolveEpisodeUrl, resolveEpisodeUrlWithRetry, isDubberBlacklisted } from './_utils';
   import { PlayerState } from './_usePlayer.svelte';
@@ -18,6 +19,14 @@
   import ActionsBar      from './components/ActionsBar.svelte';
   import TopBar          from './components/TopBar.svelte';
   import CenterPlay      from './components/CenterPlay.svelte';
+
+  // WebGPU types fallback:
+  // В некоторых конфигурациях TS не подтягивает типы WebGPU (GPUDevice/navigator.gpu),
+  // хотя рантайм их поддерживает. Чтобы не ломать сборку, даём минимальные типы.
+  // При наличии @webgpu/types этот alias будет не нужен, но и не мешает.
+  type GPUDevice = {
+    destroy?: () => void;
+  } & Record<string, unknown>;
 
   // ── URL params ─────────────────────────────────────────────────────────────
   const params          = getWatchParams();
@@ -242,7 +251,7 @@
     if (upscaleStopFn) { try { upscaleStopFn(); } catch {} upscaleStopFn = null; }
     // 3. Уничтожаем GPU-устройство — освобождаем всю GPU-память (текстуры, буферы, пайплайны)
     if (_capturedGpuDevice) {
-      try { _capturedGpuDevice.destroy(); } catch {}
+      try { _capturedGpuDevice.destroy?.(); } catch {}
       _capturedGpuDevice = null;
     }
     // 4. Сбрасываем canvas
@@ -400,8 +409,12 @@
       return id;
     };
 
-    const origRequestAdapter = navigator.gpu.requestAdapter.bind(navigator.gpu);
-    (navigator.gpu as any).requestAdapter = async (...args: any[]) => {
+    const navAny = navigator as any;
+    const gpuAny = navAny.gpu;
+    if (!gpuAny?.requestAdapter) throw new Error('WebGPU: navigator.gpu.requestAdapter is unavailable');
+
+    const origRequestAdapter = gpuAny.requestAdapter.bind(gpuAny);
+    gpuAny.requestAdapter = async (...args: any[]) => {
       const adapter = await origRequestAdapter(...args);
       if (!adapter) return adapter;
       const origRD = adapter.requestDevice.bind(adapter);
@@ -428,13 +441,13 @@
 
       // Восстанавливаем оригинальные методы
       videoEl.requestVideoFrameCallback = origRVFC;
-      navigator.gpu.requestAdapter = origRequestAdapter;
+      gpuAny.requestAdapter = origRequestAdapter;
 
       if (myRun !== upscaleRunId) {
         // Устаревший запуск — чистим
         _upscaleRenderStopped = true;
         if (latestRvfcId !== null) try { videoEl.cancelVideoFrameCallback(latestRvfcId); } catch {}
-        if (_capturedGpuDevice) { try { _capturedGpuDevice.destroy(); } catch {} _capturedGpuDevice = null; }
+        if (_capturedGpuDevice) { try { _capturedGpuDevice.destroy?.(); } catch {} _capturedGpuDevice = null; }
         return;
       }
 
@@ -450,7 +463,7 @@
     } catch (err) {
       // Восстанавливаем оригинальные методы при ошибке тоже
       videoEl.requestVideoFrameCallback = origRVFC;
-      navigator.gpu.requestAdapter = origRequestAdapter;
+      gpuAny.requestAdapter = origRequestAdapter;
       const msg = err instanceof Error ? err.message : String(err);
       upscaleLastError = msg || 'unknown';
       console.warn('[Anime4K]', err);
@@ -465,6 +478,14 @@
   let preventAutoPause = false;
   let stallCheckTimer: ReturnType<typeof setInterval> | null = null;
   let origEpUrl        = '';
+
+  type LobbyWaitOverlay = {
+    mode: 'peer' | 'localBuffering';
+    login?: string;
+    avatar?: string | null;
+    peerId?: string | null;
+  } | null;
+  let lobbyWaitOverlay = $state<LobbyWaitOverlay>(null);
 
   // ── Playback watchdog ─────────────────────────────────────────────────────
   // Catches silent HLS failures: manifest loads but segments never arrive,
@@ -495,6 +516,50 @@
       currentTime: videoEl && !isNaN(videoEl.currentTime) ? videoEl.currentTime : 0,
       duration:    videoEl && isFinite(videoEl.duration) && videoEl.duration > 0 ? videoEl.duration : undefined,
     };
+  }
+
+  /** После seek/load: sync_ready на сервер (окно плеера без WS — через IPC в главное окно). */
+  function notifyLobbyPlayerSyncedIfReady() {
+    const el = (window as any).electron;
+    if (el?.lobbyPlayerSynced) {
+      el.lobbyPlayerSynced();
+      return;
+    }
+    if (getCurrentRoomId()) {
+      window.dispatchEvent(new CustomEvent('lobby:playerSynced'));
+    }
+  }
+
+  function armLobbyPlayerSyncedOnce() {
+    const el = (window as any).electron;
+    if (el?.lobbyPlayerSynced && videoEl) {
+      let fired = false;
+      const onReady = () => {
+        if (fired) return;
+        fired = true;
+        videoEl!.removeEventListener('seeked', onReady);
+        videoEl!.removeEventListener('canplay', onReady);
+        videoEl!.removeEventListener('playing', onReady);
+        notifyLobbyPlayerSyncedIfReady();
+      };
+      videoEl.addEventListener('seeked', onReady);
+      videoEl.addEventListener('canplay', onReady);
+      videoEl.addEventListener('playing', onReady);
+      return;
+    }
+    if (!getCurrentRoomId() || !videoEl) return;
+    let fired = false;
+    const onReady = () => {
+      if (fired) return;
+      fired = true;
+      videoEl.removeEventListener('seeked', onReady);
+      videoEl.removeEventListener('canplay', onReady);
+      videoEl.removeEventListener('playing', onReady);
+      notifyLobbyPlayerSyncedIfReady();
+    };
+    videoEl.addEventListener('seeked', onReady);
+    videoEl.addEventListener('canplay', onReady);
+    videoEl.addEventListener('playing', onReady);
   }
 
   function sendToLobby(action: 'play' | 'pause' | 'seek' | 'changeEpisode', ctOverride?: number) {
@@ -680,6 +745,8 @@
     watchState.sourceName = newSourceName;
     watchState.dubberId = String(newDubberId);
     watchState.dubberName = newDubberName;
+    const elE = (window as any).electron;
+    if (elE?.lobbyNotifyBufferingStart) elE.lobbyNotifyBufferingStart();
     sendToLobby('changeEpisode');
     isApplyingSync = true;
     loadEpisode(parseInt(watchState.releaseId, 10), newSourceId, targetEp, watchState.title, newSourceName, String(newDubberId), savedTime, wasPaused)
@@ -798,6 +865,9 @@
     const src = player.availableQualities[quality];
     if (!src || quality === player.currentQuality) return;
 
+    const elE = (window as any).electron;
+    if (elE?.lobbyNotifyBufferingStart) elE.lobbyNotifyBufferingStart();
+
     const savedTime    = videoEl && !isNaN(videoEl.currentTime) ? videoEl.currentTime : 0;
     const wasPaused    = videoEl?.paused ?? true;
 
@@ -827,6 +897,7 @@
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         restoreTime();
         if (player.playbackRate !== 1) videoEl.playbackRate = player.playbackRate;
+        notifyLobbyPlayerSyncedIfReady();
       });
       // Перезапускаем апскейл после загрузки нового потока — размеры кадра могли измениться
       videoEl.addEventListener('loadedmetadata', () => {
@@ -837,6 +908,7 @@
       videoEl.addEventListener('loadeddata', (e) => {
         restoreTime();
         if (player.upscaleEnabled && gpuAvailable) startUpscale();
+        notifyLobbyPlayerSyncedIfReady();
       }, { once: true });
       doPlay();
     }
@@ -1001,6 +1073,7 @@
           .catch(() => {});
         if (applySyncTimer) clearTimeout(applySyncTimer);
         applySyncTimer = setTimeout(() => { isApplyingSync = false; applySyncTimer = null; }, 4000);
+        armLobbyPlayerSyncedOnce();
       }) as EventListener],
 
       ['player:applySync', ((e: CustomEvent) => {
@@ -1025,6 +1098,7 @@
         }
         if (applySyncTimer) clearTimeout(applySyncTimer);
         applySyncTimer = setTimeout(() => { isApplyingSync = false; applySyncTimer = null; }, pendingSync ? 3000 : 1500);
+        armLobbyPlayerSyncedOnce();
       }) as EventListener],
 
       ['lobby:proposal', ((e: CustomEvent) => {
@@ -1054,6 +1128,11 @@
         if (d.type === 'left') {
           lobby.participants = lobby.participants.filter(p => p.login !== d.login);
         }
+      }) as EventListener],
+
+      ['lobby:playerWaitingOverlay', ((e: CustomEvent) => {
+        const d = e.detail as LobbyWaitOverlay;
+        lobbyWaitOverlay = d ?? null;
       }) as EventListener],
     ];
 
@@ -1112,6 +1191,30 @@
             hidden={!player.useVideo}
           ></video>
           <canvas bind:this={canvasEl} class="watch-page__upscale-canvas" hidden></canvas>
+
+          {#if lobbyWaitOverlay}
+            <div class="watch-page__lobby-wait" role="status" aria-live="polite">
+              {#if lobbyWaitOverlay.mode === 'peer'}
+                <div class="watch-page__lobby-wait-row">
+                  {#if lobbyWaitOverlay.avatar}
+                    <img
+                      class="watch-page__lobby-wait-avatar"
+                      src={lobbyWaitOverlay.avatar}
+                      alt=""
+                      referrerpolicy="no-referrer"
+                    />
+                  {/if}
+                  <span class="watch-page__lobby-wait-text">
+                    Ожидаем пользователя <strong>{lobbyWaitOverlay.login ?? 'Участник'}</strong>
+                  </span>
+                </div>
+                <p class="watch-page__lobby-wait-hint">Загрузка потока…</p>
+              {:else if lobbyWaitOverlay.mode === 'localBuffering'}
+                <p class="watch-page__lobby-wait-title">Загружаем поток…</p>
+                <p class="watch-page__lobby-wait-hint">Синхронизация с комнатой</p>
+              {/if}
+            </div>
+          {/if}
         </div>
 
         <div class="watch-page__gui-overlay" class:watch-page__gui-overlay--hidden={!player.overlayVisible}>
@@ -1133,8 +1236,18 @@
           />
 
           <!-- ── Tap layer (fills middle) ───────────────────────────────── -->
-          <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-          <div class="watch-page__tap-layer" onclick={togglePlay}></div>
+          <div
+            class="watch-page__tap-layer"
+            role="button"
+            tabindex="0"
+            onclick={togglePlay}
+            onkeydown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                togglePlay();
+              }
+            }}
+          ></div>
 
           <!-- ── Lobby panel (absolute) ─────────────────────────────────── -->
           <LobbyPanel participants={lobby.participants} activityLog={lobby.activityLog} />

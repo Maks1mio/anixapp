@@ -1,6 +1,9 @@
 const { app, BrowserWindow, ipcMain, Tray, nativeImage, Menu, session, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+
+/** В dev можно запускать два процесса (тесты лобби / WebRTC). В production — один экземпляр. */
+const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 const { Anixart, KodikParser, SibnetParser, AniLibriaParser } = require('anixartjs');
 const { DefaultResult, BookmarkType, BookmarkSortType } = require('anixartjs');
 const logger = require('./logger');
@@ -19,21 +22,20 @@ const LIST_STATUS_TO_TYPE = {
   dropped: BookmarkType.Dropped,
 };
 
-// ——— Single instance lock ———
-if (!app.requestSingleInstanceLock()) {
-  app.quit();
-  process.exit(0);
-}
-
-app.on('second-instance', () => {
-  if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
+// ——— Single instance lock (только production) ———
+if (!isDev) {
+  if (!app.requestSingleInstanceLock()) {
+    app.quit();
+    process.exit(0);
   }
-});
-
-const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
 let mainWindow = null;
 let playerWindowRef = null;
 /** Текущий контент плеера (releaseId, sourceId, ep) — для сравнения при sync: при смене тайтла переоткрываем окно */
@@ -828,6 +830,10 @@ function createPlayerWindow(params) {
       discordRpc.focusWindow('main');
       discordRpc.setBrowsing(_discordSessionStart);
     }
+    // Notify main window so it can show the lobby "now watching" widget
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('player:closed');
+    }
   });
   playerWindow.once('ready-to-show', () => playerWindow.show());
   // Focus tracking: when user brings the player window to front, switch Discord to watching activity
@@ -955,6 +961,24 @@ ipcMain.on('lobby:activityToPlayer', (_, data) => {
 ipcMain.on('lobby:participantsToPlayer', (_, participants) => {
   if (playerWindowRef && !playerWindowRef.isDestroyed()) {
     playerWindowRef.webContents.send('lobby:participantsList', participants);
+  }
+});
+
+ipcMain.on('lobby:bufferingStartFromPlayer', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('lobby:bufferingStartFromPlayer');
+  }
+});
+
+ipcMain.on('lobby:playerSyncedFromPlayer', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('lobby:playerSyncedFromPlayer');
+  }
+});
+
+ipcMain.on('lobby:waitingOverlayToPlayer', (_, payload) => {
+  if (playerWindowRef && !playerWindowRef.isDestroyed()) {
+    playerWindowRef.webContents.send('lobby:playerWaitingOverlay', payload);
   }
 });
 
@@ -1091,6 +1115,10 @@ ipcMain.handle('player:toggleAlwaysOnTop', (event) => {
   const next = !win.isAlwaysOnTop();
   win.setAlwaysOnTop(next, 'floating');
   return next;
+});
+
+ipcMain.handle('player:isOpen', () => {
+  return !!(playerWindowRef && !playerWindowRef.isDestroyed());
 });
 
 ipcMain.handle('shell:openExternal', (_, url) => {

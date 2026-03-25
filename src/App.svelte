@@ -1,11 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import { appScreen } from './stores/auth';
   import { currentPath, navigate } from './stores/navigation';
-  import { openLobbyModal, settingsModalOpen, lobbyModalOpen, lobbyModalInitialCode, notificationsModalOpen, watchModalOpen, watchModalReleaseId, watchModalReleaseTitle } from './stores/modals';
+  import { openLobbyModal, settingsModalOpen, lobbyModalOpen, lobbyModalInitialCode, notificationsModalOpen, watchModalOpen, watchModalReleaseId, watchModalReleaseTitle, lobbyCurrentPlayback, isPlayerWindowOpen, lobbyWatchingPeerIds } from './stores/modals';
+  import { sendPlayerViewActive } from './services/lobby-ws';
   import { getPath, getSearchParams } from './router';
   import { initTheme, applyThemeById } from './services/themes';
-  import { getCurrentRoomId, getCurrentRoomCode, getCurrentParticipants, pushCommand, voteOnProposal } from './services/lobby-state';
+  import { getCurrentRoomId, getCurrentRoomCode, getCurrentParticipants, pushCommand, voteOnProposal, notifyLobbyBufferingStart } from './services/lobby-state';
   import { initTooltipPlacement } from './utils/tooltip-place';
   import { initBodyTooltip } from './utils/body-tooltip';
 
@@ -38,6 +40,10 @@
   let searchQ = $state('');
   let searchTab = $state<'releases' | 'profiles' | 'collections'>('releases');
 
+  // Local reactive mirror of isPlayerWindowOpen store (used in event handlers inside onMount)
+  let _isPlayerOpen = false;
+  isPlayerWindowOpen.subscribe(v => { _isPlayerOpen = v; });
+
   function syncSearchParams() {
     const p = getSearchParams();
     searchQ = p.get('q') || '';
@@ -52,6 +58,16 @@
       path = storePath;
       syncSearchParams();
     }
+  });
+
+  // Окно плеера без WS: список участников шлётся по IPC. События до открытия плеера терялись — при открытии и при смене плейбека лобби повторяем push.
+  $effect(() => {
+    if (!$isPlayerWindowOpen) return;
+    if (!getCurrentRoomId()) return;
+    void $lobbyCurrentPlayback;
+    queueMicrotask(() => {
+      window.electron?.sendParticipantsToPlayer?.(getCurrentParticipants());
+    });
   });
 
   const releaseMatch          = $derived(path.match(/^\/release\/(\d+)$/));
@@ -98,6 +114,10 @@
     window.addEventListener('popstate', onNav);
     syncSearchParams();
 
+    // ── Player window state tracking ────────────────────────────────────────
+    // Initialise flag from main process (in case app was reloaded while player was open)
+    window.electron?.isPlayerOpen?.().then(open => isPlayerWindowOpen.set(open)).catch(() => {});
+
     // ── Lobby IPC forwarding ─────────────────────────────────────────────────
     function discordUpdate(d: Record<string, unknown>) {
       (window.electron as any)?.discordUpdate?.(d);
@@ -134,14 +154,20 @@
       ['lobby:remotePlayback', ((e: CustomEvent) => {
         const raw = (e.detail as any);
         const rp = raw?.playback ?? raw;
-        if (!rp || !window.electron?.syncPlayerState) return;
-        window.electron.syncPlayerState({
+        if (!rp) return;
+        const pb = {
           releaseId: String(rp.releaseId ?? ''), sourceId: String(rp.sourceId ?? ''),
           ep: String(rp.ep ?? ''), dubberId: rp.dubberId != null ? String(rp.dubberId) : undefined,
           title: String(rp.title ?? ''), sourceName: String(rp.sourceName ?? ''),
           paused: Boolean(rp.paused), currentTime: Number(rp.currentTime) || 0,
-        });
-        window.electron?.sendParticipantsToPlayer?.(getCurrentParticipants());
+        };
+        // Always keep widget up-to-date regardless of player state
+        lobbyCurrentPlayback.set(pb);
+        // Only sync to player if it's already open — don't auto-open it
+        if (_isPlayerOpen && window.electron?.syncPlayerState) {
+          window.electron.syncPlayerState(pb);
+          window.electron?.sendParticipantsToPlayer?.(getCurrentParticipants());
+        }
         const parts = getCurrentParticipants();
         discordUpdate({ type: 'partyInfo', partyId: getCurrentRoomId() ?? undefined, partySize: parts.length, partyMax: Math.max(parts.length, 10), joinSecret: getCurrentRoomCode() ?? undefined });
       }) as EventListener],
@@ -170,6 +196,32 @@
       ['lobby:left', (() => {
         window.electron?.sendParticipantsToPlayer?.([]);
         discordUpdate({ type: 'partyInfo', partyId: null });
+        lobbyCurrentPlayback.set(null);
+        lobbyWatchingPeerIds.set([]);
+      }) as EventListener],
+
+      ['lobby:viewerState', ((e: CustomEvent) => {
+        const ids = (e.detail as { watchingPeerIds?: string[] })?.watchingPeerIds;
+        lobbyWatchingPeerIds.set(Array.isArray(ids) ? ids : []);
+      }) as EventListener],
+
+      ['lobby:bufferingStartFromPlayer', (() => {
+        notifyLobbyBufferingStart();
+      }) as EventListener],
+
+      ['lobby:playerSyncedFromPlayer', (() => {
+        window.dispatchEvent(new CustomEvent('lobby:playerSynced'));
+      }) as EventListener],
+
+      ['lobby:playerWaitingOverlay', ((e: CustomEvent) => {
+        if (_isPlayerOpen && window.electron?.sendLobbyWaitingOverlayToPlayer) {
+          window.electron.sendLobbyWaitingOverlayToPlayer(e.detail ?? null);
+        }
+      }) as EventListener],
+
+      ['player:windowClosed', (() => {
+        isPlayerWindowOpen.set(false);
+        _isPlayerOpen = false;
       }) as EventListener],
 
       ['anix:themeEditorSaved', ((e: CustomEvent) => {
@@ -216,6 +268,16 @@
 
     handlers.forEach(([evt, fn]) => window.addEventListener(evt, fn));
 
+    const unsubPlayerView = isPlayerWindowOpen.subscribe((open) => {
+      if (!getCurrentRoomId()) return;
+      sendPlayerViewActive(open);
+    });
+    const onWsJoined = () => {
+      if (!getCurrentRoomId()) return;
+      sendPlayerViewActive(get(isPlayerWindowOpen));
+    };
+    window.addEventListener('lobby:wsJoined', onWsJoined);
+
     // Initial boot sequence
     window.anixApi.client.checkConnection()
       .then(async () => {
@@ -230,6 +292,8 @@
       window.removeEventListener('hashchange', onNav);
       window.removeEventListener('popstate', onNav);
       handlers.forEach(([evt, fn]) => window.removeEventListener(evt, fn));
+      window.removeEventListener('lobby:wsJoined', onWsJoined);
+      unsubPlayerView();
       clearRetry();
     };
   });

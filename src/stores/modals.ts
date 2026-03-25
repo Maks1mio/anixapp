@@ -1,5 +1,25 @@
 import { writable } from 'svelte/store';
 
+export interface LobbyCurrentPlayback {
+  releaseId: string;
+  sourceId: string;
+  ep: string;
+  dubberId?: string;
+  title: string;
+  sourceName: string;
+  paused: boolean;
+  currentTime: number;
+}
+
+/** Текущий playback активного лобби (null = нет лобби или нет playback). */
+export const lobbyCurrentPlayback = writable<LobbyCurrentPlayback | null>(null);
+
+/** true = окно плеера сейчас открыто. */
+export const isPlayerWindowOpen = writable(false);
+
+/** peerId участников с открытым отдельным окном плеера (с сервера по WS). */
+export const lobbyWatchingPeerIds = writable<string[]>([]);
+
 export const settingsModalOpen = writable(false);
 export const settingsModalInitialTab = writable<string | null>(null);
 export const lobbyModalOpen = writable(false);

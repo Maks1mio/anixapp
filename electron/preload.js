@@ -61,6 +61,11 @@ ipcRenderer.on('player:debugOverlay', (_, enabled) => {
   );
 });
 
+// Notify main window when player window is closed
+ipcRenderer.on('player:closed', () => {
+  window.dispatchEvent(new CustomEvent('player:windowClosed'));
+});
+
 contextBridge.exposeInMainWorld('electron', {
   getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
   getVersions: () => ipcRenderer.invoke('app:getVersions'),
@@ -74,6 +79,7 @@ contextBridge.exposeInMainWorld('electron', {
   closePlayerWindow: () => ipcRenderer.send('player:close'),
   togglePlayerFullScreen: () => ipcRenderer.invoke('player:toggleFullScreen'),
   togglePlayerAlwaysOnTop: () => ipcRenderer.invoke('player:toggleAlwaysOnTop'),
+  isPlayerOpen: () => ipcRenderer.invoke('player:isOpen'),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   syncPlayerState: (playback) => ipcRenderer.send('player:syncState', playback),
   sendPlayerState: (playback) => ipcRenderer.send('player:stateChanged', playback),
@@ -87,6 +93,9 @@ contextBridge.exposeInMainWorld('electron', {
   // Участники и события активности → плеер
   sendActivityToPlayer: (data) => ipcRenderer.send('lobby:activityToPlayer', data),
   sendParticipantsToPlayer: (participants) => ipcRenderer.send('lobby:participantsToPlayer', participants),
+  lobbyNotifyBufferingStart: () => ipcRenderer.send('lobby:bufferingStartFromPlayer'),
+  lobbyPlayerSynced: () => ipcRenderer.send('lobby:playerSyncedFromPlayer'),
+  sendLobbyWaitingOverlayToPlayer: (payload) => ipcRenderer.send('lobby:waitingOverlayToPlayer', payload),
   // Discord Rich Presence update from renderer
   discordUpdate: (data) => ipcRenderer.send('discord:update', data),
   // Theme editor
@@ -112,6 +121,16 @@ contextBridge.exposeInMainWorld('electron', {
   logCollectZip:    ()      => ipcRenderer.invoke('log:collectZip'),
   logOpenZip:       (p)     => ipcRenderer.invoke('log:openZip', p),
   logOpenFolder:    ()      => ipcRenderer.invoke('log:openFolder'),
+});
+
+ipcRenderer.on('lobby:bufferingStartFromPlayer', () => {
+  window.dispatchEvent(new CustomEvent('lobby:bufferingStartFromPlayer'));
+});
+ipcRenderer.on('lobby:playerSyncedFromPlayer', () => {
+  window.dispatchEvent(new CustomEvent('lobby:playerSyncedFromPlayer'));
+});
+ipcRenderer.on('lobby:playerWaitingOverlay', (_, payload) => {
+  window.dispatchEvent(new CustomEvent('lobby:playerWaitingOverlay', { detail: payload }));
 });
 
 // Main window receives notification when theme editor saves a theme

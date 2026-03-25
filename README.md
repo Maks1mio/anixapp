@@ -1,4 +1,4 @@
-<img width="3792" height="2032" alt="image" src="https://github.com/user-attachments/assets/61c16e7f-9821-4e8f-ad2e-da7cd7ecfb62" />
+<img width="3792" height="2032" alt="image" src="https://github.com/user-attachments/assets/384fa24a-0ca5-4fc9-8801-f77b2405b31b" />
 
 # AnixApp Beta
 

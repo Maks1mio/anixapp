@@ -162,14 +162,18 @@ function handleMessage(e: MessageEvent): void {
       window.dispatchEvent(new CustomEvent('lobby:syncPause', {
         detail: { joinerPeerId, waitingLogin, waitingAvatar },
       }));
-      window.dispatchEvent(new CustomEvent('lobby:playerWaitingOverlay', {
-        detail: {
-          mode: 'peer',
-          login: waitingLogin ?? 'Участник',
-          avatar: waitingAvatar,
-          peerId: joinerPeerId,
-        },
-      }));
+      // Инициатор buffering_start в broadcast не попадает; на всякий случай не затираем localBuffering оверлеем «ожидаем себя».
+      const isSelfBuffering = myPeerId && joinerPeerId === myPeerId;
+      if (!isSelfBuffering) {
+        window.dispatchEvent(new CustomEvent('lobby:playerWaitingOverlay', {
+          detail: {
+            mode: 'peer',
+            login: waitingLogin ?? 'Участник',
+            avatar: waitingAvatar,
+            peerId: joinerPeerId,
+          },
+        }));
+      }
       return;
     }
 

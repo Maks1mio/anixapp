@@ -161,6 +161,14 @@ if (!getAdaptiveAcceleration()) {
 app.commandLine.appendSwitch('disable-gpu-vsync');
 app.commandLine.appendSwitch('enable-zero-copy');
 
+// Enable WebGPU on Linux (required for Anime4K).
+// Equivalent to Firefox flags: dom.webgpu.enabled, gfx.webgpu.ignore-blocklist, gfx.webrender.all
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('enable-unsafe-webgpu');
+  app.commandLine.appendSwitch('ignore-gpu-blocklist');
+  app.commandLine.appendSwitch('enable-features', 'Vulkan,UseVulkanForDisplay,WebGPUService');
+}
+
 function getLogDir() {
   const dir = path.join(app.getPath('userData'), LOG_DIR);
   try {

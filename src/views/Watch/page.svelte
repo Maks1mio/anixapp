@@ -479,6 +479,32 @@
   let stallCheckTimer: ReturnType<typeof setInterval> | null = null;
   let origEpUrl        = '';
 
+  /** Снимок комнатного playback до смены озвучки/серии — чтобы игнорировать sync_resume с устаревшим состоянием сервера (до changeEpisode). */
+  type LobbyStaleSnap = { releaseId: string; sourceId: string; ep: number; dubberId: string };
+  let lobbyStalePlaybackBeforeSwitch: LobbyStaleSnap | null = null;
+
+  function lobbyCaptureStalePlaybackSnapshot(): void {
+    if (!getCurrentRoomId()) {
+      lobbyStalePlaybackBeforeSwitch = null;
+      return;
+    }
+    lobbyStalePlaybackBeforeSwitch = {
+      releaseId: String(watchState.releaseId),
+      sourceId: String(watchState.sourceId),
+      ep: Number(watchState.ep),
+      dubberId: String(watchState.dubberId || ''),
+    };
+  }
+
+  function lobbyPlaybackMatchesStaleSnap(p: Record<string, unknown>, s: LobbyStaleSnap): boolean {
+    return (
+      String(p.releaseId ?? '') === s.releaseId &&
+      String(p.sourceId ?? '') === s.sourceId &&
+      Number(p.ep) === s.ep &&
+      String(p.dubberId ?? '') === s.dubberId
+    );
+  }
+
   type LobbyWaitOverlay = {
     mode: 'peer' | 'localBuffering';
     login?: string;
@@ -729,6 +755,11 @@
   function goToEpisode(ep: number) {
     popoverType = null;
     invalidateDubbersPickerCache();
+    if (getCurrentRoomId()) {
+      lobbyCaptureStalePlaybackSnapshot();
+      const elE = (window as any).electron;
+      if (elE?.lobbyNotifyBufferingStart) elE.lobbyNotifyBufferingStart();
+    }
     watchState.ep = ep;
     loadEpisode(parseInt(watchState.releaseId, 10), parseInt(watchState.sourceId, 10), ep, watchState.title, watchState.sourceName, watchState.dubberId);
     sendToLobby('changeEpisode', 0);
@@ -737,6 +768,7 @@
   /** @param episodeOverride — если задан и отличается от текущей серии, воспроизведение с начала новой серии */
   function switchDubbing(newSourceId: number, newSourceName: string, newDubberId: number, newDubberName: string, episodeOverride?: number) {
     popoverType = null;
+    if (getCurrentRoomId()) lobbyCaptureStalePlaybackSnapshot();
     const targetEp = episodeOverride !== undefined ? episodeOverride : watchState.ep;
     const switchingEpisode = episodeOverride !== undefined && episodeOverride !== watchState.ep;
     const savedTime = switchingEpisode ? undefined : (videoEl && !isNaN(videoEl.currentTime) ? videoEl.currentTime : undefined);
@@ -1082,12 +1114,22 @@
         isApplyingSync = true;
         const same = watchState.releaseId === p.releaseId && watchState.sourceId === p.sourceId && watchState.ep === Number(p.ep) && (watchState.dubberId || '') === (p.dubberId || '');
         if (same && videoEl && !videoEl.hidden && videoEl.readyState >= 2) {
+          lobbyStalePlaybackBeforeSwitch = null;
           videoEl.currentTime = Math.min(typeof p.currentTime === 'number' ? p.currentTime : 0, videoEl.duration || Infinity);
           if (p.paused && !videoEl.paused)     { videoEl.pause(); preventAutoPause = true; }
           else if (!p.paused && videoEl.paused)  videoEl.play().catch(() => {});
         } else if (same && videoEl && videoEl.readyState < 2) {
+          lobbyStalePlaybackBeforeSwitch = null;
           pendingSync = p;
         } else if (!same) {
+          if (
+            lobbyStalePlaybackBeforeSwitch &&
+            lobbyPlaybackMatchesStaleSnap(p as Record<string, unknown>, lobbyStalePlaybackBeforeSwitch)
+          ) {
+            isApplyingSync = false;
+            return;
+          }
+          lobbyStalePlaybackBeforeSwitch = null;
           watchState.releaseId = p.releaseId; watchState.sourceId = p.sourceId;
           watchState.dubberName = p.dubberName != null && p.dubberName !== '' ? String(p.dubberName) : '';
           invalidateDubbersPickerCache();

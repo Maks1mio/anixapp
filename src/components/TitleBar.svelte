@@ -28,6 +28,7 @@
   let updateDownloading = $state(false);
   let updatePct = $state(0);
   let updateState: 'idle' | 'downloading' | 'ready' | 'error' = $state('idle');
+  let installType: string | null = $state(null);
   let avatarUrl: string | null = $state(null);
   let avatarInitials: string = $state('');
 
@@ -45,8 +46,29 @@
     if (info) updateInfo = info;
   }
 
+  /** Человекочитаемая подпись кнопки установки для текущего типа пакета. */
+  function installLabel(): string {
+    if (installType === 'appimage') return 'Установить и перезапустить';
+    if (installType === 'pacman')   return 'Установить (Arch)';
+    if (installType === 'flatpak')  return 'Обновить (Flatpak)';
+    return 'Установить';
+  }
+
+  /** Подсказка в тултипе кнопки "готово к установке". */
+  function installTooltip(): string {
+    if (installType === 'appimage') return 'Файл скачан — приложение заменится и перезапустится';
+    if (installType === 'pacman')   return 'Откроется окно pkexec (ввод пароля root)';
+    if (installType === 'flatpak')  return 'Запустится flatpak update';
+    return 'Откроется установщик пакета';
+  }
+
   onMount(() => {
     syncAvatarFromGlobalProfile();
+
+    // Получаем тип установки для правильных подписей кнопки
+    window.electron?.getLinuxInstallType?.().then((t) => {
+      if (t) installType = t;
+    }).catch(() => {});
 
     // Check for app updates
     void loadUpdateInfo();
@@ -54,14 +76,15 @@
     // App update progress listener
     const onProgress = (ev: Event) => {
       const data = (ev as CustomEvent<AppUpdateProgress>).detail;
+      // Синхронизируем тип установки из прогресс-события (если ещё не получен)
+      if (data.installType && !installType) installType = data.installType;
       if (data.state === 'downloading') {
         updatePct = data.total > 0 ? Math.round((data.received / data.total) * 100) : data.percent || 0;
         updateState = 'downloading';
       } else if (data.state === 'ready') {
         updateState = 'ready';
         updatePct = 100;
-        // Don't auto-install — on Linux the package manager needs the user
-        // to explicitly confirm (polkit dialog). The button changes to "Установить".
+        // Не устанавливаем автоматически — пользователь должен явно нажать кнопку.
       } else if (data.state === 'error') {
         updateState = 'error';
         updateDownloading = false;
@@ -164,13 +187,14 @@
         <!-- Downloaded: click to install -->
         <button
           type="button"
-          class="titlebar__menu-item titlebar__menu-item--update titlebar__menu-item--update-downloading titlebar__menu-item--update-ready"
-          aria-label="Установить обновление"
+          class="titlebar__menu-item titlebar__menu-item--update titlebar__menu-item--update-downloading titlebar__menu-item--update-ready tooltip-trigger"
+          aria-label={installLabel()}
           onclick={handleStartUpdate}
         >
           <span class="titlebar__update-fill" style="width:100%"></span>
           {@html iconDownload(14)}
-          <span class="titlebar__update-label">Установить</span>
+          <span class="titlebar__update-label">{installLabel()}</span>
+          <span class="tooltip tooltip--animated">{installTooltip()}</span>
         </button>
       {:else}
         <!-- Idle / error: click to start download -->

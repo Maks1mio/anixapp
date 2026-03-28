@@ -57,6 +57,29 @@ jobs:
           name: linux-deb-artifacts
           path: release/*.deb
 
+  # ── Linux AppImage ──────────────────────────────────────────
+  build-linux-appimage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+
+      - run: yarn install --frozen-lockfile
+
+      - run: yarn build:linux-appimage
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_GIPHY_API_KEY: ${{ secrets.VITE_GIPHY_API_KEY }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage-artifacts
+          path: release/*.AppImage
+
   # ── Linux Arch (.pkg.tar.zst) ───────────────────────────────
   build-linux-arch:
     runs-on: ubuntu-latest
@@ -95,7 +118,7 @@ jobs:
 
   # ── Create GitHub Release ───────────────────────────────────
   create-release:
-    needs: [build-windows, build-linux-deb, build-linux-arch]
+    needs: [build-windows, build-linux-deb, build-linux-appimage, build-linux-arch]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

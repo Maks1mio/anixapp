@@ -1196,15 +1196,32 @@ ipcMain.handle('app:getVersions', () => {
 let pendingInstallerPath = null;
 let updateDownloadState = { state: 'idle', received: 0, total: 0 };
 
+/**
+ * Определяет способ установки AnixApp на текущей Linux-системе.
+ * Приоритет: flatpak → appimage → pacman (Arch/AUR) → deb (Debian/Ubuntu) → appimage (fallback)
+ */
+function getLinuxInstallType() {
+  if (process.platform !== 'linux') return null;
+  // Запущено внутри Flatpak-контейнера
+  if (process.env.FLATPAK_ID) return 'flatpak';
+  // Запущено как AppImage (AppImage runtime задаёт эту переменную)
+  if (process.env.APPIMAGE) return 'appimage';
+  // Arch Linux / AUR
+  try { require('child_process').execSync('which pacman', { stdio: 'ignore' }); return 'pacman'; } catch {}
+  // Debian / Ubuntu / apt
+  try { require('child_process').execSync('which dpkg',   { stdio: 'ignore' }); return 'deb';    } catch {}
+  // Fallback — предлагаем AppImage как универсальный вариант
+  return 'appimage';
+}
+
 /** Возвращает regex-паттерн для поиска подходящего ассета в GitHub Releases. */
 function getUpdateAssetPattern() {
   if (process.platform === 'linux') {
-    try {
-      require('child_process').execSync('which pacman', { stdio: 'ignore' });
-      return /\.(pacman|pkg\.tar\.zst)(\?|$)/i;
-    } catch {
-      return /\.deb(\?|$)/i;
-    }
+    const t = getLinuxInstallType();
+    if (t === 'pacman')  return /\.(pacman|pkg\.tar\.zst)(\?|$)/i;
+    if (t === 'deb')     return /\.deb(\?|$)/i;
+    if (t === 'flatpak') return /\.flatpak(\?|$)/i;
+    return /\.AppImage(\?|$)/i; // appimage + fallback
   }
   return /\.exe(\?|$)/i;
 }
@@ -1212,12 +1229,11 @@ function getUpdateAssetPattern() {
 /** Человекочитаемое расширение для логов. */
 function getUpdateAssetLabel() {
   if (process.platform === 'linux') {
-    try {
-      require('child_process').execSync('which pacman', { stdio: 'ignore' });
-      return '.pacman/.pkg.tar.zst';
-    } catch {
-      return '.deb';
-    }
+    const t = getLinuxInstallType();
+    if (t === 'pacman')  return '.pacman/.pkg.tar.zst';
+    if (t === 'deb')     return '.deb';
+    if (t === 'flatpak') return '.flatpak';
+    return '.AppImage';
   }
   return '.exe';
 }
@@ -1230,6 +1246,7 @@ function sendUpdateProgress(extra) {
     total: updateDownloadState.total,
     percent: updateDownloadState.total > 0 ? Math.round((updateDownloadState.received / updateDownloadState.total) * 100) : 0,
     filePath: pendingInstallerPath,
+    installType: process.platform === 'linux' ? getLinuxInstallType() : null,
     ...(extra || {}),
   };
   mainWindow.webContents.send('app:update-progress', payload);
@@ -1382,41 +1399,95 @@ ipcMain.handle('app:startUpdateDownload', async () => {
   });
 });
 
+/** Возвращает тип установки для рендерера (используется для подписей кнопок). */
+ipcMain.handle('app:getLinuxInstallType', () => getLinuxInstallType());
+
 ipcMain.handle('app:installUpdate', async () => {
-  const fs = require('fs');
   const { spawn } = require('child_process');
-  if (!pendingInstallerPath || !fs.existsSync(pendingInstallerPath)) {
-    return;
-  }
+  if (!pendingInstallerPath || !fs.existsSync(pendingInstallerPath)) return;
+
   try {
+    // ── Windows ──────────────────────────────────────────────────────────
     if (process.platform === 'win32') {
-      // Windows: run NSIS installer — it re-launches the app itself after install.
-      const child = spawn(pendingInstallerPath, [], {
-        detached: true,
-        stdio: 'ignore',
-        shell: false,
-      });
+      const child = spawn(pendingInstallerPath, [], { detached: true, stdio: 'ignore', shell: false });
       child.unref();
       isQuitting = true;
       app.quit();
-    } else if (process.platform === 'linux') {
-      // Linux: open the package file with xdg-open so the system's package manager
-      // handles authentication (pkexec, pamac, gdebi, etc.).
-      // We do NOT quit immediately — the package manager needs the display server
-      // connection to stay alive while it prompts for the password.
-      const { shell: electronShell } = require('electron');
-      const opened = await electronShell.openPath(pendingInstallerPath);
-      if (opened) {
-        // openPath returns an error string on failure
-        console.error('Failed to open installer with xdg-open:', opened);
-        sendUpdateProgress({ state: 'error', errorMessage: `Не удалось открыть установщик: ${opened}` });
-        return;
-      }
-      // Give the package manager ~3 s to appear before we exit.
-      setTimeout(() => {
+      return;
+    }
+
+    // ── Linux ─────────────────────────────────────────────────────────────
+    if (process.platform === 'linux') {
+      const installType = getLinuxInstallType();
+
+      // ── AppImage: заменяем файл на месте и перезапускаем ──────────────
+      if (installType === 'appimage') {
+        const currentPath = process.env.APPIMAGE;
+        if (!currentPath) {
+          sendUpdateProgress({ state: 'error', errorMessage: 'Переменная APPIMAGE не найдена — невозможно обновить' });
+          return;
+        }
+        // chmod +x нового файла, заменяем старый, перезапускаем
+        fs.chmodSync(pendingInstallerPath, 0o755);
+        fs.copyFileSync(pendingInstallerPath, currentPath);
+        const child = spawn(currentPath, [], { detached: true, stdio: 'ignore' });
+        child.unref();
         isQuitting = true;
         app.quit();
-      }, 3000);
+        return;
+      }
+
+      // ── Arch / AUR: pkexec pacman -U (polkit диалог авторизации) ──────
+      if (installType === 'pacman') {
+        const child = spawn('pkexec', ['pacman', '-U', '--noconfirm', pendingInstallerPath], {
+          detached: true,
+          stdio: 'ignore',
+        });
+        child.unref();
+        // Даём pkexec время показать диалог, затем выходим
+        setTimeout(() => { isQuitting = true; app.quit(); }, 2000);
+        return;
+      }
+
+      // ── Debian / Ubuntu: pkexec dpkg -i, fallback → xdg-open ─────────
+      if (installType === 'deb') {
+        let usedPkexec = false;
+        try {
+          require('child_process').execSync('which pkexec', { stdio: 'ignore' });
+          const child = spawn('pkexec', ['dpkg', '-i', pendingInstallerPath], {
+            detached: true,
+            stdio: 'ignore',
+          });
+          child.unref();
+          usedPkexec = true;
+        } catch {}
+        if (!usedPkexec) {
+          // pkexec недоступен — открываем через software center / gdebi
+          const { shell: electronShell } = require('electron');
+          const err = await electronShell.openPath(pendingInstallerPath);
+          if (err) {
+            sendUpdateProgress({ state: 'error', errorMessage: `Не удалось открыть установщик: ${err}` });
+            return;
+          }
+        }
+        setTimeout(() => { isQuitting = true; app.quit(); }, 2000);
+        return;
+      }
+
+      // ── Flatpak: flatpak update через хост ────────────────────────────
+      if (installType === 'flatpak') {
+        const inSandbox = !!process.env.FLATPAK_ID;
+        const flatpakId = process.env.FLATPAK_ID || 'com.anixapp.client';
+        // Внутри sandbox нужен flatpak-spawn --host чтобы выйти за пределы контейнера
+        const cmd  = inSandbox ? 'flatpak-spawn' : 'flatpak';
+        const args = inSandbox
+          ? ['--host', 'flatpak', 'update', '--assumeyes', flatpakId]
+          : ['update', '--assumeyes', flatpakId];
+        const child = spawn(cmd, args, { detached: true, stdio: 'ignore' });
+        child.unref();
+        setTimeout(() => { isQuitting = true; app.quit(); }, 3000);
+        return;
+      }
     }
   } catch (e) {
     console.error('Failed to start installer', e);

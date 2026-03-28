@@ -85,6 +85,7 @@ contextBridge.exposeInMainWorld('electron', {
   sendPlayerState: (playback) => ipcRenderer.send('player:stateChanged', playback),
   startUpdateDownload: () => ipcRenderer.invoke('app:startUpdateDownload'),
   installUpdate: () => ipcRenderer.invoke('app:installUpdate'),
+  getLinuxInstallType: () => ipcRenderer.invoke('app:getLinuxInstallType'),
   getSettings: () => ipcRenderer.invoke('app:getSettings'),
   saveSettings: (settings) => ipcRenderer.invoke('app:saveSettings', settings),
   // Lobby proposal IPC

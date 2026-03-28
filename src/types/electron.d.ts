@@ -31,6 +31,8 @@ export interface AppUpdateProgress {
   total: number;
   filePath?: string;
   errorMessage?: string;
+  /** Тип установки на Linux: 'appimage' | 'pacman' | 'deb' | 'flatpak' | null */
+  installType?: string | null;
 }
 
 declare global {
@@ -55,6 +57,7 @@ declare global {
       sendPlayerState: (playback: LobbyPlaybackPayload) => void;
       startUpdateDownload?: () => Promise<void>;
       installUpdate?: () => Promise<void>;
+      getLinuxInstallType?: () => Promise<string | null>;
       getDeviceId: () => Promise<string>;
       getSettings?: () => Promise<{ minimizeToTray: boolean; adaptiveAcceleration?: boolean; upscaleEnabled?: boolean; upscaleMode?: number; playerDebugOverlay?: boolean }>;
       saveSettings?: (settings: { minimizeToTray?: boolean; adaptiveAcceleration?: boolean; upscaleEnabled?: boolean; upscaleMode?: number; playerDebugOverlay?: boolean }) => Promise<void>;

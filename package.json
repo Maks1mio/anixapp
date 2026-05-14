@@ -34,7 +34,7 @@
         "electron": "39.8.5",
         "electron-builder": "^26.8.1",
         "sass": "^1.77.8",
-        "svelte": "^5.0.0",
+        "svelte": "^5.55.7",
         "svelte-check": "^4.0.0",
         "png2icons": "^2.0.1",
         "vite": "^6.4.2",

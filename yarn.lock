@@ -817,8 +817,10 @@ anime4k-webgpu@^1.0.0:
   resolved "https://registry.npmjs.org/anime4k-webgpu/-/anime4k-webgpu-1.0.0.tgz"
   integrity sha512-syZZyDRHYukFnDLxdES4AuMHzKwxlu5Lo52yhEEc1hwKQmvza8DGC62/VDPrrWOu4KArU5jh/0yFJQBwetGuxg==
 
-"anixapi@file:../AnixartJS":
+anixapi@^0.2.1:
   version "0.2.1"
+  resolved "https://registry.npmjs.org/anixapi/-/anixapi-0.2.1.tgz#29cc6ff10956bb36ae1a827b73d659a6b2fc714f"
+  integrity sha512-EDeljUksYt2lMbjce+T9q6mQ2h6aKwdzzQ55e/Xlii9rSE3KVKICRmtKRQqmlqaJmG7AqwdIVoXZviv6qNMpcg==
   dependencies:
     form-data "^4.0.2"
 
@@ -2957,6 +2959,11 @@ type-fest@^0.13.1:
   version "0.13.1"
   resolved "https://registry.npmjs.org/type-fest/-/type-fest-0.13.1.tgz"
   integrity sha512-34R7HTnG0XIJcBSn5XhDd7nNFPRcXYRZrBB2O2jdKqYODldSzBAqzsWoZYYvduky73toYS/ESqxPvkDf/F0XMg==
+
+typescript@^5.7.2:
+  version "5.9.3"
+  resolved "https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz#5b4f59e15310ab17a216f5d6cf53ee476ede670f"
+  integrity sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==
 
 undici-types@~6.21.0:
   version "6.21.0"

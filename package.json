@@ -31,14 +31,14 @@
         "@sveltejs/vite-plugin-svelte": "^5.0.0",
         "concurrently": "^9.1.0",
         "cross-env": "^7.0.3",
-        "electron": "35.7.5",
+        "electron": "39.8.5",
         "electron-builder": "^26.8.1",
         "sass": "^1.77.8",
         "svelte": "^5.0.0",
         "svelte-check": "^4.0.0",
         "png2icons": "^2.0.1",
         "typescript": "^5.7.2",
-        "vite": "^6.0.3",
+        "vite": "^6.4.2",
         "wait-on": "^8.0.1"
     },
     "dependencies": {

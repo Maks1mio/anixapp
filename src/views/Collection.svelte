@@ -1,6 +1,6 @@
 <script lang="ts">
-  import ReleaseCardV from "../components/ReleaseCardV.svelte";
-  import { onMount } from 'svelte';
+  import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../stores/navigation';
   import type { ReleaseCardData } from '../types/release';
 
@@ -150,6 +150,10 @@
     });
   }
 
+  function onLayoutChanged() {
+    releaseItems = [...releaseItems];
+  }
+
   async function toggleBookmark() {
     if (!window.anixApi) return;
     try {
@@ -232,6 +236,12 @@
       errorMsg = 'Ошибка загрузки.';
       loadState = 'error';
     }
+
+    window.addEventListener('anix:cardLayoutChanged', onLayoutChanged);
+  });
+
+  onDestroy(() => {
+    window.removeEventListener('anix:cardLayoutChanged', onLayoutChanged);
   });
 </script>
 
@@ -335,16 +345,12 @@
           </button>
         </section>
 
-        <!-- Releases list -->
+        <!-- Releases -->
         <div class="collection-releases">
           {#if releaseItems.length === 0 && !hasMore}
             <div class="collection-releases__loading">Нет релизов в коллекции.</div>
           {:else}
-            <div class="collection-releases__list">
-              {#each releaseItems as item (item.id)}
-                <ReleaseCardV data={item} />
-              {/each}
-            </div>
+            <ReleaseCardsGrid items={releaseItems} className="collection-releases__grid" />
             {#if isLoadingMore}
               <div class="collection-releases__more">Загрузка…</div>
             {:else if showEnd}

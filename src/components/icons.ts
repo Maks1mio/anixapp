@@ -6,12 +6,18 @@
 import {
   ArrowLeft,
   ArrowRight,
+  ArrowUp,
+  ArrowUpDown,
   Bell,
   Bookmark,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ClipboardList,
   Download,
+  Eye,
   Film,
   Flag,
   Heart,
@@ -19,11 +25,18 @@ import {
   Info,
   LayoutGrid,
   LogOut,
+  MessageCircle,
   MoreHorizontal,
+  Pencil,
   Play,
+  RotateCcw,
   Search,
   Settings,
+  Shuffle,
+  SlidersHorizontal,
   Star,
+  Clock,
+  CircleCheck,
   TriangleAlert,
   User,
   Users,
@@ -77,6 +90,11 @@ export function iconHeart(size = 18, filled = false): string {
   return toSvg(Heart, size, filled ? { fill: 'currentColor', stroke: 'none' } : {});
 }
 
+/** Комментарий (счётчик на карточке коллекции) */
+export function iconMessageCircle(size = 16): string {
+  return toSvg(MessageCircle, size);
+}
+
 /** Флажок / закладка (для избранного); filled — активна */
 export function iconFlag(size = 18, filled = false): string {
   return toSvg(Bookmark, size, filled ? { fill: 'currentColor', stroke: 'none' } : {});
@@ -93,8 +111,32 @@ export function iconChevronDown(size = 20): string {
 }
 
 /** Стрелка вправо */
+export function iconChevronLeft(size = 20): string {
+  return toSvg(ChevronLeft, size);
+}
+
 export function iconChevronRight(size = 20): string {
   return toSvg(ChevronRight, size);
+}
+
+/** Шеврон вверх */
+export function iconChevronUp(size = 20): string {
+  return toSvg(ChevronUp, size);
+}
+
+/** Глаз (спойлер) */
+export function iconEye(size = 18): string {
+  return toSvg(Eye, size);
+}
+
+/** Буфер обмена / правила */
+export function iconClipboardList(size = 18): string {
+  return toSvg(ClipboardList, size);
+}
+
+/** Стрелка вверх (отправить) */
+export function iconArrowUp(size = 20): string {
+  return toSvg(ArrowUp, size);
 }
 
 /** Инфо (подсказка) */
@@ -147,6 +189,16 @@ export function iconSettings(size = 20): string {
   return toSvg(Settings, size);
 }
 
+/** Ползунки (фильтр / настройки вкладки) */
+export function iconSlidersHorizontal(size = 18): string {
+  return toSvg(SlidersHorizontal, size);
+}
+
+/** Карандаш (переименовать) */
+export function iconPencil(size = 18): string {
+  return toSvg(Pencil, size);
+}
+
 /** Выход */
 export function iconLogOut(size = 20): string {
   return toSvg(LogOut, size);
@@ -175,4 +227,29 @@ export function iconDownload(size = 20): string {
 /** Предупреждение (треугольник с восклицательным знаком) */
 export function iconTriangleAlert(size = 16): string {
   return toSvg(TriangleAlert, size);
+}
+
+/** Перемешать / случайный выбор */
+export function iconShuffle(size = 18): string {
+  return toSvg(Shuffle, size);
+}
+
+/** Сортировка (стрелки вверх-вниз) */
+export function iconArrowUpDown(size = 18): string {
+  return toSvg(ArrowUpDown, size);
+}
+
+/** Сброс / очистить выбор */
+export function iconRotateCcw(size = 16): string {
+  return toSvg(RotateCcw, size);
+}
+
+/** Часы (время просмотра) */
+export function iconClock(size = 14): string {
+  return toSvg(Clock, size);
+}
+
+/** Галочка в круге (просмотренная серия) */
+export function iconCircleCheck(size = 14): string {
+  return toSvg(CircleCheck, size);
 }

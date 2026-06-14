@@ -218,9 +218,10 @@
 }
 
 .uikit-collections {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.25rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
+  gap: 1.1rem 1rem;
+  max-width: 42rem;
 }
 
 .uikit-franchise {

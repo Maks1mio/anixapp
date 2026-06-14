@@ -73,7 +73,8 @@
 .collection-banner {
   position: relative;
   width: 100%;
-  min-height: 120px;
+  aspect-ratio: 16 / 9;
+  max-height: min(28vh, 220px);
   border-radius: $radius-lg;
   overflow: hidden;
   background: $color-surface-hover;
@@ -81,14 +82,13 @@
 
   img {
     width: 100%;
-    height: auto;
+    height: 100%;
+    object-fit: cover;
     display: block;
-    vertical-align: middle;
   }
 }
 
 .collection-banner__placeholder {
-  display: none;
   width: 100%;
   height: 100%;
   background: $color-surface-hover;
@@ -268,22 +268,22 @@
   font-size: 0.9rem;
 }
 
-.collection-releases__list {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
+.collection-releases {
+  min-width: 0;
 }
 
-.collection-releases__list .release-card-h {
-  max-width: 100%;
+.collection-releases__grid {
+  width: 100%;
+  min-width: 0;
 }
 
-.collection-releases__list .release-card-h__link {
-  min-height: 180px;
+.collection-releases__grid.release-cards-grid {
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: 1rem 0.85rem;
 }
 
-.collection-releases__list .release-card-h__desc {
-  -webkit-line-clamp: 2;
+.collection-releases__grid.release-cards-grid-root--wide {
+  gap: 1rem;
 }
 
 .collection-releases__more {

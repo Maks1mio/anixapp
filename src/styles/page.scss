@@ -12,10 +12,11 @@
 }
 
 .page__scroll {
+  position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;
-  overflow-x: hidden;
+  overflow-x: clip;
   overflow-y: auto;
   padding: var(--page-scroll-padding);
   scrollbar-width: none;
@@ -30,6 +31,15 @@
 
 .page--padded {
   --page-scroll-padding: 1.5rem;
+}
+
+// Компактная область с кастомным скроллом (модалки, dropdown)
+.page--scroll-area {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  --page-scrollbar-offset: 3px;
 }
 
 // Страница чата: padding только по горизонтали

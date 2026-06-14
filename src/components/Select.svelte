@@ -1,29 +1,44 @@
 <script lang="ts">
-  import { iconChevronDown, iconTriangleAlert } from './icons';
+  import { iconChevronDown, iconTriangleAlert, iconArrowUpDown } from './icons';
   import { renderPage } from './page';
+  import SelectEnhanced from './SelectEnhanced.svelte';
+  import type { SelectProps } from './Select.svelte.ts';
 
-  export interface SelectOption {
-    value: string;
-    label: string;
-    desc?: string;
-    /** Предупреждение для опции (иконка + текст, красная метка) */
-    warning?: string;
-    disabled?: boolean;
-  }
+  let {
+    label,
+    placeholder = 'Выберите…',
+    options = [],
+    sections = [],
+    value = null,
+    values = [],
+    onChange,
+    onValuesChange,
+    className,
+    id,
+    disabled = false,
+    compact = false,
+    enhanced = false,
+    searchable = false,
+    multi = false,
+    variant = 'default',
+    startYear = null,
+    endYear = null,
+    onYearRangeChange,
+    emptyValue = '0',
+    resetValue,
+  }: SelectProps = $props();
 
-  interface Props {
-    label?: string;
-    placeholder?: string;
-    options: SelectOption[];
-    value: string | null;
-    onChange: (value: string) => void;
-    className?: string;
-    id?: string;
-    disabled?: boolean;
-  }
+  const useEnhanced = $derived(
+    !compact && (
+      enhanced ||
+      multi ||
+      searchable ||
+      variant === 'yearRange' ||
+      (sections?.length ?? 0) > 0
+    ),
+  );
 
-  let { label, placeholder = 'Выберите…', options, value, onChange, className, id, disabled = false }: Props = $props();
-
+  // ── Classic (compact toolbar + simple lists) ──────────────────────────────
   const DROPDOWN_CLASS = 'custom-select__dropdown';
   const DROPDOWN_OPEN = 'custom-select__dropdown--open';
   const DROPDOWN_CLOSING = 'custom-select__dropdown--closing';
@@ -36,6 +51,11 @@
   let triggerEl: HTMLButtonElement;
 
   const selectedOption = $derived(options.find((o) => o.value === value) ?? null);
+  const compactTitle = $derived(
+    selectedOption?.desc
+      ? `${selectedOption.label} · ${selectedOption.desc}`
+      : (selectedOption?.label ?? placeholder)
+  );
 
   function isTriggerVisible(trigger: HTMLElement): boolean {
     const r = trigger.getBoundingClientRect();
@@ -49,12 +69,13 @@
     const vw = document.documentElement.clientWidth;
     const vh = document.documentElement.clientHeight;
 
-    dropdown.style.width = `${rect.width}px`;
+    dropdown.style.width = compact ? 'auto' : `${rect.width}px`;
+    if (compact) dropdown.style.minWidth = '15rem';
     dropdown.style.top = `${rect.bottom + SELECT_GAP}px`;
 
     const spaceLeft = rect.left - SELECT_EDGE;
     const spaceRight = vw - rect.right - SELECT_EDGE;
-    const openToRight = spaceRight >= spaceLeft;
+    const openToRight = compact ? false : spaceRight >= spaceLeft;
     dropdown.style.left = openToRight ? `${rect.left}px` : `${Math.max(SELECT_EDGE, rect.right - rect.width)}px`;
 
     let listRect = dropdown.getBoundingClientRect();
@@ -64,7 +85,7 @@
     const fitsAbove = listRect.height <= spaceAbove;
 
     if (!fitsBelow && fitsAbove) {
-      dropdown.style.top = `${rect.top - SELECT_GAP - listRect.height}px`;
+      dropdown.style.top = `${rect.top + SELECT_GAP - listRect.height}px`;
     } else {
       dropdown.style.top = `${rect.bottom + SELECT_GAP}px`;
     }
@@ -72,7 +93,6 @@
     listRect = dropdown.getBoundingClientRect();
     if (listRect.right > vw - SELECT_EDGE) {
       dropdown.style.left = `${Math.max(SELECT_EDGE, rect.right - listRect.width)}px`;
-      listRect = dropdown.getBoundingClientRect();
     }
     if (listRect.left < SELECT_EDGE) {
       dropdown.style.left = `${SELECT_EDGE}px`;
@@ -87,8 +107,8 @@
 
   function createDropdown(
     trigger: HTMLElement,
-    onSelect: (value: string) => void,
-    onClosed: () => void
+    onSelect: (v: string) => void,
+    onClosed: () => void,
   ): () => void {
     const dropdown = document.createElement('div');
     dropdown.className = DROPDOWN_CLASS;
@@ -96,7 +116,6 @@
 
     const pageEl = renderPage({ noPadding: true, extraClass: 'custom-select__page' });
     const scrollEl = pageEl.querySelector('.page__scroll')!;
-
     const listEl = document.createElement('div');
     listEl.className = 'custom-select__list';
 
@@ -189,7 +208,7 @@
       requestAnimationFrame(() => {
         dropdown.classList.add(DROPDOWN_OPEN);
         if (selectedItem) (selectedItem as HTMLElement).scrollIntoView({ block: 'nearest' });
-      })
+      }),
     );
     document.addEventListener('click', closeOnOutside);
     document.addEventListener('keydown', closeOnEscape);
@@ -210,45 +229,73 @@
       isOpen = true;
       closeDropdown = createDropdown(
         triggerEl,
-        (val) => {
-          onChange(val);
-        },
+        (val) => { onChange?.(val); },
         () => {
           isOpen = false;
           closeDropdown = null;
-        }
+        },
       );
     }
   }
 </script>
 
-<div class="custom-select{className ? ' ' + className : ''}{disabled ? ' custom-select--disabled' : ''}" {id}>
-  {#if label}
-    <label class="custom-select__label" for="{id ?? 'select'}-trigger">{label}</label>
-  {/if}
-  <button
-    bind:this={triggerEl}
-    id="{id ?? 'select'}-trigger"
-    type="button"
-    class="custom-select__trigger"
-    aria-haspopup="listbox"
-    aria-expanded={isOpen ? 'true' : 'false'}
-    aria-disabled={disabled ? 'true' : undefined}
-    disabled={disabled}
-    onclick={handleTriggerClick}
-  >
-    <span class="custom-select__trigger-text">
-      {#if selectedOption}
-        <span class="custom-select__trigger-label">{selectedOption.label}</span>
-        {#if selectedOption.desc}
-          <span class="custom-select__trigger-desc">{selectedOption.desc}</span>
-        {/if}
+{#if useEnhanced}
+  <SelectEnhanced
+    {label}
+    placeholder={placeholder === 'Выберите…' ? 'Неважно' : placeholder}
+    {options}
+    {sections}
+    value={value ?? '0'}
+    {values}
+    {multi}
+    {searchable}
+    {disabled}
+    {variant}
+    {startYear}
+    {endYear}
+    onChange={(v) => onChange?.(v)}
+    onValuesChange={(v) => onValuesChange?.(v)}
+    onYearRangeChange={(a, b) => onYearRangeChange?.(a, b)}
+    {emptyValue}
+    {resetValue}
+  />
+{:else}
+  <div class="custom-select{className ? ' ' + className : ''}{disabled ? ' custom-select--disabled' : ''}" {id}>
+    {#if label}
+      <label class="custom-select__label" for="{id ?? 'select'}-trigger">{label}</label>
+    {/if}
+    <button
+      bind:this={triggerEl}
+      id="{id ?? 'select'}-trigger"
+      type="button"
+      class="custom-select__trigger{compact ? ' custom-select__trigger--compact' : ''}"
+      aria-haspopup="listbox"
+      aria-expanded={isOpen ? 'true' : 'false'}
+      aria-disabled={disabled ? 'true' : undefined}
+      aria-label={compact ? compactTitle : undefined}
+      title={compact ? compactTitle : undefined}
+      disabled={disabled}
+      onclick={handleTriggerClick}
+    >
+      {#if compact}
+        <span class="custom-select__trigger-compact-icon" aria-hidden="true">
+          {@html iconArrowUpDown(18)}
+        </span>
       {:else}
-        <span class="custom-select__trigger-label">{placeholder}</span>
+        <span class="custom-select__trigger-text">
+          {#if selectedOption}
+            <span class="custom-select__trigger-label">{selectedOption.label}</span>
+            {#if selectedOption.desc}
+              <span class="custom-select__trigger-desc">{selectedOption.desc}</span>
+            {/if}
+          {:else}
+            <span class="custom-select__trigger-label">{placeholder}</span>
+          {/if}
+        </span>
+        <span class="custom-select__trigger-icon" aria-hidden="true">
+          {@html iconChevronDown(20)}
+        </span>
       {/if}
-    </span>
-    <span class="custom-select__trigger-icon" aria-hidden="true">
-      {@html iconChevronDown(20)}
-    </span>
-  </button>
-</div>
+    </button>
+  </div>
+{/if}

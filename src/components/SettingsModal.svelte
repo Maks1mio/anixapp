@@ -96,7 +96,8 @@
           if (v.electron) parts.push(`Electron ${v.electron}`);
           if (v.chrome) parts.push(`Chrome ${v.chrome}`);
           if (v.node) parts.push(`Node ${v.node}`);
-          if (v.anixartjs) parts.push(`<a href="#" class="settings-sidebar__meta-link" data-url="https://github.com/theDesConnet/AnixartJS">AnixartJS ${v.anixartjs}</a>`);
+          const apiVer = v.anixapi || v.anixartjs;
+          if (apiVer) parts.push(`<a href="#" class="settings-sidebar__meta-link" data-url="https://github.com/Maks1mio/anixapi">AnixApi ${apiVer}</a>`);
           compEl.innerHTML = parts.join(' · ');
           compEl.querySelectorAll<HTMLAnchorElement>('.settings-sidebar__meta-link').forEach((a) => {
             a.addEventListener('click', (e) => {

@@ -38,9 +38,9 @@
     <a
       href="#"
       class="settings-about__inline-link"
-      onclick={(e) => { e.preventDefault(); openExternal('https://github.com/theDesConnet/AnixartJS'); }}
-    >theDesConnet/AnixartJS</a>
-    — Unofficial Anixart API wrapper for NodeJS.
+      onclick={(e) => { e.preventDefault(); openExternal('https://github.com/Maks1mio/anixapi'); }}
+    >AnixApi</a>
+    — TypeScript-обёртка над API Anixart 9.x для Node.js.
   </p>
   <!-- svelte-ignore a11y_invalid_attribute -->
   <a

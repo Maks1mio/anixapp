@@ -1,6 +1,6 @@
 {
     "name": "anixapp",
-    "version": "0.1.21-test-updater-linux-1",
+    "version": "0.1.20-personal1",
     "description": "Быстрый клиент для просмотра аниме на базе Anixart API",
     "repository": "github:Maks1mio/anixapp",
     "main": "electron/main.js",
@@ -37,13 +37,14 @@
         "svelte": "^5.0.0",
         "svelte-check": "^4.0.0",
         "png2icons": "^2.0.1",
+        "typescript": "^5.7.2",
         "vite": "^6.0.3",
         "wait-on": "^8.0.1"
     },
     "dependencies": {
         "@xhayper/discord-rpc": "^1.3.1",
         "anime4k-webgpu": "^1.0.0",
-        "anixartjs": "^0.1.7",
+        "anixapi": "file:../AnixartJS",
         "hls.js": "^1.6.15",
         "lottie-web": "^5.13.0",
         "lucide": "^0.577.0"

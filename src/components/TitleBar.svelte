@@ -27,7 +27,7 @@
   let updateInfo: UpdateInfo | null = $state(null);
   let updateDownloading = $state(false);
   let updatePct = $state(0);
-  let updateState: 'idle' | 'downloading' | 'ready' | 'error' = $state('idle');
+  let updateState: 'idle' | 'downloading' | 'ready' | 'error' | 'installing' | 'install-error' = $state('idle');
   let installType: string | null = $state(null);
   let avatarUrl: string | null = $state(null);
   let avatarInitials: string = $state('');
@@ -87,6 +87,13 @@
         // Не устанавливаем автоматически — пользователь должен явно нажать кнопку.
       } else if (data.state === 'error') {
         updateState = 'error';
+        updateDownloading = false;
+      } else if (data.state === 'installing') {
+        // Ждём ввода пароля пользователем — показываем индикатор
+        updateState = 'installing';
+      } else if (data.state === 'install-error') {
+        // Пользователь отменил или установка упала — возвращаемся в ready
+        updateState = 'ready';
         updateDownloading = false;
       }
     };
@@ -182,6 +189,18 @@
           <span class="titlebar__update-fill" style="width:{updatePct}%"></span>
           {@html iconDownload(14)}
           <span class="titlebar__update-label">{updatePct}%</span>
+        </button>
+      {:else if updateState === 'installing'}
+        <!-- Waiting for password input / install in progress -->
+        <button
+          type="button"
+          class="titlebar__menu-item titlebar__menu-item--update titlebar__menu-item--update-downloading tooltip-trigger"
+          aria-label="Установка обновления…"
+        >
+          <span class="titlebar__update-fill titlebar__update-fill--pulse" style="width:100%"></span>
+          {@html iconDownload(14)}
+          <span class="titlebar__update-label">Установка…</span>
+          <span class="tooltip tooltip--animated">Введите пароль в диалоге авторизации</span>
         </button>
       {:else if updateState === 'ready'}
         <!-- Downloaded: click to install -->

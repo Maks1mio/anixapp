@@ -4,8 +4,10 @@ const fs = require('fs');
 
 /** В dev можно запускать два процесса (тесты лобби / WebRTC). В production — один экземпляр. */
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
-const { Anixart, KodikParser, SibnetParser, AniLibriaParser } = require('anixartjs');
-const { DefaultResult, BookmarkType, BookmarkSortType } = require('anixartjs');
+const { Anixart, KodikParser, SibnetParser, AniLibriaParser } = require('anixapi');
+const { DefaultResult, BookmarkType, BookmarkSortType } = require('anixapi');
+const { attachLegacyEndpoints } = require('./anix-legacy-endpoints');
+const homeCustomFilter = require('./home-custom-filter');
 const logger = require('./logger');
 
 // ——— Discord Rich Presence (graceful — disabled if Discord is not running) ———
@@ -248,10 +250,14 @@ function clearToken() {
   saveConfig({ token: null, baseUrl });
 }
 
+function createAnixClient(options) {
+  return attachLegacyEndpoints(new Anixart(options));
+}
+
 function getAnixart() {
   if (!anixart) {
     const { token, baseUrl } = loadConfig();
-    anixart = new Anixart({ baseUrl, token: token || undefined });
+    anixart = createAnixClient({ baseUrl, token: token || undefined });
   }
   return anixart;
 }
@@ -349,6 +355,15 @@ function createWindow() {
 const ANIXART_UA = 'AnixartApp/9.0 BETA 3-25021818 (Android 9; SDK 28; x86_64; ROG ASUS AI2201_B; ru)';
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 const VIDEO_HOSTS = ['anixis.com', 'aniqart.com', 'aniqit.com', 'video.sibnet.ru', 'sibnet.ru', 'kodikplayer.com', 'kodik-cdn.com', 'collaps.io', 'aniliberty.top', 'anilibria.tv', 'libria.fun', 'cache.libria.fun'];
+/** Не подменять CORS-заголовки — ломает YouTube/Rutube embed (credentialed fetch + ACAO: *) */
+const EMBED_MEDIA_HOSTS = [
+  'youtube.com', 'youtu.be', 'googlevideo.com', 'ytimg.com', 'ggpht.com',
+  'googleapis.com', 'gstatic.com', 'google.com', 'rutube.ru',
+];
+
+function hostMatchesList(host, list) {
+  return list.some((h) => host === h || host.endsWith('.' + h));
+}
 
 function upsertHeader(headers, name, value) {
   const lower = name.toLowerCase();
@@ -365,7 +380,7 @@ function setupVideoRequestHeaders() {
     let host;
     try { host = new URL(details.url).host.replace(/^www\./, ''); } catch (_) { callback({ requestHeaders: details.requestHeaders }); return; }
     const requestHeaders = { ...details.requestHeaders };
-    if (!VIDEO_HOSTS.some(h => host === h || host.endsWith('.' + h))) {
+    if (!hostMatchesList(host, VIDEO_HOSTS)) {
       callback({ requestHeaders });
       return;
     }
@@ -393,6 +408,15 @@ function setupVideoRequestHeaders() {
     callback({ requestHeaders });
   });
   ses.webRequest.onHeadersReceived((details, callback) => {
+    let host;
+    try { host = new URL(details.url).host.replace(/^www\./, ''); } catch (_) { callback({ responseHeaders: details.responseHeaders }); return; }
+
+    // Wildcard ACAO ломает googlevideo.com внутри YouTube iframe
+    if (hostMatchesList(host, EMBED_MEDIA_HOSTS) || !hostMatchesList(host, VIDEO_HOSTS)) {
+      callback({ responseHeaders: details.responseHeaders });
+      return;
+    }
+
     const responseHeaders = { ...details.responseHeaders };
     upsertHeader(responseHeaders, 'Access-Control-Allow-Origin', '*');
     upsertHeader(responseHeaders, 'Access-Control-Allow-Headers', '*');
@@ -494,7 +518,7 @@ loggedHandle('anix:login', async (_, username, password) => {
   // Для логина используем отдельный клиент БЕЗ сохранённого токена,
   // чтобы старый токен не перезаписывал учётку.
   const { baseUrl } = loadConfig();
-  const loginClient = new Anixart({ baseUrl });
+  const loginClient = createAnixClient({ baseUrl });
   const res = await loginClient.endpoints.auth.signIn({ login: username, password });
   const code = res?.code;
   const profile = res?.profile;
@@ -510,7 +534,7 @@ loggedHandle('anix:login', async (_, username, password) => {
       profileRaw: profile || null,
     });
     logger.info('auth', 'login success', { profileId: profile?.id, login: profile?.login });
-    anixart = new Anixart({ baseUrl, token: profileToken.token });
+    anixart = createAnixClient({ baseUrl, token: profileToken.token });
     return { success: true };
   }
   logger.warn('auth', 'login failed', { code });
@@ -546,7 +570,7 @@ ipcMain.handle('anix:pingBaseUrl', async (_, baseUrl) => {
   if (typeof baseUrl !== 'string' || !baseUrl) return { ok: false, latencyMs: null };
   try {
     const started = Date.now();
-    const client = new Anixart({ baseUrl, token: undefined });
+    const client = createAnixClient({ baseUrl, token: undefined });
     await client.endpoints.feed.latest(1);
     return { ok: true, latencyMs: Date.now() - started };
   } catch (err) {
@@ -648,6 +672,15 @@ ipcMain.handle('anix:getDubbers', async (_, releaseId) => {
     return await client.endpoints.release.getDubbers(releaseId);
   } catch (err) {
     handleAnixError(err, 'getDubbers');
+  }
+});
+
+ipcMain.handle('anix:typeAll', async () => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.type.types();
+  } catch (err) {
+    handleAnixError(err, 'typeAll');
   }
 });
 
@@ -1177,17 +1210,18 @@ ipcMain.handle('log:openFolder', async () => {
 });
 
 ipcMain.handle('app:getVersions', () => {
-  let anixartjsVersion = '';
+  let anixapiVersion = '';
   try {
-    const pkg = require('anixartjs/package.json');
-    anixartjsVersion = pkg.version || '';
+    const pkg = require('anixapi/package.json');
+    anixapiVersion = pkg.version || '';
   } catch (_) {}
   return {
     app: app.getVersion(),
     electron: process.versions.electron,
     chrome: process.versions.chrome,
     node: process.versions.node,
-    anixartjs: anixartjsVersion,
+    anixapi: anixapiVersion,
+    anixartjs: anixapiVersion,
   };
 });
 
@@ -1439,13 +1473,25 @@ ipcMain.handle('app:installUpdate', async () => {
 
       // ── Arch / AUR: pkexec pacman -U (polkit диалог авторизации) ──────
       if (installType === 'pacman') {
+        // Не detach — ждём пока пользователь введёт пароль и pkexec завершится.
+        // Только после успешного выхода (code === 0) закрываем приложение.
+        sendUpdateProgress({ state: 'installing' });
         const child = spawn('pkexec', ['pacman', '-U', '--noconfirm', pendingInstallerPath], {
-          detached: true,
+          detached: false,
           stdio: 'ignore',
         });
-        child.unref();
-        // Даём pkexec время показать диалог, затем выходим
-        setTimeout(() => { isQuitting = true; app.quit(); }, 2000);
+        child.on('exit', (code) => {
+          if (code === 0) {
+            isQuitting = true;
+            app.quit();
+          } else {
+            // Пользователь отменил или ошибка установки — остаёмся в приложении
+            sendUpdateProgress({ state: 'install-error', errorMessage: `pkexec завершился с кодом ${code}` });
+          }
+        });
+        child.on('error', (err) => {
+          sendUpdateProgress({ state: 'install-error', errorMessage: String(err) });
+        });
         return;
       }
 
@@ -1454,11 +1500,22 @@ ipcMain.handle('app:installUpdate', async () => {
         let usedPkexec = false;
         try {
           require('child_process').execSync('which pkexec', { stdio: 'ignore' });
+          sendUpdateProgress({ state: 'installing' });
           const child = spawn('pkexec', ['dpkg', '-i', pendingInstallerPath], {
-            detached: true,
+            detached: false,
             stdio: 'ignore',
           });
-          child.unref();
+          child.on('exit', (code) => {
+            if (code === 0) {
+              isQuitting = true;
+              app.quit();
+            } else {
+              sendUpdateProgress({ state: 'install-error', errorMessage: `pkexec завершился с кодом ${code}` });
+            }
+          });
+          child.on('error', (err) => {
+            sendUpdateProgress({ state: 'install-error', errorMessage: String(err) });
+          });
           usedPkexec = true;
         } catch {}
         if (!usedPkexec) {
@@ -1469,8 +1526,10 @@ ipcMain.handle('app:installUpdate', async () => {
             sendUpdateProgress({ state: 'error', errorMessage: `Не удалось открыть установщик: ${err}` });
             return;
           }
+          // software center сам управляет установкой — просто закрываемся
+          isQuitting = true;
+          app.quit();
         }
-        setTimeout(() => { isQuitting = true; app.quit(); }, 2000);
         return;
       }
 
@@ -1483,9 +1542,19 @@ ipcMain.handle('app:installUpdate', async () => {
         const args = inSandbox
           ? ['--host', 'flatpak', 'update', '--assumeyes', flatpakId]
           : ['update', '--assumeyes', flatpakId];
-        const child = spawn(cmd, args, { detached: true, stdio: 'ignore' });
-        child.unref();
-        setTimeout(() => { isQuitting = true; app.quit(); }, 3000);
+        sendUpdateProgress({ state: 'installing' });
+        const child = spawn(cmd, args, { detached: false, stdio: 'ignore' });
+        child.on('exit', (code) => {
+          if (code === 0) {
+            isQuitting = true;
+            app.quit();
+          } else {
+            sendUpdateProgress({ state: 'install-error', errorMessage: `flatpak update завершился с кодом ${code}` });
+          }
+        });
+        child.on('error', (err) => {
+          sendUpdateProgress({ state: 'install-error', errorMessage: String(err) });
+        });
         return;
       }
     }
@@ -1533,6 +1602,26 @@ loggedHandle('anix:filterReleases', async (_, page = 0, filterArgs = {}, extende
   } catch (err) {
     handleAnixError(err, 'filterReleases');
   }
+});
+
+loggedHandle('anix:homeCustomTabGet', async () => {
+  const cfg = loadConfig();
+  const profileId = cfg.profileId;
+  if (!profileId) return { tabName: '', filter: null, activeTab: null };
+  const entry = homeCustomFilter.getEntry(app.getPath('userData'), profileId);
+  return entry ?? { tabName: '', filter: null, activeTab: null };
+});
+
+loggedHandle('anix:homeCustomTabSet', async (_, data) => {
+  const cfg = loadConfig();
+  const profileId = cfg.profileId;
+  if (!profileId) throw new Error('Not logged in');
+  homeCustomFilter.setEntry(app.getPath('userData'), profileId, {
+    tabName: typeof data?.tabName === 'string' ? data.tabName : '',
+    filter: data?.filter ?? null,
+    activeTab: typeof data?.activeTab === 'string' ? data.activeTab : null,
+  });
+  return { ok: true };
 });
 
 ipcMain.handle('anix:articleById', async (_, id) => {
@@ -1633,35 +1722,62 @@ ipcMain.handle('anix:collectionsAll', async (_, page = 1, sort = 2) => {
   }
 });
 
-ipcMain.handle('anix:favorites', async (_, page = 0) => {
+ipcMain.handle('anix:favorites', async (_, page = 0, sort = BookmarkSortType.NewToOldAddTime, filterAnnounce = 0, filter = 0) => {
   try {
     const client = getAnixart();
     const data = await client.endpoints.profile.getFavorites({
       page,
-      sort: BookmarkSortType.NewToOldAddTime,
-      filter_announce: 0,
-      filter: 0,
+      sort,
+      filter_announce: filterAnnounce,
+      filter,
     });
-    appendLog('favorites', { page, response: data });
+    appendLog('favorites', { page, sort, filterAnnounce, filter, response: data });
     return data;
   } catch (err) {
     handleAnixError(err, 'favorites');
   }
 });
 
-ipcMain.handle('anix:getBookmarks', async (_, profileId, type, page = 0) => {
+ipcMain.handle('anix:getBookmarks', async (_, profileId, type, page = 0, sort = BookmarkSortType.NewToOldAddTime, filterAnnounce = 0, filter = 0) => {
   try {
     const client = getAnixart();
     return await client.endpoints.profile.getBookmarks({
       id: profileId,
       type: type ?? BookmarkType.Watching,
       page,
-      sort: BookmarkSortType.NewToOldAddTime,
-      filter_announce: 0,
-      filter: 0,
+      sort,
+      filter_announce: filterAnnounce,
+      filter,
     });
   } catch (err) {
     handleAnixError(err, 'getBookmarks');
+  }
+});
+
+ipcMain.handle('anix:collectionFavorites', async (_, page = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.collectionFavorite.favorites(page);
+  } catch (err) {
+    handleAnixError(err, 'collectionFavorites');
+  }
+});
+
+ipcMain.handle('anix:randomFavorite', async (_, extended = true) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.release.randomFavorite({ extended_mode: extended });
+  } catch (err) {
+    handleAnixError(err, 'randomFavorite');
+  }
+});
+
+ipcMain.handle('anix:randomProfileList', async (_, profileId, status, extended = true) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.release.randomProfileList(profileId, status, { extended_mode: extended });
+  } catch (err) {
+    handleAnixError(err, 'randomProfileList');
   }
 });
 
@@ -1696,6 +1812,15 @@ ipcMain.handle('anix:history', async (_, page = 0) => {
   }
 });
 
+ipcMain.handle('anix:deleteFromHistory', async (_, releaseId) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.history.delete(releaseId);
+  } catch (err) {
+    handleAnixError(err, 'deleteFromHistory');
+  }
+});
+
 ipcMain.handle('anix:addToHistory', async (_, releaseId, sourceId, episodePosition) => {
   try {
     const client = getAnixart();
@@ -1723,11 +1848,11 @@ ipcMain.handle('anix:unmarkEpisodeAsWatched', async (_, releaseId, sourceId, epi
   }
 });
 
-ipcMain.handle('anix:relatedReleases', async (_, releaseId, page = 0) => {
+ipcMain.handle('anix:relatedReleases', async (_, relatedId, page = 0) => {
   try {
     const client = getAnixart();
-    const data = await client.endpoints.release.getRelatedReleases(releaseId, page);
-    appendLog('relatedReleases', { releaseId, page, response: data });
+    const data = await client.endpoints.release.getRelatedReleases(relatedId, page);
+    appendLog('relatedReleases', { relatedId, page, response: data });
     return data;
   } catch (err) {
     handleAnixError(err, 'relatedReleases');
@@ -1914,6 +2039,73 @@ ipcMain.handle('anix:clearListStatus', async (_, releaseId, statusId) => {
   const client = getAnixart();
   const res = await client.endpoints.release.removeFromProfileList(releaseId, type);
   return res?.code === DefaultResult.Ok ? undefined : Promise.reject(new Error(res?.code ?? 'fail'));
+});
+
+ipcMain.handle('anix:releaseVote', async (_, releaseId, vote) => {
+  const client = getAnixart();
+  const res = await client.endpoints.release.vote(releaseId, vote);
+  if (res?.code !== DefaultResult.Ok) {
+    return Promise.reject(new Error(String(res?.code ?? 'vote failed')));
+  }
+  return res;
+});
+
+ipcMain.handle('anix:releaseDeleteVote', async (_, releaseId) => {
+  const client = getAnixart();
+  const res = await client.endpoints.release.deleteVote(releaseId);
+  if (res?.code !== DefaultResult.Ok) {
+    return Promise.reject(new Error(String(res?.code ?? 'delete vote failed')));
+  }
+  return res;
+});
+
+ipcMain.handle('anix:releaseComments', async (_, releaseId, page = 0, sort = 1) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.releaseComment.comments(releaseId, page, { sort });
+  } catch (err) {
+    handleAnixError(err, 'releaseComments');
+  }
+});
+
+ipcMain.handle('anix:releaseCommentReplies', async (_, commentId, page = 0, sort = 2) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.releaseComment.replies(commentId, page, { sort });
+  } catch (err) {
+    handleAnixError(err, 'releaseCommentReplies');
+  }
+});
+
+ipcMain.handle('anix:releaseCommentVote', async (_, commentId, vote) => {
+  try {
+    const client = getAnixart();
+    const res = await client.endpoints.releaseComment.vote(commentId, vote);
+    if (res?.code !== DefaultResult.Ok) {
+      return Promise.reject(new Error(String(res?.code ?? 'comment vote failed')));
+    }
+    return res;
+  } catch (err) {
+    handleAnixError(err, 'releaseCommentVote');
+  }
+});
+
+ipcMain.handle('anix:releaseCommentById', async (_, commentId) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.releaseComment.comment(commentId);
+  } catch (err) {
+    handleAnixError(err, 'releaseCommentById');
+  }
+});
+
+ipcMain.handle('anix:releaseCommentAdd', async (_, releaseId, body) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.releaseComment.add(releaseId, body);
+  } catch (err) {
+    handleAnixError(err, 'releaseCommentAdd');
+  }
 });
 
 // ——— Theme editor window ———

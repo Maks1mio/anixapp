@@ -10,6 +10,11 @@ export interface SelectOption {
   disabled?: boolean;
 }
 
+export interface SelectSection {
+  title?: string;
+  options: SelectOption[];
+}
+
 export interface SelectOptions {
   label?: string;
   placeholder?: string;

@@ -3,14 +3,13 @@
   import { navigate } from '../../stores/navigation';
   import { openWatchModal } from '../../stores/modals';
   import { buildPosterUrl } from '../../utils/posterUrl';
-  import ReleaseCardsGrid from '../../components/ReleaseCardsGrid.svelte';
-  import type { SelectOption } from '../../components/Select.svelte';
+  import type { SelectOption } from '../../components/select';
   import { LIST_STATUSES, type ListStatusId } from './_types';
   import {
     getAgeRateText, getSeasonName, stripHtmlToText, sanitizeRichHtml,
     numToStatusId, ratingHue, mapCardData,
   } from './_utils';
-  import { ReleaseHead, ReleaseRating, ReleaseScreenshots, ReleaseComments } from './components';
+  import { ReleaseHead, ReleaseVideos, ReleaseRating, ReleaseRelated, ReleaseRecommendations, ReleaseScreenshots, ReleaseComments } from './components';
 
   interface Props { id: number; }
   let { id }: Props = $props();
@@ -59,12 +58,12 @@
   const vote3 = $derived((release?.vote_3_count ?? 0) as number);
   const vote4 = $derived((release?.vote_4_count ?? 0) as number);
   const vote5 = $derived((release?.vote_5_count ?? 0) as number);
+  const yourVote = $derived(Math.max(0, Number(release?.your_vote ?? 0) || 0));
   const watchingCount  = $derived((release?.watching_count  ?? 0) as number);
   const planCount      = $derived((release?.plan_count      ?? 0) as number);
   const completedCount = $derived((release?.completed_count ?? 0) as number);
   const holdOnCount    = $derived((release?.hold_on_count   ?? 0) as number);
   const droppedCount   = $derived((release?.dropped_count   ?? 0) as number);
-  const totalList      = $derived(watchingCount + planCount + completedCount + holdOnCount + droppedCount);
 
   // ── Derived: meta ─────────────────────────────────────────────────────────
   const year         = $derived(release?.year != null ? String(release.year) : '');
@@ -149,7 +148,12 @@
   const related          = $derived(release?.related as { id?: number; name_ru?: string; release_count?: number } | null | undefined);
   const relatedReleases  = $derived((release?.related_releases  ?? []) as Record<string, unknown>[]);
   const recommended      = $derived((release?.recommended_releases ?? []) as Record<string, unknown>[]);
-  const comments         = $derived((release?.comments ?? []) as Array<{ id?: number; profile?: { nickname?: string; avatar?: string }; message?: string; timestamp?: number }>);
+  const comments         = $derived((release?.comments ?? []) as Record<string, unknown>[]);
+  const commentCount     = $derived(
+    typeof release?.comment_count === 'number' ? release.comment_count
+      : typeof release?.comments_count === 'number' ? release.comments_count
+      : comments.length,
+  );
   const relatedCards     = $derived(relatedReleases.map(r => mapCardData(r)));
   const recommendedCards = $derived(recommended.map(r => mapCardData(r)));
 
@@ -190,6 +194,17 @@
     }
     await window.anixApi.release.setListStatus(releaseId, value as unknown as number).catch(() => {});
     currentStatus = value as ListStatusId;
+  }
+
+  async function refreshReleaseData() {
+    if (!window.anixApi) return;
+    try {
+      const data = await window.anixApi.release.info(id, true) as any;
+      const raw = data?.release ?? data;
+      if (raw && typeof raw === 'object') {
+        release = { ...release, ...raw } as Record<string, unknown>;
+      }
+    } catch { /* ignore */ }
   }
 
   // ── Load ──────────────────────────────────────────────────────────────────
@@ -252,14 +267,18 @@
         onToggleDesc={() => { descCollapsed = !descCollapsed; }}
       />
 
+      <!-- Videos -->
+      <ReleaseVideos releaseId={id} releaseTitle={title} />
+
       <!-- Rating block -->
-      {#if voteCount > 0 || totalList > 0}
-        <ReleaseRating
-          {grade} {hasRating} {voteCount}
-          {vote1} {vote2} {vote3} {vote4} {vote5}
-          {watchingCount} {planCount} {completedCount} {holdOnCount} {droppedCount}
-        />
-      {/if}
+      <ReleaseRating
+        releaseId={id}
+        {grade} {hasRating} {voteCount}
+        {vote1} {vote2} {vote3} {vote4} {vote5}
+        {yourVote}
+        {watchingCount} {planCount} {completedCount} {holdOnCount} {droppedCount}
+        onRefresh={refreshReleaseData}
+      />
 
       <!-- Screenshots -->
       {#if screenshots.length > 0}
@@ -267,31 +286,16 @@
       {/if}
 
       <!-- Related releases -->
-      {#if related?.id && (relatedCards.length > 0 || (related.release_count ?? 0) > 0)}
-        <div class="release-page__section">
-          <h2 class="release-page__section-title">
-            <button
-              type="button"
-              class="release-page__section-link"
-              onclick={() => navigate(`/release/${related!.id}/related`)}
-            >{related.name_ru || 'Франшиза'}</button>
-            {#if relatedCards.length > 0} · Связанные релизы{/if}
-          </h2>
-          <ReleaseCardsGrid items={relatedCards.slice(0, 12)} />
-        </div>
+      {#if relatedCards.length > 0 && related?.id}
+        <ReleaseRelated releaseId={id} relatedId={related.id} items={relatedCards} />
       {/if}
 
       <!-- Recommendations -->
-      {#if recommendedCards.length > 0}
-        <div class="release-page__section">
-          <h2 class="release-page__section-title">Рекомендации</h2>
-          <ReleaseCardsGrid items={recommendedCards} />
-        </div>
-      {/if}
+      <ReleaseRecommendations items={recommendedCards} />
 
       <!-- Comments -->
-      {#if comments.length > 0}
-        <ReleaseComments {comments} />
+      {#if commentCount > 0 || comments.length > 0}
+        <ReleaseComments releaseId={id} {comments} totalCount={commentCount} />
       {/if}
 
     </section>

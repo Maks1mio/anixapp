@@ -817,10 +817,8 @@ anime4k-webgpu@^1.0.0:
   resolved "https://registry.npmjs.org/anime4k-webgpu/-/anime4k-webgpu-1.0.0.tgz"
   integrity sha512-syZZyDRHYukFnDLxdES4AuMHzKwxlu5Lo52yhEEc1hwKQmvza8DGC62/VDPrrWOu4KArU5jh/0yFJQBwetGuxg==
 
-anixartjs@^0.1.7:
-  version "0.1.7"
-  resolved "https://registry.npmjs.org/anixartjs/-/anixartjs-0.1.7.tgz"
-  integrity sha512-eLfvPv6cDO/QoKTM5XGO1y+bQPi/HKumliOQJoTBB9R7y38IXsm9AMQhycXASwNkYfq4IeKx0/R7iwKGjTgWGg==
+"anixapi@file:../AnixartJS":
+  version "0.2.1"
   dependencies:
     form-data "^4.0.2"
 

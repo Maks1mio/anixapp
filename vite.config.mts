@@ -1,13 +1,13 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
-import { svelte } from '@sveltejs/vite-plugin-svelte';
+import { svelte, vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
 export default defineConfig({
   root: __dirname,
   base: './',
-  plugins: [svelte()],
+  plugins: [svelte({ preprocess: vitePreprocess() })],
   optimizeDeps: {
-    include: ['anixartjs'],
+    include: ['anixapi'],
   },
   build: {
     outDir: 'dist',

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../stores/navigation';
+  import Tabs from '../components/Tabs.svelte';
 
   interface Props {
     id?: number;
@@ -8,11 +9,21 @@
 
   let { id }: Props = $props();
 
+  function onProfileTabChange(tabId: string) {
+    if (tabId === 'friends') return;
+    navigate(id ? `/profile/${id}/votes` : '/profile/votes');
+  }
+
   let profileLogin = $state('Загрузка…');
   let profileAvatar = $state('');
   let resolvedId = $derived(id ?? 0);
   let titleSet = false;
   let friendCount = $state<number | null>(null);
+
+  const profileTabs = $derived([
+    { id: 'votes', label: 'Оценки' },
+    { id: 'friends', label: 'Друзья', badge: friendCount ?? undefined },
+  ]);
 
   let friends = $state<any[]>([]);
   let currentPage = $state(0);
@@ -122,15 +133,7 @@
       </div>
     </div>
 
-    <div class="bookmarks__tabs">
-      <button type="button" class="bookmarks__tab" data-tab="votes" onclick={() => navigate(id ? `/profile/${id}/votes` : '/profile/votes')}>Оценки</button>
-      <button type="button" class="bookmarks__tab bookmarks__tab--active" data-tab="friends">
-        Друзья
-        {#if friendCount != null}
-          <span class="profile-more__friends-count">{friendCount}</span>
-        {/if}
-      </button>
-    </div>
+    <Tabs tabs={profileTabs} activeId="friends" onChange={onProfileTabChange} />
 
     <div class="search-page__results">
       {#if loadState === 'loading'}

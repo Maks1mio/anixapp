@@ -4,7 +4,7 @@
   import { isDubberBlacklisted } from '../views/Watch/_utils';
   import { isPlayerWindowOpen } from '../stores/modals';
   import Select from './Select.svelte';
-  import type { SelectOption } from './Select.svelte';
+  import type { SelectOption } from './select';
   import Page from './Page.svelte';
 
   interface Props {

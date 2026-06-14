@@ -25,7 +25,7 @@ export interface LobbyPlaybackPayload {
 }
 
 export interface AppUpdateProgress {
-  state: 'idle' | 'downloading' | 'ready' | 'error';
+  state: 'idle' | 'downloading' | 'ready' | 'error' | 'installing' | 'install-error';
   percent: number;
   received: number;
   total: number;
@@ -44,6 +44,8 @@ declare global {
         electron: string;
         chrome: string;
         node: string;
+        anixapi: string;
+        /** @deprecated use anixapi */
         anixartjs: string;
       }>;
       window: ElectronWindowAPI;

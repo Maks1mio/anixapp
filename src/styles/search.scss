@@ -4,6 +4,7 @@
   max-width: 56rem;
   margin: 0 auto;
   width: 100%;
+  container-type: inline-size;
 }
 
 .search-page {
@@ -287,9 +288,9 @@
 
 .search-page__collections-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
   align-items: stretch;
-  gap: 1.25rem;
+  gap: 1.1rem 1rem;
   min-width: 0;
 }
 

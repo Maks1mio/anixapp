@@ -225,6 +225,15 @@
   border-radius: inherit;
   pointer-events: none;
   z-index: 0;
+
+  &--pulse {
+    animation: titlebar-update-pulse 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes titlebar-update-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
 }
 
 .titlebar__menu-item--update-ready {

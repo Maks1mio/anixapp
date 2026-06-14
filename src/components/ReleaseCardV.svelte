@@ -1,9 +1,10 @@
 <script lang="ts">
   import { navigate } from '../stores/navigation';
-  import { iconCheck, iconFlag, iconStar } from './icons';
+  import { iconCheck, iconFlag, iconStar, iconClock, iconCircleCheck } from './icons';
   import { renderDotsMenu, type DotsMenuEntry } from './dots-menu';
   import { ratingHue } from './release-card-h';
   import type { ReleaseCardData } from '../types/release';
+  import { formatHistoryViewTime } from '../utils/historyFormat';
   import { onMount } from 'svelte';
 
   type ListStatusId = 'watching' | 'planned' | 'completed' | 'on_hold' | 'dropped';
@@ -32,7 +33,19 @@
     dropped: 'rgba(185, 68, 68, 0.85)',
   };
 
-  let { data, loading = false }: { data?: ReleaseCardData; loading?: boolean } = $props();
+  let {
+    data,
+    loading = false,
+    variant = 'default',
+    onDeleteFromHistory,
+  }: {
+    data?: ReleaseCardData;
+    loading?: boolean;
+    variant?: 'default' | 'history';
+    onDeleteFromHistory?: (id: number) => void;
+  } = $props();
+
+  const isHistory = $derived(variant === 'history' || !!data?.historyView);
 
   const id = $derived(data?.id);
   const title = $derived(data?.titleRu || data?.titleEn || 'Без названия');
@@ -73,13 +86,45 @@
     return parts;
   })());
 
+  const historyEpisodeLabel = $derived(data?.historyView?.episodeLabel);
+  const historyDubberLabel = $derived(data?.historyView?.dubberLabel);
+  const historyTimeLabel = $derived(
+    data?.historyView?.viewedAt != null
+      ? formatHistoryViewTime(data.historyView.viewedAt)
+      : undefined
+  );
+  const historyEpisodeLine = $derived(
+    [historyEpisodeLabel, historyDubberLabel].filter(Boolean).join(' • ')
+  );
+
   // DotsMenu slot ref
   let menuSlotEl: HTMLElement | undefined = $state();
 
   onMount(() => {
     if (!menuSlotEl || loading) return;
 
-    const buildEntries = (): DotsMenuEntry[] => [
+    const buildEntries = (): DotsMenuEntry[] => {
+      if (isHistory) {
+        return [
+          { id: 'delete-history', label: 'Удалить из истории' },
+          { type: 'divider' },
+          {
+            id: 'favorite',
+            label: isFavorite ? 'Убрать из избранного' : 'Добавить в избранное',
+            icon: iconFlag(16, isFavorite),
+          },
+          { type: 'divider' },
+          { type: 'label', text: 'СТАТУС' },
+          { id: 'none', label: 'Не в списке' },
+          ...LIST_STATUSES.map((s) => ({
+            id: s.id,
+            label: s.label,
+            icon: currentStatusId === s.id ? iconCheck(16) : undefined,
+          })),
+        ];
+      }
+
+      return [
       {
         id: 'favorite',
         label: isFavorite ? 'Убрать из избранного' : 'Добавить в избранное',
@@ -94,6 +139,7 @@
         icon: currentStatusId === s.id ? iconCheck(16) : undefined,
       })),
     ];
+    };
 
     const menuWrap = renderDotsMenu({
       entries: buildEntries(),
@@ -101,6 +147,11 @@
       onSelect(entryId) {
         const api = window.anixApi;
         if (!id || !api) return;
+
+        if (entryId === 'delete-history') {
+          onDeleteFromHistory?.(id);
+          return;
+        }
 
         if (entryId === 'favorite') {
           const next = !isFavorite;
@@ -150,7 +201,7 @@
   }
 </script>
 
-<article class="release-card-v" class:release-card-v--skeleton={loading}>
+<article class="release-card-v{isHistory ? ' release-card-v--history' : ''}" class:release-card-v--skeleton={loading}>
   {#if loading}
     <div class="release-card-v__skeleton">
       <div class="release-card-v__poster release-card-v__skeleton-poster"></div>
@@ -198,6 +249,22 @@
           {/if}
         {/if}
       </p>
+      {#if isHistory && (historyEpisodeLine || historyTimeLabel)}
+        <div class="release-card-v__history-block">
+          {#if historyEpisodeLine}
+            <p class="release-card-v__history-line">
+              <span class="release-card-v__history-icon release-card-v__history-icon--episode" aria-hidden="true">{@html iconCircleCheck(12)}</span>
+              {historyEpisodeLine}
+            </p>
+          {/if}
+          {#if historyTimeLabel}
+            <p class="release-card-v__history-line release-card-v__history-line--time">
+              <span class="release-card-v__history-icon release-card-v__history-icon--time" aria-hidden="true">{@html iconClock(12)}</span>
+              {historyTimeLabel}
+            </p>
+          {/if}
+        </div>
+      {/if}
     </div>
   </a>
   {/if}

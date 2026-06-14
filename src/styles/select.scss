@@ -44,6 +44,19 @@
   }
 }
 
+.custom-select__trigger--compact {
+  width: auto;
+  justify-content: center;
+  gap: 0;
+}
+
+.custom-select__trigger-compact-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
 .custom-select__trigger-text {
   flex: 1;
   display: flex;
@@ -86,8 +99,205 @@
   }
 }
 
-.custom-select__trigger[aria-expanded="true"] .custom-select__trigger-icon {
+.custom-select__trigger[aria-expanded="true"] .custom-select__trigger-icon,
+.custom-select__trigger--open .custom-select__trigger-chevron {
   transform: rotate(180deg);
+}
+
+// ── Enhanced Select (search in field, multi, year range) ─────────────────────
+.custom-select__trigger--field {
+  cursor: default;
+  min-height: 2.5rem;
+  padding: 0.5rem 0.65rem;
+
+  &.custom-select__trigger--open {
+    border-color: $color-accent;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, $color-accent 35%, transparent);
+  }
+}
+
+.custom-select__trigger-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: $color-text;
+  font: inherit;
+  font-size: 0.92rem;
+  padding: 0;
+  outline: none;
+
+  &::placeholder {
+    color: $color-text-muted;
+  }
+}
+
+.custom-select__trigger-actions {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.15rem;
+  width: 3.45rem;
+}
+
+.custom-select__trigger-clear {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: $radius-sm;
+  background: transparent;
+  color: $color-text-muted;
+  cursor: pointer;
+  transition: color $transition, background $transition, opacity $transition;
+
+  &--hidden {
+    visibility: hidden;
+    pointer-events: none;
+    opacity: 0;
+  }
+
+  &:hover:not(:disabled) {
+    color: $color-accent;
+    background: color-mix(in srgb, $color-accent 12%, transparent);
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+}
+
+.custom-select__trigger-chevron {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: $color-text-muted;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.custom-select__dropdown--enhanced {
+  z-index: 100020;
+  display: flex;
+  flex-direction: column;
+  opacity: 1;
+}
+
+.custom-select__scroll-page {
+  --page-scrollbar-offset: 2px;
+  flex: 1;
+  min-height: 0;
+
+  .page__scroll {
+    padding: 0.15rem 0;
+  }
+
+  .custom-select__option {
+    display: block;
+    width: 100%;
+    border: none;
+    background: transparent;
+    text-align: left;
+    font: inherit;
+  }
+}
+
+.custom-select__section-title {
+  padding: 0.45rem 0.75rem 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: $color-text-muted;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.custom-select__check-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 2.25rem;
+  padding: 0.42rem 0.75rem 0.42rem 0.65rem;
+  font-size: 0.9rem;
+  color: $color-text;
+  cursor: pointer;
+  transition: background $transition;
+  box-sizing: border-box;
+
+  &:hover {
+    background: $color-surface-hover;
+  }
+
+  &.anix-checkbox {
+    gap: 0.65rem;
+    padding-left: 0.65rem;
+  }
+
+  .anix-checkbox__input {
+    left: 0.65rem;
+  }
+}
+
+.custom-select__empty {
+  padding: 0.75rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: $color-text-muted;
+}
+
+.custom-select__dropdown-foot {
+  flex-shrink: 0;
+  padding: 0.45rem 0.65rem;
+  border-top: 1px solid $color-border;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.custom-select__done {
+  border: none;
+  background: none;
+  color: $color-accent;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0.35rem 0.5rem;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 0.85;
+  }
+}
+
+.custom-select__year-tabs {
+  display: flex;
+  border-bottom: 1px solid $color-border;
+  flex-shrink: 0;
+}
+
+.custom-select__year-tab {
+  flex: 1;
+  padding: 0.5rem 0.4rem;
+  border: none;
+  background: transparent;
+  color: $color-text-muted;
+  font-size: 0.78rem;
+  cursor: pointer;
+
+  &--active {
+    color: $color-accent;
+    box-shadow: inset 0 -2px 0 $color-accent;
+  }
 }
 
 // ── Dropdown — fixed, появляется из кнопки ────────────────────────────────────

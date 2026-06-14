@@ -4,6 +4,8 @@
   background: transparent;
   border: none;
   overflow: visible;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .release-card-h__link {
@@ -11,6 +13,8 @@
   align-items: stretch;
   gap: 1.25rem;
   min-height: 200px;
+  min-width: 0;
+  max-width: 100%;
   color: inherit;
   text-decoration: none;
   padding: 0;
@@ -266,4 +270,171 @@
 @keyframes release-card-h-pulse {
   0%, 100% { opacity: 0.5; }
   50% { opacity: 1; }
+}
+
+.release-card-h--history {
+  .release-card-h__history-block {
+    margin-top: 0.65rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid color-mix(in srgb, $color-border 75%, transparent);
+  }
+}
+
+.release-card-h__history-line {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: $color-text-muted;
+  line-height: 1.35;
+}
+
+.release-card-h__history-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+
+  &--episode {
+    color: #e35689;
+  }
+
+  &--time {
+    color: #2dd4bf;
+  }
+}
+
+// ——— Related franchise list (timeline between posters) ———
+$related-chain-line-h: 1.25rem;
+
+.release-card-h--related {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  .release-card-h__link {
+    align-items: center;
+    min-height: 0;
+    min-width: 0;
+    max-width: 100%;
+    gap: 1.25rem;
+    padding: 0;
+  }
+
+  .release-card-h__body {
+    min-width: 0;
+  }
+
+  .release-card-h__poster-col .release-card-h__poster {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+.release-card-h__link--related {
+  cursor: pointer;
+}
+
+.release-card-h--related.release-card-h--current-related {
+  .release-card-h__link {
+    cursor: default;
+  }
+}
+
+.release-card-h__poster-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 160px;
+  min-width: 160px;
+}
+
+.release-card-h__chain-line {
+  width: 4px;
+  flex-shrink: 0;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.14);
+
+  &--top,
+  &--bottom {
+    height: $related-chain-line-h;
+    flex: 0 0 $related-chain-line-h;
+  }
+}
+
+// Первый / последний — симметричный отступ, как у соседних линий
+.release-card-h--related-first .release-card-h__poster-col::before,
+.release-card-h--related-last .release-card-h__poster-col::after {
+  content: '';
+  display: block;
+  width: 4px;
+  height: $related-chain-line-h;
+  flex-shrink: 0;
+}
+
+@media (max-width: 960px) {
+  .release-card-h--related {
+    .release-card-h__link {
+      gap: 0.85rem;
+      padding: 0;
+    }
+
+    .release-card-h__poster-col {
+      width: 120px;
+      min-width: 120px;
+    }
+
+    .release-card-h__title {
+      font-size: 1.05rem;
+    }
+
+    .release-card-h__desc {
+      -webkit-line-clamp: 2;
+    }
+  }
+}
+
+@media (max-width: 680px) {
+  .release-card-h__link {
+    gap: 0.35rem;
+    min-height: 0;
+  }
+
+  .release-card-h__poster,
+  .release-card-h__skeleton-poster {
+    width: 108px;
+    min-width: 108px;
+  }
+
+  .release-card-h__title {
+    font-size: 1.05rem;
+  }
+
+  .release-card-h__desc {
+    -webkit-line-clamp: 2;
+    margin-top: 0.35rem;
+  }
+
+  .release-card-h__genres {
+    gap: 0.3rem;
+  }
+
+  .release-card-h__tag {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.45rem;
+  }
+
+  .release-card-h--related {
+    .release-card-h__poster-col {
+      width: 108px;
+      min-width: 108px;
+    }
+  }
+
+  .release-cards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    gap: 0.85rem 0.65rem;
+  }
 }

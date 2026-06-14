@@ -1,9 +1,10 @@
 <script lang="ts">
   import { navigate } from '../stores/navigation';
-  import { iconCheck, iconFlag, iconInfo, iconStar } from './icons';
+  import { iconCheck, iconFlag, iconInfo, iconStar, iconClock, iconCircleCheck } from './icons';
   import { renderDotsMenu, type DotsMenuEntry } from './dots-menu';
   import { ratingHue } from './release-card-h';
   import type { ReleaseCardData } from '../types/release';
+  import { formatHistoryViewTime } from '../utils/historyFormat';
   import { onMount } from 'svelte';
 
   const LIST_STATUSES = [
@@ -37,7 +38,23 @@
     return String(n);
   }
 
-  let { data, loading = false }: { data?: ReleaseCardData; loading?: boolean } = $props();
+  let {
+    data,
+    loading = false,
+    variant = 'default',
+    relatedChain,
+    onDeleteFromHistory,
+  }: {
+    data?: ReleaseCardData;
+    loading?: boolean;
+    variant?: 'default' | 'history' | 'related';
+    relatedChain?: { isFirst: boolean; isLast: boolean; isCurrent?: boolean };
+    onDeleteFromHistory?: (id: number) => void;
+  } = $props();
+
+  const isHistory = $derived(variant === 'history' || !!data?.historyView);
+  const isRelated = $derived(variant === 'related');
+  const isCurrentRelated = $derived(!!relatedChain?.isCurrent);
 
   const id = $derived(data?.id);
   const title = $derived(data?.titleRu || data?.titleEn || 'Без названия');
@@ -98,7 +115,18 @@
   const statusClass = $derived(
     currentStatusId
       ? `release-card-h release-card-h--status release-card-h--status-${currentStatusId}`
-      : 'release-card-h'
+      : `release-card-h${isHistory ? ' release-card-h--history' : ''}`
+  );
+
+  const historyEpisodeLabel = $derived(data?.historyView?.episodeLabel);
+  const historyDubberLabel = $derived(data?.historyView?.dubberLabel);
+  const historyTimeLabel = $derived(
+    data?.historyView?.viewedAt != null
+      ? formatHistoryViewTime(data.historyView.viewedAt)
+      : undefined
+  );
+  const historyEpisodeLine = $derived(
+    [historyEpisodeLabel, historyDubberLabel].filter(Boolean).join(' • ')
   );
 
   let menuSlotEl: HTMLElement | undefined = $state();
@@ -111,6 +139,11 @@
       onSelect(entryId) {
         const api = window.anixApi;
         if (!id || !api) return;
+
+        if (entryId === 'delete-history') {
+          onDeleteFromHistory?.(id);
+          return;
+        }
 
         if (entryId === 'favorite') {
           const next = !isFavorite;
@@ -143,6 +176,26 @@
   });
 
   function buildEntries(): DotsMenuEntry[] {
+    if (isHistory) {
+      return [
+        { id: 'delete-history', label: 'Удалить из истории' },
+        { type: 'divider' },
+        {
+          id: 'favorite',
+          label: isFavorite ? 'Убрать из избранного' : 'Добавить в избранное',
+          icon: iconFlag(16, isFavorite),
+        },
+        { type: 'divider' },
+        { type: 'label', text: 'СТАТУС' },
+        { id: 'none', label: 'Не в списке' },
+        ...LIST_STATUSES.map((s) => ({
+          id: s.id,
+          label: s.label,
+          icon: currentStatusId === s.id ? iconCheck(16) : undefined,
+        })),
+      ];
+    }
+
     return [
       {
         id: 'favorite',
@@ -167,6 +220,10 @@
       e.stopPropagation();
       return;
     }
+    if (isCurrentRelated) {
+      e.preventDefault();
+      return;
+    }
     if (id) {
       e.preventDefault();
       navigate(`/release/${id}`);
@@ -178,7 +235,14 @@
   }
 </script>
 
-<article class={statusClass} class:release-card-h--skeleton={loading}>
+<article
+  class={statusClass}
+  class:release-card-h--skeleton={loading}
+  class:release-card-h--related={isRelated}
+  class:release-card-h--related-first={isRelated && relatedChain?.isFirst}
+  class:release-card-h--related-last={isRelated && relatedChain?.isLast}
+  class:release-card-h--current-related={isCurrentRelated}
+>
   {#if loading}
     <div class="release-card-h__skeleton">
       <div class="release-card-h__poster release-card-h__skeleton-poster"></div>
@@ -190,7 +254,33 @@
     </div>
   {:else}
   <!-- svelte-ignore a11y_invalid_attribute -->
-  <a href={id ? `/release/${id}` : '#'} class="release-card-h__link" onclick={handleLinkClick}>
+  <a
+    href={id && !isCurrentRelated ? `/release/${id}` : '#'}
+    class="release-card-h__link"
+    class:release-card-h__link--related={isRelated}
+    onclick={handleLinkClick}
+    aria-current={isCurrentRelated ? 'page' : undefined}
+  >
+    {#if isRelated}
+      <div class="release-card-h__poster-col">
+        {#if !relatedChain?.isFirst}
+          <div class="release-card-h__chain-line release-card-h__chain-line--top" aria-hidden="true"></div>
+        {/if}
+        <div class="release-card-h__poster">
+          {#if poster && !posterError}
+            <img src={poster} alt="" loading="lazy" onerror={handlePosterError} />
+          {:else}
+            <div class="release-card-h__no-poster"></div>
+          {/if}
+          {#if statusLabel}
+            <div class="release-card-h__status-badge">{statusLabel}</div>
+          {/if}
+        </div>
+        {#if !relatedChain?.isLast}
+          <div class="release-card-h__chain-line release-card-h__chain-line--bottom" aria-hidden="true"></div>
+        {/if}
+      </div>
+    {:else}
     <div class="release-card-h__poster">
       {#if poster && !posterError}
         <img src={poster} alt="" loading="lazy" onerror={handlePosterError} />
@@ -201,6 +291,7 @@
         <div class="release-card-h__status-badge">{statusLabel}</div>
       {/if}
     </div>
+    {/if}
     <div class="release-card-h__body">
       <div class="release-card-h__title-row">
         <h3 class="release-card-h__title">{title}</h3>
@@ -266,6 +357,27 @@
 
       {#if desc}
         <p class="release-card-h__desc">{desc}</p>
+      {/if}
+
+      {#if isHistory && (historyEpisodeLine || historyTimeLabel)}
+        <div class="release-card-h__history-block">
+          {#if historyEpisodeLine}
+            <p class="release-card-h__history-line">
+              <span class="release-card-h__history-icon release-card-h__history-icon--episode" aria-hidden="true">
+                {@html iconCircleCheck(14)}
+              </span>
+              <span>{historyEpisodeLine}</span>
+            </p>
+          {/if}
+          {#if historyTimeLabel}
+            <p class="release-card-h__history-line">
+              <span class="release-card-h__history-icon release-card-h__history-icon--time" aria-hidden="true">
+                {@html iconClock(14)}
+              </span>
+              <span>{historyTimeLabel}</span>
+            </p>
+          {/if}
+        </div>
       {/if}
     </div>
   </a>

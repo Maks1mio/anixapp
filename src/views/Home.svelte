@@ -1,22 +1,48 @@
 <script lang="ts">
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
+  import HomeCustomFilterView from '../components/HomeCustomFilterView.svelte';
+  import HomeDefaultTabModal from '../components/HomeDefaultTabModal.svelte';
+  import HomeTabRenameModal from '../components/HomeTabRenameModal.svelte';
   import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../stores/navigation';
-  import Tabs from '../components/Tabs.svelte';
+  import Tabs, { type TabItem } from '../components/Tabs.svelte';
+  import { iconHome, iconPencil, iconShuffle, iconSlidersHorizontal } from '../components/icons';
+  import { openFloatingMenu } from '../components/dots-menu';
   import { buildPosterUrl } from '../utils/posterUrl';
   import type { ReleaseCardData } from '../types/release';
   import { fetchAnnouncements, type Announcement } from '../services/announcements';
   import AnnouncementBanner from '../components/AnnouncementBanner.svelte';
+  import {
+    isHomeCustomTabConfigured,
+    loadHomeCustomTab,
+    renameHomeCustomTab,
+    saveHomeCustomTab,
+    serializeHomeCustomTabData,
+    setDefaultHomeTab,
+    setSavedHomeActiveTab,
+    toFilterRequest,
+    type HomeCustomTabData,
+  } from '../utils/homeCustomTab';
 
-  type HomeTabId = 'latest' | 'ongoing' | 'announced' | 'completed' | 'movies';
+  import {
+    DEFAULT_HOME_TAB,
+    getHomeTabFilterArgs,
+    HOME_TAB_DEFS,
+    resolveHomeTab,
+    type HomeTabId,
+  } from '../data/homeTabs';
 
-  const HOME_TABS = [
-    { id: 'latest' as HomeTabId,    label: 'Последние' },
-    { id: 'ongoing' as HomeTabId,   label: 'Онгоинги' },
-    { id: 'announced' as HomeTabId, label: 'Анонсы' },
-    { id: 'completed' as HomeTabId, label: 'Завершенные' },
-    { id: 'movies' as HomeTabId,    label: 'Фильмы' },
-  ];
+  let customTabData = $state<HomeCustomTabData>({ tabName: '', filter: null, activeTab: null });
+  let customTabConfigured = $derived(isHomeCustomTabConfigured(customTabData));
+
+  const homeTabs = $derived(
+    HOME_TAB_DEFS.map((tab) => ({
+      id: tab.id,
+      label: tab.id === 'my'
+        ? (customTabData.tabName.trim() || tab.label)
+        : tab.label,
+    })),
+  );
 
   function mapReleaseToCardData(raw: Record<string, unknown>): ReleaseCardData {
     const p = raw.poster as Record<string, { url?: string }> | undefined;
@@ -62,33 +88,43 @@
     };
   }
 
-  let activeTab = $state<HomeTabId>('latest');
+  function resolveInitialTab(data: HomeCustomTabData): HomeTabId {
+    return resolveHomeTab(data.activeTab);
+  }
+
+  let activeTab = $state<HomeTabId>(DEFAULT_HOME_TAB);
   let items = $state<ReleaseCardData[]>([]);
   let page = $state(0);
   let hasMore = $state(true);
   let isLoading = $state(false);
-  let loadState = $state<'loading' | 'error' | 'empty' | 'ready'>('loading');
+  let loadState = $state<'loading' | 'error' | 'empty' | 'ready' | 'unconfigured'>('loading');
   let errorMsg = $state('');
+  let randomLoading = $state(false);
+  let filterModalOpen = $state(false);
+  let defaultTabModalOpen = $state(false);
+  let renameTabModalOpen = $state(false);
+  let tabsSettingsBtn = $state<HTMLButtonElement | undefined>();
 
   let scrollEl: HTMLElement | null = null;
   let scrollListener: (() => void) | null = null;
   let wrapEl: HTMLElement | undefined = $state();
   let announcements = $state<Announcement[]>([]);
 
-  function getFilterArgs(tab: HomeTabId) {
-    const base = { sort: 0, status_id: null as number | null, category_id: null as number | null };
-    switch (tab) {
-      case 'latest':    return { ...base, sort: 0 };
-      case 'ongoing':   return { ...base, status_id: 2 };
-      case 'announced': return { ...base, status_id: 3 };
-      case 'completed': return { ...base, status_id: 1 };
-      case 'movies':    return { ...base, category_id: 2 };
-      default:          return base;
-    }
+  const isMyTab = $derived(activeTab === 'my');
+  const showMyTabEmpty = $derived(isMyTab && !customTabConfigured);
+
+  function getFilterArgs(tab: HomeTabId): Record<string, unknown> {
+    if (tab === 'my' && customTabData.filter) return toFilterRequest(customTabData.filter);
+    return getHomeTabFilterArgs(tab);
   }
 
   async function loadPage() {
     if (!window.anixApi || isLoading || !hasMore) return;
+    if (activeTab === 'my' && !customTabConfigured) {
+      loadState = 'unconfigured';
+      return;
+    }
+
     isLoading = true;
     const nextPage = page;
     if (nextPage === 0) loadState = 'loading';
@@ -142,14 +178,120 @@
     scrollListener = null;
   }
 
-  function setActiveTab(tabId: HomeTabId) {
-    if (tabId === activeTab) return;
-    activeTab = tabId;
+  function resetList() {
     page = 0;
     hasMore = true;
     items = [];
+  }
+
+  function setActiveTab(tabId: HomeTabId) {
+    if (tabId === activeTab) return;
+    activeTab = tabId;
+    void setSavedHomeActiveTab(tabId);
+    resetList();
+    if (tabId === 'my' && !customTabConfigured) {
+      loadState = 'unconfigured';
+      return;
+    }
     loadState = 'loading';
     loadPage();
+  }
+
+  function openFilterModal() {
+    filterModalOpen = true;
+  }
+
+  function openDefaultTabModal() {
+    defaultTabModalOpen = true;
+  }
+
+  function openRenameTabModal() {
+    renameTabModalOpen = true;
+  }
+
+  function handleTabsSettingsClick(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const btn = tabsSettingsBtn;
+    if (!btn) return;
+    openFloatingMenu({
+      anchor: btn,
+      entries: [
+        { id: 'default-tab', label: 'Изменить вкладку по умолч.', icon: iconHome(18) },
+        { id: 'configure-my', label: 'Настроить мою вкладку', icon: iconSlidersHorizontal(18) },
+      ],
+      onSelect: (id) => {
+        if (id === 'default-tab') openDefaultTabModal();
+        else if (id === 'configure-my') openFilterModal();
+      },
+    });
+  }
+
+  function handleTabContextMenu(tab: TabItem, e: MouseEvent) {
+    if (tab.id === 'my') {
+      openFloatingMenu({
+        x: e.clientX,
+        y: e.clientY,
+        entries: [
+          { id: 'rename', label: 'Переименовать', icon: iconPencil(18) },
+          { id: 'configure', label: 'Настроить вкладку', icon: iconSlidersHorizontal(18) },
+          { id: 'set-default', label: 'Назначить по умолчанию', icon: iconHome(18) },
+        ],
+        onSelect: (id) => {
+          if (id === 'rename') openRenameTabModal();
+          else if (id === 'configure') openFilterModal();
+          else if (id === 'set-default') void setDefaultHomeTab('my');
+        },
+      });
+      return;
+    }
+
+    openFloatingMenu({
+      x: e.clientX,
+      y: e.clientY,
+      entries: [
+        { id: 'set-default', label: 'Назначить по умолчанию', icon: iconHome(18) },
+      ],
+      onSelect: (id) => {
+        if (id === 'set-default') void setDefaultHomeTab(tab.id);
+      },
+    });
+  }
+
+  async function onDefaultTabSave(tabId: string) {
+    await setDefaultHomeTab(tabId);
+    defaultTabModalOpen = false;
+  }
+
+  async function onRenameTabSave(name: string) {
+    if (!name) return;
+    await renameHomeCustomTab(name);
+    renameTabModalOpen = false;
+  }
+
+  async function onFilterSave(data: HomeCustomTabData) {
+    const saved = serializeHomeCustomTabData(data);
+    await saveHomeCustomTab(saved);
+    customTabData = saved;
+    filterModalOpen = false;
+    if (activeTab === 'my') {
+      resetList();
+      loadState = 'loading';
+      loadPage();
+    }
+  }
+
+  async function onCustomTabChanged() {
+    customTabData = await loadHomeCustomTab();
+    if (activeTab === 'my') {
+      resetList();
+      if (!isHomeCustomTabConfigured(customTabData)) {
+        loadState = 'unconfigured';
+      } else {
+        loadState = 'loading';
+        loadPage();
+      }
+    }
   }
 
   async function loadAnnouncements() {
@@ -158,32 +300,47 @@
   }
 
   async function handleRandom() {
-    if (!window.anixApi) return;
+    if (!window.anixApi || randomLoading) return;
+    randomLoading = true;
     try {
       const data = await window.anixApi.release.random(true) as any;
       const release = data?.release as { id?: number } | undefined;
       if (release?.id) navigate(`/release/${release.id}`);
     } catch { /* ignore */ }
+    finally {
+      randomLoading = false;
+    }
   }
 
   function onLayoutChanged() {
-    // Re-render by forcing a state update (items reference stays same, Svelte re-renders)
     items = [...items];
   }
 
+  function onHomeCustomTabChangedEvent() {
+    void onCustomTabChanged();
+  }
+
   onMount(() => {
-    requestAnimationFrame(attachScroll);
-    loadPage();
+    void (async () => {
+      customTabData = await loadHomeCustomTab();
+      activeTab = resolveInitialTab(customTabData);
+      requestAnimationFrame(attachScroll);
+      if (activeTab === 'my' && !isHomeCustomTabConfigured(customTabData)) {
+        loadState = 'unconfigured';
+      } else {
+        loadPage();
+      }
+    })();
     window.addEventListener('anix:cardLayoutChanged', onLayoutChanged);
-    loadAnnouncements();
+    window.addEventListener('anix:homeCustomTabChanged', onHomeCustomTabChangedEvent);
+    void loadAnnouncements();
   });
 
   onDestroy(() => {
     detachScroll();
     window.removeEventListener('anix:cardLayoutChanged', onLayoutChanged);
+    window.removeEventListener('anix:homeCustomTabChanged', onHomeCustomTabChangedEvent);
   });
-
-  // Dynamic import of grid renderer (vanilla component)
 </script>
 
 <div class="view view-home" bind:this={wrapEl}>
@@ -195,25 +352,55 @@
     </div>
   {/if}
   <Tabs
-    tabs={HOME_TABS}
+    tabs={homeTabs}
     activeId={activeTab}
     onChange={(id) => setActiveTab(id as HomeTabId)}
+    onTabContextMenu={handleTabContextMenu}
     rootClassName="bookmarks__tabs releases-type"
   >
-    {#snippet rightActions()}
+    {#snippet leftActions()}
       <button
         type="button"
-        class="btn btn-secondary home-toolbar__random"
-        onclick={handleRandom}
+        class="bookmarks-toolbar__icon-btn bookmarks__tabs-settings"
+        title="Настройки вкладок"
+        aria-label="Настройки вкладок"
+        aria-haspopup="menu"
+        bind:this={tabsSettingsBtn}
+        onclick={handleTabsSettingsClick}
       >
-        Случайный релиз
+        {@html iconSlidersHorizontal(18)}
       </button>
+    {/snippet}
+    {#snippet rightActions()}
+      <div class="bookmarks-toolbar">
+        <button
+          type="button"
+          class="bookmarks-toolbar__icon-btn"
+          title="Случайный релиз"
+          aria-label="Случайный релиз"
+          disabled={randomLoading}
+          onclick={handleRandom}
+        >
+          {@html iconShuffle(18)}
+        </button>
+      </div>
     {/snippet}
   </Tabs>
 
   <div class="home-content">
     <div class="home-list">
-      {#if loadState === 'loading'}
+      {#if loadState === 'unconfigured' || showMyTabEmpty}
+        <div class="home-my-tab-empty">
+          <div class="home-my-tab-empty__icon" aria-hidden="true">👋</div>
+          <h2 class="home-my-tab-empty__title">Это ваша вкладка</h2>
+          <p class="home-my-tab-empty__text">
+            Настройте её под себя и укажите, что хотели бы здесь видеть
+          </p>
+          <button type="button" class="btn btn-secondary home-my-tab-empty__btn" onclick={openFilterModal}>
+            Настроить
+          </button>
+        </div>
+      {:else if loadState === 'loading'}
         <div class="home-list__loading">Загрузка…</div>
       {:else if loadState === 'error'}
         <p class="home-list__error">Ошибка: {errorMsg}</p>
@@ -227,3 +414,28 @@
     </div>
   </div>
 </div>
+
+{#if filterModalOpen}
+  <HomeCustomFilterView
+    initial={customTabData}
+    onSave={onFilterSave}
+    onClose={() => { filterModalOpen = false; }}
+  />
+{/if}
+
+{#if defaultTabModalOpen}
+  <HomeDefaultTabModal
+    options={[...HOME_TAB_DEFS]}
+    value={resolveHomeTab(customTabData.activeTab ?? activeTab)}
+    onSave={onDefaultTabSave}
+    onClose={() => { defaultTabModalOpen = false; }}
+  />
+{/if}
+
+{#if renameTabModalOpen}
+  <HomeTabRenameModal
+    initialName={customTabData.tabName.trim() || 'Моя вкладка'}
+    onSave={onRenameTabSave}
+    onClose={() => { renameTabModalOpen = false; }}
+  />
+{/if}

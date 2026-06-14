@@ -96,14 +96,44 @@ function isTriggerVisible(btn: HTMLElement): boolean {
   return r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw;
 }
 
-/* ———— Создание выпадающего списка ———— */
+function esc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
-function createPanel(
-  entries: DotsMenuEntry[],
-  btn: HTMLElement,
-  onSelect: (id: string) => void,
-  onClosed: () => void,
-): () => void {
+function positionAtPoint(dropdown: HTMLElement, x: number, y: number): void {
+  const vw = document.documentElement.clientWidth;
+  const vh = document.documentElement.clientHeight;
+
+  dropdown.style.left = '0px';
+  dropdown.style.top = '0px';
+  const dr = dropdown.getBoundingClientRect();
+  const mw = dr.width;
+  const mh = dr.height;
+
+  let left = x;
+  let top = y + GAP;
+  if (left + mw > vw - EDGE) left = Math.max(EDGE, vw - EDGE - mw);
+  if (left < EDGE) left = EDGE;
+  if (top + mh > vh - EDGE) top = y - GAP - mh;
+  if (top < EDGE) top = EDGE;
+
+  dropdown.style.left = `${left}px`;
+  dropdown.style.top = `${top}px`;
+}
+
+export interface OpenFloatingMenuOptions {
+  entries: DotsMenuEntry[];
+  onSelect: (id: string) => void;
+  anchor?: HTMLElement;
+  x?: number;
+  y?: number;
+}
+
+/** Выпадающее / контекстное меню (ПКМ или кнопка). */
+export function openFloatingMenu(opts: OpenFloatingMenuOptions): () => void {
+  closeActiveDotsMenu();
+
+  const ignoreEl = opts.anchor;
   const panel = document.createElement('div');
   panel.className = 'dots-menu__panel';
   panel.setAttribute('role', 'menu');
@@ -111,7 +141,7 @@ function createPanel(
   const list = document.createElement('div');
   list.className = 'dots-menu__list';
 
-  for (const entry of entries) {
+  for (const entry of opts.entries) {
     if ((entry as DotsMenuDivider).type === 'divider') {
       const d = document.createElement('div');
       d.className = 'dots-menu__divider';
@@ -131,8 +161,6 @@ function createPanel(
     el.className = 'dots-menu__item';
     if (item.disabled) el.classList.add('dots-menu__item--disabled');
     el.setAttribute('role', 'menuitem');
-    el.setAttribute('data-id', item.id);
-
     if (item.icon) {
       el.innerHTML =
         `<span class="dots-menu__item-icon">${item.icon}</span>` +
@@ -140,10 +168,9 @@ function createPanel(
     } else {
       el.textContent = item.label;
     }
-
     el.addEventListener('click', () => {
       if (item.disabled) return;
-      onSelect(item.id);
+      opts.onSelect(item.id);
       close();
     });
     list.appendChild(el);
@@ -151,14 +178,17 @@ function createPanel(
 
   panel.appendChild(list);
   document.body.appendChild(panel);
-  position(panel, btn);
+
+  if (opts.anchor) position(panel, opts.anchor);
+  else if (opts.x != null && opts.y != null) positionAtPoint(panel, opts.x, opts.y);
 
   requestAnimationFrame(() =>
     requestAnimationFrame(() => panel.classList.add('dots-menu__panel--open')),
   );
 
   const onOutside = (e: MouseEvent) => {
-    if (panel.contains(e.target as Node) || btn.contains(e.target as Node)) return;
+    const t = e.target as Node;
+    if (panel.contains(t) || ignoreEl?.contains(t)) return;
     close();
   };
   const onEsc = (e: KeyboardEvent) => {
@@ -166,11 +196,13 @@ function createPanel(
   };
   const onScrollResize = () => {
     if (!document.body.contains(panel)) return;
-    if (!isTriggerVisible(btn)) {
-      close();
-      return;
+    if (opts.anchor) {
+      if (!isTriggerVisible(opts.anchor)) {
+        close();
+        return;
+      }
+      position(panel, opts.anchor);
     }
-    position(panel, btn);
   };
 
   document.addEventListener('click', onOutside);
@@ -192,10 +224,8 @@ function createPanel(
     const done = () => {
       panel.removeEventListener('transitionend', done);
       panel.remove();
-      onClosed();
     };
     panel.addEventListener('transitionend', done);
-    // Fallback: если transitionend не сработал (элемент уже невидим)
     setTimeout(done, 250);
   }
 
@@ -203,8 +233,19 @@ function createPanel(
   return close;
 }
 
-function esc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+/* ———— Создание выпадающего списка ———— */
+
+function createPanel(
+  entries: DotsMenuEntry[],
+  btn: HTMLElement,
+  onSelect: (id: string) => void,
+  onClosed: () => void,
+): () => void {
+  const close = openFloatingMenu({ entries, onSelect, anchor: btn });
+  return () => {
+    close();
+    onClosed();
+  };
 }
 
 /* ———— Публичный рендер ———— */

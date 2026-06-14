@@ -2,6 +2,7 @@
 @use 'titlebar';
 @use 'layout';
 @use 'page';
+@use 'checkbox';
 @use 'settings-modal';
 @use 'notifications-modal';
 @use 'lobby-modal';
@@ -20,6 +21,7 @@
 @use 'watch-modal';
 @use 'watch';
 @use 'uikit';
+@use 'comments';
 
 *,
 *::before,

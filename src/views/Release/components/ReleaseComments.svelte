@@ -1,34 +1,82 @@
 <script lang="ts">
-  import { formatCommentTime } from '../_utils';
+  import { CommentsSection } from '../../../components/comments';
+  import { normalizeComment } from '../../../utils/comment';
+  import type { CommentData } from '../../../types/comment';
 
-  type Comment = {
-    id?: number;
-    profile?: { nickname?: string; avatar?: string };
-    message?: string;
-    timestamp?: number;
-  };
+  interface Props {
+    releaseId: number;
+    comments: Record<string, unknown>[];
+    totalCount?: number;
+  }
 
-  interface Props { comments: Comment[]; }
-  let { comments }: Props = $props();
+  let { releaseId, comments, totalCount }: Props = $props();
+
+  let selfProfileId = $state<number | null>(null);
+  let loadedItems = $state<CommentData[]>([]);
+  let loading = $state(false);
+
+  $effect(() => {
+    releaseId;
+    const preview = comments.map((raw) => normalizeComment(raw));
+
+    if (preview.length > 0) {
+      loadedItems = preview;
+      return;
+    }
+
+    const count = totalCount ?? 0;
+    if (!count || !window.anixApi?.comments?.release) {
+      loadedItems = [];
+      return;
+    }
+
+    let cancelled = false;
+    loading = true;
+
+    void window.anixApi.comments.release
+      .list(releaseId, 0, 0)
+      .then((data) => {
+        if (cancelled) return;
+        loadedItems = (data.content ?? []).map((raw) => normalizeComment(raw));
+      })
+      .catch(() => {
+        if (!cancelled) loadedItems = [];
+      })
+      .finally(() => {
+        if (!cancelled) loading = false;
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  });
+
+  $effect(() => {
+    releaseId;
+    void window.anixApi?.profile?.self?.().then((data: { profile?: { id?: number } }) => {
+      selfProfileId = data?.profile?.id ?? null;
+    });
+  });
 </script>
 
-<div class="release-page__section" id="comments">
-  <h2 class="release-page__section-title">Комментарии ({comments.length})</h2>
-  <div class="release-page__comments">
-    {#each comments.slice(0, 20) as c}
-      {@const prof     = c.profile ?? {}}
-      {@const nickname = (prof as { nickname?: string }).nickname ?? 'Пользователь'}
-      {@const avatar   = (prof as { avatar?: string }).avatar ?? ''}
-      <div class="release-page__comment">
-        <div class="release-page__comment-avatar" style={avatar ? `background-image:url(${avatar})` : ''}></div>
-        <div class="release-page__comment-body">
-          <span class="release-page__comment-author">{nickname}</span>
-          {#if c.timestamp}
-            <span class="release-page__comment-time">{formatCommentTime(c.timestamp)}</span>
-          {/if}
-          <div class="release-page__comment-text">{c.message ?? ''}</div>
-        </div>
+{#if loading && loadedItems.length === 0}
+  <section class="anix-comments release-page__section" id="comments">
+    <header class="anix-comments__header">
+      <div class="anix-comments__heading">
+        <h2 class="anix-comments__title">
+          Комментарии{totalCount ? ` (${totalCount})` : ''}
+        </h2>
+        <p class="anix-comments__subtitle">Популярные и актуальные</p>
       </div>
-    {/each}
-  </div>
-</div>
+    </header>
+    <div class="anix-comments__empty">Загрузка…</div>
+  </section>
+{:else}
+  <CommentsSection
+    items={loadedItems}
+    totalCount={totalCount ?? loadedItems.length}
+    {releaseId}
+    {selfProfileId}
+    showAllHref={`/release/${releaseId}/comments`}
+  />
+{/if}

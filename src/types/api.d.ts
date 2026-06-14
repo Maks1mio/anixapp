@@ -21,7 +21,7 @@ export interface AnixApi {
     self: () => Promise<any>;
     info: (id: number) => Promise<{ profile?: unknown }>;
     getFriends: (profileId: number, page?: number) => Promise<any>;
-    getBookmarks: (profileId: number, type: number, page?: number) => Promise<any>;
+    getBookmarks: (profileId: number, type: number, page?: number, sort?: number, filterAnnounce?: number, filter?: number) => Promise<any>;
     getVotedReleases: (profileId: number, page?: number) => Promise<any>;
   };
 
@@ -29,18 +29,68 @@ export interface AnixApi {
     info: (id: number, extended?: boolean) => Promise<{ release?: unknown } & Record<string, unknown>>;
     filter: (page?: number, filterArgs?: Record<string, unknown>, extended?: boolean) => Promise<{ content?: unknown[] }>;
     random: (extended?: boolean) => Promise<{ release?: unknown }>;
-    related: (releaseId: number, page?: number) => Promise<any>;
+    randomFavorite: (extended?: boolean) => Promise<{ release?: unknown }>;
+    randomProfileList: (profileId: number, status: number, extended?: boolean) => Promise<{ release?: unknown }>;
+    related: (relatedId: number, page?: number) => Promise<any>;
     getDubbers: (releaseId: number) => Promise<{ types?: Array<{ id: number; name: string; icon?: string; episode_count: number; view_count: number }> }>;
     getDubberSources: (releaseId: number, dubberId: number) => Promise<{ sources?: Array<{ id: number; name: string; episode_count: number }> }>;
     getEpisodes: (releaseId: number, dubberId: number, sourceId: number, sort?: number) => Promise<{ episodes?: Array<{ position: number; name: string; url: string; iframe: boolean; is_watched?: boolean }> }>;
     getEpisode: (releaseId: number, sourceId: number, episodePosition: number) => Promise<{ episode?: { position: number; name: string; url: string; iframe: boolean } }>;
     getDirectVideoLink: (embedUrl: string) => Promise<{ directUrl: string | null; quality: string | null }>;
-    getVideos: (releaseId: number) => Promise<{ blocks?: Array<{ id: number; title: string; image: string; url: string; category?: { id: number; name: string } }> }>;
-    getVideoInCategory: (releaseId: number, categoryId: number, page?: number) => Promise<{ content?: Array<{ id: number; title: string; image: string; url: string }> }>;
+    getVideos: (releaseId: number) => Promise<{
+      blocks?: Array<{ category?: { id: number; name: string }; videos?: unknown[] }>;
+      streaming_platforms?: Array<{ id: number; name: string; icon?: string; url: string }>;
+      last_videos?: unknown[];
+    }>;
+    getVideoInCategory: (releaseId: number, categoryId: number, page?: number) => Promise<{ content?: unknown[] }>;
     addFavorite: (releaseId: number) => Promise<void>;
     removeFavorite: (releaseId: number) => Promise<void>;
     setListStatus: (releaseId: number, statusId: number) => Promise<void>;
     clearListStatus: (releaseId: number, statusId: number) => Promise<void>;
+    vote: (releaseId: number, vote: number) => Promise<{ code?: number; release?: unknown }>;
+    deleteVote: (releaseId: number) => Promise<{ code?: number; release?: unknown }>;
+  };
+
+  comments: {
+    release: {
+      list: (releaseId: number, page?: number, sort?: number) => Promise<{
+        content?: Record<string, unknown>[];
+        total_count?: number;
+        total_elements?: number;
+        last?: boolean;
+      }>;
+      get: (commentId: number) => Promise<Record<string, unknown>>;
+      replies: (commentId: number, page?: number, sort?: number) => Promise<{
+        content?: Record<string, unknown>[];
+      }>;
+      vote: (commentId: number, vote: number) => Promise<{ code?: number }>;
+      add: (
+        releaseId: number,
+        body: {
+          message: string;
+          isSpoiler: boolean;
+          parentCommentId?: number | null;
+          replyToProfileId?: number | null;
+        },
+      ) => Promise<{ comment?: Record<string, unknown>; code?: number }>;
+    };
+  };
+
+  type: {
+    all: () => Promise<{
+      code?: number;
+      types?: Array<{
+        id: number;
+        name: string;
+        icon?: string | null;
+        workers?: string;
+        is_sub?: boolean;
+        channel_id?: number | null;
+        episodes_count?: number;
+        view_count?: number;
+        pinned?: boolean;
+      }>;
+    }>;
   };
 
   feed: {
@@ -60,6 +110,7 @@ export interface AnixApi {
   collection: {
     info: (id: number) => Promise<any>;
     all: (page?: number, sort?: number) => Promise<{ content?: unknown[] }>;
+    favorites: (page?: number) => Promise<{ content?: unknown[]; total_count?: number }>;
     getReleases: (id: number, page?: number) => Promise<any>;
     getRandomRelease: (id: number) => Promise<any>;
     addFavorite: (id: number) => Promise<any>;
@@ -78,17 +129,31 @@ export interface AnixApi {
 
   history: {
     all: (page?: number) => Promise<any>;
+    delete: (releaseId: number) => Promise<void>;
     add: (releaseId: number, sourceId: number, episodePosition: number) => Promise<void>;
     markWatched: (releaseId: number, sourceId: number, episodePosition: number) => Promise<void>;
     unmarkWatched: (releaseId: number, sourceId: number, episodePosition: number) => Promise<void>;
   };
 
   favorites: {
-    all: (page?: number) => Promise<any>;
+    all: (page?: number, sort?: number, filterAnnounce?: number, filter?: number) => Promise<any>;
   };
 
   article: {
     info: (id: number) => Promise<{ article?: unknown }>;
+  };
+
+  home: {
+    getCustomTab: () => Promise<{
+      tabName: string;
+      filter: Record<string, unknown> | null;
+      activeTab: string | null;
+    }>;
+    setCustomTab: (data: {
+      tabName: string;
+      filter: Record<string, unknown> | null;
+      activeTab?: string | null;
+    }) => Promise<{ ok: boolean }>;
   };
 
   settings: {

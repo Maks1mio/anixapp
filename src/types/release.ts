@@ -26,4 +26,10 @@ export interface ReleaseCardData {
   listStatus?: 'watching' | 'planned' | 'completed' | 'on_hold' | 'dropped';
   /** Личная оценка текущего пользователя (1–5, my_vote из API) */
   myVote?: number;
+  /** Данные последнего просмотра (вкладка «История») */
+  historyView?: {
+    episodeLabel?: string;
+    dubberLabel?: string;
+    viewedAt?: number;
+  };
 }

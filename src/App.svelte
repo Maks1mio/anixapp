@@ -15,6 +15,8 @@
   import Login from './views/Login.svelte';
   import Home from './views/Home.svelte';
   import Catalog from './views/Catalog.svelte';
+  import ReleaseCommentReplies from './views/ReleaseCommentReplies.svelte';
+  import ReleaseCommentsPage from './views/ReleaseComments.svelte';
   import Release from './views/Release/page.svelte';
   import Related from './views/Related.svelte';
   import Bookmarks from './views/Bookmarks.svelte';
@@ -32,6 +34,7 @@
   import NotificationsModal from './components/NotificationsModal.svelte';
   import WatchModal from './components/WatchModal.svelte';
   import Toast from './components/Toast.svelte';
+  import OfflineScreen from './views/OfflineScreen.svelte';
 
   initTheme();
 
@@ -70,6 +73,8 @@
     });
   });
 
+  const releaseCommentRepliesMatch = $derived(path.match(/^\/release\/(\d+)\/comment\/(\d+)\/replies$/));
+  const releaseCommentsMatch = $derived(path.match(/^\/release\/(\d+)\/comments$/));
   const releaseMatch          = $derived(path.match(/^\/release\/(\d+)$/));
   const relatedMatch          = $derived(path.match(/^\/release\/(\d+)\/related$/));
   const profileMatch          = $derived(path.match(/^\/profile\/(\d+)$/));
@@ -300,18 +305,7 @@
 </script>
 
 {#if $appScreen === 'offline'}
-  <div class="layout">
-    <div class="view-offline">
-      <div class="view-offline__body">
-        <div class="offline-card">
-          <div class="offline-card__spinner" aria-hidden="true"></div>
-          <h1 class="offline-card__title">Проверяем соединение с сервером…</h1>
-          <p class="offline-card__text">С серверами Anixart сейчас могут быть проблемы. Пробуем подключиться.</p>
-          <p class="offline-card__hint">Проверяем соединение каждые несколько секунд.</p>
-        </div>
-      </div>
-    </div>
-  </div>
+  <OfflineScreen onRetry={checkAndShow} />
 
 {:else if $appScreen === 'login'}
   <Login onSuccess={() => appScreen.set('main')} />
@@ -325,6 +319,17 @@
     {:else if relatedMatch}
       {#key relatedMatch[1]}
         <Related id={parseInt(relatedMatch[1], 10)} />
+      {/key}
+    {:else if releaseCommentRepliesMatch}
+      {#key `${releaseCommentRepliesMatch[1]}-${releaseCommentRepliesMatch[2]}`}
+        <ReleaseCommentReplies
+          releaseId={parseInt(releaseCommentRepliesMatch[1], 10)}
+          commentId={parseInt(releaseCommentRepliesMatch[2], 10)}
+        />
+      {/key}
+    {:else if releaseCommentsMatch}
+      {#key releaseCommentsMatch[1]}
+        <ReleaseCommentsPage releaseId={parseInt(releaseCommentsMatch[1], 10)} />
       {/key}
     {:else if releaseMatch}
       {#key releaseMatch[1]}

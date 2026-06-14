@@ -155,6 +155,41 @@
 .release-card-v__star--on  { color: #fbbf24; }
 .release-card-v__star--off { color: rgba(255, 255, 255, 0.18); }
 
+.release-card-v--history {
+  .release-card-v__history-block {
+    margin-top: 0.35rem;
+    padding-top: 0.35rem;
+    border-top: 1px solid color-mix(in srgb, $color-border 75%, transparent);
+  }
+}
+
+.release-card-v__history-line {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: 0.72rem;
+  color: $color-text-muted;
+  line-height: 1.3;
+
+  &--time {
+    margin-top: 0.1rem;
+  }
+}
+
+.release-card-v__history-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+
+  &--episode {
+    color: #e35689;
+  }
+
+  &--time {
+    color: #2dd4bf;
+  }
+}
+
 // Скелетон загрузки
 .release-card-v__skeleton {
   display: flex;

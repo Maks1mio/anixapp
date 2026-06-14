@@ -1,10 +1,10 @@
 <script lang="ts">
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
+  import CollectionCard, { type CollectionCardData } from '../components/CollectionCard.svelte';
   import { onMount, onDestroy, untrack } from 'svelte';
   import { navigate } from '../stores/navigation';
   import Tabs from '../components/Tabs.svelte';
   import { addSearchHistory } from '../utils/search-history';
-  import { iconBookmark, iconFlag } from '../components/icons';
   import type { ReleaseCardData } from '../types/release';
 
   type SearchTab = 'releases' | 'profiles' | 'collections';
@@ -64,6 +64,20 @@
       releaseDate: (raw.release_date as string) || undefined,
       isFavorite: !!(raw.is_favorite),
       listStatus,
+    };
+  }
+
+  function mapCollectionToCardData(raw: Record<string, unknown>): CollectionCardData {
+    return {
+      id: raw.id as number,
+      title: (raw.title ?? raw.name ?? 'Без названия') as string,
+      image: (raw.image as string) || undefined,
+      description: (raw.description as string) || undefined,
+      releaseCount: typeof raw.release_count === 'number' ? raw.release_count : undefined,
+      notesCount: typeof raw.notes_count === 'number' ? raw.notes_count : (typeof raw.comment_count === 'number' ? raw.comment_count : undefined),
+      bookmarksCount: typeof raw.bookmarks_count === 'number' ? raw.bookmarks_count : undefined,
+      favoritesCount: typeof raw.favorites_count === 'number' ? raw.favorites_count : undefined,
+      isFavorite: !!(raw.is_favorite),
     };
   }
 
@@ -367,54 +381,8 @@
           </div>
         {:else}
           <div class="search-page__collections search-page__collections-grid" data-search-rel="collections">
-            {#each collectionResults as c}
-              <article class="collection-card">
-                <span class="collection-card__page collection-card__page--back-2" aria-hidden="true"></span>
-                <span class="collection-card__page collection-card__page--back-1" aria-hidden="true"></span>
-                <!-- svelte-ignore a11y_invalid_attribute -->
-                <a
-                  href="/collection/{c.id}"
-                  class="collection-card__link"
-                  onclick={(e) => { e.preventDefault(); navigate(`/collection/${c.id}`); }}
-                >
-                  <div class="collection-card__poster">
-                    {#if c.image}
-                      <img src={c.image} alt="" loading="lazy" />
-                    {:else}
-                      <div class="collection-card__poster-placeholder"></div>
-                    {/if}
-                    <div class="collection-card__badges">
-                      {#if typeof c.notes_count === 'number'}
-                        <div class="collection-card__badge">
-                          <span class="collection-card__badge-icon">💬</span>
-                          <span class="collection-card__badge-text">{c.notes_count}</span>
-                        </div>
-                      {/if}
-                      {#if typeof c.bookmarks_count === 'number'}
-                        <div class="collection-card__badge">
-                          <span class="collection-card__badge-icon">{@html iconBookmark(14)}</span>
-                          <span class="collection-card__badge-text">{c.bookmarks_count}</span>
-                        </div>
-                      {/if}
-                      {#if typeof c.favorites_count === 'number'}
-                        <div class="collection-card__badge collection-card__badge--favorites{c.is_favorite ? ' collection-card__badge--in-bookmarks' : ''}">
-                          <span class="collection-card__badge-icon">{@html iconFlag(14, !!c.is_favorite)}</span>
-                          <span class="collection-card__badge-text">{c.favorites_count}</span>
-                        </div>
-                      {/if}
-                    </div>
-                  </div>
-                  <div class="collection-card__footer">
-                    <h3 class="collection-card__title">{c.title || c.name || 'Без названия'}</h3>
-                    {#if c.description}
-                      <p class="collection-card__desc">{c.description}</p>
-                    {/if}
-                    {#if typeof c.release_count === 'number'}
-                      <span class="collection-card__meta">{c.release_count} релизов</span>
-                    {/if}
-                  </div>
-                </a>
-              </article>
+            {#each collectionResults as c (c.id)}
+              <CollectionCard data={mapCollectionToCardData(c)} />
             {/each}
           </div>
         {/if}

@@ -1,13 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import Select from '../../../components/Select.svelte';
-
-  const ENDPOINT_OPTIONS = [
-    { value: 'https://api-s.anixsekai.com', label: 'api-s.anixsekai.com' },
-    { value: 'https://api.anixart.app', label: 'api.anixart.app' },
-    { value: 'https://api.anixart.tv', label: 'api.anixart.tv (Заблокирован в РФ)' },
-    { value: 'https://api.fake-anixapp.invalid', label: 'api.fake-anixapp.invalid (пример недоступного сервера)' },
-  ];
+  import { API_ENDPOINT_OPTIONS, DEFAULT_API_ENDPOINT } from '../../../constants/apiEndpoints';
 
   let currentEndpoint = $state('');
   let endpointLoaded = $state(false);
@@ -20,7 +14,7 @@
     if (!window.anixApi) return;
     try {
       const url = (await window.anixApi.client.getBaseUrl()) as string;
-      currentEndpoint = url || ENDPOINT_OPTIONS[0].value;
+      currentEndpoint = url || DEFAULT_API_ENDPOINT;
       endpointLoaded = true;
       endpointLoadError = false;
       void pingOnce();
@@ -35,7 +29,7 @@
     if (!window.anixApi) return;
     const nextState: Record<string, PingState> = {};
     await Promise.all(
-      ENDPOINT_OPTIONS.map(async (opt) => {
+      API_ENDPOINT_OPTIONS.map(async (opt) => {
         try {
           const res = (await window.anixApi!.client.pingBaseUrl(opt.value)) as PingState;
           nextState[opt.value] = res;
@@ -62,7 +56,7 @@
   }
 
   const endpointOptions = $derived(
-    ENDPOINT_OPTIONS.map((opt) => ({
+    API_ENDPOINT_OPTIONS.map((opt) => ({
       value: opt.value,
       label: opt.label,
       desc: pingLabel(opt.value) || undefined,

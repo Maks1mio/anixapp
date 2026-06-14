@@ -1,4 +1,4 @@
-import { KodikParser } from 'anixartjs';
+import { KodikParser } from 'anixapi';
 
 export function isHlsUrl(url: string): boolean {
   return /\.m3u8/i.test(url) || url.includes(':hls:manifest');

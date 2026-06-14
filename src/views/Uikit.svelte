@@ -2,8 +2,10 @@
   import ReleaseCardH from "../components/ReleaseCardH.svelte";
   import ReleaseCardV from "../components/ReleaseCardV.svelte";
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
+  import CollectionCard, { type CollectionCardData } from '../components/CollectionCard.svelte';
   import Select from '../components/Select.svelte';
-  import type { SelectOption } from '../components/Select.svelte';
+  import Tabs from '../components/Tabs.svelte';
+  import type { SelectOption } from '../components/select';
   import { onMount } from 'svelte';
   import { navigate } from '../stores/navigation';
   import type { ReleaseCardData } from '../types/release';
@@ -40,6 +42,10 @@
 
   // Tabs demo state
   let tabsDemoActive = $state<'latest' | 'ongoing'>('latest');
+  const tabsDemoTabs = [
+    { id: 'latest', label: 'Последние' },
+    { id: 'ongoing', label: 'Онгоинги' },
+  ];
   const TABS_DEMO_LATEST: ReleaseCardData[] = [
     { id: 1, titleRu: 'Адская девочка', rating: 4.23 },
     { id: 2, titleRu: 'Провожающая в последний путь Фрирен', rating: 4.9 },
@@ -70,6 +76,16 @@
     'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg',
     'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg',
   ];
+
+  const SAMPLE_COLLECTION: CollectionCardData = {
+    id: 1,
+    title: 'Этти 18+ Этти',
+    image: 'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg',
+    description: 'Подборка для вечера — когда не знаешь, что посмотреть, но хочется что-то лёгкое.',
+    notesCount: 6,
+    favoritesCount: 19596,
+    isFavorite: false,
+  };
 
   onMount(async () => {
     // Dots menu demo (vanilla helper, still used by ReleaseCardH/V)
@@ -153,10 +169,11 @@
     <h2 class="uikit-section__title">Tabs & Grid</h2>
     <p class="uikit-section__desc">Комбинация tabs-bar и грида карточек как на главной/в закладках</p>
     <div class="uikit-tabs-grid-demo">
-      <div class="bookmarks__tabs">
-        <button type="button" class="bookmarks__tab{tabsDemoActive === 'latest' ? ' bookmarks__tab--active' : ''}" onclick={() => (tabsDemoActive = 'latest')}>Последние</button>
-        <button type="button" class="bookmarks__tab{tabsDemoActive === 'ongoing' ? ' bookmarks__tab--active' : ''}" onclick={() => (tabsDemoActive = 'ongoing')}>Онгоинги</button>
-      </div>
+      <Tabs
+        tabs={tabsDemoTabs}
+        activeId={tabsDemoActive}
+        onChange={(id) => { tabsDemoActive = id as 'latest' | 'ongoing'; }}
+      />
       <div class="bookmarks__grid">
         <ReleaseCardsGrid items={tabsDemoItems} />
       </div>
@@ -263,26 +280,10 @@
   <!-- Collection card -->
   <section class="uikit-section">
     <h2 class="uikit-section__title">Карточка коллекции</h2>
-    <p class="uikit-section__desc">Горизонтальная карточка коллекции с постером и счётчиками</p>
+    <p class="uikit-section__desc">Сетка и cover-вариант как в мобильном приложении</p>
     <div class="uikit-collections">
-      <article class="collection-card">
-        <span class="collection-card__page collection-card__page--back-2" aria-hidden="true"></span>
-        <span class="collection-card__page collection-card__page--back-1" aria-hidden="true"></span>
-        <!-- svelte-ignore a11y_invalid_attribute -->
-        <a href="/collection/1" class="collection-card__link" onclick={(e) => { e.preventDefault(); navigate('/collection/1'); }}>
-          <div class="collection-card__poster">
-            <img src="https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg" alt="" loading="lazy" />
-            <div class="collection-card__badges">
-              <div class="collection-card__badge"><span class="collection-card__badge-icon">💬</span><span class="collection-card__badge-text">8</span></div>
-              <div class="collection-card__badge"><span class="collection-card__badge-icon">🔖</span><span class="collection-card__badge-text">95</span></div>
-            </div>
-          </div>
-          <div class="collection-card__footer">
-            <h3 class="collection-card__title">Этти 18+ Этти</h3>
-            <span class="collection-card__meta">42 релизов</span>
-          </div>
-        </a>
-      </article>
+      <CollectionCard data={SAMPLE_COLLECTION} />
+      <CollectionCard data={{ ...SAMPLE_COLLECTION, isFavorite: true }} variant="cover" />
     </div>
   </section>
 

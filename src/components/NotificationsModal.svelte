@@ -340,6 +340,36 @@
               </div>
             </div>
           </div>
+        {:else if updateCard.state === 'installing'}
+          <div class="notifications-modal__item notifications-modal__item--app-update">
+            <div class="notifications-modal__thumb notifications-modal__thumb--placeholder">
+              <span class="notifications-modal__marker notifications-modal__marker--update-ready">{@html iconDownload(12)}</span>
+            </div>
+            <div class="notifications-modal__content">
+              <div class="notifications-modal__row">
+                <span class="notifications-modal__title">Установка обновления…</span>
+                <span class="notifications-modal__badge">Ожидание</span>
+              </div>
+              <div class="notifications-modal__subtitle">
+                Введите пароль в диалоге авторизации для завершения установки.
+              </div>
+            </div>
+          </div>
+        {:else if updateCard.state === 'install-error'}
+          <div class="notifications-modal__item notifications-modal__item--app-update">
+            <div class="notifications-modal__thumb notifications-modal__thumb--placeholder">
+              <span class="notifications-modal__marker notifications-modal__marker--update"></span>
+            </div>
+            <div class="notifications-modal__content">
+              <div class="notifications-modal__row">
+                <span class="notifications-modal__title">Установка отменена</span>
+              </div>
+              <div class="notifications-modal__subtitle">
+                Вы отменили ввод пароля или произошла ошибка. Нажмите «Установить» чтобы повторить.
+                {updateCard.errorMessage ? ` (${updateCard.errorMessage})` : ''}
+              </div>
+            </div>
+          </div>
         {/if}
       {/if}
 

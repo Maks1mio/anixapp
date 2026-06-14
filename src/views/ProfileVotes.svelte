@@ -11,6 +11,16 @@
 
   let { id }: Props = $props();
 
+  const profileTabs = $derived([
+    { id: 'votes', label: 'Оценки' },
+    { id: 'friends', label: 'Друзья' },
+  ]);
+
+  function onProfileTabChange(tabId: string) {
+    if (tabId === 'votes') return;
+    navigate(id ? `/profile/${id}/friends` : '/profile/friends');
+  }
+
   const POSTER_BASE = 'https://s.anixmirai.com/posters';
 
   function buildPosterUrl(value: string | undefined): string | undefined {
@@ -178,10 +188,7 @@
       </div>
     </div>
 
-    <div class="bookmarks__tabs">
-      <button type="button" class="bookmarks__tab bookmarks__tab--active" data-tab="votes">Оценки</button>
-      <button type="button" class="bookmarks__tab" data-tab="friends" onclick={() => navigate(id ? `/profile/${id}/friends` : '/profile/friends')}>Друзья</button>
-    </div>
+    <Tabs tabs={profileTabs} activeId="votes" onChange={onProfileTabChange} />
 
     <div class="search-page__results">
       {#if loadState === 'loading'}

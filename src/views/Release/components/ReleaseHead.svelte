@@ -1,6 +1,6 @@
 <script lang="ts">
   import Select from '../../../components/Select.svelte';
-  import type { SelectOption } from '../../../components/Select.svelte';
+  import type { SelectOption } from '../../../components/select';
   import { iconPlay, iconStar } from '../../../components/icons';
   import type { ListStatusId } from '../_types';
   import { openImageLightbox, formatVoteCount } from '../_utils';

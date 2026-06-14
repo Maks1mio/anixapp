@@ -172,15 +172,20 @@ contextBridge.exposeInMainWorld('anixApi', {
     self: () => ipcRenderer.invoke('anix:selfProfile'),
     info: (id) => ipcRenderer.invoke('anix:profileById', id),
     getFriends: (profileId, page = 0) => ipcRenderer.invoke('anix:friends', profileId, page),
-    getBookmarks: (profileId, type, page = 0) => ipcRenderer.invoke('anix:getBookmarks', profileId, type, page),
+    getBookmarks: (profileId, type, page = 0, sort = 1, filterAnnounce = 0, filter = 0) =>
+      ipcRenderer.invoke('anix:getBookmarks', profileId, type, page, sort, filterAnnounce, filter),
     getVotedReleases: (profileId, page = 0) => ipcRenderer.invoke('anix:votedReleases', profileId, page),
   },
 
   release: {
     info: (id, extended = true) => ipcRenderer.invoke('anix:releaseById', id, extended),
-    filter: (page = 0, filterArgs = {}, extended = true) => ipcRenderer.invoke('anix:filterReleases', page, filterArgs, extended),
+    filter: (page = 0, filterArgs = {}, extended = true) =>
+      ipcRenderer.invoke('anix:filterReleases', page, JSON.parse(JSON.stringify(filterArgs)), extended),
     random: (extended = true) => ipcRenderer.invoke('anix:randomRelease', extended),
-    related: (releaseId, page = 0) => ipcRenderer.invoke('anix:relatedReleases', releaseId, page),
+    randomFavorite: (extended = true) => ipcRenderer.invoke('anix:randomFavorite', extended),
+    randomProfileList: (profileId, status, extended = true) =>
+      ipcRenderer.invoke('anix:randomProfileList', profileId, status, extended),
+    related: (relatedId, page = 0) => ipcRenderer.invoke('anix:relatedReleases', relatedId, page),
     getDubbers: (releaseId) => ipcRenderer.invoke('anix:getDubbers', releaseId),
     getDubberSources: (releaseId, dubberId) => ipcRenderer.invoke('anix:getDubberSources', releaseId, dubberId),
     getEpisodes: (releaseId, dubberId, sourceId, sort = 1) => ipcRenderer.invoke('anix:getEpisodes', releaseId, dubberId, sourceId, sort),
@@ -192,6 +197,24 @@ contextBridge.exposeInMainWorld('anixApi', {
     removeFavorite: (releaseId) => ipcRenderer.invoke('anix:removeFromFavorites', releaseId),
     setListStatus: (releaseId, statusId) => ipcRenderer.invoke('anix:setListStatus', releaseId, statusId),
     clearListStatus: (releaseId, statusId) => ipcRenderer.invoke('anix:clearListStatus', releaseId, statusId),
+    vote: (releaseId, vote) => ipcRenderer.invoke('anix:releaseVote', releaseId, vote),
+    deleteVote: (releaseId) => ipcRenderer.invoke('anix:releaseDeleteVote', releaseId),
+  },
+
+  comments: {
+    release: {
+      list: (releaseId, page = 0, sort = 1) =>
+        ipcRenderer.invoke('anix:releaseComments', releaseId, page, sort),
+      get: (commentId) => ipcRenderer.invoke('anix:releaseCommentById', commentId),
+      replies: (commentId, page = 0, sort = 2) =>
+        ipcRenderer.invoke('anix:releaseCommentReplies', commentId, page, sort),
+      vote: (commentId, vote) => ipcRenderer.invoke('anix:releaseCommentVote', commentId, vote),
+      add: (releaseId, body) => ipcRenderer.invoke('anix:releaseCommentAdd', releaseId, body),
+    },
+  },
+
+  type: {
+    all: () => ipcRenderer.invoke('anix:typeAll'),
   },
 
   feed: {
@@ -211,6 +234,7 @@ contextBridge.exposeInMainWorld('anixApi', {
   collection: {
     info: (id) => ipcRenderer.invoke('anix:collectionById', id),
     all: (page = 1, sort = 2) => ipcRenderer.invoke('anix:collectionsAll', page, sort),
+    favorites: (page = 0) => ipcRenderer.invoke('anix:collectionFavorites', page),
     getReleases: (id, page = 0) => ipcRenderer.invoke('anix:collectionReleases', id, page),
     getRandomRelease: (id) => ipcRenderer.invoke('anix:collectionRandomRelease', id),
     addFavorite: (id) => ipcRenderer.invoke('anix:addCollectionFavorite', id),
@@ -229,17 +253,24 @@ contextBridge.exposeInMainWorld('anixApi', {
 
   history: {
     all: (page = 0) => ipcRenderer.invoke('anix:history', page),
+    delete: (releaseId) => ipcRenderer.invoke('anix:deleteFromHistory', releaseId),
     add: (releaseId, sourceId, episodePosition) => ipcRenderer.invoke('anix:addToHistory', releaseId, sourceId, episodePosition),
     markWatched: (releaseId, sourceId, episodePosition) => ipcRenderer.invoke('anix:markEpisodeAsWatched', releaseId, sourceId, episodePosition),
     unmarkWatched: (releaseId, sourceId, episodePosition) => ipcRenderer.invoke('anix:unmarkEpisodeAsWatched', releaseId, sourceId, episodePosition),
   },
 
   favorites: {
-    all: (page = 0) => ipcRenderer.invoke('anix:favorites', page),
+    all: (page = 0, sort = 1, filterAnnounce = 0, filter = 0) =>
+      ipcRenderer.invoke('anix:favorites', page, sort, filterAnnounce, filter),
   },
 
   article: {
     info: (id) => ipcRenderer.invoke('anix:articleById', id),
+  },
+
+  home: {
+    getCustomTab: () => ipcRenderer.invoke('anix:homeCustomTabGet'),
+    setCustomTab: (data) => ipcRenderer.invoke('anix:homeCustomTabSet', JSON.parse(JSON.stringify(data))),
   },
 
   settings: {

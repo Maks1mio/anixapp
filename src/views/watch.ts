@@ -4,7 +4,7 @@
  */
 
 import Hls from 'hls.js';
-import { KodikParser } from 'anixartjs';
+import { KodikParser } from 'anixapi';
 import { getWatchParams } from '../router';
 import { renderPage } from '../components/page';
 import { createIcons, Play, Pause, Volume2, Maximize, List, Headphones, SkipForward, Check, ChevronRight, Zap } from 'lucide';

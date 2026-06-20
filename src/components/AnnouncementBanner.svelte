@@ -7,6 +7,7 @@
   } from 'lucide';
   import { navigate } from '../stores/navigation';
   import type { Announcement } from '../services/announcements';
+  import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import { fetchReactions, sendReaction } from '../services/announcements';
   import type { Reaction, ReactionsResult } from '../services/announcements';
 
@@ -56,7 +57,7 @@
         return {
           id: uid,
           login: p?.login ?? p?.nickname ?? String(uid),
-          avatar: p?.avatar ?? null,
+          avatar: p?.avatar ? resolveCdnAssetUrl(p.avatar) : null,
         } as Commenter;
       } catch {
         return { id: uid, login: String(uid), avatar: null } as Commenter;
@@ -82,8 +83,15 @@
   }
 
   const commentCount    = $derived(announcement.commentCount ?? 0);
-  const showCommentsBar = $derived(announcement.commentsEnabled && commentCount > 0);
+  const showCommentsBar = $derived(announcement.commentsEnabled);
   const showAvatars     = $derived(commenters.length >= 2);
+  const commentsCta     = $derived(
+    commentCount > 0
+      ? commentLabel(commentCount)
+      : announcement.commentsLocked
+        ? 'Чат закрыт'
+        : 'Написать комментарий'
+  );
 
   // ── Parse lastMessage into { type, text } for rich preview ───────────────
   type PreviewKind = 'text' | 'gif' | 'release' | 'sticker';
@@ -179,7 +187,7 @@
         {/if}
 
         <div class="ann__cbar-text">
-          <span class="ann__cbar-count">{commentLabel(commentCount)}</span>
+          <span class="ann__cbar-count">{commentsCta}</span>
           {#if lastPreview}
             <span class="ann__cbar-preview">
               {#if lastPreview.kind === 'gif'}

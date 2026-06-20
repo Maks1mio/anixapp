@@ -1,5 +1,6 @@
 <script lang="ts">
   import { navigate } from '../stores/navigation';
+  import { toCdnProxyUrl } from '../utils/posterUrl';
   import { iconCheck, iconFlag, iconStar, iconClock, iconCircleCheck } from './icons';
   import { renderDotsMenu, type DotsMenuEntry } from './dots-menu';
   import { ratingHue } from './release-card-h';
@@ -49,7 +50,7 @@
 
   const id = $derived(data?.id);
   const title = $derived(data?.titleRu || data?.titleEn || 'Без названия');
-  const poster = $derived(data?.poster || '');
+  const poster = $derived(toCdnProxyUrl(data?.poster || ''));
   const ratingValue = $derived(typeof data?.rating === 'number' ? data.rating : null);
   const myVote = $derived(typeof data?.myVote === 'number' && data.myVote > 0 ? data.myVote : null);
 

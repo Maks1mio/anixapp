@@ -4,11 +4,12 @@
   import CommentRow from '../components/comments/CommentRow.svelte';
   import CommentList from '../components/comments/CommentList.svelte';
   import CommentComposer from '../components/comments/CommentComposer.svelte';
-  import CommentsToolbar from '../components/comments/CommentsToolbar.svelte';
-  import { iconArrowLeft } from '../components/icons';
+  import CommentsLoadSentinel from '../components/comments/CommentsLoadSentinel.svelte';
+  import CommentsPageHeader from '../components/comments/CommentsPageHeader.svelte';
   import {
     normalizeComment,
     patchCommentInTree,
+    buildReleaseCommentAddBody,
   } from '../utils/comment';
   import type { CommentData, CommentSort } from '../types/comment';
   import { COMMENT_REPLIES_SORT_DEFAULT } from '../types/comment';
@@ -33,6 +34,9 @@
   let sort = $state<CommentSort>(COMMENT_REPLIES_SORT_DEFAULT);
   let selfProfileId = $state<number | null>(null);
   let submitting = $state(false);
+  let replyTarget = $state<CommentData | null>(null);
+  let scrollRootEl = $state<HTMLElement | null>(null);
+  let releaseTitle = $state('');
 
   async function loadParent() {
     if (!window.anixApi?.comments?.release) return;
@@ -87,6 +91,10 @@
     void window.anixApi?.profile?.self?.().then((data: { profile?: { id?: number } }) => {
       selfProfileId = data?.profile?.id ?? null;
     });
+    void window.anixApi?.release?.info(releaseId, false).then((data: { release?: { title_ru?: string; title_original?: string } }) => {
+      const r = data.release;
+      releaseTitle = r?.title_ru || r?.title_original || '';
+    });
     void reloadAll();
   });
 
@@ -116,8 +124,15 @@
     });
   }
 
-  function handleReplyToParent() {
-    document.getElementById('replies-composer')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  function focusComposer() {
+    queueMicrotask(() => {
+      document.querySelector<HTMLTextAreaElement>('#replies-composer textarea')?.focus();
+    });
+  }
+
+  function handleReply(comment: CommentData) {
+    replyTarget = comment;
+    focusComposer();
   }
 
   function handleNavigateReplies(reply: CommentData) {
@@ -128,12 +143,17 @@
     if (!window.anixApi?.comments?.release) return;
     submitting = true;
     try {
-      const res = await window.anixApi.comments.release.add(releaseId, {
-        message: payload.message,
-        isSpoiler: payload.isSpoiler,
-        parentCommentId: commentId,
-        replyToProfileId: parent?.profile.id ?? null,
-      }) as { comment?: Record<string, unknown> };
+      const res = await window.anixApi.comments.release.add(
+        releaseId,
+        buildReleaseCommentAddBody(payload, {
+          replyTarget,
+          threadRootCommentId: commentId,
+        }),
+      ) as { comment?: Record<string, unknown>; code?: number };
+
+      if (res.code != null && res.code !== 0) {
+        throw new Error(String(res.code));
+      }
 
       if (res.comment) {
         const added = normalizeComment(res.comment);
@@ -142,11 +162,67 @@
         if (parent) {
           parent = { ...parent, replyCount: parent.replyCount + 1 };
         }
+        replyTarget = null;
       }
     } catch {
       /* ignore */
     } finally {
       submitting = false;
+    }
+  }
+
+  async function handleEdit(
+    comment: CommentData,
+    payload: { message: string; isSpoiler: boolean },
+  ) {
+    if (!window.anixApi?.comments?.release?.edit) return;
+
+    const isParent = comment.id === parent?.id;
+    const prev = isParent ? parent : replies.find((c) => c.id === comment.id);
+    if (!prev) return;
+
+    const optimistic: CommentData = {
+      ...prev,
+      message: payload.message,
+      isSpoiler: payload.isSpoiler,
+      isEdited: true,
+    };
+
+    if (isParent) parent = optimistic;
+    else replies = patchCommentInTree(replies, comment.id, optimistic);
+
+    try {
+      await window.anixApi.comments.release.edit(comment.id, {
+        message: payload.message,
+        isSpoiler: payload.isSpoiler,
+      });
+    } catch {
+      if (isParent) parent = prev;
+      else replies = patchCommentInTree(replies, comment.id, prev);
+    }
+  }
+
+  async function handleDelete(comment: CommentData) {
+    if (!window.anixApi?.comments?.release?.delete) return;
+
+    const isParent = comment.id === parent?.id;
+    const prev = isParent ? parent : replies.find((c) => c.id === comment.id);
+    if (!prev) return;
+
+    const optimistic: CommentData = {
+      ...prev,
+      isDeleted: true,
+      message: '',
+    };
+
+    if (isParent) parent = optimistic;
+    else replies = patchCommentInTree(replies, comment.id, optimistic);
+
+    try {
+      await window.anixApi.comments.release.delete(comment.id);
+    } catch {
+      if (isParent) parent = prev;
+      else replies = patchCommentInTree(replies, comment.id, prev);
     }
   }
 
@@ -162,76 +238,100 @@
       navigate(`/release/${releaseId}/comments`);
     }
   }
+
+  const composerReplyLogin = $derived(replyTarget?.profile.login ?? null);
+
+  $effect(() => {
+    hasMore;
+    loadingMore;
+    replies.length;
+    const root = scrollRootEl;
+    if (!hasMore || loadingMore || !root) return;
+
+    queueMicrotask(() => {
+      if (!hasMore || loadingMore) return;
+      if (root.scrollHeight <= root.clientHeight + 80) {
+        loadMore();
+      }
+    });
+  });
 </script>
 
 <div class="view anix-comments-page anix-comments-replies-page">
-  <div class="anix-comments-replies-page__top">
-    <button type="button" class="anix-comments-replies-page__back" onclick={goBack} aria-label="Назад">
-      {@html iconArrowLeft(22)}
-    </button>
-    <div class="view-header anix-comments-replies-page__header">
-      <h1 class="view-header__title">Ответы</h1>
-    </div>
-    {#if loadState === 'ready'}
-      <CommentsToolbar
-        variant="header"
-        totalCount={totalCount}
+  <div class="anix-comments anix-comments--dock-layout">
+    <div class="anix-comments__scroll-body" bind:this={scrollRootEl}>
+      <CommentsPageHeader
+        title="Ответы"
+        subtitle={releaseTitle}
+        backLabel="Назад"
+        onBack={goBack}
+        onSubtitleClick={() => navigate(`/release/${releaseId}`)}
+        showToolbar={loadState === 'ready'}
+        {totalCount}
         {sort}
         onSortChange={handleSortChange}
       />
-    {/if}
-  </div>
 
-  {#if loadState === 'loading' && !parent}
-    <div class="anix-comments__empty">Загрузка…</div>
-  {:else if loadState === 'error'}
-    <div class="anix-comments__empty">{errorMsg}</div>
-  {:else}
-    {#if parent}
-      <div class="anix-comments-replies-page__parent">
-        <CommentRow
-          comment={parent}
-          canReply={true}
-          canVote={!!window.anixApi?.comments?.release}
-          showRepliesToggle={false}
-          isMine={selfProfileId != null && parent.profile.id === selfProfileId}
-          onReply={handleReplyToParent}
-          onVote={(c) => handleVote(c)}
+      {#if loadState === 'loading' && !parent}
+        <div class="anix-comments__empty">Загрузка…</div>
+      {:else if loadState === 'error'}
+        <div class="anix-comments__empty">{errorMsg}</div>
+      {:else}
+        {#if parent}
+          <div class="anix-comments-replies-page__parent">
+            <CommentRow
+              comment={parent}
+              canReply={true}
+              canVote={!!window.anixApi?.comments?.release}
+              canManage={!!window.anixApi?.comments?.release}
+              showRepliesToggle={false}
+              isMine={selfProfileId != null && parent.profile.id === selfProfileId}
+              onReply={() => handleReply(parent!)}
+              onVote={(c) => handleVote(c)}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+            />
+          </div>
+        {/if}
+
+        {#if loadState === 'loading'}
+          <div class="anix-comments__empty">Загрузка…</div>
+        {:else if replies.length === 0}
+          <div class="anix-comments__empty">Ответов пока нет</div>
+        {:else}
+          <CommentList
+            items={replies}
+            {releaseId}
+            canReply={true}
+            canVote={!!window.anixApi?.comments?.release}
+            navigateReplies={true}
+            {selfProfileId}
+            onReply={handleReply}
+            onVote={handleVote}
+            onNavigateReplies={handleNavigateReplies}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
+        {/if}
+
+        <CommentsLoadSentinel
+          {hasMore}
+          loading={loadingMore}
+          onLoad={loadMore}
+          scrollRoot={scrollRootEl}
+        />
+      {/if}
+    </div>
+
+    {#if loadState !== 'error'}
+      <div class="anix-comments__dock" id="replies-composer">
+        <CommentComposer
+          busy={submitting}
+          replyToLogin={composerReplyLogin}
+          onCancelReply={() => { replyTarget = null; }}
+          onSubmit={handleSubmit}
         />
       </div>
     {/if}
-
-    {#if loadState === 'loading'}
-      <div class="anix-comments__empty">Загрузка…</div>
-    {:else if replies.length === 0}
-      <div class="anix-comments__empty">Ответов пока нет</div>
-    {:else}
-      <CommentList
-        items={replies}
-        {releaseId}
-        canReply={true}
-        canVote={!!window.anixApi?.comments?.release}
-        navigateReplies={true}
-        {selfProfileId}
-        onReply={handleReplyToParent}
-        onVote={handleVote}
-        onNavigateReplies={handleNavigateReplies}
-      />
-    {/if}
-
-    {#if hasMore}
-      <button
-        type="button"
-        class="anix-comments-page__load-more"
-        disabled={loadingMore}
-        onclick={loadMore}
-      >
-        {loadingMore ? 'Загрузка…' : 'Загрузить ещё'}
-      </button>
-    {/if}
-
-    <div id="replies-composer">
-      <CommentComposer busy={submitting} onSubmit={handleSubmit} />
-    </div>
-  {/if}
+  </div>
 </div>

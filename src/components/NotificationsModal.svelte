@@ -9,7 +9,8 @@
     iconUser,
   } from './icons';
   import type { AppUpdateProgress } from '../types/electron';
-    import Page from './Page.svelte';
+  import { resolveCdnAssetUrl } from '../utils/posterUrl';
+  import Page from './Page.svelte';
 
   interface Props {
     onClose: () => void;
@@ -54,11 +55,9 @@
   let updateCard = $state<AppUpdateProgress | null>(null);
 
   // ── helpers ───────────────────────────────────────────────────────────────────
-  function safeUrl(raw: unknown): string {
+  function cdnImage(raw: unknown): string {
     if (typeof raw !== 'string') return '';
-    const s = raw.trim();
-    if (s.startsWith('http://') || s.startsWith('https://')) return s;
-    return '';
+    return resolveCdnAssetUrl(raw);
   }
 
   function formatTime(ts: number | undefined): string {
@@ -142,7 +141,7 @@
       const episode = n.episode;
       const release = episode?.release;
       releaseId = release?.id;
-      image = release?.image || '';
+      image = cdnImage(release?.image);
       const pos = episode?.position;
       const epName = episode?.name || '';
       const posStr = typeof pos === 'number' ? `${pos} серия` : epName;
@@ -156,14 +155,14 @@
       const n = raw as RelatedReleaseNotification;
       const rel = n.release;
       releaseId = rel?.id;
-      image = rel?.image || '';
+      image = cdnImage(rel?.image);
       title = rel?.title_ru || 'Релиз';
       subtitle = 'Связанный релиз';
       markerHtml = `<span class="notifications-modal__marker notifications-modal__marker--related">${iconBookmark(13)}</span>`;
     } else if (type === 'friend') {
       const p = raw.by_profile;
       profileId = p?.id != null ? Number(p.id) : undefined;
-      image = safeUrl(p?.avatar);
+      image = cdnImage(p?.avatar);
       const login = String(p?.login || 'Пользователь');
       title = login;
       const status = String(raw.status || '');
@@ -181,7 +180,7 @@
     } else if (raw.release) {
       const rel = raw.release;
       releaseId = rel?.id;
-      image = rel?.image || '';
+      image = cdnImage(rel?.image);
       title = rel?.title_ru || 'Релиз';
       subtitle = 'Уведомление о релизе';
     } else {

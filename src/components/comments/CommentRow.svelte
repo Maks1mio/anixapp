@@ -2,6 +2,8 @@
   import { navigate } from '../../stores/navigation';
   import { iconChevronRight, iconPencil } from '../icons';
   import CommentVote from './CommentVote.svelte';
+  import CommentComposer from './CommentComposer.svelte';
+  import UserAvatar from '../UserAvatar.svelte';
   import {
     episodeContextLabel,
     formatCommentTimestamp,
@@ -16,12 +18,15 @@
     nested?: boolean;
     canReply?: boolean;
     canVote?: boolean;
+    canManage?: boolean;
     repliesExpanded?: boolean;
     showRepliesToggle?: boolean;
     isMine?: boolean;
     onReply?: (comment: CommentData) => void;
     onVote?: (comment: CommentData) => void;
     onToggleReplies?: (comment: CommentData) => void;
+    onEdit?: (comment: CommentData, payload: { message: string; isSpoiler: boolean }) => void | Promise<void>;
+    onDelete?: (comment: CommentData) => void | Promise<void>;
   }
 
   let {
@@ -29,25 +34,57 @@
     nested = false,
     canReply = true,
     canVote = true,
+    canManage = true,
     repliesExpanded = false,
     showRepliesToggle = true,
     isMine = false,
     onReply,
     onVote,
     onToggleReplies,
+    onEdit,
+    onDelete,
   }: Props = $props();
 
   let spoilerRevealed = $state(false);
+  let editing = $state(false);
+  let editBusy = $state(false);
 
   const contextLabel = $derived(episodeContextLabel(comment.postedAtEpisode));
   const contentHidden = $derived(isCommentContentHidden(comment, spoilerRevealed));
   const hiddenLabel = $derived(hiddenCommentLabel(comment));
   const repliesText = $derived(repliesLabel(comment.replyCount));
-  const avatarLetter = $derived(comment.profile.login.charAt(0).toUpperCase() || '?');
   const hasRepliesToggle = $derived(showRepliesToggle && comment.replyCount > 0);
+  const showOwnerActions = $derived(canManage && isMine && !comment.isDeleted && !!onEdit && !!onDelete);
 
   function openProfile() {
     if (comment.profile.id) navigate(`/profile/${comment.profile.id}`);
+  }
+
+  function startEdit() {
+    editing = true;
+    spoilerRevealed = true;
+  }
+
+  function cancelEdit() {
+    editing = false;
+  }
+
+  async function submitEdit(payload: { message: string; isSpoiler: boolean }) {
+    if (!onEdit || editBusy) return;
+    editBusy = true;
+    try {
+      await onEdit(comment, payload);
+      editing = false;
+      spoilerRevealed = !payload.isSpoiler;
+    } finally {
+      editBusy = false;
+    }
+  }
+
+  function requestDelete() {
+    if (!onDelete) return;
+    if (!window.confirm('Удалить комментарий?')) return;
+    void onDelete(comment);
   }
 </script>
 
@@ -58,11 +95,7 @@
   id="comment-{comment.id}"
 >
   <button type="button" class="anix-comment__avatar" onclick={openProfile} aria-label={comment.profile.login}>
-    {#if comment.profile.avatar}
-      <img src={comment.profile.avatar} alt="" loading="lazy" decoding="async" />
-    {:else}
-      <span class="anix-comment__avatar-fallback">{avatarLetter}</span>
-    {/if}
+    <UserAvatar src={comment.profile.avatar} label={comment.profile.login} />
   </button>
 
   <div class="anix-comment__main">
@@ -93,6 +126,21 @@
 
     {#if comment.isDeleted}
       <div class="anix-comment__deleted">Комментарий удалён</div>
+    {:else if editing}
+      <div class="anix-comment__edit">
+        {#key comment.id}
+          <CommentComposer
+            label="Редактирование"
+            initialMessage={comment.message}
+            initialIsSpoiler={comment.isSpoiler}
+            resetOnSubmit={false}
+            busy={editBusy}
+            autofocus={true}
+            onCancel={cancelEdit}
+            onSubmit={submitEdit}
+          />
+        {/key}
+      </div>
     {:else if contentHidden}
       <button
         type="button"
@@ -114,15 +162,24 @@
       {/if}
     {/if}
 
-    {#if !comment.isDeleted}
+    {#if !comment.isDeleted && !editing}
       <div class="anix-comment__footer">
-        {#if canReply}
-          <button type="button" class="anix-comment__reply" onclick={() => onReply?.(comment)}>
-            Ответить
-          </button>
-        {:else}
-          <span></span>
-        {/if}
+        <div class="anix-comment__footer-start">
+          {#if canReply}
+            <button type="button" class="anix-comment__reply" onclick={() => onReply?.(comment)}>
+              Ответить
+            </button>
+          {/if}
+
+          {#if showOwnerActions}
+            <button type="button" class="anix-comment__reply" onclick={startEdit}>
+              Изменить
+            </button>
+            <button type="button" class="anix-comment__reply anix-comment__reply--danger" onclick={requestDelete}>
+              Удалить
+            </button>
+          {/if}
+        </div>
 
         <CommentVote {comment} disabled={!canVote} {onVote} />
       </div>
@@ -130,17 +187,17 @@
   </div>
 
   {#if hasRepliesToggle}
-    <div class="anix-comment__thread" aria-hidden="true">
-      <span class="anix-comment__thread-stem"></span>
-      <span class="anix-comment__thread-elbow"></span>
+    <span class="anix-comment__thread-stem" aria-hidden="true"></span>
+    <div class="anix-comment__replies-row">
+      <span class="anix-comment__thread-elbow" aria-hidden="true"></span>
+      <button
+        type="button"
+        class="anix-comment__replies"
+        onclick={() => onToggleReplies?.(comment)}
+      >
+        {repliesText}
+        {@html iconChevronRight(16)}
+      </button>
     </div>
-    <button
-      type="button"
-      class="anix-comment__replies"
-      onclick={() => onToggleReplies?.(comment)}
-    >
-      {repliesText}
-      {@html iconChevronRight(16)}
-    </button>
   {/if}
 </article>

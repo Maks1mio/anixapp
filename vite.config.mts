@@ -18,6 +18,7 @@ export default defineConfig({
         resolve(__dirname, 'player.html'),
         resolve(__dirname, 'theme-editor.html'),
         resolve(__dirname, 'upscale-tool.html'),
+        resolve(__dirname, 'overview-video-editor.html'),
       ],
     },
   },

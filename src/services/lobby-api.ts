@@ -1,10 +1,9 @@
 /**
  * API лобби совместного просмотра.
- * Базовый URL: nhapp-api.onrender.com/anixapp/lobby
- * Синхронизация: пауза, таймкод, смена серии/озвучки. Громкость не синхронизируется.
+ * База берётся из services/anixback-endpoint (настройка в dev).
  */
 
-const LOBBY_BASE = 'https://nhapp-api.onrender.com/anixapp/lobby';
+import { getLobbyHttpBase } from './anixback-endpoint';
 
 export interface LobbyParticipant {
   id: number | string;
@@ -34,7 +33,7 @@ export interface LobbyRoom {
 }
 
 async function fetchLobby(path: string, options: RequestInit = {}): Promise<Response> {
-  const url = `${LOBBY_BASE}${path}`;
+  const url = `${getLobbyHttpBase()}${path}`;
   const res = await fetch(url, {
     ...options,
     headers: {

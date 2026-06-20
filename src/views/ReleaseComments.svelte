@@ -1,11 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getSearchParams } from '../router';
+  import { navigate } from '../stores/navigation';
   import { CommentsSection } from '../components/comments';
-  import CommentsToolbar from '../components/comments/CommentsToolbar.svelte';
+  import CommentsPageHeader from '../components/comments/CommentsPageHeader.svelte';
   import { normalizeComment } from '../utils/comment';
   import type { CommentData, CommentSort } from '../types/comment';
   import { COMMENT_SORT_DEFAULT } from '../types/comment';
+  import { setDiscordContext, refreshDiscordPresence } from '../services/discord-presence';
 
   interface Props {
     releaseId: number;
@@ -25,6 +27,12 @@
   let sort = $state<CommentSort>(COMMENT_SORT_DEFAULT);
   let selfProfileId = $state<number | null>(null);
   let releaseTitle = $state('');
+  const initialReplyId = $derived.by(() => {
+    const reply = getSearchParams().get('reply');
+    if (!reply) return null;
+    const id = Number(reply);
+    return Number.isFinite(id) ? id : null;
+  });
 
   async function loadPage(nextPage: number, append = false) {
     if (!window.anixApi?.comments?.release) {
@@ -65,19 +73,16 @@
       selfProfileId = data?.profile?.id ?? null;
     });
 
-    void window.anixApi?.release?.info(releaseId, false).then((data: { release?: { title_ru?: string; title_original?: string } }) => {
+    void window.anixApi?.release?.info(releaseId, false).then((data: { release?: { title_ru?: string; title_original?: string; poster?: unknown; image?: string } }) => {
       const r = data.release;
       releaseTitle = r?.title_ru || r?.title_original || '';
+      if (releaseTitle) {
+        setDiscordContext({ releaseTitle });
+        refreshDiscordPresence();
+      }
     });
 
     void loadPage(0);
-
-    const reply = getSearchParams().get('reply');
-    if (reply) {
-      queueMicrotask(() => {
-        document.getElementById('comments-composer')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      });
-    }
   });
 
   function handleSortChange(next: CommentSort) {
@@ -89,31 +94,41 @@
     if (!hasMore || loadingMore) return;
     void loadPage(page + 1, true);
   }
+
+  function goToRelease() {
+    navigate(`/release/${releaseId}`);
+  }
 </script>
 
+{#snippet pageHeader()}
+  <CommentsPageHeader
+    title="Комментарии"
+    subtitle={releaseTitle}
+    backLabel="К странице тайтла"
+    onBack={goToRelease}
+    onSubtitleClick={goToRelease}
+    showToolbar={loadState === 'ready'}
+    {totalCount}
+    {sort}
+    onSortChange={handleSortChange}
+  />
+{/snippet}
+
 <div class="view anix-comments-page">
-  <div class="view-header anix-comments-page__header">
-    <div class="anix-comments-page__header-text">
-      <h1 class="view-header__title">Комментарии</h1>
-      {#if releaseTitle}
-        <p class="view-header__subtitle">{releaseTitle}</p>
-      {/if}
-    </div>
-
-    {#if loadState === 'ready'}
-      <CommentsToolbar
-        variant="header"
-        totalCount={totalCount}
-        {sort}
-        onSortChange={handleSortChange}
-      />
-    {/if}
-  </div>
-
   {#if loadState === 'loading' && items.length === 0}
-    <div class="anix-comments__empty">Загрузка…</div>
+    <div class="anix-comments--dock-layout anix-comments-page--dock-fallback">
+      <div class="anix-comments__scroll-body">
+        {@render pageHeader()}
+        <div class="anix-comments__empty">Загрузка…</div>
+      </div>
+    </div>
   {:else if loadState === 'error'}
-    <div class="anix-comments__empty">{errorMsg}</div>
+    <div class="anix-comments--dock-layout anix-comments-page--dock-fallback">
+      <div class="anix-comments__scroll-body">
+        {@render pageHeader()}
+        <div class="anix-comments__empty">{errorMsg}</div>
+      </div>
+    </div>
   {:else}
     <CommentsSection
       title=""
@@ -123,23 +138,18 @@
       {releaseId}
       mode="full"
       showComposer={true}
+      composerDock={true}
       asSection={false}
       {selfProfileId}
+      {initialReplyId}
+      prepend={pageHeader}
+      loadMore={{
+        hasMore,
+        loading: loadingMore,
+        onLoad: loadMore,
+      }}
       onItemsChange={(next) => { items = next; }}
       onCommentAdded={() => { totalCount += 1; }}
     />
-
-    <div id="comments-composer"></div>
-
-    {#if hasMore}
-      <button
-        type="button"
-        class="anix-comments-page__load-more"
-        disabled={loadingMore}
-        onclick={loadMore}
-      >
-        {loadingMore ? 'Загрузка…' : 'Загрузить ещё'}
-      </button>
-    {/if}
   {/if}
 </div>

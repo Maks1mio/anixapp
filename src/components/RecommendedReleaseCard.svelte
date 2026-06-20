@@ -1,6 +1,7 @@
 <script lang="ts">
   import { navigate } from '../stores/navigation';
   import type { ReleaseCardData } from '../types/release';
+  import PosterImage from './PosterImage.svelte';
 
   interface Props {
     data: ReleaseCardData;
@@ -11,8 +12,6 @@
   const id = $derived(data.id);
   const title = $derived(data.titleRu || data.titleEn || 'Без названия');
   const poster = $derived(data.poster || '');
-
-  let posterError = $state(false);
 
   function openRelease(e: MouseEvent) {
     if (!id) return;
@@ -27,8 +26,8 @@
   onclick={openRelease}
 >
   <div class="recommended-release-card__poster">
-    {#if poster && !posterError}
-      <img src={poster} alt="" loading="lazy" decoding="async" onerror={() => { posterError = true; }} />
+    {#if poster}
+      <PosterImage src={poster} alt="" />
     {:else}
       <div class="recommended-release-card__no-poster"></div>
     {/if}

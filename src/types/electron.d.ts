@@ -55,14 +55,68 @@ declare global {
       togglePlayerAlwaysOnTop: () => Promise<boolean>;
       isPlayerOpen: () => Promise<boolean>;
       openExternal: (url: string) => void;
+      downloadEpisodes?: (payload: {
+        title?: string;
+        items: Array<{
+          url: string;
+          filename: string;
+          headers?: Record<string, string>;
+        }>;
+      }) => Promise<{
+        ok: boolean;
+        cancelled?: boolean;
+        downloaded: number;
+        errors?: Array<{ filename?: string; error: string }>;
+      }>;
+      queueEpisodeDownloads?: (payload: {
+        items: Array<{
+          url: string;
+          filename: string;
+          folder?: string;
+          headers?: Record<string, string>;
+        }>;
+      }) => Promise<{
+        ok: boolean;
+        error?: string;
+        items: Array<{ id: string; filename: string }>;
+      }>;
+      getDownloadSettings?: () => Promise<{ directory: string; defaultDirectory: string }>;
+      pickDownloadDirectory?: () => Promise<{ ok: boolean; directory?: string }>;
+      openDownloadDirectory?: (dir?: string) => Promise<void>;
+      showDownloadFile?: (filePath: string) => void;
+      openDownloadFile?: (filePath: string) => void;
+      listDownloadLibrary?: () => Promise<Array<{
+        id: string;
+        name: string;
+        files: Array<{ name: string; path: string; size: number; modifiedAt: number }>;
+      }>>;
+      checkDownloadFiles?: (payload: {
+        items: Array<{ folder?: string; filename: string }>;
+      }) => Promise<Array<{ folder?: string; filename: string; exists: boolean; path: string | null }>>;
       syncPlayerState: (playback: LobbyPlaybackPayload) => void;
       sendPlayerState: (playback: LobbyPlaybackPayload) => void;
       startUpdateDownload?: () => Promise<void>;
+      checkForUpdate?: (currentVersion: string) => Promise<{
+        version: string;
+        url: string;
+        body: string | null;
+      } | null>;
       installUpdate?: () => Promise<void>;
       getLinuxInstallType?: () => Promise<string | null>;
       getDeviceId: () => Promise<string>;
-      getSettings?: () => Promise<{ minimizeToTray: boolean; adaptiveAcceleration?: boolean; upscaleEnabled?: boolean; upscaleMode?: number; playerDebugOverlay?: boolean }>;
-      saveSettings?: (settings: { minimizeToTray?: boolean; adaptiveAcceleration?: boolean; upscaleEnabled?: boolean; upscaleMode?: number; playerDebugOverlay?: boolean }) => Promise<void>;
+      adminGetSession?: () => Promise<{ token: string | null; userId: number | null }>;
+      adminSaveSession?: (payload: { token: string; userId: number }) => Promise<boolean>;
+      adminClearSession?: () => Promise<boolean>;
+      getAnixbackEndpoint?: () => Promise<'local' | 'prod' | null>;
+      setAnixbackEndpoint?: (mode: 'local' | 'prod') => Promise<boolean>;
+      getSettings?: () => Promise<AppSettings>;
+      saveSettings?: (settings: Partial<AppSettings>) => Promise<void>;
+      resolveHeroBackdrop?: (hints: {
+        titleOriginal?: string;
+        titleRu?: string;
+        titleAlt?: string;
+        year?: string | number;
+      }) => Promise<string | null>;
       sendUpscaleSettings?: (settings: { upscaleEnabled: boolean; upscaleMode: number }) => void;
       // Lobby proposal IPC
       sendProposalToPlayer?: (data: Record<string, unknown>) => void;
@@ -83,8 +137,53 @@ declare global {
       themeEditorSaved?: (themeId: string) => void;
       themeEditorLiveUpdate?: (vars: Record<string, string>) => void;
       themeEditorDeleted?: (themeId: string) => void;
+      // Upscale Preview Tool
+      openUpscaleTool?: () => Promise<void>;
+      saveToolScreenshot?: (dataUrl: string, filename: string) => Promise<void>;
+      minimizeToolWindow?: () => void;
+      toggleMaximizeToolWindow?: () => void;
+      closeToolWindow?: () => void;
+      onToolWindowState?: (cb: (state: { isMaximized: boolean }) => void) => void;
+      // Overview video editor
+      openOverviewVideoEditor?: (payload: Record<string, unknown>) => Promise<void>;
+      getOverviewEditorPayload?: () => Promise<Record<string, unknown> | null>;
+      overviewEditorDone?: () => void;
     };
   }
+}
+
+export interface AppSettings {
+  minimizeToTray: boolean;
+  adaptiveAcceleration?: boolean;
+  upscaleEnabled?: boolean;
+  upscaleMode?: number;
+  playerDebugOverlay?: boolean;
+  uiZoom?: number;
+  discordRpcEnabled?: boolean;
+  discordRpcShowBrowsing?: boolean;
+  discordRpcShowWatching?: boolean;
+  discordRpcShowProgress?: boolean;
+  discordRpcShowDubber?: boolean;
+  discordRpcShowImages?: boolean;
+  discordRpcShowParty?: boolean;
+  discordRpcPageHome?: boolean;
+  discordRpcPageOverview?: boolean;
+  discordRpcPagePopular?: boolean;
+  discordRpcPageCollections?: boolean;
+  discordRpcPageMyCollections?: boolean;
+  discordRpcPageCollection?: boolean;
+  discordRpcPageCollectionEdit?: boolean;
+  discordRpcPageRelease?: boolean;
+  discordRpcPageReleaseComments?: boolean;
+  discordRpcPageReleaseRelated?: boolean;
+  discordRpcPageProfile?: boolean;
+  discordRpcPageProfileFriends?: boolean;
+  discordRpcPageProfileVotes?: boolean;
+  discordRpcPageBookmarks?: boolean;
+  discordRpcPageSearch?: boolean;
+  discordRpcPageDownloads?: boolean;
+  discordRpcPageAnnouncement?: boolean;
+  discordRpcPageOther?: boolean;
 }
 
 export interface DiscordUpdatePayload {

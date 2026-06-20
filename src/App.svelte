@@ -7,13 +7,25 @@
   import { sendPlayerViewActive } from './services/lobby-ws';
   import { getPath, getSearchParams } from './router';
   import { initTheme, applyThemeById } from './services/themes';
+  import { initAnixbackEndpoint } from './services/anixback-endpoint';
   import { getCurrentRoomId, getCurrentRoomCode, getCurrentParticipants, pushCommand, voteOnProposal, notifyLobbyBufferingStart } from './services/lobby-state';
   import { initTooltipPlacement } from './utils/tooltip-place';
   import { initBodyTooltip } from './utils/body-tooltip';
+  import { stepZoom } from './utils/zoom';
+  import {
+    clearDiscordContext,
+    scheduleDiscordPresenceSync,
+  } from './services/discord-presence';
 
   import Layout from './layout/Layout.svelte';
   import Login from './views/Login.svelte';
   import Home from './views/Home.svelte';
+  import Overview from './views/Overview.svelte';
+  import Popular from './views/Popular.svelte';
+  import CollectionsList from './views/CollectionsList.svelte';
+  import MyCollections from './views/MyCollections.svelte';
+  import CollectionEditor from './views/CollectionEditor.svelte';
+  import CollectionReleasePicker from './views/CollectionReleasePicker.svelte';
   import Catalog from './views/Catalog.svelte';
   import ReleaseCommentReplies from './views/ReleaseCommentReplies.svelte';
   import ReleaseCommentsPage from './views/ReleaseComments.svelte';
@@ -28,6 +40,9 @@
   import Notifications from './views/Notifications.svelte';
   import Uikit from './views/Uikit.svelte';
   import AnnouncementChat from './views/AnnouncementChat/page.svelte';
+  import AdminLoginPage from './views/Admin/LoginPage.svelte';
+  import AdminPanelPage from './views/Admin/PanelPage.svelte';
+  import Downloads from './views/Downloads.svelte';
 
   import SettingsModal from './components/SettingsModal.svelte';
   import LobbyModal from './components/LobbyModal.svelte';
@@ -42,6 +57,8 @@
   let path = $state(getPath());
   let searchQ = $state('');
   let searchTab = $state<'releases' | 'profiles' | 'collections'>('releases');
+  let searchBy = $state(0);
+  let collectionsWeek = $state(false);
 
   // Local reactive mirror of isPlayerWindowOpen store (used in event handlers inside onMount)
   let _isPlayerOpen = false;
@@ -51,6 +68,8 @@
     const p = getSearchParams();
     searchQ = p.get('q') || '';
     searchTab = (p.get('tab') || 'releases') as 'releases' | 'profiles' | 'collections';
+    searchBy = Number.parseInt(p.get('by') || '0', 10) || 0;
+    collectionsWeek = p.get('week') === '1' || p.get('sort') === '4';
   }
 
   // Keep path in sync with the store (critical for HTTP mode where pushState
@@ -61,6 +80,19 @@
       path = storePath;
       syncSearchParams();
     }
+  });
+
+  $effect(() => {
+    if ($appScreen !== 'main') return;
+    const routePath = path;
+    const week = collectionsWeek;
+    const q = searchQ;
+    clearDiscordContext();
+    scheduleDiscordPresenceSync({
+      path: routePath,
+      collectionsWeek: week,
+      searchQuery: q,
+    });
   });
 
   // Окно плеера без WS: список участников шлётся по IPC. События до открытия плеера терялись — при открытии и при смене плейбека лобби повторяем push.
@@ -81,6 +113,9 @@
   const profileVotesMatch     = $derived(path.match(/^\/profile\/(\d+)\/votes$/));
   const profileFriendsMatch   = $derived(path.match(/^\/profile\/(\d+)\/friends$/));
   const collectionMatch       = $derived(path.match(/^\/collection\/(\d+)$/));
+  const collectionEditMatch   = $derived(path.match(/^\/collections\/edit\/(\d+)$/));
+  const collectionPickMatch   = $derived(path === '/collections/pick-release');
+  const collectionPickReturn  = $derived(getSearchParams().get('return') || '/collections/create');
   const announcementChatMatch = $derived(path.match(/^\/announcement\/([^/]+)\/chat$/));
 
   // ── App screen state machine ───────────────────────────────────────────────
@@ -103,6 +138,7 @@
   onMount(() => {
     initTooltipPlacement();
     initBodyTooltip();
+    void initAnixbackEndpoint();
 
     if (!window.anixApi) {
       appScreen.set('login');
@@ -254,17 +290,6 @@
         if (themeId && themeId === localStorage.getItem('anixapp.activeTheme')) applyThemeById('auto');
       }) as EventListener],
 
-      ['discord:releaseView', ((e: CustomEvent) => {
-        const { title, posterUrl } = e.detail ?? {};
-        discordUpdate({ type: 'release', title: title ?? '', posterUrl: posterUrl ?? undefined });
-        if (posterUrl) discordUpdate({ type: 'posterUrl', posterUrl });
-      }) as EventListener],
-
-      ['discord:profileView', ((e: CustomEvent) => {
-        const { username, avatarUrl, isSelf } = e.detail ?? {};
-        discordUpdate({ type: 'profile', username: username ?? '', avatarUrl: avatarUrl ?? undefined, isSelf: isSelf ?? false });
-      }) as EventListener],
-
       ['discord:joinLobby', ((e: CustomEvent) => {
         const { roomCode } = e.detail ?? {};
         if (roomCode) openLobbyModal(roomCode);
@@ -283,6 +308,31 @@
     };
     window.addEventListener('lobby:wsJoined', onWsJoined);
 
+    async function adjustUiZoom(direction: 1 | -1) {
+      if (!window.electron?.getSettings || !window.electron?.saveSettings) return;
+      const settings = await window.electron.getSettings();
+      const next = stepZoom(settings.uiZoom ?? 100, direction);
+      await window.electron.saveSettings({ uiZoom: next });
+      window.dispatchEvent(new CustomEvent('anix:uiZoomChanged', { detail: { uiZoom: next } }));
+    }
+
+    function handleZoomKeydown(e: KeyboardEvent) {
+      if (!e.ctrlKey || !window.electron?.saveSettings) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+
+      if (e.key === '=' || e.key === '+' || e.code === 'Equal') {
+        e.preventDefault();
+        void adjustUiZoom(1);
+      } else if (e.key === '-' || e.code === 'Minus') {
+        e.preventDefault();
+        void adjustUiZoom(-1);
+      }
+    }
+
+    window.addEventListener('keydown', handleZoomKeydown);
+
     // Initial boot sequence
     window.anixApi.client.checkConnection()
       .then(async () => {
@@ -298,6 +348,7 @@
       window.removeEventListener('popstate', onNav);
       handlers.forEach(([evt, fn]) => window.removeEventListener(evt, fn));
       window.removeEventListener('lobby:wsJoined', onWsJoined);
+      window.removeEventListener('keydown', handleZoomKeydown);
       unsubPlayerView();
       clearRetry();
     };
@@ -347,10 +398,32 @@
       {#key profileMatch[1]}
         <Profile id={parseInt(profileMatch[1], 10)} />
       {/key}
+    {:else if collectionEditMatch}
+      {#key collectionEditMatch[1]}
+        <CollectionEditor editId={parseInt(collectionEditMatch[1], 10)} />
+      {/key}
+    {:else if path === '/collections/create'}
+      <CollectionEditor />
+    {:else if collectionPickMatch}
+      <CollectionReleasePicker returnPath={collectionPickReturn} />
+    {:else if path === '/collections/my'}
+      <MyCollections />
     {:else if collectionMatch}
       {#key collectionMatch[1]}
         <Collection id={parseInt(collectionMatch[1], 10)} />
       {/key}
+    {:else if path === '/admin/panel'}
+      <AdminPanelPage />
+    {:else if path === '/admin'}
+      <AdminLoginPage />
+    {:else if path === '/overview'}
+      <Overview />
+    {:else if path === '/overview/popular'}
+      <Popular />
+    {:else if path === '/schedule'}
+      <Overview />
+    {:else if path === '/collections'}
+      <CollectionsList week={collectionsWeek} />
     {:else if path === '/catalog'}
       <Catalog />
     {:else if path === '/bookmarks'}
@@ -364,7 +437,9 @@
     {:else if path === '/profile/friends'}
       <ProfileFriends />
     {:else if path === '/search'}
-      <Search q={searchQ} tab={searchTab} />
+      <Search q={searchQ} tab={searchTab} {searchBy} />
+    {:else if path === '/downloads'}
+      <Downloads />
     {:else if path === '/uikit'}
       <Uikit />
     {:else}

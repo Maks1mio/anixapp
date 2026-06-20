@@ -1,0 +1,144 @@
+@use 'variables' as *;
+
+.title-info-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  flex-shrink: 0;
+  font-size: 1em;
+  line-height: 1;
+  color: $color-text-muted;
+  vertical-align: middle;
+
+  &:hover,
+  &:focus-within {
+    color: $color-text;
+    z-index: 120;
+  }
+
+  &:hover .title-info-popover,
+  &:focus-within .title-info-popover,
+  .title-info-popover:hover {
+    display: block;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  &__icon {
+    display: inline-flex;
+    width: 1em;
+    height: 1em;
+    align-items: center;
+    justify-content: center;
+
+    :global(svg) {
+      width: 100%;
+      height: 100%;
+    }
+  }
+}
+
+.title-info-popover {
+  display: none;
+  left: 0;
+  right: auto;
+  bottom: auto;
+  top: 100%;
+  margin-top: 0.45rem;
+  margin-bottom: 0;
+  padding: 0;
+  width: max-content;
+  min-width: 0;
+  max-width: min(92vw, 26rem);
+  transform: none;
+  pointer-events: none;
+  text-align: left;
+  white-space: normal;
+  z-index: 120;
+  background: $color-surface;
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.55),
+    0 0 0 1px color-mix(in srgb, $color-border 70%, $color-text-muted);
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: 0.55rem;
+  }
+
+  &__inner {
+    padding: 0.15rem 0;
+    background: $color-surface;
+    border-radius: inherit;
+  }
+
+  &__block {
+    padding: 0.55rem 0.85rem;
+
+    &:not(:last-child) {
+      border-bottom: 1px solid color-mix(in srgb, $color-border 85%, transparent);
+    }
+  }
+
+  &__head {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-bottom: 0.2rem;
+  }
+
+  &__label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: $color-text;
+    white-space: nowrap;
+  }
+
+  &__copy {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.35rem;
+    height: 1.35rem;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, $color-border 55%, $color-text-muted);
+    border-radius: 4px;
+    background: color-mix(in srgb, $color-surface-hover 35%, $color-surface);
+    color: $color-text-muted;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color $transition, background $transition, border-color $transition;
+
+    &:hover {
+      color: $color-text;
+      background: color-mix(in srgb, $color-surface 80%, $color-text-muted);
+      border-color: color-mix(in srgb, $color-border 35%, $color-text-muted);
+    }
+
+    &--done {
+      color: $color-success;
+    }
+  }
+
+  &__value {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    color: $color-text-muted;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+}
+
+.release-card-h__title-row .title-info-trigger {
+  font-size: 1.125rem;
+}
+
+.release-page__title-row .title-info-trigger {
+  font-size: 1.35rem;
+}

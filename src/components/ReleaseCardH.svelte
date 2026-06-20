@@ -1,6 +1,8 @@
 <script lang="ts">
   import { navigate } from '../stores/navigation';
-  import { iconCheck, iconFlag, iconInfo, iconStar, iconClock, iconCircleCheck } from './icons';
+  import { toCdnProxyUrl } from '../utils/posterUrl';
+  import { iconCheck, iconFlag, iconStar, iconClock, iconCircleCheck } from './icons';
+  import TitleInfoTrigger from './TitleInfoTrigger.svelte';
   import { renderDotsMenu, type DotsMenuEntry } from './dots-menu';
   import { ratingHue } from './release-card-h';
   import type { ReleaseCardData } from '../types/release';
@@ -58,7 +60,7 @@
 
   const id = $derived(data?.id);
   const title = $derived(data?.titleRu || data?.titleEn || 'Без названия');
-  const poster = $derived(data?.poster || '');
+  const poster = $derived(toCdnProxyUrl(data?.poster || ''));
   const ratingValue = $derived(typeof data?.rating === 'number' ? data.rating : null);
   const voteCount = $derived(data?.voteCount);
   const epCount = $derived(data?.episodesReleased ?? data?.episodesTotal ?? null);
@@ -78,16 +80,6 @@
   const ratingBg = $derived(hasRating ? `hsl(${ratingHue_val}, 95%, 52%)` : '');
   const ratingTextColor = $derived(hasRating ? (ratingHue_val >= 28 ? '#0b0b0b' : '#f5f5f5') : '');
   const votesLabel = $derived(voteCount != null ? formatVoteCount(voteCount) : '');
-
-  const titleTooltipLines = $derived((() => {
-    if (!data) return [];
-    const lines: string[] = [];
-    if (data.titleRu) lines.push(`Русское: ${data.titleRu}`);
-    if (data.titleEn) lines.push(`Оригинал: ${data.titleEn}`);
-    if (data.titleAlt) lines.push(`Альт: ${data.titleAlt}`);
-    return lines;
-  })());
-  const hasTitleTooltip = $derived(titleTooltipLines.length > 0);
 
   let currentStatusId: ListStatusId | null = $state<ListStatusId | null>(null);
   let isFavorite = $state(false);
@@ -215,7 +207,7 @@
 
   function handleLinkClick(e: MouseEvent) {
     const target = e.target as HTMLElement;
-    if (target.closest('.tooltip-trigger') || target.closest('.dots-menu')) {
+    if (target.closest('.tooltip-trigger') || target.closest('.title-info-popover') || target.closest('.dots-menu')) {
       e.preventDefault();
       e.stopPropagation();
       return;
@@ -295,16 +287,12 @@
     <div class="release-card-h__body">
       <div class="release-card-h__title-row">
         <h3 class="release-card-h__title">{title}</h3>
-        {#if hasTitleTooltip}
-          <span class="release-card-h__title-info tooltip-trigger" role="button" tabindex="0" aria-label="Названия">
-            {@html iconInfo(14)}
-            <span class="tooltip tooltip--animated">
-              {#each titleTooltipLines as line, i}
-                {#if i > 0}<br />{/if}{line}
-              {/each}
-            </span>
-          </span>
-        {/if}
+        <TitleInfoTrigger
+          titleRu={data?.titleRu}
+          titleEn={data?.titleEn}
+          titleAlt={data?.titleAlt}
+          className="release-card-h__title-info"
+        />
         <span class="release-card-h__menu-slot" bind:this={menuSlotEl}></span>
       </div>
 
@@ -315,23 +303,24 @@
               class="release-card-h__rating-chip"
               style="background:{ratingBg};color:{ratingTextColor}"
             >{ratingValue.toFixed(2)} {@html iconStar(14, true)}{#if votesLabel}<span class="release-card-h__rating-chip-votes">{votesLabel}</span>{/if}</span>
-            {#if isFavorite}
-              <span class="release-card-h__meta-dot">·</span><span class="release-card-h__favorite">{@html iconFlag(16, true)}</span>
+          {/if}
+          {#if isFavorite}
+            {#if hasRating && ratingValue != null}<span class="release-card-h__meta-dot">·</span>{/if}
+            <span class="release-card-h__favorite">{@html iconFlag(16, true)}</span>
+          {/if}
+          {#if !hasRating}
+            {#if data?.releaseDate}
+              {#if isFavorite}<span class="release-card-h__meta-dot">·</span>{/if}{data.releaseDate}
             {/if}
-            {#if epCount != null}
-              <span class="release-card-h__meta-dot">·</span>{epCount} эп.
-            {/if}
-          {:else}
-            {#if data?.releaseDate}{data.releaseDate}{/if}
-            {#if epCount != null}
-              {#if data?.releaseDate}<span class="release-card-h__meta-dot">·</span>{/if}{epCount} эп.
-            {/if}
+          {/if}
+          {#if epCount != null}
+            {#if hasRating || isFavorite || data?.releaseDate}<span class="release-card-h__meta-dot">·</span>{/if}{epCount} эп.
           {/if}
           {#if infoParts.length > 0}
-            {#if hasRating || data?.releaseDate || epCount != null}<span class="release-card-h__meta-dot">·</span>{/if}
+            {#if hasRating || isFavorite || data?.releaseDate || epCount != null}<span class="release-card-h__meta-dot">·</span>{/if}
             {#each infoParts as part, i}{#if i > 0}<span class="release-card-h__meta-dot">·</span>{/if}{part}{/each}
           {/if}
-          {#if !hasRating && !data?.releaseDate && epCount == null && infoParts.length === 0}—{/if}
+          {#if !hasRating && !isFavorite && !data?.releaseDate && epCount == null && infoParts.length === 0}—{/if}
         {/snippet}
         {@render metaBody()}
         {#if myVote != null}

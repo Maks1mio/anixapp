@@ -1,0 +1,179 @@
+@use 'variables' as *;
+
+.discover-page {
+  max-width: 56rem;
+  margin: 0 auto;
+  width: 100%;
+  container-type: inline-size;
+}
+
+.discover-page__loading,
+.discover-page__empty,
+.discover-page__error {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: $color-text-muted;
+}
+
+.discover-page__loading--inline {
+  padding: 1rem;
+}
+
+.discover-page__error p {
+  margin: 0 0 1rem;
+  color: $color-text;
+}
+
+.discover-page__retry {
+  min-width: 8rem;
+}
+
+// ——— Popular (TopFragment) ———
+
+.top-release-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.top-release-list__item {
+  min-width: 0;
+}
+
+.top-release-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.85rem;
+  padding: 0.75rem;
+  border-radius: $radius-lg;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    background: $color-surface-hover;
+    border-color: color-mix(in srgb, $color-border 70%, $color-accent 30%);
+  }
+}
+
+.top-release-row__rank {
+  flex: 0 0 1.75rem;
+  align-self: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: $color-text-muted;
+  text-align: center;
+}
+
+.top-release-row__poster {
+  flex: 0 0 4.5rem;
+  width: 4.5rem;
+  aspect-ratio: 2 / 3;
+  border-radius: $radius-md;
+  overflow: hidden;
+  background: $color-surface-hover;
+
+  img,
+  .poster-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+}
+
+.top-release-row__no-poster {
+  width: 100%;
+  height: 100%;
+  background: $color-surface-hover;
+}
+
+.top-release-row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.top-release-row__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.top-release-row__desc {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: $color-text-muted;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.top-release-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  margin-top: auto;
+  font-size: 0.85rem;
+}
+
+.top-release-row__rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 600;
+  color: $color-text;
+}
+
+.top-release-row__rating-icon {
+  display: inline-flex;
+  color: #f5b301;
+}
+
+.top-release-row__episodes {
+  color: $color-text-muted;
+}
+
+// ——— Schedule ———
+
+.schedule-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.schedule-day__title {
+  margin: 0 0 0.75rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+// ——— Collections list ———
+
+.collections-list-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
+  align-items: stretch;
+  gap: 1.1rem 1rem;
+  min-width: 0;
+
+  .collection-card {
+    max-width: 100%;
+    min-height: 0;
+  }
+}

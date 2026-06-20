@@ -1,11 +1,24 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import { getCurrentRoomId, getCurrentParticipants, proposeAnimeChange, getLastPlayback } from '../services/lobby-state';
-  import { isDubberBlacklisted } from '../views/Watch/_utils';
+  import { isDubberBlacklisted, resolveDownloadUrl } from '../views/Watch/_utils';
   import { isPlayerWindowOpen } from '../stores/modals';
-  import Select from './Select.svelte';
-  import type { SelectOption } from './select';
+  import { navigate } from '../stores/navigation';
   import Page from './Page.svelte';
+  import { resolveCdnAssetUrl } from '../utils/posterUrl';
+  import { infiniteScroll } from '../actions/infiniteScroll';
+  import {
+    iconMic,
+    iconSearch,
+    iconDownload,
+    iconCircleCheck,
+    iconCheck,
+    iconMoreHorizontal,
+    iconRefreshCw,
+    iconChevronLeft,
+    iconEye,
+    iconX,
+  } from './icons';
 
   interface Props {
     releaseId: number;
@@ -15,7 +28,6 @@
 
   const { releaseId, releaseTitle, onClose }: Props = $props();
 
-  // ── types ─────────────────────────────────────────────────────────────────────
   interface Dubber {
     id: number;
     name: string;
@@ -26,6 +38,8 @@
     episodeCount?: number;
     episodes_count?: number;
     episodesCount?: number;
+    is_sub?: boolean;
+    isSub?: boolean;
     [key: string]: unknown;
   }
 
@@ -34,6 +48,8 @@
     name: string;
     episode_count?: number;
     episodeCount?: number;
+    episodes_count?: number;
+    episodesCount?: number;
     [key: string]: unknown;
   }
 
@@ -43,43 +59,103 @@
     url: string;
     iframe: boolean;
     is_watched?: boolean;
+    isWatched?: boolean;
+    created_at?: string;
+    createdAt?: string;
+    added_at?: string;
+    addedAt?: string;
+    updated_at?: string;
+    updatedAt?: string;
+    [key: string]: unknown;
   }
 
-  // ── state ─────────────────────────────────────────────────────────────────────
-  type View = 'sources' | 'episodes';
+  interface DownloadItem {
+    url: string;
+    filename: string;
+    folder?: string;
+    headers?: Record<string, string>;
+  }
 
-  let currentView = $state<View>('sources');
+  interface EpisodeUpdate {
+    last_episode_update_date?: number;
+    last_episode_update_name?: string;
+    last_episode_source_update_id?: number;
+    last_episode_source_update_name?: string;
+    last_episode_type_update_id?: number;
+    lastEpisodeTypeUpdateName?: string;
+    [key: string]: unknown;
+  }
 
-  // sources view
+  type ModalView = 'variants' | 'episodes' | 'updates';
+  type VariantFilter = 'all' | 'voice' | 'sub';
+
+  let modalView = $state<ModalView>('variants');
+  let variantFilter = $state<VariantFilter>('voice');
   let sourcesLoading = $state(true);
   let sourcesError = $state('');
   let dubbers = $state<Dubber[]>([]);
-
-  // episodes view
-  let episodesLoading = $state(false);
-  let episodesLoadText = $state('Загрузка серий…');
-  let episodes = $state<Episode[]>([]);
-  let episodesError = $state('');
-  let selectedDubber = $state<{ id: number; name: string } | null>(null);
-  let selectedSource = $state<{ id: number; name: string } | null>(null);
-  let selectedEpisodePos = $state<number | null>(null);
+  let updates = $state<EpisodeUpdate[]>([]);
+  let updatesLoading = $state(false);
+  let updatesLoadingMore = $state(false);
+  let updatesError = $state('');
+  let updatesLoaded = $state(false);
+  let updatesPage = $state(0);
+  let updatesHasMore = $state(false);
+  let updatesScrollRoot = $state<HTMLElement | null>(null);
+  let selectedDubber = $state<Dubber | null>(null);
   let sources = $state<Source[]>([]);
+  let selectedSourceId = $state<number | null>(null);
+  let episodes = $state<Episode[]>([]);
+  let episodesLoading = $state(false);
+  let episodesError = $state('');
   let searchInput = $state('');
+  let selectedEpisodePos = $state<number | null>(null);
+  let optionsOpen = $state(false);
+  let actionBusy = $state('');
+  let downloadStatus = $state('');
+  let downloadedPositions = $state<Record<number, boolean>>({});
 
-  // confirm dialog
-  let confirmEpLabel = $state('');
+  let confirmTitle = $state('');
+  let confirmText = $state('');
+  let confirmYesLabel = $state('Да');
+  let confirmSkipLabel = $state('');
   let showConfirm = $state(false);
   let confirmCallback = $state<(() => void) | null>(null);
+  let confirmSkipCallback = $state<(() => void) | null>(null);
 
-  // Source selector (Svelte Select component)
-  let sourceSelectOptions = $state<SelectOption[]>([]);
-  let sourceSelectValue = $state('');
-
-  // DOM refs
   let episodesListEl = $state<HTMLElement | null>(null);
 
-  // ── helpers ───────────────────────────────────────────────────────────────────
-  const micIconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>`;
+  const micIconSvg = iconMic(18);
+  const searchIconSvg = iconSearch(15);
+  const downloadIconSvg = iconDownload(15);
+  const downloadedIconSvg = iconCircleCheck(15);
+  const checkIconSvg = iconCheck(14);
+  const dotsIconSvg = iconMoreHorizontal(16);
+  const refreshIconSvg = iconRefreshCw(18);
+  const backIconSvg = iconChevronLeft(20);
+  const eyeIconSvg = iconEye(15);
+  const closeIconSvg = iconX(16);
+
+  const selectedSource = $derived(sources.find((s) => s.id === selectedSourceId) ?? null);
+  const filteredEpisodes = $derived.by(() => {
+    const q = searchInput.trim();
+    if (!q) return episodes;
+    return episodes.filter((ep) => String(ep.position).includes(q) || ep.name?.toLowerCase().includes(q.toLowerCase()));
+  });
+  const watchedCount = $derived(episodes.filter(isEpisodeWatched).length);
+  const remainingCount = $derived(Math.max(0, episodes.length - watchedCount));
+  const lastWatchedEpisode = $derived.by(() => {
+    let last: Episode | null = null;
+    for (const ep of episodes) {
+      if (isEpisodeWatched(ep) && (!last || ep.position > last.position)) last = ep;
+    }
+    return last;
+  });
+  const filteredDubbers = $derived.by(() => {
+    if (variantFilter === 'voice') return dubbers.filter((d) => !isSubDubber(d));
+    if (variantFilter === 'sub') return dubbers.filter(isSubDubber);
+    return dubbers;
+  });
 
   function ensureHttps(url: string): string {
     if (!url || typeof url !== 'string') return url;
@@ -100,105 +176,248 @@
     return n.toLocaleString('ru-RU');
   }
 
+  function fmtViewsShort(n?: number): string {
+    if (n == null || n === 0) return '0';
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace('.0', '')}M`;
+    if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
+    return String(n);
+  }
+
+  function isSubDubber(d: Dubber): boolean {
+    return d.is_sub === true || d.isSub === true || /субтитр/i.test(d.name);
+  }
+
+  function dubberEpisodeLabel(d: Dubber): string {
+    const count = normalizeEpisodeCount(d as Record<string, unknown>);
+    return count != null ? `${count} эпизодов` : '';
+  }
+
+  function safeFilePart(value: string): string {
+    return value.replace(/[<>:"/\\|?*\x00-\x1F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) || 'episode';
+  }
+
+  function buildDownloadMeta(ep: Episode) {
+    const dub = selectedDubber?.name ?? selectedSource?.name ?? '';
+    const epNum = String(ep.position).padStart(2, '0');
+    return {
+      folder: safeFilePart(releaseTitle),
+      filename: `${safeFilePart(releaseTitle)} ${safeFilePart(dub)} ${epNum}.mp4`,
+    };
+  }
+
+  function isEpisodeDownloaded(position: number): boolean {
+    return !!downloadedPositions[position];
+  }
+
+  async function refreshDownloadedState() {
+    if (!window.electron?.checkDownloadFiles || episodes.length === 0) {
+      downloadedPositions = {};
+      return;
+    }
+    try {
+      const items = episodes.map((ep) => buildDownloadMeta(ep));
+      const results = await window.electron.checkDownloadFiles({ items });
+      const next: Record<number, boolean> = {};
+      results.forEach((r, i) => {
+        if (r.exists) next[episodes[i].position] = true;
+      });
+      downloadedPositions = next;
+    } catch {
+      downloadedPositions = {};
+    }
+  }
+
+  function openConfirm(opts: {
+    title: string;
+    text: string;
+    yesLabel?: string;
+    onYes: () => void;
+    skipLabel?: string;
+    onSkip?: () => void;
+  }) {
+    confirmTitle = opts.title;
+    confirmText = opts.text;
+    confirmYesLabel = opts.yesLabel ?? 'Да';
+    confirmCallback = opts.onYes;
+    confirmSkipLabel = opts.skipLabel ?? '';
+    confirmSkipCallback = opts.onSkip ?? null;
+    showConfirm = true;
+  }
+
   function isInLobbyWithOthers(): boolean {
     const roomId = getCurrentRoomId();
     if (!roomId) return false;
     return getCurrentParticipants().length > 1;
   }
 
-  // ── episode list DOM management ───────────────────────────────────────────────
-  function buildEpisodeList(eps: Episode[]) {
-    if (!episodesListEl) return;
-    episodesListEl.innerHTML = '';
-    eps.forEach((ep) => {
-      const item = document.createElement('button');
-      item.type = 'button';
-      const isWatched = !!ep.is_watched;
-      item.className = 'watch-modal__episode-item' + (isWatched ? ' watch-modal__episode-item--watched' : '');
-      item.dataset.position = String(ep.position);
+  function isEpisodeWatched(ep: Episode): boolean {
+    return ep.is_watched === true || ep.isWatched === true;
+  }
 
-      const numSpan = document.createElement('span');
-      numSpan.className = 'watch-modal__episode-num';
-      numSpan.textContent = String(ep.position);
-      item.appendChild(numSpan);
+  function setEpisodeWatchedLocal(position: number, watched: boolean) {
+    episodes = episodes.map((ep) => (
+      ep.position === position ? { ...ep, is_watched: watched, isWatched: watched } : ep
+    ));
+  }
 
-      if (isWatched) {
-        const check = document.createElement('span');
-        check.className = 'watch-modal__episode-watched';
-        check.title = 'Просмотрено';
-        check.textContent = '✓';
-        item.appendChild(check);
-      }
-
-      item.addEventListener('click', () => {
-        episodesListEl?.querySelectorAll('.watch-modal__episode-item--active').forEach((el) => {
-          el.classList.remove('watch-modal__episode-item--active');
-        });
-        item.classList.add('watch-modal__episode-item--active');
-        selectedEpisodePos = ep.position;
-        handleEpisodePlay(ep.position);
-
-        if (!ep.is_watched && selectedSource) {
-          ep.is_watched = true;
-          item.classList.add('watch-modal__episode-item--watched', 'watch-modal__episode-item--marking');
-          if (!item.querySelector('.watch-modal__episode-watched')) {
-            const check = document.createElement('span');
-            check.className = 'watch-modal__episode-watched';
-            check.title = 'Просмотрено';
-            check.textContent = '✓';
-            item.appendChild(check);
-          }
-          const srcId = selectedSource.id;
-          window.anixApi?.history?.markWatched?.(releaseId, srcId, ep.position)
-            .then(() => { item.classList.remove('watch-modal__episode-item--marking'); })
-            .catch(() => {
-              ep.is_watched = false;
-              item.classList.remove('watch-modal__episode-item--watched', 'watch-modal__episode-item--marking');
-              item.querySelector('.watch-modal__episode-watched')?.remove();
-            });
-        }
-      });
-
-      episodesListEl!.appendChild(item);
+  function formatUpdateTimestamp(timestamp?: number): string {
+    if (typeof timestamp !== 'number' || !Number.isFinite(timestamp) || timestamp <= 0) return 'дата неизвестна';
+    const ms = timestamp < 10_000_000_000 ? timestamp * 1000 : timestamp;
+    return new Date(ms).toLocaleString('ru-RU', {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
     });
+  }
+
+  function updateEpisodeLabel(update: EpisodeUpdate): string {
+    return update.last_episode_update_name || '— серия';
+  }
+
+  function updateVariantLabel(update: EpisodeUpdate): string {
+    return update.lastEpisodeTypeUpdateName || '—';
+  }
+
+  function updateSourceLabel(update: EpisodeUpdate): string {
+    return update.last_episode_source_update_name || '—';
+  }
+
+  async function loadUpdatesPage(page: number, append = false) {
+    if (page === 0) {
+      updatesLoading = true;
+      updatesError = '';
+    } else {
+      updatesLoadingMore = true;
+    }
+
+    try {
+      const res = await window.anixApi?.release?.getEpisodeUpdates?.(releaseId, page);
+      const content = res?.content ?? [];
+      updates = append ? [...updates, ...content] : content;
+
+      const currentPage = typeof res?.current_page === 'number' ? res.current_page : page;
+      const totalPages = typeof res?.total_page_count === 'number' ? res.total_page_count : 0;
+      updatesPage = currentPage;
+      updatesHasMore = totalPages > 0 && currentPage + 1 < totalPages;
+      updatesLoaded = true;
+
+      if (!append && updates.length === 0) updatesError = 'Статистика добавлений пустая';
+    } catch {
+      if (!append) updatesError = 'Не удалось загрузить статистику';
+    } finally {
+      updatesLoading = false;
+      updatesLoadingMore = false;
+    }
+  }
+
+  async function openUpdatesView(force = false) {
+    modalView = 'updates';
+    if (updatesLoaded && !force) return;
+    updates = [];
+    updatesPage = 0;
+    updatesHasMore = false;
+    await loadUpdatesPage(0, false);
+  }
+
+  function loadMoreUpdates() {
+    if (!updatesHasMore || updatesLoadingMore || updatesLoading) return;
+    loadUpdatesPage(updatesPage + 1, true);
+  }
+
+  function backFromNestedView() {
+    if (modalView === 'episodes') {
+      modalView = 'variants';
+      optionsOpen = false;
+      return;
+    }
+    if (modalView === 'updates') modalView = 'variants';
+  }
+
+  function sourceLabel(source: Source): string {
+    const count = normalizeEpisodeCount(source as Record<string, unknown>);
+    return count != null ? `${source.name} · ${count} эп.` : source.name;
   }
 
   function scrollToEpisode(position: number) {
     if (!episodesListEl) return;
-    const target = episodesListEl.querySelector<HTMLButtonElement>(`.watch-modal__episode-item[data-position="${position}"]`);
+    const target = episodesListEl.querySelector<HTMLElement>(`.watch-modal__episode-card[data-position="${position}"]`);
     if (!target) return;
-    target.scrollIntoView({ block: 'center', behavior: 'auto' });
-    target.classList.add('watch-modal__episode-item--highlight');
-    window.setTimeout(() => {
-      target?.classList.remove('watch-modal__episode-item--highlight');
-    }, 1200);
+    target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    target.classList.add('watch-modal__episode-card--highlight');
+    window.setTimeout(() => target.classList.remove('watch-modal__episode-card--highlight'), 1200);
   }
 
-  // ── source selector ───────────────────────────────────────────────────────────
-  function buildSourceSelector(srcs: Source[], currentSrcId: number) {
-    if (srcs.length <= 1) {
-      sourceSelectOptions = [];
-      sourceSelectValue = '';
+  function handleSearchEpisode() {
+    const num = Number(searchInput.trim());
+    if (Number.isFinite(num) && num > 0) scrollToEpisode(num);
+  }
+
+  function handleLastWatched() {
+    if (lastWatchedEpisode) scrollToEpisode(lastWatchedEpisode.position);
+  }
+
+  async function openDubber(dubber: Dubber) {
+    modalView = 'episodes';
+    selectedDubber = dubber;
+    sources = [];
+    selectedSourceId = null;
+    selectedEpisodePos = null;
+    episodes = [];
+    searchInput = '';
+    optionsOpen = false;
+    downloadStatus = '';
+    episodesError = '';
+    episodesLoading = true;
+
+    const api = window.anixApi;
+    if (!api) {
+      episodesLoading = false;
+      episodesError = 'API недоступно';
       return;
     }
-    sourceSelectOptions = srcs.map((s) => {
-      const srcEp = normalizeEpisodeCount(s as Record<string, unknown>);
-      const srcEpText = srcEp != null ? `${srcEp} эп.` : '';
-      return { value: String(s.id), label: srcEpText ? `${s.name} (${srcEpText})` : s.name };
-    });
-    sourceSelectValue = String(currentSrcId);
+
+    try {
+      const res = await api.release.getDubberSources(releaseId, dubber.id);
+      const srcs = res?.sources ?? [];
+      sources = srcs;
+      if (srcs.length === 0) {
+        episodesLoading = false;
+        episodesError = 'Нет источников';
+        return;
+      }
+      await selectSource(srcs[0], false);
+    } catch {
+      episodesLoading = false;
+      episodesError = 'Ошибка загрузки источников';
+    }
   }
 
-  function handleSourceSelectChange(value: string) {
-    const s = sources.find((x) => String(x.id) === value);
-    if (!s) return;
-    sourceSelectValue = String(s.id);
-    selectSource(s);
+  async function selectSource(source: Source, resetSearch = true) {
+    if (!selectedDubber) return;
+    selectedSourceId = source.id;
+    selectedEpisodePos = null;
+    if (resetSearch) searchInput = '';
+    episodesLoading = true;
+    episodesError = '';
+    optionsOpen = false;
+
+    try {
+      const res = await window.anixApi?.release?.getEpisodes(releaseId, selectedDubber.id, source.id);
+      episodes = res?.episodes ?? [];
+      episodesLoading = false;
+      await refreshDownloadedState();
+      await tick();
+      if (lastWatchedEpisode) window.setTimeout(() => scrollToEpisode(lastWatchedEpisode!.position), 80);
+    } catch {
+      episodesLoading = false;
+      episodesError = 'Ошибка загрузки серий';
+    }
   }
 
-  // ── actions ───────────────────────────────────────────────────────────────────
   function handleEpisodePlay(epPosition: number) {
     if (!selectedSource) return;
+    selectedEpisodePos = epPosition;
     const params = {
       releaseId: String(releaseId),
       sourceId: String(selectedSource.id),
@@ -212,6 +431,7 @@
       if (!window.electron?.openPlayerWindow) return;
       window.electron.openPlayerWindow(params).then(() => {
         isPlayerWindowOpen.set(true);
+        void markEpisodeWatched(epPosition);
         close();
       }).catch(() => {});
     };
@@ -220,16 +440,19 @@
       const currentPlayback = getLastPlayback();
       const isDifferentAnime = currentPlayback != null && String(currentPlayback.releaseId) !== String(releaseId);
       if (isDifferentAnime) {
-        confirmEpLabel = params.ep;
-        confirmCallback = () => {
-          proposeAnimeChange(params);
-          window.electron?.sendProposalToPlayer?.({
-            type: 'waiting',
-            newPlayback: { title: releaseTitle, ep: params.ep },
-          });
-          close();
-        };
-        showConfirm = true;
+        openConfirm({
+          title: `Предложить серию ${params.ep}?`,
+          text: 'Все участники увидят предложение сменить аниме. Продолжить?',
+          yesLabel: 'Предложить',
+          onYes: () => {
+            proposeAnimeChange(params);
+            window.electron?.sendProposalToPlayer?.({
+              type: 'waiting',
+              newPlayback: { title: releaseTitle, ep: params.ep },
+            });
+            close();
+          },
+        });
       } else {
         doOpenPlayer();
       }
@@ -238,112 +461,183 @@
     doOpenPlayer();
   }
 
-  function selectDubber(dubber: Dubber) {
-    selectedDubber = { id: dubber.id, name: dubber.name };
-    selectedSource = null;
-    selectedEpisodePos = null;
-    episodes = [];
-    episodesLoading = true;
-    episodesLoadText = 'Загрузка серий…';
-    episodesError = '';
-    currentView = 'episodes';
-
-    const api = window.anixApi;
-    if (!api) return;
-
-    api.release.getDubberSources(releaseId, dubber.id)
-      .then((res: { sources?: Source[] }) => {
-        const srcs = res?.sources ?? [];
-        sources = srcs;
-        if (srcs.length === 0) {
-          episodesLoading = false;
-          episodesError = 'Нет источников';
-          return;
-        }
-        buildSourceSelector(srcs, srcs[0].id);
-        selectSource(srcs[0]);
-      })
-      .catch(() => {
-        episodesLoading = false;
-        episodesError = 'Ошибка загрузки';
-      });
+  async function markEpisodeWatched(position: number) {
+    if (!selectedSource) return;
+    const prev = episodes.find((ep) => ep.position === position);
+    if (!prev || isEpisodeWatched(prev)) return;
+    setEpisodeWatchedLocal(position, true);
+    try {
+      await window.anixApi?.history?.markWatched?.(releaseId, selectedSource.id, position);
+    } catch {
+      setEpisodeWatchedLocal(position, false);
+    }
   }
 
-  function selectSource(source: Source) {
-    selectedSource = { id: source.id, name: source.name };
-    selectedEpisodePos = null;
-    episodesLoading = true;
-    episodesLoadText = 'Загрузка серий…';
-    episodesError = '';
-
-    const api = window.anixApi;
-    if (!api || !selectedDubber) return;
-
-    api.release.getEpisodes(releaseId, selectedDubber.id, source.id)
-      .then((res: { episodes?: Episode[] }) => {
-        const eps = res?.episodes ?? [];
-        episodes = eps;
-        episodesLoading = false;
-
-        // Build episode list imperatively (for watched marking logic)
-        setTimeout(() => {
-          buildEpisodeList(eps);
-          // Auto-scroll to last watched
-          let lastWatchedPos: number | null = null;
-          for (let i = eps.length - 1; i >= 0; i--) {
-            if (eps[i].is_watched) { lastWatchedPos = eps[i].position; break; }
-          }
-          if (lastWatchedPos != null) {
-            setTimeout(() => scrollToEpisode(lastWatchedPos!), 0);
-          }
-        }, 0);
-      })
-      .catch(() => {
-        episodesLoading = false;
-        episodesError = 'Ошибка загрузки серий';
-      });
+  async function toggleEpisodeWatched(ep: Episode, event: MouseEvent) {
+    event.stopPropagation();
+    if (!selectedSource || actionBusy) return;
+    const next = !isEpisodeWatched(ep);
+    const key = `ep-${ep.position}`;
+    actionBusy = key;
+    setEpisodeWatchedLocal(ep.position, next);
+    try {
+      if (next) await window.anixApi?.history?.markWatched?.(releaseId, selectedSource.id, ep.position);
+      else await window.anixApi?.history?.unmarkWatched?.(releaseId, selectedSource.id, ep.position);
+    } catch {
+      setEpisodeWatchedLocal(ep.position, !next);
+    } finally {
+      actionBusy = '';
+    }
   }
 
-  function handleBack() {
-    selectedDubber = null;
-    selectedSource = null;
-    selectedEpisodePos = null;
-    episodes = [];
-    sources = [];
-    episodesLoading = false;
-    episodesError = '';
-    currentView = 'sources';
-  }
+  async function setAllWatched(watched: boolean) {
+    if (!selectedSource || episodes.length === 0 || actionBusy) return;
+    const previous = episodes;
+    actionBusy = watched ? 'mark-all' : 'unmark-all';
+    optionsOpen = false;
+    episodes = episodes.map((ep) => ({ ...ep, is_watched: watched, isWatched: watched }));
 
-  function handleSearchEpisode() {
-    const num = Number(searchInput.trim());
-    if (!Number.isFinite(num) || num <= 0) return;
-    scrollToEpisode(num);
-  }
-
-  function handleLastWatched() {
-    if (!episodes.length) return;
-    let lastWatched: number | null = null;
-    episodes.forEach((ep) => {
-      if (ep.is_watched) {
-        if (lastWatched == null || ep.position > lastWatched) lastWatched = ep.position;
+    try {
+      const apiCall = watched ? window.anixApi?.history?.markWatched : window.anixApi?.history?.unmarkWatched;
+      for (const ep of previous) {
+        await apiCall?.(releaseId, selectedSource.id, ep.position);
       }
-    });
-    if (lastWatched != null) scrollToEpisode(lastWatched);
+    } catch {
+      episodes = previous;
+    } finally {
+      actionBusy = '';
+    }
+  }
+
+  async function resolveDownloadItem(ep: Episode): Promise<DownloadItem | null> {
+    if (!selectedSource) return null;
+    let episode = ep;
+    if (!episode.url) {
+      const res = await window.anixApi?.release?.getEpisode(releaseId, selectedSource.id, ep.position);
+      episode = { ...ep, ...(res?.episode ?? {}) };
+    }
+    if (!episode.url) return null;
+
+    const resolved = await resolveDownloadUrl(episode.url, episode.iframe);
+    if (!resolved?.url) return null;
+
+    const meta = buildDownloadMeta(ep);
+    return {
+      url: resolved.url,
+      filename: meta.filename,
+      folder: meta.folder,
+      headers: resolved.headers,
+    };
+  }
+
+  async function queueDownloads(eps: Episode[]) {
+    const items: DownloadItem[] = [];
+    for (const ep of eps) {
+      downloadStatus = `Подготовка серии ${ep.position}…`;
+      const item = await resolveDownloadItem(ep);
+      if (item) items.push(item);
+    }
+    if (items.length === 0) throw new Error('no items');
+    await window.electron?.queueEpisodeDownloads?.({ items });
+    void refreshDownloadedState();
+  }
+
+  async function downloadEpisode(ep: Episode, event?: MouseEvent) {
+    event?.stopPropagation();
+    if (actionBusy) return;
+
+    const run = async () => {
+      actionBusy = `dl-${ep.position}`;
+      downloadStatus = `Подготовка серии ${ep.position}…`;
+      try {
+        await queueDownloads([ep]);
+        downloadStatus = `Серия ${ep.position} добавлена в загрузки`;
+        navigate('/downloads');
+      } catch {
+        downloadStatus = `Не удалось подготовить серию ${ep.position}`;
+      } finally {
+        actionBusy = '';
+      }
+    };
+
+    if (isEpisodeDownloaded(ep.position)) {
+      openConfirm({
+        title: `Серия ${ep.position} уже скачана`,
+        text: 'Файл уже есть в папке загрузок. Скачать заново?',
+        yesLabel: 'Скачать заново',
+        onYes: () => { void run(); },
+      });
+      return;
+    }
+    await run();
+  }
+
+  async function downloadAllEpisodes() {
+    if (episodes.length === 0 || actionBusy) return;
+
+    const already = episodes.filter((ep) => isEpisodeDownloaded(ep.position));
+    const pending = episodes.filter((ep) => !isEpisodeDownloaded(ep.position));
+
+    const runQueue = async (list: Episode[]) => {
+      if (list.length === 0) {
+        downloadStatus = 'Нечего скачивать — все серии уже на диске';
+        return;
+      }
+      actionBusy = 'download-all';
+      optionsOpen = false;
+      downloadStatus = `Подготовка ${list.length} серий…`;
+      try {
+        await queueDownloads(list);
+        downloadStatus = `Добавлено в загрузки: ${list.length}`;
+        navigate('/downloads');
+      } catch {
+        downloadStatus = 'Не удалось подготовить загрузку';
+      } finally {
+        actionBusy = '';
+      }
+    };
+
+    if (already.length > 0) {
+      const nums = already.map((ep) => ep.position).join(', ');
+      const allDone = already.length === episodes.length;
+      openConfirm({
+        title: allDone
+          ? 'Все серии уже скачаны'
+          : `${already.length} ${already.length === 1 ? 'серия уже скачана' : already.length < 5 ? 'серии уже скачаны' : 'серий уже скачаны'}`,
+        text: allDone
+          ? 'Все файлы уже есть в папке загрузок. Скачать всё заново?'
+          : `Серии ${nums} уже скачаны. Скачать всё заново (будут созданы новые копии) или пропустить их?`,
+        yesLabel: 'Скачать заново',
+        onYes: () => { void runQueue(episodes); },
+        skipLabel: allDone ? '' : `Скачать только ${pending.length} ${pending.length === 1 ? 'серию' : pending.length < 5 ? 'серии' : 'серий'}`,
+        onSkip: allDone ? undefined : () => { void runQueue(pending); },
+      });
+      return;
+    }
+
+    await runQueue(episodes);
   }
 
   function handleConfirmYes() {
     showConfirm = false;
     confirmCallback?.();
     confirmCallback = null;
+    confirmSkipCallback = null;
   }
 
   function handleConfirmNo() {
     showConfirm = false;
     confirmCallback = null;
+    confirmSkipCallback = null;
   }
 
-  // ── close / keyboard ──────────────────────────────────────────────────────────
+  function handleConfirmSkip() {
+    showConfirm = false;
+    confirmSkipCallback?.();
+    confirmCallback = null;
+    confirmSkipCallback = null;
+  }
+
   function close() {
     document.body.style.overflow = '';
     onClose();
@@ -357,161 +651,324 @@
     document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', handleKeydown);
 
+    const onDownloadProgress = (e: Event) => {
+      const d = (e as CustomEvent).detail;
+      if (d?.status === 'done') void refreshDownloadedState();
+    };
+    window.addEventListener('episode-download:progress', onDownloadProgress);
+
     const api = window.anixApi;
     if (!api?.release?.getDubbers) {
       sourcesLoading = false;
       sourcesError = 'API недоступно';
-      return;
+    } else {
+      api.release.getDubbers(releaseId)
+        .then((res: { types?: Dubber[] }) => {
+          const types = (res?.types ?? []).filter(d => !isDubberBlacklisted(String(d.name ?? '')));
+          sourcesLoading = false;
+          if (types.length === 0) sourcesError = 'Нет озвучек';
+          else dubbers = types;
+        })
+        .catch(() => {
+          sourcesLoading = false;
+          sourcesError = 'Ошибка загрузки';
+        });
     }
 
-    api.release.getDubbers(releaseId)
-      .then((res: { types?: Dubber[] }) => {
-        const types = (res?.types ?? []).filter(d => !isDubberBlacklisted(String(d.name ?? '')));
-        sourcesLoading = false;
-        if (types.length === 0) {
-          sourcesError = 'Нет озвучек';
-        } else {
-          dubbers = types;
-        }
-      })
-      .catch(() => {
-        sourcesLoading = false;
-        sourcesError = 'Ошибка загрузки';
-      });
+    return () => {
+      window.removeEventListener('episode-download:progress', onDownloadProgress);
+    };
   });
 
   onDestroy(() => {
     document.body.style.overflow = '';
     document.removeEventListener('keydown', handleKeydown);
   });
+
 </script>
 
 <div class="watch-modal" role="dialog" aria-modal="true">
-  <div
-    class="watch-modal__backdrop"
-    role="presentation"
-    onclick={close}
-    onkeydown={undefined}
-  ></div>
+  <button type="button" class="watch-modal__backdrop" aria-label="Закрыть" onclick={close}></button>
+
   <div class="watch-modal__panel">
     <div class="watch-modal__head">
-      <h2 class="watch-modal__title">
-        {currentView === 'sources' ? 'Выбор озвучки' : 'Выбор эпизода'}
-      </h2>
-      <button type="button" class="watch-modal__close" aria-label="Закрыть" onclick={close}></button>
+      {#if modalView !== 'variants'}
+        <button type="button" class="watch-modal__head-back" aria-label="Назад" onclick={backFromNestedView}>
+          {@html backIconSvg}
+        </button>
+      {/if}
+      <div class="watch-modal__head-text">
+        <h2 class="watch-modal__title">
+          {#if modalView === 'updates'}
+            Статистика добавления
+          {:else if modalView === 'episodes' && selectedDubber}
+            {selectedDubber.name}
+          {:else}
+            Смотреть
+          {/if}
+        </h2>
+        {#if modalView === 'variants'}
+          <p class="watch-modal__subtitle">{releaseTitle}</p>
+        {:else if modalView === 'episodes' && selectedDubber}
+          {@const viewCountRaw = selectedDubber.view_count ?? selectedDubber.viewCount ?? 0}
+          {@const viewCount = typeof viewCountRaw === 'number' ? viewCountRaw : parseInt(String(viewCountRaw), 10) || 0}
+          <p class="watch-modal__subtitle">
+            {formatNum(viewCount)} просмотров · {isSubDubber(selectedDubber) ? 'субтитры' : 'озвучка'} · {dubberEpisodeLabel(selectedDubber)}
+          </p>
+        {/if}
+      </div>
+      <div class="watch-modal__head-actions">
+        {#if modalView === 'variants'}
+          <button type="button" class="watch-modal__head-icon" aria-label="Статистика добавления" title="Статистика добавления" onclick={() => openUpdatesView()}>
+            {@html refreshIconSvg}
+          </button>
+        {:else if modalView === 'updates'}
+          <button
+            type="button"
+            class="watch-modal__head-icon"
+            class:watch-modal__head-icon--spinning={updatesLoading || updatesLoadingMore}
+            aria-label="Обновить статистику"
+            title="Обновить"
+            onclick={() => openUpdatesView(true)}
+            disabled={updatesLoading}
+          >
+            {@html refreshIconSvg}
+          </button>
+        {/if}
+        <button type="button" class="watch-modal__close" aria-label="Закрыть" onclick={close}>
+          {@html closeIconSvg}
+        </button>
+      </div>
     </div>
 
     <div class="watch-modal__body">
-      <!-- Sources view -->
-      <div class="watch-modal__view watch-modal__view--sources" hidden={currentView !== 'sources'}>
-        <div class="watch-modal__col watch-modal__col--sources">
-          <h3 class="watch-modal__col-title">Озвучка</h3>
-          {#if sourcesLoading}
-            <div class="watch-modal__loading">Загрузка…</div>
-          {:else if sourcesError}
-            <div class="watch-modal__loading">{sourcesError}</div>
-          {:else}
-            <Page noPadding extraClass="watch-modal__page">
-              <div class="watch-modal__sources-list">
-                {#each dubbers as d}
+      {#if modalView === 'updates'}
+        <div class="watch-modal__updates-scroll" bind:this={updatesScrollRoot}>
+          <div class="watch-modal__updates-list">
+            {#if updatesLoading && updates.length === 0}
+              <div class="watch-modal__loading watch-modal__loading--center">Загрузка статистики…</div>
+            {:else if updatesError && updates.length === 0}
+              <div class="watch-modal__loading watch-modal__loading--center">{updatesError}</div>
+            {:else}
+              {#each updates as update, i (`${update.last_episode_update_name}-${update.last_episode_source_update_id}-${update.last_episode_update_date}-${i}`)}
+                <article class="watch-modal__update-row">
+                  <span class="watch-modal__update-marker" aria-hidden="true"></span>
+                  <div class="watch-modal__update-content">
+                    <p>
+                      {updateEpisodeLabel(update)}, вариант {updateVariantLabel(update)}, источник {updateSourceLabel(update)}
+                    </p>
+                    <time>{formatUpdateTimestamp(update.last_episode_update_date)}</time>
+                  </div>
+                </article>
+              {/each}
+
+              {#if updatesLoadingMore}
+                <div class="watch-modal__load-more-indicator" aria-live="polite">
+                  <span class="watch-modal__load-status">Загрузка…</span>
+                </div>
+              {/if}
+
+              {#if updatesHasMore || updatesLoadingMore}
+                <div
+                  class="watch-modal__load-sentinel"
+                  aria-hidden="true"
+                  use:infiniteScroll={{
+                    onLoad: loadMoreUpdates,
+                    enabled: () => updatesHasMore && !updatesLoadingMore && !updatesLoading,
+                    root: updatesScrollRoot,
+                  }}
+                ></div>
+              {/if}
+            {/if}
+          </div>
+        </div>
+      {:else if modalView === 'episodes'}
+        {#if episodesLoading && episodes.length === 0}
+          <div class="watch-modal__loading watch-modal__loading--center">Загрузка серий…</div>
+        {:else if episodesError}
+          <div class="watch-modal__loading watch-modal__loading--center">{episodesError}</div>
+        {:else}
+          <Page noPadding extraClass="watch-modal__page page--scroll-area">
+            <div class="watch-modal__episodes-view">
+              {#if sources.length > 1}
+                <div class="watch-modal__source-pills" aria-label="Источники">
+                  {#each sources as source (source.id)}
+                    <button
+                      type="button"
+                      class="watch-modal__source-pill"
+                      class:watch-modal__source-pill--active={source.id === selectedSourceId}
+                      onclick={() => selectSource(source)}
+                    >
+                      {sourceLabel(source)}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+
+              <div class="watch-modal__episodes-toolbar">
+                <label class="watch-modal__episodes-search">
+                  {@html searchIconSvg}
+                  <input
+                    type="search"
+                    class="watch-modal__episodes-search-input"
+                    placeholder="Найти серию"
+                    bind:value={searchInput}
+                    onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearchEpisode(); } }}
+                  />
+                </label>
+
+                <div class="watch-modal__toolbar-actions">
+                  <button type="button" class="watch-modal__icon-action" title="Скачать все серии" onclick={downloadAllEpisodes} disabled={actionBusy !== '' || episodes.length === 0}>
+                    {@html downloadIconSvg}
+                  </button>
+                  <div class="watch-modal__options">
+                    <button type="button" class="watch-modal__icon-action" title="Опции" onclick={() => optionsOpen = !optionsOpen}>
+                      {@html dotsIconSvg}
+                    </button>
+                    {#if optionsOpen}
+                      <div class="watch-modal__options-menu">
+                        <button type="button" onclick={handleLastWatched}>К последней отмеченной</button>
+                        <button type="button" onclick={() => setAllWatched(true)} disabled={actionBusy !== ''}>Пометить всё</button>
+                        <button type="button" onclick={() => setAllWatched(false)} disabled={actionBusy !== ''}>Удалить все отметки</button>
+                      </div>
+                    {/if}
+                  </div>
+                </div>
+              </div>
+
+              {#if downloadStatus}
+                <div class="watch-modal__download-status">{downloadStatus}</div>
+              {/if}
+
+              <div class="watch-modal__episodes" bind:this={episodesListEl}>
+                {#each filteredEpisodes as ep (ep.position)}
+                  {@const watched = isEpisodeWatched(ep)}
+                  {@const downloaded = isEpisodeDownloaded(ep.position)}
+                  <article
+                    class="watch-modal__episode-card"
+                    class:watch-modal__episode-card--watched={watched}
+                    class:watch-modal__episode-card--active={selectedEpisodePos === ep.position}
+                    data-position={ep.position}
+                  >
+                    <button type="button" class="watch-modal__episode-main" onclick={() => handleEpisodePlay(ep.position)}>
+                      <span class="watch-modal__episode-num">{ep.position}</span>
+                      <span class="watch-modal__episode-name">{ep.name || `Серия ${ep.position}`}</span>
+                    </button>
+                    <span class="watch-modal__episode-actions">
+                      <button
+                        type="button"
+                        class="watch-modal__episode-mini"
+                        title={watched ? 'Снять отметку' : 'Пометить просмотренной'}
+                        onclick={(e) => toggleEpisodeWatched(ep, e)}
+                      >
+                        {@html checkIconSvg}
+                      </button>
+                      <button
+                        type="button"
+                        class="watch-modal__episode-mini"
+                        class:watch-modal__episode-mini--downloaded={downloaded}
+                        title={downloaded ? 'Скачано' : 'Скачать серию'}
+                        onclick={(e) => downloadEpisode(ep, e)}
+                      >
+                        {#if downloaded}
+                          {@html downloadedIconSvg}
+                        {:else}
+                          {@html downloadIconSvg}
+                        {/if}
+                      </button>
+                    </span>
+                  </article>
+                {/each}
+              </div>
+            </div>
+          </Page>
+        {/if}
+      {:else if sourcesLoading}
+        <div class="watch-modal__loading watch-modal__loading--center">Загрузка озвучек…</div>
+      {:else if sourcesError}
+        <div class="watch-modal__loading watch-modal__loading--center">{sourcesError}</div>
+      {:else}
+        <Page noPadding extraClass="watch-modal__page page--scroll-area">
+          <div class="watch-modal__variants">
+            <div class="watch-modal__filters" role="tablist" aria-label="Фильтр вариантов">
+              <button
+                type="button"
+                role="tab"
+                class="watch-modal__filter"
+                class:watch-modal__filter--active={variantFilter === 'all'}
+                aria-selected={variantFilter === 'all'}
+                onclick={() => variantFilter = 'all'}
+              >Все</button>
+              <button
+                type="button"
+                role="tab"
+                class="watch-modal__filter"
+                class:watch-modal__filter--active={variantFilter === 'voice'}
+                aria-selected={variantFilter === 'voice'}
+                onclick={() => variantFilter = 'voice'}
+              >Озвучки</button>
+              <button
+                type="button"
+                role="tab"
+                class="watch-modal__filter"
+                class:watch-modal__filter--active={variantFilter === 'sub'}
+                aria-selected={variantFilter === 'sub'}
+                onclick={() => variantFilter = 'sub'}
+              >Субтитры</button>
+            </div>
+
+            <div class="watch-modal__variant-list">
+              {#if filteredDubbers.length === 0}
+                <div class="watch-modal__loading watch-modal__loading--center">Нет вариантов</div>
+              {:else}
+                {#each filteredDubbers as d (d.id)}
                   {@const viewCountRaw = d.view_count ?? d.viewCount ?? 0}
                   {@const viewCount = typeof viewCountRaw === 'number' ? viewCountRaw : parseInt(String(viewCountRaw), 10) || 0}
-                  {@const epCount = normalizeEpisodeCount(d as Record<string, unknown>)}
-                  {@const epText = epCount != null ? `${epCount} эп.` : '— эп.'}
-                  {@const iconUrl = d.icon ? ensureHttps(String(d.icon)) : ''}
-                  <button
-                    type="button"
-                    class="watch-modal__source-item"
-                    onclick={() => selectDubber(d)}
-                  >
+                  {@const iconUrl = d.icon ? resolveCdnAssetUrl(ensureHttps(String(d.icon))) : ''}
+                  {@const epLabel = dubberEpisodeLabel(d)}
+                  <button type="button" class="watch-modal__variant-row" onclick={() => openDubber(d)}>
                     {#if iconUrl}
-                      <span class="watch-modal__source-avatar" style="background-image:url({iconUrl})"></span>
+                      <span class="watch-modal__variant-avatar" style="background-image:url({iconUrl})"></span>
                     {:else}
-                      <span class="watch-modal__source-avatar watch-modal__source-avatar--mic">{@html micIconSvg}</span>
+                      <span class="watch-modal__variant-avatar watch-modal__variant-avatar--mic">{@html micIconSvg}</span>
                     {/if}
-                    <span class="watch-modal__source-info">
-                      <span class="watch-modal__source-name">{d.name}</span>
-                      <span class="watch-modal__source-meta">{formatNum(viewCount)} просмотров · {epText}</span>
+
+                    <span class="watch-modal__variant-info">
+                      <span class="watch-modal__variant-name">{d.name}</span>
+                      {#if epLabel}
+                        <span class="watch-modal__variant-ep">{epLabel}</span>
+                      {/if}
+                    </span>
+
+                    <span class="watch-modal__variant-views-badge">
+                      {@html eyeIconSvg}
+                      {fmtViewsShort(viewCount)}
                     </span>
                   </button>
                 {/each}
-              </div>
-            </Page>
-          {/if}
-        </div>
-      </div>
-
-      <!-- Episodes view -->
-      <div class="watch-modal__view watch-modal__view--episodes" hidden={currentView !== 'episodes'}>
-        <div class="watch-modal__back-row">
-          <button type="button" class="watch-modal__back" aria-label="Назад к выбору озвучки" onclick={handleBack}>
-            ← Назад
-          </button>
-        </div>
-
-        <div class="watch-modal__episodes-toolbar">
-          <div class="watch-modal__episodes-search">
-            <input
-              type="number"
-              min="1"
-              class="watch-modal__episodes-search-input"
-              placeholder="Найти серию по номеру"
-              bind:value={searchInput}
-              onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearchEpisode(); } }}
-            />
-            <button type="button" class="watch-modal__episodes-search-btn" onclick={handleSearchEpisode}>
-              Найти
-            </button>
+              {/if}
+            </div>
           </div>
-          <button type="button" class="watch-modal__episodes-last-watched-btn" onclick={handleLastWatched}>
-            К последней отмеченной
-          </button>
-        </div>
-
-        {#if sourceSelectOptions.length > 1}
-          <div class="watch-modal__source-selector-wrap">
-            <Select
-              options={sourceSelectOptions}
-              value={sourceSelectValue}
-              placeholder="Источник"
-              onChange={handleSourceSelectChange}
-            />
-          </div>
-        {/if}
-
-        <div class="watch-modal__col watch-modal__col--episodes">
-          <h3 class="watch-modal__col-title">
-            Серии
-            {#if !episodesLoading && !episodesError && episodes.length > 0}
-              <span class="watch-modal__col-count">({episodes.length})</span>
-            {/if}
-          </h3>
-
-          {#if episodesLoading}
-            <div class="watch-modal__loading">{episodesLoadText}</div>
-          {:else if episodesError}
-            <div class="watch-modal__loading">{episodesError}</div>
-          {:else}
-            <Page noPadding extraClass="watch-modal__page">
-              <div class="watch-modal__episodes" bind:this={episodesListEl}></div>
-            </Page>
-          {/if}
-        </div>
-      </div>
+        </Page>
+      {/if}
     </div>
 
-    <!-- Lobby confirmation dialog -->
     {#if showConfirm}
       <div class="watch-modal__confirm">
         <div class="watch-modal__confirm-inner">
-          <div class="watch-modal__confirm-title">Предложить серию {confirmEpLabel}?</div>
-          <div class="watch-modal__confirm-text">Все участники увидят предложение сменить аниме. Продолжить?</div>
+          <div class="watch-modal__confirm-title">{confirmTitle}</div>
+          <div class="watch-modal__confirm-text">{confirmText}</div>
           <div class="watch-modal__confirm-actions">
             <button type="button" class="watch-modal__confirm-btn watch-modal__confirm-btn--secondary" onclick={handleConfirmNo}>
               Отмена
             </button>
+            {#if confirmSkipLabel && confirmSkipCallback}
+              <button type="button" class="watch-modal__confirm-btn watch-modal__confirm-btn--secondary" onclick={handleConfirmSkip}>
+                {confirmSkipLabel}
+              </button>
+            {/if}
             <button type="button" class="watch-modal__confirm-btn watch-modal__confirm-btn--primary" onclick={handleConfirmYes}>
-              Предложить
+              {confirmYesLabel}
             </button>
           </div>
         </div>

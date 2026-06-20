@@ -68,10 +68,13 @@
   font-weight: 700;
   line-height: 1.25;
   color: $color-text;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .release-card-h__title-info {
-  margin-top: 0.1rem;
+  margin-top: 0;
 }
 
 .release-card-h__menu-slot {
@@ -393,48 +396,5 @@ $related-chain-line-h: 1.25rem;
     .release-card-h__desc {
       -webkit-line-clamp: 2;
     }
-  }
-}
-
-@media (max-width: 680px) {
-  .release-card-h__link {
-    gap: 0.35rem;
-    min-height: 0;
-  }
-
-  .release-card-h__poster,
-  .release-card-h__skeleton-poster {
-    width: 108px;
-    min-width: 108px;
-  }
-
-  .release-card-h__title {
-    font-size: 1.05rem;
-  }
-
-  .release-card-h__desc {
-    -webkit-line-clamp: 2;
-    margin-top: 0.35rem;
-  }
-
-  .release-card-h__genres {
-    gap: 0.3rem;
-  }
-
-  .release-card-h__tag {
-    font-size: 0.7rem;
-    padding: 0.2rem 0.45rem;
-  }
-
-  .release-card-h--related {
-    .release-card-h__poster-col {
-      width: 108px;
-      min-width: 108px;
-    }
-  }
-
-  .release-cards-grid {
-    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
-    gap: 0.85rem 0.65rem;
   }
 }

@@ -48,7 +48,7 @@
   let activeSelectClose: (() => void) | null = null;
   let isOpen = $state(false);
   let closeDropdown: (() => void) | null = null;
-  let triggerEl: HTMLButtonElement;
+  let triggerEl = $state<HTMLButtonElement | null>(null);
 
   const selectedOption = $derived(options.find((o) => o.value === value) ?? null);
   const compactTitle = $derived(
@@ -221,7 +221,7 @@
 
   function handleTriggerClick(e: MouseEvent) {
     e.stopPropagation();
-    if (disabled) return;
+    if (disabled || !triggerEl) return;
     if (isOpen) {
       closeDropdown?.();
     } else {

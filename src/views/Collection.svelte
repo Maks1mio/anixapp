@@ -1,25 +1,20 @@
 <script lang="ts">
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import { onMount, onDestroy } from 'svelte';
+  import { iconPencil, iconLock, iconTrash2 } from '../components/icons';
   import { navigate } from '../stores/navigation';
+  import { showToast } from '../stores/toast';
+  import { COLLECTION_DELETE_ERROR_MESSAGES } from '../utils/collection';
+  import { setDiscordContext, refreshDiscordPresence } from '../services/discord-presence';
+  import { ensureProfileId } from '../utils/profile';
   import type { ReleaseCardData } from '../types/release';
+  import { buildPosterUrl } from '../utils/posterUrl';
 
   interface Props {
     id: number;
   }
 
   let { id }: Props = $props();
-
-  const POSTER_BASE = 'https://s.anixmirai.com/posters';
-
-  function buildPosterUrl(value: string | undefined): string | undefined {
-    if (!value || typeof value !== 'string') return undefined;
-    const v = value.trim();
-    if (!v) return undefined;
-    if (v.startsWith('http')) return v;
-    const pid = v.endsWith('.jpg') || v.endsWith('.png') ? v : `${v}.jpg`;
-    return `${POSTER_BASE}/${pid}`;
-  }
 
   function formatDate(ts: number): string {
     const date = new Date(ts * 1000);
@@ -36,7 +31,7 @@
     const posterRaw = p?.original?.url ?? p?.medium?.url ?? p?.small?.url
       ?? (typeof raw.poster === 'string' ? raw.poster : undefined)
       ?? (typeof raw.image === 'string' ? raw.image : undefined);
-    const poster = posterRaw ? buildPosterUrl(posterRaw) : undefined;
+    const poster = posterRaw ? buildPosterUrl(posterRaw) || undefined : undefined;
     const grade = typeof raw.grade === 'number' ? raw.grade : undefined;
     const statusObj = raw.status as { name?: string } | undefined;
     const categoryObj = raw.category as { name?: string } | undefined;
@@ -97,6 +92,9 @@
   let authorId = $state<number | null>(null);
   let authorName = $state('');
   let authorAvatar = $state('');
+  let isOwner = $state(false);
+  let isPrivate = $state(false);
+  let isDeleting = $state(false);
 
   let watchingCount = $state(0);
   let planCount = $state(0);
@@ -175,6 +173,26 @@
     } catch { /* ignore */ }
   }
 
+  async function deleteCollection() {
+    if (!window.anixApi || isDeleting) return;
+    if (!window.confirm('Удалить коллекцию? Это действие нельзя отменить.')) return;
+    isDeleting = true;
+    try {
+      const res = await window.anixApi.collectionMy.delete(id) as { code?: number };
+      const code = res?.code ?? -1;
+      if (code !== 0 && code !== 4) {
+        showToast(COLLECTION_DELETE_ERROR_MESSAGES[code] ?? 'Не удалось удалить коллекцию', 'err');
+        return;
+      }
+      showToast('Коллекция удалена');
+      navigate('/collections/my');
+    } catch (err) {
+      showToast(String(err), 'err');
+    } finally {
+      isDeleting = false;
+    }
+  }
+
   onMount(async () => {
     if (!window.anixApi) {
       errorMsg = 'API недоступно.';
@@ -200,10 +218,13 @@
       authorId = creator.id ?? creator['@id'] ?? null;
       authorName = creator.nickname ?? creator.username ?? creator.login ?? (creator as any).name ?? 'Пользователь';
       authorAvatar = creator.avatar ?? '';
+      const selfId = await ensureProfileId();
+      isOwner = selfId != null && authorId === selfId;
 
       collectionTitle = info.title || 'Без названия';
       collectionDesc = info.description || '';
       collectionImage = info.image || '';
+      isPrivate = !!(info.is_private ?? info.isPrivate);
       lastUpdateDate = info.last_update_date ?? info.creation_date ?? 0;
       favoritesCount = info.favorites_count ?? 0;
       isFavorite = !!(info.is_favorite ?? infoRes?.is_favorite);
@@ -229,6 +250,12 @@
       });
       releaseItems = list.map((raw: any) => mapReleaseToCardData(raw as Record<string, unknown>));
       hasMore = (typeof totalFromApi === 'number' ? totalFromApi : totalReleases) > list.length;
+
+      setDiscordContext({
+        collectionTitle: collectionTitle,
+        collectionImage: collectionImage ? buildPosterUrl(collectionImage) : undefined,
+      });
+      refreshDiscordPresence();
 
       loadState = 'ready';
       requestAnimationFrame(attachScroll);
@@ -260,7 +287,7 @@
         <!-- Banner -->
         <div class="collection-banner">
           {#if collectionImage}
-            <img src={collectionImage.startsWith('http') ? collectionImage : `${POSTER_BASE}/${collectionImage}`} alt="" loading="eager" />
+            <img src={buildPosterUrl(collectionImage)} alt="" loading="eager" />
           {:else}
             <div class="collection-banner__placeholder"></div>
           {/if}
@@ -279,7 +306,7 @@
               >
                 <span
                   class="collection-header__author-avatar{authorAvatar ? ' collection-header__author-avatar--img' : ''}"
-                  style={authorAvatar ? `background-image:url(${authorAvatar})` : ''}
+                  style={authorAvatar ? `background-image:url('${buildPosterUrl(authorAvatar)}')` : ''}
                 ></span>
                 <span class="collection-header__author-name">{authorName}</span>
               </button>
@@ -305,6 +332,37 @@
         {#if collectionDesc}
           <div class="collection-desc">
             <div class="collection-desc__text">{collectionDesc}</div>
+          </div>
+        {/if}
+
+        {#if isOwner && isPrivate}
+          <div class="collection-private-notice" role="status">
+            <span class="collection-private-notice__icon" aria-hidden="true">{@html iconLock(18)}</span>
+            <p class="collection-private-notice__text">
+              Это закрытая коллекция, доступ к ней имеете только Вы.
+            </p>
+          </div>
+        {/if}
+
+        {#if isOwner}
+          <div class="collection-owner-actions">
+            <button
+              type="button"
+              class="collection-owner-actions__btn"
+              onclick={() => navigate(`/collections/edit/${id}`)}
+            >
+              <span class="collection-owner-actions__icon">{@html iconPencil(18)}</span>
+              <span>Редактировать</span>
+            </button>
+            <button
+              type="button"
+              class="collection-owner-actions__btn collection-owner-actions__btn--danger"
+              disabled={isDeleting}
+              onclick={deleteCollection}
+            >
+              <span class="collection-owner-actions__icon">{@html iconTrash2(18)}</span>
+              <span>{isDeleting ? 'Удаление…' : 'Удалить'}</span>
+            </button>
           </div>
         {/if}
 

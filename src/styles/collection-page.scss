@@ -5,7 +5,14 @@
   margin: 0 auto;
   width: 100%;
   min-width: 0;
-  overflow-x: hidden;
+  overflow-x: clip;
+}
+
+.collection-page,
+.collection-page__body {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 .collection-page__head {
@@ -105,6 +112,8 @@
   color: $color-text;
   flex: 1;
   min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .collection-info__date {
@@ -157,12 +166,84 @@
   border-top: 1px solid $color-border;
 }
 
+.collection-private-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 1rem 1.15rem;
+  border-radius: 12px;
+  background: $color-surface;
+  border: 1px solid $color-border;
+}
+
+.collection-private-notice__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  color: $color-text-muted;
+}
+
+.collection-private-notice__text {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: $color-text-muted;
+}
+
+.collection-owner-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.collection-owner-actions__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  font-family: inherit;
+  color: $color-text;
+  background: $color-surface-hover;
+  border: 1px solid $color-border;
+  cursor: pointer;
+  transition: background $transition, color $transition, border-color $transition;
+
+  &:hover:not(:disabled) {
+    background: $color-border;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  &--danger:hover:not(:disabled) {
+    color: $color-error;
+    border-color: color-mix(in srgb, $color-error 35%, $color-border);
+    background: color-mix(in srgb, $color-error 8%, $color-surface-hover);
+  }
+}
+
+.collection-owner-actions__icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 .collection-desc__text {
   font-size: 0.9rem;
   line-height: 1.55;
   color: $color-text-muted;
   white-space: pre-wrap;
   word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .collection-stats {
@@ -284,6 +365,16 @@
 
 .collection-releases__grid.release-cards-grid-root--wide {
   gap: 1rem;
+}
+
+.view-collection .release-card-h {
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.view-collection .release-card-h__title {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .collection-releases__more {

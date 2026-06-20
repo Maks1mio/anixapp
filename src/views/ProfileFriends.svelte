@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../stores/navigation';
+  import { resolveCdnAssetUrl } from '../utils/posterUrl';
+  import { setDiscordContext, refreshDiscordPresence } from '../services/discord-presence';
   import Tabs from '../components/Tabs.svelte';
 
   interface Props {
@@ -38,11 +40,17 @@
   let scrollListener: (() => void) | null = null;
   let scrollAttached = false;
 
-  function setProfile(login: string, avatar?: string) {
+  function setProfile(login: string, avatar?: string, isSelf = !id) {
     if (titleSet) return;
     titleSet = true;
     profileLogin = login;
     if (avatar) profileAvatar = avatar;
+    setDiscordContext({
+      profileLogin: login,
+      profileAvatar: avatar ? resolveCdnAssetUrl(avatar) : undefined,
+      profileIsSelf: isSelf,
+    });
+    refreshDiscordPresence();
   }
 
   async function getId(): Promise<number> {
@@ -112,7 +120,7 @@
     if (id) {
       window.anixApi?.profile.info(id).then((d: any) => {
         const p = d?.profile;
-        if (p?.login) setProfile(p.login, p.avatar);
+        if (p?.login) setProfile(p.login, p.avatar, !!d?.is_my_profile);
         if (typeof p?.friend_count === 'number') friendCount = p.friend_count;
       }).catch(() => {});
     }
@@ -128,7 +136,7 @@
   <div class="search-page">
     <div class="view-header">
       <div class="profile-more__user">
-        <div class="profile-more__avatar" style={profileAvatar ? `background-image:url('${profileAvatar}')` : ''}></div>
+        <div class="profile-more__avatar" style={profileAvatar ? `background-image:url('${resolveCdnAssetUrl(profileAvatar)}')` : ''}></div>
         <h1 class="view-header__title">{profileLogin}</h1>
       </div>
     </div>
@@ -152,7 +160,7 @@
             >
               <div
                 class="search-page__profile-avatar"
-                style={fr.avatar ? `background-image:url('${fr.avatar}')` : ''}
+                style={fr.avatar ? `background-image:url('${resolveCdnAssetUrl(fr.avatar)}')` : ''}
               ></div>
               <div class="search-page__profile-info">
                 <span class="search-page__profile-name">{fr.login || ''}</span>

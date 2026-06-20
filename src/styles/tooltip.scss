@@ -19,6 +19,7 @@
 $tooltip-gap: 8px;
 
 .tooltip {
+  display: none;
   position: absolute;
   bottom: 100%;
   left: 50%;
@@ -54,7 +55,9 @@ $tooltip-gap: 8px;
   transform: translateY(-50%);
 }
 
-.tooltip-trigger:hover .tooltip {
+.tooltip-trigger:hover .tooltip,
+.tooltip-trigger:focus-visible .tooltip {
+  display: block;
   opacity: 1;
   visibility: visible;
 }

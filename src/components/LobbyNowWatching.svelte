@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { lobbyCurrentPlayback, isPlayerWindowOpen, lobbyWatchingPeerIds } from '../stores/modals';
   import { getCurrentRoomId, getCurrentParticipants, leaveLobby } from '../services/lobby-state';
+  import { resolveCdnAssetUrl } from '../utils/posterUrl';
 
   let playback = $derived($lobbyCurrentPlayback);
   let playerOpen = $derived($isPlayerWindowOpen);
@@ -124,7 +125,7 @@
             title={row.p.login}
           >
             {#if row.p.avatar}
-              <img src={row.p.avatar} alt={row.p.login} />
+              <img src={resolveCdnAssetUrl(row.p.avatar)} alt={row.p.login} />
             {:else}
               {row.p.login?.[0]?.toUpperCase() ?? '?'}
             {/if}

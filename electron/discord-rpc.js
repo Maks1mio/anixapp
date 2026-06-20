@@ -30,6 +30,7 @@ try {
 let rpc = null;
 let connected = false;
 let destroyed = false;
+let paused = false;
 let reconnectTimer = null;
 let mainWindowRef = null;
 
@@ -46,10 +47,38 @@ let _focusedContext = 'main'; // 'main' | 'player' — which window is in front
 // Otherwise every play/pause would wipe the party/join info.
 let _partyInfo = null; // { partyId, partySize, partyMax, joinSecret }
 
+/** Runtime options from user settings (updated by main.js before each setter call). */
+let _rpcOptions = {
+  showImages: true,
+  showProgress: true,
+  showDubber: true,
+};
+
 // ── Last known poster URL for the currently playing anime ─────────────────────
 let _lastPosterUrl = null;
 
-/** @returns {object|null} The activity that is currently visible in Discord. */
+function setRpcOptions(opts = {}) {
+  if (typeof opts.showImages === 'boolean') _rpcOptions.showImages = opts.showImages;
+  if (typeof opts.showProgress === 'boolean') _rpcOptions.showProgress = opts.showProgress;
+  if (typeof opts.showDubber === 'boolean') _rpcOptions.showDubber = opts.showDubber;
+}
+
+function _unwrapCdnUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+  if (url.startsWith('anix-cdn://')) {
+    try {
+      return new URL(url).searchParams.get('u');
+    } catch {
+      return null;
+    }
+  }
+  return url.startsWith('https://') ? url : null;
+}
+
+function _imageKey(url) {
+  const resolved = _unwrapCdnUrl(url) || url;
+  return _rpcOptions.showImages && resolved && String(resolved).startsWith('https://') ? resolved : 'logo';
+}
 function _currentActivity() {
   return _focusedContext === 'player' ? _playerActivity : _mainActivity;
 }
@@ -63,7 +92,7 @@ function setMainWindow(win) {
 
 /** Connect to Discord IPC. Auto-reconnects every 30 s if Discord is not running. */
 async function connect() {
-  if (!DiscordRpcLib || destroyed || rpc) return;
+  if (!DiscordRpcLib || destroyed || paused || rpc) return;
 
   try {
     rpc = new DiscordRpcLib.Client({ clientId: CLIENT_ID, transport: { type: 'ipc' } });
@@ -141,6 +170,7 @@ async function _subscribeEvents() {
 }
 
 function scheduleReconnect() {
+  if (paused) return;
   if (reconnectTimer) clearTimeout(reconnectTimer);
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
@@ -162,7 +192,7 @@ function _mergeParty(activity) {
 }
 
 async function _applyActivity(activity) {
-  if (!connected || !rpc) return;
+  if (paused || !connected || !rpc) return;
   try {
     await rpc.user.setActivity(_mergeParty(activity));
   } catch (err) {
@@ -249,15 +279,14 @@ function setPage({ details, state: pageState }) {
  * @param {string}        opts.title      Anime title
  * @param {string|null}   [opts.posterUrl] Full HTTPS URL of the poster
  */
-function setViewingRelease({ title, posterUrl }) {
-  // Remember poster for when user starts watching
-  if (posterUrl) _lastPosterUrl = posterUrl;
+function setViewingRelease({ title, posterUrl, state: pageState }) {
+  if (posterUrl && _rpcOptions.showImages) _lastPosterUrl = posterUrl;
 
   _setForContext('main', {
     type: 0,
     details: safeStr(truncate(title || 'Аниме')),
-    state: 'Просматривает страницу аниме',
-    largeImageKey: posterUrl || 'logo',
+    state: safeStr(pageState || 'Просматривает страницу аниме'),
+    largeImageKey: _imageKey(posterUrl),
     largeImageText: truncate(title || 'AnixApp', 128),
     smallImageKey: 'logo',
     smallImageText: 'AnixApp',
@@ -274,14 +303,28 @@ function setViewingRelease({ title, posterUrl }) {
  * @param {string|null}   [opts.avatarUrl] Full HTTPS URL of the user's avatar
  * @param {boolean}       [opts.isSelf]   true = own profile
  */
-function setViewingProfile({ username, avatarUrl, isSelf }) {
+function setViewingProfile({ username, avatarUrl, isSelf, state: pageState }) {
   const displayName = truncate(username || 'Пользователь', 64);
+  const defaultState = isSelf ? 'Просматривает свой профиль' : 'Просматривает профиль';
   _setForContext('main', {
     type: 0,
     details: `Профиль: ${displayName}`,
-    state: isSelf ? 'Просматривает свой профиль' : 'Просматривает профиль',
-    largeImageKey: avatarUrl || 'logo',
+    state: safeStr(pageState || defaultState),
+    largeImageKey: _imageKey(avatarUrl),
     largeImageText: displayName,
+    smallImageKey: 'logo',
+    smallImageText: 'AnixApp',
+    instance: false,
+  });
+}
+
+function setViewingCollection({ title, imageUrl, state: pageState }) {
+  _setForContext('main', {
+    type: 0,
+    details: safeStr(truncate(title || 'Коллекция')),
+    state: safeStr(pageState || 'Просматривает коллекцию'),
+    largeImageKey: _imageKey(imageUrl),
+    largeImageText: truncate(title || 'AnixApp', 128),
     smallImageKey: 'logo',
     smallImageText: 'AnixApp',
     instance: false,
@@ -338,15 +381,13 @@ function setPosterUrl(url) {
 function setWatching({ title, ep, sourceName, dubberName, paused, currentTime, duration, posterUrl }) {
   const ct = Math.max(0, Math.floor(currentTime ?? 0));
 
-  // Prefer dubber name over source name for the state line
-  const displayName = dubberName || sourceName || '';
+  const displayName = _rpcOptions.showDubber ? (dubberName || sourceName || '') : '';
   const epStr  = ep != null ? `Серия ${ep}` : '';
   const srcStr = displayName ? ` · ${displayName}` : '';
   const stateText = safeStr(truncate(`${epStr}${srcStr}`) || 'Смотрит аниме');
 
-  // Use provided poster, or remembered poster from release page
-  const poster = posterUrl || _lastPosterUrl || 'logo';
-  if (posterUrl) _lastPosterUrl = posterUrl;
+  const poster = _rpcOptions.showImages ? (posterUrl || _lastPosterUrl || 'logo') : 'logo';
+  if (posterUrl && _rpcOptions.showImages) _lastPosterUrl = posterUrl;
 
   const activity = {
     type: 3,   // Watching
@@ -360,16 +401,13 @@ function setWatching({ title, ep, sourceName, dubberName, paused, currentTime, d
   };
 
   // Progress bar: Discord shows a countdown bar when both start + end timestamps are set.
-  // start = now - currentTime (as if playback started at that moment)
-  // end   = start + totalDuration
-  // When paused: don't set timestamps (Discord would keep moving the bar)
-  if (!paused && duration && duration > 0 && ct < duration) {
+  if (_rpcOptions.showProgress && !paused && duration && duration > 0 && ct < duration) {
     const nowMs = Date.now();
     const startMs = nowMs - (ct * 1000);
     const endMs = startMs + Math.floor(duration) * 1000;
     activity.startTimestamp = new Date(startMs);
     activity.endTimestamp = new Date(endMs);
-  } else if (!paused) {
+  } else if (_rpcOptions.showProgress && !paused) {
     // No duration known — just show elapsed time
     activity.startTimestamp = Math.floor(Date.now() / 1000) - ct;
   }
@@ -381,9 +419,45 @@ function setWatching({ title, ep, sourceName, dubberName, paused, currentTime, d
 function clearActivity() {
   _mainActivity   = null;
   _playerActivity = null;
-  if (connected && rpc) {
+  if (!paused && connected && rpc) {
     rpc.user.clearActivity().catch(() => {});
   }
+}
+
+/** Clear only the main-window activity (browsing / navigation). */
+function clearMainActivity() {
+  _mainActivity = null;
+  if (!paused && _focusedContext === 'main' && connected && rpc) {
+    if (_playerActivity) {
+      _applyActivity(_playerActivity);
+    } else {
+      rpc.user.clearActivity().catch(() => {});
+    }
+  }
+}
+
+/**
+ * Pause or resume Rich Presence without tearing down the client permanently.
+ * @param {boolean} isPaused
+ */
+function setPaused(isPaused) {
+  paused = !!isPaused;
+  if (paused) {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    if (connected && rpc) {
+      rpc.user.clearActivity().catch(() => {});
+    }
+    return;
+  }
+  if (!destroyed && !rpc) {
+    connect();
+    return;
+  }
+  const act = _currentActivity();
+  if (act) _applyActivity(act);
 }
 
 /** Graceful shutdown — called on app quit. */
@@ -404,13 +478,17 @@ module.exports = {
   connect,
   setMainWindow,
   focusWindow,
+  setRpcOptions,
   setBrowsing,
   setPage,
   setViewingRelease,
   setViewingProfile,
+  setViewingCollection,
   setPartyInfo,
   setPosterUrl,
   setWatching,
   clearActivity,
+  clearMainActivity,
+  setPaused,
   destroy,
 };

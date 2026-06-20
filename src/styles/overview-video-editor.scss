@@ -1,0 +1,764 @@
+@use 'variables' as *;
+@use 'views' as *;
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+#app {
+  height: 100%;
+}
+
+.ove-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: $color-bg;
+  color: $color-text;
+  overflow: hidden;
+}
+
+.ove-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 2.25rem;
+  padding: 0 0.5rem 0 0.75rem;
+  background: $color-surface;
+  border-bottom: 1px solid $color-border;
+  -webkit-app-region: drag;
+  flex-shrink: 0;
+
+  &__title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    opacity: 0.9;
+  }
+
+  &__controls {
+    display: flex;
+    gap: 0.25rem;
+    -webkit-app-region: no-drag;
+  }
+
+  &__btn {
+    width: 2rem;
+    height: 1.5rem;
+    border: none;
+    border-radius: 0.25rem;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.75rem;
+
+    &:hover { background: $color-surface-hover; }
+    &--close:hover { background: #c42b2b; color: #fff; }
+  }
+}
+
+.ove-body {
+  display: grid;
+  grid-template-columns: 1fr 18.5rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.ove-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 1px solid $color-border;
+  position: relative;
+
+  &--locked {
+    pointer-events: none;
+    user-select: none;
+
+    .ove-source-bar,
+    .ove-player-controls,
+    .ove-timeline {
+      opacity: 0.45;
+    }
+  }
+}
+
+.ove-load-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  background: rgba(0, 0, 0, 0.72);
+  pointer-events: all;
+
+  &__title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  &__sub {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: $color-text-muted;
+  }
+}
+
+.ove-status {
+  margin: 0.5rem 0.85rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: $radius-md;
+  background: rgba(96, 165, 250, 0.12);
+  color: #93c5fd;
+  font-size: 0.8125rem;
+}
+
+.ove-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.ove-source-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  padding: 0.65rem 0.85rem;
+  background: $color-surface;
+  border-bottom: 1px solid $color-border;
+}
+
+.ove-source-tabs {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.ove-source-tab {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+
+  &--active {
+    background: $color-accent;
+    border-color: $color-accent;
+    color: #fff;
+  }
+}
+
+.ove-picker-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.ove-picker-row select {
+  min-width: 9rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: $radius-md;
+  border: 1px solid $color-border;
+  background: $color-bg;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8125rem;
+}
+
+.ove-player-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  min-height: 12rem;
+  position: relative;
+}
+
+.ove-player {
+  max-width: 100%;
+  max-height: 100%;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+
+  &--layer {
+    position: absolute;
+    inset: 0;
+    transition: none;
+  }
+
+  &--hidden {
+    display: none;
+  }
+}
+
+.ove-player-badge {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.25rem;
+  background: rgba(227, 84, 84, 0.85);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ove-player-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.85rem;
+  background: $color-surface;
+  border-top: 1px solid $color-border;
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+  }
+}
+
+.ove-time {
+  font-size: 0.8125rem;
+  color: $color-text-muted;
+  font-variant-numeric: tabular-nums;
+}
+
+.ove-timeline {
+  padding: 0.65rem 0.85rem 0.85rem;
+  background: $color-surface;
+  border-top: 1px solid $color-border;
+}
+
+.ove-timeline__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.ove-timeline__zoom-label {
+  min-width: 2.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: $color-accent;
+}
+
+.ove-timeline__range {
+  margin-left: auto;
+  font-size: 0.75rem;
+}
+
+.ove-timeline__track {
+  position: relative;
+  height: 4.75rem;
+  border-radius: 0.5rem;
+  background: $color-bg;
+  border: 1px solid $color-border;
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+
+  &--locked {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+.ove-timeline__dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.42);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.ove-timeline__filmstrip {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  z-index: 0;
+}
+
+.ove-timeline__thumb {
+  flex: 1;
+  background: center / cover no-repeat;
+  opacity: 0.45;
+  min-width: 0;
+}
+
+.ove-timeline__fragment {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(227, 84, 84, 0.42);
+  border: 2px solid $color-accent;
+  border-radius: 0.2rem;
+  pointer-events: auto;
+  cursor: grab;
+  z-index: 2;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  touch-action: none;
+
+  &--active {
+    z-index: 4;
+    background: rgba(227, 84, 84, 0.55);
+    box-shadow: 0 0 0 2px rgba(227, 84, 84, 0.4);
+    cursor: grab;
+  }
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.ove-timeline__frag-grip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.65rem;
+  letter-spacing: -0.15em;
+  color: rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.ove-timeline__selection {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(227, 84, 84, 0.18);
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  border-radius: 0.25rem;
+  cursor: grab;
+  z-index: 3;
+  touch-action: none;
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.ove-timeline__sel-grip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+}
+
+.ove-timeline__handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0.85rem;
+  margin-left: -0.425rem;
+  background: $color-accent;
+  border: 2px solid #fff;
+  cursor: ew-resize;
+  z-index: 5;
+  border-radius: 0.2rem;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &--start,
+  &--end {
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  }
+}
+
+.ove-timeline__handle-grip {
+  font-size: 0.55rem;
+  line-height: 1;
+  color: #fff;
+  letter-spacing: -0.12em;
+  pointer-events: none;
+}
+
+.ove-timeline__playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  z-index: 6;
+}
+
+.ove-timeline__tooltip {
+  position: absolute;
+  top: -1.65rem;
+  transform: translateX(-50%);
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.35rem;
+  background: #fff;
+  color: #111;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 7;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -0.25rem;
+    transform: translateX(-50%);
+    border: 0.3rem solid transparent;
+    border-top-color: #fff;
+  }
+}
+
+.ove-timeline__labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.35rem;
+  padding: 0 0.15rem;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.ove-timeline__label {
+  &--accent {
+    color: $color-accent;
+    font-weight: 600;
+  }
+
+  &--dur {
+    color: $color-text-muted;
+  }
+}
+
+.ove-timeline__hint {
+  margin-top: 0.35rem;
+}
+
+.ove-preview-desc {
+  margin: 0 0 0.65rem;
+  font-size: 0.75rem;
+  color: $color-text-muted;
+  line-height: 1.35;
+}
+
+.ove-preview-montage {
+  position: relative;
+  height: 3.5rem;
+  margin-bottom: 0.65rem;
+  padding: 0.3rem;
+  border-radius: $radius-md;
+  background: $color-bg;
+  border: 1px solid $color-border;
+  touch-action: none;
+  user-select: none;
+
+  &--empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.25rem;
+    height: auto;
+  }
+}
+
+.ove-preview-block {
+  position: absolute;
+  top: 0.3rem;
+  bottom: 0.3rem;
+  min-width: 0.5rem;
+  border-radius: 0.25rem;
+  background: rgba(140, 55, 55, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  pointer-events: none;
+
+  &--active {
+    background: $color-accent;
+    border-color: rgba(255, 255, 255, 0.35);
+    box-shadow: 0 0 0 2px rgba(227, 84, 84, 0.45);
+  }
+
+  &__idx {
+    position: absolute;
+    left: 0.2rem;
+    bottom: 0.15rem;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.85);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  }
+}
+
+.ove-preview-transition {
+  position: absolute;
+  top: 0.3rem;
+  bottom: 0.3rem;
+  min-width: 1.1rem;
+  border-radius: 0.2rem;
+  background: rgba(227, 84, 84, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  cursor: ew-resize;
+  overflow: hidden;
+  touch-action: none;
+
+  &--active {
+    border-color: #fff;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+  }
+
+  &__curve {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  &__fill {
+    fill: rgba(255, 255, 255, 0.1);
+  }
+
+  &__line {
+    fill: none;
+    stroke: #fff;
+    stroke-width: 2.5;
+    vector-effect: non-scaling-stroke;
+  }
+
+  &__label {
+    position: absolute;
+    right: 0.2rem;
+    bottom: 0.12rem;
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+    pointer-events: none;
+  }
+}
+
+.ove-transition-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.ove-transition-item {
+  display: grid;
+  grid-template-columns: 2rem 1fr 3.2rem;
+  align-items: center;
+  gap: 0.35rem;
+
+  &__label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: $color-accent;
+  }
+
+  &__range {
+    width: 100%;
+    accent-color: $color-accent;
+  }
+
+  &__num {
+    width: 100%;
+    padding: 0.2rem 0.25rem;
+    font-size: 0.75rem;
+  }
+}
+
+.ove-random-desc {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  color: $color-text-muted;
+  line-height: 1.35;
+}
+
+.ove-random-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.ove-random-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+
+  &__label {
+    color: $color-text-muted;
+  }
+
+  .settings-input {
+    width: 100%;
+    padding: 0.25rem 0.35rem;
+    font-size: 0.8125rem;
+  }
+}
+
+.ove-random-btn {
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.ove-transport {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.35rem;
+}
+
+.ove-transport__btn {
+  flex: 1;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  background: $color-bg;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: $color-surface-hover;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  &--primary {
+    flex: 1.4;
+    background: $color-accent;
+    border-color: $color-accent;
+    color: #fff;
+    font-weight: 600;
+
+    &:hover:not(:disabled) {
+      filter: brightness(1.06);
+    }
+  }
+}
+
+.ove-preview-time {
+  margin: 0 0 1rem;
+}
+
+.ove-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: $color-surface;
+}
+
+.ove-sidebar__scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 0.75rem;
+}
+
+.ove-sidebar h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: $color-text-muted;
+}
+
+.ove-seg-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.ove-seg-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: $radius-md;
+  background: $color-bg;
+  font-size: 0.8125rem;
+
+  button {
+    border: none;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    flex: 1;
+    text-align: left;
+    font: inherit;
+  }
+}
+
+.ove-check-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.8125rem;
+}
+
+.ove-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-top: 1px solid $color-border;
+  background: $color-surface;
+}
+
+.ove-footer__meta {
+  font-size: 0.8125rem;
+  color: $color-text-muted;
+}
+
+.ove-error {
+  margin: 0.5rem 0.85rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: $radius-md;
+  background: rgba(248, 113, 113, 0.12);
+  color: #f87171;
+  font-size: 0.8125rem;
+}
+
+.ove-loading {
+  padding: 2rem;
+  text-align: center;
+  color: $color-text-muted;
+}

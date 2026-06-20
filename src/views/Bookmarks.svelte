@@ -5,7 +5,7 @@
   import { onMount, onDestroy } from 'svelte';
   import Tabs from '../components/Tabs.svelte';
   import { navigate } from '../stores/navigation';
-  import { buildPosterUrl } from '../utils/posterUrl';
+  import { buildPosterUrl, resolveCdnAssetUrl } from '../utils/posterUrl';
   import { DEFAULT_BOOKMARK_SORT } from '../constants/bookmarkSort';
   import type { ReleaseCardData } from '../types/release';
   import { extractHistoryEpisodeInfo } from '../utils/historyFormat';
@@ -86,7 +86,7 @@
     return {
       id: raw.id as number,
       title: (raw.title ?? raw.name ?? 'Без названия') as string,
-      image: (raw.image as string) || undefined,
+      image: resolveCdnAssetUrl(raw.image as string) || undefined,
       description: (raw.description as string) || undefined,
       releaseCount: typeof raw.release_count === 'number' ? raw.release_count : undefined,
       notesCount: typeof raw.notes_count === 'number' ? raw.notes_count : (typeof raw.comment_count === 'number' ? raw.comment_count : undefined),

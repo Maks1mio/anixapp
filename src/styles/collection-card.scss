@@ -102,6 +102,13 @@ $collection-body-height: calc(
   object-fit: cover;
   display: block;
 
+  &:is(img, .poster-image__fallback, span) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
   &--placeholder {
     background:
       linear-gradient(

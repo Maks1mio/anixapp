@@ -1,6 +1,7 @@
 <script lang="ts">
   import { navigate } from '../stores/navigation';
   import { iconFlag, iconMessageCircle } from './icons';
+  import PosterImage from './PosterImage.svelte';
 
   export interface CollectionCardData {
     id: number;
@@ -14,6 +15,8 @@
     favoritesCount?: number;
     /** Коллекция добавлена в закладки текущего пользователя */
     isFavorite?: boolean;
+    /** Приватная коллекция */
+    isPrivate?: boolean;
   }
 
   interface Props {
@@ -24,7 +27,7 @@
 
   let { data, variant = 'grid' }: Props = $props();
 
-  const href = `/collection/${data.id}`;
+  const href = $derived(`/collection/${data.id}`);
 
   function handleClick(e: MouseEvent) {
     e.preventDefault();
@@ -47,12 +50,18 @@
     <a {href} class="collection-card__link" onclick={handleClick}>
       <div class="collection-card__media">
         {#if data.image}
-          <img src={data.image} alt="" loading="lazy" class="collection-card__image" />
+          <PosterImage src={data.image} alt="" class="collection-card__image" />
         {:else}
           <div class="collection-card__image collection-card__image--placeholder"></div>
         {/if}
 
         <div class="collection-card__badges">
+          {#if data.isPrivate}
+            <div class="collection-card__badge collection-card__badge--private" title="Приватная коллекция">
+              <span class="collection-card__badge-icon" aria-hidden="true">🔒</span>
+            </div>
+          {/if}
+
           {#if typeof data.notesCount === 'number'}
             <div class="collection-card__badge collection-card__badge--comments">
               <span class="collection-card__badge-count">{formatCount(data.notesCount)}</span>

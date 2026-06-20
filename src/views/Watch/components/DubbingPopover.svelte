@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { DubberItem } from '../_types';
   import Page from '../../../components/Page.svelte';
+  import { resolveCdnAssetUrl } from '../../../utils/posterUrl';
 
   interface Props {
     dubbers:         DubberItem[];
@@ -57,7 +58,7 @@
           >
             <span class="watch-panel__dub-av">
               {#if dub.icon}
-                <img src={dub.icon} alt={dub.name} class="watch-panel__dub-img" />
+                <img src={resolveCdnAssetUrl(dub.icon)} alt={dub.name} class="watch-panel__dub-img" />
               {:else}
                 <span class="watch-panel__dub-av-placeholder">
                   {dub.name.charAt(0).toUpperCase()}
@@ -95,7 +96,7 @@
           >
             <span class="watch-panel__dub-av">
               {#if dub.icon}
-                <img src={dub.icon} alt={dub.name} class="watch-panel__dub-img" />
+                <img src={resolveCdnAssetUrl(dub.icon)} alt={dub.name} class="watch-panel__dub-img" />
               {:else}
                 <span class="watch-panel__dub-av-placeholder">
                   {dub.name.charAt(0).toUpperCase()}

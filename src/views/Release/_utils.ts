@@ -1,4 +1,4 @@
-import { buildPosterUrl } from '../../utils/posterUrl';
+import { buildPosterUrl, toCdnProxyUrl } from '../../utils/posterUrl';
 import type { ReleaseCardData } from '../../types/release';
 import type { ListStatusId } from './_types';
 
@@ -77,12 +77,13 @@ export function ratingHue(grade: number): number {
 // ── Lightbox ──────────────────────────────────────────────────────────────────
 
 export function openImageLightbox(imageUrl: string) {
+  const displayUrl = toCdnProxyUrl(imageUrl);
   const overlay = document.createElement('div');
   overlay.className = 'release-lightbox';
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   const div = document.createElement('div');
-  div.textContent = imageUrl;
+  div.textContent = displayUrl;
   const safeUrl = div.innerHTML;
   overlay.innerHTML = `<div class="release-lightbox__backdrop"></div><div class="release-lightbox__content"><img src="${safeUrl}" alt="" /></div>`;
   const backdrop = overlay.querySelector('.release-lightbox__backdrop');
@@ -141,4 +142,31 @@ export function mapCardData(raw: Record<string, unknown>): ReleaseCardData {
     isFavorite:       !!(raw.is_favorite),
     listStatus,
   };
+}
+
+export interface EpisodeLastUpdateData {
+  last_episode_update_name?: string;
+  last_episode_type_update_name?: string;
+  last_episode_source_update_name?: string;
+  lastEpisodeUpdateName?: string;
+  lastEpisodeTypeUpdateName?: string;
+  lastEpisodeSourceUpdateName?: string;
+}
+
+/** Android: format_episode_added → «Добавлено: %1$s | %2$s | %3$s» */
+export function formatEpisodeAdded(raw: unknown): string | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const u = raw as EpisodeLastUpdateData;
+
+  const episode =
+    String(u.last_episode_update_name ?? u.lastEpisodeUpdateName ?? '').trim()
+    || 'неизвестная серия';
+  const type =
+    String(u.last_episode_type_update_name ?? u.lastEpisodeTypeUpdateName ?? '').trim();
+  const source =
+    String(u.last_episode_source_update_name ?? u.lastEpisodeSourceUpdateName ?? '').trim();
+
+  if (!type && !source && episode === 'неизвестная серия') return null;
+
+  return `Добавлено: ${episode} | ${type} | ${source}`;
 }

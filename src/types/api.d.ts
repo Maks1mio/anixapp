@@ -36,6 +36,19 @@ export interface AnixApi {
     getDubberSources: (releaseId: number, dubberId: number) => Promise<{ sources?: Array<{ id: number; name: string; episode_count: number }> }>;
     getEpisodes: (releaseId: number, dubberId: number, sourceId: number, sort?: number) => Promise<{ episodes?: Array<{ position: number; name: string; url: string; iframe: boolean; is_watched?: boolean }> }>;
     getEpisode: (releaseId: number, sourceId: number, episodePosition: number) => Promise<{ episode?: { position: number; name: string; url: string; iframe: boolean } }>;
+    getEpisodeUpdates: (releaseId: number, page?: number) => Promise<{
+      content?: Array<{
+        last_episode_update_date?: number;
+        last_episode_update_name?: string;
+        last_episode_source_update_id?: number;
+        last_episode_source_update_name?: string;
+        last_episode_type_update_id?: number;
+        lastEpisodeTypeUpdateName?: string;
+      }>;
+      total_count?: number;
+      total_page_count?: number;
+      current_page?: number;
+    }>;
     getDirectVideoLink: (embedUrl: string) => Promise<{ directUrl: string | null; quality: string | null }>;
     getVideos: (releaseId: number) => Promise<{
       blocks?: Array<{ category?: { id: number; name: string }; videos?: unknown[] }>;
@@ -49,6 +62,7 @@ export interface AnixApi {
     clearListStatus: (releaseId: number, statusId: number) => Promise<void>;
     vote: (releaseId: number, vote: number) => Promise<{ code?: number; release?: unknown }>;
     deleteVote: (releaseId: number) => Promise<{ code?: number; release?: unknown }>;
+    schedule: () => Promise<Record<string, unknown>>;
   };
 
   comments: {
@@ -68,11 +82,21 @@ export interface AnixApi {
         releaseId: number,
         body: {
           message: string;
-          isSpoiler: boolean;
+          isSpoiler?: boolean;
+          spoiler?: boolean;
           parentCommentId?: number | null;
           replyToProfileId?: number | null;
         },
       ) => Promise<{ comment?: Record<string, unknown>; code?: number }>;
+      edit: (
+        commentId: number,
+        body: {
+          message: string;
+          isSpoiler?: boolean;
+          spoiler?: boolean;
+        },
+      ) => Promise<{ code?: number }>;
+      delete: (commentId: number) => Promise<{ code?: number }>;
     };
   };
 
@@ -98,23 +122,50 @@ export interface AnixApi {
   };
 
   discover: {
-    recommendations: (page?: number) => Promise<{ content?: unknown[] }>;
+    recommendations: (page?: number, previousPage?: number) => Promise<{ content?: unknown[] }>;
+    interesting: () => Promise<{ content?: unknown[] }>;
+    watching: (page?: number) => Promise<{ content?: unknown[] }>;
+    discussing: () => Promise<{ content?: unknown[] }>;
+    commentsWeek: () => Promise<{ content?: unknown[] }>;
+    collectionsWeek: (page?: number, previousPage?: number) => Promise<{ content?: unknown[] }>;
   };
 
   search: {
-    releases: (query: string, page?: number) => Promise<any>;
+    releases: (query: string, page?: number, searchBy?: number) => Promise<any>;
     profiles: (query: string, page?: number) => Promise<any>;
     collections: (query: string, page?: number) => Promise<any>;
   };
 
   collection: {
     info: (id: number) => Promise<any>;
-    all: (page?: number, sort?: number) => Promise<{ content?: unknown[] }>;
+    all: (page?: number, options?: { sort?: number; where?: number; previousPage?: number }) => Promise<{ content?: unknown[]; last?: boolean; total_page_count?: number; current_page?: number }>;
+    profileCollections: (profileId: number, page?: number) => Promise<{ content?: unknown[]; last?: boolean }>;
     favorites: (page?: number) => Promise<{ content?: unknown[]; total_count?: number }>;
     getReleases: (id: number, page?: number) => Promise<any>;
     getRandomRelease: (id: number) => Promise<any>;
     addFavorite: (id: number) => Promise<any>;
     removeFavorite: (id: number) => Promise<any>;
+  };
+
+  collectionMy: {
+    create: (body: {
+      title: string;
+      description: string;
+      releases: number[];
+      is_private: boolean;
+    }) => Promise<any>;
+    edit: (
+      id: number,
+      body: {
+        title: string;
+        description: string;
+        releases: number[];
+        is_private: boolean;
+      },
+    ) => Promise<any>;
+    editImage: (id: number, imageBase64: string, fileName?: string) => Promise<any>;
+    releaseAdd: (id: number, releaseId: number) => Promise<any>;
+    delete: (id: number) => Promise<any>;
   };
 
   channel: {

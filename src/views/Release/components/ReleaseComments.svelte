@@ -1,5 +1,6 @@
 <script lang="ts">
   import { CommentsSection } from '../../../components/comments';
+  import { navigate } from '../../../stores/navigation';
   import { normalizeComment } from '../../../utils/comment';
   import type { CommentData } from '../../../types/comment';
 
@@ -68,6 +69,13 @@
         </h2>
         <p class="anix-comments__subtitle">Популярные и актуальные</p>
       </div>
+      <button
+        type="button"
+        class="anix-comments__show-all"
+        onclick={() => navigate(`/release/${releaseId}/comments`)}
+      >
+        Показать всё
+      </button>
     </header>
     <div class="anix-comments__empty">Загрузка…</div>
   </section>
@@ -77,6 +85,7 @@
     totalCount={totalCount ?? loadedItems.length}
     {releaseId}
     {selfProfileId}
+    showComposer={true}
     showAllHref={`/release/${releaseId}/comments`}
   />
 {/if}

@@ -2,12 +2,14 @@
   import { onMount, onDestroy } from 'svelte';
   import { get } from 'svelte/store';
   import Page from './Page.svelte';
+  import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import { settingsModalInitialTab } from '../stores/modals';
   import AccountPage    from '../views/Settings/pages/AccountPage.svelte';
   import AppearancePage from '../views/Settings/pages/AppearancePage.svelte';
   import ConnectionPage from '../views/Settings/pages/ConnectionPage.svelte';
   import BehaviorPage   from '../views/Settings/pages/BehaviorPage.svelte';
   import PlaybackPage   from '../views/Settings/pages/PlaybackPage.svelte';
+  import DiscordRpcPage from '../views/Settings/pages/DiscordRpcPage.svelte';
   import AboutPage      from '../views/Settings/pages/AboutPage.svelte';
   import LogsPage       from '../views/Settings/pages/LogsPage.svelte';
   import UiKitPage      from '../views/Settings/pages/UiKitPage.svelte';
@@ -26,6 +28,7 @@
     Github,
     Tv,
     ScrollText,
+    Activity,
   } from 'lucide';
 
   interface Props {
@@ -34,7 +37,7 @@
 
   const { onClose }: Props = $props();
 
-  export type SettingsTab = 'account' | 'appearance' | 'connection' | 'behavior' | 'playback' | 'uikit' | 'about' | 'logs';
+  export type SettingsTab = 'account' | 'appearance' | 'connection' | 'behavior' | 'playback' | 'discord' | 'uikit' | 'about' | 'logs';
 
   const TAB_TITLES: Record<SettingsTab, string> = {
     account:    'Моя учётная запись',
@@ -42,6 +45,7 @@
     connection: 'Соединение',
     behavior:   'Поведение',
     playback:   'Воспроизведение',
+    discord:    'Discord RPC',
     uikit:      'UI Kit',
     about:      'О программе',
     logs:       'Журнал событий',
@@ -56,11 +60,11 @@
 
   const profile = (window as any).__anixProfile as { id?: number; login?: string; avatar?: string | null } | undefined;
   const loginDisplay = profile?.login ?? '—';
-  const avatarStyle = profile?.avatar ? `background-image: url('${profile.avatar}')` : '';
+  const avatarStyle = profile?.avatar ? `background-image: url('${resolveCdnAssetUrl(profile.avatar)}')` : '';
 
   function initIcons(root: HTMLElement): void {
     createIcons({
-      icons: { User, Palette, Globe, SlidersHorizontal, Info, LayoutGrid, LogOut, Star, ExternalLink, Pencil, Github, Tv, ScrollText },
+      icons: { User, Palette, Globe, SlidersHorizontal, Info, LayoutGrid, LogOut, Star, ExternalLink, Pencil, Github, Tv, ScrollText, Activity },
       root,
     });
   }
@@ -195,6 +199,13 @@
         >
           <i data-lucide="tv"></i><span>Воспроизведение</span>
         </button>
+        <button
+          class="settings-nav__item settings-nav__item--icon"
+          class:settings-nav__item--active={activeTab === 'discord'}
+          onclick={() => { activeTab = 'discord'; }}
+        >
+          <i data-lucide="activity"></i><span>Discord RPC</span>
+        </button>
 
         <div class="settings-nav__sep"></div>
 
@@ -257,6 +268,8 @@
             <BehaviorPage />
           {:else if activeTab === 'playback'}
             <PlaybackPage />
+          {:else if activeTab === 'discord'}
+            <DiscordRpcPage />
           {:else if activeTab === 'about'}
             <AboutPage />
           {:else if activeTab === 'logs'}

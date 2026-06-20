@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../stores/navigation';
+  import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import { closeLobbyModal } from '../stores/modals';
   import {
     createRoom,
@@ -62,7 +63,7 @@
     try {
       const raw = (window as any).__anixProfile as { id?: number; login?: string; avatar?: string | null } | undefined;
       if (raw && (raw.id || raw.login)) {
-        return { profileId: raw.id, login: raw.login ?? undefined, avatar: raw.avatar ?? null };
+        return { profileId: raw.id, login: raw.login ?? undefined, avatar: raw.avatar ? resolveCdnAssetUrl(raw.avatar) : null };
       }
     } catch (_) {}
     return {};
@@ -484,7 +485,7 @@
                       <span
                         class="lobby-modal__participant-avatar"
                         class:lobby-modal__participant-avatar--img={!!p.avatar}
-                        style={p.avatar ? `background-image:url(${p.avatar})` : ''}
+                        style={p.avatar ? `background-image:url('${resolveCdnAssetUrl(p.avatar)}')` : ''}
                       ></span>
                       <span class="lobby-modal__participant-online"></span>
                     </div>

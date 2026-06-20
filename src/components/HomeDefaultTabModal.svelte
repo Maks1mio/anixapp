@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import ScrollArea from './ScrollArea.svelte';
 
   interface TabOption {
@@ -15,7 +16,7 @@
   }
 
   let { options, value, onSave, onClose }: Props = $props();
-  let picked = $state(value);
+  let picked = $state(untrack(() => value));
 
   function apply() {
     onSave(picked);

@@ -1,3 +1,5 @@
+import { resolveCdnAssetUrl } from '../../utils/posterUrl';
+
 export interface ReleaseVideoItem {
   id: number;
   title: string;
@@ -25,9 +27,10 @@ export interface ReleaseStreamingPlatform {
 export function normalizeMediaUrl(url: string): string {
   const trimmed = url.trim();
   if (!trimmed) return '';
-  if (trimmed.startsWith('//')) return `https:${trimmed}`;
-  if (trimmed.startsWith('http://')) return `https://${trimmed.slice('http://'.length)}`;
-  return trimmed;
+  let normalized = trimmed;
+  if (normalized.startsWith('//')) normalized = `https:${normalized}`;
+  else if (normalized.startsWith('http://')) normalized = `https://${normalized.slice('http://'.length)}`;
+  return resolveCdnAssetUrl(normalized);
 }
 
 export function normalizeVideo(raw: Record<string, unknown>): ReleaseVideoItem {

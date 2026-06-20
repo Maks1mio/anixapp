@@ -16,12 +16,18 @@
 @use 'collection-card';
 @use 'collection-page';
 @use 'tooltip';
+@use 'title-info-popover';
+@use 'user-avatar';
 @use 'search';
 @use 'search-dropdown';
 @use 'watch-modal';
 @use 'watch';
 @use 'uikit';
 @use 'comments';
+@use 'overview';
+@use 'discover-pages';
+@use 'collections-page';
+@use 'downloads';
 
 *,
 *::before,

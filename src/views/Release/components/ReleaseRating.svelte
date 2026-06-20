@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { resolveCdnAssetUrl } from '../../../utils/posterUrl';
   import { iconStar } from '../../../components/icons';
 
   interface Props {
@@ -60,7 +61,7 @@
   onMount(async () => {
     try {
       const data = await window.anixApi?.profile?.self?.() as { profile?: { avatar?: string } } | null | undefined;
-      profileAvatar = data?.profile?.avatar?.trim() ?? '';
+      profileAvatar = resolveCdnAssetUrl(data?.profile?.avatar?.trim() ?? '');
     } catch { /* ignore */ }
   });
 

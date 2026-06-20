@@ -1,10 +1,17 @@
 @use 'variables' as *;
 
+$anix-comment-thread-color: color-mix(in srgb, $color-border 85%, transparent);
+
 // ——— Reusable comments (release / article / collection) ———
 
 .anix-comments {
   width: 100%;
   min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin-top: 1rem;
 }
 
 .anix-comments__header {
@@ -43,9 +50,20 @@
   font-weight: 500;
   cursor: pointer;
   transition: opacity $transition;
+  white-space: nowrap;
 
   &:hover {
     opacity: 0.8;
+  }
+}
+
+.anix-comments__composer {
+  margin-bottom: 1.25rem;
+
+  .anix-comment-composer {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
   }
 }
 
@@ -53,11 +71,14 @@
   display: flex;
   flex-direction: column;
   gap: 0;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .anix-comment-wrap {
   position: relative;
   min-width: 0;
+  max-width: 100%;
 
   &--nested {
     margin-left: 3.25rem;
@@ -82,12 +103,28 @@
   color: $color-text-muted;
 }
 
+.anix-comment-wrap__reply {
+  margin: -0.15rem 0 0.85rem calc(2.625rem + 0.85rem);
+  min-width: 0;
+
+  .anix-comment-composer {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+}
+
+.anix-comment-wrap--nested .anix-comment-wrap__reply {
+  margin-left: calc(2.25rem + 0.85rem);
+}
+
 .anix-comment {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 0.75rem 0.85rem;
   padding: 1rem 0;
   min-width: 0;
+  max-width: 100%;
 
   &--nested {
     grid-template-columns: auto minmax(0, 1fr);
@@ -99,7 +136,9 @@
   }
 
   &--with-thread {
+    grid-template-columns: 2.625rem minmax(0, 1fr);
     grid-template-rows: auto auto;
+    column-gap: 0.85rem;
     row-gap: 0;
 
     .anix-comment__avatar {
@@ -112,18 +151,74 @@
       grid-column: 2;
     }
 
-    .anix-comment__thread {
-      grid-row: 1 / 3;
+    .anix-comment__thread-stem {
+      display: block;
+      grid-row: 1;
       grid-column: 1;
+      justify-self: center;
       align-self: stretch;
-      padding-top: 2.625rem;
+      width: 2px;
+      margin-top: 2.625rem;
+      min-height: 0.35rem;
+      background: $anix-comment-thread-color;
+      border-radius: 999px;
+    }
+
+    .anix-comment__replies-row {
+      grid-row: 2;
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: 2.625rem minmax(0, 1fr);
+      column-gap: 0.85rem;
+      align-items: center;
+      position: relative;
+      min-height: 1.75rem;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: calc(1.3125rem - 1px);
+        top: 0;
+        bottom: 70%;
+        width: 2px;
+        background: $anix-comment-thread-color;
+        pointer-events: none;
+      }
+    }
+
+    .anix-comment__thread-elbow {
+      display: block;
+      grid-column: 1;
+      justify-self: start;
+      margin-left: calc(50% - 1px);
+      width: calc(50% + 0.85rem);
+      height: 0.55rem;
+      box-sizing: border-box;
+      border-left: 2px solid $anix-comment-thread-color;
+      border-bottom: 2px solid $anix-comment-thread-color;
+      border-bottom-left-radius: 8px;
+      transform: translateY(-30%);
     }
 
     .anix-comment__replies {
-      grid-row: 2;
       grid-column: 2;
-      align-self: center;
-      margin-top: 0.35rem;
+      margin-top: 0;
+    }
+  }
+
+  &--nested.anix-comment--with-thread {
+    grid-template-columns: 2.25rem minmax(0, 1fr);
+
+    .anix-comment__thread-stem {
+      margin-top: 2.25rem;
+    }
+
+    .anix-comment__replies-row {
+      grid-template-columns: 2.25rem minmax(0, 1fr);
+
+      &::before {
+        left: calc(1.125rem - 1px);
+      }
     }
   }
 }
@@ -138,13 +233,6 @@
   padding: 0;
   border: none;
   cursor: pointer;
-
-  img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
 }
 
 .anix-comment__avatar-fallback {
@@ -160,6 +248,8 @@
 
 .anix-comment__main {
   min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .anix-comment__head {
@@ -219,6 +309,8 @@
   color: $color-text;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
 }
 
 .anix-comment__spoiler {
@@ -272,6 +364,20 @@
   justify-content: space-between;
   gap: 1rem;
   margin-top: 0.65rem;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.anix-comment__footer-start {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.anix-comment__edit {
+  margin-top: 0.55rem;
 }
 
 .anix-comment__reply {
@@ -287,37 +393,12 @@
   &:hover {
     color: $color-text;
   }
-}
 
-$anix-comment-thread-color: color-mix(in srgb, $color-border 85%, transparent);
-
-.anix-comment__thread {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 2.625rem;
-  min-height: 1.35rem;
-  pointer-events: none;
-}
-
-.anix-comment__thread-stem {
-  flex: 1;
-  width: 2px;
-  min-height: 0.35rem;
-  background: $anix-comment-thread-color;
-  border-radius: 999px;
-}
-
-.anix-comment__thread-elbow {
-  flex-shrink: 0;
-  align-self: flex-start;
-  width: calc(50% + 0.85rem);
-  height: 0.85rem;
-  margin-left: calc(50% - 1px);
-  box-sizing: border-box;
-  border-left: 2px solid $anix-comment-thread-color;
-  border-bottom: 2px solid $anix-comment-thread-color;
-  border-bottom-left-radius: 10px;
+  &--danger {
+    &:hover {
+      color: $color-accent;
+    }
+  }
 }
 
 .anix-comment__replies {
@@ -398,6 +479,13 @@ $anix-comment-thread-color: color-mix(in srgb, $color-border 85%, transparent);
   margin-top: 1.5rem;
   padding-top: 1rem;
   border-top: 1px solid $color-border;
+  overflow: visible;
+}
+
+.anix-comment-composer__field {
+  flex: 1;
+  min-width: 0;
+  overflow: visible;
 }
 
 .anix-comment-composer__label {
@@ -413,9 +501,84 @@ $anix-comment-thread-color: color-mix(in srgb, $color-border 85%, transparent);
   gap: 0.75rem;
 }
 
-.anix-comment-composer__field {
-  flex: 1;
-  min-width: 0;
+.anix-comment-composer__rules-trigger {
+  position: relative;
+  display: inline-flex;
+
+  &:hover,
+  &:focus-within {
+    .anix-comment-composer__tool {
+      color: $color-text;
+    }
+  }
+
+  &:hover .comment-rules-popover,
+  &:focus-within .comment-rules-popover,
+  .comment-rules-popover:hover {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+}
+
+.comment-rules-popover {
+  left: 0;
+  right: auto;
+  bottom: 100%;
+  top: auto;
+  margin-bottom: 0.5rem;
+  transform: none;
+  width: min(26rem, calc(100vw - 2rem));
+  max-width: min(26rem, calc(100vw - 2rem));
+  padding: 0;
+  pointer-events: none;
+  white-space: normal;
+  text-align: left;
+  z-index: 200;
+
+  &__inner {
+    display: block;
+    padding: 0.85rem 1rem 0.95rem;
+  }
+
+  &__heading {
+    margin: 0 0 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: $color-text;
+  }
+
+  &__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    li {
+      position: relative;
+      padding-left: 0.85rem;
+      margin-bottom: 0.35rem;
+      font-size: 0.8125rem;
+      line-height: 1.45;
+      color: $color-text-muted;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      &::before {
+        content: '–';
+        position: absolute;
+        left: 0;
+      }
+    }
+  }
+
+  &__footer {
+    margin: 0.65rem 0 0;
+    font-size: 0.75rem;
+    line-height: 1.45;
+    color: $color-text-muted;
+  }
 }
 
 .anix-comment-composer__textarea {
@@ -441,6 +604,13 @@ $anix-comment-thread-color: color-mix(in srgb, $color-border 85%, transparent);
     outline: none;
     border-color: color-mix(in srgb, $color-accent 45%, $color-border);
   }
+}
+
+.anix-comment-composer__error {
+  margin: 0.45rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: $color-error;
 }
 
 .anix-comment-composer__tools {
@@ -515,6 +685,136 @@ $anix-comment-thread-color: color-mix(in srgb, $color-border 85%, transparent);
   margin: 0 auto;
   width: 100%;
   min-width: 0;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.anix-comments--dock-layout {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  margin-top: 0;
+}
+
+.anix-comments__scroll-body {
+  flex: 1;
+  min-height: 0;
+  overflow-x: clip;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+}
+
+.anix-comments__dock {
+  flex-shrink: 0;
+  z-index: 20;
+  padding: 0.75rem 0 0;
+  border-top: 1px solid $color-border;
+  background: $color-bg;
+
+  .anix-comment-composer {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+}
+
+.anix-comments-page--dock-fallback {
+  min-height: 100%;
+}
+
+.anix-comments-page-head {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+  margin: -0.15rem 0 1rem;
+  padding: 0.15rem 0 0.85rem;
+  border-bottom: 1px solid $color-border;
+  background: $color-bg;
+  box-shadow: 0 6px 16px color-mix(in srgb, $color-bg 55%, transparent);
+}
+
+.anix-comments-page-head__back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-top: 0.1rem;
+  padding: 0;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  background: $color-surface-hover;
+  color: $color-text;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background $transition, border-color $transition, color $transition;
+
+  &:hover {
+    background: color-mix(in srgb, $color-surface-hover 70%, $color-border);
+    color: $color-text;
+  }
+
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+.anix-comments-page-head__body {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem 1rem;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.anix-comments-page-head__text {
+  min-width: 0;
+  flex: 1;
+}
+
+.anix-comments-page-head__title {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: $color-text;
+}
+
+.anix-comments-page-head__subtitle {
+  margin: 0.3rem 0 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.35;
+  color: $color-text-muted;
+  text-align: left;
+
+  &--link {
+    cursor: pointer;
+    transition: color $transition;
+
+    &:hover {
+      color: $color-text;
+    }
+  }
 }
 
 .anix-comments-page__header {
@@ -544,6 +844,25 @@ $anix-comment-thread-color: color-mix(in srgb, $color-border 85%, transparent);
     margin-bottom: 0;
     flex-shrink: 0;
   }
+
+  &--page {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.65rem;
+    margin-bottom: 0;
+    flex-shrink: 0;
+    padding-top: 0.15rem;
+  }
+}
+
+.anix-comments-toolbar--page .anix-comments-toolbar__count {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: $color-text-muted;
+}
+
+.anix-comments-toolbar--page .anix-comments-toolbar__select {
+  min-width: 2.5rem;
 }
 
 .anix-comments-toolbar__count {
@@ -555,43 +874,6 @@ $anix-comment-thread-color: color-mix(in srgb, $color-border 85%, transparent);
 
 .anix-comments-toolbar__select {
   min-width: 10.5rem;
-}
-
-.anix-comments-replies-page__top {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-
-  .anix-comments-toolbar {
-    margin-bottom: 0;
-    margin-left: auto;
-  }
-}
-
-.anix-comments-replies-page__back {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  padding: 0;
-  border: none;
-  border-radius: $radius-md;
-  background: $color-surface-hover;
-  color: $color-text;
-  cursor: pointer;
-  flex-shrink: 0;
-
-  &:hover {
-    opacity: 0.85;
-  }
-}
-
-.anix-comments-replies-page__header {
-  flex: 1;
-  min-width: 0;
-  margin-bottom: 0;
 }
 
 .anix-comments-replies-page__parent {
@@ -623,9 +905,29 @@ $anix-comment-thread-color: color-mix(in srgb, $color-border 85%, transparent);
   }
 }
 
+.anix-comments__load-sentinel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.75rem 0 1rem;
+}
+
+.anix-comments__load-status {
+  font-size: 0.875rem;
+  color: $color-text-muted;
+}
+
 @media (max-width: 640px) {
   .anix-comment-wrap--nested {
     margin-left: 2.35rem;
     padding-left: 0.65rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .anix-comment-wrap--nested {
+    margin-left: 1.5rem;
+    padding-left: 0.35rem;
   }
 }

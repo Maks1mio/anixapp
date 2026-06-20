@@ -1,3 +1,5 @@
+import { resolveCdnAssetUrl } from '../../utils/posterUrl';
+
 export function fmtTime(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const d = Math.floor(h / 24);
@@ -31,11 +33,7 @@ export function fmtRelative(ts: number): string {
 }
 
 export function posterUrl(raw: string | undefined): string {
-  if (!raw) return '';
-  const s = raw.trim();
-  if (!s || s === 'null') return '';
-  if (s.startsWith('http')) return s;
-  return `https://s.anixmirai.com/posters/${s}`;
+  return resolveCdnAssetUrl(raw);
 }
 
 export function isLottieBadgeUrl(url: string): boolean {

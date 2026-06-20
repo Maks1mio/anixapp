@@ -1,0 +1,409 @@
+@use 'variables' as *;
+
+.view-downloads {
+  max-width: 56rem;
+  margin: 0 auto;
+  width: 100%;
+}
+
+// ── Панели ────────────────────────────────────────────────────────────────
+.dl-panel {
+  margin-bottom: 1.25rem;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  overflow: hidden;
+
+  &--settings {
+    background: color-mix(in srgb, $color-surface 92%, $color-bg);
+  }
+}
+
+.dl-panel__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid $color-border;
+  background: color-mix(in srgb, $color-bg 40%, transparent);
+}
+
+.dl-panel__icon {
+  display: flex;
+  color: $color-text-muted;
+
+  &--accent {
+    color: $color-accent;
+  }
+}
+
+.dl-panel__title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: $color-text;
+  flex: 1;
+}
+
+.dl-panel__meta {
+  font-size: 0.75rem;
+  color: $color-text-muted;
+  font-variant-numeric: tabular-nums;
+  padding: 0.1rem 0.45rem;
+  border-radius: $radius-sm;
+  background: color-mix(in srgb, $color-border 50%, transparent);
+}
+
+// ── Настройки ─────────────────────────────────────────────────────────────
+.dl-settings {
+  padding: 0.85rem 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dl-settings__path {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.55rem 0.75rem;
+  border-radius: $radius-sm;
+  background: $color-bg;
+  border: 1px solid $color-border;
+}
+
+.dl-settings__path-icon {
+  flex-shrink: 0;
+  color: $color-text-muted;
+  display: flex;
+}
+
+.dl-settings__path-text {
+  font-size: 0.8rem;
+  color: $color-text;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+}
+
+.dl-settings__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+// ── Проводник ─────────────────────────────────────────────────────────────
+.dl-explorer {
+  padding: 0.25rem 0;
+}
+
+.dl-explorer__head {
+  display: grid;
+  grid-template-columns: 1fr 5.5rem 4.5rem;
+  gap: 0.5rem;
+  padding: 0.35rem 1rem 0.35rem 2.75rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: $color-text-muted;
+  border-bottom: 1px solid $color-border;
+
+  .dl-explorer--library & {
+    grid-template-columns: 1fr 5rem 7rem 4.5rem;
+    padding-left: 1rem;
+  }
+}
+
+.dl-col--size,
+.dl-col--status,
+.dl-col--date {
+  text-align: right;
+}
+
+// ── Строка ────────────────────────────────────────────────────────────────
+.dl-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.55rem 1rem;
+  border-bottom: 1px solid color-mix(in srgb, $color-border 60%, transparent);
+  transition: background $transition;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: $color-surface-hover;
+  }
+
+  &--error .dl-row__status {
+    color: #e05c5c;
+  }
+}
+
+.dl-row__icon {
+  flex-shrink: 0;
+  display: flex;
+  padding-top: 2px;
+  color: $color-text-muted;
+
+  .dl-row--downloading &,
+  .dl-row--queued & {
+    color: $color-accent;
+  }
+
+  &--spin svg {
+    animation: dl-spin 1s linear infinite;
+  }
+
+  &--done {
+    color: $color-accent;
+  }
+}
+
+.dl-row__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.dl-row__main--flat {
+  display: grid;
+  grid-template-columns: 1fr 5rem 7rem 4.5rem;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.dl-row__top {
+  display: grid;
+  grid-template-columns: 1fr 5.5rem 4.5rem;
+  gap: 0.5rem;
+  align-items: baseline;
+  margin-bottom: 0.4rem;
+}
+
+.dl-row__name {
+  font-size: 0.85rem;
+  color: $color-text;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.dl-row__size,
+.dl-row__status,
+.dl-row__date {
+  font-size: 0.75rem;
+  color: $color-text-muted;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dl-row__status {
+  .dl-row--downloading & {
+    color: $color-accent;
+  }
+}
+
+.dl-row__track {
+  height: 3px;
+  background: $color-border;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.dl-row__fill {
+  height: 100%;
+  background: $color-accent;
+  border-radius: 2px;
+  transition: width 0.25s ease;
+
+  .dl-row--error & {
+    background: #e05c5c;
+  }
+}
+
+.dl-row__error {
+  margin: 0.3rem 0 0;
+  font-size: 0.72rem;
+  color: #e05c5c;
+}
+
+.dl-row__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.2rem;
+}
+
+.dl-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  padding: 0;
+  border: none;
+  border-radius: $radius-sm;
+  background: transparent;
+  color: $color-text-muted;
+  cursor: pointer;
+  transition: color $transition, background $transition;
+
+  &:hover {
+    color: $color-text;
+    background: $color-surface-hover;
+  }
+}
+
+// ── Папка (группа тайтла) ─────────────────────────────────────────────────
+.dl-folder__head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.6rem 1rem;
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, $color-border 50%, transparent);
+  background: color-mix(in srgb, $color-bg 30%, $color-surface);
+  color: $color-text;
+  cursor: pointer;
+  text-align: left;
+  transition: background $transition;
+
+  &:hover {
+    background: $color-surface-hover;
+  }
+}
+
+.dl-folder__chevron {
+  display: flex;
+  color: $color-text-muted;
+  transition: transform 0.2s ease;
+
+  &--open {
+    transform: rotate(90deg);
+  }
+}
+
+.dl-folder__icon {
+  display: flex;
+  color: $color-accent;
+}
+
+.dl-folder__name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dl-folder__meta {
+  font-size: 0.72rem;
+  color: $color-text-muted;
+  white-space: nowrap;
+}
+
+.dl-folder .dl-row {
+  padding-left: 2.25rem;
+  background: color-mix(in srgb, $color-bg 20%, transparent);
+}
+
+// ── Пустое состояние ──────────────────────────────────────────────────────
+.dl-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 2.5rem 1rem;
+  text-align: center;
+}
+
+.dl-empty__icon {
+  color: $color-text-muted;
+  opacity: 0.35;
+  margin-bottom: 0.15rem;
+}
+
+.dl-empty__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: $color-text;
+}
+
+.dl-empty__sub {
+  margin: 0;
+  font-size: 0.82rem;
+  color: $color-text-muted;
+}
+
+@keyframes dl-spin {
+  to { transform: rotate(360deg); }
+}
+
+// ── Сайдбар: прогресс + бейдж (только кнопка «Загрузки») ───────────────────
+.sidebar__link--downloads {
+  position: relative;
+  overflow: visible;
+}
+
+.sidebar-dl-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.sidebar-dl-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+
+.sidebar-dl-ring__bg {
+  fill: none;
+  stroke: color-mix(in srgb, $color-border 70%, transparent);
+  stroke-width: 2;
+}
+
+.sidebar-dl-ring__fill {
+  fill: none;
+  stroke: $color-accent;
+  stroke-width: 2;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.35s ease;
+}
+
+.downloads-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  background: $color-accent;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  line-height: 1;
+  z-index: 1;
+}

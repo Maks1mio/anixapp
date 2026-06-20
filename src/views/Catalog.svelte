@@ -2,24 +2,14 @@
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import { onMount, onDestroy } from 'svelte';
   import type { ReleaseCardData } from '../types/release';
-
-  const POSTER_BASE = 'https://s.anixmirai.com/posters';
-
-  function buildPosterUrl(value: string | undefined): string | undefined {
-    if (!value || typeof value !== 'string') return undefined;
-    const v = value.trim();
-    if (!v) return undefined;
-    if (v.startsWith('http://') || v.startsWith('https://')) return v;
-    const id = v.endsWith('.jpg') || v.endsWith('.jpeg') || v.endsWith('.png') ? v : `${v}.jpg`;
-    return `${POSTER_BASE}/${id}`;
-  }
+  import { buildPosterUrl } from '../utils/posterUrl';
 
   function mapReleaseToCardData(raw: Record<string, unknown>): ReleaseCardData {
     const p = raw.poster as Record<string, { url?: string }> | undefined;
     const posterRaw = p?.original?.url ?? p?.medium?.url ?? p?.small?.url
       ?? (typeof raw.poster === 'string' ? raw.poster : undefined)
       ?? (typeof raw.image === 'string' ? raw.image : undefined);
-    const poster = posterRaw ? buildPosterUrl(posterRaw) : undefined;
+    const poster = posterRaw ? buildPosterUrl(posterRaw) || undefined : undefined;
     const grade = typeof raw.grade === 'number' ? raw.grade : undefined;
     const statusObj = raw.status as { name?: string } | undefined;
     const categoryObj = raw.category as { name?: string } | undefined;

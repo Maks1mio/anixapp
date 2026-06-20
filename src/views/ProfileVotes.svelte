@@ -4,6 +4,8 @@
   import { navigate } from '../stores/navigation';
   import Tabs from '../components/Tabs.svelte';
   import type { ReleaseCardData } from '../types/release';
+  import { buildPosterUrl, resolveCdnAssetUrl } from '../utils/posterUrl';
+  import { setDiscordContext, refreshDiscordPresence } from '../services/discord-presence';
 
   interface Props {
     id?: number;
@@ -21,23 +23,12 @@
     navigate(id ? `/profile/${id}/friends` : '/profile/friends');
   }
 
-  const POSTER_BASE = 'https://s.anixmirai.com/posters';
-
-  function buildPosterUrl(value: string | undefined): string | undefined {
-    if (!value || typeof value !== 'string') return undefined;
-    const v = value.trim();
-    if (!v) return undefined;
-    if (v.startsWith('http://') || v.startsWith('https://')) return v;
-    const iid = v.endsWith('.jpg') || v.endsWith('.jpeg') || v.endsWith('.png') ? v : `${v}.jpg`;
-    return `${POSTER_BASE}/${iid}`;
-  }
-
   function mapVoteToCardData(raw: any): ReleaseCardData {
     const p = raw.poster as Record<string, { url?: string }> | undefined;
     const posterRaw = p?.original?.url ?? p?.medium?.url ?? p?.small?.url
       ?? (typeof raw.poster === 'string' ? raw.poster : undefined)
       ?? (typeof raw.image === 'string' ? raw.image : undefined);
-    const poster = posterRaw ? buildPosterUrl(posterRaw) : undefined;
+    const poster = posterRaw ? buildPosterUrl(posterRaw) || undefined : undefined;
     let listStatus: ReleaseCardData['listStatus'];
     switch (raw.profile_list_status) {
       case 1: listStatus = 'watching'; break;
@@ -87,11 +78,17 @@
   let scrollAttached = false;
 
 
-  function setProfile(login: string, avatar?: string) {
+  function setProfile(login: string, avatar?: string, isSelf = !id) {
     if (titleSet) return;
     titleSet = true;
     profileLogin = login;
     if (avatar) profileAvatar = avatar;
+    setDiscordContext({
+      profileLogin: login,
+      profileAvatar: avatar ? resolveCdnAssetUrl(avatar) : undefined,
+      profileIsSelf: isSelf,
+    });
+    refreshDiscordPresence();
   }
 
   async function getId(): Promise<number> {
@@ -166,7 +163,7 @@
     if (id) {
       window.anixApi?.profile.info(id).then((d: any) => {
         const p = d?.profile;
-        if (p?.login) setProfile(p.login, p.avatar);
+        if (p?.login) setProfile(p.login, p.avatar, !!d?.is_my_profile);
       }).catch(() => {});
     }
     if (window.anixApi) await load(false);
@@ -183,7 +180,7 @@
   <div class="search-page">
     <div class="view-header">
       <div class="profile-more__user">
-        <div class="profile-more__avatar" style={profileAvatar ? `background-image:url('${profileAvatar}')` : ''}></div>
+        <div class="profile-more__avatar" style={profileAvatar ? `background-image:url('${resolveCdnAssetUrl(profileAvatar)}')` : ''}></div>
         <h1 class="view-header__title">{profileLogin}</h1>
       </div>
     </div>

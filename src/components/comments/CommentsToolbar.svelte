@@ -8,7 +8,7 @@
     totalCount: number;
     sort: CommentSort;
     onSortChange: (sort: CommentSort) => void;
-    variant?: 'default' | 'header';
+    variant?: 'default' | 'header' | 'page';
   }
 
   let { totalCount, sort, onSortChange, variant = 'default' }: Props = $props();
@@ -19,7 +19,11 @@
   }));
 </script>
 
-<div class="anix-comments-toolbar" class:anix-comments-toolbar--header={variant === 'header'}>
+<div
+  class="anix-comments-toolbar"
+  class:anix-comments-toolbar--header={variant === 'header'}
+  class:anix-comments-toolbar--page={variant === 'page'}
+>
   <span class="anix-comments-toolbar__count">{formatCommentsTotal(totalCount)}</span>
 
   <Select

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from 'svelte';
   import { navigate } from '../../stores/navigation';
-  import { fetchComments, sendComment, fetchAnnouncements, deleteComment, fetchUserPermissions } from '../../services/announcements';
+  import { fetchComments, sendComment, fetchAnnouncements, deleteComment, fetchUserPermissions, fetchUserRoles } from '../../services/announcements';
   import type { Announcement, Comment } from '../../services/announcements';
 
   import { TYPE_CONFIG } from './_types';
@@ -49,10 +49,10 @@
       try {
         const [profileData, rolesData] = await Promise.allSettled([
           (window as any).anixApi?.profile?.info?.(uid),
-          fetch(`https://nhapp-api.onrender.com/api/users/${uid}/roles`, { signal: AbortSignal.timeout(4000) }).then(r => r.ok ? r.json() : null).catch(() => null),
+          fetchUserRoles(uid),
         ]);
         const p = profileData.status === 'fulfilled' ? profileData.value?.profile : undefined;
-        const roles: UserRole[] = rolesData.status === 'fulfilled' ? (rolesData.value?.roles ?? []).map((r: any) => ({ id: r.id, name: r.name, color: r.color })) : [];
+        const roles: UserRole[] = rolesData.status === 'fulfilled' ? rolesData.value.roles : [];
         if (p) profileCache = { ...profileCache, [uid]: { login: p.login ?? p.nickname ?? String(uid), avatar: p.avatar ?? null, roles } };
       } catch { /* ignore */ }
     }));

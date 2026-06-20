@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { LobbyParticipant, LobbyActivityEntry } from '../_types';
   import { lobbyActionText } from '../_utils';
+  import { resolveCdnAssetUrl } from '../../../utils/posterUrl';
 
   interface Props {
     participants: LobbyParticipant[];
@@ -20,7 +21,7 @@
         <div class="watch-lobby-avatar" data-tooltip={p.login}>
           {#if p.avatar}
             <img
-              src={p.avatar}
+              src={resolveCdnAssetUrl(p.avatar)}
               alt={p.login}
               class="watch-lobby-avatar__img"
               onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}

@@ -1,4 +1,7 @@
-import { KodikParser } from 'anixapi';
+export function isVideoEmbedPageUrl(url: string): boolean {
+  return /kodikplayer\.com|kodik\.info|aniqit\.com|anixis\.com|aniqart\.com/i.test(url)
+    && /\/(seria|video|movie|anime)\/\d+\/[0-9a-f]+\//i.test(url);
+}
 
 export function isHlsUrl(url: string): boolean {
   return /\.m3u8/i.test(url) || url.includes(':hls:manifest');
@@ -57,7 +60,7 @@ export async function resolveEpisodeUrl(
   const isSibnet   = /sibnet\.ru/i.test(host);
   const isLibria   = /aniliberty\.top|anilibria\.tv|libria\.fun/i.test(host);
   const isEmbedPage = isAniqit || isKodik;
-  const needsDirectFetch = isSibnet || isLibria;
+  const needsDirectFetch = isSibnet || isLibria || isKodik || isAniqit;
 
   if (isAniqit) {
     try { const u = new URL(url); url = u.origin + u.pathname; } catch {}
@@ -68,63 +71,42 @@ export async function resolveEpisodeUrl(
   let qualityMap: Record<string, string> = {};
   let currentQuality = '';
 
-  if (isEmbedPage) {
-    try {
-      const links = await KodikParser.getDirectLinks(url);
-      if (links && typeof links === 'object') {
-        const rawLinks = links as Record<string, { src: string }[]>;
-
-        // Build quality map: label → direct URL
-        for (const [key, arr] of Object.entries(rawLinks)) {
-          const src = arr?.[0]?.src;
-          if (src) {
-            const raw = src.startsWith('http') ? src : `https:${src}`;
-            qualityMap[key] = stripKodikQueryParams(raw);
-          }
-        }
-
-        // Pick default quality (prefer 720, then 1080, then 480, etc.)
-        const best =
-          QUALITY_PRIORITY.find(k => qualityMap[k]) ||
-          Object.keys(qualityMap)[0];
-
-        if (best) {
-          playUrl        = qualityMap[best];
-          currentQuality = best;
-          useVideo       = true;
-        }
-      }
-    } catch {}
-    if (!useVideo) { playUrl = url; useVideo = false; }
-  }
-
-  if ((needsDirectFetch || (!useVideo && !isEmbedPage)) && (window as any).anixApi?.release?.getDirectVideoLink) {
+  // Kodik/aniqit — только через main process (иначе /ftor с localhost → 500)
+  if (needsDirectFetch && (window as any).anixApi?.release?.getDirectVideoLink) {
     try {
       const res = await (window as any).anixApi.release.getDirectVideoLink(url);
       const directUrl: string | null = res?.directUrl ?? null;
       const remoteMap: Record<string, string> = res?.qualityMap ?? {};
 
       if (directUrl) {
+        const stripHls = (u: string) => u.replace(/:hls:manifest\.m3u8$/, '').replace(/:hls:hls\.m3u8$/, '');
         const raw = directUrl.startsWith('http') ? directUrl : `https:${directUrl}`;
 
-        // Merge remote quality map (Libria returns multiple qualities)
         if (Object.keys(remoteMap).length > 0) {
           for (const [k, v] of Object.entries(remoteMap)) {
-            qualityMap[k] = (v as string).startsWith('http') ? (v as string) : `https:${v}`;
+            const rawEntry = typeof v === 'string' ? v : String(v ?? '');
+            if (!rawEntry) continue;
+            const abs = rawEntry.startsWith('http') ? rawEntry : `https:${rawEntry}`;
+            qualityMap[k.replace(/p$/, '')] = stripKodikQueryParams(stripHls(abs));
           }
-          const best = QUALITY_PRIORITY.find(k => qualityMap[k]) || Object.keys(qualityMap)[0];
+          const best = QUALITY_PRIORITY.find(k => qualityMap[k] || qualityMap[k + 'p']) || Object.keys(qualityMap)[0];
           currentQuality = best || '';
-          playUrl  = currentQuality ? qualityMap[currentQuality] : stripKodikQueryParams(raw);
+          playUrl = currentQuality ? qualityMap[currentQuality] : stripKodikQueryParams(stripHls(raw));
         } else {
-          playUrl = stripKodikQueryParams(raw);
+          playUrl = stripKodikQueryParams(stripHls(raw));
           if (isSibnet) {
-            qualityMap     = { '720': playUrl };
+            qualityMap = { '720': playUrl };
             currentQuality = '720';
           }
         }
         useVideo = true;
       }
     } catch {}
+  }
+
+  if (isEmbedPage && !useVideo) {
+    playUrl = url;
+    useVideo = false;
   }
 
   if (!useVideo && iframe) { playUrl = url; useVideo = false; }
@@ -153,4 +135,40 @@ export async function resolveEpisodeUrlWithRetry(
     if (i < maxAttempts - 1) await new Promise<void>(r => setTimeout(r, 300));
   }
   return lastResult;
+}
+
+/** URL и заголовки для скачивания (как у плеера + прямой MP4 если есть) */
+export async function resolveDownloadUrl(
+  episodeUrl: string,
+  iframe: boolean,
+): Promise<{ url: string; headers: Record<string, string> } | null> {
+  const embedUrl = episodeUrl.startsWith('http') ? episodeUrl : `https:${episodeUrl}`;
+
+  let url = '';
+  let headers: Record<string, string> = {};
+
+  try {
+    const direct = await window.anixApi?.release?.getDirectVideoLink(embedUrl);
+    if (direct?.directUrl) {
+      const stripped = direct.directUrl
+        .replace(/:hls:manifest\.m3u8$/, '')
+        .replace(/:hls:hls\.m3u8$/, '');
+      url = stripped.startsWith('http') ? stripped : `https:${stripped}`;
+      headers = (direct.downloadHeaders as Record<string, string>) ?? {};
+    }
+  } catch {}
+
+  if (!url) {
+    const resolved = await resolveEpisodeUrlWithRetry(embedUrl, iframe);
+    url = resolved.playUrl;
+    if (!url || isVideoEmbedPageUrl(url)) return null;
+  }
+
+  if (isVideoEmbedPageUrl(url)) return null;
+
+  url = url
+    .replace(/:hls:manifest\.m3u8$/, '')
+    .replace(/:hls:hls\.m3u8$/, '');
+
+  return { url, headers };
 }

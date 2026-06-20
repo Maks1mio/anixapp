@@ -1,5 +1,6 @@
 <script lang="ts">
   import { navigate } from '../stores/navigation';
+  import { resolveCdnAssetUrl } from '../utils/posterUrl';
 
   export interface SearchFranchiseData {
     images: string[];
@@ -38,7 +39,7 @@
       {#each thumbs as url}
         <div
           class="search-franchise__thumb"
-          style="background-image: url('{url}')"
+          style="background-image: url('{resolveCdnAssetUrl(url)}')"
         ></div>
       {/each}
     </div>

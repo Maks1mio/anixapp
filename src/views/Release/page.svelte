@@ -2,12 +2,20 @@
   import { onMount } from 'svelte';
   import { navigate } from '../../stores/navigation';
   import { openWatchModal } from '../../stores/modals';
-  import { buildPosterUrl } from '../../utils/posterUrl';
+  import { buildPosterUrl, buildScreenshotUrl } from '../../utils/posterUrl';
+  import { setDiscordContext, refreshDiscordPresence } from '../../services/discord-presence';
   import type { SelectOption } from '../../components/select';
   import { LIST_STATUSES, type ListStatusId } from './_types';
+  import type { ReleaseMetaInfoRow } from './_metaInfo';
+  import {
+    buildCreditsSegments,
+    buildGenreSegments,
+    buildSourceSegments,
+    plainMetaSegments,
+  } from './_metaInfo';
   import {
     getAgeRateText, getSeasonName, stripHtmlToText, sanitizeRichHtml,
-    numToStatusId, ratingHue, mapCardData,
+    numToStatusId, ratingHue, mapCardData, formatEpisodeAdded,
   } from './_utils';
   import { ReleaseHead, ReleaseVideos, ReleaseRating, ReleaseRelated, ReleaseRecommendations, ReleaseScreenshots, ReleaseComments } from './components';
 
@@ -36,6 +44,7 @@
   // ── Derived: title / description ──────────────────────────────────────────
   const titleRu       = $derived((release?.title_ru       ?? '') as string);
   const titleOriginal = $derived((release?.title_original ?? '') as string);
+  const titleAlt        = $derived((release?.title_alt ?? '') as string);
   const title         = $derived(titleRu || titleOriginal || 'Без названия');
   const desc          = $derived((release?.description ?? '') as string);
   const descClean     = $derived(desc ? stripHtmlToText(desc) : '');
@@ -105,34 +114,42 @@
   });
   const playBtnDisabled = $derived(isViewBlocked || !episodesReleased || episodesReleased <= 0);
 
-  const metaInfoRows = $derived.by(() => {
-    const rows: Array<{ icon: string; text: string }> = [];
+  const episodeAddedText = $derived.by(() => {
+    if (playBtnDisabled) return null;
+    return formatEpisodeAdded(release?.episode_last_update);
+  });
+
+  const metaInfoRows = $derived.by((): ReleaseMetaInfoRow[] => {
+    const rows: ReleaseMetaInfoRow[] = [];
     const parts: string[] = [];
     if (country) parts.push(country);
     if (seasonName && year) parts.push(`${seasonName} ${year} г.`);
     else if (year) parts.push(`${year} г.`);
-    if (parts.length) rows.push({ icon: '🌍', text: parts.join(', ') });
+    if (parts.length) {
+      rows.push({
+        kind: 'country',
+        segments: plainMetaSegments(parts.join(', ')),
+        country: country || undefined,
+      });
+    }
 
     let epText = '';
     if (episodesReleased != null && episodesTotal != null && episodesTotal > 0) epText = `${episodesReleased} из ${episodesTotal} эп.`;
     else if (episodesReleased != null) epText = `${episodesReleased} эп.`;
     else if (episodesTotal    != null) epText = `${episodesTotal} эп.`;
     if (duration && duration > 0) epText += epText ? ` по ~${duration} мин.` : `~${duration} мин.`;
-    if (epText) rows.push({ icon: '🎬', text: epText });
+    if (epText) rows.push({ kind: 'episodes', segments: plainMetaSegments(epText) });
 
     const catParts: string[] = [];
     if (categoryName) catParts.push(categoryName);
     if (statusName)   catParts.push(statusName);
-    if (catParts.length) rows.push({ icon: '📺', text: catParts.join(', ') });
+    if (catParts.length) rows.push({ kind: 'category', segments: plainMetaSegments(catParts.join(', ')) });
 
-    const studioParts: string[] = [];
-    if (studio)   studioParts.push(`Студия ${studio}`);
-    if (author)   studioParts.push(`автор ${author}`);
-    if (director) studioParts.push(`режиссёр ${director}`);
-    if (studioParts.length) rows.push({ icon: '🎨', text: studioParts.join(', ') });
+    const creditSegments = buildCreditsSegments(studio, author, director);
+    if (creditSegments.length) rows.push({ kind: 'credits', segments: creditSegments });
 
-    if (source) rows.push({ icon: '📖', text: `Источник: ${source}` });
-    if (genres) rows.push({ icon: '🏷️', text: genres });
+    if (source) rows.push({ kind: 'source', segments: buildSourceSegments(source) });
+    if (genres) rows.push({ kind: 'genres', segments: buildGenreSegments(genres) });
     return rows;
   });
 
@@ -140,9 +157,9 @@
   const screenshots   = $derived.by(() => {
     if (!release) return [] as string[];
     const si = release.screenshot_images as string[] | undefined;
-    if (si) return si;
+    if (si) return si.map((u) => buildScreenshotUrl(u));
     return ((release.screenshots as string[] | undefined) ?? [])
-      .map(u => u.startsWith('http') ? u : `https://s.anixmirai.com/screenshots/${u}.jpg`);
+      .map((u) => buildScreenshotUrl(u));
   });
 
   const related          = $derived(release?.related as { id?: number; name_ru?: string; release_count?: number } | null | undefined);
@@ -232,9 +249,11 @@
         typeof raw.poster === 'string' ? raw.poster :
         (raw.poster as any)?.original?.url ?? (raw.poster as any)?.medium?.url ?? (typeof raw.image === 'string' ? raw.image : '')
       );
-      window.dispatchEvent(new CustomEvent('discord:releaseView', {
-        detail: { title: raw.title_ru || raw.title_original || '', posterUrl: posterVal || undefined },
-      }));
+      setDiscordContext({
+        releaseTitle: (raw.title_ru || raw.title_original || '') as string,
+        releasePoster: posterVal || undefined,
+      });
+      refreshDiscordPresence();
     } catch (err) {
       errorMsg  = String(err);
       loadState = 'error';
@@ -254,12 +273,11 @@
 
       <!-- Head: poster + info -->
       <ReleaseHead
-        {posterUrl} {title} {titleRu} {titleOriginal}
+        {posterUrl} {title} {titleRu} {titleOriginal} {titleAlt}
         {ageRateText} {ageIsRestricted}
-        {grade} {voteCount} {hasRating} {ratingBg} {ratingTextColor}
         {isFavorite} {favoritesCount}
         {noteHtml} {descHtml} {descClean} {descNeedsTruncate} {descCollapsed}
-        {metaInfoRows} {playBtnText} {playBtnDisabled}
+        {metaInfoRows} {playBtnText} {playBtnDisabled} {episodeAddedText}
         {currentStatus} {selectOptions}
         onToggleFavorite={toggleFavorite}
         onWatch={handleWatch}
@@ -287,7 +305,11 @@
 
       <!-- Related releases -->
       {#if relatedCards.length > 0 && related?.id}
-        <ReleaseRelated releaseId={id} relatedId={related.id} items={relatedCards} />
+        <ReleaseRelated
+          releaseId={id}
+          relatedId={related.id}
+          items={relatedCards}
+        />
       {/if}
 
       <!-- Recommendations -->

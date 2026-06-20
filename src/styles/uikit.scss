@@ -254,6 +254,33 @@
 }
 
 // ——— Состояния ———
+.uikit-comments-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.uikit-comments-demo__item {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid $color-border;
+
+  &:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+}
+
+.uikit-comments-demo__label {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: $color-text-muted;
+}
+
 .uikit-states {
   display: flex;
   flex-direction: column;

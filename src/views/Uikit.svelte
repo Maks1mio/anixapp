@@ -5,7 +5,9 @@
   import CollectionCard, { type CollectionCardData } from '../components/CollectionCard.svelte';
   import Select from '../components/Select.svelte';
   import Tabs from '../components/Tabs.svelte';
+  import CommentRow from '../components/comments/CommentRow.svelte';
   import type { SelectOption } from '../components/select';
+  import type { CommentData } from '../types/comment';
   import { onMount } from 'svelte';
   import { navigate } from '../stores/navigation';
   import type { ReleaseCardData } from '../types/release';
@@ -86,6 +88,61 @@
     favoritesCount: 19596,
     isFavorite: false,
   };
+
+  const DEMO_COMMENT_PROFILE = {
+    id: 1,
+    login: '永遠の孤独',
+    avatar: 'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg',
+  };
+
+  function mockComment(id: number, message: string, extra: Partial<CommentData> = {}): CommentData {
+    return {
+      id,
+      message,
+      timestamp: Math.floor(Date.now() / 1000) - 3600,
+      voteCount: 12,
+      userVote: 0,
+      isSpoiler: false,
+      isEdited: false,
+      isDeleted: false,
+      replyCount: 67,
+      parentCommentId: null,
+      profile: DEMO_COMMENT_PROFILE,
+      ...extra,
+    };
+  }
+
+  const COMMENT_THREAD_DEMOS: { label: string; comment: CommentData; nested?: boolean }[] = [
+    { label: 'Короткий (1 строка)', comment: mockComment(101, 'Огонь!') },
+    { label: 'Средний (2–3 строки)', comment: mockComment(102, 'Какая это имба просто огонь ту...') },
+    {
+      label: 'Длинный абзац',
+      comment: mockComment(
+        103,
+        'Это один из лучших релизов сезона. Сюжет держит с первой серии, персонажи проработаны, а финал вообще не оставляет равнодушным. Рекомендую всем, кто любит жанр.',
+      ),
+    },
+    {
+      label: 'Очень длинный текст',
+      comment: mockComment(
+        104,
+        'Смотрел на одном дыхании — и это не преувеличение. Первая половина кажется спокойной, но дальше начинается настоящий разворот, который меняет восприятие всего, что было до. Анимация на ключевых сценах на высоте, музыка попадает в настроение идеально. Единственный минус — пару серий середины чуть провисают по темпу, но финальная арка полностью компенсирует.',
+      ),
+    },
+    {
+      label: 'С контекстом серии',
+      comment: mockComment(105, 'На этом моменте я понял, что досмотрю до конца.', { postedAtEpisode: 7 }),
+    },
+    {
+      label: 'Изменённый комментарий',
+      comment: mockComment(106, 'Пересмотрел второй раз — оценка только выросла.', { isEdited: true }),
+    },
+    {
+      label: 'Вложенный (nested)',
+      comment: mockComment(107, 'Ответ в ветке — проверка линии на узком аватаре.'),
+      nested: true,
+    },
+  ];
 
   onMount(async () => {
     // Dots menu demo (vanilla helper, still used by ReleaseCardH/V)
@@ -314,6 +371,30 @@
       <div class="uikit-box uikit-box--sm">radius-sm</div>
       <div class="uikit-box uikit-box--md">radius-md</div>
       <div class="uikit-box uikit-box--lg">radius-lg</div>
+    </div>
+  </section>
+
+  <!-- Comment thread lines -->
+  <section class="uikit-section">
+    <h2 class="uikit-section__title">Комментарии — линия к ответам</h2>
+    <p class="uikit-section__desc">
+      Разная длина текста, у всех «Показать 67 ответ» — проверка изгиба thread-линии
+    </p>
+    <div class="uikit-comments-demo anix-comments__list">
+      {#each COMMENT_THREAD_DEMOS as demo (demo.comment.id)}
+        <div class="uikit-comments-demo__item">
+          <p class="uikit-comments-demo__label">{demo.label}</p>
+          <div class="anix-comment-wrap" class:anix-comment-wrap--nested={demo.nested}>
+            <CommentRow
+              comment={demo.comment}
+              nested={demo.nested}
+              canReply={true}
+              canVote={false}
+              onToggleReplies={() => {}}
+            />
+          </div>
+        </div>
+      {/each}
     </div>
   </section>
 

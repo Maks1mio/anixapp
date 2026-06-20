@@ -3,7 +3,8 @@
   import type { ReleaseEmbed } from "../_types";
   import type { ReleaseCardData } from "../../../types/release";
   import ReleaseCardV from "../../../components/ReleaseCardV.svelte";
-  import { parseMessage, renderText, timeStr, fullTime } from "../_utils";
+  import { parseMessage, renderText, timeStr, fullTime, extractPosterUrl } from "../_utils";
+  import { resolveCdnAssetUrl } from "../../../utils/posterUrl";
 
   interface UserRole { id: number; name: string; color: string; }
   interface Profile { login: string; avatar: string | null; roles?: UserRole[]; }
@@ -67,7 +68,8 @@
   const repliedPosterUrl = $derived.by((): string | null => {
     if (!repliedEmbed || repliedEmbed === "loading" || repliedEmbed === "error") return null;
     const p = (repliedEmbed as any)?.release?.poster as Record<string, { url?: string }> | undefined;
-    return p?.medium?.url ?? p?.small?.url ?? p?.original?.url ?? null;
+    const raw = p?.medium?.url ?? p?.small?.url ?? p?.original?.url ?? null;
+    return raw ? extractPosterUrl({ poster: raw } as Record<string, unknown>) ?? null : null;
   });
 
   const selfId = $derived(
@@ -132,7 +134,7 @@
       <!-- Avatar of replied user -->
       <span class="dc-row__quote-av">
         {#if repliedProfile?.avatar}
-          <img src={repliedProfile.avatar} alt="" />
+          <img src={resolveCdnAssetUrl(repliedProfile.avatar)} alt="" />
         {:else}
           <span
             class="dc-row__quote-av-fallback"
@@ -151,7 +153,7 @@
         {#if repliedParsed.gifUrl}
           <!-- Mini GIF thumbnail in quote -->
           <span class="dc-row__quote-media">
-            <img src={repliedParsed.gifUrl} alt="GIF" loading="lazy" />
+            <img src={resolveCdnAssetUrl(repliedParsed.gifUrl)} alt="GIF" loading="lazy" />
           </span>
           <span class="dc-row__quote-tag">GIF</span>
         {:else if repliedParsed.releaseId != null}
@@ -185,7 +187,7 @@
         title="Профиль"
       >
         {#if profile?.avatar}
-          <img class="dc-row__av" src={profile.avatar} alt={profile.login} />
+          <img class="dc-row__av" src={resolveCdnAssetUrl(profile.avatar ?? '')} alt={profile.login} />
         {:else}
           <div
             class="dc-row__av dc-row__av--fallback"
@@ -245,7 +247,7 @@
         onclick={() => openExternal(parsed.gifUrl!)}
         title="Открыть GIF"
       >
-        <img class="dc-row__gif-thumb" src={parsed.gifUrl} alt="GIF" loading="lazy" />
+        <img class="dc-row__gif-thumb" src={resolveCdnAssetUrl(parsed.gifUrl)} alt="GIF" loading="lazy" />
         <span class="dc-row__gif-badge">GIF</span>
       </button>
     {/if}

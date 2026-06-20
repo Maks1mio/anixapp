@@ -1,8 +1,12 @@
 import type { CommentData, CommentProfile, CommentVoteValue, CommentSort } from '../types/comment';
+import { resolveCdnAssetUrl } from './posterUrl';
 import { COMMENT_SORT_OPTIONS } from '../types/comment';
 
 export { COMMENT_SORT_OPTIONS };
 export type { CommentSort };
+
+export const COMMENT_MIN_LENGTH = 5;
+export const COMMENT_MAX_LENGTH = 720;
 
 const MONTHS_SHORT = [
   'янв.', 'февр.', 'мар.', 'апр.', 'май', 'июн.',
@@ -46,8 +50,8 @@ export function normalizeCommentProfile(raw: Record<string, unknown> | undefined
   return {
     id: (raw.id as number) ?? 0,
     login: String(raw.login ?? raw.nickname ?? 'Пользователь'),
-    avatar: String(raw.avatar ?? ''),
-    badgeUrl: (raw.badge_url as string) || undefined,
+    avatar: resolveCdnAssetUrl(String(raw.avatar ?? '')),
+    badgeUrl: resolveCdnAssetUrl((raw.badge_url as string) || undefined) || undefined,
     isVerified: !!(raw.is_verified ?? raw.isVerified),
     isSponsor: !!(raw.is_sponsor ?? raw.isSponsor),
   };
@@ -152,4 +156,36 @@ export function patchCommentInTree(
     if (item.id === commentId) return { ...item, ...patch };
     return item;
   });
+}
+
+/** Release comment add params — matches Android CommentRepliesFragment / CommentsFragment. */
+export function buildReleaseCommentAddBody(
+  payload: { message: string; isSpoiler: boolean },
+  opts: {
+    replyTarget?: CommentData | null;
+    threadRootCommentId?: number | null;
+  } = {},
+): {
+  message: string;
+  isSpoiler: boolean;
+  parentCommentId: number | null;
+  replyToProfileId: number | null;
+} {
+  const { replyTarget = null, threadRootCommentId = null } = opts;
+
+  if (threadRootCommentId != null) {
+    return {
+      message: payload.message,
+      isSpoiler: payload.isSpoiler,
+      parentCommentId: threadRootCommentId,
+      replyToProfileId: replyTarget?.profile.id ?? null,
+    };
+  }
+
+  return {
+    message: payload.message,
+    isSpoiler: payload.isSpoiler,
+    parentCommentId: replyTarget?.id ?? null,
+    replyToProfileId: replyTarget?.profile.id ?? null,
+  };
 }

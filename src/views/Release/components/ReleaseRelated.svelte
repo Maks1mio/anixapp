@@ -3,7 +3,7 @@
   import RelatedReleaseRow from '../../../components/RelatedReleaseRow.svelte';
   import type { ReleaseCardData } from '../../../types/release';
 
-  const PREVIEW_COUNT = 5;
+  const PREVIEW_COUNT = 3;
 
   interface Props {
     releaseId: number;
@@ -14,6 +14,8 @@
   let { releaseId, relatedId, items }: Props = $props();
 
   const preview = $derived(items.slice(0, PREVIEW_COUNT));
+  /** Android always shows link to RelatedFragment (chain view), not only when count > preview. */
+  const showAllLink = $derived(relatedId > 0);
   const hasCurrent = $derived(preview.some((item) => item.id === releaseId));
 
   let sectionEl = $state<HTMLElement | undefined>();
@@ -104,13 +106,15 @@
 
     <div class="release-page__block-header">
       <h2 class="release-page__block-title">Связанные релизы</h2>
-      <button
-        type="button"
-        class="release-page__block-link"
-        onclick={() => navigate(`/release/${relatedId}/related?from=${releaseId}`)}
-      >
-        Показать все
-      </button>
+      {#if showAllLink}
+        <button
+          type="button"
+          class="release-page__block-link"
+          onclick={() => navigate(`/release/${relatedId}/related?from=${releaseId}`)}
+        >
+          Показать всё
+        </button>
+      {/if}
     </div>
 
     <div class="release-page__related-list">

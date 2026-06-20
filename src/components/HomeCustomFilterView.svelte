@@ -3,7 +3,7 @@
   import Checkbox from './Checkbox.svelte';
   import ScrollArea from './ScrollArea.svelte';
   import type { SelectOption, SelectSection } from './select';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import {
     AGE_RATINGS,
     ALL_GENRES,
@@ -42,7 +42,7 @@
 
   let { initial, onSave, onClose }: Props = $props();
 
-  let filter = $state<CustomFilterStorage>({ ...(initial.filter ?? DEFAULT_CUSTOM_FILTER) });
+  let filter = $state<CustomFilterStorage>(untrack(() => ({ ...(initial.filter ?? DEFAULT_CUSTOM_FILTER) })));
   let voiceoverTypes = $state<VoiceoverType[]>([]);
 
   const none = '0';

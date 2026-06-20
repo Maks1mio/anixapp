@@ -70,6 +70,11 @@ contextBridge.exposeInMainWorld('electron', {
   getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
   getVersions: () => ipcRenderer.invoke('app:getVersions'),
   getDeviceId: () => ipcRenderer.invoke('app:getDeviceId'),
+  adminGetSession: () => ipcRenderer.invoke('admin:getSession'),
+  adminSaveSession: (payload) => ipcRenderer.invoke('admin:saveSession', payload),
+  adminClearSession: () => ipcRenderer.invoke('admin:clearSession'),
+  getAnixbackEndpoint: () => ipcRenderer.invoke('anix:getAnixbackEndpoint'),
+  setAnixbackEndpoint: (mode) => ipcRenderer.invoke('anix:setAnixbackEndpoint', mode),
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),
     maximize: () => ipcRenderer.send('window:maximize'),
@@ -81,9 +86,19 @@ contextBridge.exposeInMainWorld('electron', {
   togglePlayerAlwaysOnTop: () => ipcRenderer.invoke('player:toggleAlwaysOnTop'),
   isPlayerOpen: () => ipcRenderer.invoke('player:isOpen'),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+  downloadEpisodes: (payload) => ipcRenderer.invoke('episode-download:download', payload),
+  queueEpisodeDownloads: (payload) => ipcRenderer.invoke('episode-download:queue', payload),
+  getDownloadSettings: () => ipcRenderer.invoke('downloads:getSettings'),
+  pickDownloadDirectory: () => ipcRenderer.invoke('downloads:pickDirectory'),
+  openDownloadDirectory: (dir) => ipcRenderer.invoke('downloads:openDirectory', dir),
+  showDownloadFile: (filePath) => ipcRenderer.invoke('downloads:showFile', filePath),
+  openDownloadFile: (filePath) => ipcRenderer.invoke('downloads:openFile', filePath),
+  listDownloadLibrary: () => ipcRenderer.invoke('downloads:listLibrary'),
+  checkDownloadFiles: (payload) => ipcRenderer.invoke('downloads:checkFiles', payload),
   syncPlayerState: (playback) => ipcRenderer.send('player:syncState', playback),
   sendPlayerState: (playback) => ipcRenderer.send('player:stateChanged', playback),
   startUpdateDownload: () => ipcRenderer.invoke('app:startUpdateDownload'),
+  checkForUpdate: (currentVersion) => ipcRenderer.invoke('app:checkForUpdate', currentVersion),
   installUpdate: () => ipcRenderer.invoke('app:installUpdate'),
   getLinuxInstallType: () => ipcRenderer.invoke('app:getLinuxInstallType'),
   getSettings: () => ipcRenderer.invoke('app:getSettings'),
@@ -114,6 +129,9 @@ contextBridge.exposeInMainWorld('electron', {
   toggleMaximizeToolWindow:() => ipcRenderer.invoke('tool:toggleMaximize'),
   closeToolWindow:         () => ipcRenderer.invoke('tool:close'),
   onToolWindowState: (cb) => ipcRenderer.on('tool:windowState', (_, state) => cb(state)),
+  openOverviewVideoEditor: (payload) => ipcRenderer.invoke('overview-editor:open', payload),
+  getOverviewEditorPayload: () => ipcRenderer.invoke('overview-editor:getPayload'),
+  overviewEditorDone: () => ipcRenderer.send('overview-editor:done'),
   // Logging
   logRenderer:      (entry) => ipcRenderer.invoke('log:renderer', entry),
   logGetSessions:   ()      => ipcRenderer.invoke('log:getSessions'),
@@ -122,6 +140,11 @@ contextBridge.exposeInMainWorld('electron', {
   logCollectZip:    ()      => ipcRenderer.invoke('log:collectZip'),
   logOpenZip:       (p)     => ipcRenderer.invoke('log:openZip', p),
   logOpenFolder:    ()      => ipcRenderer.invoke('log:openFolder'),
+});
+
+// Download progress events: main → renderer
+ipcRenderer.on('episode-download:progress', (_, data) => {
+  window.dispatchEvent(new CustomEvent('episode-download:progress', { detail: data }));
 });
 
 ipcRenderer.on('lobby:bufferingStartFromPlayer', () => {
@@ -147,6 +170,10 @@ ipcRenderer.on('theme-editor:liveUpdate', (_, vars) => {
 // Main window receives notification when theme editor deletes a theme
 ipcRenderer.on('theme-editor:deleted', (_, themeId) => {
   window.dispatchEvent(new CustomEvent('anix:themeEditorDeleted', { detail: { themeId } }));
+});
+
+ipcRenderer.on('overview-editor:done', () => {
+  window.dispatchEvent(new CustomEvent('anix:overviewEditorDone'));
 });
 
 // ── Structured API (anixApi) — grouped endpoints like AniDesk ──
@@ -190,6 +217,7 @@ contextBridge.exposeInMainWorld('anixApi', {
     getDubberSources: (releaseId, dubberId) => ipcRenderer.invoke('anix:getDubberSources', releaseId, dubberId),
     getEpisodes: (releaseId, dubberId, sourceId, sort = 1) => ipcRenderer.invoke('anix:getEpisodes', releaseId, dubberId, sourceId, sort),
     getEpisode: (releaseId, sourceId, episodePosition) => ipcRenderer.invoke('anix:getEpisode', releaseId, sourceId, episodePosition),
+    getEpisodeUpdates: (releaseId, page = 0) => ipcRenderer.invoke('anix:getEpisodeUpdates', releaseId, page),
     getDirectVideoLink: (embedUrl) => ipcRenderer.invoke('anix:getDirectVideoLink', embedUrl),
     getVideos: (releaseId) => ipcRenderer.invoke('anix:getVideos', releaseId),
     getVideoInCategory: (releaseId, categoryId, page = 1) => ipcRenderer.invoke('anix:getVideoInCategory', releaseId, categoryId, page),
@@ -199,6 +227,7 @@ contextBridge.exposeInMainWorld('anixApi', {
     clearListStatus: (releaseId, statusId) => ipcRenderer.invoke('anix:clearListStatus', releaseId, statusId),
     vote: (releaseId, vote) => ipcRenderer.invoke('anix:releaseVote', releaseId, vote),
     deleteVote: (releaseId) => ipcRenderer.invoke('anix:releaseDeleteVote', releaseId),
+    schedule: () => ipcRenderer.invoke('anix:schedule'),
   },
 
   comments: {
@@ -210,6 +239,8 @@ contextBridge.exposeInMainWorld('anixApi', {
         ipcRenderer.invoke('anix:releaseCommentReplies', commentId, page, sort),
       vote: (commentId, vote) => ipcRenderer.invoke('anix:releaseCommentVote', commentId, vote),
       add: (releaseId, body) => ipcRenderer.invoke('anix:releaseCommentAdd', releaseId, body),
+      edit: (commentId, body) => ipcRenderer.invoke('anix:releaseCommentEdit', commentId, body),
+      delete: (commentId) => ipcRenderer.invoke('anix:releaseCommentDelete', commentId),
     },
   },
 
@@ -222,23 +253,42 @@ contextBridge.exposeInMainWorld('anixApi', {
   },
 
   discover: {
-    recommendations: (page = 0) => ipcRenderer.invoke('anix:discoverRecommendations', page),
+    recommendations: (page = -1, previousPage = -1) =>
+      ipcRenderer.invoke('anix:discoverRecommendations', page, previousPage),
+    interesting: () => ipcRenderer.invoke('anix:discoverInteresting'),
+    watching: (page = 0) => ipcRenderer.invoke('anix:discoverWatching', page),
+    discussing: () => ipcRenderer.invoke('anix:discoverDiscussing'),
+    commentsWeek: () => ipcRenderer.invoke('anix:discoverCommentsWeek'),
+    collectionsWeek: (page = -1, previousPage = 0) =>
+      ipcRenderer.invoke('anix:discoverCollectionsWeek', page, previousPage),
   },
 
   search: {
-    releases: (query, page = 0) => ipcRenderer.invoke('anix:searchReleases', query, page),
+    releases: (query, page = 0, searchBy = 0) =>
+      ipcRenderer.invoke('anix:searchReleases', query, page, searchBy),
     profiles: (query, page = 0) => ipcRenderer.invoke('anix:searchProfiles', query, page),
     collections: (query, page = 0) => ipcRenderer.invoke('anix:searchCollections', query, page),
   },
 
   collection: {
     info: (id) => ipcRenderer.invoke('anix:collectionById', id),
-    all: (page = 1, sort = 2) => ipcRenderer.invoke('anix:collectionsAll', page, sort),
+    all: (page = 0, options = {}) => ipcRenderer.invoke('anix:collectionsAll', page, options),
+    profileCollections: (profileId, page = 0) =>
+      ipcRenderer.invoke('anix:collectionProfileCollections', profileId, page),
     favorites: (page = 0) => ipcRenderer.invoke('anix:collectionFavorites', page),
     getReleases: (id, page = 0) => ipcRenderer.invoke('anix:collectionReleases', id, page),
     getRandomRelease: (id) => ipcRenderer.invoke('anix:collectionRandomRelease', id),
     addFavorite: (id) => ipcRenderer.invoke('anix:addCollectionFavorite', id),
     removeFavorite: (id) => ipcRenderer.invoke('anix:removeCollectionFavorite', id),
+  },
+
+  collectionMy: {
+    create: (body) => ipcRenderer.invoke('anix:collectionMyCreate', body),
+    edit: (id, body) => ipcRenderer.invoke('anix:collectionMyEdit', id, body),
+    editImage: (id, imageBase64, fileName) =>
+      ipcRenderer.invoke('anix:collectionMyEditImage', id, imageBase64, fileName),
+    releaseAdd: (id, releaseId) => ipcRenderer.invoke('anix:collectionMyReleaseAdd', id, releaseId),
+    delete: (id) => ipcRenderer.invoke('anix:collectionMyDelete', id),
   },
 
   channel: {

@@ -6,33 +6,24 @@
   import Tabs from '../components/Tabs.svelte';
   import { addSearchHistory } from '../utils/search-history';
   import type { ReleaseCardData } from '../types/release';
+  import { buildPosterUrl, resolveCdnAssetUrl } from '../utils/posterUrl';
 
   type SearchTab = 'releases' | 'profiles' | 'collections';
 
   interface Props {
     q?: string;
     tab?: SearchTab;
+    searchBy?: number;
   }
 
-  let { q = '', tab = 'releases' }: Props = $props();
-
-  const POSTER_BASE = 'https://s.anixmirai.com/posters';
-
-  function buildPosterUrl(value: string | undefined): string | undefined {
-    if (!value || typeof value !== 'string') return undefined;
-    const v = value.trim();
-    if (!v) return undefined;
-    if (v.startsWith('http://') || v.startsWith('https://')) return v;
-    const id = v.endsWith('.jpg') || v.endsWith('.jpeg') || v.endsWith('.png') ? v : `${v}.jpg`;
-    return `${POSTER_BASE}/${id}`;
-  }
+  let { q = '', tab = 'releases', searchBy = 0 }: Props = $props();
 
   function mapReleaseToCardData(raw: Record<string, unknown>): ReleaseCardData {
     const p = raw.poster as Record<string, { url?: string }> | undefined;
     const posterRaw = p?.original?.url ?? p?.medium?.url ?? p?.small?.url
       ?? (typeof raw.poster === 'string' ? raw.poster : undefined)
       ?? (typeof raw.image === 'string' ? raw.image : undefined);
-    const poster = posterRaw ? buildPosterUrl(posterRaw) : undefined;
+    const poster = posterRaw ? buildPosterUrl(posterRaw) || undefined : undefined;
     const grade = typeof raw.grade === 'number' ? raw.grade : undefined;
     const profileListStatus = typeof raw.profile_list_status === 'number' ? raw.profile_list_status : undefined;
     let listStatus: ReleaseCardData['listStatus'];
@@ -71,7 +62,7 @@
     return {
       id: raw.id as number,
       title: (raw.title ?? raw.name ?? 'Без названия') as string,
-      image: (raw.image as string) || undefined,
+      image: resolveCdnAssetUrl(raw.image as string) || undefined,
       description: (raw.description as string) || undefined,
       releaseCount: typeof raw.release_count === 'number' ? raw.release_count : undefined,
       notesCount: typeof raw.notes_count === 'number' ? raw.notes_count : (typeof raw.comment_count === 'number' ? raw.comment_count : undefined),
@@ -92,17 +83,23 @@
   // svelte-ignore state_referenced_locally
   let currentQuery = $state(q);
 
+  // svelte-ignore state_referenced_locally
+  let currentSearchBy = $state(searchBy);
+
   // Sync when parent navigates to a new search (different q/tab props).
   // Use untrack() to read currentQuery/currentTab without creating reactive
   // dependencies — otherwise setting them inside the effect would re-trigger it.
   $effect(() => {
     const newQ = q;
     const newTab = tab;
+    const newSearchBy = searchBy;
     const prevQ = untrack(() => currentQuery);
     const prevTab = untrack(() => currentTab);
-    if (newQ !== prevQ || newTab !== prevTab) {
+    const prevSearchBy = untrack(() => currentSearchBy);
+    if (newQ !== prevQ || newTab !== prevTab || newSearchBy !== prevSearchBy) {
       currentQuery = newQ;
       currentTab = newTab ?? 'releases';
+      currentSearchBy = newSearchBy ?? 0;
       currentPage = 0;
       hasMore = true;
       isLoading = false;
@@ -189,7 +186,7 @@
     try {
       let promise: Promise<any>;
       if (currentTab === 'releases') {
-        promise = window.anixApi.search.releases(q, pageToLoad);
+        promise = window.anixApi.search.releases(q, pageToLoad, currentSearchBy);
       } else if (currentTab === 'profiles') {
         promise = window.anixApi.search.profiles(q, pageToLoad);
       } else {
@@ -336,7 +333,7 @@
             >
               <div class="search-franchise__thumbs">
                 {#each franchiseData.images.slice(0, 3) as img}
-                  <div class="search-franchise__thumb" style="background-image:url('{img}')"></div>
+                  <div class="search-franchise__thumb" style="background-image:url('{resolveCdnAssetUrl(img)}')"></div>
                 {/each}
               </div>
               <div class="search-franchise__content">
@@ -365,7 +362,7 @@
               >
                 <div
                   class="search-page__profile-avatar"
-                  style={p.avatar ? `background-image:url('${p.avatar}')` : ''}
+                  style={p.avatar ? `background-image:url('${resolveCdnAssetUrl(p.avatar)}')` : ''}
                 ></div>
                 <div class="search-page__profile-info">
                   <span class="search-page__profile-name">{p.login || ''}</span>

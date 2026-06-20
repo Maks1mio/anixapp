@@ -2,7 +2,8 @@
   import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../../stores/navigation';
   import { ProfileHero, ProfileStats, ProfileDynamics, ProfileMediaGrid, ProfileFriends } from './components';
-  import { fmtDate } from './_utils';
+  import { fmtDate, posterUrl } from './_utils';
+  import { setDiscordContext, refreshDiscordPresence } from '../../services/discord-presence';
 
   interface Props { id?: number; }
   let { id }: Props = $props();
@@ -58,7 +59,7 @@
         || (channelData as any)?.blogInfo?.channel?.cover
         || (channelData as any)?.channel?.cover
         || null;
-      coverUrl = cover;
+      coverUrl = cover ? posterUrl(cover) : null;
 
       // Lazy cover fallback
       if (!cover && profile?.id) {
@@ -71,7 +72,7 @@
                 || ch?.blogInfo?.channel?.cover
                 || ch?.blog_info?.channel?.cover
                 || null;
-              if (fallback) coverUrl = fallback;
+              if (fallback) coverUrl = posterUrl(fallback);
             })
             .catch(() => {});
         }
@@ -90,10 +91,12 @@
 
       loadState = 'ready';
 
-      // Discord RPC
-      window.dispatchEvent(new CustomEvent('discord:profileView', {
-        detail: { username: profile.login ?? '', avatarUrl: profile.avatar ?? null, isSelf: isMyProfile },
-      }));
+      setDiscordContext({
+        profileLogin: profile.login ?? '',
+        profileAvatar: profile.avatar ? posterUrl(profile.avatar) : undefined,
+        profileIsSelf: isMyProfile,
+      });
+      refreshDiscordPresence();
     } catch {
       errorMsg  = 'Ошибка загрузки профиля.';
       loadState = 'error';

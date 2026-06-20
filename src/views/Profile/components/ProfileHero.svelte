@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { openSettingsModal } from '../../../stores/modals';
-  import { fmtRelative, isLottieBadgeUrl } from '../_utils';
+  import { fmtRelative, isLottieBadgeUrl, posterUrl } from '../_utils';
+  import { fetchCdnJson, toCdnProxyUrl } from '../../../utils/posterUrl';
 
   interface Props {
     profile:     any;
@@ -23,9 +24,7 @@
 
   async function loadBadgeLottie(url: string, target: HTMLElement) {
     try {
-      const res = await fetch(url, { cache: 'force-cache' });
-      if (!res.ok) return;
-      const json = await res.json();
+      const json = await fetchCdnJson(url);
       if (!json || typeof json !== 'object') return;
       const mod: any = await import('lottie-web');
       const lottie = mod?.default ?? mod;
@@ -65,7 +64,7 @@
     <div class="profile__avatar-wrap">
       <div
         class="profile__avatar{!profile.avatar ? ' profile__avatar--empty' : ''}"
-        style={profile.avatar ? `background-image:url('${profile.avatar}')` : ''}
+        style={profile.avatar ? `background-image:url('${posterUrl(profile.avatar)}')` : ''}
       ></div>
       {#if profile.is_online}
         <span class="profile__online-dot"></span>
@@ -86,7 +85,7 @@
               bind:this={badgeLottieEl}
             ></span>
           {:else}
-            <img class="profile__badge-img" src={profile.badge.image_url} alt={profile.badge.name ?? ''} />
+            <img class="profile__badge-img" src={toCdnProxyUrl(profile.badge.image_url)} alt={profile.badge.name ?? ''} />
           {/if}
         {/if}
 

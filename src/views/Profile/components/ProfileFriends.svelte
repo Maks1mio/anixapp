@@ -1,5 +1,6 @@
 <script lang="ts">
   import { navigate } from '../../../stores/navigation';
+  import { posterUrl } from '../_utils';
 
   interface Props {
     friends:    any[];
@@ -26,7 +27,7 @@
   <div class="profile__friends-grid">
     {#each friends as fr}
       <button type="button" class="profile__friend-card" onclick={() => navigate(`/profile/${fr.id}`)}>
-        <div class="profile__friend-av" style={fr.avatar ? `background-image:url('${fr.avatar}')` : ''}></div>
+        <div class="profile__friend-av" style={fr.avatar ? `background-image:url('${posterUrl(fr.avatar)}')` : ''}></div>
         {#if fr.is_online}
           <span class="profile__friend-online"></span>
         {/if}

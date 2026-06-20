@@ -72,7 +72,7 @@ export function customScrollbar(page: HTMLElement): { destroy(): void } {
     const { scrollWidth, clientWidth, scrollLeft } = scrollEl;
     const trackWidth = hTrack.clientWidth;
     const overflowX = typeof getComputedStyle !== 'undefined' ? getComputedStyle(scrollEl).overflowX : '';
-    if (overflowX === 'hidden' || scrollWidth <= clientWidth) {
+    if (overflowX === 'hidden' || overflowX === 'clip' || scrollWidth <= clientWidth) {
       hThumb.style.display = 'none';
       hVisible = false;
       hTrack.style.pointerEvents = 'none';
@@ -211,7 +211,7 @@ export function customScrollbar(page: HTMLElement): { destroy(): void } {
       if (scrollEl.scrollHeight <= scrollEl.clientHeight) return;
     } else {
       const overflowX = typeof getComputedStyle !== 'undefined' ? getComputedStyle(scrollEl).overflowX : '';
-      if (overflowX === 'hidden' || scrollEl.scrollWidth <= scrollEl.clientWidth) return;
+      if (overflowX === 'hidden' || overflowX === 'clip' || scrollEl.scrollWidth <= scrollEl.clientWidth) return;
     }
     e.preventDefault();
     dragAxis = axis;

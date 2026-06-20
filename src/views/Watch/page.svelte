@@ -19,6 +19,7 @@
   import ActionsBar      from './components/ActionsBar.svelte';
   import TopBar          from './components/TopBar.svelte';
   import CenterPlay      from './components/CenterPlay.svelte';
+  import { resolveCdnAssetUrl } from '../../utils/posterUrl';
 
   // WebGPU types fallback:
   // В некоторых конфигурациях TS не подтягивает типы WebGPU (GPUDevice/navigator.gpu),
@@ -1241,7 +1242,7 @@
                   {#if lobbyWaitOverlay.avatar}
                     <img
                       class="watch-page__lobby-wait-avatar"
-                      src={lobbyWaitOverlay.avatar}
+                      src={resolveCdnAssetUrl(lobbyWaitOverlay.avatar)}
                       alt=""
                       referrerpolicy="no-referrer"
                     />

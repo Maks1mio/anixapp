@@ -1,14 +1,11 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
   import { getCardLayout } from '../prefs';
   import type { ReleaseCardData } from '../types/release';
   import ReleaseCardV from './ReleaseCardV.svelte';
   import ReleaseCardH from './ReleaseCardH.svelte';
 
   export type GridLayoutMode = 'auto' | 'wide' | 'mini';
-
-  /** Ширина контейнера списка, ниже — mini-сетка */
-  const NARROW_CONTAINER_PX = 640;
 
   interface Props {
     items: ReleaseCardData[];
@@ -20,20 +17,12 @@
 
   let { items, layout = 'auto', className = '', variant = 'default', onDeleteFromHistory }: Props = $props();
 
-  let rootEl = $state<HTMLDivElement | undefined>();
-  let containerWidth = $state(typeof window !== 'undefined' ? window.innerWidth : 9999);
-
-  function isNarrowContainer(): boolean {
-    return containerWidth < NARROW_CONTAINER_PX;
-  }
-
   function resolveLayout(mode: GridLayoutMode): 'mini' | 'wide' {
-    if (isNarrowContainer()) return 'mini';
     if (mode === 'auto') return getCardLayout();
     return mode === 'mini' ? 'mini' : 'wide';
   }
 
-  let effectiveLayout = $state(resolveLayout(layout));
+  let effectiveLayout = $state(untrack(() => resolveLayout(layout)));
 
   function syncLayout() {
     effectiveLayout = resolveLayout(layout);
@@ -41,30 +30,17 @@
 
   $effect(() => {
     layout;
-    containerWidth;
     syncLayout();
   });
 
   function handleLayoutChanged(e: Event) {
     const detail = (e as CustomEvent<{ layout: 'mini' | 'wide' }>).detail;
-    if (layout === 'auto' && !isNarrowContainer()) {
+    if (layout === 'auto') {
       effectiveLayout = detail?.layout ?? getCardLayout();
     } else {
       syncLayout();
     }
   }
-
-  $effect(() => {
-    const el = rootEl;
-    if (!el) return;
-    const update = () => {
-      containerWidth = el.clientWidth;
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  });
 
   onMount(() => {
     window.addEventListener('anix:cardLayoutChanged', handleLayoutChanged);
@@ -85,7 +61,7 @@
   );
 </script>
 
-<div class={rootClass} bind:this={rootEl}>
+<div class={rootClass}>
   {#each items as item (item.id)}
     {#if effectiveLayout === 'mini'}
       <ReleaseCardV data={item} {variant} {onDeleteFromHistory} />

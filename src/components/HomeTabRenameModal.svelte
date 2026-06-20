@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+
   interface Props {
     initialName: string;
     onSave: (name: string) => void;
@@ -6,7 +8,7 @@
   }
 
   let { initialName, onSave, onClose }: Props = $props();
-  let name = $state(initialName);
+  let name = $state(untrack(() => initialName));
 
   function apply() {
     onSave(name.trim());

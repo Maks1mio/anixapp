@@ -3,18 +3,10 @@
  */
 
 import type { LobbyPlayback, LobbyParticipant } from './lobby-api';
-
-const LOBBY_WS_BASE = 'wss://nhapp-api.onrender.com/anixapp/lobby/ws';
+import { getLobbyWsBase } from './anixback-endpoint';
 
 function getWsUrl(): string {
-  if (typeof window === 'undefined') return LOBBY_WS_BASE;
-  const base = window.location.origin;
-  if (base.startsWith('http://localhost') || base.startsWith('file:')) {
-    return 'wss://nhapp-api.onrender.com/anixapp/lobby/ws';
-  }
-  const protocol = base.startsWith('https') ? 'wss:' : 'ws:';
-  const host = base.replace(/^https?:\/\//, '');
-  return `${protocol}//${host}/anixapp/lobby/ws`;
+  return getLobbyWsBase();
 }
 
 let ws: WebSocket | null = null;

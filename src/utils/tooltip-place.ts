@@ -7,13 +7,26 @@ function updateTooltipPlacement(trigger: HTMLElement): void {
   const tooltip = trigger.querySelector<HTMLElement>('.tooltip');
   if (!tooltip) return;
 
-  // Для "правых" тултипов (например, сайдбар) не применяем логику above/below + dx
-  if (tooltip.classList.contains('tooltip--right')) return;
-
   const triggerRect = trigger.getBoundingClientRect();
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const tr = tooltip.getBoundingClientRect();
+
+  // Title names popover — left-aligned, fit content
+  if (tooltip.classList.contains('title-info-popover')) {
+    const spaceAbove = triggerRect.top;
+    const spaceBelow = vh - triggerRect.bottom;
+    if (spaceBelow >= spaceAbove) {
+      tooltip.classList.add('tooltip--below');
+    } else {
+      tooltip.classList.remove('tooltip--below');
+    }
+    tooltip.style.removeProperty('--tooltip-dx');
+    return;
+  }
+
+  // Для "правых" тултипов (например, сайдбар) не применяем логику above/below + dx
+  if (tooltip.classList.contains('tooltip--right')) return;
 
   // Вертикаль: выбираем сторону с большим свободным пространством
   const tooltipHeight = tr.height || tooltip.offsetHeight || 0;

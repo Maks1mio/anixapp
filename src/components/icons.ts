@@ -10,36 +10,53 @@ import {
   ArrowUpDown,
   Bell,
   Bookmark,
+  Calendar,
   Check,
   ChevronDown,
+  Compass,
+  Flame,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
   ClipboardList,
+  Copy,
   Download,
   Eye,
+  FileVideo,
+  Folder,
   Film,
   Flag,
+  Globe,
   Heart,
   Home,
   Info,
   LayoutGrid,
+  Lock,
   LogOut,
   MessageCircle,
+  Mic,
   MoreHorizontal,
+  Palette,
   Pencil,
+  Pause,
   Play,
+  BookOpen,
+  RefreshCw,
+  Tags,
+  Tv,
   RotateCcw,
   Search,
   Settings,
   Shuffle,
   SlidersHorizontal,
   Star,
+  Trash2,
   Clock,
   CircleCheck,
   TriangleAlert,
   User,
   Users,
+  X,
 } from 'lucide';
 
 type IconNode = [string, Record<string, string>];
@@ -134,6 +151,11 @@ export function iconClipboardList(size = 18): string {
   return toSvg(ClipboardList, size);
 }
 
+/** Копировать */
+export function iconCopy(size = 16): string {
+  return toSvg(Copy, size);
+}
+
 /** Стрелка вверх (отправить) */
 export function iconArrowUp(size = 20): string {
   return toSvg(ArrowUp, size);
@@ -149,9 +171,39 @@ export function iconPlay(size = 20): string {
   return toSvg(Play, size, { fill: 'currentColor', stroke: 'none' });
 }
 
+/** Пауза */
+export function iconPause(size = 20): string {
+  return toSvg(Pause, size, { fill: 'currentColor', stroke: 'none' });
+}
+
 /** Плёнка */
 export function iconFilm(size = 20): string {
   return toSvg(Film, size);
+}
+
+/** Глобус */
+export function iconGlobe(size = 16): string {
+  return toSvg(Globe, size);
+}
+
+/** Телевизор */
+export function iconTv(size = 16): string {
+  return toSvg(Tv, size);
+}
+
+/** Палитра */
+export function iconPalette(size = 16): string {
+  return toSvg(Palette, size);
+}
+
+/** Книга */
+export function iconBookOpen(size = 16): string {
+  return toSvg(BookOpen, size);
+}
+
+/** Теги */
+export function iconTags(size = 16): string {
+  return toSvg(Tags, size);
 }
 
 /** Дом (главная) */
@@ -162,6 +214,21 @@ export function iconHome(size = 20): string {
 /** Сетка/обзор */
 export function iconLayoutGrid(size = 20): string {
   return toSvg(LayoutGrid, size);
+}
+
+/** Компас (вкладка «Обзор») */
+export function iconCompass(size = 20): string {
+  return toSvg(Compass, size);
+}
+
+/** Популярное */
+export function iconFlame(size = 18): string {
+  return toSvg(Flame, size);
+}
+
+/** Расписание */
+export function iconCalendar(size = 18): string {
+  return toSvg(Calendar, size);
 }
 
 /** Закладка */
@@ -199,6 +266,16 @@ export function iconPencil(size = 18): string {
   return toSvg(Pencil, size);
 }
 
+/** Замок (приватная коллекция) */
+export function iconLock(size = 18): string {
+  return toSvg(Lock, size);
+}
+
+/** Корзина (удалить) */
+export function iconTrash2(size = 18): string {
+  return toSvg(Trash2, size);
+}
+
 /** Выход */
 export function iconLogOut(size = 20): string {
   return toSvg(LogOut, size);
@@ -224,9 +301,24 @@ export function iconDownload(size = 20): string {
   return toSvg(Download, size);
 }
 
+/** Папка */
+export function iconFolder(size = 18): string {
+  return toSvg(Folder, size);
+}
+
+/** Видеофайл */
+export function iconFileVideo(size = 18): string {
+  return toSvg(FileVideo, size);
+}
+
 /** Предупреждение (треугольник с восклицательным знаком) */
 export function iconTriangleAlert(size = 16): string {
   return toSvg(TriangleAlert, size);
+}
+
+/** Закрыть */
+export function iconX(size = 18): string {
+  return toSvg(X, size);
 }
 
 /** Перемешать / случайный выбор */
@@ -252,4 +344,14 @@ export function iconClock(size = 14): string {
 /** Галочка в круге (просмотренная серия) */
 export function iconCircleCheck(size = 14): string {
   return toSvg(CircleCheck, size);
+}
+
+/** Микрофон (озвучка без иконки) */
+export function iconMic(size = 18): string {
+  return toSvg(Mic, size);
+}
+
+/** Обновить (по часовой стрелке) */
+export function iconRefreshCw(size = 18): string {
+  return toSvg(RefreshCw, size);
 }

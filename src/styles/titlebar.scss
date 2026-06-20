@@ -174,7 +174,8 @@
     flex-shrink: 0;
   }
 
-  &:hover {
+  &:hover,
+  &--active {
     background: $color-surface-hover;
     color: $color-text;
   }

@@ -10,11 +10,8 @@ export interface Announcement {
   active: boolean;
   commentsEnabled: boolean;
   commentsLocked: boolean;
-  /** Total comment count (from API) */
   commentCount?: number;
-  /** Up to 3 unique user IDs of most recent commenters (newest-first) */
   lastCommenterIds?: number[];
-  /** Text of the last comment */
   lastMessage?: string | null;
 }
 
@@ -32,24 +29,86 @@ export interface Comment {
   createdAt: string;
 }
 
-const BASE = 'https://nhapp-api.onrender.com/api';
+import { getApiBase, getAdminToken } from './admin-api';
+
+function apiBase(): string {
+  return getApiBase();
+}
+
+export {
+  fetchUserRoles,
+  fetchUserPermissions,
+  type UserRole,
+  type UserRolesResult,
+} from './admin-api';
+
+function adminHeaders(): HeadersInit {
+  const token = getAdminToken();
+  return token
+    ? { 'Content-Type': 'application/json', 'X-Admin-Token': token }
+    : { 'Content-Type': 'application/json' };
+}
 
 export async function fetchAnnouncements(): Promise<Announcement[]> {
   try {
-    const res = await fetch(`${BASE}/announcements`, { signal: AbortSignal.timeout(4000) });
+    const res = await fetch(`${apiBase()}/announcements`, { signal: AbortSignal.timeout(4000) });
     if (!res.ok) return [];
     const data = await res.json();
     if (!Array.isArray(data)) return [];
-    return data.filter((a: any) => a && a.active !== false);
+    return data.filter((a: Announcement) => a && a.active !== false);
   } catch {
     return [];
   }
 }
 
+export async function fetchAllAnnouncements(): Promise<Announcement[]> {
+  const res = await fetch(`${apiBase()}/announcements/all`, { headers: adminHeaders() });
+  if (!res.ok) throw new Error('failed to load announcements');
+  return res.json();
+}
+
+export async function createAnnouncement(input: {
+  type: AnnouncementType;
+  message: string;
+  link?: { url: string; label: string } | null;
+  commentsEnabled?: boolean;
+  commentsLocked?: boolean;
+  active?: boolean;
+}): Promise<Announcement> {
+  const res = await fetch(`${apiBase()}/announcements`, {
+    method: 'POST',
+    headers: adminHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error('failed to create');
+  return res.json();
+}
+
+export async function updateAnnouncement(
+  id: string,
+  patch: Partial<Pick<Announcement, 'type' | 'message' | 'link' | 'active' | 'commentsEnabled' | 'commentsLocked'>>
+): Promise<Announcement> {
+  const res = await fetch(`${apiBase()}/announcements/${id}`, {
+    method: 'PATCH',
+    headers: adminHeaders(),
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error('failed to update');
+  return res.json();
+}
+
+export async function deleteAnnouncement(id: string): Promise<void> {
+  const res = await fetch(`${apiBase()}/announcements/${id}`, {
+    method: 'DELETE',
+    headers: adminHeaders(),
+  });
+  if (!res.ok && res.status !== 204) throw new Error('failed to delete');
+}
+
 export async function fetchReactions(announcementId: string, userId?: number): Promise<ReactionsResult> {
   const url = userId
-    ? `${BASE}/announcements/${announcementId}/reactions?user_id=${userId}`
-    : `${BASE}/announcements/${announcementId}/reactions`;
+    ? `${apiBase()}/announcements/${announcementId}/reactions?user_id=${userId}`
+    : `${apiBase()}/announcements/${announcementId}/reactions`;
   const res = await fetch(url);
   if (!res.ok) return { likes: 0, dislikes: 0, userReaction: null };
   return res.json();
@@ -60,7 +119,7 @@ export async function sendReaction(
   userId: number,
   reaction: Reaction
 ): Promise<ReactionsResult> {
-  const res = await fetch(`${BASE}/announcements/${announcementId}/reactions`, {
+  const res = await fetch(`${apiBase()}/announcements/${announcementId}/reactions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ user_id: userId, reaction }),
@@ -70,7 +129,7 @@ export async function sendReaction(
 }
 
 export async function fetchComments(announcementId: string): Promise<Comment[]> {
-  const res = await fetch(`${BASE}/announcements/${announcementId}/comments`);
+  const res = await fetch(`${apiBase()}/announcements/${announcementId}/comments`);
   if (!res.ok) return [];
   return res.json();
 }
@@ -80,7 +139,7 @@ export async function sendComment(
   userId: number,
   message: string
 ): Promise<Comment> {
-  const res = await fetch(`${BASE}/announcements/${announcementId}/comments`, {
+  const res = await fetch(`${apiBase()}/announcements/${announcementId}/comments`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ user_id: userId, message }),
@@ -97,7 +156,7 @@ export async function deleteComment(
   commentId: string,
   userId: number
 ): Promise<void> {
-  const res = await fetch(`${BASE}/announcements/${announcementId}/comments/${commentId}`, {
+  const res = await fetch(`${apiBase()}/announcements/${announcementId}/comments/${commentId}`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ user_id: userId }),
@@ -105,16 +164,5 @@ export async function deleteComment(
   if (!res.ok && res.status !== 204) {
     const err = await res.json().catch(() => ({ error: 'Failed to delete comment' }));
     throw new Error(err.error ?? 'Failed to delete comment');
-  }
-}
-
-export async function fetchUserPermissions(userId: number): Promise<string[]> {
-  try {
-    const res = await fetch(`${BASE}/users/${userId}/roles`, { signal: AbortSignal.timeout(3000) });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return Array.isArray(data.permissions) ? data.permissions : [];
-  } catch {
-    return [];
   }
 }

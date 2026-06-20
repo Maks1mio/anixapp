@@ -25,3 +25,11 @@ export function addSearchHistory(query: string): void {
     // ignore
   }
 }
+
+export function clearSearchHistory(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import ReleaseCarouselNav from './ReleaseCarouselNav.svelte';
   import {
     formatVideoDate,
     normalizeStreamingPlatforms,
@@ -27,6 +28,20 @@
   let categoryVideos = $state<ReleaseVideoItem[]>([]);
   let categoryLoading = $state(false);
   let playingVideo = $state<ReleaseVideoItem | null>(null);
+  let failedImages = $state<Set<string>>(new Set());
+
+  function imageKey(scope: 'cat' | 'video', id: number) {
+    return `${scope}:${id}`;
+  }
+
+  function markImageFailed(key: string) {
+    if (failedImages.has(key)) return;
+    failedImages = new Set([...failedImages, key]);
+  }
+
+  function showPoster(image: string | undefined, key: string) {
+    return Boolean(image) && !failedImages.has(key);
+  }
 
   const hasContent = $derived(blocks.length > 0 || streamingPlatforms.length > 0);
   const activeBlock = $derived(blocks.find((b) => b.category.id === activeCategoryId) ?? null);
@@ -168,11 +183,22 @@
       {#each blocks as block (block.category.id)}
         <div class="release-page__video-block">
           <h3 class="release-page__video-block-title">{block.category.name}</h3>
-          <div class="release-page__video-scroll">
+          <ReleaseCarouselNav measureKey={block.videos.length} scrollClass="release-page__carousel-scroll--video-thumbs">
             {#each block.videos as video (video.id)}
               <button type="button" class="release-page__video-thumb" onclick={() => playVideo(video)}>
-                {#if video.image}
-                  <img src={video.image} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
+                {#if showPoster(video.image, imageKey('video', video.id))}
+                  <img
+                    src={video.image}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    referrerpolicy="no-referrer"
+                    onerror={() => markImageFailed(imageKey('video', video.id))}
+                  />
+                {:else}
+                  <div class="release-page__video-poster-placeholder">
+                    <span>{video.title || block.category.name}</span>
+                  </div>
                 {/if}
                 {#if video.hosting?.icon}
                   <span class="release-page__video-host-icon">
@@ -182,7 +208,7 @@
                 <span class="release-page__video-thumb-label">{video.title}</span>
               </button>
             {/each}
-          </div>
+          </ReleaseCarouselNav>
         </div>
       {/each}
     {:else if activeCategoryId}
@@ -203,8 +229,19 @@
               onclick={() => playVideo(video)}
             >
               <div class="release-page__video-row-poster">
-                {#if video.image}
-                  <img src={video.image} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
+                {#if showPoster(video.image, imageKey('video', video.id))}
+                  <img
+                    src={video.image}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    referrerpolicy="no-referrer"
+                    onerror={() => markImageFailed(imageKey('video', video.id))}
+                  />
+                {:else}
+                  <div class="release-page__video-poster-placeholder">
+                    <span>{video.title || activeCategoryName}</span>
+                  </div>
                 {/if}
                 {#if video.hosting?.icon}
                   <span class="release-page__video-host-icon">
@@ -230,7 +267,7 @@
         {/if}
       </div>
     {:else if blocks.length > 0}
-      <div class="release-page__video-categories">
+      <ReleaseCarouselNav measureKey={blocks.length}>
         {#each blocks as block (block.category.id)}
           {@const cover = block.videos[0]?.image}
           <button
@@ -239,16 +276,25 @@
             onclick={() => openCategory(block.category.id)}
           >
             <div class="release-page__video-category-poster">
-              {#if cover}
-                <img src={cover} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
+              {#if showPoster(cover, imageKey('cat', block.category.id))}
+                <img
+                  src={cover}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  referrerpolicy="no-referrer"
+                  onerror={() => markImageFailed(imageKey('cat', block.category.id))}
+                />
               {:else}
-                <div class="release-page__video-category-placeholder"></div>
+                <div class="release-page__video-category-placeholder">
+                  <span>{block.category.name}</span>
+                </div>
               {/if}
             </div>
             <span class="release-page__video-category-label">{block.category.name}</span>
           </button>
         {/each}
-      </div>
+      </ReleaseCarouselNav>
     {/if}
   </div>
 {/if}

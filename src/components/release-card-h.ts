@@ -81,9 +81,10 @@ export function renderReleaseCardHorizontal(data: ReleaseCardData): HTMLElement 
         : ''
     }</span>`;
     metaParts.push(ratingChip);
-    if (data.isFavorite) {
-      metaParts.push(`<span class="release-card-h__favorite">${iconFlag(16, true)}</span>`);
-    }
+  }
+
+  if (data.isFavorite) {
+    metaParts.push(`<span class="release-card-h__favorite">${iconFlag(16, true)}</span>`);
   }
 
   const epCount = epReleased ?? epTotal;

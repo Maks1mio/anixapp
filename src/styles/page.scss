@@ -33,6 +33,12 @@
   --page-scroll-padding: 1.5rem;
 }
 
+@media (max-width: 768px) {
+  .page--padded {
+    --page-scroll-padding: 1rem;
+  }
+}
+
 // Компактная область с кастомным скроллом (модалки, dropdown)
 .page--scroll-area {
   position: relative;
@@ -47,7 +53,15 @@
   padding: 0 0;
 }
 
-// Вертикальный скроллбар — справа, всегда едва видим
+// Комментарии / ответы: скролл внутри списка, composer закреплён снизу
+.page__scroll:has(> .view.anix-comments-page) {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  overflow: hidden;
+}
+
+// Вертикальный скроллбар — справа, всегда поверх контента страницы
 .page__v-track {
   position: absolute;
   top: var(--page-scrollbar-offset);
@@ -55,6 +69,7 @@
   bottom: var(--page-scrollbar-offset);
   width: 10px;
   padding: 4px 0;
+  z-index: 100;
   opacity: 0.22;
   pointer-events: auto;
   transition: opacity 0.2s ease;
@@ -111,6 +126,7 @@
   bottom: var(--page-scrollbar-offset);
   height: 10px;
   padding: 0 4px;
+  z-index: 100;
   opacity: 0.22;
   pointer-events: auto;
   transition: opacity 0.2s ease;

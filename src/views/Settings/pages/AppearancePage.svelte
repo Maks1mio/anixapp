@@ -11,9 +11,14 @@
   } from '../../../services/themes';
   import { getCardLayout, setCardLayout, type CardLayout } from '../../../prefs';
 
+  import ZoomScaleSlider from '../../../components/ZoomScaleSlider.svelte';
+  import { DEFAULT_ZOOM, normalizeZoom, type ZoomLevel } from '../../../utils/zoom';
+
   let cardLayout = $state<CardLayout>(getCardLayout());
   let activeThemeId = $state(getActiveThemeId());
   let customThemes = $state<Theme[]>([]);
+  let uiZoom = $state<ZoomLevel>(DEFAULT_ZOOM);
+  let zoomLoaded = $state(false);
 
   function refreshThemes() {
     customThemes = getAllThemes().filter((t) => !t.builtIn);
@@ -47,6 +52,12 @@
     openThemeEditor(theme.id, true);
   }
 
+  function saveZoom(next: ZoomLevel) {
+    uiZoom = next;
+    window.electron?.saveSettings?.({ uiZoom: next });
+    window.dispatchEvent(new CustomEvent('anix:uiZoomChanged', { detail: { uiZoom: next } }));
+  }
+
   function onThemeEditorSaved() {
     refreshThemes();
   }
@@ -54,15 +65,26 @@
     refreshThemes();
   }
 
+  function onUiZoomChanged(e: Event) {
+    const next = (e as CustomEvent<{ uiZoom?: number }>).detail?.uiZoom;
+    if (typeof next === 'number') uiZoom = normalizeZoom(next);
+  }
+
   onMount(() => {
     refreshThemes();
+    void window.electron?.getSettings?.().then((settings) => {
+      uiZoom = normalizeZoom(settings?.uiZoom ?? DEFAULT_ZOOM);
+      zoomLoaded = true;
+    });
     window.addEventListener('anix:themeEditorSaved', onThemeEditorSaved);
     window.addEventListener('anix:themeEditorDeleted', onThemeEditorDeleted);
+    window.addEventListener('anix:uiZoomChanged', onUiZoomChanged);
   });
 
   onDestroy(() => {
     window.removeEventListener('anix:themeEditorSaved', onThemeEditorSaved);
     window.removeEventListener('anix:themeEditorDeleted', onThemeEditorDeleted);
+    window.removeEventListener('anix:uiZoomChanged', onUiZoomChanged);
   });
 </script>
 
@@ -100,6 +122,19 @@
         </div>
         <span>Карточками</span>
       </button>
+    </div>
+  </div>
+
+  <!-- UI zoom -->
+  <div class="settings-section">
+    <p class="settings-section__label">Уровень масштабирования</p>
+    <div class="settings-section__body">
+      <p class="settings-zoom-hint">Измените масштаб интерфейса. Также можно использовать Ctrl + / Ctrl −.</p>
+      {#if zoomLoaded}
+        <ZoomScaleSlider value={uiZoom} onChange={saveZoom} />
+      {:else}
+        <div class="settings-zoom-loading">Загрузка…</div>
+      {/if}
     </div>
   </div>
 

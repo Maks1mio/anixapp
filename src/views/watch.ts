@@ -4,8 +4,8 @@
  */
 
 import Hls from 'hls.js';
-import { KodikParser } from 'anixapi';
 import { getWatchParams } from '../router';
+import { resolveCdnAssetUrl } from '../utils/posterUrl';
 import { renderPage } from '../components/page';
 import { createIcons, Play, Pause, Volume2, Maximize, List, Headphones, SkipForward, Check, ChevronRight, Zap } from 'lucide';
 import {
@@ -400,43 +400,8 @@ export function renderWatch(): HTMLElement {
     const isEmbedPage = /aniqit\.com|anixis\.com|aniqart\.com|kodikplayer\.com|kodik\.info/i.test(host);
     const isSibnet  = /sibnet\.ru/i.test(host);
     const isLibria  = /aniliberty\.top|anilibria\.tv|libria\.fun/i.test(host);
-    const needsDirectFetch = isSibnet || isLibria;
-    if (isEmbedPage) {
-      try {
-        const links = await KodikParser.getDirectLinks(url);
-        if (links && typeof links === 'object') {
-          const q720 = links['720']?.[0]?.src ?? (links as Record<string, { src: string }[]>)['720p']?.[0]?.src;
-          const q1080 = links['1080']?.[0]?.src ?? (links as Record<string, { src: string }[]>)['1080p']?.[0]?.src;
-          const q480 = links['480']?.[0]?.src ?? (links as Record<string, { src: string }[]>)['480p']?.[0]?.src;
-          const src = q720 || q1080 || q480 || (Object.values(links)[0] as { src: string }[])?.[0]?.src;
-          if (src) {
-            const raw = src.startsWith('http') ? src : `https:${src}`;
-            playUrl = stripKodikQueryParams(raw);
-            useVideo = true;
-          }
-        }
-      } catch (_) {}
-      if (!useVideo) {
-        playUrl = url;
-        useVideo = false;
-      }
-    } else if (host.includes('kodik')) {
-      try {
-        const links = await KodikParser.getDirectLinks(url);
-        if (links && typeof links === 'object') {
-          const q720 = links['720']?.[0]?.src || (links as Record<string, { src: string }[]>)['720p']?.[0]?.src;
-          const q1080 = links['1080']?.[0]?.src || (links as Record<string, { src: string }[]>)['1080p']?.[0]?.src;
-          const q480 = links['480']?.[0]?.src || (links as Record<string, { src: string }[]>)['480p']?.[0]?.src;
-          const src = q720 || q1080 || q480 || (Object.values(links)[0] as { src: string }[])?.[0]?.src;
-          if (src) {
-            const raw = src.startsWith('http') ? src : `https:${src}`;
-            playUrl = stripKodikQueryParams(raw);
-            useVideo = true;
-          }
-        }
-      } catch (_) {}
-    }
-    if ((needsDirectFetch || (!useVideo && !isEmbedPage)) && window.anixApi?.release?.getDirectVideoLink) {
+    const needsDirectFetch = isSibnet || isLibria || isEmbedPage || host.includes('kodik');
+    if ((needsDirectFetch || !useVideo) && window.anixApi?.release?.getDirectVideoLink) {
       try {
         const { directUrl } = await window.anixApi.release.getDirectVideoLink(url);
         if (directUrl) {
@@ -1354,7 +1319,7 @@ export function renderWatch(): HTMLElement {
       av.title = p.login;
       if (p.avatar) {
         const img = document.createElement('img');
-        img.src = p.avatar;
+        img.src = resolveCdnAssetUrl(p.avatar);
         img.alt = p.login;
         img.className = 'watch-lobby-avatar__img';
         img.onerror = () => { img.remove(); av.textContent = (p.login[0] ?? '?').toUpperCase(); };

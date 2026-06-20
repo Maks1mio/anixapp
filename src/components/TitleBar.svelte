@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { iconArrowLeft, iconArrowRight, iconSearch, iconUsers, iconBell, iconUser, iconSettings, iconDownload } from './icons';
+  import { resolveCdnAssetUrl } from '../utils/posterUrl';
+  import { iconArrowLeft, iconArrowRight, iconSearch, iconUsers, iconBell, iconCalendar, iconUser, iconSettings, iconDownload } from './icons';
   import { checkForUpdate, type UpdateInfo } from '../services/update-checker';
   import type { AppUpdateProgress } from '../types/electron';
 
@@ -11,6 +12,8 @@
     searchWrap?: HTMLElement | null;
     onLobby?: () => void;
     onNotifications?: () => void;
+    onSchedule?: () => void;
+    scheduleOpen?: boolean;
     onSettings?: () => void;
     onProfile?: () => void;
   }
@@ -20,6 +23,8 @@
     searchWrap = $bindable(null),
     onLobby,
     onNotifications,
+    onSchedule,
+    scheduleOpen = false,
     onSettings,
     onProfile,
   }: Props = $props();
@@ -34,7 +39,7 @@
 
   function syncAvatarFromGlobalProfile() {
     const profile = (window as any).__anixProfile;
-    avatarUrl = profile?.avatar ?? null;
+    avatarUrl = profile?.avatar ? resolveCdnAssetUrl(profile.avatar) : null;
   }
 
   async function loadUpdateInfo() {
@@ -245,6 +250,20 @@
     >
       {@html iconUsers(18)}
       <span class="tooltip tooltip--animated">Совместный просмотр</span>
+    </button>
+
+    <!-- Schedule -->
+    <button
+      type="button"
+      class="titlebar__menu-item tooltip-trigger"
+      class:titlebar__menu-item--active={scheduleOpen}
+      id="titlebar-schedule"
+      aria-label="Расписание"
+      aria-expanded={scheduleOpen}
+      onclick={onSchedule}
+    >
+      {@html iconCalendar(18)}
+      <span class="tooltip tooltip--animated">Расписание</span>
     </button>
 
     <!-- Notifications -->

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { navigate } from '../stores/navigation';
+  import { toCdnProxyUrl } from '../utils/posterUrl';
   import { iconStar } from './icons';
   import type { ReleaseCardData } from '../types/release';
 
@@ -10,6 +11,7 @@
 
   let { data, current = false }: Props = $props();
 
+  const posterSrc = $derived(toCdnProxyUrl(data.poster || ''));
   const title = $derived(data.titleRu || data.titleEn || 'Без названия');
   const hasRating = $derived((data.voteCount ?? 0) > 50 && data.rating != null);
   const ratingText = $derived(
@@ -30,8 +32,8 @@
   onclick={openRelease}
 >
   <div class="related-release-row__poster">
-    {#if data.poster}
-      <img src={data.poster} alt="" loading="lazy" decoding="async" />
+    {#if posterSrc}
+      <img src={posterSrc} alt="" loading="lazy" decoding="async" />
     {/if}
   </div>
 

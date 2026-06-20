@@ -47,7 +47,7 @@
         "anixapi": "^0.2.1",
         "ffmpeg-static": "^5.3.0",
         "flag-icons": "^7.5.0",
-        "hls.js": "^1.6.15",
+        "hls.js": "^1.6.16",
         "lottie-web": "^5.13.0",
         "lucide": "^0.577.0"
     },

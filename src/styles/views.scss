@@ -2675,6 +2675,18 @@
   max-width: 100%;
   overflow-wrap: anywhere;
   word-break: break-word;
+
+  &--geo-warning {
+    border-left-color: #e8a317;
+    background: color-mix(in srgb, #e8a317 8%, $color-surface);
+    color: color-mix(in srgb, var(--color-text) 92%, #e8a317);
+
+    strong {
+      display: block;
+      margin-bottom: 0.25rem;
+      color: #f0c040;
+    }
+  }
 }
 
 // ── Description with smooth collapse ──

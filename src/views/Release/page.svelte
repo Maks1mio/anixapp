@@ -18,6 +18,7 @@
     numToStatusId, ratingHue, mapCardData, formatEpisodeAdded,
   } from './_utils';
   import { ReleaseHead, ReleaseVideos, ReleaseRating, ReleaseRelated, ReleaseRecommendations, ReleaseScreenshots, ReleaseComments } from './components';
+  import { enrichBlockedRelease } from '../../services/release-geo-bypass';
 
   interface Props { id: number; }
   let { id }: Props = $props();
@@ -50,7 +51,10 @@
   const descClean     = $derived(desc ? stripHtmlToText(desc) : '');
   const descHtml      = $derived(desc ? sanitizeRichHtml(desc) : '');
   const descNeedsTruncate = $derived(descClean.length > 300);
-  const noteHtml      = $derived(release?.note ? sanitizeRichHtml(release.note as string) : '');
+  const noteHtml      = $derived.by(() => {
+    if (release?.is_view_blocked) return '';
+    return release?.note ? sanitizeRichHtml(release.note as string) : '';
+  });
 
   // ── Derived: rating ───────────────────────────────────────────────────────
   const gradeRaw   = $derived(release?.grade ?? release?.rating);
@@ -96,6 +100,7 @@
   const releaseDate  = $derived((release?.release_date ?? '') as string);
   const airedOnDate  = $derived(release?.aired_on_date as number | null | undefined);
   const isViewBlocked = $derived(!!(release?.is_view_blocked));
+  const hasEpisodesReleased = $derived(typeof episodesReleased === 'number' && episodesReleased > 0);
   const releaseId    = $derived(release?.id as number | undefined);
 
   const airedText = $derived.by(() => {
@@ -108,11 +113,10 @@
   });
 
   const playBtnText     = $derived.by(() => {
-    if (isViewBlocked) return 'Недоступно';
-    if (!episodesReleased || episodesReleased <= 0) return airedText ? `${airedText}` : 'Скоро';
-    return 'Воспроизвести';
+    if (isViewBlocked || hasEpisodesReleased) return 'Воспроизвести';
+    return airedText ? `${airedText}` : 'Скоро';
   });
-  const playBtnDisabled = $derived(isViewBlocked || !episodesReleased || episodesReleased <= 0);
+  const playBtnDisabled = $derived(!isViewBlocked && !hasEpisodesReleased);
 
   const episodeAddedText = $derived.by(() => {
     if (playBtnDisabled) return null;
@@ -217,8 +221,9 @@
     if (!window.anixApi) return;
     try {
       const data = await window.anixApi.release.info(id, true) as any;
-      const raw = data?.release ?? data;
+      let raw = data?.release ?? data;
       if (raw && typeof raw === 'object') {
+        raw = await enrichBlockedRelease(id, raw as Record<string, unknown>);
         release = { ...release, ...raw } as Record<string, unknown>;
       }
     } catch { /* ignore */ }
@@ -233,12 +238,13 @@
     }
     try {
       const data = await window.anixApi.release.info(id, true) as any;
-      const raw  = data?.release ?? data;
+      let raw  = data?.release ?? data;
       if (!raw || (raw.id == null && !raw.title_ru && !raw.title_original)) {
         errorMsg  = 'Релиз не найден.';
         loadState = 'error';
         return;
       }
+      raw = await enrichBlockedRelease(id, raw as Record<string, unknown>);
       release        = raw as Record<string, unknown>;
       isFavorite     = !!(raw.is_favorite);
       favoritesCount = (raw.favorites_count ?? 0) as number;
@@ -276,7 +282,7 @@
         {posterUrl} {title} {titleRu} {titleOriginal} {titleAlt}
         {ageRateText} {ageIsRestricted}
         {isFavorite} {favoritesCount}
-        {noteHtml} {descHtml} {descClean} {descNeedsTruncate} {descCollapsed}
+        {isViewBlocked} {noteHtml} {descHtml} {descClean} {descNeedsTruncate} {descCollapsed}
         {metaInfoRows} {playBtnText} {playBtnDisabled} {episodeAddedText}
         {currentStatus} {selectOptions}
         onToggleFavorite={toggleFavorite}

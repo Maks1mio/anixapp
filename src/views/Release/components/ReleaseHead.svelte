@@ -24,6 +24,7 @@
     ageIsRestricted: boolean;
     isFavorite:      boolean;
     favoritesCount:  number;
+    isViewBlocked:   boolean;
     noteHtml:        string;
     descHtml:        string;
     descClean:       string;
@@ -44,6 +45,7 @@
   let {
     posterUrl, title, titleRu, titleOriginal, titleAlt, ageRateText, ageIsRestricted,
     isFavorite, favoritesCount,
+    isViewBlocked,
     noteHtml, descHtml, descClean, descNeedsTruncate, descCollapsed,
     metaInfoRows, playBtnText, playBtnDisabled, episodeAddedText,
     currentStatus, selectOptions,
@@ -200,7 +202,13 @@
       </div>
     {/if}
 
-    {#if noteHtml}
+    {#if isViewBlocked}
+      <div class="release-page__note release-page__note--geo-warning" role="note">
+        <strong>Недоступно в РФ.</strong>
+        Этот тайтл официально заблокирован для просмотра в России. Вы можете попробовать воспроизвести
+        на свой страх и риск — видео может не открыться или быть ограничено источником.
+      </div>
+    {:else if noteHtml}
       <div class="release-page__note">{@html noteHtml}</div>
     {/if}
 

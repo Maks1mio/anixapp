@@ -5,7 +5,6 @@ const { Readable } = require('stream');
 const { pipeline } = require('stream/promises');
 const { spawn, execFile } = require('child_process');
 const { promisify } = require('util');
-const execFileAsync = promisify(execFile);
 
 /** В dev можно запускать два процесса (тесты лобби / WebRTC). В production — один экземпляр. */
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
@@ -843,6 +842,36 @@ ipcMain.handle('anix:setAnixbackEndpoint', (_, mode) => {
   if (mode !== 'local' && mode !== 'prod') return false;
   saveConfig({ anixbackEndpoint: mode });
   return true;
+});
+
+const ANIXBACK_LOCAL_ORIGIN = 'http://localhost:8787';
+const ANIXBACK_PROD_ORIGIN = 'https://anix.maks1mio.su';
+
+function getAnixbackOrigin() {
+  const raw = _configCache ?? _readConfigFromDisk();
+  const mode = raw.anixbackEndpoint;
+  if (mode === 'local') return ANIXBACK_LOCAL_ORIGIN;
+  if (mode === 'prod') return ANIXBACK_PROD_ORIGIN;
+  return isDev ? ANIXBACK_LOCAL_ORIGIN : ANIXBACK_PROD_ORIGIN;
+}
+
+ipcMain.handle('anix:releaseInfoGeoBypass', async (_, releaseId) => {
+  const id = Number(releaseId);
+  if (!Number.isFinite(id) || id <= 0) {
+    throw new Error('invalid release id');
+  }
+
+  const { token } = loadConfig();
+  const url = `${getAnixbackOrigin()}/api/anixart/release/${id}?extended=true`;
+  const headers = { Accept: 'application/json' };
+  if (token) headers['X-Anixart-Token'] = token;
+
+  const res = await fetch(url, { headers });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`anixback geo bypass HTTP ${res.status}: ${text.slice(0, 200)}`);
+  }
+  return JSON.parse(text);
 });
 
 ipcMain.handle('anix:selfProfile', async () => {

@@ -109,6 +109,8 @@ declare global {
       adminClearSession?: () => Promise<boolean>;
       getAnixbackEndpoint?: () => Promise<'local' | 'prod' | null>;
       setAnixbackEndpoint?: (mode: 'local' | 'prod') => Promise<boolean>;
+      /** AnixBack proxy for geo-blocked release info (GET /api/anixart/release/:id). */
+      fetchReleaseGeoBypass?: (releaseId: number) => Promise<unknown>;
       getSettings?: () => Promise<AppSettings>;
       saveSettings?: (settings: Partial<AppSettings>) => Promise<void>;
       resolveHeroBackdrop?: (hints: {

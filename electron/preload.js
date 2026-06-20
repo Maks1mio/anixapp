@@ -75,6 +75,7 @@ contextBridge.exposeInMainWorld('electron', {
   adminClearSession: () => ipcRenderer.invoke('admin:clearSession'),
   getAnixbackEndpoint: () => ipcRenderer.invoke('anix:getAnixbackEndpoint'),
   setAnixbackEndpoint: (mode) => ipcRenderer.invoke('anix:setAnixbackEndpoint', mode),
+  fetchReleaseGeoBypass: (releaseId) => ipcRenderer.invoke('anix:releaseInfoGeoBypass', releaseId),
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),
     maximize: () => ipcRenderer.send('window:maximize'),

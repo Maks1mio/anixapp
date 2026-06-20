@@ -49,7 +49,7 @@
         "flag-icons": "^7.5.0",
         "hls.js": "^1.6.16",
         "lottie-web": "^5.13.0",
-        "lucide": "^0.577.0"
+        "lucide": "^1.21.0"
     },
     "resolutions": {
         "axios": "^1.18.0",

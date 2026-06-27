@@ -102,6 +102,10 @@
   }
 
   const isChatPage = $derived(/^\/announcement\/[^/]+\/chat$/.test(currentPath ?? ''));
+  const isWrappedPage = $derived((currentPath ?? '').startsWith('/wrapped/'));
+  const pageExtraClass = $derived(
+    isChatPage ? 'page--chat' : isWrappedPage ? 'page--wrapped' : undefined,
+  );
 
   let searchInputEl: HTMLInputElement | null = $state(null);
   let searchWrapEl: HTMLElement | null = $state(null);
@@ -321,7 +325,7 @@
     <main class="layout__main">
       <div class="content-panel">
         <div class="content-panel__body">
-          <Page scrollId="content" extraClass={isChatPage ? 'page--chat' : undefined}>
+          <Page scrollId="content" extraClass={pageExtraClass}>
             {@render children?.()}
           </Page>
         </div>

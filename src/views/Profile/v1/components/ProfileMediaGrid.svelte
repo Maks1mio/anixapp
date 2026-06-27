@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { navigate } from '../../../stores/navigation';
-  import { posterUrl } from '../_utils';
+  import { navigate } from '../../../../stores/navigation';
+  import { posterUrl } from '../../_utils';
 
   interface Props {
     title:     string;

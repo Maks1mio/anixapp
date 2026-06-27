@@ -53,6 +53,20 @@
   padding: 0 0;
 }
 
+// Итоги года: на весь viewport панели контента, без скролла страницы
+.page--wrapped {
+  --page-scroll-padding: 0;
+
+  .page__scroll {
+    position: relative;
+    overflow: hidden;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+  }
+}
+
 // Комментарии / ответы: скролл внутри списка, composer закреплён снизу
 .page__scroll:has(> .view.anix-comments-page) {
   display: flex;

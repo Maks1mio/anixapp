@@ -1,10 +1,13 @@
 @use 'variables' as *;
 
-.collections-page {
+.collections-page,
+.view-collections-list {
   position: relative;
-  max-width: 42rem;
+  max-width: 56rem;
   margin: 0 auto;
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding-bottom: 2rem;
 }
 
@@ -146,42 +149,11 @@
     height: 100%;
     min-width: 0;
   }
-
-  .collection-card--cover {
-    .collection-card__link {
-      min-height: 0;
-      height: 100%;
-    }
-
-    .collection-card__media {
-      aspect-ratio: 4 / 3;
-      min-height: 7.5rem;
-    }
-
-    .collection-card__title--overlay {
-      font-size: 0.8rem;
-      -webkit-line-clamp: 2;
-    }
-
-    .collection-card__overlay {
-      padding: 1.5rem 0.55rem 0.55rem;
-    }
-
-    .collection-card__badges {
-      padding: 0.4rem 0.4rem 1.75rem;
-    }
-
-    .collection-card__badge {
-      min-height: 1.25rem;
-      padding: 0 0.4rem;
-      font-size: 0.65rem;
-    }
-  }
 }
 
 .collections-fab {
   position: fixed;
-  right: max(1rem, calc((100vw - 42rem) / 2 + 1rem));
+  right: max(1rem, calc((100vw - 56rem) / 2 + 1rem));
   bottom: 1.25rem;
   z-index: 20;
   display: inline-flex;
@@ -234,7 +206,7 @@
 }
 
 .collection-editor {
-  max-width: 42rem;
+  max-width: 56rem;
   margin: 0 auto;
   width: 100%;
   padding-bottom: 2rem;
@@ -554,7 +526,7 @@
 }
 
 .collection-release-picker {
-  max-width: 42rem;
+  max-width: 56rem;
   margin: 0 auto;
   width: 100%;
 }

@@ -33,6 +33,7 @@ function attachLegacyEndpoints(client) {
   release.removeFavorite = (releaseId) => ep.favorite.delete(releaseId);
   release.addToProfileList = (releaseId, type) => ep.profileList.add(type, releaseId);
   release.removeFromProfileList = (releaseId, type) => ep.profileList.delete(type, releaseId);
+  release.schedule = () => ep.schedule.schedule();
 
   ep.discover.getRecommendations = (page) => ep.discover.recommendations(page);
 

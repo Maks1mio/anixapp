@@ -1,26 +1,68 @@
 const POSTER_BASE = 'https://s.anixmirai.com/posters';
 const SCREENSHOT_BASE = 'https://s.anixmirai.com/screenshots';
+const COLLECTION_BASE = 'https://s.anixmirai.com/collections';
 
 const CDN_HOSTS = ['anixmirai.com', 'anixart.tv', 'anixsekai.com'];
 
 export function isAnixartCdnUrl(url: string): boolean {
-  if (!url?.trim()) return false;
+  const canonical = unwrapCdnUrl(url);
+  if (!canonical?.trim()) return false;
   try {
-    const host = new URL(url.trim()).hostname.replace(/^www\./, '');
+    const host = new URL(canonical.trim()).hostname.replace(/^www\./, '');
     return CDN_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
   } catch {
     return false;
   }
 }
 
-/** Прокси через Electron main (Referer anixart.tv). Вне Electron — прямой URL. */
+/** Снимает anix-cdn://, /__cdn/?u= и вложенные обёртки — возвращает исходный https URL или путь. */
+export function unwrapCdnUrl(raw: string): string {
+  let s = raw?.trim() ?? '';
+  if (!s) return '';
+
+  for (let i = 0; i < 6; i += 1) {
+    if (s.startsWith('anix-cdn://')) {
+      s = fromCdnProxyUrl(s).trim();
+      continue;
+    }
+    if (s.startsWith('/__cdn/?') || s.startsWith('/__cdn?')) {
+      try {
+        const inner = new URL(s, 'http://localhost').searchParams.get('u');
+        if (inner) {
+          s = inner.trim();
+          continue;
+        }
+      } catch {
+        break;
+      }
+    }
+    const embedded = s.match(/\/__cdn\/\?u=([^&]+)/);
+    if (embedded) {
+      try {
+        s = decodeURIComponent(embedded[1]).trim();
+        continue;
+      } catch {
+        break;
+      }
+    }
+    break;
+  }
+
+  return s;
+}
+
+/** Прокси через Electron main (Referer anixart.tv) или Vite /__cdn в браузере. */
 export function toCdnProxyUrl(url: string): string {
-  const trimmed = url?.trim() ?? '';
+  const trimmed = unwrapCdnUrl(url?.trim() ?? '');
   if (!trimmed) return '';
   if (trimmed.startsWith('anix-cdn://')) return trimmed;
+  if (trimmed.startsWith('/__cdn/')) return trimmed;
   if (!isAnixartCdnUrl(trimmed)) return trimmed;
   if (typeof window !== 'undefined' && window.electron) {
     return `anix-cdn://asset/?u=${encodeURIComponent(trimmed)}`;
+  }
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    return `/__cdn/?u=${encodeURIComponent(trimmed)}`;
   }
   return trimmed;
 }
@@ -69,9 +111,16 @@ export function resolveCdnAssetUrl(raw: string | undefined | null): string {
   if (!raw || typeof raw !== 'string') return '';
   const s = raw.trim();
   if (!s || s === 'null') return '';
-  if (s.startsWith('anix-cdn://')) return s;
-  if (s.startsWith('http://') || s.startsWith('https://')) return toCdnProxyUrl(s);
-  return buildPosterUrl(s);
+  if (s.startsWith('/__cdn/')) return s;
+
+  const canonical = unwrapCdnUrl(s);
+  if (!canonical) return '';
+
+  if (canonical.startsWith('anix-cdn://')) return canonical;
+  if (canonical.startsWith('http://') || canonical.startsWith('https://')) {
+    return toCdnProxyUrl(canonical);
+  }
+  return buildPosterUrl(canonical);
 }
 
 /** Собирает URL постера: id → anix-cdn://… или https://… */
@@ -84,17 +133,26 @@ export function buildScreenshotUrl(value: string | undefined): string {
   return buildCdnAssetUrl(SCREENSHOT_BASE, value);
 }
 
+/** Собирает URL обложки коллекции: полный URL или hash → anix-cdn://… */
+export function buildCollectionUrl(value: string | undefined): string {
+  return buildCdnAssetUrl(COLLECTION_BASE, value);
+}
+
 function buildCdnAssetUrl(base: string, value: string | undefined): string {
   if (!value || typeof value !== 'string') return '';
   const trimmed = value.trim();
   if (!trimmed) return '';
-  if (trimmed.startsWith('anix-cdn://')) return trimmed;
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    return toCdnProxyUrl(trimmed);
+  if (trimmed.startsWith('anix-cdn://') || trimmed.startsWith('/__cdn/')) return trimmed;
+
+  const canonical = unwrapCdnUrl(trimmed);
+  if (!canonical) return '';
+
+  if (canonical.startsWith('http://') || canonical.startsWith('https://')) {
+    return toCdnProxyUrl(canonical);
   }
-  const id = trimmed.endsWith('.jpg') || trimmed.endsWith('.jpeg') || trimmed.endsWith('.png') || trimmed.endsWith('.webp')
-    ? trimmed
-    : `${trimmed}.jpg`;
+  const id = canonical.endsWith('.jpg') || canonical.endsWith('.jpeg') || canonical.endsWith('.png') || canonical.endsWith('.webp')
+    ? canonical
+    : `${canonical}.jpg`;
   return toCdnProxyUrl(`${base}/${id}`);
 }
 

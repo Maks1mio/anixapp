@@ -9,6 +9,7 @@
 @use 'lobby-vote';
 @use 'views';
 @use 'profile';
+@use 'profile-v2';
 @use 'select';
 @use 'dots-menu';
 @use 'release-card-h';
@@ -28,6 +29,9 @@
 @use 'discover-pages';
 @use 'collections-page';
 @use 'downloads';
+@use 'year-wrapped-banner';
+@use 'wrapped';
+@use 'rewind';
 
 *,
 *::before,

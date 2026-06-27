@@ -197,11 +197,7 @@
 
   function handleWatch() {
     if (!releaseId) return;
-    if ((window as any).electron?.openPlayerWindow) {
-      openWatchModal(releaseId, titleRu || title || titleOriginal || 'Без названия');
-    } else {
-      window.open(`https://anixart.tv/release/${releaseId}`, '_blank', 'noopener,noreferrer');
-    }
+    openWatchModal(releaseId, titleRu || title || titleOriginal || 'Без названия');
   }
 
   async function setStatus(value: string) {

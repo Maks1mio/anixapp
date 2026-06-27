@@ -1,6 +1,7 @@
 import type { CommentData, CommentProfile, CommentVoteValue, CommentSort } from '../types/comment';
 import { resolveCdnAssetUrl } from './posterUrl';
 import { COMMENT_SORT_OPTIONS } from '../types/comment';
+import { resolveJacksonEntity } from './jackson-refs';
 
 export { COMMENT_SORT_OPTIONS };
 export type { CommentSort };
@@ -96,6 +97,93 @@ export function hiddenCommentLabel(comment: CommentData): string {
     return 'Комментарий может содержать спойлер. Нажмите, чтобы прочитать';
   }
   return '';
+}
+
+export interface ProfileCommentPreviewItem {
+  id: number;
+  message: string;
+  timestamp: number;
+  voteCount: number;
+  isSpoiler: boolean;
+  profileLogin: string;
+  profileAvatar: string;
+  contextLabel: string;
+  targetTitle: string;
+  targetPath: string | null;
+}
+
+function profileCommentContext(typeRaw: unknown): string {
+  const type = String(typeRaw ?? '').toLowerCase();
+  if (type === 'collection' || type.includes('collection')) return 'к коллекции';
+  if (type === 'article' || type.includes('article')) return 'к статье';
+  return 'к релизу';
+}
+
+function entityNumericId(raw: Record<string, unknown> | undefined): number {
+  if (!raw) return 0;
+  const id = Number(raw.id ?? 0);
+  return Number.isFinite(id) && id > 0 ? id : 0;
+}
+
+function releaseTitleFrom(raw: Record<string, unknown>): string {
+  return String(
+    raw.title_ru ?? raw.titleRu ?? raw.title_original ?? raw.titleOriginal ?? raw.title ?? '',
+  ).trim();
+}
+
+function collectionTitleFrom(raw: Record<string, unknown>): string {
+  return String(raw.title ?? raw.name ?? '').trim();
+}
+
+export function mapProfileCommentPreview(
+  raw: Record<string, unknown>,
+  profileRoot?: unknown,
+): ProfileCommentPreviewItem | null {
+  const id = raw.id as number;
+  if (!id) return null;
+
+  const profile = normalizeCommentProfile(raw.profile as Record<string, unknown> | undefined);
+  const commentType = String(raw.commentType ?? raw.comment_type ?? raw.type ?? '').toLowerCase();
+
+  const release = resolveJacksonEntity(raw.release, profileRoot);
+  const collection = resolveJacksonEntity(raw.collection, profileRoot);
+  const article = resolveJacksonEntity(raw.article, profileRoot);
+
+  let targetPath: string | null = null;
+  let targetTitle = '';
+
+  if (commentType === 'collection' || commentType.includes('collection')) {
+    const collectionId = entityNumericId(collection);
+    if (collectionId) targetPath = `/collection/${collectionId}`;
+    targetTitle = collection ? collectionTitleFrom(collection) : '';
+  } else if (commentType === 'article' || commentType.includes('article')) {
+    const articleId = entityNumericId(article);
+    const channelId = Number(
+      (article?.channel as { id?: number } | undefined)?.id
+      ?? article?.channel_id
+      ?? article?.channelId
+      ?? 0,
+    );
+    if (articleId && channelId) targetPath = `/channel/${channelId}/article/${articleId}`;
+    targetTitle = String(article?.title ?? article?.embeddable_title ?? article?.embeddableTitle ?? '').trim();
+  } else {
+    const releaseId = entityNumericId(release);
+    if (releaseId) targetPath = `/release/${releaseId}`;
+    targetTitle = release ? releaseTitleFrom(release) : '';
+  }
+
+  return {
+    id,
+    message: String(raw.message ?? ''),
+    timestamp: Number(raw.timestamp ?? 0),
+    voteCount: Number(raw.vote_count ?? raw.voteCount ?? 0),
+    isSpoiler: !!(raw.is_spoiler ?? raw.isSpoiler),
+    profileLogin: profile.login,
+    profileAvatar: profile.avatar,
+    contextLabel: profileCommentContext(commentType),
+    targetTitle: targetTitle || 'Без названия',
+    targetPath,
+  };
 }
 
 export function episodeContextLabel(episode: number | null | undefined): string | null {

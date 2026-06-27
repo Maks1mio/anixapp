@@ -2,8 +2,8 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import { getCurrentRoomId, getCurrentParticipants, proposeAnimeChange, getLastPlayback } from '../services/lobby-state';
   import { isDubberBlacklisted, resolveDownloadUrl } from '../views/Watch/_utils';
-  import { isPlayerWindowOpen } from '../stores/modals';
   import { navigate } from '../stores/navigation';
+  import { openInAppPlayer } from '../utils/watch-nav';
   import Page from './Page.svelte';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import { infiniteScroll } from '../actions/infiniteScroll';
@@ -428,9 +428,14 @@
     };
 
     const doOpenPlayer = () => {
-      if (!window.electron?.openPlayerWindow) return;
-      window.electron.openPlayerWindow(params).then(() => {
-        isPlayerWindowOpen.set(true);
+      void openInAppPlayer({
+        releaseId,
+        sourceId: selectedSource.id,
+        ep: epPosition,
+        title: releaseTitle,
+        sourceName: selectedDubber ? selectedDubber.name : selectedSource.name,
+        dubberId: selectedDubber?.id,
+      }).then(() => {
         void markEpisodeWatched(epPosition);
         close();
       }).catch(() => {});

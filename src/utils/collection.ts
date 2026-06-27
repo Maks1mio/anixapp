@@ -1,4 +1,4 @@
-import { buildPosterUrl } from './posterUrl';
+import { buildCollectionUrl, buildPosterUrl, resolveCdnAssetUrl } from './posterUrl';
 import type { CollectionCardData } from '../components/CollectionCard.svelte';
 
 export const COLLECTION_SORT_OPTIONS = [
@@ -44,12 +44,39 @@ export function initialCollectionPreviousPage(): number {
   return -1;
 }
 
+function resolveCollectionImage(raw: Record<string, unknown>): string | undefined {
+  const candidates = [raw.image, raw.image_url, raw.cover];
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string' || !candidate.trim()) continue;
+    const url = candidate.includes('/collections/')
+      ? resolveCdnAssetUrl(candidate)
+      : buildCollectionUrl(candidate) || resolveCdnAssetUrl(candidate);
+    if (url) return url;
+  }
+
+  const releases = raw.releases as Array<Record<string, unknown>> | undefined;
+  const firstRelease = releases?.[0];
+  if (firstRelease) {
+    const poster = firstRelease.poster as Record<string, { url?: string }> | undefined;
+    const releaseImage = poster?.original?.url
+      ?? poster?.medium?.url
+      ?? poster?.small?.url
+      ?? (typeof firstRelease.image === 'string' ? firstRelease.image : undefined);
+    if (releaseImage) {
+      return buildPosterUrl(releaseImage) || resolveCdnAssetUrl(releaseImage) || undefined;
+    }
+  }
+
+  return undefined;
+}
+
 export function mapCollectionCard(raw: Record<string, unknown>): CollectionCardData {
-  const imageRaw = raw.image as string | undefined;
+  const isDeleted = !!(raw.is_deleted ?? raw.delete ?? raw.isDeleted);
+  const id = Number(raw.id ?? 0);
   return {
-    id: raw.id as number,
+    id,
     title: String(raw.title ?? raw.name ?? 'Без названия'),
-    image: imageRaw ? buildPosterUrl(imageRaw) || undefined : undefined,
+    image: isDeleted ? undefined : resolveCollectionImage(raw),
     description: (raw.description as string) || undefined,
     releaseCount: typeof raw.release_count === 'number' ? raw.release_count : undefined,
     notesCount:

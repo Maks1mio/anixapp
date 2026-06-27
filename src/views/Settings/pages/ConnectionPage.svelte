@@ -2,20 +2,6 @@
   import { onMount, onDestroy } from 'svelte';
   import Select from '../../../components/Select.svelte';
   import { API_ENDPOINT_OPTIONS, DEFAULT_API_ENDPOINT } from '../../../constants/apiEndpoints';
-  import {
-    ANIXBACK_ENDPOINT_OPTIONS,
-    DEFAULT_ANIXBACK_MODE,
-    originForMode,
-    type AnixbackEndpointMode,
-  } from '../../../constants/anixbackEndpoints';
-  import {
-    getAnixbackEndpointMode,
-    initAnixbackEndpoint,
-    pingAnixbackOrigin,
-    setAnixbackEndpoint,
-  } from '../../../services/anixback-endpoint';
-
-  const isDev = import.meta.env.DEV;
 
   let currentEndpoint = $state('');
   let endpointLoaded = $state(false);
@@ -23,10 +9,6 @@
   type PingState = { ok: boolean; latencyMs: number | null };
   let pingState = $state<Record<string, PingState>>({});
   let pingInterval: ReturnType<typeof setInterval> | null = null;
-
-  let anixbackMode = $state<AnixbackEndpointMode>(DEFAULT_ANIXBACK_MODE);
-  let anixbackPing = $state<Record<string, PingState>>({});
-  let anixbackPingInterval: ReturnType<typeof setInterval> | null = null;
 
   async function loadEndpoint() {
     if (!window.anixApi) return;
@@ -37,13 +19,6 @@
       endpointLoadError = false;
       void pingOnce();
       pingInterval = setInterval(() => void pingOnce(), 1000);
-
-      if (isDev) {
-        await initAnixbackEndpoint();
-        anixbackMode = getAnixbackEndpointMode();
-        void pingAnixbackOnce();
-        anixbackPingInterval = setInterval(() => void pingAnixbackOnce(), 2000);
-      }
     } catch {
       endpointLoaded = true;
       endpointLoadError = true;
@@ -66,27 +41,10 @@
     pingState = nextState;
   }
 
-  async function pingAnixbackOnce() {
-    const next: Record<string, PingState> = {};
-    await Promise.all(
-      ANIXBACK_ENDPOINT_OPTIONS.map(async (opt) => {
-        next[opt.value] = await pingAnixbackOrigin(opt.origin);
-      })
-    );
-    anixbackPing = next;
-  }
-
   function setEndpoint(value: string) {
     currentEndpoint = value;
     window.anixApi?.client?.setBaseUrl(value);
     window.dispatchEvent(new CustomEvent('anix:offline'));
-  }
-
-  async function setAnixback(value: string) {
-    const mode = value as AnixbackEndpointMode;
-    anixbackMode = mode;
-    await setAnixbackEndpoint(mode);
-    void pingAnixbackOnce();
   }
 
   function pingLabel(map: Record<string, PingState>, key: string): string {
@@ -105,20 +63,9 @@
     }))
   );
 
-  const anixbackOptions = $derived(
-    ANIXBACK_ENDPOINT_OPTIONS.map((opt) => ({
-      value: opt.value,
-      label: opt.label,
-      desc: pingLabel(anixbackPing, opt.value) || undefined,
-    }))
-  );
-
-  const anixbackCurrentOrigin = $derived(originForMode(anixbackMode));
-
   onMount(() => void loadEndpoint());
   onDestroy(() => {
     if (pingInterval) clearInterval(pingInterval);
-    if (anixbackPingInterval) clearInterval(anixbackPingInterval);
   });
 </script>
 
@@ -146,32 +93,5 @@
         placeholder="Выберите эндпоинт"
       />
     </div>
-
-    {#if isDev}
-      <div class="settings-section settings-section--spaced">
-        <p class="settings-section__label">AnixBack</p>
-        <p class="settings-section__desc">
-          Объявления, чат, лобби. Сейчас: <code>{anixbackCurrentOrigin}</code>
-        </p>
-        <Select
-          options={anixbackOptions}
-          value={anixbackMode}
-          onChange={setAnixback}
-          placeholder="Выберите сервер"
-        />
-      </div>
-    {/if}
   {/if}
 </div>
-
-<style lang="scss">
-  .settings-section--spaced {
-    margin-top: 1.5rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-  }
-  code {
-    font-size: 0.8125rem;
-    opacity: 0.85;
-  }
-</style>

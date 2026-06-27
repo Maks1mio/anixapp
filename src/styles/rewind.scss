@@ -1,0 +1,672 @@
+// ===== Rewind — поэкранный дизайн «Итоги года» по прототипу PrototypePNG =====
+// Каждая сцена: сплошной фон (--rw-bg), контраст (--rw-ink), hero-фигура (--rw-hero),
+// логотип (--rw-logo). Цвет «уходящего кадра» переносится в фон следующей сцены.
+
+.rewind-scroll,
+.rewind-viewport {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  background: #171022;
+}
+
+.rewind-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+
+  &.is-active {
+    visibility: visible;
+    pointer-events: auto;
+  }
+}
+
+.rewind-page {
+  height: 100%;
+  min-height: 0;
+}
+
+.rewind-advance-hint {
+  position: absolute;
+  bottom: clamp(14px, 2.5vh, 28px);
+  right: clamp(20px, 4vw, 48px);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.75);
+  mix-blend-mode: difference;
+  pointer-events: none;
+}
+
+.rewind-advance-hint__arrow {
+  animation: rw-hint-nudge 1.6s ease-in-out infinite;
+}
+
+@keyframes rw-hint-nudge {
+  0%, 100% { transform: translateX(0); opacity: 0.7; }
+  50% { transform: translateX(5px); opacity: 1; }
+}
+
+.rewind-screen {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  max-height: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--rw-bg);
+  color: var(--rw-ink);
+  overflow: hidden;
+  padding: clamp(48px, 7vh, 88px) clamp(16px, 4vw, 56px);
+  box-sizing: border-box;
+  font-family:
+    'Manrope', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+// Вуаль входа — заливка цветом предыдущей сцены, уезжает вверх при reveal
+.rewind-screen__veil {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  transform-origin: top center;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.rewind-screen__logo {
+  position: absolute;
+  top: clamp(16px, 3vh, 30px);
+  left: clamp(20px, 4vw, 48px);
+  z-index: 5;
+}
+
+// ——— hero-сцена: фигура держит контент ———
+.rewind-stage {
+  position: relative;
+  z-index: 2;
+  width: min(72vmin, 68vh);
+  max-height: calc(100% - 24px);
+  aspect-ratio: 1 / 1;
+  display: grid;
+  place-items: center;
+  flex-shrink: 1;
+}
+
+.rewind-screen--arrow .rewind-stage {
+  width: min(96vw, 1120px);
+  aspect-ratio: 100 / 60;
+}
+
+.rewind-stage__shape {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  filter: drop-shadow(0 24px 60px rgba(0, 0, 0, 0.22));
+  will-change: transform, opacity;
+}
+
+.rewind-stage__content {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+}
+
+.rewind-stage__content--star { max-width: 50%; }
+.rewind-stage__content--flower { max-width: 54%; }
+.rewind-stage__content--arrow { max-width: 66%; }
+
+// плавная «жизнь» фигур
+@media (prefers-reduced-motion: no-preference) {
+  .rewind-screen--star .rewind-hero { animation: rw-spin 70s linear infinite; transform-origin: 50% 50%; }
+  .rewind-screen--flower .rewind-hero { animation: rw-breathe 9s ease-in-out infinite; transform-origin: 50% 50%; }
+}
+
+@keyframes rw-spin { to { transform: rotate(360deg); } }
+@keyframes rw-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.045); }
+}
+
+.rewind-flat {
+  position: relative;
+  z-index: 2;
+  width: min(1080px, 94vw);
+  max-height: calc(100% - 16px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.rewind-screen--start .rewind-flat {
+  justify-content: flex-start;
+  padding-top: clamp(8px, 2vh, 24px);
+}
+.rewind-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.18em;
+  color: var(--rw-ink);
+}
+.rewind-welcome__mark { margin-bottom: 0.4em; }
+.rewind-welcome__title {
+  font-weight: 900;
+  font-size: clamp(1.6rem, 5vmin, 3.2rem);
+  line-height: 0.96;
+  letter-spacing: -0.02em;
+}
+.rewind-welcome__year {
+  font-weight: 900;
+  font-size: clamp(1.6rem, 4.8vmin, 3rem);
+  line-height: 1;
+}
+.rewind-welcome__sub {
+  margin-top: 0.7em;
+  font-weight: 700;
+  font-size: clamp(0.78rem, 1.5vmin, 1rem);
+  max-width: 22ch;
+  color: var(--rw-ink-soft);
+}
+
+// ——— Большая статистика (Ритм / Время) ———
+.rewind-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.18em;
+  color: var(--rw-ink);
+}
+.rewind-stat__eyebrow {
+  font-weight: 800;
+  font-size: clamp(0.85rem, 1.9vmin, 1.15rem);
+  letter-spacing: 0.04em;
+}
+.rewind-stat__huge {
+  font-weight: 900;
+  font-size: clamp(3rem, 14vmin, 9rem);
+  line-height: 0.86;
+}
+.rewind-stat__label {
+  font-weight: 900;
+  font-size: clamp(1rem, 2.8vmin, 1.85rem);
+}
+.rewind-stat__sub {
+  margin-top: 0.5em;
+  font-weight: 700;
+  font-size: clamp(0.78rem, 1.6vmin, 1.05rem);
+  color: var(--rw-ink-soft);
+}
+.rewind-stat__note {
+  margin-top: 0.35em;
+  font-weight: 700;
+  font-size: clamp(0.7rem, 1.35vmin, 0.92rem);
+  color: var(--rw-ink-soft);
+  max-width: 26ch;
+}
+.rewind-stat__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  justify-content: center;
+  margin-top: 0.7em;
+}
+.rewind-pill {
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  padding: 0.3em 0.85em;
+  font-weight: 800;
+  font-size: clamp(0.72rem, 1.4vmin, 0.92rem);
+  b { font-weight: 900; }
+}
+
+// ——— Активность (плоская сетка 4 + 6, как в PrototypePNG 4-3) ———
+.rewind-screen--activity {
+  .rewind-decor__item--tr {
+    top: -6vmin;
+    right: -8vmin;
+  }
+  .rewind-decor__item--bl {
+    bottom: -8vmin;
+    left: -5vmin;
+  }
+}
+
+.rewind-activity {
+  width: min(980px, 92vw);
+  color: var(--rw-ink);
+  text-align: center;
+}
+
+.rewind-activity__title {
+  font-weight: 900;
+  font-size: clamp(1.45rem, 3.8vmin, 2.35rem);
+  margin: 0 0 clamp(28px, 5vmin, 52px);
+}
+
+.rewind-activity__rows {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(22px, 4.5vmin, 44px);
+}
+
+.rewind-activity__row {
+  display: grid;
+  justify-content: center;
+  width: 100%;
+  gap: clamp(14px, 2.8vmin, 32px) clamp(18px, 3.5vmin, 40px);
+
+  &--1 { grid-template-columns: minmax(0, 1fr); max-width: 160px; }
+  &--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 360px; }
+  &--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 540px; }
+  &--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 720px; }
+  &--5 { grid-template-columns: repeat(5, minmax(0, 1fr)); max-width: 900px; }
+  &--6 { grid-template-columns: repeat(6, minmax(0, 1fr)); max-width: 980px; }
+}
+
+.rewind-activity__cell {
+  text-align: center;
+  min-width: 0;
+}
+
+.rewind-activity__value {
+  display: block;
+  font-weight: 900;
+  font-size: clamp(1.85rem, 5vmin, 3.25rem);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--rw-ink);
+}
+
+.rewind-activity__label {
+  display: block;
+  margin-top: 0.28em;
+  font-weight: 800;
+  font-size: clamp(0.72rem, 1.45vmin, 1rem);
+  line-height: 1.15;
+  color: var(--rw-ink);
+}
+
+// ——— Тайтлы года (внутри стрелки) ———
+.rewind-titles {
+  width: 100%;
+  color: var(--rw-ink);
+}
+.rewind-titles__title {
+  text-align: center;
+  font-weight: 900;
+  font-size: clamp(1.2rem, 3.2vmin, 2.1rem);
+  margin: 0 0 1em;
+}
+.rewind-titles__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 1.8vmin, 18px);
+}
+.rewind-titles__btn {
+  display: flex;
+  align-items: center;
+  gap: 1em;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  text-align: left;
+  padding: 0;
+}
+.rewind-titles__poster {
+  flex: none;
+  width: clamp(52px, 7vmin, 78px);
+  aspect-ratio: 3 / 4;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.15) center / cover no-repeat;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+}
+.rewind-titles__name {
+  font-weight: 900;
+  font-size: clamp(1rem, 2.3vmin, 1.5rem);
+}
+.rewind-titles__rank {
+  display: block;
+  font-weight: 700;
+  color: var(--rw-ink-soft);
+}
+
+// ——— Коллекции ———
+.rewind-collections {
+  width: min(1000px, 94vw);
+  color: var(--rw-ink);
+  text-align: center;
+}
+.rewind-collections__title {
+  font-weight: 900;
+  font-size: clamp(1.5rem, 4vmin, 2.4rem);
+  margin: 0 0 1em;
+}
+.rewind-collections__row {
+  display: flex;
+  gap: clamp(12px, 2vmin, 24px);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.rewind-collection-card {
+  position: relative;
+  width: clamp(190px, 30vw, 320px);
+  aspect-ratio: 16 / 10;
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(50, 43, 77, 0.92);
+  display: flex;
+  align-items: flex-end;
+}
+.rewind-collection-card__cover {
+  position: absolute;
+  inset: 0;
+  background: center / cover no-repeat;
+}
+.rewind-collection-card__name {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  padding: 0.7em 0.8em;
+  text-align: left;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.65));
+}
+.rewind-collection-card--more {
+  align-items: center;
+  justify-content: center;
+}
+.rewind-collection-card__more {
+  color: #fff;
+  font-weight: 900;
+  font-size: 1.8rem;
+}
+.rewind-collections__note {
+  margin: 1.2em auto 0;
+  font-weight: 700;
+  max-width: 40ch;
+  color: var(--rw-ink-soft);
+}
+
+// ——— Что смотрел и что любишь (рекомендации) ———
+.rewind-screen--scrollable {
+  overflow-x: hidden;
+  overflow-y: auto;
+  align-items: stretch;
+  justify-content: flex-start;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+  .rewind-flat {
+    max-height: none;
+    overflow: visible;
+    width: 100%;
+    flex: none;
+    justify-content: flex-start;
+    padding-top: clamp(12px, 2vh, 28px);
+    padding-bottom: clamp(56px, 10vh, 120px);
+  }
+}
+
+.rewind-prefs {
+  width: min(1080px, 94vw);
+  margin: 0 auto;
+  color: var(--rw-ink);
+  padding-bottom: 0.5em;
+}
+.rewind-prefs__title {
+  text-align: center;
+  font-weight: 900;
+  font-size: clamp(1.5rem, 4vmin, 2.4rem);
+  margin: 0 0 0.7em;
+}
+.rewind-prefs__section { margin-top: clamp(14px, 2.4vmin, 26px); }
+.rewind-prefs__h {
+  font-weight: 900;
+  font-size: clamp(1.1rem, 2.6vmin, 1.7rem);
+  margin: 0;
+}
+.rewind-prefs__lead {
+  margin: 0.15em 0 0.7em;
+  font-weight: 700;
+  font-size: clamp(0.76rem, 1.4vmin, 0.95rem);
+  color: var(--rw-ink-soft);
+}
+.rewind-prefs__row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: clamp(10px, 1.6vmin, 18px);
+}
+.rewind-poster {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45em;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  text-align: left;
+}
+.rewind-poster__img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 11px;
+  background: rgba(0, 0, 0, 0.2) center / cover no-repeat;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+  transition: transform 0.25s ease;
+}
+.rewind-poster:hover .rewind-poster__img { transform: translateY(-4px) scale(1.02); }
+.rewind-poster__name {
+  font-weight: 700;
+  font-size: clamp(0.7rem, 1.3vmin, 0.9rem);
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+// ——— Комментарии (внутри звезды) ———
+.rewind-comments {
+  width: 100%;
+  color: var(--rw-ink);
+}
+.rewind-comments__title {
+  text-align: center;
+  font-weight: 900;
+  font-size: clamp(1.1rem, 2.7vmin, 1.9rem);
+  margin: 0 0 1em;
+}
+.rewind-comments__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 2vmin, 22px);
+}
+.rewind-comment {
+  display: flex;
+  align-items: center;
+  gap: 1em;
+}
+.rewind-comment__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  text-align: left;
+  min-width: 0;
+}
+.rewind-comment__text {
+  font-weight: 800;
+  font-size: clamp(0.85rem, 1.8vmin, 1.15rem);
+}
+.rewind-comment__text--spoiler { filter: blur(5px); }
+.rewind-comment__src {
+  font-weight: 600;
+  font-size: clamp(0.7rem, 1.3vmin, 0.9rem);
+  color: var(--rw-ink-soft);
+}
+.rewind-comment__likes {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-weight: 900;
+  flex: none;
+}
+.rewind-comment__heart { font-size: 1.15rem; line-height: 1; }
+
+// ——— Финал ———
+.rewind-final {
+  width: min(1024px, 94vw);
+  display: flex;
+  flex-direction: column;
+  gap: 1.2em;
+  color: #fff;
+}
+.rewind-final__card {
+  position: relative;
+  border-radius: 26px;
+  background: #1d1530;
+  overflow: hidden;
+  padding: clamp(22px, 3vw, 44px);
+  isolation: isolate;
+}
+.rewind-final__art {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 46%;
+  height: 100%;
+  background: center / cover no-repeat;
+  opacity: 0.4;
+  z-index: 0;
+  mask-image: linear-gradient(to left, #000 25%, transparent 96%);
+  -webkit-mask-image: linear-gradient(to left, #000 25%, transparent 96%);
+}
+.rewind-final__head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+}
+.rewind-final__avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: #2a2140 center / cover no-repeat;
+  flex: none;
+}
+.rewind-final__user b {
+  display: block;
+  font-weight: 900;
+  font-size: 1.1rem;
+}
+.rewind-final__user small {
+  font-weight: 700;
+  opacity: 0.65;
+  letter-spacing: 0.06em;
+}
+.rewind-final__h {
+  position: relative;
+  z-index: 1;
+  font-weight: 900;
+  font-size: clamp(1.3rem, 3vmin, 2rem);
+  margin: 1em 0 0;
+}
+.rewind-final__h--sm { font-size: clamp(1.05rem, 2.3vmin, 1.45rem); }
+.rewind-final__grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(5, max-content);
+  gap: 0.5em 1.5em;
+  margin-top: 0.7em;
+}
+.rewind-final__value {
+  display: block;
+  font-weight: 900;
+  font-size: clamp(1.2rem, 3vmin, 2rem);
+  line-height: 1;
+}
+.rewind-final__label {
+  font-weight: 700;
+  opacity: 0.75;
+  font-size: 0.8rem;
+}
+.rewind-final__posters {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 0.6em;
+  margin-top: 0.7em;
+  flex-wrap: wrap;
+}
+.rewind-final__poster {
+  width: clamp(58px, 8vw, 98px);
+  aspect-ratio: 3 / 4;
+  border-radius: 10px;
+  background: #2a2140 center / cover no-repeat;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+.rewind-final__brand {
+  position: absolute;
+  bottom: clamp(14px, 2vw, 28px);
+  right: clamp(16px, 2.4vw, 32px);
+  z-index: 1;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  opacity: 0.55;
+}
+.rewind-final__actions {
+  display: flex;
+  gap: 1em;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+// Адаптив
+@media (max-width: 900px) {
+  .rewind-activity__row--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 360px; }
+  .rewind-activity__row--6 { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 540px; }
+}
+
+@media (max-width: 720px) {
+  .rewind-prefs__row { grid-template-columns: repeat(2, 1fr); }
+  .rewind-final__grid { grid-template-columns: repeat(3, max-content); }
+  .rewind-stage__content--star { max-width: 70%; }
+  .rewind-stage__content--flower { max-width: 72%; }
+  .rewind-stage__content--arrow { max-width: 82%; }
+}

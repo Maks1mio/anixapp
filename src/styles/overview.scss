@@ -779,6 +779,15 @@ img.poster-image--loaded {
   &:hover {
     color: $color-text;
   }
+
+  &--plain {
+    cursor: default;
+    display: block;
+
+    &:hover {
+      color: $color-text-muted;
+    }
+  }
 }
 
 .overview-comment-week__message {

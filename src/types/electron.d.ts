@@ -35,6 +35,17 @@ export interface AppUpdateProgress {
   installType?: string | null;
 }
 
+export interface DevBridgeStatus {
+  available: boolean;
+  enabled: boolean;
+  port: number;
+  token: string | null;
+  hasAuth: boolean;
+  login: string | null;
+  running: boolean;
+  baseUrl: string;
+}
+
 declare global {
   interface Window {
     electron?: {
@@ -113,6 +124,10 @@ declare global {
       fetchReleaseGeoBypass?: (releaseId: number) => Promise<unknown>;
       getSettings?: () => Promise<AppSettings>;
       saveSettings?: (settings: Partial<AppSettings>) => Promise<void>;
+      /** Dev-only local HTTP bridge to Anixart API (see Settings → Разработчик). */
+      getDevBridgeStatus?: () => Promise<DevBridgeStatus>;
+      setDevBridgeEnabled?: (enabled: boolean) => Promise<DevBridgeStatus>;
+      regenerateDevBridgeToken?: () => Promise<DevBridgeStatus>;
       resolveHeroBackdrop?: (hints: {
         titleOriginal?: string;
         titleRu?: string;

@@ -1,7 +1,9 @@
 import { resolveCdnAssetUrl } from './posterUrl';
 import { formatCommentTimestamp } from './comment';
+import { resolveJacksonEntity } from './jackson-refs';
 import type { ReleaseCardData } from '../types/release';
 import type { CollectionCardData } from '../components/CollectionCard.svelte';
+import { mapCollectionCard } from './collection';
 import { mapCardData } from '../views/Release/_utils';
 
 export interface OverviewBanner {
@@ -57,23 +59,15 @@ export function mapOverviewDiscuss(raw: Record<string, unknown>): OverviewDiscus
 }
 
 export function mapOverviewCollection(raw: Record<string, unknown>): CollectionCardData {
-  return {
-    id: raw.id as number,
-    title: String(raw.title ?? 'Коллекция'),
-    image: resolveImageUrl(raw.image) || undefined,
-    description: String(raw.description ?? '') || undefined,
-    notesCount: Number(raw.comment_count ?? raw.commentCount ?? 0) || undefined,
-    favoritesCount: Number(raw.favorites_count ?? raw.favoritesCount ?? 0) || undefined,
-    isFavorite: !!(raw.is_favorite ?? raw.isFavorite),
-  };
+  return mapCollectionCard(raw);
 }
 
 export function mapOverviewCommentWeek(raw: Record<string, unknown>): OverviewCommentWeekItem | null {
   const id = raw.id as number;
   if (!id) return null;
   const profile = (raw.profile ?? {}) as Record<string, unknown>;
-  const release = (raw.release ?? {}) as Record<string, unknown>;
-  const releaseId = (release.id ?? release['@id']) as number;
+  const release = resolveJacksonEntity(raw.release, raw);
+  const releaseId = Number(release?.id ?? 0);
   if (!releaseId) return null;
 
   return {
@@ -85,7 +79,9 @@ export function mapOverviewCommentWeek(raw: Record<string, unknown>): OverviewCo
     profileLogin: String(profile.login ?? profile.nickname ?? 'Пользователь'),
     profileAvatar: resolveCdnAssetUrl(String(profile.avatar ?? '')),
     releaseId,
-    releaseTitle: String(release.title_ru ?? release.titleRu ?? release.title_original ?? 'Релиз'),
+    releaseTitle: String(
+      release?.title_ru ?? release?.titleRu ?? release?.title_original ?? release?.title ?? 'Релиз',
+    ),
   };
 }
 

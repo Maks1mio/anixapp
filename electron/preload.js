@@ -104,6 +104,9 @@ contextBridge.exposeInMainWorld('electron', {
   getLinuxInstallType: () => ipcRenderer.invoke('app:getLinuxInstallType'),
   getSettings: () => ipcRenderer.invoke('app:getSettings'),
   saveSettings: (settings) => ipcRenderer.invoke('app:saveSettings', settings),
+  getDevBridgeStatus: () => ipcRenderer.invoke('dev:getBridgeStatus'),
+  setDevBridgeEnabled: (enabled) => ipcRenderer.invoke('dev:setBridgeEnabled', enabled),
+  regenerateDevBridgeToken: () => ipcRenderer.invoke('dev:regenerateBridgeToken'),
   // Lobby proposal IPC
   sendProposalToPlayer: (data) => ipcRenderer.send('lobby:proposalToPlayer', data),
   sendLobbyVote: (proposalId, accept) => ipcRenderer.send('lobby:voteFromPlayer', proposalId, accept),

@@ -11,8 +11,7 @@
   import PlaybackPage   from '../views/Settings/pages/PlaybackPage.svelte';
   import DiscordRpcPage from '../views/Settings/pages/DiscordRpcPage.svelte';
   import AboutPage      from '../views/Settings/pages/AboutPage.svelte';
-  import LogsPage       from '../views/Settings/pages/LogsPage.svelte';
-  import UiKitPage      from '../views/Settings/pages/UiKitPage.svelte';
+  import DeveloperPage  from '../views/Settings/pages/DeveloperPage.svelte';
   import {
     createIcons,
     User,
@@ -25,10 +24,10 @@
     Star,
     ExternalLink,
     Pencil,
-    Github,
     Tv,
     ScrollText,
     Activity,
+    Code2,
   } from 'lucide';
 
   interface Props {
@@ -37,7 +36,7 @@
 
   const { onClose }: Props = $props();
 
-  export type SettingsTab = 'account' | 'appearance' | 'connection' | 'behavior' | 'playback' | 'discord' | 'uikit' | 'about' | 'logs';
+  export type SettingsTab = 'account' | 'appearance' | 'connection' | 'behavior' | 'playback' | 'discord' | 'developer' | 'about';
 
   const TAB_TITLES: Record<SettingsTab, string> = {
     account:    'Моя учётная запись',
@@ -46,9 +45,8 @@
     behavior:   'Поведение',
     playback:   'Воспроизведение',
     discord:    'Discord RPC',
-    uikit:      'UI Kit',
+    developer:  'Разработчик',
     about:      'О программе',
-    logs:       'Журнал событий',
   };
 
   const isDev = import.meta.env.DEV;
@@ -64,7 +62,7 @@
 
   function initIcons(root: HTMLElement): void {
     createIcons({
-      icons: { User, Palette, Globe, SlidersHorizontal, Info, LayoutGrid, LogOut, Star, ExternalLink, Pencil, Github, Tv, ScrollText, Activity },
+      icons: { User, Palette, Globe, SlidersHorizontal, Info, LogOut, Star, ExternalLink, Pencil, Tv, ScrollText, Activity, Code2 },
       root,
     });
   }
@@ -207,6 +205,18 @@
           <i data-lucide="activity"></i><span>Discord RPC</span>
         </button>
 
+        {#if isDev}
+          <div class="settings-nav__sep"></div>
+          <p class="settings-nav__section">Разработчик</p>
+          <button
+            class="settings-nav__item settings-nav__item--icon"
+            class:settings-nav__item--active={activeTab === 'developer'}
+            onclick={() => { activeTab = 'developer'; }}
+          >
+            <i data-lucide="code-2"></i><span>Разработчик</span>
+          </button>
+        {/if}
+
         <div class="settings-nav__sep"></div>
 
         <button
@@ -216,23 +226,6 @@
         >
           <i data-lucide="info"></i><span>О программе</span>
         </button>
-        <button
-          class="settings-nav__item settings-nav__item--icon"
-          class:settings-nav__item--active={activeTab === 'logs'}
-          onclick={() => { activeTab = 'logs'; }}
-        >
-          <i data-lucide="scroll-text"></i><span>Журнал событий</span>
-        </button>
-
-        {#if isDev}
-          <button
-            class="settings-nav__item settings-nav__item--icon"
-            class:settings-nav__item--active={activeTab === 'uikit'}
-            onclick={() => { activeTab = 'uikit'; }}
-          >
-            <i data-lucide="layout-grid"></i><span>UI Kit</span>
-          </button>
-        {/if}
 
       </div>
 
@@ -244,7 +237,9 @@
         <div class="settings-sidebar__meta">
           <span class="settings-sidebar__meta-version" id="s-version">AnixApp</span>
           <button type="button" class="settings-sidebar__meta-icon" id="s-github-link" title="GitHub" onclick={handleGithubLink}>
-            <i data-lucide="github"></i>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+              <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2z"/>
+            </svg>
           </button>
         </div>
         <div class="settings-sidebar__meta-components" id="s-components"></div>
@@ -270,12 +265,10 @@
             <PlaybackPage />
           {:else if activeTab === 'discord'}
             <DiscordRpcPage />
+          {:else if activeTab === 'developer'}
+            <DeveloperPage />
           {:else if activeTab === 'about'}
             <AboutPage />
-          {:else if activeTab === 'logs'}
-            <LogsPage />
-          {:else if activeTab === 'uikit'}
-            <UiKitPage />
           {/if}
         </Page>
       </div>

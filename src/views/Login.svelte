@@ -64,7 +64,7 @@
       <p class="auth__subtitle">Войдите в аккаунт Anixart</p>
 
       {#if !hasApi}
-        <p class="auth-form__error">API доступно только в приложении Electron.</p>
+        <p class="auth-form__error">API недоступно. Запустите <code>npm run dev</code> — в браузере работает через локальный мост.</p>
       {:else}
         <form class="auth-form" onsubmit={handleSubmit}>
           <label class="auth-form__label">

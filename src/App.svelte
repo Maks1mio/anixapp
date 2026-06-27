@@ -35,6 +35,7 @@
   import Profile from './views/Profile/page.svelte';
   import ProfileVotes from './views/ProfileVotes.svelte';
   import ProfileFriends from './views/ProfileFriends.svelte';
+  import ProfileCollections from './views/ProfileCollections.svelte';
   import Search from './views/Search.svelte';
   import Collection from './views/Collection.svelte';
   import Notifications from './views/Notifications.svelte';
@@ -43,6 +44,8 @@
   import AdminLoginPage from './views/Admin/LoginPage.svelte';
   import AdminPanelPage from './views/Admin/PanelPage.svelte';
   import Downloads from './views/Downloads.svelte';
+  import WrappedPage from './views/Wrapped/WrappedPage.svelte';
+  import WebPlayerShell from './components/WebPlayerShell.svelte';
 
   import SettingsModal from './components/SettingsModal.svelte';
   import LobbyModal from './components/LobbyModal.svelte';
@@ -112,11 +115,13 @@
   const profileMatch          = $derived(path.match(/^\/profile\/(\d+)$/));
   const profileVotesMatch     = $derived(path.match(/^\/profile\/(\d+)\/votes$/));
   const profileFriendsMatch   = $derived(path.match(/^\/profile\/(\d+)\/friends$/));
+  const profileCollectionsMatch = $derived(path.match(/^\/profile\/(\d+)\/collections$/));
   const collectionMatch       = $derived(path.match(/^\/collection\/(\d+)$/));
   const collectionEditMatch   = $derived(path.match(/^\/collections\/edit\/(\d+)$/));
   const collectionPickMatch   = $derived(path === '/collections/pick-release');
   const collectionPickReturn  = $derived(getSearchParams().get('return') || '/collections/create');
   const announcementChatMatch = $derived(path.match(/^\/announcement\/([^/]+)\/chat$/));
+  const isWatchRoute = $derived(path === '/watch');
 
   // ── App screen state machine ───────────────────────────────────────────────
   let offlineRetryTimer: number | null = null;
@@ -361,6 +366,9 @@
 {:else if $appScreen === 'login'}
   <Login onSuccess={() => appScreen.set('main')} />
 
+{:else if isWatchRoute}
+  <WebPlayerShell />
+
 {:else}
   <Layout currentPath={path} searchQ={searchQ}>
     {#if announcementChatMatch}
@@ -393,6 +401,10 @@
     {:else if profileFriendsMatch}
       {#key profileFriendsMatch[1]}
         <ProfileFriends id={parseInt(profileFriendsMatch[1], 10)} />
+      {/key}
+    {:else if profileCollectionsMatch}
+      {#key profileCollectionsMatch[1]}
+        <ProfileCollections id={parseInt(profileCollectionsMatch[1], 10)} />
       {/key}
     {:else if profileMatch}
       {#key profileMatch[1]}
@@ -436,10 +448,14 @@
       <ProfileVotes />
     {:else if path === '/profile/friends'}
       <ProfileFriends />
+    {:else if path === '/profile/collections'}
+      <ProfileCollections />
     {:else if path === '/search'}
       <Search q={searchQ} tab={searchTab} {searchBy} />
     {:else if path === '/downloads'}
       <Downloads />
+    {:else if path === '/wrapped/2026' || path.startsWith('/wrapped/')}
+      <WrappedPage year={2026} />
     {:else if path === '/uikit'}
       <Uikit />
     {:else}

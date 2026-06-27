@@ -15,7 +15,7 @@
     <ReleaseCarouselNav measureKey={items.length} navClass="overview-carousel__nav" scrollClass="overview-collections-week__scroll">
       {#each items as item (item.id)}
         <div class="overview-collections-week__item">
-          <CollectionCard data={item} variant="cover" />
+          <CollectionCard data={item} variant="grid" />
         </div>
       {/each}
     </ReleaseCarouselNav>

@@ -1,8 +1,12 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
 
-  interface Props { watchDynamics: any[]; }
-  let { watchDynamics }: Props = $props();
+  interface Props {
+    watchDynamics: any[];
+    /** Без обёртки profile__section — для v2 */
+    embedded?: boolean;
+  }
+  let { watchDynamics, embedded = false }: Props = $props();
 
   type DynamicsPoint = { count: number; timestamp: number };
 
@@ -34,7 +38,8 @@
   }
 
   function shouldShowLabel(index: number, total: number): boolean {
-    const step = Math.max(1, Math.floor(total / 7));
+    if (total <= 6) return true;
+    const step = Math.max(1, Math.ceil(total / 5));
     return index % step === 0 || index === total - 1;
   }
 
@@ -89,58 +94,70 @@
   const chart = $derived(data.length ? buildGeometry(data) : null);
 </script>
 
-{#if chart}
-  <section class="profile__section">
-    <h2 class="profile__section-title">Динамика просмотра</h2>
-    <div class="profile__chart-wrap">
-      <svg class="profile__chart-svg" viewBox="0 0 {chart.w} {chart.h}" preserveAspectRatio="none" bind:this={svgEl}>
-        <defs>
-          <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   style="stop-color: var(--color-accent)" stop-opacity="0.35"></stop>
-            <stop offset="100%" style="stop-color: var(--color-accent)" stop-opacity="0.02"></stop>
-          </linearGradient>
-        </defs>
+{#snippet chartSvg()}
+  {#if chart}
+    <svg class="profile__chart-svg" viewBox="0 0 {chart.w} {chart.h}" preserveAspectRatio="none" bind:this={svgEl}>
+      <defs>
+        <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"   style="stop-color: var(--color-accent)" stop-opacity="0.35"></stop>
+          <stop offset="100%" style="stop-color: var(--color-accent)" stop-opacity="0.02"></stop>
+        </linearGradient>
+      </defs>
 
-        {#each [0, 0.5, 1] as frac}
-          {@const y   = chart.padT + (1 - frac) * chart.ih}
-          {@const val = Math.round(chart.maxVal * frac)}
-          <line stroke="#262626" stroke-dasharray="3 3" x1={chart.padL} y1={y} x2={chart.w - chart.padR} y2={y}></line>
-          {#if val > 0}
-            <text class="profile__chart-label" x="0" y={y + 3.5} text-anchor="start">{val}</text>
-          {/if}
-        {/each}
-
-        <path d={chart.areaPath} fill="url(#chartGrad)"></path>
-        <path class="profile__chart-line" d={chart.linePath}></path>
-
-        {#if hoverIndex != null}
-          {@const hp = chart.points[hoverIndex]}
-          <line class="profile__chart-hover-line" x1={hp.x} y1={chart.padT} x2={hp.x} y2={chart.h - chart.padB}></line>
+      {#each [0, 0.5, 1] as frac}
+        {@const y   = chart.padT + (1 - frac) * chart.ih}
+        {@const val = Math.round(chart.maxVal * frac)}
+        <line stroke="#262626" stroke-dasharray="3 3" x1={chart.padL} y1={y} x2={chart.w - chart.padR} y2={y}></line>
+        {#if val > 0}
+          <text class="profile__chart-label" x="0" y={y + 3.5} text-anchor="start">{val}</text>
         {/if}
+      {/each}
 
-        {#each chart.points as p, i}
-          <circle class="profile__chart-dot" cx={p.x} cy={p.y} r={hoverIndex === i ? 5 : 3.5}></circle>
-        {/each}
+      <path d={chart.areaPath} fill="url(#chartGrad)"></path>
+      <path class="profile__chart-line" d={chart.linePath}></path>
 
-        {#each chart.points as p, i}
-          {#if shouldShowLabel(i, chart.points.length)}
-            {@const dt = new Date(p.timestamp < 1e12 ? p.timestamp * 1000 : p.timestamp)}
-            <text class="profile__chart-label" x={p.x} y={chart.h - chart.padB + 14} text-anchor="middle">
-              {dt.getDate()}.{String(dt.getMonth() + 1).padStart(2, '0')}.{String(dt.getFullYear()).slice(-2)}
-            </text>
-          {/if}
-        {/each}
+      {#if hoverIndex != null}
+        {@const hp = chart.points[hoverIndex]}
+        <line class="profile__chart-hover-line" x1={hp.x} y1={chart.padT} x2={hp.x} y2={chart.h - chart.padB}></line>
+      {/if}
 
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <rect
-          class="profile__chart-overlay"
-          x={chart.padL} y={chart.padT}
-          width={chart.w - chart.padL - chart.padR}
-          height={chart.h - chart.padT - chart.padB}
-          onmousemove={(e) => onMouseMove(e, chart)}
-          onmouseleave={() => { hoverIndex = null; hideTooltip(); }}
-        ></rect>
-      </svg>
+      {#each chart.points as p, i}
+        <circle class="profile__chart-dot" cx={p.x} cy={p.y} r={hoverIndex === i ? 5 : 3.5}></circle>
+      {/each}
+
+      {#each chart.points as p, i}
+        {#if shouldShowLabel(i, chart.points.length)}
+          {@const dt = new Date(p.timestamp < 1e12 ? p.timestamp * 1000 : p.timestamp)}
+          <text class="profile__chart-label" x={p.x} y={chart.h - chart.padB + 14} text-anchor="middle">
+            {dt.getDate()}.{String(dt.getMonth() + 1).padStart(2, '0')}.{String(dt.getFullYear()).slice(-2)}
+          </text>
+        {/if}
+      {/each}
+
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <rect
+        class="profile__chart-overlay"
+        x={chart.padL} y={chart.padT}
+        width={chart.w - chart.padL - chart.padR}
+        height={chart.h - chart.padT - chart.padB}
+        onmousemove={(e) => onMouseMove(e, chart)}
+        onmouseleave={() => { hoverIndex = null; hideTooltip(); }}
+      ></rect>
+    </svg>
+  {/if}
+{/snippet}
+
+{#if chart}
+  {#if embedded}
+    <div class="profile__chart-wrap">
+      {@render chartSvg()}
     </div>
-  </section>
+  {:else}
+    <section class="profile__section">
+      <h2 class="profile__section-title">Динамика просмотра</h2>
+      <div class="profile__chart-wrap">
+        {@render chartSvg()}
+      </div>
+    </section>
+  {/if}
 {/if}

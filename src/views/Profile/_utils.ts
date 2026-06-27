@@ -39,3 +39,31 @@ export function posterUrl(raw: string | undefined): string {
 export function isLottieBadgeUrl(url: string): boolean {
   return url.trim().toLowerCase().endsWith('.json');
 }
+
+/** «3 серия • 8 июн. в 17:31» для истории просмотра */
+export function fmtHistoryEpisodeMeta(item: Record<string, unknown>): string {
+  const ep = item.last_view_episode as { name?: string; position?: number } | undefined;
+  let epLabel = '';
+  if (ep?.name) {
+    epLabel = ep.name;
+  } else if (ep?.position) {
+    epLabel = `${ep.position} серия`;
+  }
+  const ts = Number(item.last_view_timestamp ?? 0);
+  if (!ts) return epLabel;
+
+  const date = new Date(ts < 1e12 ? ts * 1000 : ts);
+  const months = ['янв.', 'фев.', 'мар.', 'апр.', 'мая', 'июн.', 'июл.', 'авг.', 'сен.', 'окт.', 'нояб.', 'дек.'];
+  const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  const datePart = `${date.getDate()} ${months[date.getMonth()]} в ${time}`;
+  return epLabel ? `${epLabel} • ${datePart}` : datePart;
+}
+
+/** «был(а) в сети 10 июн. в 01:40» */
+export function fmtLastSeen(ts: number): string {
+  if (!ts) return '';
+  const date = new Date(ts < 1e12 ? ts * 1000 : ts);
+  const months = ['янв.', 'фев.', 'мар.', 'апр.', 'мая', 'июн.', 'июл.', 'авг.', 'сен.', 'окт.', 'нояб.', 'дек.'];
+  const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  return `был(а) в сети ${date.getDate()} ${months[date.getMonth()]} в ${time}`;
+}

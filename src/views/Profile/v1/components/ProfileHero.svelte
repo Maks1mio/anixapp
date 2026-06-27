@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { openSettingsModal } from '../../../stores/modals';
-  import { fmtRelative, isLottieBadgeUrl, posterUrl } from '../_utils';
-  import { fetchCdnJson, toCdnProxyUrl } from '../../../utils/posterUrl';
+  import { openSettingsModal } from '../../../../stores/modals';
+  import { fmtRelative, isLottieBadgeUrl, posterUrl } from '../../_utils';
+  import { fetchCdnJson, toCdnProxyUrl } from '../../../../utils/posterUrl';
 
   interface Props {
     profile:     any;

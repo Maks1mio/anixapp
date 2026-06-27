@@ -1,11 +1,12 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
 import { svelte, vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+import { anixWebBridgePlugin } from './vite/anix-web-bridge-plugin.mjs';
 
 export default defineConfig({
   root: __dirname,
   base: './',
-  plugins: [svelte({ preprocess: vitePreprocess() })],
+  plugins: [svelte({ preprocess: vitePreprocess() }), anixWebBridgePlugin()],
   optimizeDeps: {
     include: ['anixapi'],
   },
@@ -25,7 +26,6 @@ export default defineConfig({
   css: {
     preprocessorOptions: {
       scss: {
-        api: 'modern-compiler',
         silenceDeprecations: ['legacy-js-api'],
       },
     },

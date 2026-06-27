@@ -58,9 +58,10 @@
   let slideTimerRaf: number | null = null;
   let slideTimerStart = 0;
   let loadGen = 0;
+  let resizeDebounce: ReturnType<typeof setTimeout> | null = null;
   let slideTransitioning = $state(false);
   let upscaleMode = 15;
-  let upscaleEnabled = GPU_AVAILABLE;
+  let upscaleEnabled = false;
 
   let slideElapsed = $state(0);
   let heroImage = $state('');
@@ -457,7 +458,11 @@
       return;
     }
     if (banner.type === 2) {
-      window.electron?.openExternal?.(action);
+      if (window.electron?.openExternal) {
+        window.electron.openExternal(action);
+      } else {
+        window.open(action, '_blank', 'noopener,noreferrer');
+      }
       return;
     }
     if (banner.type === 3) {
@@ -584,13 +589,37 @@
     void window.electron?.getSettings?.().then((s) => {
       const settings = s as { upscaleEnabled?: boolean; upscaleMode?: number };
       if (typeof settings.upscaleMode === 'number') upscaleMode = settings.upscaleMode;
-      upscaleEnabled = settings.upscaleEnabled !== false && GPU_AVAILABLE;
+      upscaleEnabled = settings.upscaleEnabled === true && GPU_AVAILABLE;
     });
+
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        stopSlideTimer();
+        stopAllUpscale();
+        customVideoEl?.pause();
+        return;
+      }
+      if (montagePlaybackPaused || items.length === 0) return;
+      restartSlideTimer(() => {
+        if (items.length > 1) goTo(activeIndex + 1);
+      });
+      if (customVideoEl) {
+        void customVideoEl.play().catch(() => {});
+        if (upscaleEnabled) void ensureVideoUpscale();
+      } else if (!videoVisible) {
+        schedulePosterUpscale();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     if (stageEl) {
       resizeObserver = new ResizeObserver(() => {
-        if (videoVisible) void ensureVideoUpscale();
-        else void ensurePosterUpscale();
+        if (resizeDebounce != null) clearTimeout(resizeDebounce);
+        resizeDebounce = setTimeout(() => {
+          resizeDebounce = null;
+          if (videoVisible) void ensureVideoUpscale();
+          else void ensurePosterUpscale();
+        }, 120);
       });
       resizeObserver.observe(stageEl);
     }
@@ -604,11 +633,15 @@
     };
     window.addEventListener('anix:upscaleChanged', onUpscaleChanged);
 
-    return () => window.removeEventListener('anix:upscaleChanged', onUpscaleChanged);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('anix:upscaleChanged', onUpscaleChanged);
+    };
   });
 
   onDestroy(() => {
     loadGen++;
+    if (resizeDebounce != null) clearTimeout(resizeDebounce);
     if (posterUpscaleTimer != null) clearTimeout(posterUpscaleTimer);
     if (slideTransitionTimer != null) clearTimeout(slideTransitionTimer);
     stopSlideTimer();

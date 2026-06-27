@@ -20,6 +20,10 @@ function viteOriginOverride(): string | null {
 export function getAnixbackOrigin(): string {
   const vite = viteOriginOverride();
   if (vite) return vite.replace(/\/$/, '');
+  // Браузерный dev: same-origin прокси (без CORS), см. vite/anix-web-bridge-plugin.mjs
+  if (import.meta.env.DEV && typeof window !== 'undefined' && !window.electron) {
+    return `${window.location.origin}/__anixback`;
+  }
   return originForMode(currentMode);
 }
 

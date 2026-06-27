@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { fmtTime, fmtDate } from '../_utils';
+  import { fmtTime, fmtDate } from '../../_utils';
 
   interface Props { profile: any; }
   let { profile }: Props = $props();

@@ -24,7 +24,7 @@
   };
 </script>
 
-<div class="settings-section">
+<div class="developer-uikit">
   <p class="settings-section__desc">Компоненты и стили приложения.</p>
   <!-- svelte-ignore a11y_interactive_supports_focus -->
   <!-- svelte-ignore a11y_click_events_have_key_events -->

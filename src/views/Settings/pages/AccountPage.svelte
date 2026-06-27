@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import ProfileHero from '../../Profile/components/ProfileHero.svelte';
+  import ProfileHero from '../../Profile/v1/components/ProfileHero.svelte';
   import { renderSelect } from '../../../components/select';
   import { showToast } from '../../../stores/toast';
 

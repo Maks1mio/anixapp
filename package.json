@@ -27,18 +27,18 @@
     "author": "",
     "license": "MIT",
     "devDependencies": {
-        "@electron/rebuild": "^4.0.4",
+        "@electron/rebuild": "^4.0.6",
         "@sveltejs/vite-plugin-svelte": "^7.1.2",
         "concurrently": "^10.0.3",
         "cross-env": "^10.1.0",
-        "electron": "42.4.1",
+        "electron": "42.5.1",
         "electron-builder": "^26.15.3",
         "png2icons": "^2.0.1",
         "sass": "^1.101.0",
-        "svelte": "^5.56.3",
-        "svelte-check": "^4.6.0",
+        "svelte": "^5.56.4",
+        "svelte-check": "^4.7.1",
         "typescript": "^6.0.3",
-        "vite": "^8.0.16",
+        "vite": "^8.1.0",
         "wait-on": "^9.0.10"
     },
     "dependencies": {

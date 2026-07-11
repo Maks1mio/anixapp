@@ -8,6 +8,7 @@
     type DownloadLibraryGroup,
     type DownloadLibraryFile,
   } from '../stores/downloads';
+  import { formatDownloadErrorMessage } from '../utils/download-errors';
   import {
     iconDownload,
     iconRefreshCw,
@@ -181,7 +182,7 @@
                 <div class="dl-row__fill" style="width: {pct}%"></div>
               </div>
               {#if entry.status === 'error' && entry.error}
-                <p class="dl-row__error">{entry.error}</p>
+                <p class="dl-row__error" title={entry.error}>{formatDownloadErrorMessage(entry.error)}</p>
               {/if}
             </div>
           </div>

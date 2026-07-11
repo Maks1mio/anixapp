@@ -12,6 +12,7 @@ const { BROWSER_UA } = require('../cdn-proxy');
 const { ANIXART_UA } = require('../lib/constants');
 const config = require('../lib/config-store');
 const state = require('../lib/app-state');
+const { formatDownloadError, extractRawMessage } = require('../lib/download-errors');
 
 const DOWNLOAD_VIDEO_EXT = new Set(['.mp4', '.mkv', '.webm', '.avi', '.mov', '.m4v']);
 const MIN_DOWNLOAD_VIDEO_BYTES = 256 * 1024;
@@ -199,17 +200,21 @@ function sessionFetchBuffer(url, headers = {}) {
       if (v != null && v !== '') req.setHeader(k, String(v));
     }
     const chunks = [];
+    const fail = (err) => {
+      const base = extractRawMessage(err);
+      reject(new Error(base ? `${base} @ ${url}` : url));
+    };
     req.on('response', (res) => {
       if (res.statusCode && res.statusCode >= 400) {
-        reject(new Error(`HTTP ${res.statusCode}`));
+        reject(new Error(`HTTP ${res.statusCode} @ ${url}`));
         res.resume();
         return;
       }
       res.on('data', (c) => chunks.push(c));
       res.on('end', () => resolve(Buffer.concat(chunks)));
-      res.on('error', reject);
+      res.on('error', fail);
     });
-    req.on('error', reject);
+    req.on('error', fail);
     req.end();
   });
 }
@@ -225,20 +230,22 @@ function sessionFetchStreamToFile(url, outputPath, headers = {}, onProgress = nu
     for (const [k, v] of Object.entries(merged)) {
       if (v != null && v !== '') req.setHeader(k, String(v));
     }
+    const filename = path.basename(outputPath);
+    const fail = (err) => {
+      try { ws.destroy(); } catch (_) {}
+      const base = extractRawMessage(err);
+      reject(new Error(base ? `${base} @ ${url}` : url));
+    };
+    const ws = fs.createWriteStream(outputPath);
     req.on('response', (res) => {
       if (res.statusCode && res.statusCode >= 400) {
-        reject(new Error(`HTTP ${res.statusCode}`));
+        fail(new Error(`HTTP ${res.statusCode}`));
         res.resume();
         return;
       }
       const total = parseInt(res.headers['content-length'] || '0', 10) || 0;
       let received = 0;
       let lastEmit = 0;
-      const ws = fs.createWriteStream(outputPath);
-      const fail = (err) => {
-        try { ws.destroy(); } catch (_) {}
-        reject(err);
-      };
       res.on('data', (chunk) => {
         received += chunk.length;
         ws.write(chunk);
@@ -258,7 +265,7 @@ function sessionFetchStreamToFile(url, outputPath, headers = {}, onProgress = nu
       res.on('error', fail);
       ws.on('error', fail);
     });
-    req.on('error', reject);
+    req.on('error', fail);
     req.end();
   });
 }
@@ -379,9 +386,17 @@ async function downloadHlsParallel(segments, outputPath, headers = {}, onProgres
   async function worker() {
     while (nextFetch < total) {
       const i = nextFetch++;
-      const buf = await sessionFetchBuffer(segments[i], headers);
-      pending.set(i, buf);
-      flush();
+      try {
+        const buf = await sessionFetchBuffer(segments[i], headers);
+        pending.set(i, buf);
+        flush();
+      } catch (err) {
+        throw new Error(formatDownloadError(err, {
+          url: segments[i],
+          segment: i,
+          segmentTotal: total,
+        }));
+      }
     }
   }
 
@@ -794,7 +809,7 @@ ipcMain.handle('episode-download:queue', async (_, payload) => {
         status: 'error',
         received: 0,
         total: 0,
-        error: 'embed-url-not-video',
+        error: formatDownloadError('embed-url-not-video', { url, filename: item?.filename }),
       });
       continue;
     }
@@ -833,7 +848,7 @@ ipcMain.handle('episode-download:queue', async (_, payload) => {
       } catch (err) {
         sendProgress({
           id, filename, status: 'error', received: 0, total: 0,
-          error: err?.message ?? String(err),
+          error: formatDownloadError(err, { url, filename }),
         });
         try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (_) {}
       }
@@ -902,7 +917,7 @@ ipcMain.handle('episode-download:download', async (_, payload) => {
     } catch (err) {
       errors.push({
         filename: path.basename(filePath),
-        error: err && err.message ? String(err.message) : String(err),
+        error: formatDownloadError(err, { url, filename: path.basename(filePath) }),
       });
       try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (_) {}
     }

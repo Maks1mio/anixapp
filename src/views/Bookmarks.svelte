@@ -218,8 +218,25 @@
     }
   }
 
+  function syncTabToUrl(tabId: TabId) {
+    const qs = tabId === 'collections' ? '' : `?tab=${encodeURIComponent(tabId)}`;
+    const path = `/bookmarks${qs}`;
+    if (window.location.protocol === 'file:') {
+      const hash = `#${path}`;
+      if (window.location.hash !== hash) {
+        window.history.replaceState(null, '', hash);
+      }
+      return;
+    }
+    const current = `${window.location.pathname}${window.location.search}`;
+    if (current !== path) {
+      window.history.replaceState(null, '', path);
+    }
+  }
+
   async function loadTab(tabId: TabId, resetSort = false) {
     activeTab = tabId;
+    syncTabToUrl(tabId);
     if (resetSort) selectedSort = DEFAULT_BOOKMARK_SORT;
     nextPage = 0;
     hasMore = true;

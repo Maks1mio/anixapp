@@ -479,6 +479,7 @@
   let preventAutoPause = false;
   let stallCheckTimer: ReturnType<typeof setInterval> | null = null;
   let origEpUrl        = '';
+  let episodeLoadGen   = 0;
 
   /** Снимок комнатного playback до смены озвучки/серии — чтобы игнорировать sync_resume с устаревшим состоянием сервера (до changeEpisode). */
   type LobbyStaleSnap = { releaseId: string; sourceId: string; ep: number; dubberId: string };
@@ -740,13 +741,21 @@
     }
   }
 
+  function setOrigEpisodeUrl(rawUrl: string) {
+    origEpUrl = stripKodikQueryParams(rawUrl.startsWith('http') ? rawUrl : `https:${rawUrl}`);
+  }
+
   function loadEpisode(rId: number, sId: number, ep: number, titleStr: string, srcName: string, dubId: string, seekTime?: number, initialPaused?: boolean): Promise<void> {
     const api = (window as any).anixApi?.release;
     if (!api?.getEpisode) return Promise.resolve();
+    const myGen = ++episodeLoadGen;
     return api.getEpisode(rId, sId, ep).then(async (res: any) => {
+      if (myGen !== episodeLoadGen) return;
       const episode = res?.episode;
       if (!episode?.url) return;
+      setOrigEpisodeUrl(episode.url);
       const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq } = await resolveEpisodeUrlWithRetry(episode.url, episode.iframe);
+      if (myGen !== episodeLoadGen) return;
       player.availableQualities = qualityMap;
       player.currentQuality = cq;
       applyVideoAndUI(pUrl, uv, ep, titleStr, srcName, dubId, seekTime, initialPaused);
@@ -1041,7 +1050,7 @@
     ).then(async (res: any) => {
       const episode = res?.episode;
       if (!episode?.url) { player.loadState = 'error'; player.errorText = 'Серия недоступна.'; return; }
-      origEpUrl = stripKodikQueryParams(episode.url.startsWith('http') ? episode.url : `https:${episode.url}`);
+      setOrigEpisodeUrl(episode.url);
       const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq } = await resolveEpisodeUrlWithRetry(episode.url, episode.iframe);
       player.availableQualities = qualityMap;
       player.currentQuality = cq;

@@ -9,6 +9,8 @@
     useVideo:       boolean;
     hasPrevEp:      boolean;
     hasNextEp:      boolean;
+    prevEp:         number | null;
+    nextEp:         number | null;
     nextEpAltDub:   NextEpAltDub | null;
     currentDubLabel: string;
     onprevEp:       () => void;
@@ -18,7 +20,7 @@
 
   let {
     ep, title, dubberName, sourceName, useVideo,
-    hasPrevEp, hasNextEp, nextEpAltDub, currentDubLabel,
+    hasPrevEp, hasNextEp, prevEp, nextEp, nextEpAltDub, currentDubLabel,
     onprevEp, onnextEp, onnextAltDub,
   }: Props = $props();
 </script>
@@ -36,7 +38,7 @@
         <line x1="5" y1="19" x2="5" y2="5"/>
       </svg>
       <span class="watch-page__ep-nav-alt-inner">
-        <span class="watch-page__ep-nav-main">Серия {ep - 1}</span>
+        <span class="watch-page__ep-nav-main">Серия {prevEp}</span>
         {#if currentDubLabel}
           <span class="watch-page__ep-nav-sub">в озвучке ({currentDubLabel})</span>
         {/if}
@@ -67,7 +69,7 @@
       onclick={(e) => { e.stopPropagation(); onnextEp(); }}
     >
       <span class="watch-page__ep-nav-alt-inner">
-        <span class="watch-page__ep-nav-main">Серия {ep + 1}</span>
+        <span class="watch-page__ep-nav-main">Серия {nextEp}</span>
         {#if currentDubLabel}
           <span class="watch-page__ep-nav-sub">в озвучке ({currentDubLabel})</span>
         {/if}

@@ -1,6 +1,6 @@
 import { writable, derived } from 'svelte/store';
 
-export type DownloadStatus = 'queued' | 'downloading' | 'done' | 'error';
+export type DownloadStatus = 'queued' | 'downloading' | 'done' | 'error' | 'cancelled';
 
 export interface DownloadEntry {
   id: string;
@@ -11,6 +11,15 @@ export interface DownloadEntry {
   error?: string;
   filePath?: string;
   fileSize?: number;
+  releaseId?: number;
+  sourceId?: number;
+  dubberId?: number;
+  episodePosition?: number;
+  releaseTitle?: string;
+  folder?: string;
+  dubberName?: string;
+  sourceName?: string;
+  playable?: boolean;
 }
 
 export interface DownloadLibraryFile {
@@ -18,12 +27,19 @@ export interface DownloadLibraryFile {
   path: string;
   size: number;
   modifiedAt: number;
+  episodePosition?: number | null;
 }
 
 export interface DownloadLibraryGroup {
   id: string;
   name: string;
   files: DownloadLibraryFile[];
+  releaseId?: number | null;
+  sourceId?: number | null;
+  dubberId?: number | null;
+  releaseTitle?: string;
+  dubberName?: string;
+  sourceName?: string;
 }
 
 export interface DownloadSettings {
@@ -68,18 +84,15 @@ function createDownloadsStore() {
     return null;
   }
 
-  function handleProgress(e: CustomEvent<{
-    id: string;
-    filename: string;
-    status: DownloadStatus;
-    received: number;
-    total: number;
-    error?: string;
-    filePath?: string;
-    fileSize?: number;
-  }>) {
+  function handleProgress(e: CustomEvent<DownloadEntry>) {
     const d = e.detail;
     if (!d?.id) return;
+
+    if (d.status === 'cancelled') {
+      update(list => list.filter(x => x.id !== d.id));
+      return;
+    }
+
     update(list => {
       const idx = list.findIndex(x => x.id === d.id);
       const entry: DownloadEntry = {
@@ -91,6 +104,15 @@ function createDownloadsStore() {
         error: d.error,
         filePath: d.filePath,
         fileSize: d.fileSize,
+        releaseId: d.releaseId,
+        sourceId: d.sourceId,
+        dubberId: d.dubberId,
+        episodePosition: d.episodePosition,
+        releaseTitle: d.releaseTitle,
+        folder: d.folder,
+        dubberName: d.dubberName,
+        sourceName: d.sourceName,
+        playable: d.playable,
       };
       if (idx === -1) return [...list, entry];
       const next = [...list];
@@ -109,12 +131,21 @@ function createDownloadsStore() {
     }
   }
 
-  function clearDone() {
-    update(list => list.filter(x => x.status !== 'done' && x.status !== 'error'));
+  async function removeEntry(id: string) {
+    try { await window.electron?.removeDownloadEntry?.(id); } catch {}
+    update(list => list.filter(x => x.id !== id));
   }
 
-  function clearAll() {
-    update(() => []);
+  async function cancelEntry(id: string) {
+    try { await window.electron?.cancelDownload?.(id); } catch {}
+  }
+
+  async function cancelAllActive() {
+    try { await window.electron?.cancelAllDownloads?.(); } catch {}
+  }
+
+  function clearErrors() {
+    update(list => list.filter(x => x.status !== 'error'));
   }
 
   function init() {
@@ -134,8 +165,10 @@ function createDownloadsStore() {
     loadLibrary,
     pickDirectory,
     handleProgress,
-    clearDone,
-    clearAll,
+    removeEntry,
+    cancelEntry,
+    cancelAllActive,
+    clearErrors,
     init,
   };
 }

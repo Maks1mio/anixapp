@@ -9,6 +9,8 @@
     type DownloadLibraryFile,
   } from '../stores/downloads';
   import { formatDownloadErrorMessage } from '../utils/download-errors';
+  import { queueMissingEpisodes } from '../utils/download-queue-client';
+  import { navigate } from '../stores/navigation';
   import {
     iconDownload,
     iconRefreshCw,
@@ -18,10 +20,14 @@
     iconChevronRight,
     iconSettings,
     iconPlay,
+    iconX,
+    iconTrash2,
+    iconFilm,
   } from '../components/icons';
 
   let expandedGroups = $state<Record<string, boolean>>({});
   let pickingDir = $state(false);
+  let seasonBusy = $state<string | null>(null);
 
   onMount(() => downloads.init());
 
@@ -31,6 +37,7 @@
   const activeCount = $derived(
     $downloads.filter(x => x.status === 'queued' || x.status === 'downloading').length,
   );
+  const errorCount = $derived($downloads.filter(x => x.status === 'error').length);
   const libraryGroups = $derived($downloadLibrary);
   const libraryFileCount = $derived(libraryGroups.reduce((n, g) => n + g.files.length, 0));
   const downloadDir = $derived($downloadSettings.directory || '—');
@@ -97,8 +104,66 @@
     window.electron?.showDownloadFile?.(file.path);
   }
 
-  function playFile(file: DownloadLibraryFile) {
-    window.electron?.openDownloadFile?.(file.path);
+  async function playInApp(payload: {
+    filePath: string;
+    title?: string;
+    releaseId?: number | null;
+    sourceId?: number | null;
+    dubberId?: number | null;
+    episodePosition?: number | null;
+    sourceName?: string;
+    allowPartial?: boolean;
+    status?: string;
+  }) {
+    await window.electron?.playDownloadInApp?.({
+      filePath: payload.filePath,
+      title: payload.title,
+      releaseId: payload.releaseId ?? undefined,
+      sourceId: payload.sourceId ?? undefined,
+      dubberId: payload.dubberId ?? undefined,
+      episodePosition: payload.episodePosition ?? undefined,
+      sourceName: payload.sourceName,
+      allowPartial: payload.allowPartial,
+      status: payload.status,
+    });
+  }
+
+  function openRelease(releaseId?: number | null) {
+    if (releaseId) navigate(`/release/${releaseId}`);
+  }
+
+  async function downloadRestOfSeason(group: DownloadLibraryGroup) {
+    if (!group.releaseId || !group.sourceId || !group.dubberId) return;
+    seasonBusy = group.id;
+    try {
+      const positions = group.files
+        .map(f => f.episodePosition)
+        .filter((p): p is number => typeof p === 'number');
+      const n = await queueMissingEpisodes({
+        releaseId: group.releaseId,
+        sourceId: group.sourceId,
+        dubberId: group.dubberId,
+        releaseTitle: group.releaseTitle || group.name,
+        dubberName: group.dubberName || '',
+        sourceName: group.sourceName || '',
+        existingPositions: positions,
+      });
+      if (n > 0) navigate('/downloads');
+    } finally {
+      seasonBusy = null;
+    }
+  }
+
+  function canPlayEntry(entry: DownloadEntry): boolean {
+    if (
+      entry.status === 'downloading'
+      && entry.releaseId != null
+      && entry.sourceId != null
+      && entry.episodePosition != null
+    ) {
+      return true;
+    }
+    return !!entry.filePath && (entry.playable || entry.status === 'done');
   }
 </script>
 
@@ -107,7 +172,7 @@
     <h1 class="view-header__title">Загрузки</h1>
     <p class="view-header__subtitle">
       {#if activeCount > 0}
-        Скачивается {activeCount} {activeCount === 1 ? 'файл' : activeCount < 5 ? 'файла' : 'файлов'}
+        Скачивается {activeCount} {activeCount === 1 ? 'файл' : activeCount < 5 ? 'файла' : 'файлов'} · по одному
         {#if libraryFileCount > 0}
           · в библиотеке {libraryFileCount}
         {/if}
@@ -135,6 +200,12 @@
         </button>
         <button class="btn btn-secondary btn-sm" onclick={openFolder}>Открыть папку</button>
         <button class="btn btn-secondary btn-sm" onclick={() => downloads.loadLibrary()}>Обновить</button>
+        {#if activeCount > 0}
+          <button class="btn btn-secondary btn-sm" onclick={() => downloads.cancelAllActive()}>Остановить все</button>
+        {/if}
+        {#if errorCount > 0}
+          <button class="btn btn-secondary btn-sm" onclick={() => downloads.clearErrors()}>Очистить ошибки</button>
+        {/if}
       </div>
     </div>
   </section>
@@ -149,15 +220,17 @@
 
       <div class="dl-explorer">
         <div class="dl-explorer__head" aria-hidden="true">
+          <span class="dl-col dl-col--icon"></span>
           <span class="dl-col dl-col--name">Файл</span>
           <span class="dl-col dl-col--size">Размер</span>
           <span class="dl-col dl-col--status">Статус</span>
+          <span class="dl-col dl-col--actions"></span>
         </div>
 
         {#each activeItems as entry (entry.id)}
           {@const pct = progressPercent(entry)}
           <div class="dl-row dl-row--{entry.status}">
-            <div class="dl-row__icon" class:dl-row__icon--spin={entry.status === 'downloading'}>
+            <span class="dl-row__icon" class:dl-row__icon--spin={entry.status === 'downloading'} aria-hidden="true">
               {#if entry.status === 'error'}
                 {@html iconTriangleAlert(16)}
               {:else if entry.status === 'downloading'}
@@ -165,10 +238,16 @@
               {:else}
                 {@html iconDownload(16)}
               {/if}
-            </div>
+            </span>
             <div class="dl-row__main">
               <div class="dl-row__top">
-                <span class="dl-row__name" title={entry.filename}>{entry.filename}</span>
+                {#if entry.releaseId}
+                  <button type="button" class="dl-row__name dl-row__name--link" title={entry.filename} onclick={() => openRelease(entry.releaseId)}>
+                    {entry.filename}
+                  </button>
+                {:else}
+                  <span class="dl-row__name" title={entry.filename}>{entry.filename}</span>
+                {/if}
                 <span class="dl-row__size">
                   {#if entry.total > 0}
                     {formatBytes(entry.received)} / {formatBytes(entry.total)}
@@ -177,6 +256,38 @@
                   {/if}
                 </span>
                 <span class="dl-row__status">{statusLabel(entry)}</span>
+                <span class="dl-row__actions">
+                  {#if canPlayEntry(entry)}
+                    <button
+                      type="button"
+                      class="dl-action-btn"
+                      title={entry.status === 'downloading' ? 'Смотреть с подгрузкой' : 'Смотреть в плеере'}
+                      onclick={() => playInApp({
+                      filePath: entry.filePath!,
+                      title: entry.releaseTitle || entry.filename,
+                      releaseId: entry.releaseId,
+                      sourceId: entry.sourceId,
+                      dubberId: entry.dubberId,
+                      episodePosition: entry.episodePosition,
+                      sourceName: entry.sourceName,
+                      allowPartial: true,
+                      status: entry.status,
+                    })}
+                    >
+                      {@html iconPlay(14)}
+                    </button>
+                  {/if}
+                  {#if entry.status === 'queued' || entry.status === 'downloading'}
+                    <button type="button" class="dl-action-btn" title="Остановить" onclick={() => downloads.cancelEntry(entry.id)}>
+                      {@html iconX(14)}
+                    </button>
+                  {/if}
+                  {#if entry.status === 'error'}
+                    <button type="button" class="dl-action-btn" title="Убрать из списка" onclick={() => downloads.removeEntry(entry.id)}>
+                      {@html iconTrash2(14)}
+                    </button>
+                  {/if}
+                </span>
               </div>
               <div class="dl-row__track">
                 <div class="dl-row__fill" style="width: {pct}%"></div>
@@ -207,6 +318,7 @@
     {:else}
       <div class="dl-explorer dl-explorer--library">
         <div class="dl-explorer__head" aria-hidden="true">
+          <span class="dl-col dl-col--icon"></span>
           <span class="dl-col dl-col--name">Тайтл / файл</span>
           <span class="dl-col dl-col--size">Размер</span>
           <span class="dl-col dl-col--date">Дата</span>
@@ -215,46 +327,71 @@
 
         {#each libraryGroups as group (group.id)}
           <div class="dl-folder">
-            <button
-              type="button"
-              class="dl-folder__head"
-              onclick={() => toggleGroup(group.id)}
-              aria-expanded={isExpanded(group.id)}
-            >
-              <span class="dl-folder__chevron" class:dl-folder__chevron--open={isExpanded(group.id)}>
-                {@html iconChevronRight(16)}
-              </span>
-              <span class="dl-folder__icon">{@html iconFolder(16)}</span>
-              <span class="dl-folder__name">{group.name}</span>
-              <span class="dl-folder__meta">
+            <div class="dl-folder__head">
+              <button
+                type="button"
+                class="dl-folder__chevron-btn"
+                onclick={() => toggleGroup(group.id)}
+                aria-expanded={isExpanded(group.id)}
+                aria-label={isExpanded(group.id) ? 'Свернуть' : 'Развернуть'}
+              >
+                <span class="dl-folder__chevron" class:dl-folder__chevron--open={isExpanded(group.id)}>
+                  {@html iconChevronRight(16)}
+                </span>
+              </button>
+              <span class="dl-folder__icon" aria-hidden="true">{@html iconFolder(16)}</span>
+              {#if group.releaseId}
+                <button type="button" class="dl-folder__name dl-folder__name--link" onclick={() => openRelease(group.releaseId)}>
+                  {group.name}
+                </button>
+              {:else}
+                <span class="dl-folder__name">{group.name}</span>
+              {/if}
+              <button type="button" class="dl-folder__meta-toggle" onclick={() => toggleGroup(group.id)}>
                 {group.files.length} {group.files.length === 1 ? 'файл' : group.files.length < 5 ? 'файла' : 'файлов'}
                 · {formatBytes(groupSize(group))}
-              </span>
-            </button>
+              </button>
+              <div class="dl-folder__actions">
+                {#if group.releaseId}
+                  <button type="button" class="dl-action-btn" title="Страница тайтла" onclick={() => openRelease(group.releaseId)}>
+                    {@html iconFilm(14)}
+                  </button>
+                {/if}
+                {#if group.releaseId && group.sourceId && group.dubberId}
+                  <button
+                    type="button"
+                    class="dl-action-btn"
+                    title="Докачать остальные серии"
+                    disabled={seasonBusy === group.id}
+                    onclick={() => downloadRestOfSeason(group)}
+                  >
+                    {@html iconDownload(14)}
+                  </button>
+                {/if}
+              </div>
+            </div>
 
             {#if isExpanded(group.id)}
               {#each group.files as file (file.path)}
-                <div class="dl-row dl-row--done">
-                  <div class="dl-row__icon dl-row__icon--done">{@html iconFileVideo(16)}</div>
+                <div class="dl-row dl-row--done dl-row--nested">
+                  <span class="dl-row__icon dl-row__icon--done" aria-hidden="true">{@html iconFileVideo(16)}</span>
                   <div class="dl-row__main dl-row__main--flat">
                     <span class="dl-row__name" title={file.name}>{file.name}</span>
                     <span class="dl-row__size">{formatBytes(file.size)}</span>
                     <span class="dl-row__date">{formatDate(file.modifiedAt)}</span>
                     <span class="dl-row__actions">
-                      <button
-                        type="button"
-                        class="dl-action-btn"
-                        title="Открыть"
-                        onclick={() => playFile(file)}
-                      >
+                      <button type="button" class="dl-action-btn" title="Смотреть в плеере" onclick={() => playInApp({
+                        filePath: file.path,
+                        title: group.releaseTitle || group.name,
+                        releaseId: group.releaseId,
+                        sourceId: group.sourceId,
+                        dubberId: group.dubberId,
+                        episodePosition: file.episodePosition,
+                        sourceName: group.sourceName,
+                      })}>
                         {@html iconPlay(14)}
                       </button>
-                      <button
-                        type="button"
-                        class="dl-action-btn"
-                        title="Показать в папке"
-                        onclick={() => showInFolder(file)}
-                      >
+                      <button type="button" class="dl-action-btn" title="Показать в папке" onclick={() => showInFolder(file)}>
                         {@html iconFolder(14)}
                       </button>
                     </span>

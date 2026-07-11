@@ -101,9 +101,10 @@
 
 .dl-explorer__head {
   display: grid;
-  grid-template-columns: 1fr 5.5rem 4.5rem;
+  grid-template-columns: 1.5rem 1fr 5.5rem 4.5rem 4.5rem;
   gap: 0.5rem;
-  padding: 0.35rem 1rem 0.35rem 2.75rem;
+  align-items: center;
+  padding: 0.35rem 1rem;
   font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -112,9 +113,12 @@
   border-bottom: 1px solid $color-border;
 
   .dl-explorer--library & {
-    grid-template-columns: 1fr 5rem 7rem 4.5rem;
-    padding-left: 1rem;
+    grid-template-columns: 1.5rem 1fr 5rem 7rem 4.5rem;
   }
+}
+
+.dl-col--icon {
+  width: 1.5rem;
 }
 
 .dl-col--size,
@@ -125,12 +129,22 @@
 
 // ── Строка ────────────────────────────────────────────────────────────────
 .dl-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.65rem;
+  display: grid;
+  grid-template-columns: 1.5rem 1fr;
+  gap: 0.5rem;
+  align-items: start;
   padding: 0.55rem 1rem;
   border-bottom: 1px solid color-mix(in srgb, $color-border 60%, transparent);
   transition: background $transition;
+
+  &--nested {
+    padding-left: 1rem;
+
+    .dl-row__main {
+      padding-left: 1.5rem;
+      border-left: 1px solid color-mix(in srgb, $color-accent 35%, transparent);
+    }
+  }
 
   &:last-child {
     border-bottom: none;
@@ -146,9 +160,11 @@
 }
 
 .dl-row__icon {
-  flex-shrink: 0;
   display: flex;
-  padding-top: 2px;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
   color: $color-text-muted;
 
   .dl-row--downloading &,
@@ -179,10 +195,25 @@
 
 .dl-row__top {
   display: grid;
-  grid-template-columns: 1fr 5.5rem 4.5rem;
+  grid-template-columns: 1fr 5.5rem 4.5rem 4.5rem;
   gap: 0.5rem;
-  align-items: baseline;
+  align-items: center;
   margin-bottom: 0.4rem;
+}
+
+.dl-row__name--link {
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  color: $color-text;
+  font: inherit;
+
+  &:hover {
+    color: $color-accent;
+    text-decoration: underline;
+  }
 }
 
 .dl-row__name {
@@ -264,19 +295,63 @@
 .dl-folder__head {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  width: 100%;
-  padding: 0.6rem 1rem;
-  border: none;
+  gap: 0.35rem;
+  padding: 0.35rem 0.5rem 0.35rem 1rem;
   border-bottom: 1px solid color-mix(in srgb, $color-border 50%, transparent);
   background: color-mix(in srgb, $color-bg 30%, $color-surface);
-  color: $color-text;
+}
+
+.dl-folder__chevron-btn,
+.dl-folder__meta-toggle {
+  display: flex;
+  align-items: center;
+  padding: 0.25rem;
+  border: none;
+  background: transparent;
+  color: $color-text-muted;
   cursor: pointer;
-  text-align: left;
-  transition: background $transition;
+  border-radius: $radius-sm;
+  transition: background $transition, color $transition;
 
   &:hover {
     background: $color-surface-hover;
+    color: $color-text;
+  }
+}
+
+.dl-folder__meta-toggle {
+  margin-left: auto;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  padding: 0.25rem 0.5rem;
+}
+
+.dl-folder__actions {
+  display: flex;
+  gap: 0.15rem;
+  padding-right: 0.25rem;
+  flex-shrink: 0;
+  margin-left: 0.25rem;
+}
+
+.dl-folder__name--link {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: $color-text;
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  &:hover {
+    color: $color-accent;
+    text-decoration: underline;
   }
 }
 
@@ -305,14 +380,7 @@
   text-overflow: ellipsis;
 }
 
-.dl-folder__meta {
-  font-size: 0.72rem;
-  color: $color-text-muted;
-  white-space: nowrap;
-}
-
-.dl-folder .dl-row {
-  padding-left: 2.25rem;
+.dl-folder .dl-row--nested {
   background: color-mix(in srgb, $color-bg 20%, transparent);
 }
 

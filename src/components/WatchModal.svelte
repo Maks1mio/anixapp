@@ -74,6 +74,13 @@
     filename: string;
     folder?: string;
     headers?: Record<string, string>;
+    releaseId?: number;
+    sourceId?: number;
+    dubberId?: number;
+    episodePosition?: number;
+    releaseTitle?: string;
+    dubberName?: string;
+    sourceName?: string;
   }
 
   interface EpisodeUpdate {
@@ -532,6 +539,13 @@
       filename: meta.filename,
       folder: meta.folder,
       headers: resolved.headers,
+      releaseId,
+      sourceId: selectedSource.id,
+      dubberId: selectedDubber?.id,
+      episodePosition: ep.position,
+      releaseTitle,
+      dubberName: selectedDubber?.name ?? '',
+      sourceName: selectedSource?.name ?? '',
     };
   }
 

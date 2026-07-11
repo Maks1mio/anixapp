@@ -61,7 +61,7 @@ function mapKnownError(raw) {
     const code = httpMatch[1];
     if (code === '403') return 'Доступ запрещён (HTTP 403) — ссылка могла устареть';
     if (code === '404') return 'Файл не найден (HTTP 404)';
-    if (code === '429') return 'Слишком много запросов (HTTP 429)';
+  if (code === '429') return 'Слишком много запросов (HTTP 429) — CDN ограничил скорость, попробуйте позже';
     if (code === '500' || code === '502' || code === '503') return `Ошибка сервера (HTTP ${code})`;
     return `Ошибка HTTP ${code}`;
   }
@@ -81,10 +81,20 @@ function mapKnownError(raw) {
 
 /**
  * @param {unknown} err
- * @param {{ url?: string, filename?: string, segment?: number, segmentTotal?: number }} [context]
+ * @param {{ url?: string, filename?: string, segment?: number, segmentTotal?: number, skipReformat?: boolean }} [context]
  */
 function formatDownloadError(err, context = {}) {
   const rawFull = extractRawMessage(err);
+  if (context.skipReformat && rawFull.includes(' · ')) {
+    if (context.filename && !rawFull.includes('«')) {
+      return `${rawFull} · «${context.filename}»`;
+    }
+    return rawFull;
+  }
+  if (rawFull.includes(' · ') && (/источник:|сегмент \d/i.test(rawFull))) {
+    return rawFull;
+  }
+
   const { message: raw, url: rawUrl } = splitRawAndUrl(rawFull);
   const friendly = mapKnownError(raw || rawFull);
   const host = hostFromUrl(context.url || rawUrl);
@@ -102,7 +112,10 @@ function formatDownloadError(err, context = {}) {
 
   const technical = raw || rawFull;
   if (friendly && technical && friendly !== technical) {
-    parts.push(`(${technical})`);
+    const techShort = splitRawAndUrl(technical).message || technical;
+    if (techShort && techShort !== friendly && techShort.length < 120) {
+      parts.push(`(${techShort})`);
+    }
   }
 
   return parts.join(' · ');

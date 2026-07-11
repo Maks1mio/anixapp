@@ -1,6 +1,6 @@
 <script lang="ts">
   import { fade, scale } from 'svelte/transition';
-  import type { EpisodeItem, DubberItem } from '../_types';
+  import type { EpisodeItem, DubberItem, DownloadedEpisodeItem } from '../_types';
   import EpisodesPopover  from './EpisodesPopover.svelte';
   import DubbingPopover   from './DubbingPopover.svelte';
   import SettingsPopover  from './SettingsPopover.svelte';
@@ -12,6 +12,10 @@
     isFullscreen:    boolean;
     episodes:        EpisodeItem[];
     dubbers:         DubberItem[];
+    downloadedEpisodes?: DownloadedEpisodeItem[];
+    downloadedPositions?: number[];
+    localMode?: boolean;
+    currentDownloadedPath?: string;
     currentEp:       number;
     currentDubberId: string;
     popoverType:     'series' | 'dubbing' | 'settings' | null;
@@ -33,6 +37,7 @@
     onopenSettings:  () => void;
     onselectEp:      (ep: number) => void;
     onselectDub:     (dub: DubberItem) => void;
+    onselectDownloadedMode?: () => void;
     onclosePopover:  () => void;
     onfullscreen:     () => void;
     onchangeRate:     (r: number) => void;
@@ -42,12 +47,15 @@
 
   let {
     paused, muted, volume, isFullscreen,
-    episodes, dubbers, currentEp, currentDubberId,
+    episodes, dubbers, downloadedEpisodes = [], downloadedPositions = [], localMode = false,
+    currentDownloadedPath = '',
+    currentEp, currentDubberId,
     popoverType, popoverLoading, useVideo, gpuAvailable, upscaleEnabled,
     playbackRate, aspectRatio, availableQualities, currentQuality,
     ontogglePlay, ontoggleMute, onvolumechange, ontoggleUpscale, onskipOpening,
     onopenSeries, onopenDubbing, onopenSettings,
-    onselectEp, onselectDub, onclosePopover, onfullscreen,
+    onselectEp, onselectDub, onselectDownloadedMode,
+    onclosePopover, onfullscreen,
     onchangeRate, onchangeAspect, onchangeQuality,
   }: Props = $props();
 
@@ -192,9 +200,12 @@
         >
           <DubbingPopover
             {dubbers}
+            {downloadedEpisodes}
+            {currentDownloadedPath}
             {currentDubberId}
             loading={popoverLoading}
             onselect={(dub) => { onselectDub(dub); onclosePopover(); }}
+            onselectDownloadedMode={() => { onselectDownloadedMode?.(); onclosePopover(); }}
             onclose={onclosePopover}
           />
         </div>
@@ -231,6 +242,8 @@
         >
           <EpisodesPopover
             {episodes}
+            {downloadedPositions}
+            {localMode}
             currentEp={currentEp}
             loading={popoverLoading}
             onselect={(ep) => { onselectEp(ep); onclosePopover(); }}

@@ -29,7 +29,7 @@ function mapKnownError(raw: string): string {
     const code = httpMatch[1];
     if (code === '403') return 'Доступ запрещён (HTTP 403) — ссылка могла устареть';
     if (code === '404') return 'Файл не найден (HTTP 404)';
-    if (code === '429') return 'Слишком много запросов (HTTP 429)';
+    if (code === '429') return 'Слишком много запросов (HTTP 429) — CDN ограничил скорость, попробуйте позже';
     if (code === '500' || code === '502' || code === '503') return `Ошибка сервера (HTTP ${code})`;
     return `Ошибка HTTP ${code}`;
   }

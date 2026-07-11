@@ -1221,6 +1221,14 @@ $watch-float-panel-height: min(480px, 70vh);
       color: #fff;
       .watch-panel__ep-label { font-weight: 600; }
     }
+
+    &--downloaded .watch-panel__ep-icon--download {
+      color: var(--color-accent, #e85d5d);
+    }
+  }
+
+  &__ep-icon--download {
+    color: var(--color-accent, #e85d5d);
   }
 
   &__ep-icon  { flex-shrink: 0; display: flex; align-items: center; }

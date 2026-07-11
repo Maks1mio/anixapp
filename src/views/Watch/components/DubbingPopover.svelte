@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { DubberItem } from '../_types';
+  import type { DubberItem, DownloadedEpisodeItem } from '../_types';
   import Page from '../../../components/Page.svelte';
   import { resolveCdnAssetUrl } from '../../../utils/posterUrl';
 
@@ -7,12 +7,21 @@
     dubbers:         DubberItem[];
     currentDubberId: string;
     loading:         boolean;
+    downloadedEpisodes?: DownloadedEpisodeItem[];
+    currentDownloadedPath?: string;
     showClose?:      boolean;
     onselect:        (dub: DubberItem) => void;
+    onselectDownloadedMode?: () => void;
     onclose:         () => void;
   }
 
-  let { dubbers, currentDubberId, loading, showClose = false, onselect, onclose }: Props = $props();
+  let {
+    dubbers, currentDubberId, loading,
+    downloadedEpisodes = [],
+    currentDownloadedPath = '',
+    showClose = false,
+    onselect, onselectDownloadedMode, onclose,
+  }: Props = $props();
 
   // Split: subtitle if type=1 OR name contains "субтитр" (case-insensitive)
   const isSub      = (d: DubberItem) => d.type === 1 || /субтитр/i.test(d.name);
@@ -44,6 +53,32 @@
     <div class="watch-panel__loading">Загрузка…</div>
   {:else}
     <Page noPadding extraClass="watch-panel__scroll-page">
+
+      {#if downloadedEpisodes.length > 0}
+        <div class="watch-panel__section">Скаченные</div>
+        <button
+          type="button"
+          class="watch-panel__dub-row {currentDownloadedPath ? 'watch-panel__dub-row--active' : ''}"
+          onclick={(e) => { e.stopPropagation(); onselectDownloadedMode?.(); }}
+        >
+          <span class="watch-panel__dub-av">
+            <span class="watch-panel__dub-av-placeholder watch-panel__dub-av-placeholder--local">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+            </span>
+          </span>
+          <span class="watch-panel__dub-info">
+            <span class="watch-panel__dub-name">Скаченное</span>
+            <span class="watch-panel__dub-meta">
+              {downloadedEpisodes.length}
+              {downloadedEpisodes.length === 1 ? ' серия' : downloadedEpisodes.length < 5 ? ' серии' : ' серий'}
+            </span>
+          </span>
+        </button>
+      {/if}
 
       <!-- Subtitles section -->
       {#if subtitles.length > 0}
@@ -121,7 +156,7 @@
         {/each}
       {/if}
 
-      {#if dubbers.length === 0}
+      {#if dubbers.length === 0 && downloadedEpisodes.length === 0}
         <div class="watch-panel__empty">Озвучки не найдены</div>
       {/if}
     </Page>

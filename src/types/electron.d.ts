@@ -60,7 +60,7 @@ declare global {
         anixartjs: string;
       }>;
       window: ElectronWindowAPI;
-      openPlayerWindow: (params: { releaseId: string; sourceId: string; ep: string; title: string; sourceName: string; dubberId?: string }) => Promise<void>;
+      openPlayerWindow: (params: { releaseId: string; sourceId: string; ep: string; title: string; sourceName: string; dubberId?: string; localFile?: string }) => Promise<void>;
       closePlayerWindow: () => void;
       togglePlayerFullScreen: () => Promise<boolean>;
       togglePlayerAlwaysOnTop: () => Promise<boolean>;
@@ -85,6 +85,13 @@ declare global {
           filename: string;
           folder?: string;
           headers?: Record<string, string>;
+          releaseId?: number;
+          sourceId?: number;
+          dubberId?: number;
+          episodePosition?: number;
+          releaseTitle?: string;
+          dubberName?: string;
+          sourceName?: string;
         }>;
       }) => Promise<{
         ok: boolean;
@@ -99,11 +106,40 @@ declare global {
       listDownloadLibrary?: () => Promise<Array<{
         id: string;
         name: string;
-        files: Array<{ name: string; path: string; size: number; modifiedAt: number }>;
+        releaseId?: number | null;
+        sourceId?: number | null;
+        dubberId?: number | null;
+        releaseTitle?: string;
+        dubberName?: string;
+        sourceName?: string;
+        files: Array<{ name: string; path: string; size: number; modifiedAt: number; episodePosition?: number | null }>;
+      }>>;
+      listDownloadsByRelease?: (releaseId: number) => Promise<Array<{
+        episodePosition: number | null;
+        path: string;
+        name: string;
+        size: number;
+        dubberName: string;
+        sourceName: string;
+        folder: string;
       }>>;
       checkDownloadFiles?: (payload: {
         items: Array<{ folder?: string; filename: string }>;
       }) => Promise<Array<{ folder?: string; filename: string; exists: boolean; path: string | null }>>;
+      cancelDownload?: (id: string) => Promise<{ ok: boolean }>;
+      cancelAllDownloads?: () => Promise<{ ok: boolean; cancelled?: number }>;
+      removeDownloadEntry?: (id: string) => Promise<{ ok: boolean }>;
+      playDownloadInApp?: (payload: {
+        filePath: string;
+        title?: string;
+        releaseId?: number;
+        sourceId?: number;
+        dubberId?: number;
+        episodePosition?: number;
+        sourceName?: string;
+        allowPartial?: boolean;
+        status?: string;
+      }) => Promise<{ ok: boolean; error?: string }>;
       syncPlayerState: (playback: LobbyPlaybackPayload) => void;
       sendPlayerState: (playback: LobbyPlaybackPayload) => void;
       startUpdateDownload?: () => Promise<void>;

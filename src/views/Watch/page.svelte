@@ -9,8 +9,9 @@
   } from 'anime4k-webgpu';
   import { getWatchParams } from '../../router';
   import { getCurrentRoomId } from '../../services/lobby-state';
-  import type { WatchState, EpisodeItem, DubberItem, LobbyActivityEntry, PopoverType, NextEpAltDub } from './_types';
+  import type { WatchState, EpisodeItem, DubberItem, LobbyActivityEntry, PopoverType, NextEpAltDub, DownloadedEpisodeItem } from './_types';
   import { isHlsUrl, stripKodikQueryParams, resolveEpisodeUrl, resolveEpisodeUrlWithRetry, isDubberBlacklisted } from './_utils';
+  import { pathToLocalMediaUrl, isLocalMediaUrl } from '../../utils/local-media-url';
   import { PlayerState } from './_usePlayer.svelte';
   import { LobbyState }  from './_useLobby.svelte';
   import LobbyPanel      from './components/LobbyPanel.svelte';
@@ -37,6 +38,8 @@
   const initialTitle    = params.get('title') || 'Просмотр';
   const initialSrcName  = params.get('sourceName') || '';
   const initialDubId    = params.get('dubberId') || '';
+  const initialLocalFile = params.get('localFile') || '';
+  const playbackMode = params.get('playbackMode') || '';
 
   // ── Reactive state ─────────────────────────────────────────────────────────
   const player = new PlayerState();
@@ -103,17 +106,37 @@
   let popoverLoading = $state(false);
   let episodes       = $state<EpisodeItem[]>([]);
   let dubbers        = $state<DubberItem[]>([]);
+  let downloadedEpisodes = $state<DownloadedEpisodeItem[]>([]);
+  let localPlaybackPath = $state('');
 
   // ── Episode nav derived ────────────────────────────────────────────────────
-  const hasNextEp = $derived(
-    episodes.length === 0 || episodes.some(e => e.position === watchState.ep + 1),
-  );
-  const hasPrevEp = $derived(
-    watchState.ep > 0 && (episodes.length === 0 || episodes.some(e => e.position === watchState.ep - 1)),
-  );
-
-  /** Подпись «в озвучке (…)» для кнопки следующей серии */
   const currentDubLabel = $derived((watchState.dubberName || watchState.sourceName || '').trim());
+  const isLocalPlaybackMode = $derived(!!localPlaybackPath || watchState.sourceName === 'Скачано');
+  const downloadedPositions = $derived(
+    [...new Set(downloadedEpisodes.map((d) => d.episodePosition).filter((p) => p > 0))]
+      .sort((a, b) => a - b),
+  );
+  const prevEpisodePosition = $derived.by(() => {
+    if (!isLocalPlaybackMode) {
+      const target = watchState.ep - 1;
+      return target > 0 && (episodes.length === 0 || episodes.some((e) => e.position === target))
+        ? target
+        : null;
+    }
+    const available = downloadedPositions.filter((position) => position < watchState.ep);
+    return available.length > 0 ? available[available.length - 1] : null;
+  });
+  const nextEpisodePosition = $derived.by(() => {
+    if (!isLocalPlaybackMode) {
+      const target = watchState.ep + 1;
+      return episodes.length === 0 || episodes.some((e) => e.position === target)
+        ? target
+        : null;
+    }
+    return downloadedPositions.find((position) => position > watchState.ep) ?? null;
+  });
+  const hasPrevEp = $derived(prevEpisodePosition != null);
+  const hasNextEp = $derived(nextEpisodePosition != null);
 
   /** Следующая серия недоступна в текущей озвучке, но есть в другой — самая популярная по view_count */
   let nextEpAltDub = $state<NextEpAltDub | null>(null);
@@ -125,6 +148,10 @@
 
   async function refreshNextEpisodeAlternative() {
     const gen = ++nextEpAltGen;
+    if (isLocalPlaybackMode) {
+      nextEpAltDub = null;
+      return;
+    }
     const nextEp = watchState.ep + 1;
     const rId = parseInt(watchState.releaseId, 10);
     const currentDubId = watchState.dubberId;
@@ -602,6 +629,7 @@
     titleStr: string, srcName: string, dubId: string,
     seekTime?: number, initialPaused?: boolean,
   ) {
+    const isLocal = isLocalMediaUrl(pUrl);
     watchState.ep = ep; watchState.title = titleStr;
     watchState.sourceName = srcName; watchState.dubberId = dubId;
 
@@ -641,6 +669,11 @@
     }
 
     const fallback = () => {
+      if (isLocal) {
+        player.loadState = 'error';
+        player.errorText = 'Не удалось воспроизвести скачанный файл.';
+        return;
+      }
       if (origEpUrl) applyVideoAndUI(origEpUrl, false, ep, titleStr, srcName, dubId);
     };
 
@@ -710,7 +743,7 @@
     // indefinitely ("до талого") until it succeeds. Only stops when:
     //   • video actually plays (playing event above clears wdTimer)
     //   • user navigates away (myGen !== wdGen exits the callback)
-    if (!initialPaused) {
+    if (!initialPaused && !isLocal) {
       const scheduleWd = (delay: number) => {
         wdTimer = setTimeout(async () => {
           wdTimer = null;
@@ -746,6 +779,7 @@
   }
 
   function loadEpisode(rId: number, sId: number, ep: number, titleStr: string, srcName: string, dubId: string, seekTime?: number, initialPaused?: boolean): Promise<void> {
+    localPlaybackPath = '';
     const api = (window as any).anixApi?.release;
     if (!api?.getEpisode) return Promise.resolve();
     const myGen = ++episodeLoadGen;
@@ -765,6 +799,11 @@
   function goToEpisode(ep: number) {
     popoverType = null;
     invalidateDubbersPickerCache();
+    const dl = downloadedEpisodes.find((d) => d.episodePosition === ep);
+    if (isLocalPlaybackMode && dl) {
+      void selectDownloadedEpisode(dl);
+      return;
+    }
     if (getCurrentRoomId()) {
       lobbyCaptureStalePlaybackSnapshot();
       const elE = (window as any).electron;
@@ -778,6 +817,7 @@
   /** @param episodeOverride — если задан и отличается от текущей серии, воспроизведение с начала новой серии */
   function switchDubbing(newSourceId: number, newSourceName: string, newDubberId: number, newDubberName: string, episodeOverride?: number) {
     popoverType = null;
+    localPlaybackPath = '';
     if (getCurrentRoomId()) lobbyCaptureStalePlaybackSnapshot();
     const targetEp = episodeOverride !== undefined ? episodeOverride : watchState.ep;
     const switchingEpisode = episodeOverride !== undefined && episodeOverride !== watchState.ep;
@@ -815,17 +855,65 @@
     } catch {}
   }
 
+  async function loadDownloadedEpisodes() {
+    const rId = parseInt(watchState.releaseId, 10);
+    if (!rId) {
+      downloadedEpisodes = [];
+      return;
+    }
+    try {
+      const files = await window.electron?.listDownloadsByRelease?.(rId);
+      if (!Array.isArray(files)) {
+        downloadedEpisodes = [];
+        return;
+      }
+      downloadedEpisodes = files.map((f) => {
+        const ep = f.episodePosition ?? 0;
+        const label = f.dubberName || f.sourceName || f.folder || 'Скачано';
+        return {
+          episodePosition: ep,
+          filePath: f.path,
+          label,
+          name: ep > 0 ? `Серия ${ep}` : f.name,
+        };
+      });
+    } catch {
+      downloadedEpisodes = [];
+    }
+  }
+
+  async function selectDownloadedEpisode(item: DownloadedEpisodeItem) {
+    localPlaybackPath = item.filePath;
+    popoverType = null;
+    watchState.ep = item.episodePosition || watchState.ep;
+    watchState.dubberId = '';
+    watchState.dubberName = 'Скаченное';
+    watchState.sourceName = 'Скачано';
+    await startLocalFilePlayback(item.filePath, item.episodePosition || undefined);
+  }
+
+  async function selectDownloadedMode() {
+    if (downloadedEpisodes.length === 0) await loadDownloadedEpisodes();
+    const exact = downloadedEpisodes.find((item) => item.episodePosition === watchState.ep);
+    const first = [...downloadedEpisodes]
+      .filter((item) => item.episodePosition > 0)
+      .sort((a, b) => a.episodePosition - b.episodePosition)[0];
+    const target = exact || first;
+    if (target) await selectDownloadedEpisode(target);
+  }
+
   async function openSeriesPopover() {
-    if (popoverType === 'series') return; // already open — hover handles close
+    if (popoverType === 'series') return;
     popoverType = 'series';
     popoverLoading = true;
-    await fetchEpisodesSilently();
+    await Promise.all([fetchEpisodesSilently(), loadDownloadedEpisodes()]);
     popoverLoading = false;
   }
 
   async function openDubbingPopover() {
-    if (popoverType === 'dubbing') return; // already open — hover handles close
+    if (popoverType === 'dubbing') return;
     popoverType = 'dubbing';
+    void loadDownloadedEpisodes();
     const key = `${watchState.releaseId}:${watchState.ep}`;
     if (dubbersPickerCacheKey === key && dubbersPickerCache.length > 0) {
       dubbers = dubbersPickerCache;
@@ -844,7 +932,9 @@
   }
 
   async function selectDubber(dubber: DubberItem) {
-    if (String(dubber.id) === watchState.dubberId) return;
+    const wasLocalPlayback = isLocalPlaybackMode;
+    localPlaybackPath = '';
+    if (String(dubber.id) === watchState.dubberId && !wasLocalPlayback) return;
     try {
       const res = await (window as any).anixApi.release.getDubberSources(parseInt(watchState.releaseId, 10), dubber.id);
       const first = res?.sources?.[0];
@@ -1020,6 +1110,48 @@
     window.addEventListener('resize', winResizeHandler);
   }
 
+  async function startLocalFilePlayback(filePath: string, epOverride?: number) {
+    localPlaybackPath = filePath;
+    const fileUrl = pathToLocalMediaUrl(filePath);
+    if (!fileUrl) {
+      player.loadState = 'error';
+      player.errorText = 'Файл не найден.';
+      return;
+    }
+    if (epOverride != null && epOverride > 0) watchState.ep = epOverride;
+    watchState.dubberId = '';
+    watchState.dubberName = 'Скаченное';
+    watchState.sourceName = 'Скачано';
+    player.loadState = 'ready';
+    await tick();
+    applyVideoAndUI(fileUrl, true, watchState.ep, watchState.title, 'Скачано', watchState.dubberId);
+    bindVideoElementListeners();
+    showAndSchedule();
+    void loadDownloadedEpisodes();
+  }
+
+  function bindVideoElementListeners() {
+    if (!videoEl) return;
+    videoEl.addEventListener('timeupdate', () => {
+      player.currentTime = videoEl.currentTime;
+      player.duration    = videoEl.duration || 0;
+      player.bufferedEnd = videoEl.buffered.length ? videoEl.buffered.end(videoEl.buffered.length - 1) : 0;
+    });
+    videoEl.addEventListener('play',  () => { player.paused = false; sendToLobby('play'); });
+    videoEl.addEventListener('pause', () => { player.paused = true;  sendToLobby('pause'); });
+    videoEl.addEventListener('loadedmetadata', () => {
+      player.duration = videoEl.duration || 0;
+      try { (window as any).electron?.sendPlayerState?.(getPlaybackPayload()); } catch {}
+      if (player.upscaleEnabled && gpuAvailable) startUpscale();
+      if (pendingSync) applyPendingSync();
+    });
+    videoEl.addEventListener('canplay',    doAutoPlay, { once: true });
+    videoEl.addEventListener('loadeddata', doAutoPlay, { once: true });
+    setTimeout(doAutoPlay, 800);
+    doAutoPlay();
+    initResizeObserver();
+  }
+
   // ── onMount ────────────────────────────────────────────────────────────────
   onMount(() => {
     try {
@@ -1039,12 +1171,18 @@
       }).catch(() => {});
     }
 
-    if (!releaseId || !watchState.sourceId || !Number.isFinite(watchState.ep) || !(window as any).anixApi?.release?.getEpisode) {
+    if (releaseId) void loadDownloadedEpisodes();
+
+    if (initialLocalFile) {
+      void loadDownloadedEpisodes();
+      void startLocalFilePlayback(initialLocalFile, initialEp);
+    } else if (playbackMode === 'local') {
+      player.loadState = 'loading';
+    } else if (!releaseId || !watchState.sourceId || !Number.isFinite(watchState.ep) || !(window as any).anixApi?.release?.getEpisode) {
       player.loadState = 'error';
       player.errorText = 'Неверные параметры просмотра.';
       return;
-    }
-
+    } else {
     ;(window as any).anixApi.release.getEpisode(
       parseInt(releaseId, 10), parseInt(watchState.sourceId, 10), watchState.ep,
     ).then(async (res: any) => {
@@ -1061,27 +1199,11 @@
       fetchEpisodesSilently();
 
       if (uv) {
-        videoEl.addEventListener('timeupdate', () => {
-          player.currentTime = videoEl.currentTime;
-          player.duration    = videoEl.duration || 0;
-          player.bufferedEnd = videoEl.buffered.length ? videoEl.buffered.end(videoEl.buffered.length - 1) : 0;
-        });
-        videoEl.addEventListener('play',  () => { player.paused = false; sendToLobby('play'); });
-        videoEl.addEventListener('pause', () => { player.paused = true;  sendToLobby('pause'); });
-        videoEl.addEventListener('loadedmetadata', () => {
-          player.duration = videoEl.duration || 0;
-          try { (window as any).electron?.sendPlayerState?.(getPlaybackPayload()); } catch {}
-          if (player.upscaleEnabled && gpuAvailable) startUpscale();
-          if (pendingSync) applyPendingSync();
-        });
-        videoEl.addEventListener('canplay',    doAutoPlay, { once: true });
-        videoEl.addEventListener('loadeddata', doAutoPlay, { once: true });
-        setTimeout(doAutoPlay, 800);
-        doAutoPlay();
-        initResizeObserver();
+        bindVideoElementListeners();
       }
       showAndSchedule();
     }).catch(() => { player.loadState = 'error'; player.errorText = 'Ошибка загрузки серии.'; });
+    }
 
     const handlers: [string, EventListener][] = [
       ['anix:upscaleChanged', ((e: CustomEvent) => {
@@ -1098,6 +1220,16 @@
 
       ['player:changeContent', ((e: CustomEvent) => {
         const p = e.detail as any;
+        if (p?.localFile) {
+          watchState.title = p.title || watchState.title;
+          watchState.sourceName = p.sourceName || watchState.sourceName;
+          if (p.releaseId) watchState.releaseId = p.releaseId;
+          if (p.sourceId) watchState.sourceId = p.sourceId;
+          if (p.ep) watchState.ep = parseInt(p.ep, 10);
+          if (p.dubberId) watchState.dubberId = p.dubberId;
+          void startLocalFilePlayback(String(p.localFile), p.ep ? parseInt(p.ep, 10) : undefined);
+          return;
+        }
         if (!p?.releaseId || !p.sourceId || !p.ep) return;
         watchState.releaseId  = p.releaseId;
         watchState.sourceId   = p.sourceId;
@@ -1280,10 +1412,12 @@
             useVideo={player.useVideo}
             {hasPrevEp}
             {hasNextEp}
-            {nextEpAltDub}
+            prevEp={prevEpisodePosition}
+            nextEp={nextEpisodePosition}
+            nextEpAltDub={isLocalPlaybackMode ? null : nextEpAltDub}
             {currentDubLabel}
-            onprevEp={() => goToEpisode(watchState.ep - 1)}
-            onnextEp={() => goToEpisode(watchState.ep + 1)}
+            onprevEp={() => { if (prevEpisodePosition != null) goToEpisode(prevEpisodePosition); }}
+            onnextEp={() => { if (nextEpisodePosition != null) goToEpisode(nextEpisodePosition); }}
             onnextAltDub={goToNextEpisodeInAltDub}
           />
 
@@ -1326,6 +1460,10 @@
               isFullscreen={player.isFullscreen}
               {episodes}
               {dubbers}
+              {downloadedEpisodes}
+              {downloadedPositions}
+              localMode={isLocalPlaybackMode}
+              currentDownloadedPath={localPlaybackPath}
               currentEp={watchState.ep}
               currentDubberId={watchState.dubberId}
               {popoverType}
@@ -1347,6 +1485,7 @@
               onopenSettings={openSettingsPopover}
               onselectEp={goToEpisode}
               onselectDub={selectDubber}
+              onselectDownloadedMode={selectDownloadedMode}
               onclosePopover={() => popoverType = null}
               onfullscreen={toggleFullscreen}
               onchangeRate={changePlaybackRate}

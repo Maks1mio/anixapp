@@ -58,6 +58,13 @@ export interface NextEpAltDub {
   sourceName: string;
 }
 
+export interface DownloadedEpisodeItem {
+  episodePosition: number;
+  filePath: string;
+  label: string;
+  name: string;
+}
+
 export type PopoverType      = 'series' | 'dubbing' | 'settings' | null;
 export type PlayerLoadState  = 'loading' | 'ready' | 'error';
 export type VoteState        = 'hidden' | 'vote' | 'waiting' | 'result';

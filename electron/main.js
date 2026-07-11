@@ -16,6 +16,7 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 const electronDir = __dirname;
 
 const { registerCdnScheme, setupCdnProtocol } = require('./cdn-proxy');
+const { registerLocalMediaScheme, setupLocalMediaProtocol } = require('./lib/local-media-protocol');
 const logger = require('./logger');
 const state = require('./lib/app-state');
 const config = require('./lib/config-store');
@@ -35,6 +36,7 @@ const { media } = require('./services/media');
 const homeCustomFilter = require('./home-custom-filter');
 
 registerCdnScheme();
+registerLocalMediaScheme();
 applyGpuFlags();
 
 let discordRpc = null;
@@ -103,6 +105,7 @@ app.whenReady().then(() => {
 
   setupSessionRequestHeaders();
   setupCdnProtocol(logger);
+  setupLocalMediaProtocol(() => media.getDownloadDirectory?.() || '', logger);
   if (media.getDownloadDirectory) media.getDownloadDirectory();
 
   createMainWindow(deps);

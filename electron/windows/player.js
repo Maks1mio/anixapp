@@ -80,6 +80,8 @@ function createPlayerWindow(params) {
     sourceName: params.sourceName ?? '',
     ...(params.dubberId != null && params.dubberId !== '' ? { dubberId: params.dubberId } : {}),
   };
+  const hasLocalFile = typeof params.localFile === 'string' && params.localFile.trim() !== '';
+  if (hasLocalFile) queryParams.playbackMode = 'local';
   if (isDev) {
     const q = new URLSearchParams(queryParams).toString();
     playerWindow.loadURL('http://localhost:5173/player.html?' + q);
@@ -87,7 +89,22 @@ function createPlayerWindow(params) {
     const playerPath = path.join(electronDir, '../dist/player.html');
     playerWindow.loadFile(playerPath, { query: queryParams });
   }
-  if (params.paused != null || params.currentTime != null) {
+  if (hasLocalFile) {
+    playerWindow.webContents.once('did-finish-load', () => {
+      if (state.playerWindowRef === playerWindow && !playerWindow.isDestroyed()) {
+        playerWindow.webContents.send('player:changeContent', {
+          releaseId: queryParams.releaseId,
+          sourceId: queryParams.sourceId,
+          ep: queryParams.ep,
+          title: queryParams.title,
+          sourceName: queryParams.sourceName,
+          dubberId: queryParams.dubberId || '',
+          localFile: String(params.localFile),
+          local: true,
+        });
+      }
+    });
+  } else if (params.paused != null || params.currentTime != null) {
     playerWindow.webContents.once('did-finish-load', () => {
       if (state.playerWindowRef === playerWindow && !playerWindow.isDestroyed()) {
         playerWindow.webContents.send('player:applySync', params);
@@ -121,6 +138,7 @@ ipcMain.handle('player:openWindow', async (_, params) => {
     title: String(params.title ?? ''),
     sourceName: String(params.sourceName ?? ''),
     ...(params.dubberId != null && params.dubberId !== '' ? { dubberId: String(params.dubberId) } : {}),
+    ...(params.localFile ? { localFile: String(params.localFile) } : {}),
   };
   // If player window already exists — change content dynamically without closing/reopening
   if (state.playerWindowRef && !state.playerWindowRef.isDestroyed()) {

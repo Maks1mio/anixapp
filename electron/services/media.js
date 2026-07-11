@@ -13,6 +13,9 @@ const { ANIXART_UA } = require('../lib/constants');
 const config = require('../lib/config-store');
 const state = require('../lib/app-state');
 const { formatDownloadError, extractRawMessage } = require('../lib/download-errors');
+const downloadQueue = require('../lib/download-queue');
+const { nodeFetchBuffer } = downloadQueue;
+const { saveFolderMeta, getFolderMeta, parseEpisodeFromFilename } = require('../lib/download-meta');
 
 const DOWNLOAD_VIDEO_EXT = new Set(['.mp4', '.mkv', '.webm', '.avi', '.mov', '.m4v']);
 const MIN_DOWNLOAD_VIDEO_BYTES = 256 * 1024;
@@ -200,8 +203,17 @@ function sessionFetchBuffer(url, headers = {}) {
       if (v != null && v !== '') req.setHeader(k, String(v));
     }
     const chunks = [];
-    const fail = (err) => {
+    const fail = async (err) => {
       const base = extractRawMessage(err);
+      if (/BLOCKED_BY_CLIENT|ERR_FAILED/i.test(base)) {
+        try {
+          resolve(await nodeFetchBuffer(url, merged));
+          return;
+        } catch (nodeErr) {
+          reject(new Error(extractRawMessage(nodeErr) ? `${extractRawMessage(nodeErr)} @ ${url}` : url));
+          return;
+        }
+      }
       reject(new Error(base ? `${base} @ ${url}` : url));
     };
     req.on('response', (res) => {
@@ -365,13 +377,57 @@ async function resolveHlsSegments(m3u8Url, headers = {}) {
   return { segments, encrypted };
 }
 
-/** Параллельная загрузка HLS-сегментов (до 12 одновременно), запись по порядку */
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function hostFromSegmentUrl(url) {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '';
+  }
+}
+
+function hlsFetchPolicy(segments) {
+  const host = hostFromSegmentUrl(segments[0] || '');
+  if (/libria\.fun|anilibria/i.test(host)) {
+    return { concurrency: 1, delayMs: 200, maxRetries: 6, retryBaseMs: 2000 };
+  }
+  if (/kodik|aniqit|moon|hdrezka/i.test(host)) {
+    return { concurrency: 3, delayMs: 80, maxRetries: 4, retryBaseMs: 1500 };
+  }
+  return { concurrency: 6, delayMs: 0, maxRetries: 3, retryBaseMs: 1000 };
+}
+
+function isRetryableFetchError(err) {
+  const raw = extractRawMessage(err);
+  return /HTTP\s+429|HTTP\s+503|HTTP\s+502|ERR_FAILED|ECONNRESET|ETIMEDOUT/i.test(raw);
+}
+
+async function fetchBufferWithRetry(url, headers, policy) {
+  let lastErr;
+  for (let attempt = 0; attempt <= policy.maxRetries; attempt++) {
+    try {
+      return await sessionFetchBuffer(url, headers);
+    } catch (err) {
+      lastErr = err;
+      if (!isRetryableFetchError(err) || attempt === policy.maxRetries) throw err;
+      const delay = policy.retryBaseMs * Math.pow(1.8, attempt) + Math.random() * 400;
+      await sleep(delay);
+    }
+  }
+  throw lastErr;
+}
+
+/** Загрузка HLS-сегментов с ограничением параллелизма и повторами при 429 */
 async function downloadHlsParallel(segments, outputPath, headers = {}, onProgress = null) {
   const total = segments.length;
+  const policy = hlsFetchPolicy(segments);
   const pending = new Map();
   let nextWrite = 0;
   let nextFetch = 0;
-  const CONCURRENCY = 12;
+  const CONCURRENCY = Math.min(policy.concurrency, total);
   const ws = fs.createWriteStream(outputPath);
 
   const flush = () => {
@@ -387,15 +443,17 @@ async function downloadHlsParallel(segments, outputPath, headers = {}, onProgres
     while (nextFetch < total) {
       const i = nextFetch++;
       try {
-        const buf = await sessionFetchBuffer(segments[i], headers);
+        const buf = await fetchBufferWithRetry(segments[i], headers, policy);
         pending.set(i, buf);
         flush();
+        if (policy.delayMs > 0) await sleep(policy.delayMs);
       } catch (err) {
-        throw new Error(formatDownloadError(err, {
+        const formatted = formatDownloadError(err, {
           url: segments[i],
           segment: i,
           segmentTotal: total,
-        }));
+        });
+        throw new Error(formatted);
       }
     }
   }
@@ -658,13 +716,26 @@ function scanDownloadLibrary(rootDir) {
   const addFile = (filePath, stat, groupName) => {
     const key = groupName || 'Без папки';
     if (!groups.has(key)) {
-      groups.set(key, { id: key, name: key, files: [] });
+      const meta = getFolderMeta(rootDir, key);
+      groups.set(key, {
+        id: key,
+        name: key,
+        releaseId: meta?.releaseId ?? null,
+        dubberId: meta?.dubberId ?? null,
+        sourceId: meta?.sourceId ?? null,
+        releaseTitle: meta?.releaseTitle ?? key,
+        dubberName: meta?.dubberName ?? '',
+        sourceName: meta?.sourceName ?? '',
+        files: [],
+      });
     }
+    const ep = parseEpisodeFromFilename(path.basename(filePath));
     groups.get(key).files.push({
       name: path.basename(filePath),
       path: filePath,
       size: stat.size,
       modifiedAt: stat.mtimeMs,
+      episodePosition: ep,
     });
   };
 
@@ -709,6 +780,34 @@ function scanDownloadLibrary(rootDir) {
   }
   list.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
   return list;
+}
+
+function listDownloadsForRelease(releaseId) {
+  const id = Number(releaseId);
+  if (!Number.isFinite(id) || id <= 0) return [];
+  const groups = scanDownloadLibrary(getDownloadDirectory());
+  const files = [];
+  for (const g of groups) {
+    if (g.releaseId !== id) continue;
+    for (const f of g.files) {
+      files.push({
+        episodePosition: f.episodePosition ?? null,
+        path: f.path,
+        name: f.name,
+        size: f.size,
+        dubberName: g.dubberName || '',
+        sourceName: g.sourceName || '',
+        folder: g.name,
+      });
+    }
+  }
+  files.sort((a, b) => {
+    const ap = a.episodePosition ?? 9999;
+    const bp = b.episodePosition ?? 9999;
+    if (ap !== bp) return ap - bp;
+    return a.name.localeCompare(b.name, 'ru');
+  });
+  return files;
 }
 
 function isValidDownloadVideoFile(filePath) {
@@ -777,6 +876,8 @@ ipcMain.handle('downloads:openFile', (_, filePath) => {
 
 ipcMain.handle('downloads:listLibrary', () => scanDownloadLibrary(getDownloadDirectory()));
 
+ipcMain.handle('downloads:listByRelease', (_, releaseId) => listDownloadsForRelease(releaseId));
+
 ipcMain.handle('downloads:checkFiles', (_, payload) => {
   const items = Array.isArray(payload?.items) ? payload.items : [];
   getDownloadDirectory();
@@ -788,74 +889,137 @@ ipcMain.handle('downloads:checkFiles', (_, payload) => {
   });
 });
 
-/** Background download queue — starts downloads without blocking the renderer */
+/** Background download queue — sequential, one file at a time */
+function isEmbedDownloadUrl(url) {
+  return /\/(seria|video|movie|anime)\/\d+\/[0-9a-f]+\//i.test(url)
+    && /kodikplayer\.com|kodik\.info|aniqit\.com|anixis\.com|aniqart\.com/i.test(url);
+}
+
+function getDownloadQueueDeps() {
+  return {
+    downloadHlsToFile,
+    formatDownloadError,
+    isEmbedPageUrl: isEmbedDownloadUrl,
+  };
+}
+
+downloadQueue.setProgressSink((data) => {
+  try { state.mainWindow?.webContents?.send('episode-download:progress', data); } catch (_) {}
+});
+
 ipcMain.handle('episode-download:queue', async (_, payload) => {
   const items = Array.isArray(payload?.items) ? payload.items : [];
   if (items.length === 0) return { ok: false, error: 'empty', items: [] };
 
-  const sendProgress = (data) => {
-    try { state.mainWindow?.webContents?.send('episode-download:progress', data); } catch (_) {}
-  };
-
+  const baseDir = getDownloadDirectory();
   const queued = [];
+  const deps = getDownloadQueueDeps();
+
   for (const item of items) {
     const url = typeof item?.url === 'string' ? item.url : '';
-    if (!/^https?:\/\//i.test(url)) continue;
-    if (/\/(seria|video|movie|anime)\/\d+\/[0-9a-f]+\//i.test(url)
-      && /kodikplayer\.com|kodik\.info|aniqit\.com|anixis\.com|aniqart\.com/i.test(url)) {
-      sendProgress({
-        id: `dl-${Date.now()}-skip`,
-        filename: item?.filename || 'episode.mp4',
-        status: 'error',
-        received: 0,
-        total: 0,
-        error: formatDownloadError('embed-url-not-video', { url, filename: item?.filename }),
-      });
-      continue;
-    }
-
-    const id = `dl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const baseDir = getDownloadDirectory();
     const subFolder = typeof item?.folder === 'string' ? sanitizeDownloadDirName(item.folder) : '';
     const targetDir = subFolder ? path.join(baseDir, subFolder) : baseDir;
     try { fs.mkdirSync(targetDir, { recursive: true }); } catch {}
     const filePath = uniqueDownloadPath(targetDir, item?.filename || path.basename(url.split('?')[0]) || 'episode.mp4');
     const filename = path.basename(filePath);
 
-    queued.push({ id, filename });
-    sendProgress({ id, filename, status: 'queued', received: 0, total: 0 });
+    if (subFolder && item?.releaseId) {
+      saveFolderMeta(baseDir, subFolder, {
+        releaseId: item.releaseId,
+        releaseTitle: item.releaseTitle || subFolder,
+        dubberId: item.dubberId,
+        sourceId: item.sourceId,
+        dubberName: item.dubberName,
+        sourceName: item.sourceName,
+      });
+    }
 
-    const dlHeaders = item?.headers && typeof item.headers === 'object' ? item.headers : {};
-    const isHls = /\.m3u8(\?|$)/i.test(url) || url.includes(':hls:manifest') || url.includes(':hls:hls');
+    const job = downloadQueue.enqueue({
+      url,
+      filePath,
+      filename,
+      headers: item?.headers,
+      folder: subFolder,
+      releaseId: item?.releaseId,
+      sourceId: item?.sourceId,
+      dubberId: item?.dubberId,
+      episodePosition: item?.episodePosition,
+      releaseTitle: item?.releaseTitle,
+      dubberName: item?.dubberName,
+      sourceName: item?.sourceName,
+    }, deps);
 
-    setImmediate(async () => {
-      sendProgress({ id, filename, status: 'downloading', received: 0, total: 0 });
-      try {
-        if (isHls) {
-          await downloadHlsToFile(url, filePath, dlHeaders, (received, total) => {
-            sendProgress({ id, filename, status: 'downloading', received, total });
-          });
-        } else {
-          await sessionFetchStreamToFile(url, filePath, dlHeaders, (received, total) => {
-            sendProgress({ id, filename, status: 'downloading', received, total });
-          });
-        }
-        let fileSize = 0;
-        try { fileSize = fs.statSync(filePath).size; } catch {}
-        sendProgress({
-          id, filename, status: 'done', received: fileSize || 1, total: fileSize || 1, filePath, fileSize,
-        });
-      } catch (err) {
-        sendProgress({
-          id, filename, status: 'error', received: 0, total: 0,
-          error: formatDownloadError(err, { url, filename }),
-        });
-        try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (_) {}
-      }
-    });
+    if (job) queued.push({ id: job.id, filename: job.filename });
   }
 
   return { ok: queued.length > 0, items: queued };
+});
+
+ipcMain.handle('downloads:cancel', (_, id) => {
+  if (typeof id !== 'string' || !id) return { ok: false };
+  return { ok: downloadQueue.cancelJob(id) };
+});
+
+ipcMain.handle('downloads:cancelAll', () => ({ ok: true, cancelled: downloadQueue.cancelAll() }));
+
+ipcMain.handle('downloads:removeEntry', (_, id) => {
+  if (typeof id !== 'string' || !id) return { ok: false };
+  downloadQueue.cancelJob(id);
+  return { ok: true };
+});
+
+ipcMain.handle('downloads:playInApp', async (_, payload) => {
+  const filePath = typeof payload?.filePath === 'string' ? payload.filePath : '';
+  const { player } = require('../windows/player');
+  const isDownloading = payload?.status === 'downloading';
+  const canStreamOnline = isDownloading
+    && payload?.releaseId != null
+    && payload?.sourceId != null
+    && payload?.episodePosition != null;
+
+  // Растущий MP4/HLS-файл часто нельзя корректно продолжить после достигнутого
+  // конца. Пока загрузка активна, открываем ту же серию как сетевой поток:
+  // плеер буферизует её независимо, а очередь продолжает сохранять файл.
+  if (canStreamOnline) {
+    const streamParams = {
+      title: payload?.title || path.basename(filePath || 'episode.mp4'),
+      releaseId: String(payload.releaseId),
+      sourceId: String(payload.sourceId),
+      ep: String(payload.episodePosition),
+      sourceName: payload?.sourceName || '',
+      dubberId: payload?.dubberId != null ? String(payload.dubberId) : '',
+    };
+    if (state.playerWindowRef && !state.playerWindowRef.isDestroyed()) {
+      state.playerWindowRef.webContents.send('player:changeContent', { ...streamParams, local: true });
+      state.playerWindowRef.focus();
+    } else if (player.createPlayerWindow) {
+      player.createPlayerWindow(streamParams);
+    }
+    return { ok: true, streaming: true };
+  }
+
+  if (!filePath || !fs.existsSync(filePath)) return { ok: false, error: 'file-missing' };
+  const st = fs.statSync(filePath);
+  const allowPartial = payload?.allowPartial === true;
+  if (st.size < downloadQueue.MIN_PLAYABLE_BYTES && !allowPartial) {
+    return { ok: false, error: 'file-too-small' };
+  }
+  const params = {
+    localFile: filePath,
+    title: payload?.title || path.basename(filePath),
+    releaseId: payload?.releaseId != null ? String(payload.releaseId) : '',
+    sourceId: payload?.sourceId != null ? String(payload.sourceId) : '',
+    ep: payload?.episodePosition != null ? String(payload.episodePosition) : '1',
+    sourceName: payload?.sourceName || '',
+    dubberId: payload?.dubberId != null ? String(payload.dubberId) : '',
+  };
+  if (state.playerWindowRef && !state.playerWindowRef.isDestroyed()) {
+    state.playerWindowRef.webContents.send('player:changeContent', { ...params, local: true });
+    state.playerWindowRef.focus();
+  } else if (player.createPlayerWindow) {
+    player.createPlayerWindow(params);
+  }
+  return { ok: true };
 });
 
 function sanitizeDownloadName(name) {

@@ -29,6 +29,7 @@ export interface ProfilePageData {
   profile: Record<string, unknown> | null;
   coverUrl: string | null;
   isMyProfile: boolean;
+  selfProfileId: number;
   friendsPreview: Record<string, unknown>[];
   hasFriendsMore: boolean;
   jacksonRoot: Record<string, unknown> | null;
@@ -42,6 +43,7 @@ export async function loadProfilePage(id?: number): Promise<ProfilePageData> {
       profile: null,
       coverUrl: null,
       isMyProfile: false,
+      selfProfileId: 0,
       friendsPreview: [],
       hasFriendsMore: false,
       jacksonRoot: null,
@@ -53,14 +55,19 @@ export async function loadProfilePage(id?: number): Promise<ProfilePageData> {
       ? window.anixApi.profile.info(id)
       : window.anixApi.profile.self();
 
+    const selfPromise = id
+      ? window.anixApi.profile.self().catch(() => null)
+      : Promise.resolve(null);
+
     const channelPromise = id
       ? (window.anixApi.channel?.getBlog
           ? window.anixApi.channel.getBlog(id).catch(() => null)
           : window.anixApi.channel?.info?.(id).catch(() => null) ?? Promise.resolve(null))
       : Promise.resolve(null);
 
-    const [data, channelData] = await Promise.all([profilePromise, channelPromise]) as [
+    const [data, selfData, channelData] = await Promise.all([profilePromise, selfPromise, channelPromise]) as [
       Record<string, unknown>,
+      Record<string, unknown> | null,
       Record<string, unknown> | null,
     ];
 
@@ -73,6 +80,7 @@ export async function loadProfilePage(id?: number): Promise<ProfilePageData> {
         profile: null,
         coverUrl: null,
         isMyProfile: false,
+        selfProfileId: 0,
         friendsPreview: [],
         hasFriendsMore: false,
         jacksonRoot: null,
@@ -82,6 +90,9 @@ export async function loadProfilePage(id?: number): Promise<ProfilePageData> {
     const resolved = resolveJacksonRefs(data);
     const profile = resolved.profile as Record<string, unknown>;
     const isMyProfile = !id || !!(data?.is_my_profile);
+    const selfProfileId = isMyProfile
+      ? Number(profile.id ?? 0)
+      : Number((selfData?.profile as { id?: number } | undefined)?.id ?? 0);
 
     const collectionCount = Number(profile.collection_count ?? 0);
     let collectionsPreview = Array.isArray(profile.collections_preview)
@@ -142,6 +153,7 @@ export async function loadProfilePage(id?: number): Promise<ProfilePageData> {
       profile,
       coverUrl,
       isMyProfile,
+      selfProfileId,
       friendsPreview,
       hasFriendsMore,
       jacksonRoot: data,
@@ -153,6 +165,7 @@ export async function loadProfilePage(id?: number): Promise<ProfilePageData> {
       profile: null,
       coverUrl: null,
       isMyProfile: false,
+      selfProfileId: 0,
       friendsPreview: [],
       hasFriendsMore: false,
       jacksonRoot: null,

@@ -42,9 +42,20 @@ function buildWebAnixApi(): AnixApi {
       self: () => invoke('anix:selfProfile'),
       info: (id) => invoke('anix:profileById', id),
       getFriends: (profileId, page = 0) => invoke('anix:friends', profileId, page),
+      sendFriendRequest: (profileId) => invoke('anix:friendRequestSend', profileId),
+      removeFriendRequest: (profileId) => invoke('anix:friendRequestRemove', profileId),
+      getFriendRecommendations: () => invoke('anix:friendRecommendations'),
       getBookmarks: (profileId, type, page = 0, sort = 1, filterAnnounce = 0, filter = 0) =>
         invoke('anix:getBookmarks', profileId, type, page, sort, filterAnnounce, filter),
       getVotedReleases: (profileId, page = 0) => invoke('anix:votedReleases', profileId, page),
+      getReleaseComments: (profileId, page = 0, sort = 1) =>
+        invoke('anix:profileReleaseComments', profileId, page, sort),
+      getCollectionComments: (profileId, page = 0, sort = 1) =>
+        invoke('anix:profileCollectionComments', profileId, page, sort),
+      getArticleComments: (profileId, page = 0, sort = 1) =>
+        invoke('anix:profileArticleComments', profileId, page, sort),
+      getFavoriteVideos: (profileId, page = 0) =>
+        invoke('anix:profileFavoriteVideos', profileId, page),
     },
 
     release: {

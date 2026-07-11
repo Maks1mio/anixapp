@@ -1,16 +1,21 @@
 <script lang="ts">
+  import { navigate } from '../../../../stores/navigation';
   import { fmtTime } from '../../_utils';
 
-  interface Props { profile: Record<string, unknown>; }
-  let { profile }: Props = $props();
+  interface Props {
+    profile: Record<string, unknown>;
+    profileId: number;
+    isMyProfile: boolean;
+  }
 
-  // Цвета как в Android-приложении
+  let { profile, profileId, isMyProfile }: Props = $props();
+
   const statsItems = $derived([
-    { label: 'Смотрю', value: Number(profile.watching_count ?? 0), color: '#22c55e' },
-    { label: 'В планах', value: Number(profile.plan_count ?? 0), color: '#a855f7' },
-    { label: 'Просмотрено', value: Number(profile.completed_count ?? 0), color: '#3b82f6' },
-    { label: 'Отложено', value: Number(profile.hold_on_count ?? 0), color: '#f59e0b' },
-    { label: 'Брошено', value: Number(profile.dropped_count ?? 0), color: '#ef4444' },
+    { label: 'Смотрю', value: Number(profile.watching_count ?? 0), color: '#22c55e', status: 1 },
+    { label: 'В планах', value: Number(profile.plan_count ?? 0), color: '#a855f7', status: 2 },
+    { label: 'Просмотрено', value: Number(profile.completed_count ?? 0), color: '#3b82f6', status: 3 },
+    { label: 'Отложено', value: Number(profile.hold_on_count ?? 0), color: '#f59e0b', status: 4 },
+    { label: 'Брошено', value: Number(profile.dropped_count ?? 0), color: '#ef4444', status: 5 },
   ]);
 
   const preferredBlocks = $derived.by(() => {
@@ -58,17 +63,30 @@
   const watchTimeLabel = $derived(
     profile.watched_time ? fmtTime(Number(profile.watched_time)) : '',
   );
+
+  function openList(status: number) {
+    if (isMyProfile) {
+      navigate(`/bookmarks`);
+      return;
+    }
+    navigate(`/profile/${profileId}/lists?status=${status}`);
+  }
 </script>
 
 <div class="profile-v2__stats">
   <div class="profile-v2__stats-main">
     <div class="profile-v2__stats-list">
       {#each statsItems as s}
-        <div class="profile-v2__stat-row">
+        <button
+          type="button"
+          class="profile-v2__stat-row profile-v2__stat-row--btn"
+          disabled={s.value <= 0}
+          onclick={() => openList(s.status)}
+        >
           <span class="profile-v2__stat-dot" style="background:{s.color}"></span>
           <span class="profile-v2__stat-label">{s.label}</span>
           <span class="profile-v2__stat-value">{s.value}</span>
-        </div>
+        </button>
       {/each}
 
       {#each preferredBlocks as block}

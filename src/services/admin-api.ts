@@ -73,20 +73,38 @@ async function parseError(res: Response): Promise<Error> {
   return new Error(mapError(err.error ?? 'request failed'));
 }
 
+function mapFetchError(err: unknown, apiBase: string): Error {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (msg === 'Failed to fetch' || msg.includes('NetworkError') || msg.includes('fetch')) {
+    return new Error(
+      `Не удалось связаться с AnixBack (${apiBase}). ` +
+        'Если выбран локальный сервер — запустите anixback (npm run dev в папке anixback). ' +
+        'Или переключите эндпоинт в Настройки → Разработчик → AnixBack.'
+    );
+  }
+  return err instanceof Error ? err : new Error(msg);
+}
+
 export async function unlockAdminSession(input: {
   userId: number;
   deviceId?: string;
   password?: string;
 }): Promise<AdminSessionResult> {
-  const res = await fetch(`${getApiBase()}/admin/unlock`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      user_id: input.userId,
-      device_id: input.deviceId,
-      password: input.password,
-    }),
-  });
+  const apiBase = getApiBase();
+  let res: Response;
+  try {
+    res = await fetch(`${apiBase}/admin/unlock`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: input.userId,
+        device_id: input.deviceId,
+        password: input.password,
+      }),
+    });
+  } catch (err) {
+    throw mapFetchError(err, apiBase);
+  }
   if (!res.ok) throw await parseError(res);
   return res.json();
 }

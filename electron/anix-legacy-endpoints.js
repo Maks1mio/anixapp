@@ -51,6 +51,17 @@ function attachLegacyEndpoints(client) {
   ep.profile.getVotedReleases = (profileId, page) =>
     ep.profileReleaseVote.allReleaseVoted(profileId, page);
   ep.profile.getFriends = ({ id, page }) => ep.profileFriend.friends(id, page);
+  ep.profile.sendFriendRequest = (id) => ep.profileFriend.requestSend(id);
+  ep.profile.removeFriendRequest = (id) => ep.profileFriend.requestRemove(id);
+  ep.profile.getFriendRecommendations = () => ep.profileFriend.recommendations();
+  ep.profile.getReleaseComments = (profileId, page, sort = 1) =>
+    ep.releaseComment.profileComments(profileId, page, { sort });
+  ep.profile.getCollectionComments = (profileId, page, sort = 1) =>
+    ep.collectionComment.profileComments(profileId, page, { sort });
+  ep.profile.getArticleComments = (profileId, page, sort = 1) =>
+    ep.articleComment.profileComments(profileId, page, { sort });
+  ep.profile.getFavoriteVideos = (profileId, page) =>
+    ep.releaseVideoFavorite.favorites(profileId, page);
 
   ep.collection.info = (id) => ep.collection.collection(id);
   ep.collection.getCollectionReleases = (id, page) => ep.collection.releases(id, page);

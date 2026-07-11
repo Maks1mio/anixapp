@@ -13,11 +13,12 @@
     items: Record<string, unknown>[];
     profileLogin: string;
     profileAvatar?: string;
+    profileId: number;
     profile?: Record<string, unknown> | null;
     jacksonRoot?: Record<string, unknown> | null;
   }
 
-  let { items, profileLogin, profileAvatar, profile = null, jacksonRoot = null }: Props = $props();
+  let { items, profileLogin, profileAvatar, profileId, profile = null, jacksonRoot = null }: Props = $props();
 
   let revealed = $state<Record<number, boolean>>({});
 
@@ -55,61 +56,69 @@
   }
 </script>
 
-<div class="overview-comments-week">
-  {#each comments as item (item.id)}
-    {@const hidden = isCommentContentHidden(
-      { isSpoiler: item.isSpoiler, isDeleted: false, voteCount: item.voteCount },
-      !!revealed[item.id],
-    )}
-    <article class="overview-comment-week">
-      <div class="overview-comment-week__bubble">
-        <UserAvatar src={item.profileAvatar} label={item.profileLogin} class="overview-comment-week__avatar" />
-        <div class="overview-comment-week__main">
-          <div class="overview-comment-week__head">
-            <span class="overview-comment-week__login">{item.profileLogin}</span>
-            <span class="overview-comment-week__to">{item.contextLabel}</span>
-          </div>
+<div class="profile-v2__comments">
+  <div class="profile-v2__section-head">
+    <button type="button" class="profile-v2__link" onclick={() => navigate(`/profile/${profileId}/comments`)}>
+      Показать всё
+    </button>
+  </div>
 
-          {#if item.targetPath}
-            <button
-              type="button"
-              class="overview-comment-week__release"
-              onclick={() => openTarget(item.targetPath!)}
-            >
-              <span>{item.targetTitle}</span>
-              {@html iconChevronRight(16)}
-            </button>
-          {:else}
-            <p class="overview-comment-week__release overview-comment-week__release--plain">{item.targetTitle}</p>
-          {/if}
+  <div class="overview-comments-week">
+    {#each comments as item (item.id)}
+      {@const hidden = isCommentContentHidden(
+        { isSpoiler: item.isSpoiler, isDeleted: false, voteCount: item.voteCount },
+        !!revealed[item.id],
+      )}
+      <article class="overview-comment-week">
+        <div class="overview-comment-week__bubble">
+          <UserAvatar src={item.profileAvatar} label={item.profileLogin} class="overview-comment-week__avatar" />
+          <div class="overview-comment-week__main">
+            <div class="overview-comment-week__head">
+              <span class="overview-comment-week__login">{item.profileLogin}</span>
+              <span class="overview-comment-week__to">{item.contextLabel}</span>
+            </div>
 
-          {#if hidden}
-            <button type="button" class="overview-comment-week__spoiler" onclick={() => revealSpoiler(item.id)}>
-              Комментарий может содержать спойлер. Нажмите, чтобы прочитать
-            </button>
-          {:else}
-            {#if item.message}
-              <p class="overview-comment-week__message">{item.message}</p>
-            {/if}
-            {#if item.isSpoiler && revealed[item.id]}
+            {#if item.targetPath}
               <button
                 type="button"
-                class="overview-comment-week__hide-spoiler"
-                onclick={() => hideSpoiler(item.id)}
+                class="overview-comment-week__release"
+                onclick={() => openTarget(item.targetPath!)}
               >
-                Нажмите, чтобы скрыть
+                <span>{item.targetTitle}</span>
+                {@html iconChevronRight(16)}
               </button>
+            {:else}
+              <p class="overview-comment-week__release overview-comment-week__release--plain">{item.targetTitle}</p>
             {/if}
-          {/if}
 
-          <div class="overview-comment-week__foot">
-            {#if item.timestamp}
-              <time>{formatCommentTimestamp(item.timestamp)}</time>
+            {#if hidden}
+              <button type="button" class="overview-comment-week__spoiler" onclick={() => revealSpoiler(item.id)}>
+                Комментарий может содержать спойлер. Нажмите, чтобы прочитать
+              </button>
+            {:else}
+              {#if item.message}
+                <p class="overview-comment-week__message">{item.message}</p>
+              {/if}
+              {#if item.isSpoiler && revealed[item.id]}
+                <button
+                  type="button"
+                  class="overview-comment-week__hide-spoiler"
+                  onclick={() => hideSpoiler(item.id)}
+                >
+                  Нажмите, чтобы скрыть
+                </button>
+              {/if}
             {/if}
-            <span class="overview-comment-week__votes">{item.voteCount}</span>
+
+            <div class="overview-comment-week__foot">
+              {#if item.timestamp}
+                <time>{formatCommentTimestamp(item.timestamp)}</time>
+              {/if}
+              <span class="overview-comment-week__votes">{item.voteCount}</span>
+            </div>
           </div>
         </div>
-      </div>
-    </article>
-  {/each}
+      </article>
+    {/each}
+  </div>
 </div>

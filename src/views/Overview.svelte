@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { navigate } from '../stores/navigation';
-  import OverviewHeroBanner from '../components/overview/OverviewHeroBanner.svelte';
+  import OverviewSteamCarousel from '../components/overview/OverviewSteamCarousel.svelte';
   import OverviewSectionHeader from '../components/overview/OverviewSectionHeader.svelte';
   import OverviewReleaseCarousel from '../components/overview/OverviewReleaseCarousel.svelte';
   import OverviewDiscussList from '../components/overview/OverviewDiscussList.svelte';
@@ -28,6 +28,7 @@
   } from '../utils/overviewCache';
   import {
     fetchOverviewOverrides,
+    pruneOverviewStaleOverrides,
     type OverviewOverride,
   } from '../services/overview-overrides';
   import type { ReleaseCardData } from '../types/release';
@@ -111,9 +112,15 @@
     };
   }
 
-  async function loadHeroOverrides() {
+  async function loadHeroOverrides(bannerList: OverviewBanner[] = banners) {
     try {
-      heroOverrides = await fetchOverviewOverrides();
+      const bannerIds = bannerList.map((b) => b.id).filter((id) => id > 0);
+      if (bannerIds.length > 0) {
+        await pruneOverviewStaleOverrides(bannerIds);
+      }
+      const keep = new Set(bannerIds);
+      const rows = await fetchOverviewOverrides();
+      heroOverrides = rows.filter((o) => keep.has(o.bannerId));
     } catch {
       heroOverrides = [];
     }
@@ -124,7 +131,7 @@
       const cached = getOverviewCache();
       if (cached) {
         applyCache(cached);
-        void loadHeroOverrides();
+        void loadHeroOverrides(cached.banners);
         return;
       }
 
@@ -152,7 +159,7 @@
     try {
       const data = await request;
       applyCache(data);
-      await loadHeroOverrides();
+      await loadHeroOverrides(data.banners);
     } catch (err) {
       errorMsg = String(err);
       loadState = 'error';
@@ -176,7 +183,7 @@
         </button>
       </div>
     {:else}
-      <OverviewHeroBanner items={banners} overrides={heroOverrides} />
+      <OverviewSteamCarousel items={banners} overrides={heroOverrides} />
 
       <div class="overview-page__content">
         {#if recommendations.length > 0}

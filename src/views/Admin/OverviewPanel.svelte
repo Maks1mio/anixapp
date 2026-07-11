@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { clearOverviewCache } from '../../utils/overviewCache';
   import { getAdminToken } from '../../stores/admin';
   import { mapOverviewBanner, type OverviewBanner } from '../../utils/overview';
   import { parseBannerReleaseId } from '../../utils/heroPlayback';
@@ -9,6 +10,7 @@
     deleteOverviewVideo,
     fetchAdminOverviewOverrides,
     formatTimeSec,
+    pruneOverviewOverrides,
     segmentsTotalDuration,
     uploadOverviewBackground,
     type OverviewOverrideAdmin,
@@ -21,6 +23,14 @@
   let loadError = $state('');
   let formError = $state('');
   let busy = $state(false);
+  let pruneInfo = $state('');
+
+  const customizedCount = $derived(
+    banners.filter((b) => {
+      const ov = overrides.get(b.id);
+      return Boolean(ov?.customBgUrl || ov?.customVideoUrl || ov?.sourceVideoUrl || (ov?.segments?.length ?? 0) > 0);
+    }).length
+  );
 
   const selectedBanner = $derived(banners.find((b) => b.id === selectedId) ?? null);
   const selectedOverride = $derived(selectedId != null ? overrides.get(selectedId) ?? null : null);
@@ -28,7 +38,9 @@
   const bgUrl = $derived(
     resolveUploadUrl(selectedOverride?.customBgUrl ?? null) || selectedBanner?.image || ''
   );
-  const renderedUrl = $derived(resolveUploadUrl(selectedOverride?.customVideoUrl ?? null));
+  const renderedUrl = $derived(
+    resolveUploadUrl(selectedOverride?.customVideoUrl ?? null, selectedOverride?.updatedAt)
+  );
   const segments = $derived(selectedOverride?.segments ?? []);
   const hasCarouselVideo = $derived(
     Boolean(renderedUrl || segments.length > 0 || selectedOverride?.sourceVideoUrl)
@@ -57,7 +69,21 @@
   async function load() {
     loadError = '';
     try {
-      await Promise.all([loadBanners(), loadOverrides()]);
+      await loadBanners();
+      const bannerIds = banners.map((b) => b.id).filter((id) => id > 0);
+      const token = getAdminToken();
+      if (token && bannerIds.length > 0) {
+        const deleted = await pruneOverviewOverrides(token, bannerIds);
+        invalidateOverviewOverridesCache();
+        clearOverviewCache();
+        pruneInfo =
+          deleted.length > 0
+            ? `Удалено устаревших кастомизаций: ${deleted.length}`
+            : 'Синхронизация с API: устаревших записей нет';
+      } else {
+        pruneInfo = '';
+      }
+      await loadOverrides();
       if (!selectedId && banners.length > 0) selectBanner(banners[0]!.id);
     } catch (e) {
       loadError = e instanceof Error ? e.message : 'Ошибка загрузки';
@@ -150,8 +176,15 @@
   <aside class="admin-list" aria-label="Баннеры обзора">
     <div class="admin-list__toolbar">
       <p class="admin-list__title">Карусель</p>
-      <span class="admin-list__chip">{banners.length}</span>
+      <span class="admin-list__chip" title="Баннеры из Anixart API (discover.interesting)">{banners.length} API</span>
+      {#if customizedCount > 0}
+        <span class="admin-list__chip" title="Баннеры с загруженным фоном или видео">{customizedCount} свои</span>
+      {/if}
     </div>
+
+    {#if pruneInfo}
+      <p class="settings-row__desc admin-list__sync-note">{pruneInfo}</p>
+    {/if}
 
     {#if banners.length === 0}
       <div class="admin-list__empty">
@@ -253,7 +286,7 @@
     {:else}
       <div class="admin-editor__empty">
         <h2 class="admin-editor__empty-title">Выберите баннер</h2>
-        <p class="admin-editor__empty-text">Слева — все баннеры из Anixart API (discover.interesting).</p>
+        <p class="admin-editor__empty-text">Слева — актуальный список из Anixart API. Кастомизации хранятся только для баннеров с метками «Видео» / «Фон».</p>
       </div>
     {/if}
   </section>

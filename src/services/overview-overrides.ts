@@ -1,4 +1,4 @@
-import { getAnixbackOrigin, getApiBase } from './anixback-endpoint';
+import { getAnixbackUploadsOrigin, getApiBase } from './anixback-endpoint';
 
 export interface VideoSegment {
   start: number;
@@ -15,12 +15,32 @@ export interface OverviewOverride {
   customBgUrl: string | null;
   customVideoUrl: string | null;
   segments: VideoSegment[];
+  assetVersion?: string | null;
 }
 
-export function resolveUploadUrl(path: string | null): string | null {
+function withAssetVersion(url: string, version?: string | null): string {
+  if (!version) return url;
+  const v = encodeURIComponent(version);
+  return `${url}${url.includes('?') ? '&' : '?'}v=${v}`;
+}
+
+export function resolveUploadUrl(path: string | null, version?: string | null): string | null {
   if (!path) return null;
-  if (path.startsWith('http://') || path.startsWith('https://')) return path;
-  return `${getAnixbackOrigin()}${path.startsWith('/') ? path : `/${path}`}`;
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return withAssetVersion(path, version);
+  }
+  return withAssetVersion(
+    `${getAnixbackUploadsOrigin()}${path.startsWith('/') ? path : `/${path}`}`,
+    version
+  );
+}
+
+export function resolveCustomVideoUrl(override: Pick<OverviewOverride, 'customVideoUrl' | 'assetVersion'> | null): string | null {
+  return resolveUploadUrl(override?.customVideoUrl ?? null, override?.assetVersion);
+}
+
+export function resolveCustomBgUrl(override: Pick<OverviewOverride, 'customBgUrl' | 'assetVersion'> | null): string | null {
+  return resolveUploadUrl(override?.customBgUrl ?? null, override?.assetVersion);
 }
 
 let cache: OverviewOverride[] | null = null;
@@ -54,6 +74,24 @@ export function getOverrideForBanner(
 
 export function invalidateOverviewOverridesCache(): void {
   cache = null;
+}
+
+export async function pruneOverviewStaleOverrides(bannerIds: number[]): Promise<number[]> {
+  if (!bannerIds.length) return [];
+  try {
+    const res = await fetch(`${getApiBase()}/overview/prune`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ banner_ids: bannerIds }),
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { deleted?: number[] };
+    cache = null;
+    return Array.isArray(data.deleted) ? data.deleted : [];
+  } catch {
+    return [];
+  }
 }
 
 export function segmentDuration(seg: VideoSegment): number {

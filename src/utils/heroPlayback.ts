@@ -72,6 +72,10 @@ export async function resolveHeroPlayback(releaseId: number): Promise<HeroPlayba
 
 const backdropCache = new Map<number, string>();
 
+export function getCachedHeroBackdrop(releaseId: number): string | undefined {
+  return backdropCache.get(releaseId);
+}
+
 /** Widescreen screenshot or original poster — sharper than small banner art. */
 export async function resolveHeroBackdrop(releaseId: number, fallback: string): Promise<string> {
   const cached = backdropCache.get(releaseId);

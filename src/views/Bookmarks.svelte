@@ -5,6 +5,7 @@
   import { onMount, onDestroy } from 'svelte';
   import Tabs from '../components/Tabs.svelte';
   import { navigate } from '../stores/navigation';
+  import { getSearchParams } from '../router';
   import { buildPosterUrl, resolveCdnAssetUrl } from '../utils/posterUrl';
   import { DEFAULT_BOOKMARK_SORT } from '../constants/bookmarkSort';
   import type { ReleaseCardData } from '../types/release';
@@ -310,7 +311,9 @@
 
   onMount(() => {
     requestAnimationFrame(attachScroll);
-    void loadTab('collections');
+    const tabParam = getSearchParams().get('tab') as TabId | null;
+    const initialTab = tabParam && TABS.some((t) => t.id === tabParam) ? tabParam : 'collections';
+    void loadTab(initialTab);
     window.addEventListener('anix:cardLayoutChanged', onLayoutChanged);
   });
 

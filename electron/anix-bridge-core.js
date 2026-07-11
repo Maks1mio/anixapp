@@ -337,6 +337,20 @@ function createAnixBridgeCore(options = {}) {
       c.getClient().endpoints.profile.getVotedReleases(profileId, page)),
     'anix:friends': h((c, profileId, page = 0) =>
       c.getClient().endpoints.profile.getFriends({ id: profileId, page })),
+    'anix:friendRequestSend': h((c, profileId) =>
+      c.getClient().endpoints.profile.sendFriendRequest(profileId)),
+    'anix:friendRequestRemove': h((c, profileId) =>
+      c.getClient().endpoints.profile.removeFriendRequest(profileId)),
+    'anix:friendRecommendations': h((c) =>
+      c.getClient().endpoints.profile.getFriendRecommendations()),
+    'anix:profileReleaseComments': h((c, profileId, page = 0, sort = 1) =>
+      c.getClient().endpoints.profile.getReleaseComments(profileId, page, sort)),
+    'anix:profileCollectionComments': h((c, profileId, page = 0, sort = 1) =>
+      c.getClient().endpoints.profile.getCollectionComments(profileId, page, sort)),
+    'anix:profileArticleComments': h((c, profileId, page = 0, sort = 1) =>
+      c.getClient().endpoints.profile.getArticleComments(profileId, page, sort)),
+    'anix:profileFavoriteVideos': h((c, profileId, page = 0) =>
+      c.getClient().endpoints.profile.getFavoriteVideos(profileId, page)),
     'anix:getProfileSettings': h((c) => c.getClient().endpoints.settings.getCurrentProfileSettings()),
     'anix:setStatus': h((c, status) => c.getClient().endpoints.settings.setStatus(status)),
     'anix:getSocial': h((c) => c.getClient().endpoints.settings.getSocial()),

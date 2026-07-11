@@ -15,6 +15,7 @@
   } from './components';
   import type { ProfileTab } from './components/ProfileTabNav.svelte';
   import { loadProfilePage, fetchCoverFallback } from '../shared/profile-load';
+  import { resolvePinnedTab } from '../../../utils/profile-friend';
   import { setDiscordContext, refreshDiscordPresence } from '../../../services/discord-presence';
 
   interface Props { id?: number; }
@@ -31,10 +32,12 @@
   let profile = $state<Record<string, unknown> | null>(null);
   let coverUrl = $state<string | null>(null);
   let isMyProfile = $state(false);
+  let selfProfileId = $state(0);
   let friendsData = $state<Record<string, unknown>[]>([]);
   let hasFriendsMore = $state(false);
   let jacksonRoot = $state<Record<string, unknown> | null>(null);
   let activeTab = $state('stats');
+  let pinnedApplied = $state(false);
 
   const availableTabs = $derived.by((): ProfileTab[] => {
     if (!profile) return [];
@@ -61,7 +64,13 @@
 
   $effect(() => {
     const ids = availableTabs.map((t) => t.id);
-    if (ids.length && !ids.includes(activeTab)) {
+    if (!ids.length) return;
+    if (!pinnedApplied && profile) {
+      activeTab = resolvePinnedTab(profile.pinned_section_id, ids);
+      pinnedApplied = true;
+      return;
+    }
+    if (!ids.includes(activeTab)) {
       activeTab = ids[0];
     }
   });
@@ -86,6 +95,7 @@
     profile = result.profile;
     coverUrl = result.coverUrl;
     isMyProfile = result.isMyProfile;
+    selfProfileId = result.selfProfileId;
     friendsData = result.friendsPreview;
     hasFriendsMore = result.hasFriendsMore;
     jacksonRoot = result.jacksonRoot;
@@ -117,13 +127,20 @@
     </div>
   {:else if profile}
     <div class="profile-v2">
-      <ProfileHead {profile} {coverUrl} {isMyProfile} onOpenSocial={openSocial} />
+      <ProfileHead
+        {profile}
+        {coverUrl}
+        {isMyProfile}
+        {selfProfileId}
+        onOpenSocial={openSocial}
+      />
 
       {#if !profile.is_counts_hidden && friendsData.length}
         <ProfileFriendsStrip
           friends={friendsData}
           totalCount={Number(profile.friend_count ?? friendsData.length)}
           profileId={Number(profile.id)}
+          {hasFriendsMore}
         />
       {/if}
 
@@ -132,7 +149,11 @@
 
         <div class="profile-v2__panel" role="tabpanel">
           {#if activeTab === 'stats' && !profile.is_stats_hidden}
-            <ProfileStatsSection {profile} />
+            <ProfileStatsSection
+              {profile}
+              profileId={Number(profile.id)}
+              {isMyProfile}
+            />
           {:else if activeTab === 'votes' && Array.isArray(profile.votes) && profile.votes.length}
             <ProfileVotesSection
               items={profile.votes as Record<string, unknown>[]}
@@ -151,9 +172,13 @@
               {jacksonRoot}
               profileLogin={String(profile.login ?? '')}
               profileAvatar={profile.avatar ? String(profile.avatar) : undefined}
+              profileId={Number(profile.id)}
             />
           {:else if activeTab === 'videos' && Array.isArray(profile.release_video_preview) && profile.release_video_preview.length}
-            <ProfileVideosSection items={profile.release_video_preview as Record<string, unknown>[]} />
+            <ProfileVideosSection
+              items={profile.release_video_preview as Record<string, unknown>[]}
+              profileId={Number(profile.id)}
+            />
           {/if}
         </div>
       {:else if !showBelowSection}

@@ -203,9 +203,20 @@ contextBridge.exposeInMainWorld('anixApi', {
     self: () => ipcRenderer.invoke('anix:selfProfile'),
     info: (id) => ipcRenderer.invoke('anix:profileById', id),
     getFriends: (profileId, page = 0) => ipcRenderer.invoke('anix:friends', profileId, page),
+    sendFriendRequest: (profileId) => ipcRenderer.invoke('anix:friendRequestSend', profileId),
+    removeFriendRequest: (profileId) => ipcRenderer.invoke('anix:friendRequestRemove', profileId),
+    getFriendRecommendations: () => ipcRenderer.invoke('anix:friendRecommendations'),
     getBookmarks: (profileId, type, page = 0, sort = 1, filterAnnounce = 0, filter = 0) =>
       ipcRenderer.invoke('anix:getBookmarks', profileId, type, page, sort, filterAnnounce, filter),
     getVotedReleases: (profileId, page = 0) => ipcRenderer.invoke('anix:votedReleases', profileId, page),
+    getReleaseComments: (profileId, page = 0, sort = 1) =>
+      ipcRenderer.invoke('anix:profileReleaseComments', profileId, page, sort),
+    getCollectionComments: (profileId, page = 0, sort = 1) =>
+      ipcRenderer.invoke('anix:profileCollectionComments', profileId, page, sort),
+    getArticleComments: (profileId, page = 0, sort = 1) =>
+      ipcRenderer.invoke('anix:profileArticleComments', profileId, page, sort),
+    getFavoriteVideos: (profileId, page = 0) =>
+      ipcRenderer.invoke('anix:profileFavoriteVideos', profileId, page),
   },
 
   release: {

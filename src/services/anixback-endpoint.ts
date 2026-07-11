@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import {
+  ANIXBACK_LOCAL_ORIGIN,
   DEFAULT_ANIXBACK_MODE,
   originForMode,
   type AnixbackEndpointMode,
@@ -20,11 +21,27 @@ function viteOriginOverride(): string | null {
 export function getAnixbackOrigin(): string {
   const vite = viteOriginOverride();
   if (vite) return vite.replace(/\/$/, '');
-  // Браузерный dev: same-origin прокси (без CORS), см. vite/anix-web-bridge-plugin.mjs
-  if (import.meta.env.DEV && typeof window !== 'undefined' && !window.electron) {
-    return `${window.location.origin}/__anixback`;
-  }
   return originForMode(currentMode);
+}
+
+/** Static uploads (MP4/JPG/PNG) — тот же сервер, что выбран в настройках разработчика. */
+export function getAnixbackUploadsOrigin(): string {
+  const uploadsOverride = (import.meta.env.VITE_ANIXBACK_UPLOADS_ORIGIN as string | undefined)?.trim();
+  if (uploadsOverride) return uploadsOverride.replace(/\/$/, '');
+
+  const origin = originForMode(currentMode);
+
+  // Dev в Electron/Vite (:5173): прокси __anixback = same-origin, без нарушения CSP
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      if (currentMode === 'local') {
+        return `${window.location.origin}/__anixback`;
+      }
+    }
+  }
+
+  return origin;
 }
 
 export function getApiBase(): string {
@@ -58,6 +75,18 @@ export async function initAnixbackEndpoint(): Promise<void> {
     }
   } catch {
     /* ignore */
+  }
+
+  if (import.meta.env.DEV) {
+    return;
+  }
+
+  if (currentMode === 'local') {
+    const localOk = await pingAnixbackOrigin(ANIXBACK_LOCAL_ORIGIN);
+    if (!localOk.ok) {
+      currentMode = 'prod';
+      anixbackEndpointMode.set('prod');
+    }
   }
 }
 

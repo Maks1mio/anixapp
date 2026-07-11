@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -5,12 +7,35 @@ const require = createRequire(import.meta.url);
 const ANIXART_REFERER = 'https://anixart.tv/';
 const ANIXART_ORIGIN = 'https://anixart.tv';
 
+const ANIXBACK_PROD_ORIGIN = 'https://anix.maks1mio.su';
+const ANIXBACK_LOCAL_ORIGIN = 'http://localhost:8787';
+
+function anixbackTargetOrigins() {
+  const seen = new Set();
+  const out = [];
+  const add = (raw) => {
+    const v = (raw || '').replace(/\/$/, '');
+    if (v && !seen.has(v)) {
+      seen.add(v);
+      out.push(v);
+    }
+  };
+  add(process.env.VITE_ANIXBACK_ORIGIN);
+  add(ANIXBACK_LOCAL_ORIGIN);
+  add(process.env.ANIXBACK_PROXY_TARGET);
+  add(ANIXBACK_PROD_ORIGIN);
+  return out;
+}
+
 function anixbackTargetOrigin() {
-  return (
-    process.env.VITE_ANIXBACK_ORIGIN
-    || process.env.ANIXBACK_PROXY_TARGET
-    || 'https://anix.maks1mio.su'
-  ).replace(/\/$/, '');
+  return anixbackTargetOrigins()[0] ?? ANIXBACK_PROD_ORIGIN;
+}
+
+function shouldTryNextOrigin(res, path, originIndex, total) {
+  if (originIndex >= total - 1) return false;
+  if (res.ok) return false;
+  if (res.status >= 500) return true;
+  return path.startsWith('/uploads/') && res.status === 404;
 }
 
 function readBody(req) {
@@ -39,6 +64,7 @@ function readBody(req) {
 }
 
 function sendJson(res, code, payload) {
+  if (res.headersSent || res.writableEnded) return;
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(payload));
 }
@@ -63,9 +89,8 @@ async function proxyCdn(url, res) {
 }
 
 async function proxyAnixback(req, res, url) {
-  const targetOrigin = anixbackTargetOrigin();
   const path = url.replace(/^\/__anixback/, '') || '/';
-  const upstreamUrl = `${targetOrigin}${path}`;
+  const origins = anixbackTargetOrigins();
 
   try {
     const headers = {
@@ -84,33 +109,89 @@ async function proxyAnixback(req, res, url) {
       }
     }
 
-    const upstream = await fetch(upstreamUrl, {
-      method: req.method,
-      headers,
-      body: body ?? undefined,
-    });
+    let upstream = null;
+    let usedOrigin = origins[0];
+    let lastErr = null;
 
-    const outHeaders = {
-      'Cache-Control': upstream.headers.get('cache-control') || 'public, max-age=300',
+    for (let i = 0; i < origins.length; i++) {
+      const origin = origins[i];
+      const upstreamUrl = `${origin}${path}`;
+      try {
+        const isUpload = path.includes('/uploads/');
+        const fetchOpts = {
+          method: req.method,
+          headers,
+          body: body ?? undefined,
+        };
+        if (!isUpload) {
+          fetchOpts.signal = AbortSignal.timeout(30_000);
+        }
+        const attempt = await fetch(upstreamUrl, fetchOpts);
+        if (shouldTryNextOrigin(attempt, path, i, origins.length)) {
+          continue;
+        }
+        upstream = attempt;
+        usedOrigin = origin;
+        break;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+
+    if (!upstream) {
+      throw lastErr ?? new Error('anixback unreachable');
+    }
+
+    const outHeaders = {};
+    for (const [key, value] of upstream.headers.entries()) {
+      const lower = key.toLowerCase();
+      if (['content-type', 'content-length', 'content-range', 'accept-ranges', 'cache-control', 'etag', 'last-modified'].includes(lower)) {
+        outHeaders[key] = value;
+      }
+    }
+    if (!outHeaders['cache-control']) {
+      outHeaders['Cache-Control'] = path.includes('/uploads/') ? 'public, max-age=31536000, immutable' : 'public, max-age=300';
+    }
+    if (usedOrigin !== origins[0]) {
+      outHeaders['X-Anixback-Proxy-Origin'] = usedOrigin;
+    }
+
+    if (!res.headersSent) {
+      res.writeHead(upstream.status, outHeaders);
+    }
+
+    if (req.method === 'HEAD' || !upstream.body) {
+      if (!res.writableEnded) res.end();
+      return;
+    }
+
+    const readable = Readable.fromWeb(upstream.body);
+    const abortStream = () => {
+      try {
+        readable.destroy();
+      } catch {
+        /* ignore */
+      }
     };
-    const ct = upstream.headers.get('content-type');
-    if (ct) outHeaders['Content-Type'] = ct;
-    const cr = upstream.headers.get('content-range');
-    if (cr) outHeaders['Content-Range'] = cr;
-    const ar = upstream.headers.get('accept-ranges');
-    if (ar) outHeaders['Accept-Ranges'] = ar;
-    const cl = upstream.headers.get('content-length');
-    if (cl) outHeaders['Content-Length'] = cl;
+    readable.on('error', abortStream);
+    res.on('close', abortStream);
+    req.on('aborted', abortStream);
 
-    res.writeHead(upstream.status, outHeaders);
-    const buf = Buffer.from(await upstream.arrayBuffer());
-    res.end(buf);
+    await pipeline(readable, res).catch(abortStream);
   } catch (err) {
-    sendJson(res, 502, { ok: false, error: String(err?.message || err) });
+    if (!res.headersSent && !res.writableEnded) {
+      sendJson(res, 502, { ok: false, error: String(err?.message || err) });
+    } else if (!res.writableEnded) {
+      res.destroy();
+    }
   }
 }
 
 function attachBridgeMiddleware(server, bridge) {
+  server.middlewares.on('error', (err) => {
+    console.warn('[anix-web-bridge] middleware error:', err?.message || err);
+  });
+
   server.middlewares.use(async (req, res, next) => {
     const url = req.url ?? '';
 
@@ -216,7 +297,7 @@ export function anixWebBridgePlugin() {
     configureServer(server) {
       attachBridgeMiddleware(server, getBridge());
       console.log('[anix-web-bridge] Browser API at /__anix/invoke');
-      console.log(`[anix-web-bridge] Anixback proxy /__anixback → ${anixbackTargetOrigin()}`);
+      console.log(`[anix-web-bridge] Anixback proxy /__anixback → ${anixbackTargetOrigins().join(' → ')}`);
       console.log(`[anix-web-bridge] Session config: ${getBridge().configPath}`);
     },
     configurePreviewServer(server) {

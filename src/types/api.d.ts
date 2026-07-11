@@ -19,10 +19,17 @@ export interface AnixApi {
 
   profile: {
     self: () => Promise<any>;
-    info: (id: number) => Promise<{ profile?: unknown }>;
+    info: (id: number) => Promise<{ profile?: unknown; is_my_profile?: boolean }>;
     getFriends: (profileId: number, page?: number) => Promise<any>;
+    sendFriendRequest: (profileId: number) => Promise<{ friend_status?: number | null; code?: number }>;
+    removeFriendRequest: (profileId: number) => Promise<{ friend_status?: number | null; code?: number }>;
+    getFriendRecommendations: () => Promise<{ content?: unknown[] }>;
     getBookmarks: (profileId: number, type: number, page?: number, sort?: number, filterAnnounce?: number, filter?: number) => Promise<any>;
     getVotedReleases: (profileId: number, page?: number) => Promise<any>;
+    getReleaseComments: (profileId: number, page?: number, sort?: number) => Promise<{ content?: Record<string, unknown>[] }>;
+    getCollectionComments: (profileId: number, page?: number, sort?: number) => Promise<{ content?: Record<string, unknown>[] }>;
+    getArticleComments: (profileId: number, page?: number, sort?: number) => Promise<{ content?: Record<string, unknown>[] }>;
+    getFavoriteVideos: (profileId: number, page?: number) => Promise<{ content?: Record<string, unknown>[] }>;
   };
 
   release: {

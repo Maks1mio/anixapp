@@ -123,6 +123,17 @@ export async function renderOverviewVideo(
   return res.json();
 }
 
+export async function pruneOverviewOverrides(token: string, bannerIds: number[]): Promise<number[]> {
+  const res = await fetch(`${getApiBase()}/admin/overview/prune`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ banner_ids: bannerIds }),
+  });
+  if (!res.ok) throw await parseError(res);
+  const data = (await res.json()) as { deleted?: number[] };
+  return Array.isArray(data.deleted) ? data.deleted : [];
+}
+
 export async function deleteOverviewOverride(token: string, bannerId: number): Promise<void> {
   const res = await fetch(`${getApiBase()}/admin/overview/overrides/${bannerId}`, {
     method: 'DELETE',

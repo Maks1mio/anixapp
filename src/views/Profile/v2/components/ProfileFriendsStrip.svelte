@@ -6,9 +6,10 @@
     friends: Record<string, unknown>[];
     totalCount: number;
     profileId: number;
+    hasMore?: boolean;
   }
 
-  let { friends, totalCount, profileId }: Props = $props();
+  let { friends, totalCount, profileId, hasMore = false }: Props = $props();
 
   const previewNames = $derived(
     friends.slice(0, 2).map((f) => String(f.login ?? '')).filter(Boolean),
@@ -17,7 +18,7 @@
   const namesLine = $derived.by(() => {
     if (!previewNames.length) return '';
     const base = previewNames.join(', ');
-    if (totalCount > previewNames.length) return `${base} и другие`;
+    if (totalCount > previewNames.length || hasMore) return `${base} и другие`;
     return base;
   });
 </script>
@@ -36,10 +37,15 @@
 
   <div class="profile-v2__friends-stack" aria-hidden="true">
     {#each friends.slice(0, 4) as fr, i}
-      <span
-        class="profile-v2__friends-stack-av"
-        style="--stack-index:{i};{fr.avatar ? `background-image:url('${posterUrl(String(fr.avatar))}')` : ''}"
-      ></span>
+      <span class="profile-v2__friends-stack-item" style="--stack-index:{i}">
+        <span
+          class="profile-v2__friends-stack-av"
+          style={fr.avatar ? `background-image:url('${posterUrl(String(fr.avatar))}')` : ''}
+        ></span>
+        {#if fr.is_online}
+          <span class="profile-v2__friends-stack-online"></span>
+        {/if}
+      </span>
     {/each}
   </div>
 </button>

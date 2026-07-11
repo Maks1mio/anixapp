@@ -536,6 +536,69 @@ ipcMain.handle('anix:friends', async (_, profileId, page = 0) => {
   }
 });
 
+ipcMain.handle('anix:friendRequestSend', async (_, profileId) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profile.sendFriendRequest(profileId);
+  } catch (err) {
+    handleAnixError(err, 'friendRequestSend');
+  }
+});
+
+ipcMain.handle('anix:friendRequestRemove', async (_, profileId) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profile.removeFriendRequest(profileId);
+  } catch (err) {
+    handleAnixError(err, 'friendRequestRemove');
+  }
+});
+
+ipcMain.handle('anix:friendRecommendations', async () => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profile.getFriendRecommendations();
+  } catch (err) {
+    handleAnixError(err, 'friendRecommendations');
+  }
+});
+
+ipcMain.handle('anix:profileReleaseComments', async (_, profileId, page = 0, sort = 1) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profile.getReleaseComments(profileId, page, sort);
+  } catch (err) {
+    handleAnixError(err, 'profileReleaseComments');
+  }
+});
+
+ipcMain.handle('anix:profileCollectionComments', async (_, profileId, page = 0, sort = 1) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profile.getCollectionComments(profileId, page, sort);
+  } catch (err) {
+    handleAnixError(err, 'profileCollectionComments');
+  }
+});
+
+ipcMain.handle('anix:profileArticleComments', async (_, profileId, page = 0, sort = 1) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profile.getArticleComments(profileId, page, sort);
+  } catch (err) {
+    handleAnixError(err, 'profileArticleComments');
+  }
+});
+
+ipcMain.handle('anix:profileFavoriteVideos', async (_, profileId, page = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profile.getFavoriteVideos(profileId, page);
+  } catch (err) {
+    handleAnixError(err, 'profileFavoriteVideos');
+  }
+});
+
 // ——— Настройки профиля ———
 
 ipcMain.handle('anix:getProfileSettings', async () => {

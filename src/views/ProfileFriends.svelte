@@ -28,6 +28,8 @@
   ]);
 
   let friends = $state<any[]>([]);
+  let recommendations = $state<any[]>([]);
+  let isMyProfilePage = $state(!id);
   let currentPage = $state(0);
   let isLoading = $state(false);
   let hasMore = $state(true);
@@ -122,7 +124,14 @@
         const p = d?.profile;
         if (p?.login) setProfile(p.login, p.avatar, !!d?.is_my_profile);
         if (typeof p?.friend_count === 'number') friendCount = p.friend_count;
+        isMyProfilePage = !!d?.is_my_profile;
       }).catch(() => {});
+    } else {
+      isMyProfilePage = true;
+      try {
+        const rec = await window.anixApi?.profile.getFriendRecommendations?.() as { content?: any[] };
+        recommendations = rec?.content ?? [];
+      } catch { /* ignore */ }
     }
     if (window.anixApi) await load(false);
   });
@@ -144,6 +153,29 @@
     <Tabs tabs={profileTabs} activeId="friends" onChange={onProfileTabChange} />
 
     <div class="search-page__results">
+      {#if isMyProfilePage && recommendations.length}
+        <section class="profile-friends__recs">
+          <h2 class="profile-friends__recs-title">Рекомендации</h2>
+          <div class="search-page__profiles">
+            {#each recommendations as fr}
+              <button
+                type="button"
+                class="search-page__profile"
+                onclick={() => navigate(`/profile/${fr.id}`)}
+              >
+                <div
+                  class="search-page__profile-avatar"
+                  style={fr.avatar ? `background-image:url('${resolveCdnAssetUrl(fr.avatar)}')` : ''}
+                ></div>
+                <div class="search-page__profile-info">
+                  <span class="search-page__profile-name">{fr.login || ''}</span>
+                </div>
+              </button>
+            {/each}
+          </div>
+        </section>
+      {/if}
+
       {#if loadState === 'loading'}
         <div class="search-page__loading">Загрузка…</div>
       {:else if loadState === 'error'}

@@ -232,9 +232,45 @@
     cursor: pointer;
     transition: background $transition;
 
-    &:hover {
+    &:hover:not(:disabled) {
       background: $color-surface-hover;
     }
+
+    &:disabled {
+      opacity: 0.65;
+      cursor: default;
+    }
+  }
+
+  &__friend-note {
+    font-size: 0.85rem;
+    color: $color-text-muted;
+    text-align: center;
+  }
+
+  &__roles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.35rem;
+  }
+
+  &__role {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 999px;
+    border: 1px solid;
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+
+  &__role-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
   }
 
   &__social-row {
@@ -318,14 +354,34 @@
     padding-left: 0.5rem;
   }
 
+  &__friends-stack-item {
+    position: relative;
+    margin-left: -10px;
+
+    &:first-child {
+      margin-left: 0;
+    }
+  }
+
   &__friends-stack-av {
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    margin-left: -10px;
+    display: block;
     background: $color-border center / cover no-repeat;
     border: 2px solid $color-bg;
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+
+  &__friends-stack-online {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #22c55e;
+    border: 2px solid $color-bg;
   }
 
   // ——— Tabs ———
@@ -455,6 +511,27 @@
     align-items: center;
     gap: 0.45rem;
     font-size: 0.875rem;
+
+    &--btn {
+      width: 100%;
+      padding: 0.2rem 0;
+      border: none;
+      background: none;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      border-radius: $radius-sm;
+
+      &:hover:not(:disabled) {
+        background: $color-surface-hover;
+      }
+
+      &:disabled {
+        cursor: default;
+        opacity: 0.55;
+      }
+    }
   }
 
   &__stat-dot {
@@ -628,6 +705,29 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+
+  &__section-title {
+    margin: 0 0 1rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+  }
+
+  &__videos--grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.75rem;
+  }
+}
+
+.profile-friends__recs {
+  margin-bottom: 1.25rem;
+}
+
+.profile-friends__recs-title {
+  margin: 0 0 0.65rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: $color-text-muted;
 }
 
 @keyframes profile-v2-shimmer {

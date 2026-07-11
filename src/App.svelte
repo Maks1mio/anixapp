@@ -36,6 +36,9 @@
   import ProfileVotes from './views/ProfileVotes.svelte';
   import ProfileFriends from './views/ProfileFriends.svelte';
   import ProfileCollections from './views/ProfileCollections.svelte';
+  import ProfileLists from './views/ProfileLists.svelte';
+  import ProfileComments from './views/ProfileComments.svelte';
+  import ProfileVideos from './views/ProfileVideos.svelte';
   import Search from './views/Search.svelte';
   import Collection from './views/Collection.svelte';
   import Notifications from './views/Notifications.svelte';
@@ -116,6 +119,9 @@
   const profileVotesMatch     = $derived(path.match(/^\/profile\/(\d+)\/votes$/));
   const profileFriendsMatch   = $derived(path.match(/^\/profile\/(\d+)\/friends$/));
   const profileCollectionsMatch = $derived(path.match(/^\/profile\/(\d+)\/collections$/));
+  const profileListsMatch     = $derived(path.match(/^\/profile\/(\d+)\/lists$/));
+  const profileCommentsMatch  = $derived(path.match(/^\/profile\/(\d+)\/comments$/));
+  const profileVideosMatch    = $derived(path.match(/^\/profile\/(\d+)\/videos$/));
   const collectionMatch       = $derived(path.match(/^\/collection\/(\d+)$/));
   const collectionEditMatch   = $derived(path.match(/^\/collections\/edit\/(\d+)$/));
   const collectionPickMatch   = $derived(path === '/collections/pick-release');
@@ -394,6 +400,18 @@
       {#key releaseMatch[1]}
         <Release id={parseInt(releaseMatch[1], 10)} />
       {/key}
+    {:else if profileListsMatch}
+      {#key profileListsMatch[1]}
+        <ProfileLists id={parseInt(profileListsMatch[1], 10)} />
+      {/key}
+    {:else if profileCommentsMatch}
+      {#key profileCommentsMatch[1]}
+        <ProfileComments id={parseInt(profileCommentsMatch[1], 10)} />
+      {/key}
+    {:else if profileVideosMatch}
+      {#key profileVideosMatch[1]}
+        <ProfileVideos id={parseInt(profileVideosMatch[1], 10)} />
+      {/key}
     {:else if profileVotesMatch}
       {#key profileVotesMatch[1]}
         <ProfileVotes id={parseInt(profileVotesMatch[1], 10)} />
@@ -450,6 +468,12 @@
       <ProfileFriends />
     {:else if path === '/profile/collections'}
       <ProfileCollections />
+    {:else if path === '/profile/lists'}
+      <ProfileLists />
+    {:else if path === '/profile/comments'}
+      <ProfileComments />
+    {:else if path === '/profile/videos'}
+      <ProfileVideos />
     {:else if path === '/search'}
       <Search q={searchQ} tab={searchTab} {searchBy} />
     {:else if path === '/downloads'}

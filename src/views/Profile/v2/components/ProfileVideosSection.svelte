@@ -2,11 +2,21 @@
   import { navigate } from '../../../../stores/navigation';
   import { posterUrl } from '../../_utils';
 
-  interface Props { items: Record<string, unknown>[]; }
-  let { items }: Props = $props();
+  interface Props {
+    items: Record<string, unknown>[];
+    profileId: number;
+  }
+
+  let { items, profileId }: Props = $props();
 </script>
 
 <div class="profile-v2__videos">
+  <div class="profile-v2__section-head">
+    <button type="button" class="profile-v2__link" onclick={() => navigate(`/profile/${profileId}/videos`)}>
+      Показать всё
+    </button>
+  </div>
+
   <div class="profile__hscroll">
     <div class="profile__hscroll-track profile-v2__video-track">
       {#each items as item}

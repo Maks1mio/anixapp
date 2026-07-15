@@ -2345,6 +2345,13 @@
       color: #fff;
     }
 
+    .release-page__btn-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     &:hover:not(:disabled) {
       background: $color-accent-hover;
       border-color: $color-accent-hover;

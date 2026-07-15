@@ -2,6 +2,7 @@ import { navigate } from '../stores/navigation';
 import { iconCheck, iconFlag, iconInfo, iconStar } from './icons';
 import { renderDotsMenu, type DotsMenuEntry } from './dots-menu';
 import type { ReleaseCardData } from '../types/release';
+import { notifyFavoritesChanged } from '../utils/favorites-events';
 
 const LIST_STATUSES = [
   { id: 'watching', label: 'Смотрю' },
@@ -226,6 +227,7 @@ export function renderReleaseCardHorizontal(data: ReleaseCardData): HTMLElement 
           (next ? api.release.addFavorite(id) : api.release.removeFavorite(id))
             .then(() => {
               isFavorite = next;
+              notifyFavoritesChanged();
               const favEntry = menuEntries.find((e) => (e as any).id === 'favorite') as {
                 id: string;
                 label: string;

@@ -1,6 +1,6 @@
 'use strict';
 
-const { protocol } = require('electron');
+const { protocol, nativeImage } = require('electron');
 
 const ANIXART_SITE_ORIGIN = 'https://anixart.tv';
 const ANIXART_SITE_REFERER = `${ANIXART_SITE_ORIGIN}/`;
@@ -12,6 +12,8 @@ const CACHE_MAX = 256;
 const CACHE_TTL_MS = 60 * 60 * 1000;
 /** @type {Map<string, { buffer: Buffer, mimeType: string, ts: number }>} */
 const cache = new Map();
+/** @type {Map<string, { buffer: Buffer, mimeType: string, ts: number }>} */
+const thumbnailCache = new Map();
 
 function hostMatchesList(host, list) {
   return list.some((h) => host === h || host.endsWith('.' + h));
@@ -55,6 +57,47 @@ function trimCache() {
     if (first == null) break;
     cache.delete(first);
   }
+}
+
+function createThumbnail(buffer, width, height) {
+  const image = nativeImage.createFromBuffer(buffer);
+  if (image.isEmpty()) throw new Error('CDN image decode failed');
+
+  const dimensions = image.getSize();
+  const sourceRatio = dimensions.width / dimensions.height;
+  const targetRatio = width / height;
+  const cropWidth = sourceRatio > targetRatio
+    ? Math.round(dimensions.height * targetRatio)
+    : dimensions.width;
+  const cropHeight = sourceRatio > targetRatio
+    ? dimensions.height
+    : Math.round(dimensions.width / targetRatio);
+  const cropped = image.crop({
+    x: Math.floor((dimensions.width - cropWidth) / 2),
+    y: Math.floor((dimensions.height - cropHeight) / 2),
+    width: cropWidth,
+    height: cropHeight,
+  });
+  return cropped.resize({ width, height, quality: 'good' }).toPNG();
+}
+
+function getThumbnail(url, sourceBuffer, width, height) {
+  const key = `${url}|${width}x${height}`;
+  const cached = thumbnailCache.get(key);
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached;
+
+  const entry = {
+    buffer: createThumbnail(sourceBuffer, width, height),
+    mimeType: 'image/png',
+    ts: Date.now(),
+  };
+  thumbnailCache.set(key, entry);
+  while (thumbnailCache.size > CACHE_MAX) {
+    const first = thumbnailCache.keys().next().value;
+    if (first == null) break;
+    thumbnailCache.delete(first);
+  }
+  return entry;
 }
 
 async function fetchCdnAsset(url) {
@@ -113,11 +156,22 @@ function setupCdnProtocol(logger) {
       if (!target || !isAnixartCdnUrl(target)) {
         return new Response('Forbidden', { status: 403 });
       }
-      const { buffer, mimeType } = await fetchCdnAsset(target);
-      return new Response(buffer, {
+      const asset = await fetchCdnAsset(target);
+      const requestedSize = Number.parseInt(reqUrl.searchParams.get('size') || '', 10);
+      const requestedWidth = Number.parseInt(reqUrl.searchParams.get('w') || '', 10);
+      const requestedHeight = Number.parseInt(reqUrl.searchParams.get('h') || '', 10);
+      const width = requestedWidth || requestedSize;
+      const height = requestedHeight || requestedSize;
+      const hasValidDimensions = Number.isFinite(width) && Number.isFinite(height)
+        && width >= 16 && width <= 512
+        && height >= 16 && height <= 768;
+      const output = hasValidDimensions
+        ? getThumbnail(target, asset.buffer, width, height)
+        : asset;
+      return new Response(output.buffer, {
         status: 200,
         headers: {
-          'Content-Type': mimeType,
+          'Content-Type': output.mimeType,
           'Cache-Control': 'private, max-age=3600',
         },
       });

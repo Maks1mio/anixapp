@@ -388,7 +388,7 @@
   <WebPlayerShell />
 
 {:else}
-  <Layout currentPath={path} searchQ={searchQ}>
+  <Layout currentPath={path}>
     {#if announcementChatMatch}
       {#key announcementChatMatch[1]}
         <AnnouncementChat id={announcementChatMatch[1]} />

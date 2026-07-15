@@ -1,29 +1,28 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import type { Snippet } from 'svelte';
-  import { navigate, navigateSidebarTab } from '../stores/navigation';
+  import { navigate, navigateSearchTab, navigateSidebarTab } from '../stores/navigation';
   import { activeSidebarTab, isSidebarTabActive } from '../stores/tab-navigation';
   import { openAdminArea, restoreAdminSession, checkTeamMembership, isTeamMember } from '../stores/admin';
   import { openLobbyModal, openNotificationsModal, openSettingsModal } from '../stores/modals';
   import { bindSearchHotkeys } from '../search-controller';
-  import { addSearchHistory } from '../utils/search-history';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
-  import { openSearchDropdown, closeSearchDropdown } from '../components/search-dropdown';
   import { iconHome, iconBookmark, iconCompass, iconFlame, iconLayoutGrid, iconDownload } from '../components/icons';
   import { downloads, activeDownloadsCount, downloadsOverallProgress } from '../stores/downloads';
 
   import TitleBar from '../components/TitleBar.svelte';
   import LobbyNowWatching from '../components/LobbyNowWatching.svelte';
   import SidebarSchedulePanel from '../components/SidebarSchedulePanel.svelte';
+  import SidebarPins from '../components/SidebarPins.svelte';
   import Page from '../components/Page.svelte';
+  import { initSidebarPins } from '../stores/sidebar-pins';
 
   interface Props {
     children?: Snippet;
     currentPath?: string;
-    searchQ?: string;
   }
 
-  let { children, currentPath = '/', searchQ = '' }: Props = $props();
+  let { children, currentPath = '/' }: Props = $props();
 
   const SIDEBAR_NAV = [
     { href: '/', label: 'Главная', icon: iconHome(18) },
@@ -41,7 +40,11 @@
 
   onMount(() => {
     const cleanupDl = downloads.init();
-    return cleanupDl;
+    const cleanupPins = initSidebarPins();
+    return () => {
+      cleanupDl?.();
+      cleanupPins();
+    };
   });
 
   const SCHEDULE_ANIM_MS = 340;
@@ -94,6 +97,7 @@
   }
 
   const sidebarContextTab = $derived($activeSidebarTab);
+  const searchTabActive = $derived(sidebarContextTab === 'search');
 
   function isActive(href: string): boolean {
     void sidebarContextTab;
@@ -106,22 +110,10 @@
     isChatPage ? 'page--chat' : isWrappedPage ? 'page--wrapped' : undefined,
   );
 
-  let searchInputEl: HTMLInputElement | null = $state(null);
-  let searchWrapEl: HTMLElement | null = $state(null);
-
   $effect(() => {
     if (currentPath === '/schedule') {
       openSchedule();
       navigate('/overview');
-    }
-  });
-
-  // Sync titlebar input value whenever the search query changes from navigation
-  $effect(() => {
-    const q = searchQ;
-    const el = searchInputEl;
-    if (el && document.activeElement !== el) {
-      el.value = q;
     }
   });
 
@@ -130,49 +122,6 @@
       if (e.key === 'Escape') closeSchedule();
     };
     window.addEventListener('keydown', onKeyDown);
-
-    if (searchWrapEl && searchInputEl) {
-      const searchKbd = searchWrapEl.querySelector('.titlebar__search-kbd') as HTMLElement | null;
-
-      searchWrapEl.addEventListener('click', () => searchInputEl?.focus());
-
-      searchInputEl.addEventListener('focus', () => {
-        if (searchKbd) searchKbd.textContent = 'Enter';
-        openSearchDropdown(searchWrapEl!, searchInputEl!, ({ query, tab }) => {
-          if (query) addSearchHistory(query);
-          // Immediately show the selected query in the input so the user
-          // sees it even before the page re-renders.
-          if (searchInputEl) searchInputEl.value = query;
-          const tabParam = tab && tab !== 'releases' ? `&tab=${tab}` : '';
-          navigate(query ? `/search?q=${encodeURIComponent(query)}${tabParam}` : '/search');
-          // Dispatch directly so Search.svelte always reacts, even if the URL
-          // path didn't change (same /search path, only query params differ).
-          window.dispatchEvent(new CustomEvent('anix:searchRequest', {
-            detail: { q: query, tab: tab || 'releases' },
-          }));
-        });
-      });
-
-      searchInputEl.addEventListener('blur', () => {
-        if (searchKbd) searchKbd.textContent = 'Ctrl+K';
-      });
-
-      searchInputEl.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          const q = searchInputEl!.value.trim();
-          if (q) addSearchHistory(q);
-          closeSearchDropdown();
-          navigate(q ? `/search?q=${encodeURIComponent(q)}` : '/search');
-          // Always dispatch so Search.svelte reacts even when the URL path
-          // stays the same (pushState with same /search path won't trigger
-          // the store/effect chain that updates the `q` prop).
-          window.dispatchEvent(new CustomEvent('anix:searchRequest', {
-            detail: { q, tab: 'releases' },
-          }));
-        }
-      });
-    }
 
     bindSearchHotkeys();
     void restoreAdminSession();
@@ -210,14 +159,14 @@
 
 <div class="layout">
   <TitleBar
-    bind:searchInput={searchInputEl}
-    bind:searchWrap={searchWrapEl}
     onLobby={() => openLobbyModal()}
     onSchedule={toggleSchedule}
     scheduleOpen={scheduleActive}
     onNotifications={() => openNotificationsModal()}
     onSettings={() => openSettingsModal()}
     onProfile={() => navigate('/profile')}
+    onSearchTab={navigateSearchTab}
+    {searchTabActive}
   />
 
   <LobbyNowWatching />
@@ -268,6 +217,7 @@
             </a>
           {/each}
         </nav>
+        <SidebarPins currentPath={currentPath} />
         <div class="sidebar__bottom">
   {#if $isTeamMember}
   <button

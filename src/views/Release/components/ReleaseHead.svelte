@@ -159,12 +159,13 @@
           type="button"
           class="release-page__btn release-page__btn--play{playBtnDisabled ? ' release-page__btn--disabled' : ''}"
           disabled={playBtnDisabled}
+          title={playBtnText}
           onclick={onWatch}
         >
           {#if !playBtnDisabled}
             <span class="release-page__btn-icon">{@html iconPlay(20)}</span>
           {/if}
-          <span>{playBtnText}</span>
+          <span class="release-page__btn-label">{playBtnText}</span>
         </button>
       </div>
     </div>

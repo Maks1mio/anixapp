@@ -18,7 +18,9 @@
     numToStatusId, ratingHue, mapCardData, formatEpisodeAdded,
   } from './_utils';
   import { ReleaseHead, ReleaseVideos, ReleaseRating, ReleaseRelated, ReleaseRecommendations, ReleaseScreenshots, ReleaseComments } from './components';
+  import { notifyFavoritesChanged } from '../../utils/favorites-events';
   import { enrichBlockedRelease } from '../../services/release-geo-bypass';
+  import { extractHistoryEpisodeInfo } from '../../utils/historyFormat';
 
   interface Props { id: number; }
   let { id }: Props = $props();
@@ -31,6 +33,46 @@
   let favoritesCount = $state(0);
   let currentStatus  = $state<ListStatusId | null>(null);
   let descCollapsed  = $state(true);
+  let historyResume  = $state<{ episode: string; dubber: string } | null>(null);
+
+  function readResumeInfo(raw: Record<string, unknown> | null | undefined) {
+    if (!raw) return { episode: '', dubber: '' };
+
+    const lastEpisode = raw.last_view_episode as Record<string, unknown> | undefined;
+    const nested = extractHistoryEpisodeInfo(lastEpisode);
+    const rawEpisode = String(raw.last_view_episode_name ?? nested.episodeLabel ?? '').trim();
+    const episode = /^\d+(?:[.,]\d+)?$/.test(rawEpisode)
+      ? `${rawEpisode} серия`
+      : rawEpisode;
+
+    const source = lastEpisode?.source as Record<string, unknown> | undefined;
+    const sourceDubber = source?.dubber as Record<string, unknown> | undefined;
+    const sourceType = source?.type as Record<string, unknown> | undefined;
+    const dubber = String(
+      raw.last_view_episode_type_name
+      ?? sourceDubber?.name
+      ?? sourceType?.name
+      ?? nested.dubberLabel
+      ?? '',
+    ).trim();
+
+    return { episode, dubber };
+  }
+
+  async function loadHistoryResume(releaseId: number) {
+    if (!window.anixApi?.history?.all) return null;
+
+    // Обычно нужный релиз находится на первой странице. Несколько страниц
+    // нужны для тайтлов, которые пользователь смотрел чуть раньше.
+    for (let page = 0; page < 6; page += 1) {
+      const response = await window.anixApi.history.all(page) as Record<string, unknown>;
+      const content = (response?.content ?? response?.releases ?? []) as Record<string, unknown>[];
+      const match = content.find((item) => Number(item.id ?? (item.release as Record<string, unknown> | undefined)?.id) === releaseId);
+      if (match) return readResumeInfo(match);
+      if (content.length === 0 || response?.last === true) break;
+    }
+    return null;
+  }
 
   // ── Derived: poster ────────────────────────────────────────────────────────
   const posterUrl = $derived.by(() => {
@@ -103,6 +145,14 @@
   const hasEpisodesReleased = $derived(typeof episodesReleased === 'number' && episodesReleased > 0);
   const releaseId    = $derived(release?.id as number | undefined);
 
+  const resumeInfo = $derived.by(() => {
+    const fromRelease = readResumeInfo(release);
+    return {
+      episode: historyResume?.episode || fromRelease.episode,
+      dubber: historyResume?.dubber || fromRelease.dubber,
+    };
+  });
+
   const airedText = $derived.by(() => {
     if (airedOnDate && airedOnDate > 0) {
       const d = new Date(airedOnDate * 1000);
@@ -113,7 +163,14 @@
   });
 
   const playBtnText     = $derived.by(() => {
-    if (isViewBlocked || hasEpisodesReleased) return 'Воспроизвести';
+    if (isViewBlocked || hasEpisodesReleased) {
+      if (resumeInfo.episode && resumeInfo.dubber) {
+        return `${resumeInfo.episode} · ${resumeInfo.dubber}`;
+      }
+      if (resumeInfo.episode) return `Продолжить · ${resumeInfo.episode}`;
+      if (resumeInfo.dubber) return `Продолжить · ${resumeInfo.dubber}`;
+      return 'Воспроизвести';
+    }
     return airedText ? `${airedText}` : 'Скоро';
   });
   const playBtnDisabled = $derived(!isViewBlocked && !hasEpisodesReleased);
@@ -192,6 +249,7 @@
       else            await window.anixApi.release.addFavorite(releaseId);
       isFavorite     = !isFavorite;
       favoritesCount = Math.max(0, favoritesCount + (isFavorite ? 1 : -1));
+      notifyFavoritesChanged();
     } catch { /* ignore */ }
   }
 
@@ -233,6 +291,7 @@
       return;
     }
     try {
+      const historyResumePromise = loadHistoryResume(id).catch(() => null);
       const data = await window.anixApi.release.info(id, true) as any;
       let raw  = data?.release ?? data;
       if (!raw || (raw.id == null && !raw.title_ru && !raw.title_original)) {
@@ -256,6 +315,10 @@
         releasePoster: posterVal || undefined,
       });
       refreshDiscordPresence();
+
+      void historyResumePromise.then((resume) => {
+        if (resume?.episode || resume?.dubber) historyResume = resume;
+      });
     } catch (err) {
       errorMsg  = String(err);
       loadState = 'error';

@@ -6,18 +6,16 @@ export function openSearch(): void {
     focusSearch();
     return;
   }
-  const input = document.getElementById(TITLEBAR_SEARCH_ID) as HTMLInputElement | null;
-  const q = input?.value?.trim() ?? '';
-  navigate(q ? `/search?q=${encodeURIComponent(q)}` : '/search');
+  navigate('/search');
   requestAnimationFrame(() => {
     requestAnimationFrame(() => focusSearch());
   });
 }
 
-const TITLEBAR_SEARCH_ID = 'titlebar-search-input';
+const SEARCH_PAGE_INPUT_ID = 'search-page-input';
 
 export function focusSearch(): void {
-  const input = document.getElementById(TITLEBAR_SEARCH_ID) as HTMLInputElement | null;
+  const input = document.getElementById(SEARCH_PAGE_INPUT_ID) as HTMLInputElement | null;
   if (input) {
     input.focus();
     input.setSelectionRange(0, input.value.length);

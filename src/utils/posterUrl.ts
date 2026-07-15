@@ -67,6 +67,22 @@ export function toCdnProxyUrl(url: string): string {
   return trimmed;
 }
 
+/** Electron CDN-прокси отдаёт уже физически уменьшенную картинку нужного размера. */
+export function toCdnThumbnailUrl(url: string, width: number, height = width): string {
+  const proxied = toCdnProxyUrl(url);
+  if (!proxied || !proxied.startsWith('anix-cdn://')) return proxied;
+
+  try {
+    const parsed = new URL(proxied);
+    parsed.searchParams.delete('size');
+    parsed.searchParams.set('w', String(Math.max(16, Math.min(512, Math.round(width)))));
+    parsed.searchParams.set('h', String(Math.max(16, Math.min(768, Math.round(height)))));
+    return parsed.toString();
+  } catch {
+    return proxied;
+  }
+}
+
 /** Извлекает оригинальный HTTPS URL из anix-cdn:// или возвращает как есть */
 export function fromCdnProxyUrl(url: string): string {
   if (!url.startsWith('anix-cdn://')) return url;

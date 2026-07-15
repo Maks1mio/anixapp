@@ -4,7 +4,9 @@
   import { onMount, onDestroy, untrack } from 'svelte';
   import { navigate } from '../stores/navigation';
   import Tabs from '../components/Tabs.svelte';
-  import { addSearchHistory } from '../utils/search-history';
+  import ScrollArea from '../components/ScrollArea.svelte';
+  import { iconSearch } from '../components/icons';
+  import { addSearchHistory, clearSearchHistory, getSearchHistory } from '../utils/search-history';
   import type { ReleaseCardData } from '../types/release';
   import { buildPosterUrl, resolveCdnAssetUrl } from '../utils/posterUrl';
   import {
@@ -92,6 +94,30 @@
   let currentTab = $state<SearchTab>(tab);
   // svelte-ignore state_referenced_locally
   let currentQuery = $state(q);
+  // svelte-ignore state_referenced_locally
+  let inputValue = $state(q);
+  let recentSearches = $state<string[]>(getSearchHistory());
+  let searchFocused = $state(false);
+  let historyIndex = $state(-1);
+  let searchBlurTimer: ReturnType<typeof setTimeout> | null = null;
+  const matchingRecentSearches = $derived.by(() => {
+    const needle = inputValue.trim().toLocaleLowerCase('ru-RU');
+    return recentSearches
+      .filter((item) => !needle || item.toLocaleLowerCase('ru-RU').includes(needle));
+  });
+
+  const showSearchSuggest = $derived(
+    searchFocused && (
+      !inputValue.trim() || matchingRecentSearches.length > 0
+    ),
+  );
+
+  $effect(() => {
+    inputValue;
+    if (historyIndex >= matchingRecentSearches.length) {
+      historyIndex = -1;
+    }
+  });
 
   // svelte-ignore state_referenced_locally
   let currentSearchBy = $state(searchBy);
@@ -108,6 +134,7 @@
     const prevSearchBy = untrack(() => currentSearchBy);
     if (newQ !== prevQ || newTab !== prevTab || newSearchBy !== prevSearchBy) {
       currentQuery = newQ;
+      inputValue = newQ;
       currentTab = newTab ?? 'releases';
       currentSearchBy = newSearchBy ?? 0;
       currentPage = 0;
@@ -223,6 +250,7 @@
     if (!window.anixApi || !currentQuery.trim()) return;
     if (isLoading || !hasMore) return;
     if (!append) addSearchHistory(currentQuery.trim());
+    if (!append) recentSearches = getSearchHistory();
     isLoading = true;
 
     if (!append) {
@@ -313,6 +341,90 @@
     else loadState = 'hint';
   }
 
+  function runSearch(rawQuery: string) {
+    const query = rawQuery.trim();
+    inputValue = query;
+    currentQuery = query;
+    currentPage = 0;
+    hasMore = true;
+    isLoading = false;
+    scrollAttached = false;
+    releaseResults = [];
+    profileResults = [];
+    collectionResults = [];
+    franchiseData = null;
+    showEnd = false;
+
+    const params = new URLSearchParams();
+    if (query) params.set('q', query);
+    if (currentTab !== 'releases') params.set('tab', currentTab);
+    if (currentTab === 'releases' && currentSearchBy > 0) params.set('by', String(currentSearchBy));
+    const queryString = params.toString();
+    navigate(queryString ? `/search?${queryString}` : '/search');
+
+    if (query) void performSearch(false);
+    else loadState = 'hint';
+  }
+
+  function submitSearch(event: SubmitEvent) {
+    event.preventDefault();
+    searchFocused = false;
+    runSearch(inputValue);
+  }
+
+  function clearRecentSearches() {
+    clearSearchHistory();
+    recentSearches = [];
+  }
+
+  function handleSearchFocus() {
+    if (searchBlurTimer != null) clearTimeout(searchBlurTimer);
+    recentSearches = getSearchHistory();
+    searchFocused = true;
+    historyIndex = -1;
+  }
+
+  function handleSearchInput() {
+    if (searchBlurTimer != null) clearTimeout(searchBlurTimer);
+    recentSearches = getSearchHistory();
+    searchFocused = true;
+  }
+
+  function handleSearchBlur() {
+    searchBlurTimer = setTimeout(() => {
+      const input = document.getElementById('search-page-input');
+      if (input === document.activeElement) return;
+      searchFocused = false;
+      historyIndex = -1;
+      searchBlurTimer = null;
+    }, 120);
+  }
+
+  function selectRecentSearch(query: string) {
+    if (searchBlurTimer != null) clearTimeout(searchBlurTimer);
+    searchFocused = false;
+    historyIndex = -1;
+    runSearch(query);
+  }
+
+  function handleSearchKeydown(event: KeyboardEvent) {
+    const items = matchingRecentSearches;
+    if (!searchFocused || items.length === 0) return;
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      historyIndex = (historyIndex + 1) % items.length;
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      historyIndex = (historyIndex - 1 + items.length) % items.length;
+    } else if (event.key === 'Enter' && historyIndex >= 0) {
+      event.preventDefault();
+      selectRecentSearch(items[historyIndex]);
+    } else if (event.key === 'Escape') {
+      historyIndex = -1;
+    }
+  }
+
   function onLayoutChanged() {
     if (!wrapEl || !currentQuery.trim()) return;
     isLoading = false;
@@ -326,6 +438,7 @@
     const newQ = detail.q ?? '';
     const newTab: SearchTab = (detail.tab as SearchTab) ?? 'releases';
     currentQuery = newQ;
+    inputValue = newQ;
     currentTab = newTab;
     currentPage = 0;
     hasMore = true;
@@ -376,6 +489,13 @@
     }
 
     if (currentQuery) performSearch(false);
+    else {
+      requestAnimationFrame(() => {
+        const input = document.getElementById('search-page-input') as HTMLInputElement | null;
+        input?.focus();
+        if (input === document.activeElement) handleSearchFocus();
+      });
+    }
   });
 
   onDestroy(() => {
@@ -386,32 +506,124 @@
     detachScroll();
     window.removeEventListener('anix:cardLayoutChanged', onLayoutChanged);
     window.removeEventListener('anix:searchRequest', onSearchRequest);
+    if (searchBlurTimer != null) clearTimeout(searchBlurTimer);
   });
 
-  const pageTitle = $derived(currentQuery ? `Поиск: ${currentQuery}` : 'Поиск');
 </script>
 
 <div class="view view-search" bind:this={wrapEl}>
   <div class="search-page">
-    <div class="view-header">
-      <h1 class="view-header__title">{pageTitle}</h1>
-    </div>
+    <header class="search-page__header">
+      <div class="search-page__heading">
+        <h1 class="search-page__title">Поиск</h1>
+        <p class="search-page__subtitle">Тайтлы, коллекции и пользователи — в одном месте</p>
+      </div>
 
-    <Tabs
-      tabs={SEARCH_TABS}
-      activeId={currentTab}
-      onChange={(id) => applyTabChange(id as SearchTab)}
-    />
+      <div class="search-page__form-wrap">
+        <form class="search-page__form" role="search" onsubmit={submitSearch}>
+          <span class="search-page__form-icon" aria-hidden="true">{@html iconSearch(20)}</span>
+          <input
+            id="search-page-input"
+            class="search-page__input"
+            type="search"
+            bind:value={inputValue}
+            placeholder="Введите название, имя пользователя или коллекции"
+            autocomplete="off"
+            spellcheck={false}
+            aria-label="Поисковый запрос"
+            aria-expanded={showSearchSuggest}
+            aria-controls="search-page-suggest"
+            onfocus={handleSearchFocus}
+            onblur={handleSearchBlur}
+            oninput={handleSearchInput}
+            onkeydown={handleSearchKeydown}
+          />
+          <button
+            type="submit"
+            class="search-page__submit"
+            disabled={!inputValue.trim()}
+          >
+            Найти
+          </button>
+        </form>
+
+        {#if showSearchSuggest}
+          <div
+            id="search-page-suggest"
+            class="search-page__suggest"
+            role="listbox"
+            aria-label="Недавние запросы"
+          >
+            <div class="search-page__suggest-head">
+              <span class="search-page__suggest-section">Недавние запросы</span>
+              {#if recentSearches.length > 0}
+                <button
+                  type="button"
+                  class="search-page__suggest-clear"
+                  onmousedown={(event) => event.preventDefault()}
+                  onclick={clearRecentSearches}
+                >
+                  Очистить
+                </button>
+              {/if}
+            </div>
+
+            {#if matchingRecentSearches.length > 0}
+              <ScrollArea extraClass="search-page__suggest-scroll">
+                {#each matchingRecentSearches as item, index (item)}
+                  <button
+                    type="button"
+                    class="search-page__suggest-item"
+                    class:search-page__suggest-item--active={historyIndex === index}
+                    role="option"
+                    aria-selected={historyIndex === index}
+                    onmousedown={(event) => event.preventDefault()}
+                    onclick={() => selectRecentSearch(item)}
+                  >
+                    {item}
+                  </button>
+                {/each}
+              </ScrollArea>
+            {:else}
+              <div class="search-page__suggest-empty">Нет недавних запросов</div>
+            {/if}
+          </div>
+        {/if}
+      </div>
+    </header>
+
+    <div class="search-page__tabs-wrap">
+      <Tabs
+        tabs={SEARCH_TABS}
+        activeId={currentTab}
+        onChange={(id) => applyTabChange(id as SearchTab)}
+        rootClassName="bookmarks__tabs search-page__tabs-bar"
+      />
+    </div>
 
     <div class="search-page__results">
       {#if loadState === 'hint'}
-        <p class="search-page__hint">Введите запрос в поле выше и нажмите Enter</p>
+        <div class="search-page__state">
+          <span class="search-page__state-icon" aria-hidden="true">{@html iconSearch(24)}</span>
+          <p class="search-page__state-title">Начните поиск</p>
+          <p class="search-page__hint">Введите запрос в поле выше</p>
+        </div>
       {:else if loadState === 'loading'}
-        <div class="search-page__loading">Поиск…</div>
+        <div class="search-page__state">
+          <span class="search-page__loader" aria-hidden="true"></span>
+          <p class="search-page__state-title">Ищем «{currentQuery}»</p>
+        </div>
       {:else if loadState === 'error'}
-        <p class="search-page__error">Ошибка: {errorMsg}</p>
+        <div class="search-page__state search-page__state--error">
+          <p class="search-page__state-title">Не удалось выполнить поиск</p>
+          <p class="search-page__error">{errorMsg}</p>
+          <button type="button" class="search-page__retry" onclick={() => runSearch(currentQuery)}>Повторить</button>
+        </div>
       {:else if loadState === 'empty'}
-        <p class="search-page__empty">Ничего не найдено</p>
+        <div class="search-page__state">
+          <p class="search-page__state-title">Ничего не найдено</p>
+          <p class="search-page__empty">Попробуйте изменить запрос или выбрать другую вкладку</p>
+        </div>
       {:else}
         {#if currentTab === 'releases'}
           {#if franchiseData}

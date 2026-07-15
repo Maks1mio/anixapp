@@ -10,45 +10,193 @@
 .search-page {
   display: flex;
   flex-direction: column;
+  gap: 1.15rem;
 }
 
 .search-page__header {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.9rem;
+  padding-top: 0.2rem;
 }
 
-.search-page__tabs {
+.search-page__heading {
   display: flex;
-  gap: 2px;
-  background: color-mix(in srgb, var(--color-text) 4%, transparent);
-  border-radius: $radius-md;
-  padding: 3px;
+  flex-direction: column;
+  gap: 0.2rem;
 }
 
-.search-page__tab {
-  flex: 1;
-  height: 30px;
-  padding: 0 0.75rem;
-  font-size: 0.8rem;
-  font-family: inherit;
-  font-weight: 500;
+.search-page__title {
+  margin: 0;
+  font-size: 1.55rem;
+  line-height: 1.2;
+  font-weight: 650;
+  color: $color-text;
+}
+
+.search-page__subtitle {
+  margin: 0;
   color: $color-text-muted;
+  font-size: 0.84rem;
+}
+
+.search-page__form-wrap {
+  position: relative;
+}
+
+.search-page__form {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 3.2rem;
+  padding: 0.35rem 0.4rem 0.35rem 0.9rem;
+  border: 1px solid $color-border;
+  border-radius: 11px;
+  background: $color-surface;
+  transition: border-color $transition, background $transition;
+
+  &:focus-within {
+    border-color: color-mix(in srgb, $color-accent 65%, $color-border);
+    background: color-mix(in srgb, $color-surface 92%, $color-bg);
+  }
+}
+
+.search-page__suggest {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  background: $color-surface;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+.search-page__suggest-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 1rem 0.3rem;
+}
+
+.search-page__suggest-section {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: $color-text-muted;
+}
+
+.search-page__suggest-clear {
+  padding: 0.15rem 0.3rem;
+  border: 0;
   background: transparent;
-  border: none;
-  border-radius: calc($radius-md - 2px);
+  color: $color-text-muted;
+  font: inherit;
+  font-size: 0.75rem;
   cursor: pointer;
-  transition: background $transition, color $transition;
 
   &:hover {
     color: $color-text;
   }
+}
 
+.search-page__suggest-scroll.page {
+  --page-scrollbar-offset: 6px;
+  --page-scroll-padding: 0;
+}
+
+.search-page__suggest-scroll .page__scroll {
+  max-height: 14rem;
+}
+
+.search-page__suggest-item {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 1rem 0.5rem 1.25rem;
+  border: 0;
+  background: transparent;
+  color: $color-text-muted;
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover,
   &--active {
-    background: $color-surface;
+    background: rgba(255, 255, 255, 0.08);
     color: $color-text;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
   }
+}
+
+.search-page__suggest-empty {
+  padding: 0.75rem 1rem 0.9rem;
+  font-size: 0.8rem;
+  color: $color-text-muted;
+  text-align: center;
+}
+
+.search-page__form-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: $color-text-muted;
+}
+
+.search-page__input {
+  flex: 1;
+  min-width: 0;
+  height: 2.35rem;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: $color-text;
+  font: inherit;
+  font-size: 0.93rem;
+
+  &::placeholder {
+    color: $color-text-muted;
+  }
+
+  &::-webkit-search-cancel-button {
+    cursor: pointer;
+  }
+}
+
+.search-page__submit,
+.search-page__retry {
+  min-height: 2.35rem;
+  padding: 0 1.05rem;
+  border: 0;
+  border-radius: 8px;
+  background: $color-accent;
+  color: #fff;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background $transition, opacity $transition;
+
+  &:hover {
+    background: $color-accent-hover;
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+.search-page__tabs-wrap {
+  border-bottom: 1px solid $color-border;
+}
+
+.search-page__tabs-bar {
+  margin: 0;
 }
 
 .search-page__results {
@@ -189,14 +337,41 @@
   transition: transform 0.2s ease, color 0.2s ease;
 }
 
+.search-page__state {
+  min-height: 13rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 2rem;
+  border: 1px dashed color-mix(in srgb, $color-border 75%, transparent);
+  border-radius: 11px;
+  color: $color-text-muted;
+  text-align: center;
+}
+
+.search-page__state-icon {
+  display: inline-flex;
+  margin-bottom: 0.25rem;
+  opacity: 0.6;
+}
+
+.search-page__state-title {
+  margin: 0;
+  color: $color-text;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
 .search-page__hint,
 .search-page__empty,
-.search-page__error,
-.search-page__loading {
-  font-size: 0.85rem;
+.search-page__error {
+  max-width: 30rem;
+  margin: 0;
   color: $color-text-muted;
-  padding: 2rem 0;
-  text-align: center;
+  font-size: 0.82rem;
+  line-height: 1.45;
 }
 
 .search-page__end {
@@ -209,6 +384,24 @@
 
 .search-page__error {
   color: $color-error;
+}
+
+.search-page__retry {
+  margin-top: 0.35rem;
+}
+
+.search-page__loader {
+  width: 1.35rem;
+  height: 1.35rem;
+  margin-bottom: 0.25rem;
+  border: 2px solid color-mix(in srgb, $color-text-muted 25%, transparent);
+  border-top-color: $color-accent;
+  border-radius: 50%;
+  animation: search-page-spin 0.75s linear infinite;
+}
+
+@keyframes search-page-spin {
+  to { transform: rotate(360deg); }
 }
 
 // ——— Profiles ———
@@ -297,4 +490,29 @@
 .search-page__collections-grid .collection-card {
   max-width: 100%;
   min-height: 0;
+}
+
+@container (max-width: 34rem) {
+  .search-page__title {
+    font-size: 1.3rem;
+  }
+
+  .search-page__subtitle {
+    font-size: 0.78rem;
+  }
+
+  .search-page__form {
+    gap: 0.5rem;
+    padding-left: 0.7rem;
+  }
+
+  .search-page__submit {
+    padding-inline: 0.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search-page__loader {
+    animation: none;
+  }
 }

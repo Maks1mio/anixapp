@@ -1,7 +1,13 @@
 import { writable } from 'svelte/store';
 import { getPath } from '../router';
 import { captureActiveScroll, resetScrollAfterRouteChange } from './view-state';
-import { recordTabNavigation, prepareSidebarTabSwitch } from './tab-navigation';
+import {
+  recordTabNavigation,
+  prepareSidebarTabSwitch,
+  prepareIndependentNavigation,
+  prepareIndependentTabSwitch,
+  type IndependentTabId,
+} from './tab-navigation';
 
 export const currentPath = writable<string>(getPath());
 
@@ -33,4 +39,12 @@ export function navigate(path: string, _state?: unknown): void {
 export function navigateSidebarTab(href: string): void {
   const target = prepareSidebarTabSwitch(href);
   navigate(target ?? href);
+}
+
+export function navigateIndependentTab(tabId: IndependentTabId, path: string): void {
+  navigate(prepareIndependentNavigation(tabId, path));
+}
+
+export function navigateSearchTab(): void {
+  navigate(prepareIndependentTabSwitch('search', '/search'));
 }

@@ -10,6 +10,8 @@
 
 .sidebar {
   width: 3.25rem;
+  flex: 1;
+  min-height: 0;
   flex-shrink: 0;
   background: $color-surface;
   display: flex;
@@ -24,6 +26,7 @@
   gap: 0.15rem;
   align-items: center;
   width: 100%;
+  flex-shrink: 0;
 }
 
 .sidebar__link {
@@ -65,6 +68,263 @@
   gap: 0.15rem;
   align-items: center;
   width: 100%;
+  flex-shrink: 0;
+}
+
+// ——— Закреплённое избранное (пины, как в Spotify) ———
+.sidebar-pins {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  margin: 0.2rem 0;
+  border-top: 1px solid color-mix(in srgb, $color-border 42%, transparent);
+}
+
+.sidebar-pins__scroll {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.2rem 0;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.sidebar-pins__fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1.45rem;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity;
+
+  &--top {
+    top: 0;
+    background: linear-gradient(
+      to bottom,
+      $color-surface 0%,
+      color-mix(in srgb, $color-surface 88%, transparent) 38%,
+      color-mix(in srgb, $color-surface 35%, transparent) 72%,
+      transparent 100%
+    );
+  }
+
+  &--bottom {
+    bottom: 0;
+    background: linear-gradient(
+      to top,
+      $color-surface 0%,
+      color-mix(in srgb, $color-surface 88%, transparent) 38%,
+      color-mix(in srgb, $color-surface 35%, transparent) 72%,
+      transparent 100%
+    );
+  }
+}
+
+.sidebar-pins__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: $color-surface-hover;
+  cursor: pointer;
+  overflow: hidden;
+  flex-shrink: 0;
+  will-change: transform, opacity;
+  transition: box-shadow 0.22s ease, opacity 0.22s ease;
+
+  &:hover {
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.38);
+  }
+
+  &--active {
+    box-shadow: 0 0 0 1.5px color-mix(in srgb, $color-text 70%, transparent);
+  }
+}
+
+.sidebar-pins__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 4px;
+  image-rendering: auto;
+}
+
+.sidebar-pins__fallback {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: $color-text-muted;
+}
+
+.sidebar-pins__skel {
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 10px;
+  background: $color-surface-hover;
+  flex-shrink: 0;
+  animation: sidebar-pins-pulse 1.2s ease-in-out infinite;
+}
+
+.sidebar-pins__preview {
+  position: fixed;
+  left: calc(3.25rem + 0.55rem);
+  z-index: 120;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-50%) translateX(-8px) scale(0.97);
+  transition:
+    opacity 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0.26s;
+
+  &--visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(-50%) translateX(0) scale(1);
+    pointer-events: auto;
+  }
+}
+
+.sidebar-pins__preview-card {
+  display: flex;
+  gap: 0.75rem;
+  width: 17.5rem;
+  padding: 0.65rem;
+  border-radius: 12px;
+  background: color-mix(in srgb, $color-surface 94%, $color-bg);
+  border: 1px solid color-mix(in srgb, $color-border 75%, transparent);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+.sidebar-pins__preview-poster {
+  flex-shrink: 0;
+  width: 4.6rem;
+  aspect-ratio: 2 / 3;
+  border-radius: 10px;
+  overflow: hidden;
+  background: $color-surface-hover;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+}
+
+.sidebar-pins__preview-poster-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: $color-text-muted;
+}
+
+.sidebar-pins__preview-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  padding-top: 0.1rem;
+}
+
+.sidebar-pins__preview-title {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: $color-text;
+  display: -webkit-box;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.sidebar-pins__preview-sub {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: $color-text-muted;
+  display: -webkit-box;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.sidebar-pins__preview-meta {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: color-mix(in srgb, $color-text-muted 92%, $color-text);
+}
+
+.sidebar-pins__preview-status {
+  align-self: flex-start;
+  margin-top: 0.1rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 500;
+  text-transform: lowercase;
+  color: $color-text;
+  background: color-mix(in srgb, $color-accent 22%, $color-surface-hover);
+}
+
+.sidebar-pins__preview-hint {
+  margin-top: auto;
+  font-size: 0.66rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, $color-text-muted 80%, transparent);
+}
+
+@keyframes sidebar-pins-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.85; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-pins__item {
+    transition: none;
+
+    &:hover {
+      transform: none;
+    }
+
+  }
+
+  .sidebar-pins__skel {
+    animation: none;
+    opacity: 0.6;
+  }
 }
 
 .sidebar__link--logout:hover {
@@ -94,8 +354,10 @@
 .sidebar-column {
   position: relative;
   display: flex;
+  flex-direction: column;
   flex-shrink: 0;
   align-self: stretch;
+  min-height: 0;
   z-index: 40;
 }
 

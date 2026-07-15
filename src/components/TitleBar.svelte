@@ -8,25 +8,25 @@
   const hasWindowApi = typeof (window as any).electron?.window !== 'undefined';
 
   interface Props {
-    searchInput?: HTMLInputElement | null;
-    searchWrap?: HTMLElement | null;
     onLobby?: () => void;
     onNotifications?: () => void;
     onSchedule?: () => void;
     scheduleOpen?: boolean;
     onSettings?: () => void;
     onProfile?: () => void;
+    onSearchTab?: () => void;
+    searchTabActive?: boolean;
   }
 
   let {
-    searchInput = $bindable(null),
-    searchWrap = $bindable(null),
     onLobby,
     onNotifications,
     onSchedule,
     scheduleOpen = false,
     onSettings,
     onProfile,
+    onSearchTab,
+    searchTabActive = false,
   }: Props = $props();
 
   let updateInfo: UpdateInfo | null = $state(null);
@@ -166,21 +166,6 @@
     </button>
   </div>
 
-  <div class="titlebar__search" id="titlebar-search-wrap" bind:this={searchWrap}>
-    <span class="titlebar__search-icon">{@html iconSearch(14)}</span>
-    <input
-      type="text"
-      class="titlebar__search-input"
-      id="titlebar-search-input"
-      placeholder="Поиск аниме, пользователей, коллекций…"
-      autocomplete="off"
-      spellcheck={false}
-      aria-label="Поиск"
-      bind:this={searchInput}
-    />
-    <kbd class="titlebar__search-kbd">Ctrl+K</kbd>
-  </div>
-
   <div class="titlebar__menu" id="titlebar-menu">
     <!-- Update button -->
     {#if updateInfo}
@@ -305,6 +290,19 @@
     >
       {@html iconSettings(18)}
       <span class="tooltip tooltip--animated">Настройки</span>
+    </button>
+
+    <!-- Independent search tab -->
+    <button
+      type="button"
+      class="titlebar__menu-item tooltip-trigger"
+      class:titlebar__menu-item--active={searchTabActive}
+      aria-label="Поиск"
+      aria-current={searchTabActive ? 'page' : undefined}
+      onclick={onSearchTab}
+    >
+      {@html iconSearch(18)}
+      <span class="tooltip tooltip--animated">Поиск</span>
     </button>
   </div>
 

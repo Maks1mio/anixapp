@@ -8,6 +8,7 @@
   import type { ReleaseCardData } from '../types/release';
   import { formatHistoryViewTime } from '../utils/historyFormat';
   import { onMount } from 'svelte';
+  import { notifyFavoritesChanged } from '../utils/favorites-events';
 
   const LIST_STATUSES = [
     { id: 'watching', label: 'Смотрю' },
@@ -142,6 +143,7 @@
           (next ? api.release.addFavorite(id) : api.release.removeFavorite(id))
             .then(() => {
               isFavorite = next;
+              notifyFavoritesChanged();
             })
             .catch(() => {});
           return;

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import {
     downloads,
     downloadSettings,
@@ -11,6 +11,14 @@
   import { formatDownloadErrorMessage } from '../utils/download-errors';
   import { queueMissingEpisodes } from '../utils/download-queue-client';
   import { navigate } from '../stores/navigation';
+  import {
+    buildViewStateKey,
+    getViewState,
+    saveViewStateWithScroll,
+    restoreScrollTop,
+    registerActiveScrollKey,
+    saveViewStateData,
+  } from '../stores/view-state';
   import {
     iconDownload,
     iconRefreshCw,
@@ -25,11 +33,32 @@
     iconFilm,
   } from '../components/icons';
 
+  interface DownloadsViewState {
+    expandedGroups: Record<string, boolean>;
+  }
+
+  const DOWNLOADS_VIEW_KEY = () => buildViewStateKey('/downloads');
+
   let expandedGroups = $state<Record<string, boolean>>({});
   let pickingDir = $state(false);
   let seasonBusy = $state<string | null>(null);
+  let unregisterScrollKey: (() => void) | null = null;
 
-  onMount(() => downloads.init());
+  onMount(() => {
+    unregisterScrollKey = registerActiveScrollKey(() => DOWNLOADS_VIEW_KEY());
+    downloads.init();
+    const cached = getViewState<DownloadsViewState>(DOWNLOADS_VIEW_KEY());
+    if (cached?.data?.expandedGroups) {
+      expandedGroups = { ...cached.data.expandedGroups };
+      void restoreScrollTop(cached.scrollTop, { maxWaitMs: 5000 });
+    }
+  });
+
+  onDestroy(() => {
+    unregisterScrollKey?.();
+    unregisterScrollKey = null;
+    saveViewStateData(DOWNLOADS_VIEW_KEY(), { expandedGroups });
+  });
 
   const activeItems = $derived(
     $downloads.filter(x => x.status === 'queued' || x.status === 'downloading' || x.status === 'error'),

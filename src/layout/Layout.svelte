@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import type { Snippet } from 'svelte';
-  import { navigate } from '../stores/navigation';
+  import { navigate, navigateSidebarTab } from '../stores/navigation';
+  import { activeSidebarTab, isSidebarTabActive } from '../stores/tab-navigation';
   import { openAdminArea, restoreAdminSession, checkTeamMembership, isTeamMember } from '../stores/admin';
   import { openLobbyModal, openNotificationsModal, openSettingsModal } from '../stores/modals';
   import { bindSearchHotkeys } from '../search-controller';
@@ -92,13 +93,11 @@
     if (!scheduleActive) finishScheduleClose();
   }
 
+  const sidebarContextTab = $derived($activeSidebarTab);
+
   function isActive(href: string): boolean {
-    const path = currentPath ?? '';
-    if (href === '/') return path === '' || path === '/';
-    if (href === '/overview') return path === '/overview';
-    if (href === '/overview/popular') return path === '/overview/popular' || path.startsWith('/overview/popular/');
-    if (href === '/collections') return path === '/collections' || path.startsWith('/collections/');
-    return path === href || path.startsWith(`${href}/`);
+    void sidebarContextTab;
+    return isSidebarTabActive(href, currentPath ?? '');
   }
 
   const isChatPage = $derived(/^\/announcement\/[^/]+\/chat$/.test(currentPath ?? ''));
@@ -237,7 +236,7 @@
               onclick={(e) => {
                 closeSchedule();
                 e.preventDefault();
-                navigate(item.href);
+                navigateSidebarTab(item.href);
                 (e.currentTarget as HTMLElement).blur();
               }}
             >

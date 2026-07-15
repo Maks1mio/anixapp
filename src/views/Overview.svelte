@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../stores/navigation';
   import OverviewSteamCarousel from '../components/overview/OverviewSteamCarousel.svelte';
   import OverviewSectionHeader from '../components/overview/OverviewSectionHeader.svelte';
@@ -33,8 +33,26 @@
   } from '../services/overview-overrides';
   import type { ReleaseCardData } from '../types/release';
   import type { CollectionCardData } from '../components/CollectionCard.svelte';
+  import {
+    buildViewStateKey,
+    getViewState,
+    saveViewStateWithScroll,
+    restoreScrollTop,
+    registerActiveScrollKey,
+    flushActiveViewState,
+    saveViewStateData,
+    beginScrollRestore,
+    logViewStateRestore,
+  } from '../stores/view-state';
 
   type LoadState = 'loading' | 'ready' | 'error';
+
+  interface OverviewUiState {
+    steamActiveIndex: number;
+    carouselScroll: Partial<Record<'recommendations' | 'watching', number>>;
+  }
+
+  const OVERVIEW_UI_KEY = () => buildViewStateKey('/overview');
 
   const DISCOVER_TIMEOUT_MS = 20_000;
 
@@ -48,6 +66,18 @@
   let collectionsWeek = $state<CollectionCardData[]>([]);
   let commentsWeek = $state<OverviewCommentWeekItem[]>([]);
   let heroOverrides = $state<OverviewOverride[]>([]);
+  let steamActiveIndex = $state(0);
+  let carouselScroll = $state<Partial<Record<'recommendations' | 'watching', number>>>({});
+  let pendingScrollTop = $state(0);
+  let unregisterScrollKey: (() => void) | null = null;
+
+  function overviewUiSnapshot(): OverviewUiState {
+    return { steamActiveIndex, carouselScroll };
+  }
+
+  function onBeforeNavigate() {
+    if (loadState === 'ready') flushActiveViewState(overviewUiSnapshot());
+  }
 
   function applyCache(data: OverviewCacheData) {
     banners = data.banners;
@@ -58,6 +88,14 @@
     commentsWeek = data.commentsWeek;
     loadState = 'ready';
     errorMsg = '';
+    if (pendingScrollTop > 0) {
+      const top = pendingScrollTop;
+      pendingScrollTop = 0;
+      beginScrollRestore();
+      requestAnimationFrame(() => {
+        void restoreScrollTop(top, { maxWaitMs: 8000 });
+      });
+    }
   }
 
   function mapReleaseList(data: { content?: unknown[] } | null | undefined): ReleaseCardData[] {
@@ -167,7 +205,27 @@
   }
 
   onMount(() => {
+    unregisterScrollKey = registerActiveScrollKey(() => OVERVIEW_UI_KEY());
+    window.addEventListener('anix:beforeNavigate', onBeforeNavigate);
+    const cached = getViewState<OverviewUiState>(OVERVIEW_UI_KEY());
+    if (cached?.data) {
+      steamActiveIndex = cached.data.steamActiveIndex ?? 0;
+      carouselScroll = { ...cached.data.carouselScroll };
+      pendingScrollTop = cached.scrollTop;
+      logViewStateRestore(OVERVIEW_UI_KEY(), cached.scrollTop, cached.data);
+      if (cached.scrollTop > 0) beginScrollRestore();
+    }
     void loadOverview();
+  });
+
+  onDestroy(() => {
+    window.removeEventListener('anix:beforeNavigate', onBeforeNavigate);
+    unregisterScrollKey?.();
+    unregisterScrollKey = null;
+    saveViewStateData(OVERVIEW_UI_KEY(), {
+      steamActiveIndex,
+      carouselScroll,
+    });
   });
 </script>
 
@@ -183,7 +241,12 @@
         </button>
       </div>
     {:else}
-      <OverviewSteamCarousel items={banners} overrides={heroOverrides} />
+      <OverviewSteamCarousel
+        items={banners}
+        overrides={heroOverrides}
+        initialActiveIndex={steamActiveIndex}
+        onActiveIndexChange={(index) => { steamActiveIndex = index; }}
+      />
 
       <div class="overview-page__content">
         {#if recommendations.length > 0}
@@ -193,7 +256,12 @@
               subtitle="На основе ваших оценок"
               onShowAll={() => navigate('/catalog')}
             />
-            <OverviewReleaseCarousel items={recommendations} />
+            <OverviewReleaseCarousel
+              items={recommendations}
+              sectionId="recommendations"
+              initialScrollLeft={carouselScroll.recommendations ?? 0}
+              onScrollLeftChange={(left) => { carouselScroll = { ...carouselScroll, recommendations: left }; }}
+            />
           </section>
         {/if}
 
@@ -210,7 +278,12 @@
               title="Смотрят сейчас"
               onShowAll={() => navigate('/catalog')}
             />
-            <OverviewReleaseCarousel items={watching} />
+            <OverviewReleaseCarousel
+              items={watching}
+              sectionId="watching"
+              initialScrollLeft={carouselScroll.watching ?? 0}
+              onScrollLeftChange={(left) => { carouselScroll = { ...carouselScroll, watching: left }; }}
+            />
           </section>
         {/if}
 

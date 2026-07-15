@@ -109,6 +109,11 @@ export function initRendererLogging() {
     rendererLogger.info('navigation', `→ ${path}`);
   });
 
+  window.addEventListener('anix:beforeNavigate', (ev: Event) => {
+    const to = (ev as CustomEvent<{ to?: string }>).detail?.to;
+    rendererLogger.info('navigation', `before → ${to ?? '?'}`);
+  });
+
   // Window focus/blur
   window.addEventListener('focus', () => rendererLogger.debug('window', 'focus'));
   window.addEventListener('blur',  () => rendererLogger.debug('window', 'blur'));

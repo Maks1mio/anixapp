@@ -3,7 +3,7 @@
   import { get } from 'svelte/store';
   import Page from './Page.svelte';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
-  import { settingsModalInitialTab } from '../stores/modals';
+  import { settingsModalInitialTab, settingsModalLastTab } from '../stores/modals';
   import AccountPage    from '../views/Settings/pages/AccountPage.svelte';
   import AppearancePage from '../views/Settings/pages/AppearancePage.svelte';
   import ConnectionPage from '../views/Settings/pages/ConnectionPage.svelte';
@@ -121,6 +121,7 @@
   });
 
   onDestroy(() => {
+    settingsModalLastTab.set(activeTab);
     document.removeEventListener('keydown', handleKeydown);
   });
 

@@ -1,6 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../../../stores/navigation';
+  import {
+    buildViewStateKey,
+    getViewState,
+    saveViewStateWithScroll,
+    restoreScrollTop,
+    registerActiveScrollKey,
+    saveViewStateData,
+  } from '../../../stores/view-state';
   import {
     ProfileHead,
     ProfileFriendsStrip,
@@ -17,9 +25,18 @@
   import { loadProfilePage, fetchCoverFallback } from '../shared/profile-load';
   import { resolvePinnedTab } from '../../../utils/profile-friend';
   import { setDiscordContext, refreshDiscordPresence } from '../../../services/discord-presence';
+  import { getPath } from '../../../router';
 
   interface Props { id?: number; }
   let { id }: Props = $props();
+
+  /** Зафиксированы при создании экземпляра — не читаем reactive id родителя при destroy */
+  const loadProfileId = id;
+  const viewStateKey = buildViewStateKey(getPath());
+
+  interface ProfileViewState {
+    activeTab: string;
+  }
 
   const ICON_STATS = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M12 20V4M20 20v-6"/></svg>';
   const ICON_VOTES = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>';
@@ -38,6 +55,7 @@
   let jacksonRoot = $state<Record<string, unknown> | null>(null);
   let activeTab = $state('stats');
   let pinnedApplied = $state(false);
+  let unregisterScrollKey: (() => void) | null = null;
 
   const availableTabs = $derived.by((): ProfileTab[] => {
     if (!profile) return [];
@@ -89,7 +107,9 @@
   }
 
   onMount(async () => {
-    const result = await loadProfilePage(id);
+    unregisterScrollKey = registerActiveScrollKey(() => viewStateKey);
+    const cached = getViewState<ProfileViewState>(viewStateKey);
+    const result = await loadProfilePage(loadProfileId);
     loadState = result.loadState;
     errorMsg = result.errorMsg;
     profile = result.profile;
@@ -110,6 +130,23 @@
         profileIsSelf: result.isMyProfile,
       });
       refreshDiscordPresence();
+
+      if (cached?.data?.activeTab) {
+        const tabIds = availableTabs.map((t) => t.id);
+        if (tabIds.includes(cached.data.activeTab)) {
+          pinnedApplied = true;
+          activeTab = cached.data.activeTab;
+        }
+      }
+      void restoreScrollTop(cached?.scrollTop ?? 0, { maxWaitMs: 5000 });
+    }
+  });
+
+  onDestroy(() => {
+    unregisterScrollKey?.();
+    unregisterScrollKey = null;
+    if (loadState === 'ready') {
+      saveViewStateData(viewStateKey, { activeTab });
     }
   });
 </script>

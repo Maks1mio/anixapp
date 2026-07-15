@@ -10,6 +10,81 @@
   import { DEFAULT_BOOKMARK_SORT } from '../constants/bookmarkSort';
   import type { ReleaseCardData } from '../types/release';
   import { extractHistoryEpisodeInfo } from '../utils/historyFormat';
+  import {
+    buildViewStateKey,
+    getViewState,
+    saveViewStateWithScroll,
+    restoreScrollTop,
+    removeViewState,
+    registerActiveScrollKey,
+    flushActiveViewState,
+    saveViewStateData,
+    beginScrollRestore,
+  } from '../stores/view-state';
+
+  interface BookmarksViewState {
+    activeTab: TabId;
+    items: ReleaseCardData[];
+    collectionItems: CollectionCardData[];
+    nextPage: number;
+    hasMore: boolean;
+    loadState: 'loading' | 'error' | 'empty' | 'ready';
+    showEnd: boolean;
+    errorMsg: string;
+    selectedSort: number;
+    totalCount: number;
+    cachedProfileId: number | null;
+  }
+
+  const BOOKMARKS_VIEW_KEY = () => buildViewStateKey('/bookmarks');
+
+  function bookmarksSnapshot(): BookmarksViewState {
+    return {
+      activeTab,
+      items,
+      collectionItems,
+      nextPage,
+      hasMore,
+      loadState,
+      showEnd,
+      errorMsg,
+      selectedSort,
+      totalCount,
+      cachedProfileId,
+    };
+  }
+
+  function applyBookmarksSnapshot(s: BookmarksViewState) {
+    activeTab = s.activeTab;
+    items = s.items;
+    collectionItems = s.collectionItems;
+    nextPage = s.nextPage;
+    hasMore = s.hasMore;
+    loadState = s.loadState;
+    showEnd = s.showEnd;
+    errorMsg = s.errorMsg;
+    selectedSort = s.selectedSort;
+    totalCount = s.totalCount;
+    cachedProfileId = s.cachedProfileId;
+  }
+
+  function hasBookmarkItems(s: BookmarksViewState): boolean {
+    return s.items.length > 0 || s.collectionItems.length > 0;
+  }
+
+  function restoreBookmarksScroll(scrollTop: number) {
+    if (scrollTop > 0) beginScrollRestore();
+    requestAnimationFrame(() => {
+      attachScroll();
+      void restoreScrollTop(scrollTop, { maxWaitMs: 8000 });
+    });
+  }
+
+  function onBeforeNavigate() {
+    if (items.length > 0 || collectionItems.length > 0) {
+      flushActiveViewState(bookmarksSnapshot());
+    }
+  }
 
   import type { CollectionCardData } from '../components/CollectionCard.svelte';
 
@@ -116,6 +191,7 @@
   let selectedSort = $state(DEFAULT_BOOKMARK_SORT);
   let randomLoading = $state(false);
   let wrapEl: HTMLElement | undefined = $state();
+  let unregisterScrollKey: (() => void) | null = null;
 
   const isCollectionsTab = $derived(activeTab === 'collections');
   const isHistoryTab = $derived(activeTab === 'history');
@@ -235,8 +311,22 @@
   }
 
   async function loadTab(tabId: TabId, resetSort = false) {
+    if (tabId !== activeTab && (items.length > 0 || collectionItems.length > 0)) {
+      saveViewStateWithScroll(BOOKMARKS_VIEW_KEY(), bookmarksSnapshot());
+    }
+
     activeTab = tabId;
     syncTabToUrl(tabId);
+
+    if (!resetSort) {
+      const cached = getViewState<BookmarksViewState>(BOOKMARKS_VIEW_KEY());
+      if (cached?.data && hasBookmarkItems(cached.data) && cached.data.activeTab === tabId) {
+        applyBookmarksSnapshot(cached.data);
+        restoreBookmarksScroll(cached.scrollTop);
+        return;
+      }
+    }
+
     if (resetSort) selectedSort = DEFAULT_BOOKMARK_SORT;
     nextPage = 0;
     hasMore = true;
@@ -316,6 +406,7 @@
       items = items.filter((item) => item.id !== releaseId);
       totalCount = Math.max(0, totalCount - 1);
       if (!items.length) loadState = 'empty';
+      removeViewState(BOOKMARKS_VIEW_KEY());
     } catch {
       /* ignore */
     }
@@ -327,6 +418,27 @@
   }
 
   onMount(() => {
+    unregisterScrollKey = registerActiveScrollKey(() => BOOKMARKS_VIEW_KEY());
+    window.addEventListener('anix:beforeNavigate', onBeforeNavigate);
+    const cached = getViewState<BookmarksViewState>(BOOKMARKS_VIEW_KEY());
+    if (cached?.data && (cached.data.items.length > 0 || cached.data.collectionItems.length > 0)) {
+      const s = cached.data;
+      activeTab = s.activeTab;
+      items = s.items;
+      collectionItems = s.collectionItems;
+      nextPage = s.nextPage;
+      hasMore = s.hasMore;
+      loadState = s.loadState;
+      showEnd = s.showEnd;
+      errorMsg = s.errorMsg;
+      selectedSort = s.selectedSort;
+      totalCount = s.totalCount;
+      cachedProfileId = s.cachedProfileId;
+      restoreBookmarksScroll(cached.scrollTop);
+      window.addEventListener('anix:cardLayoutChanged', onLayoutChanged);
+      return;
+    }
+
     requestAnimationFrame(attachScroll);
     const tabParam = getSearchParams().get('tab') as TabId | null;
     const initialTab = tabParam && TABS.some((t) => t.id === tabParam) ? tabParam : 'collections';
@@ -335,6 +447,10 @@
   });
 
   onDestroy(() => {
+    window.removeEventListener('anix:beforeNavigate', onBeforeNavigate);
+    unregisterScrollKey?.();
+    unregisterScrollKey = null;
+    saveViewStateData(BOOKMARKS_VIEW_KEY(), bookmarksSnapshot());
     detachScroll();
     window.removeEventListener('anix:cardLayoutChanged', onLayoutChanged);
   });
@@ -344,7 +460,7 @@
   <Tabs
     tabs={TABS.map((t) => ({ id: t.id, label: t.label }))}
     activeId={activeTab}
-    onChange={(id) => loadTab(id as TabId, true)}
+    onChange={(id) => loadTab(id as TabId)}
   >
     {#snippet rightActions()}
       {#if isReleaseListTab && loadState !== 'loading'}

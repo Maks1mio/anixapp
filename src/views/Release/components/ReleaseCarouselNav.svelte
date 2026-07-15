@@ -8,14 +8,24 @@
     measureKey?: unknown;
     navClass?: string;
     scrollClass?: string;
+    initialScrollLeft?: number;
+    onScrollLeftChange?: (left: number) => void;
   }
 
-  let { children, measureKey, navClass = '', scrollClass = '' }: Props = $props();
+  let {
+    children,
+    measureKey,
+    navClass = '',
+    scrollClass = '',
+    initialScrollLeft = 0,
+    onScrollLeftChange,
+  }: Props = $props();
 
   let scrollEl = $state<HTMLDivElement | undefined>();
   let canScrollLeft = $state(false);
   let canScrollRight = $state(false);
   let hasOverflow = $state(false);
+  let initialScrollApplied = false;
 
   const SCROLL_EDGE = 4;
 
@@ -57,9 +67,19 @@
     ro.observe(el);
     if (el.parentElement) ro.observe(el.parentElement);
 
-    const onScroll = () => updateScrollState();
+    const onScroll = () => {
+      updateScrollState();
+      onScrollLeftChange?.(el.scrollLeft);
+    };
     el.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', update);
+
+    if (!initialScrollApplied && initialScrollLeft > 0) {
+      requestAnimationFrame(() => {
+        if (scrollEl) scrollEl.scrollLeft = initialScrollLeft;
+        initialScrollApplied = true;
+      });
+    }
 
     return () => {
       ro.disconnect();

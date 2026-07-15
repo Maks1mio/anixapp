@@ -29,11 +29,13 @@
   interface Props {
     items: OverviewBanner[];
     overrides?: OverviewOverride[];
+    initialActiveIndex?: number;
+    onActiveIndexChange?: (index: number) => void;
   }
 
   type SlideMedia = SteamSlideMediaCacheValue;
 
-  let { items, overrides = [] }: Props = $props();
+  let { items, overrides = [], initialActiveIndex = 0, onActiveIndexChange }: Props = $props();
 
   const AUTO_ADVANCE_SEC = 8;
   const SLIDE_ANIM_MS = 520;
@@ -59,6 +61,7 @@
   }
 
   let activeIndex = $state(0);
+  let initialIndexApplied = false;
   let animDir = $state<0 | 1 | -1>(0);
   let animating = $state(false);
   let mediaHover = $state(false);
@@ -360,6 +363,7 @@
     resetHoverVideo();
     mediaHover = false;
     activeIndex = nextIndex;
+    onActiveIndexChange?.(nextIndex);
     progressElapsedMs = 0;
     slideProgress = 0;
 
@@ -471,6 +475,14 @@
   onMount(() => {
     startProgressTimer();
     return () => stopProgressTimer();
+  });
+
+  $effect(() => {
+    const n = items.length;
+    if (initialIndexApplied || n === 0) return;
+    const clamped = Math.max(0, Math.min(initialActiveIndex, n - 1));
+    activeIndex = clamped;
+    initialIndexApplied = true;
   });
 
   onDestroy(() => {

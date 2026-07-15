@@ -8,6 +8,10 @@
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import { infiniteScroll } from '../actions/infiniteScroll';
   import {
+    getWatchModalState,
+    saveWatchModalState,
+  } from '../stores/modals';
+  import {
     iconMic,
     iconSearch,
     iconDownload,
@@ -670,6 +674,8 @@
     document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', handleKeydown);
 
+    const cached = getWatchModalState(releaseId);
+
     const onDownloadProgress = (e: Event) => {
       const d = (e as CustomEvent).detail;
       if (d?.status === 'done') void refreshDownloadedState();
@@ -682,11 +688,39 @@
       sourcesError = 'API недоступно';
     } else {
       api.release.getDubbers(releaseId)
-        .then((res: { types?: Dubber[] }) => {
+        .then(async (res: { types?: Dubber[] }) => {
           const types = (res?.types ?? []).filter(d => !isDubberBlacklisted(String(d.name ?? '')));
           sourcesLoading = false;
-          if (types.length === 0) sourcesError = 'Нет озвучек';
-          else dubbers = types;
+          if (types.length === 0) {
+            sourcesError = 'Нет озвучек';
+            return;
+          }
+          dubbers = types;
+
+          if (!cached) return;
+
+          variantFilter = cached.variantFilter;
+          searchInput = cached.searchInput;
+          selectedEpisodePos = cached.selectedEpisodePos;
+
+          if (cached.modalView === 'updates') {
+            void openUpdatesView();
+            return;
+          }
+
+          if (cached.modalView === 'episodes' && cached.selectedDubberId != null) {
+            const dubber = types.find((d) => d.id === cached.selectedDubberId);
+            if (!dubber) return;
+            await openDubber(dubber);
+            if (cached.selectedSourceId != null) {
+              const source = sources.find((s) => s.id === cached.selectedSourceId);
+              if (source) {
+                await selectSource(source, false);
+                searchInput = cached.searchInput;
+                selectedEpisodePos = cached.selectedEpisodePos;
+              }
+            }
+          }
         })
         .catch(() => {
           sourcesLoading = false;
@@ -700,6 +734,15 @@
   });
 
   onDestroy(() => {
+    saveWatchModalState({
+      releaseId,
+      modalView,
+      variantFilter,
+      selectedDubberId: selectedDubber?.id ?? null,
+      selectedSourceId,
+      searchInput,
+      selectedEpisodePos,
+    });
     document.body.style.overflow = '';
     document.removeEventListener('keydown', handleKeydown);
   });

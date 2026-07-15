@@ -9,6 +9,8 @@
   interface Props { id?: number; }
   let { id }: Props = $props();
 
+  const loadProfileId = id;
+
   let loadState = $state<'loading' | 'error' | 'ready'>('loading');
   let errorMsg = $state('');
   let profile = $state<Record<string, unknown> | null>(null);
@@ -22,7 +24,7 @@
   }
 
   onMount(async () => {
-    const result = await loadProfilePage(id);
+    const result = await loadProfilePage(loadProfileId);
     loadState = result.loadState;
     errorMsg = result.errorMsg;
     profile = result.profile;

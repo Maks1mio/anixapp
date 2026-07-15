@@ -31,9 +31,80 @@
     DEFAULT_HOME_TAB,
     getHomeTabFilterArgs,
     HOME_TAB_DEFS,
+    HOME_TAB_IDS,
     resolveHomeTab,
     type HomeTabId,
   } from '../data/homeTabs';
+  import {
+    buildViewStateKey,
+    getViewState,
+    saveViewStateWithScroll,
+    restoreScrollTop,
+    registerActiveScrollKey,
+    flushActiveViewState,
+    saveViewStateData,
+    beginScrollRestore,
+    logViewStateRestore,
+    logViewStateMiss,
+    type ViewStateEntry,
+  } from '../stores/view-state';
+
+  interface HomeViewState {
+    activeTab: HomeTabId;
+    items: ReleaseCardData[];
+    page: number;
+    hasMore: boolean;
+    loadState: 'loading' | 'error' | 'empty' | 'ready' | 'unconfigured';
+    errorMsg: string;
+    customTabData: HomeCustomTabData;
+  }
+
+  const HOME_VIEW_KEY = (tab: HomeTabId = activeTab) => buildViewStateKey('/', { htab: tab });
+
+  function findBestHomeCache(): ViewStateEntry<HomeViewState> | null {
+    let best: ViewStateEntry<HomeViewState> | null = null;
+    for (const tabId of HOME_TAB_IDS) {
+      const entry = getViewState<HomeViewState>(HOME_VIEW_KEY(tabId));
+      if (!entry?.data || entry.data.items.length === 0) continue;
+      if (!best || entry.savedAt >= best.savedAt) best = entry;
+    }
+    return best;
+  }
+
+  function homeSnapshot(): HomeViewState {
+    return {
+      activeTab,
+      items,
+      page,
+      hasMore,
+      loadState,
+      errorMsg,
+      customTabData,
+    };
+  }
+
+  function applyHomeSnapshot(s: HomeViewState) {
+    items = s.items;
+    page = s.page;
+    hasMore = s.hasMore;
+    loadState = s.loadState;
+    errorMsg = s.errorMsg;
+    customTabData = s.customTabData;
+  }
+
+  async function restoreHomeScroll(scrollTop: number) {
+    if (scrollTop > 0) beginScrollRestore();
+    requestAnimationFrame(() => {
+      attachScroll();
+      void restoreScrollTop(scrollTop, { maxWaitMs: 8000 });
+    });
+  }
+
+  function onBeforeNavigate() {
+    if (items.length > 0 || loadState === 'ready' || loadState === 'empty') {
+      flushActiveViewState(homeSnapshot());
+    }
+  }
 
   let customTabData = $state<HomeCustomTabData>({ tabName: '', filter: null, activeTab: null });
   let customTabConfigured = $derived(isHomeCustomTabConfigured(customTabData));
@@ -107,6 +178,7 @@
   let defaultTabModalOpen = $state(false);
   let renameTabModalOpen = $state(false);
   let tabsSettingsBtn = $state<HTMLButtonElement | undefined>();
+  let unregisterScrollKey: (() => void) | null = null;
 
   let scrollEl: HTMLElement | null = null;
   let scrollListener: (() => void) | null = null;
@@ -191,8 +263,17 @@
 
   function setActiveTab(tabId: HomeTabId) {
     if (tabId === activeTab) return;
+    saveViewStateWithScroll(HOME_VIEW_KEY(activeTab), homeSnapshot());
     activeTab = tabId;
     void setSavedHomeActiveTab(tabId);
+
+    const cached = getViewState<HomeViewState>(HOME_VIEW_KEY(tabId));
+    if (cached?.data && cached.data.items.length > 0) {
+      applyHomeSnapshot(cached.data);
+      void restoreHomeScroll(cached.scrollTop);
+      return;
+    }
+
     resetList();
     if (tabId === 'my' && !customTabConfigured) {
       loadState = 'unconfigured';
@@ -326,16 +407,7 @@
   }
 
   onMount(() => {
-    void (async () => {
-      customTabData = await loadHomeCustomTab();
-      activeTab = resolveInitialTab(customTabData);
-      requestAnimationFrame(attachScroll);
-      if (activeTab === 'my' && !isHomeCustomTabConfigured(customTabData)) {
-        loadState = 'unconfigured';
-      } else {
-        loadPage();
-      }
-    })();
+    window.addEventListener('anix:beforeNavigate', onBeforeNavigate);
     window.addEventListener('anix:cardLayoutChanged', onLayoutChanged);
     window.addEventListener('anix:homeCustomTabChanged', onHomeCustomTabChangedEvent);
     void loadAnnouncements();
@@ -344,9 +416,40 @@
         if (urls.length) wrappedPreviewPosters = urls;
       });
     }
+
+    const cached = findBestHomeCache();
+    if (cached?.data && cached.data.items.length > 0) {
+      activeTab = cached.data.activeTab;
+      applyHomeSnapshot(cached.data);
+      unregisterScrollKey = registerActiveScrollKey(() => HOME_VIEW_KEY());
+      logViewStateRestore(HOME_VIEW_KEY(cached.data.activeTab), cached.scrollTop, cached.data);
+      void restoreHomeScroll(cached.scrollTop);
+      void loadHomeCustomTab().then((data) => {
+        customTabData = data;
+      });
+      return;
+    }
+
+    unregisterScrollKey = registerActiveScrollKey(() => HOME_VIEW_KEY());
+
+    void (async () => {
+      customTabData = await loadHomeCustomTab();
+      activeTab = resolveInitialTab(customTabData);
+      logViewStateMiss(HOME_VIEW_KEY(activeTab), 'no-cached-items');
+      requestAnimationFrame(attachScroll);
+      if (activeTab === 'my' && !isHomeCustomTabConfigured(customTabData)) {
+        loadState = 'unconfigured';
+      } else {
+        loadPage();
+      }
+    })();
   });
 
   onDestroy(() => {
+    window.removeEventListener('anix:beforeNavigate', onBeforeNavigate);
+    unregisterScrollKey?.();
+    unregisterScrollKey = null;
+    saveViewStateData(HOME_VIEW_KEY(activeTab), homeSnapshot());
     detachScroll();
     window.removeEventListener('anix:cardLayoutChanged', onLayoutChanged);
     window.removeEventListener('anix:homeCustomTabChanged', onHomeCustomTabChangedEvent);

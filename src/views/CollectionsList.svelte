@@ -12,6 +12,24 @@
     mapCollectionCard,
   } from '../utils/collection';
   import type { CollectionCardData } from '../components/CollectionCard.svelte';
+  import {
+    buildViewStateKey,
+    getViewState,
+    saveViewStateWithScroll,
+    restoreScrollTop,
+    registerActiveScrollKey,
+    saveViewStateData,
+  } from '../stores/view-state';
+
+  interface CollectionsViewState {
+    items: CollectionCardData[];
+    page: number;
+    previousPage: number;
+    hasMore: boolean;
+    loadState: 'loading' | 'error' | 'empty' | 'ready';
+    errorMsg: string;
+    selectedSort: number;
+  }
 
   interface Props {
     week?: boolean;
@@ -31,6 +49,7 @@
   let wrapEl: HTMLElement | undefined = $state();
   let scrollEl: HTMLElement | null = null;
   let scrollListener: (() => void) | null = null;
+  let unregisterScrollKey: (() => void) | null = null;
 
   const listSort = $derived(week ? 4 : selectedSort);
   const listWhere = $derived(week ? 2 : 1);
@@ -38,6 +57,8 @@
   const pageSubtitle = $derived(
     week ? 'Лучшие подборки за неделю' : 'Пользовательские коллекции релизов',
   );
+
+  const COLLECTIONS_VIEW_KEY = () => buildViewStateKey('/collections');
 
   function resetList() {
     items = [];
@@ -137,13 +158,44 @@
   }
 
   onMount(() => {
+    unregisterScrollKey = registerActiveScrollKey(() => COLLECTIONS_VIEW_KEY());
+    const cached = getViewState<CollectionsViewState>(COLLECTIONS_VIEW_KEY());
+    if (cached?.data && cached.data.items.length > 0) {
+      const s = cached.data;
+      selectedSort = s.selectedSort;
+      items = s.items;
+      page = s.page;
+      previousPage = s.previousPage;
+      hasMore = s.hasMore;
+      loadState = s.loadState;
+      errorMsg = s.errorMsg;
+      requestAnimationFrame(() => {
+        attachScroll();
+        void restoreScrollTop(cached.scrollTop, { maxWaitMs: 5000 });
+      });
+      return;
+    }
+
     page = initialCollectionListPage(listSort);
     previousPage = initialCollectionPreviousPage();
     requestAnimationFrame(attachScroll);
     void loadPage();
   });
 
-  onDestroy(detachScroll);
+  onDestroy(() => {
+    unregisterScrollKey?.();
+    unregisterScrollKey = null;
+    saveViewStateData(COLLECTIONS_VIEW_KEY(), {
+      items,
+      page,
+      previousPage,
+      hasMore,
+      loadState,
+      errorMsg,
+      selectedSort,
+    });
+    detachScroll();
+  });
 </script>
 
 <div class="view view-collections-list discover-page collections-page" bind:this={wrapEl}>

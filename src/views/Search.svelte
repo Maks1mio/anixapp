@@ -7,6 +7,16 @@
   import { addSearchHistory } from '../utils/search-history';
   import type { ReleaseCardData } from '../types/release';
   import { buildPosterUrl, resolveCdnAssetUrl } from '../utils/posterUrl';
+  import {
+    buildViewStateKey,
+    getViewState,
+    saveViewStateWithScroll,
+    restoreScrollTop,
+    registerActiveScrollKey,
+    flushActiveViewState,
+    saveViewStateData,
+    beginScrollRestore,
+  } from '../stores/view-state';
 
   type SearchTab = 'releases' | 'profiles' | 'collections';
 
@@ -131,12 +141,58 @@
     relatedId?: number;
     firstReleaseId?: number;
   }
+
+  interface SearchViewState {
+    currentTab: SearchTab;
+    currentQuery: string;
+    currentSearchBy: number;
+    currentPage: number;
+    hasMore: boolean;
+    loadState: 'hint' | 'loading' | 'error' | 'empty' | 'ready';
+    errorMsg: string;
+    releaseResults: ReleaseCardData[];
+    profileResults: any[];
+    collectionResults: any[];
+    showEnd: boolean;
+    franchiseData: FranchiseData | null;
+  }
+
+  const SEARCH_VIEW_KEY = () => buildViewStateKey('/search');
+
+  function hasSearchResults(state: SearchViewState): boolean {
+    if (state.currentTab === 'releases') return state.releaseResults.length > 0;
+    if (state.currentTab === 'profiles') return state.profileResults.length > 0;
+    return state.collectionResults.length > 0;
+  }
+
+  function searchSnapshot(): SearchViewState {
+    return {
+      currentTab,
+      currentQuery,
+      currentSearchBy,
+      currentPage,
+      hasMore,
+      loadState,
+      errorMsg,
+      releaseResults,
+      profileResults,
+      collectionResults,
+      showEnd,
+      franchiseData,
+    };
+  }
+
+  function onBeforeNavigate() {
+    if (hasSearchResults(searchSnapshot())) flushActiveViewState(searchSnapshot());
+  }
+
   let franchiseData = $state<FranchiseData | null>(null);
 
   let scrollEl: HTMLElement | null = null;
   let scrollListener: (() => void) | null = null;
   let scrollAttached = false;
   let wrapEl: HTMLElement | undefined = $state();
+  let unregisterScrollKey: (() => void) | null = null;
 
   function getScrollEl(): HTMLElement | null {
     return wrapEl?.closest('.page__scroll') as HTMLElement | null;
@@ -285,12 +341,48 @@
   }
 
   onMount(() => {
+    unregisterScrollKey = registerActiveScrollKey(() => SEARCH_VIEW_KEY());
+    window.addEventListener('anix:beforeNavigate', onBeforeNavigate);
     window.addEventListener('anix:cardLayoutChanged', onLayoutChanged);
     window.addEventListener('anix:searchRequest', onSearchRequest);
+
+    const cached = getViewState<SearchViewState>(SEARCH_VIEW_KEY());
+    if (
+      cached?.data
+      && hasSearchResults(cached.data)
+      && cached.data.currentQuery === currentQuery
+      && cached.data.currentTab === currentTab
+      && cached.data.currentSearchBy === currentSearchBy
+    ) {
+      const s = cached.data;
+      currentTab = s.currentTab;
+      currentQuery = s.currentQuery;
+      currentSearchBy = s.currentSearchBy;
+      currentPage = s.currentPage;
+      hasMore = s.hasMore;
+      loadState = s.loadState;
+      errorMsg = s.errorMsg;
+      releaseResults = s.releaseResults;
+      profileResults = s.profileResults;
+      collectionResults = s.collectionResults;
+      showEnd = s.showEnd;
+      franchiseData = s.franchiseData;
+      if (cached.scrollTop > 0) beginScrollRestore();
+      requestAnimationFrame(() => {
+        attachInfiniteScroll();
+        void restoreScrollTop(cached.scrollTop, { maxWaitMs: 8000 });
+      });
+      return;
+    }
+
     if (currentQuery) performSearch(false);
   });
 
   onDestroy(() => {
+    window.removeEventListener('anix:beforeNavigate', onBeforeNavigate);
+    unregisterScrollKey?.();
+    unregisterScrollKey = null;
+    saveViewStateData(SEARCH_VIEW_KEY(), searchSnapshot());
     detachScroll();
     window.removeEventListener('anix:cardLayoutChanged', onLayoutChanged);
     window.removeEventListener('anix:searchRequest', onSearchRequest);

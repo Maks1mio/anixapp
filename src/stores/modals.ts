@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 
 export interface LobbyCurrentPlayback {
   releaseId: string;
@@ -29,13 +29,40 @@ export const watchModalOpen = writable(false);
 export const watchModalReleaseId = writable<number>(0);
 export const watchModalReleaseTitle = writable<string>('');
 
+export interface WatchModalCachedState {
+  releaseId: number;
+  modalView: 'variants' | 'episodes' | 'updates';
+  variantFilter: 'all' | 'voice' | 'sub';
+  selectedDubberId: number | null;
+  selectedSourceId: number | null;
+  searchInput: string;
+  selectedEpisodePos: number | null;
+}
+
+const watchModalStateCache = new Map<number, WatchModalCachedState>();
+export const settingsModalLastTab = writable<string | null>(null);
+
 export function openSettingsModal(tab?: string): void {
-  settingsModalInitialTab.set(tab ?? null);
+  const cached = get(settingsModalLastTab);
+  settingsModalInitialTab.set(tab ?? cached ?? null);
   settingsModalOpen.set(true);
 }
 export function closeSettingsModal(): void {
   settingsModalOpen.set(false);
   settingsModalInitialTab.set(null);
+}
+
+export function saveWatchModalState(state: WatchModalCachedState): void {
+  watchModalStateCache.set(state.releaseId, state);
+}
+
+export function getWatchModalState(releaseId: number): WatchModalCachedState | null {
+  return watchModalStateCache.get(releaseId) ?? null;
+}
+
+export function clearWatchModalState(releaseId?: number): void {
+  if (releaseId != null) watchModalStateCache.delete(releaseId);
+  else watchModalStateCache.clear();
 }
 
 export function openLobbyModal(roomCode?: string): void {

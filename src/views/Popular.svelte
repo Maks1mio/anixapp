@@ -10,6 +10,62 @@
     POPULAR_TAB_DEFS,
     type PopularTabId,
   } from '../data/popularTabs';
+  import {
+    buildViewStateKey,
+    getViewState,
+    saveViewStateWithScroll,
+    restoreScrollTop,
+    registerActiveScrollKey,
+    flushActiveViewState,
+    saveViewStateData,
+    beginScrollRestore,
+    type ViewStateEntry,
+  } from '../stores/view-state';
+
+  interface PopularViewState {
+    activeTab: PopularTabId;
+    items: ReleaseCardData[];
+    page: number;
+    hasMore: boolean;
+    loadState: 'loading' | 'error' | 'empty' | 'ready';
+    errorMsg: string;
+  }
+
+  const POPULAR_VIEW_KEY = (tab: PopularTabId = activeTab) => buildViewStateKey('/overview/popular', { ptab: tab });
+
+  function findBestPopularCache(): ViewStateEntry<PopularViewState> | null {
+    let best: ViewStateEntry<PopularViewState> | null = null;
+    for (const tab of POPULAR_TAB_DEFS) {
+      const entry = getViewState<PopularViewState>(POPULAR_VIEW_KEY(tab.id));
+      if (!entry?.data || entry.data.items.length === 0) continue;
+      if (!best || entry.savedAt >= best.savedAt) best = entry;
+    }
+    return best;
+  }
+
+  function popularSnapshot(): PopularViewState {
+    return { activeTab, items, page, hasMore, loadState, errorMsg };
+  }
+
+  function applyPopularSnapshot(s: PopularViewState) {
+    items = s.items;
+    page = s.page;
+    hasMore = s.hasMore;
+    loadState = s.loadState;
+    errorMsg = s.errorMsg;
+  }
+
+  async function restorePopularScroll(scrollTop: number) {
+    if (scrollTop > 0) beginScrollRestore();
+    requestAnimationFrame(() => {
+      attachScroll();
+      void restoreScrollTop(scrollTop, { maxWaitMs: 8000 });
+    });
+  }
+
+  function onBeforeNavigate() {
+    if (items.length > 0) flushActiveViewState(popularSnapshot());
+  }
 
   let activeTab = $state<PopularTabId>(DEFAULT_POPULAR_TAB);
   let items = $state<ReleaseCardData[]>([]);
@@ -22,6 +78,7 @@
   let wrapEl: HTMLElement | undefined = $state();
   let scrollEl: HTMLElement | null = null;
   let scrollListener: (() => void) | null = null;
+  let unregisterScrollKey: (() => void) | null = null;
 
   const tabs = POPULAR_TAB_DEFS.map((t) => ({ id: t.id, label: t.label }));
 
@@ -88,16 +145,42 @@
 
   function onTabChange(id: string) {
     if (id === activeTab) return;
+    saveViewStateWithScroll(POPULAR_VIEW_KEY(activeTab), popularSnapshot());
     activeTab = id as PopularTabId;
+
+    const cached = getViewState<PopularViewState>(POPULAR_VIEW_KEY(activeTab));
+    if (cached?.data && cached.data.items.length > 0) {
+      applyPopularSnapshot(cached.data);
+      void restorePopularScroll(cached.scrollTop);
+      return;
+    }
+
     resetAndLoad();
   }
 
   onMount(() => {
+    unregisterScrollKey = registerActiveScrollKey(() => POPULAR_VIEW_KEY());
+    window.addEventListener('anix:beforeNavigate', onBeforeNavigate);
+
+    const cached = findBestPopularCache();
+    if (cached?.data && cached.data.items.length > 0) {
+      activeTab = cached.data.activeTab;
+      applyPopularSnapshot(cached.data);
+      void restorePopularScroll(cached.scrollTop);
+      return;
+    }
+
     requestAnimationFrame(attachScroll);
     void loadPage();
   });
 
-  onDestroy(detachScroll);
+  onDestroy(() => {
+    window.removeEventListener('anix:beforeNavigate', onBeforeNavigate);
+    unregisterScrollKey?.();
+    unregisterScrollKey = null;
+    saveViewStateData(POPULAR_VIEW_KEY(activeTab), popularSnapshot());
+    detachScroll();
+  });
 </script>
 
 <div class="view view-popular discover-page" bind:this={wrapEl}>

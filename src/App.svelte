@@ -6,6 +6,8 @@
   import { openLobbyModal, settingsModalOpen, lobbyModalOpen, lobbyModalInitialCode, notificationsModalOpen, watchModalOpen, watchModalReleaseId, watchModalReleaseTitle, lobbyCurrentPlayback, isPlayerWindowOpen, lobbyWatchingPeerIds } from './stores/modals';
   import { sendPlayerViewActive } from './services/lobby-ws';
   import { getPath, getSearchParams } from './router';
+  import { captureActiveScroll, resetScrollAfterRouteChange } from './stores/view-state';
+  import { initTabNavigation, recordTabNavigation } from './stores/tab-navigation';
   import { initTheme, applyThemeById } from './services/themes';
   import { initAnixbackEndpoint } from './services/anixback-endpoint';
   import { getCurrentRoomId, getCurrentRoomCode, getCurrentParticipants, pushCommand, voteOnProposal, notifyLobbyBufferingStart } from './services/lobby-state';
@@ -83,8 +85,11 @@
   $effect(() => {
     const storePath = $currentPath;
     if (storePath !== path) {
+      window.dispatchEvent(new CustomEvent('anix:beforeNavigate', { detail: { to: storePath } }));
+      captureActiveScroll();
       path = storePath;
       syncSearchParams();
+      resetScrollAfterRouteChange();
     }
   });
 
@@ -116,6 +121,8 @@
   const releaseMatch          = $derived(path.match(/^\/release\/(\d+)$/));
   const relatedMatch          = $derived(path.match(/^\/release\/(\d+)\/related$/));
   const profileMatch          = $derived(path.match(/^\/profile\/(\d+)$/));
+  const profilePageId         = $derived(profileMatch?.[1] ? parseInt(profileMatch[1], 10) : undefined);
+  const isProfileMainRoute    = $derived(path === '/profile' || profilePageId != null);
   const profileVotesMatch     = $derived(path.match(/^\/profile\/(\d+)\/votes$/));
   const profileFriendsMatch   = $derived(path.match(/^\/profile\/(\d+)\/friends$/));
   const profileCollectionsMatch = $derived(path.match(/^\/profile\/(\d+)\/collections$/));
@@ -158,12 +165,17 @@
 
     // Routing listeners
     const onNav = () => {
+      window.dispatchEvent(new CustomEvent('anix:beforeNavigate', { detail: { to: getPath() } }));
+      captureActiveScroll();
       path = getPath();
+      recordTabNavigation(path);
       currentPath.set(path);
       syncSearchParams();
+      resetScrollAfterRouteChange();
     };
     window.addEventListener('hashchange', onNav);
     window.addEventListener('popstate', onNav);
+    initTabNavigation(getPath());
     syncSearchParams();
 
     // ── Player window state tracking ────────────────────────────────────────
@@ -424,9 +436,9 @@
       {#key profileCollectionsMatch[1]}
         <ProfileCollections id={parseInt(profileCollectionsMatch[1], 10)} />
       {/key}
-    {:else if profileMatch}
-      {#key profileMatch[1]}
-        <Profile id={parseInt(profileMatch[1], 10)} />
+    {:else if isProfileMainRoute}
+      {#key path}
+        <Profile id={profilePageId} />
       {/key}
     {:else if collectionEditMatch}
       {#key collectionEditMatch[1]}
@@ -460,8 +472,6 @@
       <Bookmarks />
     {:else if path === '/notifications'}
       <Notifications />
-    {:else if path === '/profile'}
-      <Profile />
     {:else if path === '/profile/votes'}
       <ProfileVotes />
     {:else if path === '/profile/friends'}

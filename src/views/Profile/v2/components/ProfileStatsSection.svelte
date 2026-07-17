@@ -99,7 +99,7 @@
     </div>
   </div>
 
-  {#if !profile.is_counts_hidden && (profile.watched_episode_count || watchTimeLabel)}
+  {#if profile.watched_episode_count || watchTimeLabel}
     <div class="profile-v2__stats-totals">
       {#if profile.watched_episode_count}
         <p>Просмотрено серий: <strong>{profile.watched_episode_count}</strong></p>

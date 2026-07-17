@@ -13,7 +13,7 @@
     onSchedule?: () => void;
     scheduleOpen?: boolean;
     onSettings?: () => void;
-    onProfile?: () => void;
+    onProfile?: (event: MouseEvent) => void;
     onSearchTab?: () => void;
     searchTabActive?: boolean;
   }

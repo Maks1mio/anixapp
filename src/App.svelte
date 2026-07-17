@@ -3,7 +3,7 @@
   import { get } from 'svelte/store';
   import { appScreen } from './stores/auth';
   import { currentPath, navigate } from './stores/navigation';
-  import { openLobbyModal, settingsModalOpen, lobbyModalOpen, lobbyModalInitialCode, notificationsModalOpen, watchModalOpen, watchModalReleaseId, watchModalReleaseTitle, lobbyCurrentPlayback, isPlayerWindowOpen, lobbyWatchingPeerIds } from './stores/modals';
+  import { openLobbyModal, settingsModalOpen, lobbyModalOpen, lobbyModalInitialCode, notificationsModalOpen, watchModalOpen, watchModalReleaseId, watchModalReleaseTitle, profileModalOpen, profileModalUserId, lobbyCurrentPlayback, isPlayerWindowOpen, lobbyWatchingPeerIds } from './stores/modals';
   import { sendPlayerViewActive } from './services/lobby-ws';
   import { getPath, getSearchParams } from './router';
   import { captureActiveScroll, resetScrollAfterRouteChange } from './stores/view-state';
@@ -56,6 +56,8 @@
   import LobbyModal from './components/LobbyModal.svelte';
   import NotificationsModal from './components/NotificationsModal.svelte';
   import WatchModal from './components/WatchModal.svelte';
+  import UserProfilePopout from './components/UserProfilePopout.svelte';
+  import UserProfileModal from './components/UserProfileModal.svelte';
   import Toast from './components/Toast.svelte';
   import OfflineScreen from './views/OfflineScreen.svelte';
 
@@ -513,6 +515,13 @@
       onClose={() => watchModalOpen.set(false)}
     />
   {/if}
+  {#if $profileModalOpen && $profileModalUserId}
+    <UserProfileModal
+      userId={$profileModalUserId}
+      onClose={() => { profileModalOpen.set(false); profileModalUserId.set(null); }}
+    />
+  {/if}
+  <UserProfilePopout />
 {/if}
 
 <Toast />

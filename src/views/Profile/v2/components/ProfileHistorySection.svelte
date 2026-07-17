@@ -7,8 +7,6 @@
 </script>
 
 <section class="profile-v2__recent">
-  <h2 class="profile-v2__section-title">Просмотрено недавно</h2>
-
   <ul class="profile-v2__recent-list">
     {#each items as item}
       <li>

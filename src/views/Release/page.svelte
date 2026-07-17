@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../../stores/navigation';
   import { openWatchModal } from '../../stores/modals';
   import { buildPosterUrl, buildScreenshotUrl } from '../../utils/posterUrl';
@@ -19,6 +19,7 @@
   } from './_utils';
   import { ReleaseHead, ReleaseVideos, ReleaseRating, ReleaseRelated, ReleaseRecommendations, ReleaseScreenshots, ReleaseComments } from './components';
   import { notifyFavoritesChanged } from '../../utils/favorites-events';
+  import { applyReleaseListStatus } from '../../utils/release-list-status';
   import { enrichBlockedRelease } from '../../services/release-geo-bypass';
   import { extractHistoryEpisodeInfo } from '../../utils/historyFormat';
 
@@ -260,15 +261,27 @@
 
   async function setStatus(value: string) {
     if (!window.anixApi || !releaseId) return;
-    if (!value) {
-      if (currentStatus) {
-        await window.anixApi.release.clearListStatus(releaseId, currentStatus as unknown as number).catch(() => {});
-        currentStatus = null;
-      }
-      return;
+    const prev = currentStatus;
+    const next = (value || null) as ListStatusId | null;
+    if (prev === next) return;
+    try {
+      await applyReleaseListStatus(releaseId, next, prev);
+      currentStatus = next;
+    } catch {
+      /* keep previous status on failure */
     }
-    await window.anixApi.release.setListStatus(releaseId, value as unknown as number).catch(() => {});
-    currentStatus = value as ListStatusId;
+  }
+
+  async function syncListStateFromApi() {
+    if (!window.anixApi || !id) return;
+    try {
+      const data = await window.anixApi.release.info(id, true) as Record<string, unknown>;
+      const raw = (data?.release ?? data) as Record<string, unknown> | undefined;
+      if (!raw || typeof raw !== 'object') return;
+      isFavorite = !!(raw.is_favorite);
+      if (typeof raw.favorites_count === 'number') favoritesCount = raw.favorites_count;
+      currentStatus = numToStatusId(raw.profile_list_status as number | null | undefined);
+    } catch { /* ignore */ }
   }
 
   async function refreshReleaseData() {
@@ -279,12 +292,22 @@
       if (raw && typeof raw === 'object') {
         raw = await enrichBlockedRelease(id, raw as Record<string, unknown>);
         release = { ...release, ...raw } as Record<string, unknown>;
+        isFavorite = !!(raw.is_favorite);
+        if (typeof raw.favorites_count === 'number') favoritesCount = raw.favorites_count;
+        currentStatus = numToStatusId(raw.profile_list_status as number | null | undefined);
       }
     } catch { /* ignore */ }
   }
 
+  function onBookmarksChanged(e: Event) {
+    const detail = (e as CustomEvent<{ releaseId?: number }>).detail;
+    if (detail?.releaseId != null && detail.releaseId !== id) return;
+    void syncListStateFromApi();
+  }
+
   // ── Load ──────────────────────────────────────────────────────────────────
   onMount(async () => {
+    window.addEventListener('anix:bookmarksChanged', onBookmarksChanged);
     if (!window.anixApi) {
       errorMsg  = 'API недоступно (только в Electron).';
       loadState = 'error';
@@ -323,6 +346,10 @@
       errorMsg  = String(err);
       loadState = 'error';
     }
+  });
+
+  onDestroy(() => {
+    window.removeEventListener('anix:bookmarksChanged', onBookmarksChanged);
   });
 </script>
 

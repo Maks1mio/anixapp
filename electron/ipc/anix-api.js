@@ -749,6 +749,15 @@ ipcMain.handle('anix:setListStatus', async (_, releaseId, statusId) => {
   const type = LIST_STATUS_TO_TYPE[statusId];
   if (type == null) return Promise.reject(new Error('unknown status'));
   const client = getAnixart();
+  // Сначала убираем из остальных списков — иначе тайтл остаётся в старой категории.
+  for (const [id, otherType] of Object.entries(LIST_STATUS_TO_TYPE)) {
+    if (id === statusId) continue;
+    try {
+      await client.endpoints.release.removeFromProfileList(releaseId, otherType);
+    } catch {
+      /* ignore — мог не быть в этом списке */
+    }
+  }
   const res = await client.endpoints.release.addToProfileList(releaseId, type);
   return res?.code === DefaultResult.Ok ? undefined : Promise.reject(new Error(res?.code ?? 'fail'));
 });

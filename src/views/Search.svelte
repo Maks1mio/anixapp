@@ -3,6 +3,7 @@
   import CollectionCard, { type CollectionCardData } from '../components/CollectionCard.svelte';
   import { onMount, onDestroy, untrack } from 'svelte';
   import { navigate } from '../stores/navigation';
+  import { handleUserProfileClick } from '../stores/user-profile';
   import Tabs from '../components/Tabs.svelte';
   import ScrollArea from '../components/ScrollArea.svelte';
   import { iconSearch } from '../components/icons';
@@ -662,7 +663,7 @@
               <button
                 type="button"
                 class="search-page__profile"
-                onclick={() => navigate(`/profile/${p.id}`)}
+                onclick={(event) => handleUserProfileClick(p.id, event)}
               >
                 <div
                   class="search-page__profile-avatar"

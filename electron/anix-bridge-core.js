@@ -377,7 +377,16 @@ function createAnixBridgeCore(options = {}) {
     'anix:setListStatus': h(async (c, releaseId, statusId) => {
       const type = LIST_STATUS_TO_TYPE[statusId];
       if (type == null) throw new Error('unknown status');
-      const res = await c.getClient().endpoints.release.addToProfileList(releaseId, type);
+      const client = c.getClient();
+      for (const [id, otherType] of Object.entries(LIST_STATUS_TO_TYPE)) {
+        if (id === statusId) continue;
+        try {
+          await client.endpoints.release.removeFromProfileList(releaseId, otherType);
+        } catch {
+          /* ignore */
+        }
+      }
+      const res = await client.endpoints.release.addToProfileList(releaseId, type);
       if (res?.code !== DefaultResult.Ok) throw new Error(String(res?.code ?? 'fail'));
     }),
     'anix:clearListStatus': h(async (c, releaseId, statusId) => {

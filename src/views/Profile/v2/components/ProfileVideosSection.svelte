@@ -11,12 +11,6 @@
 </script>
 
 <div class="profile-v2__videos">
-  <div class="profile-v2__section-head">
-    <button type="button" class="profile-v2__link" onclick={() => navigate(`/profile/${profileId}/videos`)}>
-      Показать всё
-    </button>
-  </div>
-
   <div class="profile__hscroll">
     <div class="profile__hscroll-track profile-v2__video-track">
       {#each items as item}

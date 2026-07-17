@@ -56,26 +56,38 @@
   }
 </script>
 
-<div class="profile-v2__comments">
-  <div class="profile-v2__section-head">
-    <button type="button" class="profile-v2__link" onclick={() => navigate(`/profile/${profileId}/comments`)}>
-      Показать всё
-    </button>
-  </div>
+<div class="profile-ui__comments">
+  {#if Array.isArray(profile?.roles) && profile.roles.length}
+    <div class="profile-ui__comment-roles">
+      <span class="profile-ui__comment-roles-label">Роли</span>
+      <div class="profile-ui__roles-row">
+        {#each profile.roles as role}
+          {@const r = role as { name?: string; color?: string }}
+          {@const c = r.color || '#888'}
+          <span
+            class="profile-ui__role"
+            style="--role-color:{c};border-color:{c};color:{c};background:color-mix(in srgb, {c} 14%, transparent);"
+          >
+            <i class="profile-ui__role-dot" style="background:{c}"></i>{r.name}
+          </span>
+        {/each}
+      </div>
+    </div>
+  {/if}
 
-  <div class="overview-comments-week">
+  <div class="profile-ui__comments-list">
     {#each comments as item (item.id)}
       {@const hidden = isCommentContentHidden(
         { isSpoiler: item.isSpoiler, isDeleted: false, voteCount: item.voteCount },
         !!revealed[item.id],
       )}
-      <article class="overview-comment-week">
-        <div class="overview-comment-week__bubble">
+      <article class="profile-ui__comment">
+        <div class="profile-ui__comment-row">
           <UserAvatar src={item.profileAvatar} label={item.profileLogin} class="overview-comment-week__avatar" />
           <div class="overview-comment-week__main">
             <div class="overview-comment-week__head">
               <span class="overview-comment-week__login">{item.profileLogin}</span>
-              <span class="overview-comment-week__to">{item.contextLabel}</span>
+        <span class="profile-ui__comment-context">{item.contextLabel}</span>
             </div>
 
             {#if item.targetPath}

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from 'svelte';
   import { navigate } from '../../stores/navigation';
+  import { handleUserProfileClick } from '../../stores/user-profile';
   import { fetchComments, sendComment, fetchAnnouncements, deleteComment, fetchUserPermissions, fetchUserRoles } from '../../services/announcements';
   import type { Announcement, Comment } from '../../services/announcements';
 
@@ -234,7 +235,9 @@
     t.style.height = Math.min(t.scrollHeight, 200) + 'px';
   }
 
-  function openProfile(userId: number) { navigate(`/profile/${userId}`); }
+  function openProfile(userId: number, event: MouseEvent) {
+    handleUserProfileClick(userId, event);
+  }
 
   async function removeComment(commentId: string) {
     const self = getSelf();

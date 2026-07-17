@@ -23,7 +23,7 @@
     profileCache: Record<number, Profile>;
     onReply: (c: Comment) => void;
     onMention: (userId: number) => void;
-    onOpenProfile: (userId: number) => void;
+    onOpenProfile: (userId: number, event: MouseEvent) => void;
     embedToCardData: (e: ReleaseEmbed) => ReleaseCardData;
     canDelete: boolean;
     onDelete: (commentId: string) => void;
@@ -183,7 +183,7 @@
     {#if showAvatar}
       <button
         class="dc-row__av-btn"
-        onclick={() => onOpenProfile(comment.userId)}
+        onclick={(event) => onOpenProfile(comment.userId, event)}
         title="Профиль"
       >
         {#if profile?.avatar}
@@ -209,7 +209,7 @@
         <button
           class="dc-row__author"
           style="color:{profile?.roles?.[0]?.color ?? userColor(comment.userId)}"
-          onclick={() => onOpenProfile(comment.userId)}
+          onclick={(event) => onOpenProfile(comment.userId, event)}
         >
           {profile?.login ?? comment.userId}
         </button>

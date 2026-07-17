@@ -5,6 +5,8 @@
   import { activeSidebarTab, isSidebarTabActive } from '../stores/tab-navigation';
   import { openAdminArea, restoreAdminSession, checkTeamMembership, isTeamMember } from '../stores/admin';
   import { openLobbyModal, openNotificationsModal, openSettingsModal } from '../stores/modals';
+  import { handleUserProfileClick } from '../stores/user-profile';
+  import { ensureProfileId } from '../utils/profile';
   import { bindSearchHotkeys } from '../search-controller';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import { iconHome, iconBookmark, iconCompass, iconFlame, iconLayoutGrid, iconDownload } from '../components/icons';
@@ -155,6 +157,12 @@
       window.removeEventListener('anix:profileUpdated', onProfileUpdated);
     };
   });
+
+  async function onProfileClick(event: MouseEvent) {
+    const selfId = Number((window as { __anixProfile?: { id?: number } }).__anixProfile?.id ?? 0)
+      || Number(await ensureProfileId() ?? 0);
+    if (selfId) handleUserProfileClick(selfId, event);
+  }
 </script>
 
 <div class="layout">
@@ -164,7 +172,7 @@
     scheduleOpen={scheduleActive}
     onNotifications={() => openNotificationsModal()}
     onSettings={() => openSettingsModal()}
-    onProfile={() => navigate('/profile')}
+    onProfile={onProfileClick}
     onSearchTab={navigateSearchTab}
     {searchTabActive}
   />

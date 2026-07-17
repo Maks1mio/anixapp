@@ -1,16 +1,11 @@
 <script lang="ts">
-  import { navigate } from '../../../../stores/navigation';
-  import CollectionCard from '../../../../components/CollectionCard.svelte';
-  import ReleaseCarouselNav from '../../../Release/components/ReleaseCarouselNav.svelte';
+  import CollectionCard from '../../../../components/CollectionCard.svelte';  import ReleaseCarouselNav from '../../../Release/components/ReleaseCarouselNav.svelte';
   import { mapCollectionCard } from '../../../../utils/collection';
 
   interface Props {
     items: Record<string, unknown>[];
-    profileId: number;
   }
-
-  let { items, profileId }: Props = $props();
-
+  let { items }: Props = $props();
   const cards = $derived(
     items
       .map((item) => {
@@ -23,12 +18,6 @@
 </script>
 
 <div class="profile-v2__collections">
-  <div class="profile-v2__section-head">
-    <button type="button" class="profile-v2__link" onclick={() => navigate(`/profile/${profileId}/collections`)}>
-      Показать всё
-    </button>
-  </div>
-
   {#if cards.length > 0}
     <div class="profile-v2__collections-carousel overview-collections-week">
       <ReleaseCarouselNav

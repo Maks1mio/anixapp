@@ -2,25 +2,37 @@
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import CollectionCard from '../components/CollectionCard.svelte';
   import BookmarksToolbar from '../components/BookmarksToolbar.svelte';
+  import HomeDefaultTabModal from '../components/HomeDefaultTabModal.svelte';
   import { onMount, onDestroy } from 'svelte';
-  import Tabs from '../components/Tabs.svelte';
+  import Tabs, { type TabItem } from '../components/Tabs.svelte';
   import { navigate } from '../stores/navigation';
   import { getSearchParams } from '../router';
   import { buildPosterUrl, resolveCdnAssetUrl } from '../utils/posterUrl';
   import { DEFAULT_BOOKMARK_SORT } from '../constants/bookmarkSort';
   import type { ReleaseCardData } from '../types/release';
   import { extractHistoryEpisodeInfo } from '../utils/historyFormat';
+  import { iconHome, iconSlidersHorizontal } from '../components/icons';
+  import { openFloatingMenu } from '../components/dots-menu';
+  import {
+    getDefaultBookmarksTab,
+    resolveBookmarksTab,
+    setDefaultBookmarksTab,
+    type BookmarksTabId,
+  } from '../prefs';
+  import type { CollectionCardData } from '../components/CollectionCard.svelte';
   import {
     buildViewStateKey,
     getViewState,
     saveViewStateWithScroll,
     restoreScrollTop,
-    removeViewState,
+    invalidateViewStatePrefix,
     registerActiveScrollKey,
     flushActiveViewState,
     saveViewStateData,
     beginScrollRestore,
   } from '../stores/view-state';
+
+  type TabId = BookmarksTabId;
 
   interface BookmarksViewState {
     activeTab: TabId;
@@ -86,20 +98,18 @@
     }
   }
 
-  import type { CollectionCardData } from '../components/CollectionCard.svelte';
-
-  type TabId = 'collections' | 'history' | 'favorites' | 'watching' | 'planned' | 'completed' | 'on_hold' | 'dropped';
-
-  const TABS: { id: TabId; label: string; type: number | null }[] = [
-    { id: 'collections', label: 'Коллекции',   type: null },
-    { id: 'history',     label: 'История',     type: null },
-    { id: 'favorites',   label: 'Избранное',   type: null },
-    { id: 'watching',    label: 'Смотрю',     type: 1 },
-    { id: 'planned',     label: 'В планах',   type: 2 },
-    { id: 'completed',   label: 'Просмотрено', type: 3 },
-    { id: 'on_hold',     label: 'Отложено',   type: 4 },
-    { id: 'dropped',     label: 'Брошено',    type: 5 },
+  const TABS: { id: TabId; label: string; desc: string; type: number | null }[] = [
+    { id: 'collections', label: 'Коллекции',   desc: 'Избранные коллекции', type: null },
+    { id: 'history',     label: 'История',     desc: 'Недавно просмотренные релизы', type: null },
+    { id: 'favorites',   label: 'Избранное',   desc: 'Релизы в избранном', type: null },
+    { id: 'watching',    label: 'Смотрю',      desc: 'Сейчас в просмотре', type: 1 },
+    { id: 'planned',     label: 'В планах',    desc: 'Запланированные релизы', type: 2 },
+    { id: 'completed',   label: 'Просмотрено', desc: 'Завершённые релизы', type: 3 },
+    { id: 'on_hold',     label: 'Отложено',    desc: 'Отложенные релизы', type: 4 },
+    { id: 'dropped',     label: 'Брошено',     desc: 'Брошенные релизы', type: 5 },
   ];
+
+  const DEFAULT_TAB_OPTIONS = TABS.map((t) => ({ id: t.id, label: t.label, desc: t.desc }));
 
   function mapReleaseToCardData(raw: Record<string, unknown>): ReleaseCardData {
     const p = raw.poster as Record<string, { url?: string }> | undefined;
@@ -192,6 +202,9 @@
   let randomLoading = $state(false);
   let wrapEl: HTMLElement | undefined = $state();
   let unregisterScrollKey: (() => void) | null = null;
+  let defaultTabModalOpen = $state(false);
+  let defaultBookmarksTab = $state(getDefaultBookmarksTab());
+  let tabsSettingsBtn = $state<HTMLButtonElement | undefined>();
 
   const isCollectionsTab = $derived(activeTab === 'collections');
   const isHistoryTab = $derived(activeTab === 'history');
@@ -310,7 +323,7 @@
     }
   }
 
-  async function loadTab(tabId: TabId, resetSort = false) {
+  async function loadTab(tabId: TabId, resetSort = false, force = false) {
     if (tabId !== activeTab && (items.length > 0 || collectionItems.length > 0)) {
       saveViewStateWithScroll(BOOKMARKS_VIEW_KEY(), bookmarksSnapshot());
     }
@@ -318,7 +331,7 @@
     activeTab = tabId;
     syncTabToUrl(tabId);
 
-    if (!resetSort) {
+    if (!resetSort && !force) {
       const cached = getViewState<BookmarksViewState>(BOOKMARKS_VIEW_KEY());
       if (cached?.data && hasBookmarkItems(cached.data) && cached.data.activeTab === tabId) {
         applyBookmarksSnapshot(cached.data);
@@ -326,6 +339,8 @@
         return;
       }
     }
+
+    if (force) invalidateViewStatePrefix('/bookmarks');
 
     if (resetSort) selectedSort = DEFAULT_BOOKMARK_SORT;
     nextPage = 0;
@@ -370,6 +385,10 @@
     }
   }
 
+  function onBookmarksChanged() {
+    void loadTab(activeTab, false, true);
+  }
+
   function onSortChange(sort: number) {
     if (sort === selectedSort) return;
     selectedSort = sort;
@@ -406,7 +425,7 @@
       items = items.filter((item) => item.id !== releaseId);
       totalCount = Math.max(0, totalCount - 1);
       if (!items.length) loadState = 'empty';
-      removeViewState(BOOKMARKS_VIEW_KEY());
+      invalidateViewStatePrefix('/bookmarks');
     } catch {
       /* ignore */
     }
@@ -417,11 +436,64 @@
     void loadTab(activeTab);
   }
 
+  function openDefaultTabModal() {
+    defaultTabModalOpen = true;
+  }
+
+  function handleTabsSettingsClick(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const btn = tabsSettingsBtn;
+    if (!btn) return;
+    openFloatingMenu({
+      anchor: btn,
+      entries: [
+        { id: 'default-tab', label: 'Изменить вкладку по умолч.', icon: iconHome(18) },
+      ],
+      onSelect: (id) => {
+        if (id === 'default-tab') openDefaultTabModal();
+      },
+    });
+  }
+
+  function handleTabContextMenu(tab: TabItem, e: MouseEvent) {
+    openFloatingMenu({
+      x: e.clientX,
+      y: e.clientY,
+      entries: [
+        { id: 'set-default', label: 'Назначить по умолчанию', icon: iconHome(18) },
+      ],
+      onSelect: (id) => {
+        if (id === 'set-default') {
+          defaultBookmarksTab = setDefaultBookmarksTab(tab.id);
+        }
+      },
+    });
+  }
+
+  function onDefaultTabSave(tabId: string) {
+    defaultBookmarksTab = setDefaultBookmarksTab(tabId);
+    defaultTabModalOpen = false;
+  }
+
+  function resolveInitialBookmarksTab(): TabId {
+    const tabParam = getSearchParams().get('tab');
+    if (tabParam && TABS.some((t) => t.id === tabParam)) return tabParam as TabId;
+    return resolveBookmarksTab(getDefaultBookmarksTab());
+  }
+
   onMount(() => {
     unregisterScrollKey = registerActiveScrollKey(() => BOOKMARKS_VIEW_KEY());
     window.addEventListener('anix:beforeNavigate', onBeforeNavigate);
+    window.addEventListener('anix:bookmarksChanged', onBookmarksChanged);
+    defaultBookmarksTab = getDefaultBookmarksTab();
+
+    const tabParam = getSearchParams().get('tab');
+    const hasExplicitTab = !!(tabParam && TABS.some((t) => t.id === tabParam));
     const cached = getViewState<BookmarksViewState>(BOOKMARKS_VIEW_KEY());
-    if (cached?.data && (cached.data.items.length > 0 || cached.data.collectionItems.length > 0)) {
+
+    // URL ?tab= имеет приоритет; иначе кэш; иначе вкладка по умолчанию.
+    if (!hasExplicitTab && cached?.data && (cached.data.items.length > 0 || cached.data.collectionItems.length > 0)) {
       const s = cached.data;
       activeTab = s.activeTab;
       items = s.items;
@@ -440,14 +512,13 @@
     }
 
     requestAnimationFrame(attachScroll);
-    const tabParam = getSearchParams().get('tab') as TabId | null;
-    const initialTab = tabParam && TABS.some((t) => t.id === tabParam) ? tabParam : 'collections';
-    void loadTab(initialTab);
+    void loadTab(resolveInitialBookmarksTab());
     window.addEventListener('anix:cardLayoutChanged', onLayoutChanged);
   });
 
   onDestroy(() => {
     window.removeEventListener('anix:beforeNavigate', onBeforeNavigate);
+    window.removeEventListener('anix:bookmarksChanged', onBookmarksChanged);
     unregisterScrollKey?.();
     unregisterScrollKey = null;
     saveViewStateData(BOOKMARKS_VIEW_KEY(), bookmarksSnapshot());
@@ -461,7 +532,21 @@
     tabs={TABS.map((t) => ({ id: t.id, label: t.label }))}
     activeId={activeTab}
     onChange={(id) => loadTab(id as TabId)}
+    onTabContextMenu={handleTabContextMenu}
   >
+    {#snippet leftActions()}
+      <button
+        type="button"
+        class="bookmarks-toolbar__icon-btn bookmarks__tabs-settings"
+        title="Настройки вкладок"
+        aria-label="Настройки вкладок"
+        aria-haspopup="menu"
+        bind:this={tabsSettingsBtn}
+        onclick={handleTabsSettingsClick}
+      >
+        {@html iconSlidersHorizontal(18)}
+      </button>
+    {/snippet}
     {#snippet rightActions()}
       {#if isReleaseListTab && loadState !== 'loading'}
         <BookmarksToolbar
@@ -502,3 +587,13 @@
     {/if}
   </div>
 </div>
+
+{#if defaultTabModalOpen}
+  <HomeDefaultTabModal
+    options={DEFAULT_TAB_OPTIONS}
+    value={resolveBookmarksTab(defaultBookmarksTab)}
+    subtitle="Выбранная вкладка будет открываться при переходе в закладки"
+    onSave={onDefaultTabSave}
+    onClose={() => { defaultTabModalOpen = false; }}
+  />
+{/if}

@@ -13,9 +13,18 @@
     value: string;
     onSave: (tabId: string) => void;
     onClose: () => void;
+    title?: string;
+    subtitle?: string;
   }
 
-  let { options, value, onSave, onClose }: Props = $props();
+  let {
+    options,
+    value,
+    onSave,
+    onClose,
+    title = 'Изменить вкладку по умолч.',
+    subtitle = 'Выбранная вкладка будет открываться при запуске приложения',
+  }: Props = $props();
   let picked = $state(untrack(() => value));
 
   function apply() {
@@ -29,8 +38,8 @@
   <div class="home-filter-modal__panel home-default-tab-modal">
     <header class="home-filter-modal__head">
       <div>
-        <h2 id="home-default-tab-title" class="home-filter-modal__title">Изменить вкладку по умолч.</h2>
-        <p class="home-default-tab-modal__sub">Выбранная вкладка будет открываться при запуске приложения</p>
+        <h2 id="home-default-tab-title" class="home-filter-modal__title">{title}</h2>
+        <p class="home-default-tab-modal__sub">{subtitle}</p>
       </div>
       <button type="button" class="home-filter-modal__close" aria-label="Закрыть" onclick={onClose}>×</button>
     </header>

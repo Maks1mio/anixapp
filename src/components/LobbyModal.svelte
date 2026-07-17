@@ -1,8 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { navigate } from '../stores/navigation';
-  import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import { closeLobbyModal } from '../stores/modals';
+  import { handleUserProfileClick } from '../stores/user-profile';
   import {
     createRoom,
     joinRoom,
@@ -479,7 +478,7 @@
                   <button
                     type="button"
                     class="lobby-modal__participant"
-                    onclick={() => navigate(`/profile/${p.id}`)}
+                    onclick={(event) => handleUserProfileClick(p.id, event)}
                   >
                     <div class="lobby-modal__participant-avatar-wrap">
                       <span

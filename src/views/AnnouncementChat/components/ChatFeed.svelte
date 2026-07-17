@@ -21,7 +21,7 @@
     accentColor: string;
     onReply: (c: Comment) => void;
     onMention: (userId: number) => void;
-    onOpenProfile: (userId: number) => void;
+    onOpenProfile: (userId: number, event: MouseEvent) => void;
     embedToCardData: (e: ReleaseEmbed) => ReleaseCardData;
     canModerate: boolean;
     onDelete: (commentId: string) => void;

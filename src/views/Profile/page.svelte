@@ -4,8 +4,8 @@
   import ProfileV1 from './v1/page.svelte';
   import ProfileV2 from './v2/page.svelte';
 
-  interface Props { id?: number; }
-  let { id }: Props = $props();
+  interface Props { id?: number; embedded?: boolean; discordLayout?: boolean; }
+  let { id, embedded = false, discordLayout = false }: Props = $props();
 
   let layout = $state<ProfileLayout>(getProfileLayout());
 
@@ -24,8 +24,10 @@
   });
 </script>
 
-{#if layout === 'classic'}
-  <ProfileV1 {id} />
+{#if discordLayout}
+  <ProfileV2 {id} {embedded} {discordLayout} />
+{:else if layout === 'classic'}
+  <ProfileV1 {id} {embedded} />
 {:else}
-  <ProfileV2 {id} />
+  <ProfileV2 {id} {embedded} {discordLayout} />
 {/if}

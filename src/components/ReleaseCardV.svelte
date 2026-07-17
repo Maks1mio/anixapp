@@ -8,6 +8,8 @@
   import { formatHistoryViewTime } from '../utils/historyFormat';
   import { onMount } from 'svelte';
   import { notifyFavoritesChanged } from '../utils/favorites-events';
+  import { applyReleaseListStatus } from '../utils/release-list-status';
+  import type { ReleaseListStatusId } from '../utils/release-list-status';
 
   type ListStatusId = 'watching' | 'planned' | 'completed' | 'on_hold' | 'dropped';
 
@@ -168,7 +170,7 @@
 
         if (entryId === 'none' && currentStatusId) {
           const prev = currentStatusId;
-          api.release.clearListStatus(id, prev as unknown as number).then(() => {
+          applyReleaseListStatus(id, null, prev).then(() => {
             currentStatusId = null;
           }).catch(() => {});
           return;
@@ -176,7 +178,8 @@
 
         if (LIST_STATUSES.some((s) => s.id === entryId)) {
           const nextStatus = entryId as ListStatusId;
-          api.release.setListStatus(id, nextStatus as unknown as number).then(() => {
+          const prev = currentStatusId;
+          applyReleaseListStatus(id, nextStatus as ReleaseListStatusId, prev).then(() => {
             currentStatusId = nextStatus;
           }).catch(() => {});
         }

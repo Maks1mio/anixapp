@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { navigate } from '../../stores/navigation';
+  import { handleUserProfileClick } from '../../stores/user-profile';
   import { iconChevronRight, iconPencil } from '../icons';
   import CommentVote from './CommentVote.svelte';
   import CommentComposer from './CommentComposer.svelte';
@@ -56,8 +56,8 @@
   const hasRepliesToggle = $derived(showRepliesToggle && comment.replyCount > 0);
   const showOwnerActions = $derived(canManage && isMine && !comment.isDeleted && !!onEdit && !!onDelete);
 
-  function openProfile() {
-    if (comment.profile.id) navigate(`/profile/${comment.profile.id}`);
+  function openProfile(event: MouseEvent) {
+    if (comment.profile.id) handleUserProfileClick(comment.profile.id, event);
   }
 
   function startEdit() {

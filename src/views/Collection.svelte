@@ -3,12 +3,14 @@
   import { onMount, onDestroy } from 'svelte';
   import { iconPencil, iconLock, iconTrash2 } from '../components/icons';
   import { navigate } from '../stores/navigation';
+  import { handleUserProfileClick } from '../stores/user-profile';
   import { showToast } from '../stores/toast';
   import { COLLECTION_DELETE_ERROR_MESSAGES } from '../utils/collection';
   import { setDiscordContext, refreshDiscordPresence } from '../services/discord-presence';
   import { ensureProfileId } from '../utils/profile';
   import type { ReleaseCardData } from '../types/release';
   import { buildPosterUrl } from '../utils/posterUrl';
+  import { notifyBookmarksChanged } from '../utils/favorites-events';
 
   interface Props {
     id: number;
@@ -161,6 +163,7 @@
         await window.anixApi.collection.addFavorite(id);
       }
       isFavorite = !isFavorite;
+      notifyBookmarksChanged({ kind: 'collections' });
     } catch { /* ignore */ }
   }
 
@@ -302,7 +305,7 @@
               <button
                 type="button"
                 class="collection-header__author-link"
-                onclick={() => { if (authorId) navigate(`/profile/${authorId}`); }}
+                onclick={(event) => { if (authorId) handleUserProfileClick(authorId, event); }}
               >
                 <span
                   class="collection-header__author-avatar{authorAvatar ? ' collection-header__author-avatar--img' : ''}"

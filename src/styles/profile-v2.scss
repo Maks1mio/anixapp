@@ -2,12 +2,17 @@
 
 // Android-style profile v2
 .view-profile.view-profile--v2 {
-  max-width: 56rem;
+  max-width: none;
   margin: 0 auto;
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  padding: 0 0 2.5rem;
+  padding: 0 0 2rem;
+
+  &.view-profile--embedded,
+  &.view-profile--discord {
+    padding: 0;
+  }
 }
 
 .profile-v2 {
@@ -457,6 +462,47 @@
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
+    margin-top: 1.25rem;
+    padding-top: 0.25rem;
+  }
+
+  &__below--stats {
+    margin-top: 1rem;
+  }
+
+  &__friends-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+
+  &__friends-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  &__friends-count {
+    margin-left: 0.4rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: $color-text-muted;
+  }
+
+  &__friends-state {
+    margin: 0;
+    padding: 1.5rem 0;
+    text-align: center;
+    color: $color-text-muted;
+    font-size: 0.85rem;
+
+    &--error {
+      color: $color-error;
+    }
+  }
+
+  &__recent {
     min-width: 0;
     margin-top: 0.25rem;
     padding-top: 1rem;

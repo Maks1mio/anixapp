@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { closeNotificationsModal } from '../stores/modals';
   import { navigate } from '../stores/navigation';
+  import { handleUserProfileClick } from '../stores/user-profile';
   import {
     iconPlay,
     iconBookmark,
@@ -200,13 +202,12 @@
     };
   }
 
-  function handleItemClick(n: ParsedNotification) {
+  function handleItemClick(n: ParsedNotification, event: MouseEvent) {
     if (n.releaseId) {
       close();
       navigate(`/release/${n.releaseId}`);
     } else if (n.profileId) {
-      close();
-      navigate(`/profile/${n.profileId}`);
+      handleUserProfileClick(n.profileId, event);
     }
   }
 
@@ -388,7 +389,7 @@
             <button
               type="button"
               class="notifications-modal__item"
-              onclick={() => handleItemClick(n)}
+              onclick={(event) => handleItemClick(n, event)}
             >
               {#if n.image}
                 <div

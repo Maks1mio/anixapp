@@ -6,8 +6,8 @@
   import { loadProfilePage, fetchCoverFallback } from '../shared/profile-load';
   import { setDiscordContext, refreshDiscordPresence } from '../../../services/discord-presence';
 
-  interface Props { id?: number; }
-  let { id }: Props = $props();
+  interface Props { id?: number; embedded?: boolean; discordLayout?: boolean; }
+  let { id, embedded = false, discordLayout = false }: Props = $props();
 
   const loadProfileId = id;
 
@@ -37,12 +37,14 @@
       if (!result.coverUrl) {
         fetchCoverFallback(Number(result.profile.id), (url) => { coverUrl = url; });
       }
-      setDiscordContext({
-        profileLogin: String(result.profile.login ?? ''),
-        profileAvatar: result.profile.avatar ? String(result.profile.avatar) : undefined,
-        profileIsSelf: result.isMyProfile,
-      });
-      refreshDiscordPresence();
+      if (!embedded) {
+        setDiscordContext({
+          profileLogin: String(result.profile.login ?? ''),
+          profileAvatar: result.profile.avatar ? String(result.profile.avatar) : undefined,
+          profileIsSelf: result.isMyProfile,
+        });
+        refreshDiscordPresence();
+      }
     }
   });
 </script>

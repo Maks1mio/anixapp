@@ -89,3 +89,18 @@ export function openWatchModal(releaseId: number, releaseTitle: string): void {
 export function closeWatchModal(): void {
   watchModalOpen.set(false);
 }
+
+export const profileModalOpen = writable(false);
+export const profileModalUserId = writable<number | null>(null);
+
+export function openProfileModal(userId?: number): void {
+  const id = userId ?? Number((window as { __anixProfile?: { id?: number } }).__anixProfile?.id ?? 0);
+  if (!id) return;
+  profileModalUserId.set(id);
+  profileModalOpen.set(true);
+}
+
+export function closeProfileModal(): void {
+  profileModalOpen.set(false);
+  profileModalUserId.set(null);
+}

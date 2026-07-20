@@ -51,7 +51,7 @@
         "html-to-image": "^1.11.13",
         "hls.js": "^1.6.16",
         "lottie-web": "^5.13.0",
-        "lucide": "^1.21.0"
+        "lucide": "^1.25.0"
     },
     "resolutions": {
         "axios": "^1.18.0",

@@ -65,7 +65,7 @@
         "undici": "^7.28.0",
         "ip-address": "^10.2.0",
         "shell-quote": "^1.8.4",
-        "js-yaml": "^4.2.0"
+        "js-yaml": "^4.3.0"
     },
     "build": {
         "appId": "com.anixapp.client",

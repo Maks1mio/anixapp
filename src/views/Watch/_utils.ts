@@ -79,7 +79,14 @@ export async function resolveEpisodeUrl(
       const remoteMap: Record<string, string> = res?.qualityMap ?? {};
 
       if (directUrl) {
-        const stripHls = (u: string) => u.replace(/:hls:manifest\.m3u8$/, '').replace(/:hls:hls\.m3u8$/, '');
+        // /s/m/ на solodcdn: progressive MP4 часто 500 — оставляем HLS; иначе снимаем :hls: суффикс.
+        const toPlayable = (u: string) => {
+          if (/\/s\/m\//i.test(u)) {
+            if (!/:hls:/i.test(u) && /\.mp4$/i.test(u)) return `${u}:hls:manifest.m3u8`;
+            return u;
+          }
+          return u.replace(/:hls:manifest\.m3u8$/i, '').replace(/:hls:hls\.m3u8$/i, '');
+        };
         const raw = directUrl.startsWith('http') ? directUrl : `https:${directUrl}`;
 
         if (Object.keys(remoteMap).length > 0) {
@@ -87,13 +94,13 @@ export async function resolveEpisodeUrl(
             const rawEntry = typeof v === 'string' ? v : String(v ?? '');
             if (!rawEntry) continue;
             const abs = rawEntry.startsWith('http') ? rawEntry : `https:${rawEntry}`;
-            qualityMap[k.replace(/p$/, '')] = stripKodikQueryParams(stripHls(abs));
+            qualityMap[k.replace(/p$/, '')] = stripKodikQueryParams(toPlayable(abs));
           }
           const best = QUALITY_PRIORITY.find(k => qualityMap[k] || qualityMap[k + 'p']) || Object.keys(qualityMap)[0];
           currentQuality = best || '';
-          playUrl = currentQuality ? qualityMap[currentQuality] : stripKodikQueryParams(stripHls(raw));
+          playUrl = currentQuality ? qualityMap[currentQuality] : stripKodikQueryParams(toPlayable(raw));
         } else {
-          playUrl = stripKodikQueryParams(stripHls(raw));
+          playUrl = stripKodikQueryParams(toPlayable(raw));
           if (isSibnet) {
             qualityMap = { '720': playUrl };
             currentQuality = '720';

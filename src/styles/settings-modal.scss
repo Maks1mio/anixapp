@@ -2289,7 +2289,7 @@ $toggle-switch-travel: calc(#{$toggle-switch-w} - #{$toggle-switch-thumb} - #{$t
 
 // ── UI zoom slider ───────────────────────────────────────────────────────────
 .settings-zoom-hint {
-  margin: 0 0 1rem;
+  margin: 0 0 0.875rem;
   font-size: 0.875rem;
   line-height: 1.45;
   color: $color-text-muted;
@@ -2309,91 +2309,100 @@ $toggle-switch-travel: calc(#{$toggle-switch-w} - #{$toggle-switch-thumb} - #{$t
 }
 
 .zoom-scale {
-  position: relative;
-  padding-top: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.15rem 0 0.25rem;
 }
 
-.zoom-scale__ticks {
-  position: relative;
-  height: 1.25rem;
-  margin-bottom: 0.35rem;
+.zoom-scale__row {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
 }
 
-.zoom-scale__tick {
-  position: absolute;
-  transform: translateX(-50%);
+.zoom-scale__value {
+  flex: 0 0 auto;
+  min-width: 3.25rem;
+  text-align: right;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: $color-text;
+  line-height: 1;
+}
+
+.zoom-scale__ends {
+  display: flex;
+  justify-content: space-between;
+  padding-right: calc(3.25rem + 0.875rem);
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
   color: $color-text-muted;
-  white-space: nowrap;
-
-  &--default {
-    color: $color-success;
-    font-weight: 600;
-  }
-
-  &--active {
-    color: $color-text;
-    font-weight: 600;
-  }
+  line-height: 1;
 }
 
 .zoom-scale__input {
   -webkit-appearance: none;
   appearance: none;
-  display: block;
+  flex: 1 1 auto;
   width: 100%;
-  height: 4px;
+  height: 1.5rem;
   margin: 0;
-  border-radius: 999px;
-  background: linear-gradient(
-    to right,
-    $color-accent 0%,
-    $color-accent var(--zoom-fill, 50%),
-    color-mix(in srgb, $color-border 85%, transparent) var(--zoom-fill, 50%),
-    color-mix(in srgb, $color-border 85%, transparent) 100%
-  );
+  background: transparent;
   outline: none;
   cursor: pointer;
 
-  &::-webkit-slider-runnable-track {
-    height: 4px;
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, $color-accent 55%, transparent);
+    outline-offset: 4px;
     border-radius: 999px;
-    background: transparent;
+  }
+
+  &::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(
+      to right,
+      $color-accent 0%,
+      $color-accent var(--zoom-fill, 50%),
+      color-mix(in srgb, $color-border 70%, transparent) var(--zoom-fill, 50%),
+      color-mix(in srgb, $color-border 70%, transparent) 100%
+    );
   }
 
   &::-webkit-slider-thumb {
     -webkit-appearance: none;
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     margin-top: -6px;
-    border: none;
+    border: 2px solid $color-accent;
     border-radius: 50%;
     background: #fff;
-    box-shadow: 0 0 0 1px color-mix(in srgb, $color-border 70%, transparent);
+    box-shadow: 0 1px 3px color-mix(in srgb, #000 35%, transparent);
     cursor: pointer;
   }
 
   &::-moz-range-track {
-    height: 4px;
+    height: 6px;
     border: none;
     border-radius: 999px;
-    background: color-mix(in srgb, $color-border 85%, transparent);
+    background: color-mix(in srgb, $color-border 70%, transparent);
   }
 
   &::-moz-range-progress {
-    height: 4px;
+    height: 6px;
     border-radius: 999px;
     background: $color-accent;
   }
 
   &::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
-    border: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid $color-accent;
     border-radius: 50%;
     background: #fff;
-    box-shadow: 0 0 0 1px color-mix(in srgb, $color-border 70%, transparent);
+    box-shadow: 0 1px 3px color-mix(in srgb, #000 35%, transparent);
     cursor: pointer;
   }
 }

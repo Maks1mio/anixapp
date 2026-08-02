@@ -1,5 +1,5 @@
 /**
- * Совместимость AnixApp (AnixartJS 0.1.x API) → AnixApi 0.2.x
+ * Совместимость AnixApp (AnixartJS 0.1.x API) → AnixApi 0.3.x
  * @param {import('anixapi').Anixart} client
  */
 function attachLegacyEndpoints(client) {

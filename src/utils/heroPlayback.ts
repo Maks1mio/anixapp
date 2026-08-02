@@ -76,7 +76,7 @@ export function getCachedHeroBackdrop(releaseId: number): string | undefined {
   return backdropCache.get(releaseId);
 }
 
-/** Widescreen screenshot or original poster — sharper than small banner art. */
+/** Backdrop for non-carousel contexts. Prefer release poster, then screenshots. */
 export async function resolveHeroBackdrop(releaseId: number, fallback: string): Promise<string> {
   const cached = backdropCache.get(releaseId);
   if (cached) return cached;

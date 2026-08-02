@@ -34,17 +34,24 @@ function anixbackTargetOrigin() {
 function shouldTryNextOrigin(res, path, originIndex, total) {
   if (originIndex >= total - 1) return false;
   if (res.ok) return false;
+  // Admin API must stay on the selected origin (no silent failover to prod).
+  if (path.startsWith('/api/admin/')) return false;
   if (res.status >= 500) return true;
   return path.startsWith('/uploads/') && res.status === 404;
 }
 
-function readBody(req) {
+/** ffmpeg download / render can take minutes — never apply the short proxy timeout. */
+function isLongRunningAnixbackPath(path) {
+  return /\/admin\/overview\/overrides\/[^/?#]+\/(source-url|source|render|bg)\b/.test(path);
+}
+
+function readBody(req, maxBytes = 4 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
     req.on('data', (chunk) => {
       size += chunk.length;
-      if (size > 4 * 1024 * 1024) {
+      if (size > maxBytes) {
         reject(new Error('Body too large'));
         req.destroy();
         return;
@@ -101,9 +108,12 @@ async function proxyAnixback(req, res, url) {
     if (req.headers['x-admin-token']) headers['X-Admin-Token'] = req.headers['x-admin-token'];
     if (req.headers.range) headers.Range = req.headers.range;
 
+    const longRunning = isLongRunningAnixbackPath(path);
     let body;
     if (req.method !== 'GET' && req.method !== 'HEAD') {
-      const parsed = await readBody(req);
+      // source/bg могут нести data_url целиком (видео/картинка в JSON).
+      const maxBytes = longRunning ? 300 * 1024 * 1024 : 4 * 1024 * 1024;
+      const parsed = await readBody(req, maxBytes);
       if (parsed !== null && parsed !== undefined && Object.keys(parsed).length > 0) {
         body = JSON.stringify(parsed);
       }
@@ -123,8 +133,11 @@ async function proxyAnixback(req, res, url) {
           headers,
           body: body ?? undefined,
         };
-        if (!isUpload) {
+        if (!isUpload && !longRunning) {
           fetchOpts.signal = AbortSignal.timeout(30_000);
+        } else if (longRunning) {
+          // Скачивание серии / ffmpeg render — до 15 минут.
+          fetchOpts.signal = AbortSignal.timeout(15 * 60_000);
         }
         const attempt = await fetch(upstreamUrl, fetchOpts);
         if (shouldTryNextOrigin(attempt, path, i, origins.length)) {
@@ -135,6 +148,8 @@ async function proxyAnixback(req, res, url) {
         break;
       } catch (err) {
         lastErr = err;
+        // Admin / long-running: не уходим на следующий origin после timeout/сети.
+        if (longRunning || path.startsWith('/api/admin/')) break;
       }
     }
 

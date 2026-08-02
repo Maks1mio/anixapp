@@ -65,12 +65,20 @@ function setupSessionRequestHeaders() {
       upsertHeader(requestHeaders, 'Referer', 'https://video.sibnet.ru/');
     } else if (host.endsWith('kodik-cdn.com') || host.includes('kodik-storage') || host.includes('solodcdn')) {
       upsertHeader(requestHeaders, 'Referer', 'https://kodikplayer.com/');
+      // Progressive /s/m/ edges на solodcdn стабильнее с браузерным UA (как SwiftPlayer).
+      upsertHeader(requestHeaders, 'User-Agent', BROWSER_UA);
     } else if (host.includes('libria') || host.includes('anilib')) {
       upsertHeader(requestHeaders, 'Referer', preservedReferer || details.referrer || 'https://anilibria.top/');
     } else if (preservedReferer) {
       upsertHeader(requestHeaders, 'Referer', preservedReferer);
     }
-    if (host !== 'kodikplayer.com' && host !== 'video.sibnet.ru') {
+    if (
+      host !== 'kodikplayer.com'
+      && host !== 'video.sibnet.ru'
+      && !host.includes('solodcdn')
+      && !host.includes('kodik-storage')
+      && !host.endsWith('kodik-cdn.com')
+    ) {
       upsertHeader(requestHeaders, 'User-Agent', ANIXART_UA);
       upsertHeader(requestHeaders, 'sec-ch-ua', '"AnixartApp"');
       upsertHeader(requestHeaders, 'sec-ch-ua-mobile', '?1');

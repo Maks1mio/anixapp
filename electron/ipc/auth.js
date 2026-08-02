@@ -60,7 +60,7 @@ function register(deps) {
   }
 
   const ANIX_UA =
-    'AnixartApp/9.0 BETA 7-25082901 (Android 9; SDK 28; x86_64; ROG ASUS AI2201_B; ru)';
+    'AnixartApp/9.0 BETA 19-26073118 (Android 9; SDK 28; x86_64; ROG ASUS AI2201_B; ru)';
 
   /** Прямой POST /auth/vk — обходим возможные нюансы URLSearchParams. */
   async function signInWithVkRaw(baseUrl, vkAccessToken, fieldName = 'vkAccessToken') {

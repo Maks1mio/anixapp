@@ -9,13 +9,12 @@
     BUILT_IN_THEMES,
     type Theme,
   } from '../../../services/themes';
-  import { getCardLayout, setCardLayout, getProfileLayout, setProfileLayout, type CardLayout, type ProfileLayout } from '../../../prefs';
+  import { getCardLayout, setCardLayout, type CardLayout } from '../../../prefs';
 
   import ZoomScaleSlider from '../../../components/ZoomScaleSlider.svelte';
   import { DEFAULT_ZOOM, normalizeZoom, type ZoomLevel } from '../../../utils/zoom';
 
   let cardLayout = $state<CardLayout>(getCardLayout());
-  let profileLayout = $state<ProfileLayout>(getProfileLayout());
   let activeThemeId = $state(getActiveThemeId());
   let customThemes = $state<Theme[]>([]);
   let uiZoom = $state<ZoomLevel>(DEFAULT_ZOOM);
@@ -36,15 +35,6 @@
     cardLayout = layout;
     const p = typeof window !== 'undefined' ? window.location.pathname + window.location.search : '';
     if (p === '/' || p.startsWith('/catalog') || p.startsWith('/search') || p.startsWith('/bookmarks')) {
-      navigate(p);
-    }
-  }
-
-  function selectProfileLayout(layout: ProfileLayout) {
-    setProfileLayout(layout);
-    profileLayout = layout;
-    const p = typeof window !== 'undefined' ? window.location.pathname : '';
-    if (p === '/profile' || /^\/profile\/\d+$/.test(p)) {
       navigate(p);
     }
   }
@@ -131,43 +121,6 @@
           </svg>
         </div>
         <span>Карточками</span>
-      </button>
-    </div>
-  </div>
-
-  <!-- Profile layout -->
-  <div class="settings-section">
-    <p class="settings-section__label">Страница профиля</p>
-    <p class="settings-section__desc">Новый дизайн оформлен как страница релиза — удобнее на широком экране. Классический можно вернуть для отката.</p>
-    <div class="settings-card-layout-toggle">
-      <button
-        type="button"
-        class="settings-card-layout-btn{profileLayout === 'v2' ? ' settings-card-layout-btn--active' : ''}"
-        onclick={() => selectProfileLayout('v2')}
-      >
-        <div class="settings-card-layout-btn__preview">
-          <svg viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="8" y="8" width="10" height="28" rx="2" fill="currentColor" opacity="0.5" />
-            <rect x="22" y="8" width="14" height="6" rx="2" fill="currentColor" opacity="0.7" />
-            <rect x="22" y="18" width="14" height="4" rx="1" fill="currentColor" opacity="0.4" />
-            <rect x="22" y="26" width="14" height="10" rx="2" fill="currentColor" opacity="0.35" />
-          </svg>
-        </div>
-        <span>Новый (v2)</span>
-      </button>
-      <button
-        type="button"
-        class="settings-card-layout-btn{profileLayout === 'classic' ? ' settings-card-layout-btn--active' : ''}"
-        onclick={() => selectProfileLayout('classic')}
-      >
-        <div class="settings-card-layout-btn__preview">
-          <svg viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="8" y="10" width="28" height="8" rx="2" fill="currentColor" opacity="0.5" />
-            <rect x="8" y="22" width="28" height="5" rx="1" fill="currentColor" opacity="0.35" />
-            <rect x="8" y="30" width="28" height="5" rx="1" fill="currentColor" opacity="0.35" />
-          </svg>
-        </div>
-        <span>Классический</span>
       </button>
     </div>
   </div>

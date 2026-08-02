@@ -1062,19 +1062,58 @@
     zoomToRange(seg.start, seg.end);
   }
 
-  async function ensureSourceOnServer(token: string, bannerId: number) {
-    if (sourceMode === 'server' && serverSourceUrl) return;
-    if (sourceMode === 'upload' && localFile) {
+  async function probeServerSource(url: string): Promise<boolean> {
+    try {
+      const head = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(8000) });
+      if (head.ok) return true;
+      // Некоторые static-серверы не отдают HEAD — пробуем Range.
+      const range = await fetch(url, {
+        headers: { Range: 'bytes=0-1' },
+        signal: AbortSignal.timeout(8000),
+      });
+      return range.ok || range.status === 206;
+    } catch {
+      return false;
+    }
+  }
+
+  async function ensureSourceOnServer(token: string, bannerId: number, forceUpload = false) {
+    if (!forceUpload && sourceMode === 'server' && serverSourceUrl) {
+      const ok = await probeServerSource(serverSourceUrl);
+      if (ok) return;
+      statusMsg = 'Исходник на сервере недоступен — загружаю заново…';
+    }
+
+    if (localFile && (sourceMode === 'upload' || forceUpload)) {
       statusMsg = 'Загрузка файла на сервер…';
-      await uploadOverviewSourceVideo(token, bannerId, localFile);
+      const row = await uploadOverviewSourceVideo(token, bannerId, localFile);
+      serverSourceUrl = resolveUploadUrl(row.sourceVideoUrl);
       return;
     }
-    if (sourceMode === 'episode' && episodePlayback?.playUrl) {
+
+    // episode / stale «С сервера» → качаем 1 серию на диск anixback
+    if (payload?.releaseId && !episodePlayback?.playUrl) {
+      statusMsg = 'Подготовка 1 серии…';
+      if (!dubbers.length) await loadEpisodeOptions();
+      else await loadEpisodeVideo();
+    }
+
+    const playUrl = episodePlayback?.playUrl;
+    if (playUrl) {
       statusMsg = 'Скачивание 1 серии на сервер…';
-      await uploadOverviewSourceFromUrl(token, bannerId, episodePlayback.playUrl);
+      const row = await uploadOverviewSourceFromUrl(token, bannerId, playUrl);
+      serverSourceUrl = resolveUploadUrl(row.sourceVideoUrl);
       return;
     }
-    throw new Error('Выберите источник видео');
+
+    if (localFile) {
+      statusMsg = 'Загрузка файла на сервер…';
+      const row = await uploadOverviewSourceVideo(token, bannerId, localFile);
+      serverSourceUrl = resolveUploadUrl(row.sourceVideoUrl);
+      return;
+    }
+
+    throw new Error('Выберите источник видео (1 серия или файл)');
   }
 
   async function exportVideo() {
@@ -1093,7 +1132,16 @@
         payload.releaseId
       );
       statusMsg = 'Склейка MP4 (ffmpeg)…';
-      await renderOverviewVideo(payload.adminToken, payload.bannerId, segments, crossfade);
+      try {
+        await renderOverviewVideo(payload.adminToken, payload.bannerId, segments, crossfade);
+      } catch (renderErr) {
+        const msg = renderErr instanceof Error ? renderErr.message : String(renderErr);
+        if (!/upload source video first/i.test(msg)) throw renderErr;
+        // БД без sourceVideoPath / битая ссылка «С сервера» — форсируем загрузку и повторяем.
+        statusMsg = 'Исходник не найден на сервере — загружаю и повторяю склейку…';
+        await ensureSourceOnServer(payload.adminToken, payload.bannerId, true);
+        await renderOverviewVideo(payload.adminToken, payload.bannerId, segments, crossfade);
+      }
       window.electron?.overviewEditorDone?.();
       statusMsg = 'Готово!';
     } catch (e) {

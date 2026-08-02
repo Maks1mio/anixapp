@@ -10,6 +10,7 @@ const { session, net, dialog, shell, app, ipcMain } = require('electron');
 const { SibnetParser } = require('anixapi');
 const { BROWSER_UA } = require('../cdn-proxy');
 const { ANIXART_UA } = require('../lib/constants');
+const { getDirectVideoLink: getKodikDirectVideoLink } = require('../kodik-direct');
 const config = require('../lib/config-store');
 const state = require('../lib/app-state');
 const { formatDownloadError, extractRawMessage } = require('../lib/download-errors');
@@ -70,128 +71,6 @@ async function getSibnetDirectLink(embedUrl) {
   } catch {}
 
   return null;
-}
-
-const KODIK_PLAYER_ORIGIN = 'https://kodikplayer.com/';
-const KODIK_VALID_SRC = /\/\/(get|cloud)\.(kodik-storage|solodcdn)\.com\/useruploads\/.*?\/.*?\/(240|360|480|720|1080)\.mp4:hls:manifest\.m3u8/;
-
-function normalizeKodikEmbedUrl(embedUrl) {
-  let url = embedUrl.startsWith('http') ? embedUrl : `https:${embedUrl}`;
-  try {
-    const u = new URL(url);
-    url = u.origin + u.pathname;
-  } catch {}
-  return url;
-}
-
-function decryptKodikSrc(src) {
-  const zCharCode = 'Z'.charCodeAt(0);
-  const decryptedBase64 = src.replace(/[a-zA-Z]/g, (e) => {
-    let eCharCode = e.charCodeAt(0);
-    return String.fromCharCode(
-      (eCharCode <= zCharCode ? 90 : 122) >= (eCharCode = eCharCode + 18) ? eCharCode : eCharCode - 26,
-    );
-  });
-  return atob(decryptedBase64);
-}
-
-function parseKodikLinkFromUrl(pageUrl) {
-  const m = pageUrl.match(/\/(seria|video|movie|anime)\/(\d+)\/([0-9a-f]+)\//i);
-  if (!m) return null;
-  return { type: m[1], id: m[2], hash: m[3] };
-}
-
-function parseKodikEmbedHtml(html) {
-  const hash = html.match(/\w+\.hash\s=\s'([^']+)';/is)?.[1];
-  const id = html.match(/\w+\.id\s=\s'([^']+)';/is)?.[1];
-  const type = html.match(/\w+\.type\s=\s'([^']+)';/is)?.[1];
-  return { hash, id, type };
-}
-
-function decryptKodikLinks(links) {
-  if (!links || typeof links !== 'object') return null;
-  for (const [, sources] of Object.entries(links)) {
-    if (!Array.isArray(sources)) continue;
-    for (const source of sources) {
-      if (!source?.src || KODIK_VALID_SRC.test(source.src)) continue;
-      try {
-        source.src = decryptKodikSrc(source.src);
-      } catch {}
-    }
-  }
-  return links;
-}
-
-/** /ftor только с type+hash+id — urlParams с localhost/_sign ломают запрос (500) */
-async function fetchKodikFtorLinks(pageUrl, videoInfo) {
-  const { type, hash, id } = videoInfo;
-  if (!type || !hash || !id) return null;
-
-  const ftorUrl = `https://kodikplayer.com/ftor?${new URLSearchParams({ type, hash, id }).toString()}`;
-  let ftorBuf;
-  if (typeof session.defaultSession.fetch === 'function') {
-    const res = await session.defaultSession.fetch(ftorUrl, {
-      headers: { Referer: pageUrl, Accept: 'application/json' },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    ftorBuf = Buffer.from(await res.arrayBuffer());
-  } else {
-    ftorBuf = await sessionFetchBuffer(ftorUrl, { Referer: pageUrl, Accept: 'application/json' });
-  }
-
-  let payload;
-  try {
-    payload = JSON.parse(ftorBuf.toString('utf8'));
-  } catch {
-    return null;
-  }
-  if (!payload?.links || typeof payload.links !== 'object') return null;
-  return decryptKodikLinks(payload.links);
-}
-
-async function getKodikDirectLinks(embedUrl) {
-  const pageUrl = await resolveKodikEmbedUrl(embedUrl);
-  let videoInfo = parseKodikLinkFromUrl(pageUrl);
-
-  if (!videoInfo?.hash || !videoInfo?.id || !videoInfo?.type) {
-    try {
-      const html = await sessionFetchText(pageUrl, {
-        Referer: KODIK_PLAYER_ORIGIN,
-        Accept: 'text/html,application/xhtml+xml',
-      });
-      videoInfo = parseKodikEmbedHtml(html);
-    } catch (e) {
-      console.warn('kodik embed fetch:', e?.message || e);
-    }
-  }
-
-  try {
-    return await fetchKodikFtorLinks(pageUrl, videoInfo || {});
-  } catch (e) {
-    console.warn('kodik ftor:', e?.message || e);
-  }
-  return null;
-}
-
-async function resolveKodikEmbedUrl(embedUrl) {
-  let url = normalizeKodikEmbedUrl(embedUrl);
-  const host = (url.match(/https?:\/\/([^/]+)/) || [])[1] || '';
-  if (host.includes('kodik')) return url;
-
-  if (host.includes('aniqit') || host.includes('anixis') || host.includes('aniqart')) {
-    const html = await sessionFetchText(url, {
-      Referer: KODIK_PLAYER_ORIGIN,
-      Accept: 'text/html,application/xhtml+xml',
-    });
-    const m = html.match(/https?:\\\/\\\/(?:[^\\/]+\.)?kodikplayer\.com\\\/seria\\\/[^"']+/i)
-      ?? html.match(/(?:https:)?\/\/[^"'\s]*kodikplayer\.com\/seria\/[^"'\s]+/i);
-    if (m) {
-      let kodikUrl = m[0].replace(/\\/g, '');
-      if (kodikUrl.startsWith('//')) kodikUrl = `https:${kodikUrl}`;
-      return normalizeKodikEmbedUrl(kodikUrl);
-    }
-  }
-  return url;
 }
 
 /** Загрузка через session Chromium — те же Referer/UA, что и у плеера */
@@ -575,28 +454,9 @@ ipcMain.handle('anix:getDirectVideoLink', async (_, embedUrl) => {
   const PRIO  = ['1080', '1080p', '720', '720p', '480', '480p', '360', '360p'];
 
   try {
-    // ── Kodik (array format: { "720": [{ src }], ... }) ─────────────────
+    // ── Kodik: cookie-free node fetch (session cookies → pl*.solodcdn /s/m/ → 500)
     if (host.includes('kodik') || host.includes('aniqit') || host.includes('anixis') || host.includes('aniqart')) {
-      const links = await getKodikDirectLinks(url);
-      if (!links || typeof links !== 'object') return EMPTY;
-      // Strip :hls:manifest.m3u8 / :hls:hls.m3u8 suffix → direct MP4 download URL
-      // (same approach as in the Android app's KodikParser.i())
-      const stripHls = (u) => u
-        ? u.replace(/:hls:manifest\.m3u8$/, '').replace(/:hls:hls\.m3u8$/, '')
-        : u;
-      const qualityMap = {};
-      for (const [key, arr] of Object.entries(links)) {
-        const src = toAbs(arr?.[0]?.src);
-        if (src) qualityMap[key.replace('p', '')] = stripHls(src);
-      }
-      const best = PRIO.find(k => qualityMap[k]) || Object.keys(qualityMap)[0];
-      const directUrl = qualityMap[best] || null;
-      return {
-        directUrl,
-        quality: best || null,
-        qualityMap,
-        downloadHeaders: directUrl ? { 'Referer': 'https://kodikplayer.com/' } : {},
-      };
+      return await getKodikDirectVideoLink(url);
     }
 
     // ── Sibnet — трёхэтапный парсер с браузерными заголовками ───────────

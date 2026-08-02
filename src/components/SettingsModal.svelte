@@ -2,7 +2,6 @@
   import { onMount, onDestroy } from 'svelte';
   import { get } from 'svelte/store';
   import Page from './Page.svelte';
-  import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import { settingsModalInitialTab, settingsModalLastTab } from '../stores/modals';
   import { isAuthenticated, openLoginPrompt } from '../stores/auth';
   import AccountPage    from '../views/Settings/pages/AccountPage.svelte';
@@ -24,7 +23,6 @@
     LogOut,
     Star,
     ExternalLink,
-    Pencil,
     Tv,
     ScrollText,
     Activity,
@@ -57,13 +55,9 @@
   let overlayEl = $state<HTMLElement | null>(null);
   let sidebarScrollEl = $state<HTMLElement | null>(null);
 
-  const profile = (window as any).__anixProfile as { id?: number; login?: string; avatar?: string | null } | undefined;
-  const loginDisplay = profile?.login ?? '—';
-  const avatarStyle = profile?.avatar ? `background-image: url('${resolveCdnAssetUrl(profile.avatar)}')` : '';
-
   function initIcons(root: HTMLElement): void {
     createIcons({
-      icons: { User, Palette, Globe, SlidersHorizontal, Info, LogOut, Star, ExternalLink, Pencil, Tv, ScrollText, Activity, Code2 },
+      icons: { User, Palette, Globe, SlidersHorizontal, Info, LogOut, Star, ExternalLink, Tv, ScrollText, Activity, Code2 },
       root,
     });
   }
@@ -159,20 +153,6 @@
 
     <aside class="settings-sidebar">
       <div class="settings-sidebar__scroll" bind:this={sidebarScrollEl}>
-
-        <button
-          class="settings-sidebar__user settings-nav__item"
-          class:settings-nav__item--active={activeTab === 'account'}
-          onclick={() => { activeTab = 'account'; }}
-        >
-          <div class="settings-sidebar__avatar" style={avatarStyle} id="s-av"></div>
-          <div class="settings-sidebar__user-info">
-            <span class="settings-sidebar__username">{loginDisplay}</span>
-            <span class="settings-sidebar__user-sub">Редактировать профи… <i data-lucide="pencil"></i></span>
-          </div>
-        </button>
-
-        <div class="settings-nav__sep"></div>
 
         <p class="settings-nav__section">Настройки приложения</p>
         <button

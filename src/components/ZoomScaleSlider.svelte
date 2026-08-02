@@ -10,8 +10,8 @@
 
   const levels = ZOOM_LEVELS;
   const maxIndex = levels.length - 1;
-
-  const sliderIndex = $derived(levels.indexOf(normalizeZoom(value)));
+  const current = $derived(normalizeZoom(value));
+  const sliderIndex = $derived(levels.indexOf(current));
   const fillPercent = $derived((sliderIndex / maxIndex) * 100);
 
   function handleInput(e: Event) {
@@ -21,32 +21,27 @@
 </script>
 
 <div class="zoom-scale">
-  <div class="zoom-scale__ticks" aria-hidden="true">
-    {#each levels as level, i}
-      <span
-        class="zoom-scale__tick"
-        class:zoom-scale__tick--active={level === normalizeZoom(value)}
-        class:zoom-scale__tick--default={level === 100}
-        style="left: {(i / maxIndex) * 100}%"
-      >
-        {level}
-      </span>
-    {/each}
+  <div class="zoom-scale__row">
+    <input
+      type="range"
+      class="zoom-scale__input"
+      style="--zoom-fill: {fillPercent}%"
+      min="0"
+      max={maxIndex}
+      step="1"
+      value={sliderIndex}
+      aria-label="Уровень масштабирования"
+      aria-valuemin={levels[0]}
+      aria-valuemax={levels[maxIndex]}
+      aria-valuenow={current}
+      aria-valuetext="{current}%"
+      oninput={handleInput}
+    />
+    <span class="zoom-scale__value" aria-hidden="true">{current}%</span>
   </div>
 
-  <input
-    type="range"
-    class="zoom-scale__input"
-    style="--zoom-fill: {fillPercent}%"
-    min="0"
-    max={maxIndex}
-    step="1"
-    value={sliderIndex}
-    aria-label="Уровень масштабирования"
-    aria-valuemin={levels[0]}
-    aria-valuemax={levels[maxIndex]}
-    aria-valuenow={normalizeZoom(value)}
-    aria-valuetext="{normalizeZoom(value)}%"
-    oninput={handleInput}
-  />
+  <div class="zoom-scale__ends" aria-hidden="true">
+    <span>{levels[0]}%</span>
+    <span>{levels[maxIndex]}%</span>
+  </div>
 </div>

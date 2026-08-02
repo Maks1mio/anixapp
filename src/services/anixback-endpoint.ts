@@ -17,8 +17,30 @@ function viteOriginOverride(): string | null {
   return raw || null;
 }
 
-/** Origin without trailing slash, e.g. http://localhost:8787 */
+/** Same-origin Vite proxy for local anixback (avoids CSP connect-src blocks on :8787). */
+function devAnixbackProxyOrigin(): string | null {
+  if (!import.meta.env.DEV || typeof window === 'undefined') return null;
+  if (viteOriginOverride()) return null;
+  if (currentMode !== 'local') return null;
+  const host = window.location.hostname;
+  if (host !== 'localhost' && host !== '127.0.0.1') return null;
+  return `${window.location.origin}/__anixback`;
+}
+
+/**
+ * Origin for HTTP API / uploads. In Vite DEV + local mode → `/__anixback` proxy.
+ * Without trailing slash.
+ */
 export function getAnixbackOrigin(): string {
+  const vite = viteOriginOverride();
+  if (vite) return vite.replace(/\/$/, '');
+  return devAnixbackProxyOrigin() ?? originForMode(currentMode);
+}
+
+/**
+ * Raw selected origin (no Vite proxy) — for WS / health pings that talk to :8787 directly.
+ */
+export function getAnixbackDirectOrigin(): string {
   const vite = viteOriginOverride();
   if (vite) return vite.replace(/\/$/, '');
   return originForMode(currentMode);
@@ -28,20 +50,7 @@ export function getAnixbackOrigin(): string {
 export function getAnixbackUploadsOrigin(): string {
   const uploadsOverride = (import.meta.env.VITE_ANIXBACK_UPLOADS_ORIGIN as string | undefined)?.trim();
   if (uploadsOverride) return uploadsOverride.replace(/\/$/, '');
-
-  const origin = originForMode(currentMode);
-
-  // Dev в Electron/Vite (:5173): прокси __anixback = same-origin, без нарушения CSP
-  if (import.meta.env.DEV && typeof window !== 'undefined') {
-    const host = window.location.hostname;
-    if (host === 'localhost' || host === '127.0.0.1') {
-      if (currentMode === 'local') {
-        return `${window.location.origin}/__anixback`;
-      }
-    }
-  }
-
-  return origin;
+  return getAnixbackOrigin();
 }
 
 export function getApiBase(): string {
@@ -53,7 +62,8 @@ export function getLobbyHttpBase(): string {
 }
 
 export function getLobbyWsBase(): string {
-  const origin = getAnixbackOrigin();
+  // WS не идёт через HTTP middleware /__anixback — только прямой origin.
+  const origin = getAnixbackDirectOrigin();
   if (origin.startsWith('https://')) {
     return `${origin.replace('https://', 'wss://')}/anixapp/lobby/ws`;
   }

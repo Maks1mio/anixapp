@@ -2,8 +2,10 @@
  * Kodik / aniqit direct link resolution (Node fetch — для web-bridge и dev).
  */
 const KODIK_PLAYER_ORIGIN = 'https://kodikplayer.com/';
-const KODIK_VALID_SRC = /\/\/(get|cloud)\.(kodik-storage|solodcdn)\.com\/useruploads\/.*?\/.*?\/(240|360|480|720|1080)\.mp4:hls:manifest\.m3u8/;
-const ANIXART_UA = 'AnixartApp/9.0 BETA 3-25021818 (Android 9; SDK 28; x86_64; ROG ASUS AI2201_B; ru)';
+/** Уже расшифрованный URL — не трогаем (solodcdn /s/m/, useruploads, cloud и т.п.). */
+const KODIK_PLAIN_SRC = /(?:kodik-storage|solodcdn)\.com\//i;
+const BROWSER_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
 function normalizeKodikEmbedUrl(embedUrl) {
   let url = embedUrl.startsWith('http') ? embedUrl : `https:${embedUrl}`;
@@ -45,7 +47,9 @@ function decryptKodikLinks(links) {
   for (const [, sources] of Object.entries(links)) {
     if (!Array.isArray(sources)) continue;
     for (const source of sources) {
-      if (!source?.src || KODIK_VALID_SRC.test(source.src)) continue;
+      if (!source?.src || KODIK_PLAIN_SRC.test(source.src) || /^https?:\/\//i.test(source.src) || source.src.startsWith('//')) {
+        continue;
+      }
       try {
         source.src = decryptKodikSrc(source.src);
       } catch {
@@ -56,9 +60,22 @@ function decryptKodikLinks(links) {
   return links;
 }
 
+/** /s/m/ на solodcdn часто отдаёт 500 как progressive MP4 — оставляем HLS. */
+function preferPlayableKodikUrl(url) {
+  if (!url) return url;
+  const abs = url.startsWith('http') ? url : url.startsWith('//') ? `https:${url}` : url;
+  if (/\/s\/m\//i.test(abs) && !/:hls:/i.test(abs) && /\.mp4$/i.test(abs)) {
+    return `${abs}:hls:manifest.m3u8`;
+  }
+  if (/\/s\/m\//i.test(abs)) return abs;
+  return abs
+    .replace(/:hls:manifest\.m3u8$/i, '')
+    .replace(/:hls:hls\.m3u8$/i, '');
+}
+
 async function fetchText(url, headers = {}) {
   const res = await fetch(url, {
-    headers: { 'User-Agent': ANIXART_UA, ...headers },
+    headers: { 'User-Agent': BROWSER_UA, ...headers },
     redirect: 'follow',
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -71,7 +88,7 @@ async function fetchKodikFtorLinks(pageUrl, videoInfo) {
 
   const ftorUrl = `https://kodikplayer.com/ftor?${new URLSearchParams({ type, hash, id }).toString()}`;
   const res = await fetch(ftorUrl, {
-    headers: { Referer: pageUrl, Accept: 'application/json', 'User-Agent': ANIXART_UA },
+    headers: { Referer: pageUrl, Accept: 'application/json', 'User-Agent': BROWSER_UA },
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const payload = await res.json();
@@ -136,13 +153,10 @@ async function getDirectVideoLink(embedUrl) {
     if (host.includes('kodik') || host.includes('aniqit') || host.includes('anixis') || host.includes('aniqart')) {
       const links = await getKodikDirectLinks(url);
       if (!links || typeof links !== 'object') return EMPTY;
-      const stripHls = (u) => u
-        ? u.replace(/:hls:manifest\.m3u8$/, '').replace(/:hls:hls\.m3u8$/, '')
-        : u;
       const qualityMap = {};
       for (const [key, arr] of Object.entries(links)) {
         const src = toAbs(arr?.[0]?.src);
-        if (src) qualityMap[key.replace('p', '')] = stripHls(src);
+        if (src) qualityMap[key.replace('p', '')] = preferPlayableKodikUrl(src);
       }
       const best = PRIO.find((k) => qualityMap[k]) || Object.keys(qualityMap)[0];
       const directUrl = qualityMap[best] || null;
@@ -150,7 +164,9 @@ async function getDirectVideoLink(embedUrl) {
         directUrl,
         quality: best || null,
         qualityMap,
-        downloadHeaders: directUrl ? { Referer: 'https://kodikplayer.com/' } : {},
+        downloadHeaders: directUrl
+          ? { Referer: 'https://kodikplayer.com/', 'User-Agent': BROWSER_UA }
+          : {},
       };
     }
   } catch (e) {

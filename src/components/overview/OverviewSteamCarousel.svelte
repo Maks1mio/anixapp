@@ -3,11 +3,7 @@
   import { navigate } from '../../stores/navigation';
   import { openWatchModal } from '../../stores/modals';
   import type { OverviewBanner } from '../../utils/overview';
-  import {
-    parseBannerReleaseId,
-    resolveHeroBackdrop,
-    getCachedHeroBackdrop,
-  } from '../../utils/heroPlayback';
+  import { parseBannerReleaseId } from '../../utils/heroPlayback';
   import {
     resolveCustomBgUrl,
     resolveCustomVideoUrl,
@@ -129,6 +125,7 @@
       customBg ?? '',
       customVideo ?? '',
       override?.assetVersion ?? '',
+      'banner-image',
     ].join('|');
     requestedMediaKeys.set(banner.id, cacheKey);
 
@@ -161,13 +158,11 @@
       const fallback = resolveAbsoluteUrl(banner.image);
       const releaseId = parseBannerReleaseId(banner);
 
+      // Фон слайда — картинка баннера (banner.image), не кадр из галереи релиза.
       let poster = customBg || fallback;
       let screenshots: string[] = [];
 
-      if (!customBg && releaseId) {
-        const cachedBackdrop = getCachedHeroBackdrop(releaseId);
-        poster = cachedBackdrop || (await resolveHeroBackdrop(releaseId, fallback));
-
+      if (releaseId) {
         const api = window.anixApi?.release;
         if (api?.info) {
           try {
@@ -235,10 +230,6 @@
       const customBg = resolveCustomBgUrl(override);
       if (banner.image) void warmSteamImage(resolveAbsoluteUrl(banner.image));
       if (customBg) void warmSteamImage(customBg);
-
-      const releaseId = parseBannerReleaseId(banner);
-      const cachedBackdrop = releaseId ? getCachedHeroBackdrop(releaseId) : undefined;
-      if (cachedBackdrop) void warmSteamImage(cachedBackdrop);
     }
 
     let cursor = 0;

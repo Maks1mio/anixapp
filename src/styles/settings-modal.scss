@@ -856,6 +856,44 @@
   &+& {
     border-top: 1px solid $color-border;
   }
+
+  &--stack {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+}
+
+.settings-seek-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.settings-seek-chip {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid $color-border;
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+  color: $color-text-muted;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background $transition, border-color $transition, color $transition;
+
+  &:hover {
+    color: $color-text;
+    background: color-mix(in srgb, var(--color-text) 11%, transparent);
+  }
+
+  &--active {
+    background: $color-accent;
+    border-color: $color-accent;
+    color: #fff;
+  }
 }
 
 .settings-row__info {
@@ -879,6 +917,37 @@
 
 .settings-row__control {
   flex-shrink: 0;
+}
+
+.settings-keybind-btn {
+  min-width: 4.5rem;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: $radius-md;
+  border: 1px solid $color-border;
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+  color: $color-text;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background $transition, border-color $transition, color $transition;
+
+  &:hover {
+    background: color-mix(in srgb, var(--color-text) 11%, transparent);
+  }
+
+  &--listen {
+    border-color: $color-accent;
+    color: $color-accent;
+    animation: settings-keybind-pulse 1.1s ease-in-out infinite;
+  }
+}
+
+@keyframes settings-keybind-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
 }
 
 // ── Account card ──────────────────────────────────────────────────────────────

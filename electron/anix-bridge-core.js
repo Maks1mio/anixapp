@@ -207,6 +207,8 @@ function createAnixBridgeCore(options = {}) {
       c.getClient().endpoints.release.getVideoInCategory({ id: releaseId, categoryId, page })),
     'anix:getDubbers': h((c, releaseId) => c.getClient().endpoints.release.getDubbers(releaseId)),
     'anix:typeAll': h((c) => c.getClient().endpoints.type.types()),
+    'anix:typePin': h((c, releaseId, typeId) => c.getClient().endpoints.type.pin(releaseId, typeId)),
+    'anix:typeUnpin': h((c, releaseId, typeId) => c.getClient().endpoints.type.unpin(releaseId, typeId)),
     'anix:getDubberSources': h((c, releaseId, dubberId) =>
       c.getClient().endpoints.release.getDubberSources(releaseId, dubberId)),
     'anix:getEpisodes': h((c, releaseId, dubberId, sourceId, sort = 1) =>
@@ -333,6 +335,7 @@ function createAnixBridgeCore(options = {}) {
       c.getClient().endpoints.release.randomProfileList(profileId, status, { extended_mode: extended })),
     'anix:notificationsAll': h((c, page = 0) => c.getClient().endpoints.notification.getNotifications(page)),
     'anix:notificationsCount': h((c) => c.getClient().endpoints.notification.countNotifications()),
+    'anix:notificationsRead': h((c) => c.getClient().endpoints.notification.read()),
     'anix:history': h((c, page = 0) => c.getClient().endpoints.release.getHistory(page)),
     'anix:deleteFromHistory': h((c, releaseId) => c.getClient().endpoints.history.delete(releaseId)),
     'anix:addToHistory': h((c, releaseId, sourceId, episodePosition) =>

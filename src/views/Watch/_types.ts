@@ -26,6 +26,10 @@ export interface DubberItem {
   view_count?:   number;
   /** 0 = dub, 1 = sub (if provided by API) */
   type?:         number;
+  is_sub?:       boolean;
+  pinned?:       boolean;
+  /** 1 = 1080p, 2 = QHD, 3 = 4K */
+  quality?:      number;
 }
 
 export interface SourceItem {

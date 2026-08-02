@@ -46,10 +46,9 @@ function positionDropdown(dropdown: HTMLElement, anchor: HTMLElement): void {
 
 function buildContent(query: string, history: string[]): string {
   const q = query.trim();
-  const hasQuery = q.length > 0;
   const qLower = q.toLowerCase();
   const filteredHistory =
-    hasQuery ? history.filter((h) => h.toLowerCase().includes(qLower)) : history;
+    q.length > 0 ? history.filter((h) => h.toLowerCase().includes(qLower)) : history;
   const rows: string[] = [];
 
   if (filteredHistory.length > 0) {
@@ -57,8 +56,6 @@ function buildContent(query: string, history: string[]): string {
     filteredHistory.forEach((h) => {
       rows.push(`<button type="button" class="search-dropdown__history-item">${esc(h)}</button>`);
     });
-  } else if (!hasQuery) {
-    rows.push('<div class="search-dropdown__empty">Нет недавних запросов</div>');
   }
 
   return rows.join('');

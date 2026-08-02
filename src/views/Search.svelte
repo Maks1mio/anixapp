@@ -108,9 +108,7 @@
   });
 
   const showSearchSuggest = $derived(
-    searchFocused && (
-      !inputValue.trim() || matchingRecentSearches.length > 0
-    ),
+    searchFocused && matchingRecentSearches.length > 0,
   );
 
   $effect(() => {
@@ -490,13 +488,6 @@
     }
 
     if (currentQuery) performSearch(false);
-    else {
-      requestAnimationFrame(() => {
-        const input = document.getElementById('search-page-input') as HTMLInputElement | null;
-        input?.focus();
-        if (input === document.activeElement) handleSearchFocus();
-      });
-    }
   });
 
   onDestroy(() => {
@@ -557,37 +548,31 @@
           >
             <div class="search-page__suggest-head">
               <span class="search-page__suggest-section">Недавние запросы</span>
-              {#if recentSearches.length > 0}
-                <button
-                  type="button"
-                  class="search-page__suggest-clear"
-                  onmousedown={(event) => event.preventDefault()}
-                  onclick={clearRecentSearches}
-                >
-                  Очистить
-                </button>
-              {/if}
+              <button
+                type="button"
+                class="search-page__suggest-clear"
+                onmousedown={(event) => event.preventDefault()}
+                onclick={clearRecentSearches}
+              >
+                Очистить
+              </button>
             </div>
 
-            {#if matchingRecentSearches.length > 0}
-              <ScrollArea extraClass="search-page__suggest-scroll">
-                {#each matchingRecentSearches as item, index (item)}
-                  <button
-                    type="button"
-                    class="search-page__suggest-item"
-                    class:search-page__suggest-item--active={historyIndex === index}
-                    role="option"
-                    aria-selected={historyIndex === index}
-                    onmousedown={(event) => event.preventDefault()}
-                    onclick={() => selectRecentSearch(item)}
-                  >
-                    {item}
-                  </button>
-                {/each}
-              </ScrollArea>
-            {:else}
-              <div class="search-page__suggest-empty">Нет недавних запросов</div>
-            {/if}
+            <ScrollArea extraClass="search-page__suggest-scroll">
+              {#each matchingRecentSearches as item, index (item)}
+                <button
+                  type="button"
+                  class="search-page__suggest-item"
+                  class:search-page__suggest-item--active={historyIndex === index}
+                  role="option"
+                  aria-selected={historyIndex === index}
+                  onmousedown={(event) => event.preventDefault()}
+                  onclick={() => selectRecentSearch(item)}
+                >
+                  {item}
+                </button>
+              {/each}
+            </ScrollArea>
           </div>
         {/if}
       </div>

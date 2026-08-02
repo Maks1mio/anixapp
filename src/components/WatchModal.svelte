@@ -22,7 +22,9 @@
     iconChevronLeft,
     iconEye,
     iconX,
+    iconPin,
   } from './icons';
+  import { formatDubberQuality, isDubberNovelty, readLastEpisodeTypeUpdateId, sortDubbersPinnedFirst } from '../utils/dubber-meta';
 
   interface Props {
     releaseId: number;
@@ -44,6 +46,8 @@
     episodesCount?: number;
     is_sub?: boolean;
     isSub?: boolean;
+    pinned?: boolean;
+    quality?: number;
     [key: string]: unknown;
   }
 
@@ -125,6 +129,7 @@
   let actionBusy = $state('');
   let downloadStatus = $state('');
   let downloadedPositions = $state<Record<number, boolean>>({});
+  let lastEpisodeTypeUpdateId = $state<number | null>(null);
 
   let confirmTitle = $state('');
   let confirmText = $state('');
@@ -163,9 +168,11 @@
     return last;
   });
   const filteredDubbers = $derived.by(() => {
-    if (variantFilter === 'voice') return dubbers.filter((d) => !isSubDubber(d));
-    if (variantFilter === 'sub') return dubbers.filter(isSubDubber);
-    return dubbers;
+    const list =
+      variantFilter === 'voice' ? dubbers.filter((d) => !isSubDubber(d))
+      : variantFilter === 'sub' ? dubbers.filter(isSubDubber)
+      : dubbers;
+    return sortDubbersPinnedFirst(list);
   });
 
   function ensureHttps(url: string): string {
@@ -201,6 +208,30 @@
   function dubberEpisodeLabel(d: Dubber): string {
     const count = normalizeEpisodeCount(d as Record<string, unknown>);
     return count != null ? `${count} эпизодов` : '';
+  }
+
+  let pinningId = $state<number | null>(null);
+
+  async function togglePinDubber(d: Dubber, e: MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    const api = window.anixApi?.type;
+    if (!api?.pin || !api?.unpin || pinningId != null) return;
+    const nextPinned = !d.pinned;
+    pinningId = d.id;
+    try {
+      const res = nextPinned
+        ? await api.pin(releaseId, d.id)
+        : await api.unpin(releaseId, d.id);
+      if (res && typeof res.code === 'number' && res.code !== 0) return;
+      dubbers = sortDubbersPinnedFirst(
+        dubbers.map((item) => (item.id === d.id ? { ...item, pinned: nextPinned } : item)),
+      );
+    } catch {
+      /* ignore */
+    } finally {
+      pinningId = null;
+    }
   }
 
   function safeFilePart(value: string): string {
@@ -695,7 +726,11 @@
             sourcesError = 'Нет озвучек';
             return;
           }
-          dubbers = types;
+          dubbers = sortDubbersPinnedFirst(types);
+
+          void api.release.info?.(releaseId).then((infoRes: { release?: unknown }) => {
+            lastEpisodeTypeUpdateId = readLastEpisodeTypeUpdateId(infoRes?.release ?? infoRes);
+          }).catch(() => {});
 
           if (!cached) return;
 
@@ -867,9 +902,9 @@
                 </div>
               {/if}
 
-              <div class="watch-modal__episodes-toolbar">
+              <div class="watch-modal__episodes-toolbar" role="search">
                 <label class="watch-modal__episodes-search">
-                  {@html searchIconSvg}
+                  <span class="watch-modal__episodes-search-icon" aria-hidden="true">{@html searchIconSvg}</span>
                   <input
                     type="search"
                     class="watch-modal__episodes-search-input"
@@ -879,12 +914,14 @@
                   />
                 </label>
 
+                <div class="watch-modal__toolbar-divider" aria-hidden="true"></div>
+
                 <div class="watch-modal__toolbar-actions">
-                  <button type="button" class="watch-modal__icon-action" title="Скачать все серии" onclick={downloadAllEpisodes} disabled={actionBusy !== '' || episodes.length === 0}>
+                  <button type="button" class="watch-modal__toolbar-btn" title="Скачать все серии" onclick={downloadAllEpisodes} disabled={actionBusy !== '' || episodes.length === 0}>
                     {@html downloadIconSvg}
                   </button>
                   <div class="watch-modal__options">
-                    <button type="button" class="watch-modal__icon-action" title="Опции" onclick={() => optionsOpen = !optionsOpen}>
+                    <button type="button" class="watch-modal__toolbar-btn" title="Опции" aria-expanded={optionsOpen} onclick={() => optionsOpen = !optionsOpen}>
                       {@html dotsIconSvg}
                     </button>
                     {#if optionsOpen}
@@ -988,7 +1025,34 @@
                   {@const viewCount = typeof viewCountRaw === 'number' ? viewCountRaw : parseInt(String(viewCountRaw), 10) || 0}
                   {@const iconUrl = d.icon ? resolveCdnAssetUrl(ensureHttps(String(d.icon))) : ''}
                   {@const epLabel = dubberEpisodeLabel(d)}
-                  <button type="button" class="watch-modal__variant-row" onclick={() => openDubber(d)}>
+                  {@const qualityLabel = formatDubberQuality(d.quality)}
+                  {@const pinned = d.pinned === true}
+                  {@const isNew = isDubberNovelty(d.id, lastEpisodeTypeUpdateId)}
+                  <div
+                    class="watch-modal__variant-row"
+                    class:watch-modal__variant-row--pinned={pinned}
+                    role="button"
+                    tabindex="0"
+                    onclick={() => openDubber(d)}
+                    onkeydown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openDubber(d);
+                      }
+                    }}
+                  >
+                    <button
+                      type="button"
+                      class="watch-modal__variant-pin"
+                      class:watch-modal__variant-pin--active={pinned}
+                      aria-label={pinned ? 'Открепить озвучку' : 'Закрепить озвучку'}
+                      title={pinned ? 'Открепить' : 'Закрепить'}
+                      disabled={pinningId === d.id}
+                      onclick={(e) => void togglePinDubber(d, e)}
+                    >
+                      {@html iconPin(15)}
+                    </button>
+
                     {#if iconUrl}
                       <span class="watch-modal__variant-avatar" style="background-image:url({iconUrl})"></span>
                     {:else}
@@ -996,17 +1060,27 @@
                     {/if}
 
                     <span class="watch-modal__variant-info">
-                      <span class="watch-modal__variant-name">{d.name}</span>
-                      {#if epLabel}
-                        <span class="watch-modal__variant-ep">{epLabel}</span>
-                      {/if}
+                      <span class="watch-modal__variant-name-row">
+                        <span class="watch-modal__variant-name">{d.name}</span>
+                        {#if isNew}
+                          <span class="watch-modal__new-badge">НОВИНКА</span>
+                        {/if}
+                      </span>
+                      <span class="watch-modal__variant-meta">
+                        {#if epLabel}
+                          <span class="watch-modal__variant-ep">{epLabel}</span>
+                        {/if}
+                        {#if qualityLabel}
+                          <span class="watch-modal__quality-badge">{qualityLabel}</span>
+                        {/if}
+                      </span>
                     </span>
 
                     <span class="watch-modal__variant-views-badge">
                       {@html eyeIconSvg}
                       {fmtViewsShort(viewCount)}
                     </span>
-                  </button>
+                  </div>
                 {/each}
               {/if}
             </div>

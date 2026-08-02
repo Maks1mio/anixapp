@@ -4,6 +4,8 @@
   import { iconArrowLeft, iconArrowRight, iconSearch, iconUsers, iconBell, iconCalendar, iconUser, iconSettings, iconDownload } from './icons';
   import { checkForUpdate, type UpdateInfo } from '../services/update-checker';
   import type { AppUpdateProgress } from '../types/electron';
+  import { isAuthenticated } from '../stores/auth';
+  import { notificationUnreadCount, refreshNotificationUnreadCount } from '../stores/notifications';
 
   const hasWindowApi = typeof (window as any).electron?.window !== 'undefined';
 
@@ -36,10 +38,22 @@
   let installType: string | null = $state(null);
   let avatarUrl: string | null = $state(null);
   let avatarInitials: string = $state('');
+  let hasUnreadNotifications = $state(false);
+  let appVersion = $state('');
 
   function syncAvatarFromGlobalProfile() {
     const profile = (window as any).__anixProfile;
     avatarUrl = profile?.avatar ? resolveCdnAssetUrl(profile.avatar) : null;
+  }
+
+  async function loadAppVersion() {
+    try {
+      const versions = await window.electron?.getVersions?.();
+      const v = versions?.app || (await window.electron?.getAppVersion?.());
+      if (v) appVersion = String(v).replace(/^v/i, '');
+    } catch {
+      // ignore
+    }
   }
 
   async function loadUpdateInfo() {
@@ -69,6 +83,7 @@
 
   onMount(() => {
     syncAvatarFromGlobalProfile();
+    void loadAppVersion();
 
     // Получаем тип установки для правильных подписей кнопки
     window.electron?.getLinuxInstallType?.().then((t) => {
@@ -105,9 +120,24 @@
     window.addEventListener('app-update-progress', onProgress);
     window.addEventListener('anix:profileUpdated', syncAvatarFromGlobalProfile as EventListener);
 
+    const unsubUnread = notificationUnreadCount.subscribe((n) => {
+      hasUnreadNotifications = n > 0;
+    });
+    const unsubAuth = isAuthenticated.subscribe((ok) => {
+      if (ok) void refreshNotificationUnreadCount();
+      else notificationUnreadCount.set(0);
+    });
+    void refreshNotificationUnreadCount();
+    const unreadPoll = setInterval(() => {
+      void refreshNotificationUnreadCount();
+    }, 60_000);
+
     return () => {
       window.removeEventListener('app-update-progress', onProgress);
       window.removeEventListener('anix:profileUpdated', syncAvatarFromGlobalProfile as EventListener);
+      unsubUnread();
+      unsubAuth();
+      clearInterval(unreadPoll);
     };
   });
 
@@ -140,7 +170,13 @@
     <span class="titlebar__logo" aria-hidden="true">
       <img src="logo/512x512.png" alt="" class="titlebar__logo-img" />
     </span>
-    <span class="titlebar__title">AnixApp</span>
+    <div class="titlebar__brand" title={appVersion ? `AnixApp v${appVersion}` : 'AnixApp beta'}>
+      <span class="titlebar__title">AnixApp</span>
+      <span class="titlebar__beta">beta</span>
+      {#if appVersion}
+        <span class="titlebar__version">v{appVersion}</span>
+      {/if}
+    </div>
   </div>
 
   <div class="titlebar__nav" id="titlebar-nav">
@@ -255,11 +291,15 @@
     <button
       type="button"
       class="titlebar__menu-item tooltip-trigger"
+      class:titlebar__menu-item--has-badge={hasUnreadNotifications}
       id="titlebar-notifications"
-      aria-label="Уведомления"
+      aria-label={hasUnreadNotifications ? 'Уведомления (есть новые)' : 'Уведомления'}
       onclick={onNotifications}
     >
       {@html iconBell(18)}
+      {#if hasUnreadNotifications}
+        <span class="titlebar__notif-dot" aria-hidden="true"></span>
+      {/if}
       <span class="tooltip tooltip--animated">Уведомления</span>
     </button>
 

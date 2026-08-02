@@ -27,6 +27,8 @@
     aspectRatio:     string;
     availableQualities: Record<string, string>;
     currentQuality:     string;
+    speedLocked?:       boolean;
+    lastEpisodeTypeUpdateId?: number | null;
     ontogglePlay:    () => void;
     ontoggleMute:    () => void;
     onvolumechange:  (e: Event) => void;
@@ -38,6 +40,7 @@
     onselectEp:      (ep: number) => void;
     onselectDub:     (dub: DubberItem) => void;
     onselectDownloadedMode?: () => void;
+    ontogglePinDub?: (dub: DubberItem) => void | Promise<void>;
     onclosePopover:  () => void;
     onfullscreen:     () => void;
     onchangeRate:     (r: number) => void;
@@ -52,9 +55,11 @@
     currentEp, currentDubberId,
     popoverType, popoverLoading, useVideo, gpuAvailable, upscaleEnabled,
     playbackRate, aspectRatio, availableQualities, currentQuality,
+    speedLocked = false,
+    lastEpisodeTypeUpdateId = null,
     ontogglePlay, ontoggleMute, onvolumechange, ontoggleUpscale, onskipOpening,
     onopenSeries, onopenDubbing, onopenSettings,
-    onselectEp, onselectDub, onselectDownloadedMode,
+    onselectEp, onselectDub, onselectDownloadedMode, ontogglePinDub,
     onclosePopover, onfullscreen,
     onchangeRate, onchangeAspect, onchangeQuality,
   }: Props = $props();
@@ -203,9 +208,11 @@
             {downloadedEpisodes}
             {currentDownloadedPath}
             {currentDubberId}
+            {lastEpisodeTypeUpdateId}
             loading={popoverLoading}
             onselect={(dub) => { onselectDub(dub); onclosePopover(); }}
             onselectDownloadedMode={() => { onselectDownloadedMode?.(); onclosePopover(); }}
+            ontogglePin={ontogglePinDub}
             onclose={onclosePopover}
           />
         </div>
@@ -289,6 +296,7 @@
             {aspectRatio}
             {availableQualities}
             {currentQuality}
+            {speedLocked}
             {ontoggleUpscale}
             {onchangeRate}
             {onchangeAspect}
@@ -303,6 +311,7 @@
       type="button"
       class="watch-page__ctrl-btn"
       aria-label={isFullscreen ? 'Выйти из полного экрана' : 'Полный экран'}
+      title={isFullscreen ? 'Выйти из полного экрана (F)' : 'Полный экран (F)'}
       onclick={(e) => { e.stopPropagation(); onfullscreen(); }}
     >
       {#if isFullscreen}

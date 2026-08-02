@@ -21,6 +21,7 @@ const COMMON_METHODS = [
   'discover.recommendations',
   'discover.interesting',
   'notification.all',
+  'notification.count',
   'history.all',
 ];
 

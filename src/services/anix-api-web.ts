@@ -112,6 +112,8 @@ function buildWebAnixApi(): AnixApi {
 
     type: {
       all: () => invoke('anix:typeAll'),
+      pin: (releaseId, typeId) => invoke('anix:typePin', releaseId, typeId),
+      unpin: (releaseId, typeId) => invoke('anix:typeUnpin', releaseId, typeId),
     },
 
     feed: {
@@ -164,6 +166,7 @@ function buildWebAnixApi(): AnixApi {
     notification: {
       all: (page = 0) => invoke('anix:notificationsAll', page),
       count: () => invoke('anix:notificationsCount'),
+      read: () => invoke('anix:notificationsRead'),
     },
 
     history: {

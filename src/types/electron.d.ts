@@ -174,6 +174,7 @@ declare global {
         year?: string | number;
       }) => Promise<string | null>;
       sendUpscaleSettings?: (settings: { upscaleEnabled: boolean; upscaleMode: number }) => void;
+      sendPlayerHotkeys?: (hotkeys: PlayerHotkeysSettings) => void;
       // Lobby proposal IPC
       sendProposalToPlayer?: (data: Record<string, unknown>) => void;
       sendLobbyVote?: (proposalId: string, accept: boolean) => void;
@@ -208,12 +209,27 @@ declare global {
   }
 }
 
+export interface PlayerHotkeysSettings {
+  seekBackCode?: string;
+  seekForwardCode?: string;
+  playPauseCode?: string;
+  volumeUpCode?: string;
+  volumeDownCode?: string;
+  fullscreenCode?: string;
+  alwaysOnTopCode?: string;
+  seekSeconds?: number;
+  ctrlWheelSpeed?: boolean;
+}
+
 export interface AppSettings {
   minimizeToTray: boolean;
   adaptiveAcceleration?: boolean;
   upscaleEnabled?: boolean;
   upscaleMode?: number;
   playerDebugOverlay?: boolean;
+  /** Cap stream quality by player window size (default off). */
+  adaptiveQualityByWindow?: boolean;
+  playerHotkeys?: PlayerHotkeysSettings;
   uiZoom?: number;
   discordRpcEnabled?: boolean;
   discordRpcShowBrowsing?: boolean;

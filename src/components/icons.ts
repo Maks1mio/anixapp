@@ -41,6 +41,7 @@ import {
   Palette,
   Pencil,
   Pause,
+  Pin,
   Play,
   Plus,
   BookOpen,
@@ -281,6 +282,11 @@ export function iconSlidersHorizontal(size = 18): string {
 /** Карандаш (переименовать) */
 export function iconPencil(size = 18): string {
   return toSvg(Pencil, size);
+}
+
+/** Канцелярская кнопка (закреплённая озвучка) */
+export function iconPin(size = 16): string {
+  return toSvg(Pin, size);
 }
 
 export function iconShare(size = 18): string {

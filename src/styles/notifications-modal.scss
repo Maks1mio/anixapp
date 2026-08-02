@@ -24,7 +24,7 @@
 .notifications-modal-panel {
   width: 380px;
   max-width: 100%;
-  max-height: 520px;
+  max-height: min(720px, calc(100vh - 4.5rem));
   background: $color-surface;
   border: 1px solid $color-border;
   border-radius: $radius-lg;

@@ -12,6 +12,7 @@
   import type { WatchState, EpisodeItem, DubberItem, LobbyActivityEntry, PopoverType, NextEpAltDub, DownloadedEpisodeItem } from './_types';
   import { isHlsUrl, stripKodikQueryParams, resolveEpisodeUrl, resolveEpisodeUrlWithRetry, isDubberBlacklisted } from './_utils';
   import { pathToLocalMediaUrl, isLocalMediaUrl } from '../../utils/local-media-url';
+  import { sortDubbersPinnedFirst, readLastEpisodeTypeUpdateId } from '../../utils/dubber-meta';
   import { PlayerState } from './_usePlayer.svelte';
   import { LobbyState }  from './_useLobby.svelte';
   import LobbyPanel      from './components/LobbyPanel.svelte';
@@ -21,6 +22,20 @@
   import TopBar          from './components/TopBar.svelte';
   import CenterPlay      from './components/CenterPlay.svelte';
   import { resolveCdnAssetUrl } from '../../utils/posterUrl';
+  import {
+    DEFAULT_PLAYBACK_RATE,
+    DEFAULT_PLAYER_HOTKEYS,
+    PLAYBACK_RATE_WARN,
+    clampPlaybackRate,
+    formatPlaybackRate,
+    normalizePlayerHotkeys,
+    stepPlaybackRate,
+    type PlayerHotkeysSettings,
+  } from '../../utils/player-hotkeys';
+  import {
+    getPlayerViewportWidth,
+    pickAdaptiveQuality,
+  } from '../../utils/adaptive-quality';
 
   // WebGPU types fallback:
   // В некоторых конфигурациях TS не подтягивает типы WebGPU (GPUDevice/navigator.gpu),
@@ -108,6 +123,54 @@
   let dubbers        = $state<DubberItem[]>([]);
   let downloadedEpisodes = $state<DownloadedEpisodeItem[]>([]);
   let localPlaybackPath = $state('');
+  let lastEpisodeTypeUpdateId = $state<number | null>(null);
+
+  // ── Hotkeys + OSD ──────────────────────────────────────────────────────────
+  let hotkeys = $state<PlayerHotkeysSettings>({ ...DEFAULT_PLAYER_HOTKEYS });
+  let inLobby = $state(!!getCurrentRoomId());
+  let osdText = $state('');
+  let osdWarn = $state(false);
+  let osdTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Cap quality by player window size (settings → playback, default off). */
+  let adaptiveQualityByWindow = $state(false);
+  /** Manual quality pick from UI — skip auto until next episode / setting toggle. */
+  let qualityManualLock = $state(false);
+  let adaptiveQualityTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function showOsd(text: string, opts?: { warn?: boolean }) {
+    osdText = text;
+    osdWarn = opts?.warn === true;
+    if (osdTimer) clearTimeout(osdTimer);
+    osdTimer = setTimeout(() => {
+      osdText = '';
+      osdWarn = false;
+      osdTimer = null;
+    }, 900);
+  }
+
+  function formatSeekDelta(seconds: number): string {
+    const sign = seconds >= 0 ? '+' : '−';
+    const abs = Math.abs(seconds);
+    if (abs < 60) return `${sign}${abs} с`;
+    const m = Math.floor(abs / 60);
+    const s = abs % 60;
+    return s === 0 ? `${sign}${m}:00` : `${sign}${m}:${String(s).padStart(2, '0')}`;
+  }
+
+  function seekBySeconds(delta: number) {
+    if (!videoEl || !player.useVideo || isNaN(videoEl.duration)) return;
+    const next = Math.min(Math.max(0, videoEl.currentTime + delta), videoEl.duration);
+    videoEl.currentTime = next;
+    sendToLobby('seek');
+    showOsd(formatSeekDelta(delta));
+    showAndSchedule();
+  }
+
+  function isTypingTarget(t: EventTarget | null): boolean {
+    const el = t as HTMLElement | null;
+    const tag = el?.tagName?.toLowerCase();
+    return tag === 'input' || tag === 'textarea' || tag === 'select' || !!el?.isContentEditable;
+  }
 
   // ── Episode nav derived ────────────────────────────────────────────────────
   const currentDubLabel = $derived((watchState.dubberName || watchState.sourceName || '').trim());
@@ -557,6 +620,20 @@
   }
 
   const VOLUME_KEY = 'anixapp_player_volume';
+  const RATE_KEY = 'anixapp_player_playback_rate';
+
+  function readStoredPlaybackRate(): number {
+    try {
+      const raw = localStorage.getItem(RATE_KEY);
+      const n = raw != null ? Number(raw) : NaN;
+      if (!isNaN(n)) return clampPlaybackRate(n);
+    } catch {}
+    return DEFAULT_PLAYBACK_RATE;
+  }
+
+  function writeStoredPlaybackRate(rate: number) {
+    try { localStorage.setItem(RATE_KEY, String(clampPlaybackRate(rate))); } catch {}
+  }
 
   function getPlaybackPayload() {
     return {
@@ -684,9 +761,14 @@
       (videoEl as any)._hls = hls;
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         doPlay();
-        // Restore playback rate after HLS loads
-        if (player.playbackRate !== 1) videoEl.playbackRate = player.playbackRate;
+        syncVideoPlaybackRate();
       });
+      videoEl.addEventListener('loadedmetadata', () => {
+        syncVideoPlaybackRate();
+      }, { once: true });
+      videoEl.addEventListener('playing', () => {
+        syncVideoPlaybackRate();
+      }, { once: true });
       let attempts = 0;
       let reResolveAttempts = 0;
       hls.on(Hls.Events.ERROR, (_, data) => {
@@ -707,10 +789,9 @@
           const wasPaused = videoEl?.paused ?? false;
           resolveEpisodeUrlWithRetry(curEpUrl, false).then(res => {
             if (!res.useVideo || !res.playUrl) { fallback(); return; }
-            player.availableQualities = res.qualityMap;
-            player.currentQuality     = res.currentQuality;
+            const resolved = applyQualityMap(res.qualityMap, res.currentQuality, res.playUrl);
             // Cleanly restart playback with new URL (applyVideoAndUI destroys existing HLS)
-            applyVideoAndUI(res.playUrl, true, ep, titleStr, srcName, dubId, savedTime, wasPaused);
+            applyVideoAndUI(resolved.url, true, ep, titleStr, srcName, dubId, savedTime, wasPaused);
           }).catch(fallback);
         } else {
           fallback();
@@ -725,6 +806,13 @@
       }, 5000);
     } else {
       videoEl.src = pUrl;
+      videoEl.addEventListener('loadedmetadata', () => {
+        syncVideoPlaybackRate();
+      }, { once: true });
+      videoEl.addEventListener('playing', () => {
+        syncVideoPlaybackRate();
+      }, { once: true });
+      syncVideoPlaybackRate();
       doPlay();
     }
 
@@ -755,11 +843,10 @@
             const res = await resolveEpisodeUrlWithRetry(embedUrl, false, 3);
             if (myGen !== wdGen) return; // superseded while awaiting resolve
             if (res.useVideo && res.playUrl) {
-              player.availableQualities = res.qualityMap;
-              player.currentQuality     = res.currentQuality;
+              const resolved = applyQualityMap(res.qualityMap, res.currentQuality, res.playUrl);
               // applyVideoAndUI increments wdGen and arms its own watchdog —
               // the retry loop continues naturally until video actually plays.
-              applyVideoAndUI(res.playUrl, true, ep, titleStr, srcName, dubId);
+              applyVideoAndUI(resolved.url, true, ep, titleStr, srcName, dubId);
             } else {
               // URL resolve failed — schedule another attempt after short delay
               if (myGen === wdGen) scheduleWd(WD_RETRY_DELAY_MS);
@@ -790,9 +877,8 @@
       setOrigEpisodeUrl(episode.url);
       const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq } = await resolveEpisodeUrlWithRetry(episode.url, episode.iframe);
       if (myGen !== episodeLoadGen) return;
-      player.availableQualities = qualityMap;
-      player.currentQuality = cq;
-      applyVideoAndUI(pUrl, uv, ep, titleStr, srcName, dubId, seekTime, initialPaused);
+      const resolved = applyQualityMap(qualityMap, cq, pUrl, { resetManualLock: true });
+      applyVideoAndUI(resolved.url, uv, ep, titleStr, srcName, dubId, seekTime, initialPaused);
     }).catch(() => {});
   }
 
@@ -917,14 +1003,27 @@
     const key = `${watchState.releaseId}:${watchState.ep}`;
     if (dubbersPickerCacheKey === key && dubbersPickerCache.length > 0) {
       dubbers = dubbersPickerCache;
+      if (lastEpisodeTypeUpdateId == null) {
+        const rId = parseInt(watchState.releaseId, 10);
+        void (window as any).anixApi.release.info?.(rId).then((infoRes: { release?: unknown }) => {
+          lastEpisodeTypeUpdateId = readLastEpisodeTypeUpdateId(infoRes?.release ?? infoRes);
+        }).catch(() => {});
+      }
       return;
     }
     popoverLoading = true;
     try {
       const rId = parseInt(watchState.releaseId, 10);
-      const res = await (window as any).anixApi.release.getDubbers(rId);
-      const all = (res?.types ?? []).filter((d: DubberItem) => !isDubberBlacklisted(d.name));
+      const [res, infoRes] = await Promise.all([
+        (window as any).anixApi.release.getDubbers(rId),
+        (window as any).anixApi.release.info?.(rId).catch(() => null),
+      ]);
+      lastEpisodeTypeUpdateId = readLastEpisodeTypeUpdateId(infoRes?.release ?? infoRes);
+      const all = sortDubbersPinnedFirst(
+        (res?.types ?? []).filter((d: DubberItem) => !isDubberBlacklisted(d.name)),
+      );
       dubbers = await filterDubbersForCurrentEp(all, rId, watchState.ep, watchState.dubberId);
+      dubbers = sortDubbersPinnedFirst(dubbers);
       dubbersPickerCacheKey = key;
       dubbersPickerCache    = dubbers;
     } catch {}
@@ -940,6 +1039,23 @@
       const first = res?.sources?.[0];
       if (first) switchDubbing(first.id, first.name, dubber.id, dubber.name);
     } catch {}
+  }
+
+  async function togglePinDubber(dubber: DubberItem) {
+    const api = (window as any).anixApi?.type;
+    const rId = parseInt(watchState.releaseId, 10);
+    if (!api?.pin || !api?.unpin || !Number.isFinite(rId)) return;
+    const nextPinned = !dubber.pinned;
+    try {
+      const res = nextPinned ? await api.pin(rId, dubber.id) : await api.unpin(rId, dubber.id);
+      if (res && typeof res.code === 'number' && res.code !== 0) return;
+      const patch = (list: DubberItem[]) =>
+        sortDubbersPinnedFirst(list.map((d) => (d.id === dubber.id ? { ...d, pinned: nextPinned } : d)));
+      dubbers = patch(dubbers);
+      dubbersPickerCache = patch(dubbersPickerCache);
+    } catch {
+      /* ignore */
+    }
   }
 
   // ── Player controls ────────────────────────────────────────────────────────
@@ -961,9 +1077,26 @@
 
   function onVolumeChange(e: Event) {
     const v = Number((e.target as HTMLInputElement).value);
-    player.volume = v;
-    if (videoEl) videoEl.volume = v / 100;
-    try { localStorage.setItem(VOLUME_KEY, String(Math.round(v))); } catch {}
+    setVolume(v);
+  }
+
+  function setVolume(v: number, opts?: { osd?: boolean }) {
+    const next = Math.max(0, Math.min(100, Math.round(v)));
+    player.volume = next;
+    if (videoEl) {
+      videoEl.volume = next / 100;
+      if (next > 0 && player.muted) {
+        player.muted = false;
+        videoEl.muted = false;
+      }
+    }
+    try { localStorage.setItem(VOLUME_KEY, String(next)); } catch {}
+    if (opts?.osd) showOsd(`${next}%`);
+  }
+
+  function adjustVolume(direction: 1 | -1) {
+    setVolume(player.volume + direction * 5, { osd: true });
+    showAndSchedule();
   }
 
   function toggleMute() {
@@ -971,9 +1104,23 @@
     if (videoEl) videoEl.muted = player.muted;
   }
 
-  function toggleFullscreen() {
-    (window as any).electron?.togglePlayerFullScreen?.();
-    player.isFullscreen = !player.isFullscreen;
+  function toggleFullscreen(opts?: { osd?: boolean }) {
+    void (async () => {
+      const next = await (window as any).electron?.togglePlayerFullScreen?.();
+      if (typeof next === 'boolean') {
+        player.isFullscreen = next;
+      } else {
+        player.isFullscreen = !player.isFullscreen;
+      }
+      if (opts?.osd) showOsd(player.isFullscreen ? 'Полный экран' : 'Обычный режим');
+    })();
+  }
+
+  async function toggleAlwaysOnTop(opts?: { osd?: boolean }) {
+    const next = await (window as any).electron?.togglePlayerAlwaysOnTop?.();
+    const pinned = !!next;
+    window.dispatchEvent(new CustomEvent('player-always-on-top', { detail: pinned }));
+    if (opts?.osd) showOsd(pinned ? 'Поверх всех окон' : 'Окно откреплено');
   }
 
   function toggleUpscale() {
@@ -983,19 +1130,105 @@
     if (player.upscaleEnabled) startUpscale(); else stopUpscale();
   }
 
-  function changePlaybackRate(rate: number) {
+  function changePlaybackRate(rate: number, opts?: { osd?: boolean }) {
+    if (getCurrentRoomId()) {
+      if (videoEl && videoEl.playbackRate !== 1) videoEl.playbackRate = 1;
+      if (opts?.osd) showOsd('Скорость недоступна в совместном просмотре', { warn: true });
+      return;
+    }
+    const next = clampPlaybackRate(rate);
+    player.playbackRate = next;
+    writeStoredPlaybackRate(next);
+    if (videoEl) videoEl.playbackRate = next;
+    if (opts?.osd) showOsd(formatPlaybackRate(next), { warn: next > PLAYBACK_RATE_WARN });
+  }
+
+  /** Re-apply saved speed after src/HLS reload (browser resets rate to 1). */
+  function syncVideoPlaybackRate() {
+    if (!videoEl) return;
+    if (getCurrentRoomId()) {
+      videoEl.playbackRate = 1;
+      return;
+    }
+    const rate = clampPlaybackRate(player.playbackRate);
     player.playbackRate = rate;
-    if (videoEl) videoEl.playbackRate = rate;
+    videoEl.playbackRate = rate;
+  }
+
+  function enforceNormalRateInLobby() {
+    if (!getCurrentRoomId()) return;
+    if (videoEl) videoEl.playbackRate = 1;
+  }
+
+  function restorePlaybackRateFromStore() {
+    if (getCurrentRoomId()) {
+      enforceNormalRateInLobby();
+      return;
+    }
+    player.playbackRate = readStoredPlaybackRate();
+    syncVideoPlaybackRate();
   }
 
   function changeAspectRatio(aspect: string) {
     player.aspectRatio = aspect;
   }
 
+  function pickQualityForMap(
+    qualityMap: Record<string, string>,
+    fallbackQuality: string,
+    fallbackUrl: string,
+  ): { quality: string; url: string } {
+    const fallback = {
+      quality: fallbackQuality,
+      url: (fallbackQuality && qualityMap[fallbackQuality]) || fallbackUrl,
+    };
+    if (!adaptiveQualityByWindow || qualityManualLock) return fallback;
+    if (Object.keys(qualityMap).length === 0) return fallback;
+    const picked = pickAdaptiveQuality(qualityMap, getPlayerViewportWidth());
+    if (!picked || !qualityMap[picked]) return fallback;
+    return { quality: picked, url: qualityMap[picked] };
+  }
+
+  function applyQualityMap(
+    qualityMap: Record<string, string>,
+    fallbackQuality: string,
+    fallbackUrl: string,
+    opts?: { resetManualLock?: boolean },
+  ): { quality: string; url: string } {
+    if (opts?.resetManualLock) qualityManualLock = false;
+    player.availableQualities = qualityMap;
+    const resolved = pickQualityForMap(qualityMap, fallbackQuality, fallbackUrl);
+    player.currentQuality = resolved.quality;
+    return resolved;
+  }
+
+  function scheduleAdaptiveQuality() {
+    if (!adaptiveQualityByWindow || qualityManualLock) return;
+    if (!player.useVideo || player.loadState !== 'ready') return;
+    if (adaptiveQualityTimer) clearTimeout(adaptiveQualityTimer);
+    adaptiveQualityTimer = setTimeout(() => {
+      adaptiveQualityTimer = null;
+      void applyAdaptiveQualityIfNeeded();
+    }, 420);
+  }
+
+  async function applyAdaptiveQualityIfNeeded(opts?: { force?: boolean; osd?: boolean }) {
+    if (!adaptiveQualityByWindow) return;
+    if (qualityManualLock && !opts?.force) return;
+    if (!player.useVideo || player.loadState !== 'ready') return;
+    const map = player.availableQualities;
+    if (Object.keys(map).length < 2) return;
+    const picked = pickAdaptiveQuality(map, getPlayerViewportWidth());
+    if (!picked || picked === player.currentQuality) return;
+    await changeQuality(picked, { fromAdaptive: true, osd: opts?.osd });
+  }
+
   /** Switch to a different quality URL (e.g. "720", "480") — recreates HLS */
-  async function changeQuality(quality: string) {
+  async function changeQuality(quality: string, opts?: { fromAdaptive?: boolean; osd?: boolean }) {
     const src = player.availableQualities[quality];
     if (!src || quality === player.currentQuality) return;
+
+    if (!opts?.fromAdaptive) qualityManualLock = true;
 
     const elE = (window as any).electron;
     if (elE?.lobbyNotifyBufferingStart) elE.lobbyNotifyBufferingStart();
@@ -1008,6 +1241,7 @@
     if (hlsInst) { hlsInst.destroy(); (videoEl as any)._hls = undefined; }
 
     player.currentQuality = quality;
+    if (opts?.osd) showOsd(`${quality.replace(/p$/i, '')}p`);
 
     if (!videoEl) return;
     videoEl.src = '';
@@ -1018,6 +1252,7 @@
 
     const restoreTime = () => {
       if (savedTime > 0) videoEl.currentTime = Math.min(savedTime, videoEl.duration || Infinity);
+      syncVideoPlaybackRate();
       if (wasPaused) videoEl.pause(); else doPlay();
     };
 
@@ -1028,20 +1263,31 @@
       (videoEl as any)._hls = hls;
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         restoreTime();
-        if (player.playbackRate !== 1) videoEl.playbackRate = player.playbackRate;
+        syncVideoPlaybackRate();
         notifyLobbyPlayerSyncedIfReady();
       });
       // Перезапускаем апскейл после загрузки нового потока — размеры кадра могли измениться
       videoEl.addEventListener('loadedmetadata', () => {
+        syncVideoPlaybackRate();
         if (player.upscaleEnabled && gpuAvailable) startUpscale();
+      }, { once: true });
+      videoEl.addEventListener('playing', () => {
+        syncVideoPlaybackRate();
       }, { once: true });
     } else {
       videoEl.src = src;
-      videoEl.addEventListener('loadeddata', (e) => {
+      videoEl.addEventListener('loadeddata', () => {
         restoreTime();
         if (player.upscaleEnabled && gpuAvailable) startUpscale();
         notifyLobbyPlayerSyncedIfReady();
       }, { once: true });
+      videoEl.addEventListener('loadedmetadata', () => {
+        syncVideoPlaybackRate();
+      }, { once: true });
+      videoEl.addEventListener('playing', () => {
+        syncVideoPlaybackRate();
+      }, { once: true });
+      syncVideoPlaybackRate();
       doPlay();
     }
   }
@@ -1059,13 +1305,61 @@
   }
 
   function onKeyDown(e: KeyboardEvent) {
-    if (e.code === 'Space' || e.key === ' ') {
-      const t = e.target as HTMLElement | null;
-      const tag = t?.tagName.toLowerCase();
-      if (tag === 'input' || tag === 'textarea' || tag === 'select' || t?.isContentEditable) return;
+    if (!player.useVideo || player.loadState !== 'ready') return;
+    if (isTypingTarget(e.target)) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+    if (e.code === hotkeys.playPauseCode) {
       e.preventDefault();
       togglePlay();
+      return;
     }
+    if (e.code === hotkeys.seekBackCode) {
+      e.preventDefault();
+      seekBySeconds(-hotkeys.seekSeconds);
+      return;
+    }
+    if (e.code === hotkeys.seekForwardCode) {
+      e.preventDefault();
+      seekBySeconds(hotkeys.seekSeconds);
+      return;
+    }
+    if (e.code === hotkeys.volumeUpCode) {
+      e.preventDefault();
+      adjustVolume(1);
+      return;
+    }
+    if (e.code === hotkeys.volumeDownCode) {
+      e.preventDefault();
+      adjustVolume(-1);
+      return;
+    }
+    if (e.code === hotkeys.fullscreenCode) {
+      e.preventDefault();
+      toggleFullscreen({ osd: true });
+      return;
+    }
+    if (e.code === hotkeys.alwaysOnTopCode) {
+      e.preventDefault();
+      void toggleAlwaysOnTop({ osd: true });
+    }
+  }
+
+  function onWheel(e: WheelEvent) {
+    if (!hotkeys.ctrlWheelSpeed) return;
+    if (!e.ctrlKey && !e.metaKey) return;
+    if (!player.useVideo || player.loadState !== 'ready') return;
+    if (isTypingTarget(e.target)) return;
+    e.preventDefault();
+    if (getCurrentRoomId()) {
+      enforceNormalRateInLobby();
+      showOsd('Скорость недоступна в совместном просмотре', { warn: true });
+      showAndSchedule();
+      return;
+    }
+    const direction: 1 | -1 = e.deltaY < 0 ? 1 : -1;
+    changePlaybackRate(stepPlaybackRate(player.playbackRate, direction), { osd: true });
+    showAndSchedule();
   }
 
   // ── Pending sync ───────────────────────────────────────────────────────────
@@ -1100,13 +1394,19 @@
     }, 380);
   }
 
+  function onPlayerAreaResize() {
+    scheduleUpscaleResize();
+    scheduleAdaptiveQuality();
+  }
+
   function initResizeObserver() {
     if (typeof ResizeObserver === 'undefined') return;
     ro?.disconnect();
-    ro = new ResizeObserver(() => scheduleUpscaleResize());
-    const area = canvasEl?.parentElement;
+    ro = new ResizeObserver(() => onPlayerAreaResize());
+    const wrap = document.querySelector('.watch-page__player-wrap');
+    const area = (wrap instanceof HTMLElement ? wrap : null) ?? canvasEl?.parentElement;
     if (area) ro.observe(area);
-    winResizeHandler = () => scheduleUpscaleResize();
+    winResizeHandler = () => onPlayerAreaResize();
     window.addEventListener('resize', winResizeHandler);
   }
 
@@ -1142,8 +1442,12 @@
     videoEl.addEventListener('loadedmetadata', () => {
       player.duration = videoEl.duration || 0;
       try { (window as any).electron?.sendPlayerState?.(getPlaybackPayload()); } catch {}
+      syncVideoPlaybackRate();
       if (player.upscaleEnabled && gpuAvailable) startUpscale();
       if (pendingSync) applyPendingSync();
+    });
+    videoEl.addEventListener('playing', () => {
+      syncVideoPlaybackRate();
     });
     videoEl.addEventListener('canplay',    doAutoPlay, { once: true });
     videoEl.addEventListener('loadeddata', doAutoPlay, { once: true });
@@ -1159,17 +1463,24 @@
       const v = stored != null ? Number(stored) : NaN;
       if (!isNaN(v) && v >= 0 && v <= 100) player.volume = v;
     } catch {}
+    player.playbackRate = readStoredPlaybackRate();
 
     if ((window as any).electron?.getSettings) {
       (window as any).electron.getSettings().then((s: any) => {
         player.debugOverlay = s?.playerDebugOverlay === true;
+        adaptiveQualityByWindow = s?.adaptiveQualityByWindow === true;
+        hotkeys = normalizePlayerHotkeys(s?.playerHotkeys);
         if (gpuAvailable) {
           player.upscaleEnabled = s?.upscaleEnabled ?? false;
           player.upscaleMode    = s?.upscaleMode    ?? 15;
           if (player.upscaleEnabled && videoEl?.readyState >= 1) startUpscale();
         }
+        if (adaptiveQualityByWindow) scheduleAdaptiveQuality();
       }).catch(() => {});
     }
+
+    inLobby = !!getCurrentRoomId();
+    enforceNormalRateInLobby();
 
     if (releaseId) void loadDownloadedEpisodes();
 
@@ -1190,11 +1501,10 @@
       if (!episode?.url) { player.loadState = 'error'; player.errorText = 'Серия недоступна.'; return; }
       setOrigEpisodeUrl(episode.url);
       const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq } = await resolveEpisodeUrlWithRetry(episode.url, episode.iframe);
-      player.availableQualities = qualityMap;
-      player.currentQuality = cq;
+      const resolved = applyQualityMap(qualityMap, cq, pUrl, { resetManualLock: true });
       player.loadState = 'ready';
       await tick();
-      applyVideoAndUI(pUrl, uv, watchState.ep, watchState.title, watchState.sourceName, watchState.dubberId);
+      applyVideoAndUI(resolved.url, uv, watchState.ep, watchState.title, watchState.sourceName, watchState.dubberId);
       refreshDubberNameFromApi();
       fetchEpisodesSilently();
 
@@ -1216,6 +1526,35 @@
       ['anix:playerDebugChanged', ((e: CustomEvent) => {
         const d = e.detail as { playerDebugOverlay?: boolean };
         if (typeof d?.playerDebugOverlay === 'boolean') player.debugOverlay = d.playerDebugOverlay;
+      }) as EventListener],
+
+      ['anix:adaptiveQualityChanged', ((e: CustomEvent) => {
+        const d = e.detail as { adaptiveQualityByWindow?: boolean };
+        if (typeof d?.adaptiveQualityByWindow !== 'boolean') return;
+        adaptiveQualityByWindow = d.adaptiveQualityByWindow;
+        if (adaptiveQualityByWindow) {
+          qualityManualLock = false;
+          void applyAdaptiveQualityIfNeeded({ force: true, osd: true });
+        }
+      }) as EventListener],
+
+      ['anix:playerHotkeysChanged', ((e: CustomEvent) => {
+        hotkeys = normalizePlayerHotkeys(e.detail);
+      }) as EventListener],
+
+      ['lobby:wsJoined', (() => {
+        inLobby = true;
+        enforceNormalRateInLobby();
+      }) as EventListener],
+
+      ['lobby:left', (() => {
+        inLobby = !!getCurrentRoomId();
+        if (!inLobby) restorePlaybackRateFromStore();
+      }) as EventListener],
+
+      ['lobby:roomGone', (() => {
+        inLobby = false;
+        restorePlaybackRateFromStore();
       }) as EventListener],
 
       ['player:changeContent', ((e: CustomEvent) => {
@@ -1322,10 +1661,13 @@
 
     handlers.forEach(([evt, fn]) => window.addEventListener(evt, fn));
     window.addEventListener('keydown', onKeyDown);
+    const wheelOpts: AddEventListenerOptions = { passive: false };
+    window.addEventListener('wheel', onWheel, wheelOpts);
 
     return () => {
       handlers.forEach(([evt, fn]) => window.removeEventListener(evt, fn));
       window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('wheel', onWheel, wheelOpts);
       stopUpscale();
       ro?.disconnect();
       if (winResizeHandler) window.removeEventListener('resize', winResizeHandler);
@@ -1333,6 +1675,8 @@
       if (stallCheckTimer) clearInterval(stallCheckTimer);
       if (applySyncTimer)  clearTimeout(applySyncTimer);
       if (idleTimer)       clearTimeout(idleTimer);
+      if (osdTimer)        clearTimeout(osdTimer);
+      if (adaptiveQualityTimer) clearTimeout(adaptiveQualityTimer);
       const hlsInst = (videoEl as any)?._hls as Hls | undefined;
       if (hlsInst) hlsInst.destroy();
     };
@@ -1475,6 +1819,8 @@
               aspectRatio={player.aspectRatio}
               availableQualities={player.availableQualities}
               currentQuality={player.currentQuality}
+              speedLocked={inLobby}
+              {lastEpisodeTypeUpdateId}
               ontogglePlay={togglePlay}
               ontoggleMute={toggleMute}
               onvolumechange={onVolumeChange}
@@ -1486,6 +1832,7 @@
               onselectEp={goToEpisode}
               onselectDub={selectDubber}
               onselectDownloadedMode={selectDownloadedMode}
+              ontogglePinDub={togglePinDubber}
               onclosePopover={() => popoverType = null}
               onfullscreen={toggleFullscreen}
               onchangeRate={changePlaybackRate}
@@ -1498,6 +1845,15 @@
 
         {#if player.debugOverlay && player.useVideo}
           <pre class="watch-page__debug-hud">{debugHudText}</pre>
+        {/if}
+
+        {#if osdText}
+          <div
+            class="watch-page__osd"
+            class:watch-page__osd--warn={osdWarn}
+            role="status"
+            aria-live="polite"
+          >{osdText}</div>
         {/if}
 
       {/if}

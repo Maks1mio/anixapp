@@ -41,6 +41,13 @@
 *::before,
 *::after {
   box-sizing: border-box;
+  outline: none !important;
+}
+
+*:focus,
+*:focus-visible {
+  outline: none !important;
+  outline-offset: 0 !important;
 }
 
 html {

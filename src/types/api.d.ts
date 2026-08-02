@@ -63,8 +63,21 @@ export interface AnixApi {
     randomFavorite: (extended?: boolean) => Promise<{ release?: unknown }>;
     randomProfileList: (profileId: number, status: number, extended?: boolean) => Promise<{ release?: unknown }>;
     related: (relatedId: number, page?: number) => Promise<any>;
-    getDubbers: (releaseId: number) => Promise<{ types?: Array<{ id: number; name: string; icon?: string; episode_count: number; view_count: number }> }>;
-    getDubberSources: (releaseId: number, dubberId: number) => Promise<{ sources?: Array<{ id: number; name: string; episode_count: number }> }>;
+    getDubbers: (releaseId: number) => Promise<{
+      types?: Array<{
+        id: number;
+        name: string;
+        icon?: string;
+        episode_count?: number;
+        view_count?: number;
+        pinned?: boolean;
+        is_sub?: boolean;
+        quality?: number;
+      }>;
+    }>;
+    getDubberSources: (releaseId: number, dubberId: number) => Promise<{
+      sources?: Array<{ id: number; name: string; episode_count?: number; quality?: number }>;
+    }>;
     getEpisodes: (releaseId: number, dubberId: number, sourceId: number, sort?: number) => Promise<{ episodes?: Array<{ position: number; name: string; url: string; iframe: boolean; is_watched?: boolean }> }>;
     getEpisode: (releaseId: number, sourceId: number, episodePosition: number) => Promise<{ episode?: { position: number; name: string; url: string; iframe: boolean } }>;
     getEpisodeUpdates: (releaseId: number, page?: number) => Promise<{
@@ -144,8 +157,11 @@ export interface AnixApi {
         episodes_count?: number;
         view_count?: number;
         pinned?: boolean;
+        quality?: number;
       }>;
     }>;
+    pin: (releaseId: number, typeId: number) => Promise<{ code?: number }>;
+    unpin: (releaseId: number, typeId: number) => Promise<{ code?: number }>;
   };
 
   feed: {
@@ -207,6 +223,7 @@ export interface AnixApi {
   notification: {
     all: (page?: number) => Promise<any>;
     count: () => Promise<any>;
+    read: () => Promise<any>;
   };
 
   history: {

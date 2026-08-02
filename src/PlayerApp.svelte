@@ -8,6 +8,7 @@
   async function togglePin() {
     const next = await window.electron?.togglePlayerAlwaysOnTop?.();
     pinned = !!next;
+    window.dispatchEvent(new CustomEvent('player-always-on-top', { detail: pinned }));
   }
 
   onMount(() => {
@@ -18,8 +19,16 @@
       document.body.classList.toggle('player-fullscreen', e.detail === true);
     }) as EventListener;
 
+    const onAlwaysOnTop = ((e: CustomEvent<boolean>) => {
+      pinned = e.detail === true;
+    }) as EventListener;
+
     window.addEventListener('player-fullscreen', onFullscreen);
-    return () => window.removeEventListener('player-fullscreen', onFullscreen);
+    window.addEventListener('player-always-on-top', onAlwaysOnTop);
+    return () => {
+      window.removeEventListener('player-fullscreen', onFullscreen);
+      window.removeEventListener('player-always-on-top', onAlwaysOnTop);
+    };
   });
 </script>
 
@@ -35,7 +44,7 @@
       type="button"
       class="player-titlebar__btn player-titlebar__btn--pin"
       class:player-titlebar__btn--pin-active={pinned}
-      title={pinned ? 'Открепить окно' : 'Поверх всех окон'}
+      title={pinned ? 'Открепить окно (P)' : 'Поверх всех окон (P)'}
       onclick={togglePin}
     >
       {#if pinned}

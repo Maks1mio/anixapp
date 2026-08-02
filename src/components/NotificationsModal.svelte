@@ -1,8 +1,11 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { closeNotificationsModal } from '../stores/modals';
   import { navigate } from '../stores/navigation';
   import { handleUserProfileClick } from '../stores/user-profile';
+  import {
+    fetchAllNotifications,
+    markNotificationsRead,
+  } from '../stores/notifications';
   import {
     iconPlay,
     iconBookmark,
@@ -243,26 +246,35 @@
       return;
     }
 
-    window.anixApi.notification
-      .all(0)
-      .then((data: any) => {
-        const content = (data?.content ?? []) as AnyNotification[];
+    void (async () => {
+      try {
+        const content = await fetchAllNotifications();
+        // Clear unread badge once the list is opened (Android-like).
+        void markNotificationsRead();
+
         if (content.length === 0) {
           loadState = 'empty';
           return;
         }
-        content.sort((a: any, b: any) => {
+
+        const byId = new Map<number | string, AnyNotification>();
+        for (const item of content) {
+          const key = item?.id ?? `${item?.type}-${item?.timestamp}-${Math.random()}`;
+          if (!byId.has(key)) byId.set(key, item);
+        }
+        const unique = Array.from(byId.values());
+        unique.sort((a: any, b: any) => {
           const ta = typeof a.timestamp === 'number' ? a.timestamp : 0;
           const tb = typeof b.timestamp === 'number' ? b.timestamp : 0;
           return tb - ta;
         });
-        notifications = content;
+        notifications = unique;
         loadState = 'loaded';
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         errorMsg = String(err);
         loadState = 'error';
-      });
+      }
+    })();
   });
 
   onDestroy(() => {

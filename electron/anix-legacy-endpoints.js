@@ -77,6 +77,7 @@ function attachLegacyEndpoints(client) {
 
   ep.notification.getNotifications = (page) => ep.notification.all(page);
   ep.notification.countNotifications = () => ep.notification.count();
+  ep.notification.readNotifications = () => ep.notification.read();
 
   const pref = ep.profilePreference;
   Object.defineProperty(ep, 'settings', {

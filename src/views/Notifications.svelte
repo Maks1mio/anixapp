@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { fetchAllNotifications, markNotificationsRead } from '../stores/notifications';
 
   interface NotificationItem {
     title: string;
@@ -23,8 +24,8 @@
     }
 
     try {
-      const data = await window.anixApi.notification.all(0) as any;
-      const content = (data?.content ?? []) as any[];
+      const content = await fetchAllNotifications();
+      void markNotificationsRead();
       if (!content.length) {
         loadState = 'empty';
         return;

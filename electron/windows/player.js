@@ -192,6 +192,13 @@ ipcMain.on('upscale:applySettings', (_, settings) => {
   }
 });
 
+// Hotkeys / seek settings: apply to player window immediately
+ipcMain.on('player:applyHotkeys', (_, hotkeys) => {
+  if (state.playerWindowRef && !state.playerWindowRef.isDestroyed()) {
+    state.playerWindowRef.webContents.send('player:hotkeysChanged', hotkeys);
+  }
+});
+
 // ── Lobby proposal IPC forwarding ──
 // Main window → Player window (proposal events)
 ipcMain.on('lobby:proposalToPlayer', (_, data) => {

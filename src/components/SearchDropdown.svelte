@@ -132,27 +132,23 @@
   });
 </script>
 
-{#if visible && (hasItems || !query.trim())}
+{#if visible && hasItems}
   <div
     class="search-dropdown"
     role="listbox"
     bind:this={dropdownEl}
     style="position:fixed; left:{left}px; top:{top}px; width:{width}px; min-width:{width}px;"
   >
-    {#if filteredHistory().length > 0}
-      <div class="search-dropdown__section">Недавние запросы</div>
-      {#each filteredHistory() as item, i}
-        <button
-          type="button"
-          class="search-dropdown__history-item"
-          class:search-dropdown__item--active={i === currentIndex}
-          onclick={() => handleHistoryClick(item)}
-        >
-          {item}
-        </button>
-      {/each}
-    {:else if !query.trim()}
-      <div class="search-dropdown__empty">Нет недавних запросов</div>
-    {/if}
+    <div class="search-dropdown__section">Недавние запросы</div>
+    {#each filteredHistory() as item, i}
+      <button
+        type="button"
+        class="search-dropdown__history-item"
+        class:search-dropdown__item--active={i === currentIndex}
+        onclick={() => handleHistoryClick(item)}
+      >
+        {item}
+      </button>
+    {/each}
   </div>
 {/if}

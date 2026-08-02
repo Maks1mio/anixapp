@@ -15,15 +15,15 @@
 .titlebar__drag {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0 1rem;
+  gap: 1rem;
+  padding: 0 0.85rem 0 0.9rem;
   -webkit-app-region: drag;
 }
 
 .titlebar__logo {
-  width: 22px;
-  height: 22px;
-  background: $color-text-muted;
+  width: 24px;
+  height: 24px;
+  background: var(--color-text-muted);
   border-radius: 5px;
   flex-shrink: 0;
   overflow: hidden;
@@ -39,10 +39,48 @@
   }
 }
 
+.titlebar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  line-height: 1;
+}
+
 .titlebar__title {
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 600;
+  color: $color-text;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+.titlebar__beta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.1rem;
+  padding: 0 0.4rem;
+  border-radius: 74px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.1;
+  flex-shrink: 0;
+}
+
+.titlebar__version {
+  font-size: 0.7rem;
+  font-weight: 500;
   color: $color-text-muted;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  flex-shrink: 0;
+  white-space: nowrap;
+  opacity: 0.85;
 }
 
 // ——— Navigation buttons ———
@@ -156,6 +194,7 @@
 }
 
 .titlebar__menu-item {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -179,6 +218,18 @@
     background: $color-surface-hover;
     color: $color-text;
   }
+}
+
+.titlebar__notif-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: $color-accent;
+  box-shadow: 0 0 0 2px $color-surface;
+  pointer-events: none;
 }
 
 .titlebar__menu-item--avatar {

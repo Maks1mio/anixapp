@@ -61,6 +61,16 @@ ipcRenderer.on('player:debugOverlay', (_, enabled) => {
   );
 });
 
+ipcRenderer.on('player:adaptiveQuality', (_, enabled) => {
+  window.dispatchEvent(
+    new CustomEvent('anix:adaptiveQualityChanged', { detail: { adaptiveQualityByWindow: !!enabled } }),
+  );
+});
+
+ipcRenderer.on('player:hotkeysChanged', (_, hotkeys) => {
+  window.dispatchEvent(new CustomEvent('anix:playerHotkeysChanged', { detail: hotkeys }));
+});
+
 // Notify main window when player window is closed
 ipcRenderer.on('player:closed', () => {
   window.dispatchEvent(new CustomEvent('player:windowClosed'));
@@ -143,6 +153,7 @@ contextBridge.exposeInMainWorld('electron', {
   themeEditorDeleted: (themeId) => ipcRenderer.send('theme-editor:deleted', themeId),
   // Upscale settings sync to player window
   sendUpscaleSettings: (settings) => ipcRenderer.send('upscale:applySettings', settings),
+  sendPlayerHotkeys: (hotkeys) => ipcRenderer.send('player:applyHotkeys', hotkeys),
   // Upscale Preview Tool
   openUpscaleTool: () => ipcRenderer.invoke('tool:openUpscale'),
   saveToolScreenshot: (dataUrl, filename) => ipcRenderer.invoke('tool:saveScreenshot', dataUrl, filename),
@@ -289,6 +300,8 @@ contextBridge.exposeInMainWorld('anixApi', {
 
   type: {
     all: () => ipcRenderer.invoke('anix:typeAll'),
+    pin: (releaseId, typeId) => ipcRenderer.invoke('anix:typePin', releaseId, typeId),
+    unpin: (releaseId, typeId) => ipcRenderer.invoke('anix:typeUnpin', releaseId, typeId),
   },
 
   feed: {
@@ -342,6 +355,7 @@ contextBridge.exposeInMainWorld('anixApi', {
   notification: {
     all: (page = 0) => ipcRenderer.invoke('anix:notificationsAll', page),
     count: () => ipcRenderer.invoke('anix:notificationsCount'),
+    read: () => ipcRenderer.invoke('anix:notificationsRead'),
   },
 
   history: {

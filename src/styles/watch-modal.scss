@@ -17,7 +17,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1.5rem;
+  padding: 1rem;
 }
 
 .watch-modal__backdrop {
@@ -31,9 +31,9 @@
 
 .watch-modal__panel {
   position: relative;
-  width: min(52rem, 100%);
-  height: min(88vh, 48rem);
-  max-height: min(88vh, 48rem);
+  width: min(56rem, 100%);
+  height: min(90vh, 52rem);
+  max-height: min(90vh, 52rem);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -160,7 +160,7 @@
 }
 
 .watch-modal__page .page__scroll {
-  padding: 0 0.35rem 0 0;
+  padding: 0;
   scroll-behavior: smooth;
 }
 
@@ -224,21 +224,22 @@
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
-  padding: 0.95rem 0.9rem 0.95rem 0.95rem;
+  padding: 0.75rem 0.75rem 0.85rem;
 }
 
 .watch-modal__variants {
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 0.75rem 0.9rem 0.95rem 0.95rem;
+  padding: 0.55rem 0 0.35rem;
 }
 
 .watch-modal__filters {
   display: flex;
   gap: 0;
   border-bottom: 1px solid color-mix(in srgb, $color-border 55%, transparent);
-  margin-bottom: 0.2rem;
+  margin-bottom: 0.15rem;
+  padding: 0 0.85rem;
 }
 
 .watch-modal__filter {
@@ -288,16 +289,16 @@
 .watch-modal__variant-row {
   display: flex;
   align-items: center;
-  gap: 0.82rem;
+  gap: 0.7rem;
   width: 100%;
-  padding: 0.7rem 0.2rem;
+  padding: 0.7rem 0.85rem;
   border: 0;
   border-bottom: 1px solid color-mix(in srgb, $color-border 45%, transparent);
   background: transparent;
   color: $color-text;
   text-align: left;
   cursor: pointer;
-  transition: background $transition, padding-left $transition;
+  transition: background $transition;
 
   &:last-child {
     border-bottom: 0;
@@ -305,7 +306,46 @@
 
   &:hover {
     background: color-mix(in srgb, $color-surface-hover 60%, transparent);
-    padding-left: 0.45rem;
+  }
+
+  &--pinned {
+    background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+
+    &:hover {
+      background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+    }
+  }
+}
+
+.watch-modal__variant-pin {
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: $radius-sm;
+  background: transparent;
+  color: $color-text-muted;
+  opacity: 0.45;
+  cursor: pointer;
+  transition: color $transition, opacity $transition, background $transition, transform $transition;
+
+  &:hover:not(:disabled) {
+    opacity: 1;
+    color: $color-text;
+    background: color-mix(in srgb, var(--color-text) 8%, transparent);
+  }
+
+  &--active {
+    opacity: 1;
+    color: $color-accent;
+    transform: rotate(-35deg);
+  }
+
+  &:disabled {
+    cursor: default;
   }
 }
 
@@ -350,12 +390,60 @@
   color: $color-text;
 }
 
+.watch-modal__variant-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+
+  .watch-modal__variant-name {
+    display: flex;
+  }
+}
+
+.watch-modal__new-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: 1.15rem;
+  padding: 0 0.4rem;
+  border-radius: 4px;
+  border: 1px solid $color-accent;
+  color: $color-accent;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.watch-modal__variant-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
 .watch-modal__variant-ep {
   display: block;
   font-size: 0.76rem;
   font-weight: 500;
   color: $color-text-muted;
   line-height: 1.2;
+}
+
+.watch-modal__quality-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 1.15rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-text) 12%, transparent);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
 }
 
 .watch-modal__variant-views-badge {
@@ -449,23 +537,42 @@
 }
 
 
+.watch-modal__mobile-list,
+.watch-modal__episodes-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem 0.85rem 0.95rem;
+}
+
 .watch-modal__source-pills {
   display: flex;
-  gap: 0.45rem;
+  gap: 0.4rem;
   overflow-x: auto;
-  padding-bottom: 0.1rem;
+  padding: 0.05rem 0 0.15rem;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 .watch-modal__source-pill {
   flex: 0 0 auto;
-  padding: 0.48rem 0.72rem;
-  border: 1px solid color-mix(in srgb, $color-border 75%, transparent);
+  padding: 0.42rem 0.78rem;
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: color-mix(in srgb, $color-bg 74%, transparent);
+  background: color-mix(in srgb, $color-bg 70%, transparent);
   color: $color-text-muted;
   font-size: 0.78rem;
+  font-weight: 600;
   cursor: pointer;
   transition: background $transition, color $transition, border-color $transition;
+
+  &:hover:not(.watch-modal__source-pill--active) {
+    color: $color-text;
+    background: color-mix(in srgb, $color-surface-hover 80%, transparent);
+  }
 
   &--active {
     color: #fff;
@@ -479,11 +586,21 @@
   top: 0;
   z-index: 2;
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.35rem 0;
-  background: color-mix(in srgb, $color-surface-hover 78%, transparent);
-  backdrop-filter: blur(10px);
+  align-items: stretch;
+  min-height: 2.55rem;
+  border: 1px solid color-mix(in srgb, $color-border 70%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, $color-surface 55%, $color-bg);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 4%, transparent);
+  overflow: visible;
+  transition: border-color $transition, box-shadow $transition;
+
+  &:focus-within {
+    border-color: color-mix(in srgb, $color-accent 45%, $color-border);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, #fff 4%, transparent),
+      0 0 0 2px color-mix(in srgb, $color-accent 18%, transparent);
+  }
 }
 
 .watch-modal__episodes-search {
@@ -491,13 +608,27 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0 0.72rem;
-  height: 2.35rem;
-  border: 1px solid color-mix(in srgb, $color-border 70%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, $color-bg 78%, transparent);
+  gap: 0.55rem;
+  padding: 0 0.9rem;
   color: $color-text-muted;
+  cursor: text;
+}
+
+.watch-modal__episodes-search-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  opacity: 0.65;
+  transition: opacity $transition, color $transition;
+
+  .watch-modal__episodes-toolbar:focus-within & {
+    opacity: 1;
+    color: $color-accent;
+  }
+
+  :global(svg) {
+    width: 1rem;
+    height: 1rem;
+  }
 }
 
 .watch-modal__episodes-search-input {
@@ -508,72 +639,93 @@
   background: transparent;
   color: $color-text;
   font: inherit;
-  font-size: 0.86rem;
+  font-size: 0.875rem;
 
   &::placeholder {
-    color: $color-text-muted;
+    color: color-mix(in srgb, $color-text-muted 88%, transparent);
   }
+
+  &::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+}
+
+.watch-modal__toolbar-divider {
+  flex: 0 0 auto;
+  width: 1px;
+  margin: 0.5rem 0;
+  background: color-mix(in srgb, $color-border 75%, transparent);
 }
 
 .watch-modal__toolbar-actions {
   display: flex;
-  gap: 0.35rem;
+  align-items: stretch;
+  flex-shrink: 0;
+  padding: 0.15rem;
 }
 
-.watch-modal__icon-action {
+.watch-modal__toolbar-btn {
   width: 2.35rem;
-  height: 2.35rem;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: $color-text-muted;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid color-mix(in srgb, $color-border 70%, transparent);
-  border-radius: 50%;
-  background: color-mix(in srgb, $color-bg 78%, transparent);
-  color: $color-text;
   cursor: pointer;
-  transition: background $transition, color $transition, border-color $transition, opacity $transition;
+  transition: color $transition, background $transition, opacity $transition;
 
   &:hover:not(:disabled) {
-    background: color-mix(in srgb, $color-accent 14%, $color-bg);
-    border-color: color-mix(in srgb, $color-accent 32%, $color-border);
+    color: $color-text;
+    background: color-mix(in srgb, $color-text 7%, transparent);
   }
 
   &:disabled {
-    opacity: 0.45;
+    opacity: 0.4;
     cursor: not-allowed;
+  }
+
+  :global(svg) {
+    width: 1.05rem;
+    height: 1.05rem;
   }
 }
 
 .watch-modal__options {
   position: relative;
+  display: flex;
 }
 
 .watch-modal__options-menu {
   position: absolute;
-  right: 0;
-  top: calc(100% + 0.45rem);
-  width: 13.5rem;
+  right: 0.35rem;
+  top: calc(100% + 0.4rem);
+  width: 14rem;
   z-index: 5;
   display: grid;
-  padding: 0.35rem;
+  gap: 0.15rem;
+  padding: 0.4rem;
   border: 1px solid $color-border;
-  border-radius: 14px;
-  background: color-mix(in srgb, $color-surface 96%, black);
+  border-radius: 12px;
+  background: color-mix(in srgb, $color-surface 97%, black);
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
 
   button {
-    padding: 0.58rem 0.65rem;
+    padding: 0.6rem 0.7rem;
     border: 0;
-    border-radius: 10px;
+    border-radius: 8px;
     background: transparent;
     color: $color-text;
     text-align: left;
     font: inherit;
-    font-size: 0.82rem;
+    font-size: 0.84rem;
     cursor: pointer;
+    transition: background $transition;
 
     &:hover:not(:disabled) {
-      background: $color-surface-hover;
+      background: color-mix(in srgb, $color-surface-hover 90%, transparent);
     }
 
     &:disabled {

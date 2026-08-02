@@ -64,6 +64,24 @@ ipcMain.handle('anix:typeAll', async () => {
   }
 });
 
+ipcMain.handle('anix:typePin', async (_, releaseId, typeId) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.type.pin(releaseId, typeId);
+  } catch (err) {
+    handleAnixError(err, 'typePin');
+  }
+});
+
+ipcMain.handle('anix:typeUnpin', async (_, releaseId, typeId) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.type.unpin(releaseId, typeId);
+  } catch (err) {
+    handleAnixError(err, 'typeUnpin');
+  }
+});
+
 ipcMain.handle('anix:getDubberSources', async (_, releaseId, dubberId) => {
   try {
     const client = getAnixart();
@@ -456,6 +474,15 @@ ipcMain.handle('anix:notificationsCount', async () => {
     return data;
   } catch (err) {
     handleAnixError(err, 'notificationsCount');
+  }
+});
+
+ipcMain.handle('anix:notificationsRead', async () => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.notification.read();
+  } catch (err) {
+    handleAnixError(err, 'notificationsRead');
   }
 });
 

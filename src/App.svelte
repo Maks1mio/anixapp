@@ -1,9 +1,18 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
-  import { appScreen } from './stores/auth';
+  import {
+    appScreen,
+    syncAuthStatus,
+    isAuthenticated,
+    loginPromptOpen,
+    closeLoginPrompt,
+    openLoginPrompt,
+    pathRequiresAuth,
+    notifyAuthChanged,
+  } from './stores/auth';
   import { currentPath, navigate } from './stores/navigation';
-  import { openLobbyModal, settingsModalOpen, lobbyModalOpen, lobbyModalInitialCode, notificationsModalOpen, watchModalOpen, watchModalReleaseId, watchModalReleaseTitle, profileModalOpen, profileModalUserId, lobbyCurrentPlayback, isPlayerWindowOpen, lobbyWatchingPeerIds } from './stores/modals';
+  import { openLobbyModal, settingsModalOpen, lobbyModalOpen, lobbyModalInitialCode, notificationsModalOpen, watchModalOpen, watchModalReleaseId, watchModalReleaseTitle, lobbyCurrentPlayback, isPlayerWindowOpen, lobbyWatchingPeerIds } from './stores/modals';
   import { sendPlayerViewActive } from './services/lobby-ws';
   import { getPath, getSearchParams } from './router';
   import { captureActiveScroll, resetScrollAfterRouteChange } from './stores/view-state';
@@ -18,6 +27,7 @@
     clearDiscordContext,
     scheduleDiscordPresenceSync,
   } from './services/discord-presence';
+  import { openProfilePanel } from './stores/profile-panel';
 
   import Layout from './layout/Layout.svelte';
   import Login from './views/Login.svelte';
@@ -35,16 +45,15 @@
   import Related from './views/Related.svelte';
   import Bookmarks from './views/Bookmarks.svelte';
   import Profile from './views/Profile/page.svelte';
-  import ProfileVotes from './views/ProfileVotes.svelte';
   import ProfileFriends from './views/ProfileFriends.svelte';
   import ProfileCollections from './views/ProfileCollections.svelte';
-  import ProfileLists from './views/ProfileLists.svelte';
   import ProfileComments from './views/ProfileComments.svelte';
   import ProfileVideos from './views/ProfileVideos.svelte';
   import Search from './views/Search.svelte';
   import Collection from './views/Collection.svelte';
   import Notifications from './views/Notifications.svelte';
   import Uikit from './views/Uikit.svelte';
+  import UikitV2 from './views/UikitV2.svelte';
   import AnnouncementChat from './views/AnnouncementChat/page.svelte';
   import AdminLoginPage from './views/Admin/LoginPage.svelte';
   import AdminPanelPage from './views/Admin/PanelPage.svelte';
@@ -56,8 +65,6 @@
   import LobbyModal from './components/LobbyModal.svelte';
   import NotificationsModal from './components/NotificationsModal.svelte';
   import WatchModal from './components/WatchModal.svelte';
-  import UserProfilePopout from './components/UserProfilePopout.svelte';
-  import UserProfileModal from './components/UserProfileModal.svelte';
   import Toast from './components/Toast.svelte';
   import OfflineScreen from './views/OfflineScreen.svelte';
 
@@ -74,12 +81,32 @@
   let _isPlayerOpen = false;
   isPlayerWindowOpen.subscribe(v => { _isPlayerOpen = v; });
 
-  function syncSearchParams() {
-    const p = getSearchParams();
+  let bookmarksUserId = $state<number | undefined>(undefined);
+
+  function bookmarksUserFromRoute(route: string): number | undefined {
+    const pathOnly = route.split('?')[0] || '';
+    if (pathOnly !== '/bookmarks') return undefined;
+    const q = route.includes('?') ? route.slice(route.indexOf('?') + 1) : '';
+    const user = Number.parseInt(new URLSearchParams(q).get('user') || '', 10);
+    return Number.isFinite(user) && user > 0 ? user : undefined;
+  }
+
+  function syncSearchParams(route?: string) {
+    // anix:navigate приходит до pushState/hash — парсим целевой URL из detail
+    const fromRoute = typeof route === 'string';
+    const p = fromRoute
+      ? new URLSearchParams(route.includes('?') ? route.slice(route.indexOf('?') + 1) : '')
+      : getSearchParams();
     searchQ = p.get('q') || '';
     searchTab = (p.get('tab') || 'releases') as 'releases' | 'profiles' | 'collections';
     searchBy = Number.parseInt(p.get('by') || '0', 10) || 0;
     collectionsWeek = p.get('week') === '1' || p.get('sort') === '4';
+    if (fromRoute) {
+      bookmarksUserId = bookmarksUserFromRoute(route);
+    } else {
+      const user = Number.parseInt(p.get('user') || '', 10);
+      bookmarksUserId = Number.isFinite(user) && user > 0 ? user : undefined;
+    }
   }
 
   // Keep path in sync with the store (critical for HTTP mode where pushState
@@ -108,6 +135,15 @@
     });
   });
 
+  // Гость открыл раздел, которому нужен аккаунт
+  $effect(() => {
+    if ($appScreen !== 'main') return;
+    if ($isAuthenticated) return;
+    if (!pathRequiresAuth(path)) return;
+    openLoginPrompt();
+    navigate('/');
+  });
+
   // Окно плеера без WS: список участников шлётся по IPC. События до открытия плеера терялись — при открытии и при смене плейбека лобби повторяем push.
   $effect(() => {
     if (!$isPlayerWindowOpen) return;
@@ -131,6 +167,12 @@
   const profileListsMatch     = $derived(path.match(/^\/profile\/(\d+)\/lists$/));
   const profileCommentsMatch  = $derived(path.match(/^\/profile\/(\d+)\/comments$/));
   const profileVideosMatch    = $derived(path.match(/^\/profile\/(\d+)\/videos$/));
+  const profileListsId        = $derived(profileListsMatch?.[1] ? parseInt(profileListsMatch[1], 10) : null);
+  const profileVotesId        = $derived(profileVotesMatch?.[1] ? parseInt(profileVotesMatch[1], 10) : null);
+  const profileFriendsId      = $derived(profileFriendsMatch?.[1] ? parseInt(profileFriendsMatch[1], 10) : null);
+  const profileCollectionsId  = $derived(profileCollectionsMatch?.[1] ? parseInt(profileCollectionsMatch[1], 10) : null);
+  const profileCommentsId     = $derived(profileCommentsMatch?.[1] ? parseInt(profileCommentsMatch[1], 10) : null);
+  const profileVideosId       = $derived(profileVideosMatch?.[1] ? parseInt(profileVideosMatch[1], 10) : null);
   const collectionMatch       = $derived(path.match(/^\/collection\/(\d+)$/));
   const collectionEditMatch   = $derived(path.match(/^\/collections\/edit\/(\d+)$/));
   const collectionPickMatch   = $derived(path === '/collections/pick-release');
@@ -140,19 +182,38 @@
 
   // ── App screen state machine ───────────────────────────────────────────────
   let offlineRetryTimer: number | null = null;
+  let pendingDeepLink: { type: string; id: number } | null = null;
 
   function clearRetry() {
     if (offlineRetryTimer !== null) { window.clearInterval(offlineRetryTimer); offlineRetryTimer = null; }
+  }
+
+  function applyDeepLink(d: { type: string; id: number }) {
+    if (d.type === 'profile') openProfilePanel(d.id);
+    else if (d.type === 'release') navigate(`/release/${d.id}`);
+    else if (d.type === 'collection') navigate(`/collection/${d.id}`);
   }
 
   async function checkAndShow() {
     if (!window.anixApi) return;
     try {
       await window.anixApi.client.checkConnection();
-      const { hasToken } = await window.anixApi.auth.getStatus();
+      await syncAuthStatus();
       clearRetry();
-      appScreen.set(hasToken ? 'main' : 'login');
+      // Без токена — гостевой режим (главная/каталог), не экран логина
+      appScreen.set('main');
     } catch { /* stay offline */ }
+  }
+
+  async function onLoginSuccess() {
+    await syncAuthStatus();
+    closeLoginPrompt();
+    notifyAuthChanged();
+  }
+
+  function dismissLoginPrompt() {
+    closeLoginPrompt();
+    if (pathRequiresAuth(path)) navigate('/');
   }
 
   onMount(() => {
@@ -175,8 +236,18 @@
       syncSearchParams();
       resetScrollAfterRouteChange();
     };
+    const onAnixNavigate = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      const to = typeof detail === 'string'
+        ? detail
+        : (detail && typeof detail === 'object' && 'to' in detail
+          ? String((detail as { to: unknown }).to ?? '')
+          : '');
+      syncSearchParams(to || undefined);
+    };
     window.addEventListener('hashchange', onNav);
     window.addEventListener('popstate', onNav);
+    window.addEventListener('anix:navigate', onAnixNavigate);
     initTabNavigation(getPath());
     syncSearchParams();
 
@@ -290,6 +361,19 @@
         _isPlayerOpen = false;
       }) as EventListener],
 
+      ['anix:deepLink', ((e: CustomEvent) => {
+        window.electron?.consumePendingDeepLink?.();
+        const d = e.detail as { type?: string; id?: number } | null;
+        const id = Number(d?.id);
+        if (!d?.type || !Number.isFinite(id) || id <= 0) return;
+        const payload = { type: d.type, id };
+        if (get(appScreen) !== 'main') {
+          pendingDeepLink = payload;
+          return;
+        }
+        applyDeepLink(payload);
+      }) as EventListener],
+
       ['anix:themeEditorSaved', ((e: CustomEvent) => {
         const { themeId } = e.detail ?? {};
         if (themeId) applyThemeById(themeId);
@@ -322,6 +406,19 @@
     ];
 
     handlers.forEach(([evt, fn]) => window.addEventListener(evt, fn));
+
+    // Deep link could arrive before listeners are attached (cold start).
+    const earlyDeepLink = window.electron?.consumePendingDeepLink?.();
+    if (earlyDeepLink) {
+      window.dispatchEvent(new CustomEvent('anix:deepLink', { detail: earlyDeepLink }));
+    }
+
+    const unsubAppScreen = appScreen.subscribe((screen) => {
+      if (screen !== 'main' || !pendingDeepLink) return;
+      const next = pendingDeepLink;
+      pendingDeepLink = null;
+      applyDeepLink(next);
+    });
 
     const unsubPlayerView = isPlayerWindowOpen.subscribe((open) => {
       if (!getCurrentRoomId()) return;
@@ -358,11 +455,11 @@
 
     window.addEventListener('keydown', handleZoomKeydown);
 
-    // Initial boot sequence
+    // Initial boot sequence — API доступен → main (гость или авторизован)
     window.anixApi.client.checkConnection()
       .then(async () => {
-        const { hasToken } = await window.anixApi.auth.getStatus();
-        window.setTimeout(() => appScreen.set(hasToken ? 'main' : 'login'), 500);
+        await syncAuthStatus();
+        window.setTimeout(() => appScreen.set('main'), 500);
       })
       .catch(() => {
         offlineRetryTimer = window.setInterval(checkAndShow, 7000);
@@ -371,9 +468,11 @@
     return () => {
       window.removeEventListener('hashchange', onNav);
       window.removeEventListener('popstate', onNav);
+      window.removeEventListener('anix:navigate', onAnixNavigate);
       handlers.forEach(([evt, fn]) => window.removeEventListener(evt, fn));
       window.removeEventListener('lobby:wsJoined', onWsJoined);
       window.removeEventListener('keydown', handleZoomKeydown);
+      unsubAppScreen();
       unsubPlayerView();
       clearRetry();
     };
@@ -384,7 +483,15 @@
   <OfflineScreen onRetry={checkAndShow} />
 
 {:else if $appScreen === 'login'}
-  <Login onSuccess={() => appScreen.set('main')} />
+  <!-- Нет anixApi (браузер без моста) -->
+  <Login
+    onSuccess={() => { void onLoginSuccess(); appScreen.set('main'); }}
+    allowGuest
+    onDismiss={() => appScreen.set('main')}
+  />
+  {#if $settingsModalOpen}
+    <SettingsModal onClose={() => settingsModalOpen.set(false)} />
+  {/if}
 
 {:else if isWatchRoute}
   <WebPlayerShell />
@@ -414,29 +521,29 @@
       {#key releaseMatch[1]}
         <Release id={parseInt(releaseMatch[1], 10)} />
       {/key}
-    {:else if profileListsMatch}
-      {#key profileListsMatch[1]}
-        <ProfileLists id={parseInt(profileListsMatch[1], 10)} />
+    {:else if profileListsId != null}
+      {#key profileListsId}
+        <Bookmarks id={profileListsId} />
       {/key}
-    {:else if profileCommentsMatch}
-      {#key profileCommentsMatch[1]}
-        <ProfileComments id={parseInt(profileCommentsMatch[1], 10)} />
+    {:else if profileCommentsId != null}
+      {#key profileCommentsId}
+        <ProfileComments id={profileCommentsId} />
       {/key}
-    {:else if profileVideosMatch}
-      {#key profileVideosMatch[1]}
-        <ProfileVideos id={parseInt(profileVideosMatch[1], 10)} />
+    {:else if profileVideosId != null}
+      {#key profileVideosId}
+        <ProfileVideos id={profileVideosId} />
       {/key}
-    {:else if profileVotesMatch}
-      {#key profileVotesMatch[1]}
-        <ProfileVotes id={parseInt(profileVotesMatch[1], 10)} />
+    {:else if profileVotesId != null}
+      {#key profileVotesId}
+        <Bookmarks id={profileVotesId} initialTab="votes" />
       {/key}
-    {:else if profileFriendsMatch}
-      {#key profileFriendsMatch[1]}
-        <ProfileFriends id={parseInt(profileFriendsMatch[1], 10)} />
+    {:else if profileFriendsId != null}
+      {#key profileFriendsId}
+        <ProfileFriends id={profileFriendsId} />
       {/key}
-    {:else if profileCollectionsMatch}
-      {#key profileCollectionsMatch[1]}
-        <ProfileCollections id={parseInt(profileCollectionsMatch[1], 10)} />
+    {:else if profileCollectionsId != null}
+      {#key profileCollectionsId}
+        <ProfileCollections id={profileCollectionsId} />
       {/key}
     {:else if isProfileMainRoute}
       {#key path}
@@ -471,17 +578,19 @@
     {:else if path === '/catalog'}
       <Catalog />
     {:else if path === '/bookmarks'}
-      <Bookmarks />
+      {#key bookmarksUserId ?? 'self'}
+        <Bookmarks id={bookmarksUserId} />
+      {/key}
     {:else if path === '/notifications'}
       <Notifications />
     {:else if path === '/profile/votes'}
-      <ProfileVotes />
+      <Bookmarks initialTab="votes" />
     {:else if path === '/profile/friends'}
       <ProfileFriends />
     {:else if path === '/profile/collections'}
       <ProfileCollections />
     {:else if path === '/profile/lists'}
-      <ProfileLists />
+      <Bookmarks listsOnly />
     {:else if path === '/profile/comments'}
       <ProfileComments />
     {:else if path === '/profile/videos'}
@@ -494,6 +603,8 @@
       <WrappedPage year={2026} />
     {:else if path === '/uikit'}
       <Uikit />
+    {:else if path === '/uikit-v2'}
+      <UikitV2 />
     {:else}
       <Home />
     {/if}
@@ -515,13 +626,14 @@
       onClose={() => watchModalOpen.set(false)}
     />
   {/if}
-  {#if $profileModalOpen && $profileModalUserId}
-    <UserProfileModal
-      userId={$profileModalUserId}
-      onClose={() => { profileModalOpen.set(false); profileModalUserId.set(null); }}
+  {#if $loginPromptOpen}
+    <Login
+      overlay
+      allowGuest
+      onSuccess={() => void onLoginSuccess()}
+      onDismiss={dismissLoginPrompt}
     />
   {/if}
-  <UserProfilePopout />
 {/if}
 
 <Toast />

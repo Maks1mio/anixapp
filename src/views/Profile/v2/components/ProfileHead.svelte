@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { openSettingsModal } from '../../../../stores/modals';
+  import { requireAuth } from '../../../../stores/auth';
   import { fmtDate, fmtLastSeen, isLottieBadgeUrl, posterUrl } from '../../_utils';
   import { fetchCdnJson, toCdnProxyUrl } from '../../../../utils/posterUrl';
   import { resolveFriendButtonState } from '../../../../utils/profile-friend';
@@ -67,6 +68,7 @@
   }
 
   async function onFriendClick() {
+    if (!isMyProfile && !requireAuth()) return;
     if (friendBusy || friendButton.disabled || friendButton.action === 'none') return;
     const profileId = Number(profile.id ?? 0);
     if (!profileId || !window.anixApi?.profile) return;

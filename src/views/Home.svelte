@@ -5,6 +5,7 @@
   import HomeTabRenameModal from '../components/HomeTabRenameModal.svelte';
   import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../stores/navigation';
+  import { requireAuth } from '../stores/auth';
   import Tabs, { type TabItem } from '../components/Tabs.svelte';
   import { iconHome, iconPencil, iconShuffle, iconSlidersHorizontal } from '../components/icons';
   import { openFloatingMenu } from '../components/dots-menu';
@@ -263,6 +264,7 @@
 
   function setActiveTab(tabId: HomeTabId) {
     if (tabId === activeTab) return;
+    if (tabId === 'my' && !requireAuth()) return;
     saveViewStateWithScroll(HOME_VIEW_KEY(activeTab), homeSnapshot());
     activeTab = tabId;
     void setSavedHomeActiveTab(tabId);
@@ -284,20 +286,24 @@
   }
 
   function openFilterModal() {
+    if (!requireAuth()) return;
     filterModalOpen = true;
   }
 
   function openDefaultTabModal() {
+    if (!requireAuth()) return;
     defaultTabModalOpen = true;
   }
 
   function openRenameTabModal() {
+    if (!requireAuth()) return;
     renameTabModalOpen = true;
   }
 
   function handleTabsSettingsClick(e: MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
+    if (!requireAuth()) return;
     const btn = tabsSettingsBtn;
     if (!btn) return;
     openFloatingMenu({
@@ -315,6 +321,7 @@
 
   function handleTabContextMenu(tab: TabItem, e: MouseEvent) {
     if (tab.id === 'my') {
+      if (!requireAuth()) return;
       openFloatingMenu({
         x: e.clientX,
         y: e.clientY,

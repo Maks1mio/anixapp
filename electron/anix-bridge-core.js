@@ -127,6 +127,16 @@ function createAnixBridgeCore(options = {}) {
       }
       return { success: false, code };
     },
+    'anix:loginVk': async () => ({
+      success: false,
+      error: 'oauth_electron_only',
+    }),
+    'anix:loginGoogle': async () => ({
+      success: false,
+      error: 'oauth_electron_only',
+    }),
+    'anix:oauthSubmitUrl': async () => ({ success: false, error: 'oauth_electron_only' }),
+    'anix:oauthCancel': async () => ({ ok: true }),
     'anix:logout': async (c) => {
       const { baseUrl } = c.loadConfig();
       c.saveConfig({
@@ -333,14 +343,37 @@ function createAnixBridgeCore(options = {}) {
       c.getClient().endpoints.release.unmarkEpisodeAsWatched(releaseId, sourceId, episodePosition)),
     'anix:relatedReleases': h((c, relatedId, page = 0) =>
       c.getClient().endpoints.release.getRelatedReleases(relatedId, page)),
-    'anix:votedReleases': h((c, profileId, page = 0) =>
-      c.getClient().endpoints.profile.getVotedReleases(profileId, page)),
+    'anix:votedReleases': h(async (c, profileId, page = 0, sort = 1) => {
+      try {
+        const sortValue = Number(sort);
+        const safeSort = Number.isFinite(sortValue) && sortValue > 0 ? sortValue : 1;
+        return await c.getClient().endpoints.profileReleaseVote.allReleaseVoted(
+          profileId,
+          page,
+          { sort: safeSort },
+        );
+      } catch (err) {
+        const msg = String(err?.message || err || '');
+        if (msg.includes('empty response')) {
+          return { content: [], last: true, total_count: 0, code: 0 };
+        }
+        throw err;
+      }
+    }),
+    'anix:profileSocial': h((c, profileId) =>
+      c.getClient().endpoints.profile.getSocialPages(profileId)),
     'anix:friends': h((c, profileId, page = 0) =>
       c.getClient().endpoints.profile.getFriends({ id: profileId, page })),
     'anix:friendRequestSend': h((c, profileId) =>
       c.getClient().endpoints.profile.sendFriendRequest(profileId)),
     'anix:friendRequestRemove': h((c, profileId) =>
       c.getClient().endpoints.profile.removeFriendRequest(profileId)),
+    'anix:friendRequestHide': h((c, profileId) =>
+      c.getClient().endpoints.profile.hideFriendRequest(profileId)),
+    'anix:friendRequestsIn': h((c, page = 0) =>
+      c.getClient().endpoints.profile.getFriendRequestsIn(page)),
+    'anix:friendRequestsOut': h((c, page = 0) =>
+      c.getClient().endpoints.profile.getFriendRequestsOut(page)),
     'anix:friendRecommendations': h((c) =>
       c.getClient().endpoints.profile.getFriendRecommendations()),
     'anix:profileReleaseComments': h((c, profileId, page = 0, sort = 1) =>
@@ -362,6 +395,8 @@ function createAnixBridgeCore(options = {}) {
       c.getClient().endpoints.settings.setPrivacyFriendRequests(state)),
     'anix:getLoginInfo': h((c) => c.getClient().endpoints.settings.getLoginInfo()),
     'anix:changeLogin': h((c, newLogin) => c.getClient().endpoints.settings.changeLogin(newLogin)),
+    'anix:loginHistory': h((c, profileId, page = 0) =>
+      c.getClient().endpoints.profile.changeLoginHistory(profileId, page)),
     'anix:searchReleases': h((c, query, page = 0, searchBy = 0) =>
       c.getClient().endpoints.search.releases(query, page, searchBy)),
     'anix:searchProfiles': h((c, query, page = 0) => c.getClient().endpoints.search.profiles(query, page)),

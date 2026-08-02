@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { requireAuth } from '../../../stores/auth';
   import { resolveCdnAssetUrl } from '../../../utils/posterUrl';
   import { iconStar } from '../../../components/icons';
 
@@ -66,6 +67,7 @@
   });
 
   async function submitVote(stars: number) {
+    if (!requireAuth()) return;
     if (!window.anixApi || busy || stars < 1 || stars > 5) return;
     busy = true;
     try {
@@ -80,6 +82,7 @@
   }
 
   async function startChangeVote() {
+    if (!requireAuth()) return;
     if (!window.anixApi || busy || !hasYourVote) return;
     busy = true;
     try {

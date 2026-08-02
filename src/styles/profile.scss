@@ -661,27 +661,89 @@
   margin: 0 auto;
 }
 
-// ——— Line chart (watch dynamics) ———
+// ——— Watch dynamics chart ———
+.profile__chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.profile__chart-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.profile__chart-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, $color-bg 55%, transparent);
+}
+
+.profile__chart-stat-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: $color-text;
+  letter-spacing: -0.02em;
+}
+
+.profile__chart-stat-label {
+  font-size: 0.68rem;
+  color: $color-text-muted;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .profile__chart-wrap {
   position: relative;
   width: 100%;
-  border-radius: $radius-md;
+  border-radius: 8px;
   overflow: hidden;
-  background: $color-surface;
-  border: 1px solid $color-border;
+  background: color-mix(in srgb, $color-bg 70%, $color-surface);
+  border: 1px solid color-mix(in srgb, $color-border 80%, transparent);
 }
 
 .profile__chart-svg {
   display: block;
   width: 100%;
   height: auto;
-  min-height: 80px;
+  min-height: 140px;
+}
+
+.profile__chart-grid {
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.profile__chart-bar {
+  fill: color-mix(in srgb, $color-accent 28%, transparent);
+  pointer-events: none;
+  transition: fill 0.12s ease;
+
+  &--empty {
+    fill: rgba(255, 255, 255, 0.03);
+  }
+
+  &--active {
+    fill: color-mix(in srgb, $color-accent 55%, transparent);
+  }
+}
+
+.profile__chart-area {
+  pointer-events: none;
 }
 
 .profile__chart-line {
   fill: none;
   stroke: $color-accent;
-  stroke-width: 2;
+  stroke-width: 2.25;
   stroke-linejoin: round;
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
@@ -689,23 +751,47 @@
 
 .profile__chart-label {
   fill: $color-text-muted;
-  font-size: 8px;
+  font-size: 14px;
   font-family: inherit;
+  font-weight: 500;
+
+  &--y {
+    font-size: 14px;
+  }
+
+  &--x {
+    font-size: 13px;
+  }
+
+  &--active {
+    fill: $color-text;
+    font-weight: 700;
+  }
 }
 
 .profile__chart-dot {
-  fill: $color-accent;
+  fill: $color-text;
   pointer-events: none;
-  opacity: 0.7;
-  transition: opacity 0.15s;
-  vector-effect: non-scaling-stroke;
+
+  &--active {
+    fill: $color-text;
+  }
+}
+
+.profile__chart-dot-ring {
+  fill: none;
+  stroke: $color-accent;
+  stroke-width: 2;
+  pointer-events: none;
+  opacity: 0.9;
 }
 
 .profile__chart-hover-line {
-  stroke: color-mix(in srgb, var(--color-accent) 75%, #fff 25%);
-  stroke-width: 1.2;
-  stroke-dasharray: 3 3;
+  stroke: color-mix(in srgb, $color-accent 70%, $color-text);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
   vector-effect: non-scaling-stroke;
+  opacity: 0.85;
 }
 
 .profile__chart-overlay {
@@ -716,16 +802,33 @@
 .profile__chart-tooltip {
   position: fixed;
   pointer-events: none;
-  padding: 0.25rem 0.6rem;
-  background: $color-surface;
-  border: 1px solid $color-border;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.4rem 0.65rem;
+  background: color-mix(in srgb, $color-surface 92%, #000);
+  border: 1px solid color-mix(in srgb, $color-border 90%, transparent);
   color: $color-text;
   font-size: 0.72rem;
   font-weight: 500;
-  border-radius: $radius-sm;
+  border-radius: 8px;
   white-space: nowrap;
   z-index: 99999;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+
+  strong {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: $color-text;
+    margin-right: 0.2rem;
+  }
+
+  span {
+    display: block;
+    color: $color-text-muted;
+    font-size: 0.68rem;
+    font-weight: 500;
+  }
 }
 
 // ——— Horizontal scroll (votes, history) ———

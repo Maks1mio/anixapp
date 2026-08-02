@@ -31,6 +31,9 @@ export default defineConfig({
     },
   },
   server: {
+    // IPv4 явно: на Windows Vite иначе слушает только [::1], а wait-on/Electron
+    // ходят на 127.0.0.1 → ECONNREFUSED, и electron:dev зависает без окна.
+    host: '127.0.0.1',
     port: 5173,
     strictPort: true,
   },

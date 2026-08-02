@@ -108,7 +108,7 @@
           title="Оценки релизов"
           items={(profile.votes as unknown[]).slice(0, 6)}
           type="vote"
-          onViewAll={() => navigate(`/profile/${profile!.id}/votes`)}
+          onViewAll={() => navigate(`/profile/${profile!.id}/lists?tab=votes`)}
         />
       {/if}
 

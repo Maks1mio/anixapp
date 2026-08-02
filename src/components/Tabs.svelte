@@ -7,6 +7,8 @@
     id: string;
     label: string;
     badge?: number | string;
+    /** Вертикальный разделитель перед вкладкой */
+    dividerBefore?: boolean;
   }
 
   interface Props {
@@ -119,6 +121,9 @@
   >
     <div class="bookmarks__tabs-scroll" bind:this={scrollEl}>
       {#each tabs as tab (tab.id)}
+        {#if tab.dividerBefore}
+          <span class="bookmarks__tabs-divider" aria-hidden="true"></span>
+        {/if}
         <button
           type="button"
           class="bookmarks__tab{tab.id === activeId ? ' bookmarks__tab--active' : ''}"

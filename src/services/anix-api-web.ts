@@ -34,6 +34,10 @@ function buildWebAnixApi(): AnixApi {
 
     auth: {
       signIn: (username, password) => invoke('anix:login', username, password),
+      signInWithVk: () => invoke('anix:loginVk'),
+      signInWithGoogle: () => invoke('anix:loginGoogle'),
+      submitOAuthUrl: (url: string) => invoke('anix:oauthSubmitUrl', url),
+      cancelOAuth: () => invoke('anix:oauthCancel'),
       logout: () => invoke('anix:logout'),
       getStatus: () => invoke('anix:getAuthStatus'),
     },
@@ -41,13 +45,19 @@ function buildWebAnixApi(): AnixApi {
     profile: {
       self: () => invoke('anix:selfProfile'),
       info: (id) => invoke('anix:profileById', id),
+      getSocialPages: (profileId) => invoke('anix:profileSocial', profileId),
+      getLoginHistory: (profileId, page = 0) => invoke('anix:loginHistory', profileId, page),
       getFriends: (profileId, page = 0) => invoke('anix:friends', profileId, page),
       sendFriendRequest: (profileId) => invoke('anix:friendRequestSend', profileId),
       removeFriendRequest: (profileId) => invoke('anix:friendRequestRemove', profileId),
+      hideFriendRequest: (profileId) => invoke('anix:friendRequestHide', profileId),
+      getFriendRequestsIn: (page = 0) => invoke('anix:friendRequestsIn', page),
+      getFriendRequestsOut: (page = 0) => invoke('anix:friendRequestsOut', page),
       getFriendRecommendations: () => invoke('anix:friendRecommendations'),
       getBookmarks: (profileId, type, page = 0, sort = 1, filterAnnounce = 0, filter = 0) =>
         invoke('anix:getBookmarks', profileId, type, page, sort, filterAnnounce, filter),
-      getVotedReleases: (profileId, page = 0) => invoke('anix:votedReleases', profileId, page),
+      getVotedReleases: (profileId, page = 0, sort = 1) =>
+        invoke('anix:votedReleases', profileId, page, sort),
       getReleaseComments: (profileId, page = 0, sort = 1) =>
         invoke('anix:profileReleaseComments', profileId, page, sort),
       getCollectionComments: (profileId, page = 0, sort = 1) =>

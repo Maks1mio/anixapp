@@ -1,4 +1,5 @@
 import { navigate } from '../stores/navigation';
+import { requireAuth } from '../stores/auth';
 import { iconCheck, iconFlag, iconInfo, iconStar } from './icons';
 import { renderDotsMenu, type DotsMenuEntry } from './dots-menu';
 import type { ReleaseCardData } from '../types/release';
@@ -221,6 +222,7 @@ export function renderReleaseCardHorizontal(data: ReleaseCardData): HTMLElement 
     const menuWrap = renderDotsMenu({
       entries: menuEntries,
       onSelect(entryId) {
+        if (!requireAuth()) return;
         const api = window.anixApi;
         if (!id || !api) return;
 

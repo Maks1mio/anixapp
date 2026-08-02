@@ -1,4 +1,6 @@
 import { get, writable } from 'svelte/store';
+import { requireAuth } from './auth';
+import { openProfilePanel, closeProfilePanel } from './profile-panel';
 
 export interface LobbyCurrentPlayback {
   releaseId: string;
@@ -66,6 +68,7 @@ export function clearWatchModalState(releaseId?: number): void {
 }
 
 export function openLobbyModal(roomCode?: string): void {
+  if (!requireAuth()) return;
   lobbyModalInitialCode.set(roomCode ?? null);
   lobbyModalOpen.set(true);
 }
@@ -93,14 +96,11 @@ export function closeWatchModal(): void {
 export const profileModalOpen = writable(false);
 export const profileModalUserId = writable<number | null>(null);
 
+/** @deprecated Используйте openProfilePanel — профиль открывается справа */
 export function openProfileModal(userId?: number): void {
-  const id = userId ?? Number((window as { __anixProfile?: { id?: number } }).__anixProfile?.id ?? 0);
-  if (!id) return;
-  profileModalUserId.set(id);
-  profileModalOpen.set(true);
+  openProfilePanel(userId);
 }
 
 export function closeProfileModal(): void {
-  profileModalOpen.set(false);
-  profileModalUserId.set(null);
+  closeProfilePanel();
 }

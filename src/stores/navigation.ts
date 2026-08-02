@@ -14,9 +14,8 @@ export const currentPath = writable<string>(getPath());
 export function navigate(path: string, _state?: unknown): void {
   window.dispatchEvent(new CustomEvent('anix:beforeNavigate', { detail: { to: path } }));
   captureActiveScroll();
-  // Emit for logger before changing location
-  window.dispatchEvent(new CustomEvent('anix:navigate', { detail: path }));
 
+  // Сначала меняем URL, потом anix:navigate — слушатели читают актуальный location
   if (window.location.protocol === 'file:') {
     const hash = path && path !== '/' ? (path.startsWith('#') ? path : '#' + path) : '#/';
     recordTabNavigation(path);
@@ -27,10 +26,12 @@ export function navigate(path: string, _state?: unknown): void {
       currentPath.set(getPath());
       resetScrollAfterRouteChange();
     }
+    window.dispatchEvent(new CustomEvent('anix:navigate', { detail: path }));
     return;
   }
   window.history.pushState(_state ?? null, '', path);
   recordTabNavigation(path);
+  window.dispatchEvent(new CustomEvent('anix:navigate', { detail: path }));
   currentPath.set(getPath());
   resetScrollAfterRouteChange();
 }

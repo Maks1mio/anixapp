@@ -146,7 +146,6 @@
             {coverUrl}
             {isMyProfile}
             {selfProfileId}
-            variant="sidebar"
             onOpenSocial={openSocial}
           />
         {/snippet}
@@ -176,7 +175,6 @@
             {coverUrl}
             {isMyProfile}
             {selfProfileId}
-            variant="sidebar"
             onOpenSocial={openSocial}
           />
         {/snippet}

@@ -172,10 +172,22 @@ function buildCdnAssetUrl(base: string, value: string | undefined): string {
   return toCdnProxyUrl(`${base}/${id}`);
 }
 
-/** Fetch JSON from Anixart CDN (badges Lottie) via Electron proxy — avoids CORS in dev. */
+/** Fetch JSON from Anixart CDN (badges Lottie). Electron: IPC (fetch не умеет anix-cdn://). */
 export async function fetchCdnJson(url: string): Promise<unknown | null> {
-  const proxy = toCdnProxyUrl(url.trim());
-  if (!proxy) return null;
+  const httpsUrl = unwrapCdnUrl(url.trim());
+  if (!httpsUrl) return null;
+
+  const electronFetch = typeof window !== 'undefined' ? window.electron?.fetchCdnJson : undefined;
+  if (electronFetch) {
+    try {
+      return await electronFetch(httpsUrl);
+    } catch {
+      return null;
+    }
+  }
+
+  const proxy = toCdnProxyUrl(httpsUrl);
+  if (!proxy || proxy.startsWith('anix-cdn://')) return null;
   try {
     const res = await fetch(proxy, { cache: 'force-cache' });
     if (!res.ok) return null;

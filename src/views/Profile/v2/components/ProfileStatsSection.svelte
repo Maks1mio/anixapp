@@ -1,21 +1,78 @@
 <script lang="ts">
   import { navigate } from '../../../../stores/navigation';
-  import { fmtTime } from '../../_utils';
+  import { fmtWatchedTime } from '../../_utils';
+  import { profileShowcaseBackground } from '../../../../utils/profile-showcase-theme';
+  import { toCdnProxyUrl } from '../../../../utils/posterUrl';
 
   interface Props {
     profile: Record<string, unknown>;
     profileId: number;
     isMyProfile: boolean;
+    /** Показать ссылку «Узнать подробнее» (в панели профиля). */
+    showMoreLink?: boolean;
+    /** Число оценок (из preview API). Если не передано — подгрузится. */
+    votesCount?: number;
+    /** Без фонового showcase — нейтральная карточка панели */
+    plain?: boolean;
   }
 
-  let { profile, profileId, isMyProfile }: Props = $props();
+  let {
+    profile,
+    profileId,
+    isMyProfile,
+    showMoreLink = false,
+    votesCount,
+    plain = false,
+  }: Props = $props();
 
-  const statsItems = $derived([
-    { label: 'Смотрю', value: Number(profile.watching_count ?? 0), color: '#22c55e', status: 1 },
-    { label: 'В планах', value: Number(profile.plan_count ?? 0), color: '#a855f7', status: 2 },
-    { label: 'Просмотрено', value: Number(profile.completed_count ?? 0), color: '#3b82f6', status: 3 },
-    { label: 'Отложено', value: Number(profile.hold_on_count ?? 0), color: '#f59e0b', status: 4 },
-    { label: 'Брошено', value: Number(profile.dropped_count ?? 0), color: '#ef4444', status: 5 },
+  type ListTab = 'votes' | 'watching' | 'planned' | 'completed' | 'on_hold' | 'dropped';
+
+  let loadedVotesCount = $state(0);
+
+  $effect(() => {
+    if (votesCount != null) {
+      loadedVotesCount = votesCount;
+      return;
+    }
+    if (!window.anixApi?.profile?.getVotedReleases || !profileId) {
+      loadedVotesCount = 0;
+      return;
+    }
+    let cancelled = false;
+    void window.anixApi.profile
+      .getVotedReleases(profileId, 0, 1)
+      .then((data: { content?: unknown[]; total_count?: number }) => {
+        if (cancelled) return;
+        loadedVotesCount = Number(data?.total_count ?? data?.content?.length ?? 0);
+      })
+      .catch(() => {
+        if (!cancelled) loadedVotesCount = 0;
+      });
+    return () => {
+      cancelled = true;
+    };
+  });
+
+  const showcaseBg = $derived(
+    plain
+      ? null
+      : profileShowcaseBackground(profile, {
+          backgroundUrlProxy: (url) => toCdnProxyUrl(url),
+        }),
+  );
+  const showcaseStyle = $derived(showcaseBg ? `background:${showcaseBg}` : undefined);
+
+  const statusItems = $derived([
+    { label: 'Смотрю', value: Number(profile.watching_count ?? 0), color: '#22c55e', tab: 'watching' as ListTab },
+    { label: 'В планах', value: Number(profile.plan_count ?? 0), color: '#a855f7', tab: 'planned' as ListTab },
+    { label: 'Просмотрено', value: Number(profile.completed_count ?? 0), color: '#3b82f6', tab: 'completed' as ListTab },
+    { label: 'Отложено', value: Number(profile.hold_on_count ?? 0), color: '#f59e0b', tab: 'on_hold' as ListTab },
+    { label: 'Брошено', value: Number(profile.dropped_count ?? 0), color: '#ef4444', tab: 'dropped' as ListTab },
+  ]);
+
+  const listItems = $derived([
+    { label: 'Оценки', value: loadedVotesCount, color: '#eab308', tab: 'votes' as ListTab },
+    ...statusItems,
   ]);
 
   const preferredBlocks = $derived.by(() => {
@@ -37,7 +94,8 @@
   });
 
   function buildDonutChart(items: { value: number; color: string }[]): string {
-    const r = 34, cx = 40, cy = 40, c = 2 * Math.PI * r;
+    // Плотное кольцо к центру — как в Anixart
+    const r = 22, cx = 40, cy = 40, stroke = 28, c = 2 * Math.PI * r;
     const total = items.reduce((s, i) => s + i.value, 0);
     if (!total) return '';
     let acc = 0;
@@ -45,68 +103,96 @@
       .filter((s) => s.value > 0)
       .map((s) => {
         const dash = (s.value / total) * c;
-        const seg = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.color}" stroke-width="10"
+        const seg = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.color}" stroke-width="${stroke}"
           stroke-dasharray="${dash.toFixed(2)} ${(c - dash).toFixed(2)}"
           stroke-dashoffset="${(-acc).toFixed(2)}"
           transform="rotate(-90 ${cx} ${cy})"></circle>`;
         acc += dash;
         return seg;
       }).join('');
-    return `<svg width="160" height="160" viewBox="0 0 80 80" class="profile-v2__donut" aria-hidden="true">
-      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#2a2a2a" stroke-width="10"></circle>
+    return `<svg width="148" height="148" viewBox="0 0 80 80" class="profile-v2__donut" aria-hidden="true">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="${stroke}"></circle>
       ${segs}
-      <text x="${cx}" y="${cy - 1}" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="700" fill="#9ca3af">${total}</text>
-      <text x="${cx}" y="${cy + 10}" text-anchor="middle" dominant-baseline="middle" font-size="6.5" font-weight="600" fill="#6b7280">аниме</text>
     </svg>`;
   }
 
-  const watchTimeLabel = $derived(
-    profile.watched_time ? fmtTime(Number(profile.watched_time)) : '',
-  );
+  // API: watched_time в минутах (35524 → «24 дня 16 часов»)
+  const watchTimeLabel = $derived.by(() => {
+    const min = Number(profile.watched_time ?? 0);
+    if (!min) return '';
+    return fmtWatchedTime(min);
+  });
 
-  function openList(status: number) {
-    if (isMyProfile) {
-      navigate(`/bookmarks`);
-      return;
-    }
-    navigate(`/profile/${profileId}/lists?status=${status}`);
+  const episodesLabel = $derived.by(() => {
+    const n = Number(profile.watched_episode_count ?? 0);
+    if (!n) return '';
+    return n.toLocaleString('ru-RU');
+  });
+
+  function bookmarksPath(tab: ListTab): string {
+    if (isMyProfile) return `/bookmarks?tab=${tab}`;
+    return `/bookmarks?tab=${tab}&user=${profileId}`;
+  }
+
+  function openList(tab: ListTab) {
+    navigate(bookmarksPath(tab));
+  }
+
+  function openFullStats() {
+    navigate(bookmarksPath('votes'));
   }
 </script>
 
-<div class="profile-v2__stats">
+<div
+  class="profile-v2__stats"
+  class:profile-v2__stats--themed={!!showcaseBg}
+  style={showcaseStyle}
+>
   <div class="profile-v2__stats-main">
     <div class="profile-v2__stats-list">
-      {#each statsItems as s}
+      {#each listItems as s}
         <button
           type="button"
           class="profile-v2__stat-row profile-v2__stat-row--btn"
           disabled={s.value <= 0}
-          onclick={() => openList(s.status)}
+          onclick={() => openList(s.tab)}
         >
           <span class="profile-v2__stat-dot" style="background:{s.color}"></span>
-          <span class="profile-v2__stat-label">{s.label}</span>
-          <span class="profile-v2__stat-value">{s.value}</span>
+          <span class="profile-v2__stat-inline">
+            <span class="profile-v2__stat-label">{s.label}</span>
+            <span class="profile-v2__stat-value">{s.value.toLocaleString('ru-RU')}</span>
+          </span>
         </button>
-      {/each}
-
-      {#each preferredBlocks as block}
-        <p class="profile-v2__pref-line"><span>{block.label}:</span> {block.text}</p>
       {/each}
     </div>
 
     <div class="profile-v2__stats-chart">
-      {@html buildDonutChart(statsItems)}
+      {@html buildDonutChart(statusItems)}
     </div>
   </div>
 
-  {#if profile.watched_episode_count || watchTimeLabel}
+  {#if preferredBlocks.length}
+    <div class="profile-v2__prefs">
+      {#each preferredBlocks as block}
+        <p class="profile-v2__pref-line"><span>{block.label}:</span> {block.text}</p>
+      {/each}
+    </div>
+  {/if}
+
+  {#if episodesLabel || watchTimeLabel}
     <div class="profile-v2__stats-totals">
-      {#if profile.watched_episode_count}
-        <p>Просмотрено серий: <strong>{profile.watched_episode_count}</strong></p>
+      {#if episodesLabel}
+        <p><span class="profile-v2__stats-totals-label">Просмотрено серий:</span> <strong>{episodesLabel}</strong></p>
       {/if}
       {#if watchTimeLabel}
-        <p>Время просмотра: <strong>~ {watchTimeLabel}</strong></p>
+        <p><span class="profile-v2__stats-totals-label">Время просмотра:</span> <strong>~ {watchTimeLabel}</strong></p>
       {/if}
     </div>
+  {/if}
+
+  {#if showMoreLink}
+    <button type="button" class="profile-v2__stats-more" onclick={openFullStats}>
+      Узнать подробнее
+    </button>
   {/if}
 </div>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { navigate } from '../../stores/navigation';
+  import { requireAuth } from '../../stores/auth';
   import { iconLayoutGrid } from '../icons';
   import { clearCollectionEditorDraft } from '../../utils/collection';
 
@@ -12,6 +13,7 @@
   let { onCreate, showMyCollections = true }: Props = $props();
 
   function handleCreate() {
+    if (!requireAuth()) return;
     if (onCreate) onCreate();
     else {
       clearCollectionEditorDraft();
@@ -20,6 +22,7 @@
   }
 
   function handleMy() {
+    if (!requireAuth()) return;
     navigate('/collections/my');
   }
 </script>

@@ -188,11 +188,11 @@
       ]);
       statusValue  = settings.status ?? '';
       socialValues = {
-        vk_page:      (social as any).vk_page      ?? '',
-        tg_page:      (social as any).tg_page      ?? '',
-        inst_page:    (social as any).inst_page    ?? '',
-        tt_page:      (social as any).tt_page      ?? '',
-        discord_page: (social as any).discord_page ?? '',
+        vk_page:      (social as any).vk_page      ?? (social as any).vkPage      ?? '',
+        tg_page:      (social as any).tg_page      ?? (social as any).tgPage      ?? '',
+        inst_page:    (social as any).inst_page    ?? (social as any).instPage    ?? '',
+        tt_page:      (social as any).tt_page      ?? (social as any).ttPage      ?? '',
+        discord_page: (social as any).discord_page ?? (social as any).discordPage ?? '',
       };
       loginInfo  = loginInfoRes;
       loginValue = loginInfoRes.login ?? '';

@@ -21,11 +21,13 @@
 @use 'user-avatar';
 @use 'search';
 @use 'profile-ui';
-@use 'user-profile-popout';
+@use 'profile-panel';
 @use 'user-profile-modal';
 @use 'watch-modal';
 @use 'watch';
 @use 'uikit';
+@use 'uikit-v2';
+
 @use 'comments';
 @use 'overview';
 @use 'discover-pages';
@@ -46,6 +48,7 @@ html {
   -webkit-font-smoothing: antialiased;
   height: 100%;
   overflow: hidden;
+  transform: translate3d(0%, 0px, 0px);
 }
 
 body {

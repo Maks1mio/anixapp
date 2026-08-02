@@ -4,6 +4,7 @@ export type ProfileLayout = 'classic' | 'v2';
 export type BookmarksTabId =
   | 'collections'
   | 'history'
+  | 'votes'
   | 'favorites'
   | 'watching'
   | 'planned'
@@ -16,14 +17,15 @@ const PROFILE_LAYOUT_KEY = 'anixapp.profileLayout';
 const BOOKMARKS_DEFAULT_TAB_KEY = 'anixapp.bookmarksDefaultTab';
 
 const BOOKMARKS_TAB_IDS: readonly BookmarksTabId[] = [
-  'collections',
-  'history',
-  'favorites',
   'watching',
   'planned',
   'completed',
   'on_hold',
   'dropped',
+  'collections',
+  'history',
+  'votes',
+  'favorites',
 ];
 
 export const DEFAULT_BOOKMARKS_TAB: BookmarksTabId = 'collections';

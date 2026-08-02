@@ -133,6 +133,15 @@ async function fetchCdnAsset(url) {
   return entry;
 }
 
+/** JSON с CDN (Lottie-бейджи) — для IPC, без renderer fetch(anix-cdn://). */
+async function fetchCdnJson(url) {
+  if (!isAnixartCdnUrl(url)) {
+    throw new Error('Forbidden CDN host');
+  }
+  const asset = await fetchCdnAsset(url);
+  return JSON.parse(asset.buffer.toString('utf8'));
+}
+
 function registerCdnScheme() {
   protocol.registerSchemesAsPrivileged([
     {
@@ -143,6 +152,7 @@ function registerCdnScheme() {
         supportFetchAPI: true,
         corsEnabled: true,
         stream: true,
+        bypassCSP: true,
       },
     },
   ]);
@@ -187,6 +197,7 @@ function setupCdnProtocol(logger) {
 module.exports = {
   registerCdnScheme,
   setupCdnProtocol,
+  fetchCdnJson,
   isAnixartCdnUrl,
   ANIXART_CDN_HOSTS,
   ANIXART_SITE_ORIGIN,

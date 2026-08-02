@@ -13,6 +13,10 @@ export interface AnixApi {
 
   auth: {
     signIn: (username: string, password: string) => Promise<{ success: boolean; code?: number }>;
+    signInWithVk: () => Promise<{ success: boolean; code?: number; cancelled?: boolean; error?: string }>;
+    signInWithGoogle: () => Promise<{ success: boolean; code?: number; cancelled?: boolean; error?: string }>;
+    submitOAuthUrl: (url: string) => Promise<{ success: boolean; code?: number; error?: string }>;
+    cancelOAuth: () => Promise<{ ok: boolean }>;
     logout: () => Promise<void>;
     getStatus: () => Promise<{ hasToken: boolean }>;
   };
@@ -20,12 +24,32 @@ export interface AnixApi {
   profile: {
     self: () => Promise<any>;
     info: (id: number) => Promise<{ profile?: unknown; is_my_profile?: boolean }>;
+    getSocialPages: (profileId: number) => Promise<{
+      code?: number;
+      vk_page?: string;
+      tg_page?: string;
+      inst_page?: string;
+      tt_page?: string;
+      discord_page?: string;
+    }>;
+    getLoginHistory: (profileId: number, page?: number) => Promise<{
+      code?: number;
+      content?: Array<{
+        id?: number;
+        newLogin?: string;
+        new_login?: string;
+        timestamp?: number;
+      }>;
+    }>;
     getFriends: (profileId: number, page?: number) => Promise<any>;
     sendFriendRequest: (profileId: number) => Promise<{ friend_status?: number | null; code?: number }>;
     removeFriendRequest: (profileId: number) => Promise<{ friend_status?: number | null; code?: number }>;
+    hideFriendRequest: (profileId: number) => Promise<{ code?: number }>;
+    getFriendRequestsIn: (page?: number) => Promise<{ content?: unknown[]; total_count?: number }>;
+    getFriendRequestsOut: (page?: number) => Promise<{ content?: unknown[]; total_count?: number }>;
     getFriendRecommendations: () => Promise<{ content?: unknown[] }>;
     getBookmarks: (profileId: number, type: number, page?: number, sort?: number, filterAnnounce?: number, filter?: number) => Promise<any>;
-    getVotedReleases: (profileId: number, page?: number) => Promise<any>;
+    getVotedReleases: (profileId: number, page?: number, sort?: number) => Promise<any>;
     getReleaseComments: (profileId: number, page?: number, sort?: number) => Promise<{ content?: Record<string, unknown>[] }>;
     getCollectionComments: (profileId: number, page?: number, sort?: number) => Promise<{ content?: Record<string, unknown>[] }>;
     getArticleComments: (profileId: number, page?: number, sort?: number) => Promise<{ content?: Record<string, unknown>[] }>;

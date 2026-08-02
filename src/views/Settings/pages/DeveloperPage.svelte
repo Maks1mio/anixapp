@@ -3,6 +3,7 @@
   import DeveloperAnixbackSection from './DeveloperAnixbackSection.svelte';
   import LogsPage from './LogsPage.svelte';
   import UiKitPage from './UiKitPage.svelte';
+  import UiKitV2Page from './UiKitV2Page.svelte';
 </script>
 
 <div class="settings-modal-content developer-settings">
@@ -17,5 +18,10 @@
   <section class="developer-settings__block">
     <p class="settings-section__label">UI Kit</p>
     <UiKitPage />
+  </section>
+
+  <section class="developer-settings__block">
+    <p class="settings-section__label">UI Kit V2</p>
+    <UiKitV2Page />
   </section>
 </div>

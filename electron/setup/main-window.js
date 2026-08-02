@@ -4,6 +4,7 @@ const path = require('path');
 const { BrowserWindow } = require('electron');
 const state = require('../lib/app-state');
 const logger = require('../logger');
+const { flushPendingDeepLink } = require('../lib/deep-link');
 
 function createMainWindow(deps) {
   const { isDev, getIconPath, applyUiZoom, config, electronDir } = deps;
@@ -32,7 +33,7 @@ function createMainWindow(deps) {
   logger.info('main', 'window created');
 
   if (isDev) {
-    state.mainWindow.loadURL('http://localhost:5173');
+    state.mainWindow.loadURL('http://127.0.0.1:5173');
     if (process.env.ELECTRON_DEVTOOLS === '1') {
       state.mainWindow.webContents.openDevTools({ mode: 'detach' });
     }
@@ -44,6 +45,10 @@ function createMainWindow(deps) {
     logger.info('main', 'window ready-to-show');
     applyUiZoom(config.getUiZoom());
     state.mainWindow.show();
+    flushPendingDeepLink();
+  });
+  state.mainWindow.webContents.once('did-finish-load', () => {
+    flushPendingDeepLink();
   });
   state.mainWindow.on('close', (e) => {
     if (!state.isQuitting) {

@@ -4,6 +4,12 @@ const { ipcMain } = require('electron');
 const { DefaultResult } = require('anixapi');
 const config = require('../lib/config-store');
 const state = require('../lib/app-state');
+const {
+  getVkAccessToken,
+  getGoogleFirebaseIdToken,
+  extractTokenFromPastedUrl,
+  cancelPending,
+} = require('../lib/oauth-login');
 
 function register(deps) {
   const {
@@ -14,7 +20,121 @@ function register(deps) {
     resetAnixart,
     appendLog,
     logger,
+    isDev,
   } = deps;
+
+
+  function applyLoginSuccess(profile, profileToken, baseUrl) {
+    config.saveConfig({
+      token: profileToken.token,
+      profileId: profile?.id ?? null,
+      profileLogin: profile?.login ?? null,
+      profileAvatar: profile?.avatar ?? null,
+      profileRaw: profile || null,
+    });
+    state.anixart = createAnixClient({ baseUrl, token: profileToken.token });
+  }
+
+  async function finishOAuthLogin(provider, apiCall) {
+    const { baseUrl } = config.loadConfig();
+    const loginClient = createAnixClient({ baseUrl });
+    const res = await apiCall(loginClient);
+    const code = res?.code;
+    const profile = res?.profile;
+    const profileToken = res?.profileToken;
+    logger.info('auth', `${provider} login attempt`, {
+      code,
+      profileId: profile?.id,
+      login: profile?.login,
+    });
+    if (code === DefaultResult.Ok && profileToken?.token) {
+      applyLoginSuccess(profile, profileToken, baseUrl);
+      logger.info('auth', `${provider} login success`, {
+        profileId: profile?.id,
+        login: profile?.login,
+      });
+      return { success: true };
+    }
+    logger.warn('auth', `${provider} login failed`, { code });
+    return { success: false, code };
+  }
+
+  const ANIX_UA =
+    'AnixartApp/9.0 BETA 7-25082901 (Android 9; SDK 28; x86_64; ROG ASUS AI2201_B; ru)';
+
+  /** Прямой POST /auth/vk — обходим возможные нюансы URLSearchParams. */
+  async function signInWithVkRaw(baseUrl, vkAccessToken, fieldName = 'vkAccessToken') {
+    const url = new URL('auth/vk', baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
+    const body = `${fieldName}=${encodeURIComponent(vkAccessToken)}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': ANIX_UA,
+        Accept: 'application/json',
+      },
+      body,
+    });
+    const text = await res.text();
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { code: -1, raw: text.slice(0, 300) };
+    }
+    logger.info('auth', 'vk raw response', {
+      http: res.status,
+      code: data?.code,
+      fieldName,
+      bodyPreview: text.slice(0, 240),
+    });
+    return data;
+  }
+
+  async function finishVkLogin(vkAccessToken) {
+    const { baseUrl } = config.loadConfig();
+    const token = String(vkAccessToken || '').trim();
+    if (!token) return { success: false, error: 'vk_no_token' };
+
+    // 1) как в AnixartJS
+    let res = await finishOAuthLogin('vk', (client) =>
+      client.endpoints.auth.signInWithVk({ vkAccessToken: token }),
+    );
+    if (res.success) return res;
+
+    // 2) код 2 при живом токене — пробуем прямой POST и snake_case
+    if (res.code === 2) {
+      const attempts = [
+        ['vkAccessToken', baseUrl],
+        ['vk_access_token', baseUrl],
+        ['vkAccessToken', 'https://api.anixsekai.com'],
+        ['vkAccessToken', 'https://api-s.anixsekai.com'],
+      ];
+      for (const [field, apiBase] of attempts) {
+        try {
+          const data = await signInWithVkRaw(apiBase, token, field);
+          const code = data?.code;
+          const profile = data?.profile;
+          const profileToken = data?.profileToken;
+          if (code === DefaultResult.Ok && profileToken?.token) {
+            applyLoginSuccess(profile, profileToken, baseUrl);
+            logger.info('auth', 'vk login success via raw', { field, apiBase });
+            return { success: true };
+          }
+          if (code != null && code !== 2) {
+            return { success: false, code };
+          }
+        } catch (err) {
+          logger.warn('auth', 'vk raw attempt failed', {
+            field,
+            apiBase,
+            error: String(err?.message || err),
+          });
+        }
+      }
+    }
+    return res;
+  }
 
 // ——— Auth ———
 
@@ -53,19 +173,58 @@ loggedHandle('anix:login', async (_, username, password) => {
   // Log auth result but never the token/password
   logger.info('auth', 'login attempt', { code, profileId: profile?.id, login: profile?.login });
   if (code === DefaultResult.Ok && profileToken?.token) {
-    config.saveConfig({
-      token: profileToken.token,
-      profileId: profile?.id ?? null,
-      profileLogin: profile?.login ?? null,
-      profileAvatar: profile?.avatar ?? null,
-      profileRaw: profile || null,
-    });
+    applyLoginSuccess(profile, profileToken, baseUrl);
     logger.info('auth', 'login success', { profileId: profile?.id, login: profile?.login });
-    state.anixart = createAnixClient({ baseUrl, token: profileToken.token });
     return { success: true };
   }
   logger.warn('auth', 'login failed', { code });
   return { success: false, code };
+});
+
+loggedHandle('anix:loginVk', async () => {
+  try {
+    const vkAccessToken = String(await getVkAccessToken() || '').trim();
+    if (!vkAccessToken) return { success: false, error: 'vk_no_token' };
+    logger.info('auth', 'vk token ready', { len: vkAccessToken.length });
+    return await finishVkLogin(vkAccessToken);
+  } catch (err) {
+    const msg = String(err?.message || err);
+    if (msg === 'cancelled') return { success: false, cancelled: true };
+    logger.warn('auth', 'vk oauth error', { error: msg });
+    return { success: false, error: msg };
+  }
+});
+
+loggedHandle('anix:loginGoogle', async () => {
+  try {
+    const googleIdToken = String(await getGoogleFirebaseIdToken() || '').trim();
+    if (!googleIdToken) return { success: false, error: 'google_no_token' };
+    logger.info('auth', 'google token ready', { len: googleIdToken.length });
+    return await finishOAuthLogin('google', (client) =>
+      client.endpoints.auth.signInWithGoogle({ googleIdToken }),
+    );
+  } catch (err) {
+    const msg = String(err?.message || err);
+    if (msg === 'cancelled') return { success: false, cancelled: true };
+    logger.warn('auth', 'google oauth error', { error: msg });
+    return { success: false, error: msg };
+  }
+});
+
+/** Запасной путь: вставка URL с blank.html (если окно OAuth не перехватило hash). */
+loggedHandle('anix:oauthSubmitUrl', async (_, url) => {
+  if (typeof url !== 'string' || !url.trim()) {
+    return { success: false, error: 'empty' };
+  }
+  const vkAccessToken = extractTokenFromPastedUrl(url.trim());
+  if (!vkAccessToken) return { success: false, error: 'no_token' };
+  cancelPending('cancelled');
+  return finishVkLogin(vkAccessToken);
+});
+
+ipcMain.handle('anix:oauthCancel', () => {
+  cancelPending('cancelled');
+  return { ok: true };
 });
 
 loggedHandle('anix:logout', async () => {

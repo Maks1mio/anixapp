@@ -17,6 +17,11 @@ const electronDir = __dirname;
 
 const { registerCdnScheme, setupCdnProtocol } = require('./cdn-proxy');
 const { registerLocalMediaScheme, setupLocalMediaProtocol } = require('./lib/local-media-protocol');
+const {
+  setupDeepLinks,
+  handleSecondInstanceArgv,
+  flushPendingDeepLink,
+} = require('./lib/deep-link');
 const logger = require('./logger');
 const state = require('./lib/app-state');
 const config = require('./lib/config-store');
@@ -38,6 +43,19 @@ const homeCustomFilter = require('./home-custom-filter');
 registerCdnScheme();
 registerLocalMediaScheme();
 applyGpuFlags();
+
+// Deep links (anixart://…) need a single instance so the OS hands URLs to a running app.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+  process.exit(0);
+}
+
+app.on('second-instance', (_event, commandLine) => {
+  handleSecondInstanceArgv(commandLine);
+});
+
+setupDeepLinks(app);
 
 let discordRpc = null;
 try { discordRpc = require('./discord-rpc'); } catch (_) {}
@@ -78,20 +96,6 @@ const deps = {
 
 registerAll(deps);
 
-if (!isDev) {
-  if (!app.requestSingleInstanceLock()) {
-    app.quit();
-    process.exit(0);
-  }
-  app.on('second-instance', () => {
-    if (state.mainWindow) {
-      if (state.mainWindow.isMinimized()) state.mainWindow.restore();
-      state.mainWindow.show();
-      state.mainWindow.focus();
-    }
-  });
-}
-
 app.whenReady().then(() => {
   config.primeConfigCache();
 
@@ -111,6 +115,7 @@ app.whenReady().then(() => {
   createMainWindow(deps);
   createTray(deps);
   discord.initDiscordRpc();
+  flushPendingDeepLink();
 
   if (isDev) {
     void devApiBridge.start().catch((err) => {

@@ -1,0 +1,876 @@
+@use 'variables' as *;
+
+.view-uikit-v2 {
+  --uikit-v2-bg: #0c0c0e;
+  --uikit-v2-surface: #16161a;
+  --uikit-v2-elevated: #1e1e24;
+  --uikit-v2-border: #2a2a32;
+  --uikit-v2-text: #e8e8ec;
+  --uikit-v2-muted: #8b8b96;
+  --uikit-v2-accent: #e35454;
+  --uikit-v2-accent-hover: #ec7e7e;
+  --uikit-v2-danger: #ef4444;
+  --uikit-v2-radius: 8px;
+  /* Как в приложении: Calibri → Segoe UI */
+  --uikit-v2-font: #{$font-sans};
+  --uikit-v2-mono: 'Cascadia Code', Consolas, Monaco, monospace;
+
+  max-width: 48rem;
+  margin: 0 auto;
+  width: 100%;
+  padding: 1.5rem 1.25rem 3rem;
+  font-family: $font-sans;
+  color: var(--uikit-v2-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.uikit-v2-header {
+  margin-bottom: 1.75rem;
+}
+
+.uikit-v2-header__top {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.uikit-v2-back {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--uikit-v2-muted);
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.25rem 0;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--uikit-v2-text);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--uikit-v2-accent);
+    outline-offset: 2px;
+  }
+}
+
+.uikit-v2-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--uikit-v2-muted);
+  border: 1px solid var(--uikit-v2-border);
+  border-radius: 4px;
+  padding: 0.15rem 0.45rem;
+}
+
+.uikit-v2-title {
+  margin: 0 0 0.4rem;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.uikit-v2-desc {
+  margin: 0;
+  color: var(--uikit-v2-muted);
+  font-size: 1rem;
+  line-height: 1.45;
+  max-width: 36rem;
+}
+
+.uikit-v2-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 1.75rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--uikit-v2-border);
+}
+
+.uikit-v2-nav__item {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--uikit-v2-muted);
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--uikit-v2-radius);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    color: var(--uikit-v2-text);
+    background: var(--uikit-v2-surface);
+  }
+
+  &--active {
+    color: var(--uikit-v2-text);
+    background: var(--uikit-v2-surface);
+    border-color: var(--uikit-v2-border);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--uikit-v2-accent);
+    outline-offset: 2px;
+  }
+}
+
+.uikit-v2-section__title {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.uikit-v2-section__desc {
+  margin: 0 0 1.25rem;
+  font-size: 0.9rem;
+  color: var(--uikit-v2-muted);
+}
+
+.uikit-v2-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: 0.75rem;
+}
+
+.uikit-v2-swatch {
+  aspect-ratio: 1.2;
+  border-radius: var(--uikit-v2-radius);
+  border: 1px solid var(--uikit-v2-border);
+  display: flex;
+  align-items: flex-end;
+  padding: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--uikit-v2-text);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+
+  &--ink span {
+    color: var(--uikit-v2-bg);
+    text-shadow: none;
+  }
+}
+
+.uikit-v2-type {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+
+  p {
+    margin: 0;
+  }
+
+  &__display {
+    font-size: 2.5rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+  }
+
+  &__h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+  }
+
+  &__h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+
+  &__body {
+    font-size: 1rem;
+    line-height: 1.5;
+    color: var(--uikit-v2-text);
+  }
+
+  &__caption {
+    font-size: 0.8rem;
+    color: var(--uikit-v2-muted);
+  }
+
+  &__mono {
+    font-family: var(--uikit-v2-mono);
+    font-size: 0.9rem;
+    color: var(--uikit-v2-muted);
+  }
+}
+
+.uikit-v2-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1.5rem;
+}
+
+.uikit-v2-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-width: 20rem;
+}
+
+.uikit-v2-field__label {
+  font-size: 0.8rem;
+  color: var(--uikit-v2-muted);
+}
+
+.uikit-v2-input {
+  appearance: none;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--uikit-v2-surface);
+  border: 1px solid var(--uikit-v2-border);
+  border-radius: var(--uikit-v2-radius);
+  color: var(--uikit-v2-text);
+  font: inherit;
+  font-size: 0.95rem;
+  padding: 0.55rem 0.75rem;
+
+  &::placeholder {
+    color: var(--uikit-v2-muted);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--uikit-v2-accent);
+  }
+}
+
+.uikit-v2-card-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 22rem;
+}
+
+.uikit-v2-card-demo-body {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.uikit-v2-demo-block {
+  margin-bottom: 1.75rem;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.uikit-v2-demo-block__title {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--uikit-v2-muted);
+}
+
+.uikit-v2-demo-block__desc {
+  margin: 0 0 0.85rem;
+  font-size: 0.85rem;
+  color: var(--uikit-v2-muted);
+}
+
+.uikit-v2-round-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+// ── UI Kit V2 components ─────────────────────────────────────────────────────
+
+$uiv2-chrome-bg: rgba(36, 36, 36, 0.94);
+$uiv2-chrome-bg-hover: rgba(48, 48, 48, 0.98);
+$uiv2-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+
+.uiv2-btn {
+  --uiv2-btn-icon: 1rem;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 999px;
+  box-shadow: $uiv2-chrome-shadow;
+  font: inherit;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  white-space: nowrap;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease,
+    transform 0.18s ease;
+
+  &:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 50%, transparent);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  &--sm {
+    --uiv2-btn-icon: 0.875rem;
+    min-height: 1.75rem;
+    padding: 0 0.75rem;
+    font-size: 0.75rem;
+  }
+
+  &--md {
+    --uiv2-btn-icon: 1rem;
+    min-height: 2.15rem;
+    padding: 0 1rem;
+    font-size: 0.85rem;
+  }
+
+  &--lg {
+    --uiv2-btn-icon: 1.125rem;
+    min-height: 2.6rem;
+    padding: 0 1.25rem;
+    font-size: 0.95rem;
+  }
+
+  &--icon {
+    &.uiv2-btn--sm {
+      padding-left: 0.55rem;
+    }
+
+    &.uiv2-btn--md {
+      padding-left: 0.7rem;
+    }
+
+    &.uiv2-btn--lg {
+      padding-left: 0.85rem;
+    }
+  }
+
+  &--chrome {
+    background: $uiv2-chrome-bg;
+    color: #fff;
+
+    &:hover:not(:disabled) {
+      background: $uiv2-chrome-bg-hover;
+    }
+  }
+
+  &--primary {
+    background: var(--uikit-v2-accent, #{$color-accent});
+    color: #fff;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset;
+
+    &:hover:not(:disabled) {
+      background: var(--uikit-v2-accent-hover, #{$color-accent-hover});
+    }
+  }
+
+  &--ghost {
+    background: transparent;
+    color: rgba(255, 255, 255, 0.88);
+    box-shadow: none;
+
+    &:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.06);
+      box-shadow: $uiv2-chrome-shadow;
+    }
+  }
+
+  &--danger {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ff6b6b;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+
+    &:hover:not(:disabled) {
+      background: rgba(239, 68, 68, 0.2);
+    }
+  }
+
+  &--light {
+    background: #e8e8e8;
+    color: #111;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset;
+
+    &:hover:not(:disabled) {
+      background: #f3f3f3;
+    }
+  }
+
+  &--block {
+    width: 100%;
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.uiv2-btn__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 var(--uiv2-btn-icon);
+  width: var(--uiv2-btn-icon);
+  height: var(--uiv2-btn-icon);
+  line-height: 0;
+  overflow: hidden;
+
+  :global(svg) {
+    display: block;
+    width: var(--uiv2-btn-icon);
+    height: var(--uiv2-btn-icon);
+    margin: 0;
+    flex-shrink: 0;
+  }
+}
+
+.uiv2-btn__label {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  line-height: 1;
+}
+
+.uiv2-round-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: $uiv2-chrome-bg;
+  box-shadow: $uiv2-chrome-shadow;
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  transition:
+    background 0.2s ease,
+    opacity 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    margin 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+
+  &:hover:not(:disabled) {
+    background: $uiv2-chrome-bg-hover;
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 50%, transparent);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.32;
+    cursor: default;
+  }
+
+  :global(svg) {
+    display: block;
+  }
+
+  &--muted {
+    color: rgba(255, 255, 255, 0.38);
+  }
+
+  &--social-discord {
+    color: #5865f2;
+  }
+
+  &--social-vk {
+    color: #0077ff;
+  }
+
+  &--social-tg {
+    color: #0088cc;
+  }
+
+  &--social-inst {
+    color: #e1306c;
+  }
+
+  &--sm {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  &--md {
+    width: 2.15rem;
+    height: 2.15rem;
+  }
+
+  &--lg {
+    width: 2.6rem;
+    height: 2.6rem;
+  }
+
+  // В pill-bar стрелки по умолчанию свёрнуты, появляются на hover / alwaysShowArrows
+  .uiv2-pill-bar:not(.uiv2-pill-bar--arrows) & {
+    width: 0;
+    margin: 0;
+    opacity: 0;
+    transform: scale(0.8);
+    overflow: hidden;
+    pointer-events: none;
+    box-shadow: none;
+  }
+}
+
+.uiv2-pill-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  padding: 0.2rem;
+  margin: -0.2rem;
+  border-radius: 999px;
+}
+
+.uiv2-pill-bar__pill {
+  min-width: 0;
+  flex: 0 1 auto;
+  max-width: min(16rem, 70vw);
+  height: 2.15rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: 999px;
+  background: $uiv2-chrome-bg;
+  box-shadow: $uiv2-chrome-shadow;
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  scrollbar-width: none;
+  transition: max-width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+
+  .uiv2-pill-bar--arrows & {
+    max-width: min(13.5rem, 52vw);
+  }
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.uiv2-pill-bar__track {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0 0.4rem;
+  height: 100%;
+  width: max-content;
+}
+
+.uiv2-pill-bar__crumb {
+  flex-shrink: 0;
+  max-width: 7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.28rem 0.55rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    background 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+
+  &:hover:not(.uiv2-pill-bar__crumb--active) {
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  &--active {
+    background: rgba(58, 58, 58, 0.98);
+    color: #fff;
+    font-weight: 600;
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 50%, transparent);
+    outline-offset: 1px;
+  }
+}
+
+.uiv2-pill-bar__sep {
+  flex-shrink: 0;
+  width: 1px;
+  height: 0.85rem;
+  margin: 0 0.1rem;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 1px;
+  user-select: none;
+}
+
+// ── Back Bar: назад + где сейчас / наследование ──────────────────────────────
+
+.uiv2-back-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.uiv2-back-bar__pill {
+  min-width: 0;
+  flex: 0 1 auto;
+  max-width: min(22rem, 82%);
+  height: 2.15rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: 999px;
+  background: $uiv2-chrome-bg;
+  box-shadow: $uiv2-chrome-shadow;
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.uiv2-back-bar__track {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0 0.35rem;
+  height: 100%;
+  width: max-content;
+}
+
+.uiv2-back-bar__seg {
+  flex-shrink: 0;
+  max-width: 8.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.2;
+
+  &--active {
+    max-width: 12rem;
+    background: rgba(58, 58, 58, 0.98);
+    color: #fff;
+    font-weight: 600;
+  }
+}
+
+.uiv2-back-bar__sep {
+  flex-shrink: 0;
+  width: 1px;
+  height: 0.85rem;
+  margin: 0 0.1rem;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 1px;
+  user-select: none;
+}
+
+// ── Card: контент-панель профиля ─────────────────────────────────────────────
+
+.uiv2-card {
+  margin: 0;
+  padding: 0.75rem 0.85rem 0.65rem;
+  border-radius: 20px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: $uiv2-chrome-shadow;
+  font-family: $font-sans;
+  color: $color-text;
+  // Одинаковый AA и в UI Kit, и внутри profile-panel (transform-слой)
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  &--spaced {
+    margin-top: 0.85rem;
+  }
+}
+
+.uiv2-card__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0.4rem;
+  min-width: 0;
+  margin-bottom: 0.45rem;
+}
+
+.uiv2-card__title {
+  margin: 0;
+  flex-shrink: 0;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 300;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-rendering: geometricPrecision;
+}
+
+.uiv2-card__pill {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.78);
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 500;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.uiv2-card__body {
+  min-width: 0;
+}
+
+// ── Choice Sheet: выбор одной опции (радио) ──────────────────────────────────
+
+.uiv2-choice-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  pointer-events: none;
+}
+
+.uiv2-choice-sheet__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.62);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.uiv2-choice-sheet__panel {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 20.5rem);
+  padding: 1.15rem 0.85rem 0.85rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, $color-surface 94%, #1c1c1c);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.55),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  pointer-events: auto;
+
+  .uiv2-btn--block {
+    margin-top: 0.35rem;
+  }
+}
+
+.uiv2-choice-sheet__title {
+  margin: 0 0 0.75rem;
+  padding: 0 0.55rem;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #fff;
+}
+
+.uiv2-choice-sheet__list {
+  list-style: none;
+  margin: 0;
+  padding: 0.15rem 0 0.35rem;
+}
+
+.uiv2-choice-sheet__option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.78rem 0.65rem;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  &--on {
+    background: rgba(255, 255, 255, 0.07);
+
+    .uiv2-choice-sheet__radio {
+      border-color: #fff;
+      background:
+        radial-gradient(circle at center, #fff 0 38%, transparent 40%),
+        transparent;
+    }
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: wait;
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 50%, transparent);
+    outline-offset: 1px;
+  }
+}
+
+.uiv2-choice-sheet__radio {
+  flex-shrink: 0;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  background: transparent;
+}
+
+.uiv2-choice-sheet__label {
+  min-width: 0;
+  line-height: 1.35;
+}

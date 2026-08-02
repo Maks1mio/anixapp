@@ -13,7 +13,7 @@
 
   function onProfileTabChange(tabId: string) {
     if (tabId === 'friends') return;
-    navigate(id ? `/profile/${id}/votes` : '/profile/votes');
+    navigate(id ? `/profile/${id}/lists?tab=votes` : '/bookmarks?tab=votes');
   }
 
   let profileLogin = $state('Загрузка…');

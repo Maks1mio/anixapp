@@ -6,12 +6,13 @@
   import { onMount, onDestroy } from 'svelte';
   import Tabs, { type TabItem } from '../components/Tabs.svelte';
   import { navigate } from '../stores/navigation';
+  import { handleUserProfileClick } from '../stores/user-profile';
   import { getSearchParams } from '../router';
   import { buildPosterUrl, resolveCdnAssetUrl } from '../utils/posterUrl';
   import { DEFAULT_BOOKMARK_SORT } from '../constants/bookmarkSort';
   import type { ReleaseCardData } from '../types/release';
   import { extractHistoryEpisodeInfo } from '../utils/historyFormat';
-  import { iconHome, iconSlidersHorizontal } from '../components/icons';
+  import { iconHome } from '../components/icons';
   import { openFloatingMenu } from '../components/dots-menu';
   import {
     getDefaultBookmarksTab,
@@ -34,6 +35,40 @@
 
   type TabId = BookmarksTabId;
 
+  interface Props {
+    /** Чужой профиль — списки/оценки этого пользователя */
+    id?: number;
+    /** Стартовая вкладка (например votes с /profile/:id/votes) */
+    initialTab?: TabId;
+    /** Только оценки + статусы (страница /profile/lists) */
+    listsOnly?: boolean;
+  }
+
+  let { id: routeProfileId, initialTab, listsOnly = false }: Props = $props();
+
+  function readUserFromRoute(route?: string): number | undefined {
+    const q = route
+      ? (route.includes('?') ? route.slice(route.indexOf('?') + 1) : '')
+      : getSearchParams().toString();
+    const user = Number.parseInt(new URLSearchParams(q).get('user') || '', 10);
+    return Number.isFinite(user) && user > 0 ? user : undefined;
+  }
+
+  function navigateDetailToPath(detail: unknown): string {
+    if (typeof detail === 'string') return detail;
+    if (detail && typeof detail === 'object' && 'to' in detail) {
+      return String((detail as { to: unknown }).to ?? '');
+    }
+    return '';
+  }
+
+  /** Активный «чей список»: prop, ?user= или переключение по navigate */
+  let listUserId = $state<number | undefined>(
+    typeof routeProfileId === 'number' && routeProfileId > 0
+      ? routeProfileId
+      : readUserFromRoute(),
+  );
+
   interface BookmarksViewState {
     activeTab: TabId;
     items: ReleaseCardData[];
@@ -46,9 +81,48 @@
     selectedSort: number;
     totalCount: number;
     cachedProfileId: number | null;
+    profileLogin: string;
+    profileAvatar: string;
   }
 
-  const BOOKMARKS_VIEW_KEY = () => buildViewStateKey('/bookmarks');
+  const STATUS_TO_TAB: Record<string, TabId> = {
+    '1': 'watching',
+    '2': 'planned',
+    '3': 'completed',
+    '4': 'on_hold',
+    '5': 'dropped',
+  };
+
+  const SELF_TABS: { id: TabId; label: string; desc: string; type: number | null }[] = [
+    { id: 'watching',    label: 'Смотрю',      desc: 'Сейчас в просмотре', type: 1 },
+    { id: 'planned',     label: 'В планах',    desc: 'Запланированные релизы', type: 2 },
+    { id: 'completed',   label: 'Просмотрено', desc: 'Завершённые релизы', type: 3 },
+    { id: 'on_hold',     label: 'Отложено',    desc: 'Отложенные релизы', type: 4 },
+    { id: 'dropped',     label: 'Брошено',     desc: 'Брошенные релизы', type: 5 },
+    { id: 'collections', label: 'Коллекции',   desc: 'Избранные коллекции', type: null },
+    { id: 'history',     label: 'История',     desc: 'Недавно просмотренные релизы', type: null },
+    { id: 'votes',       label: 'Оценки',      desc: 'Релизы с вашей оценкой', type: null },
+    { id: 'favorites',   label: 'Избранное',   desc: 'Релизы в избранном', type: null },
+  ];
+
+  const OTHER_TABS = SELF_TABS.filter((t) =>
+    t.id === 'votes' || t.type != null,
+  );
+
+  const isOtherProfile = $derived(typeof listUserId === 'number' && listUserId > 0);
+  /** Страница списков профиля: оценки + статусы (без коллекций/истории/избранного) */
+  const isListsPage = $derived(listsOnly || isOtherProfile);
+  const TABS = $derived(isListsPage ? OTHER_TABS : SELF_TABS);
+  const DEFAULT_TAB_OPTIONS = $derived(SELF_TABS.map((t) => ({ id: t.id, label: t.label, desc: t.desc })));
+
+  const BOOKMARKS_VIEW_KEY = () =>
+    buildViewStateKey(
+      isOtherProfile
+        ? `/bookmarks?user=${listUserId}`
+        : listsOnly
+          ? '/profile/lists'
+          : '/bookmarks',
+    );
 
   function bookmarksSnapshot(): BookmarksViewState {
     return {
@@ -63,6 +137,8 @@
       selectedSort,
       totalCount,
       cachedProfileId,
+      profileLogin,
+      profileAvatar,
     };
   }
 
@@ -78,6 +154,8 @@
     selectedSort = s.selectedSort;
     totalCount = s.totalCount;
     cachedProfileId = s.cachedProfileId;
+    profileLogin = s.profileLogin;
+    profileAvatar = s.profileAvatar;
   }
 
   function hasBookmarkItems(s: BookmarksViewState): boolean {
@@ -98,24 +176,11 @@
     }
   }
 
-  const TABS: { id: TabId; label: string; desc: string; type: number | null }[] = [
-    { id: 'collections', label: 'Коллекции',   desc: 'Избранные коллекции', type: null },
-    { id: 'history',     label: 'История',     desc: 'Недавно просмотренные релизы', type: null },
-    { id: 'favorites',   label: 'Избранное',   desc: 'Релизы в избранном', type: null },
-    { id: 'watching',    label: 'Смотрю',      desc: 'Сейчас в просмотре', type: 1 },
-    { id: 'planned',     label: 'В планах',    desc: 'Запланированные релизы', type: 2 },
-    { id: 'completed',   label: 'Просмотрено', desc: 'Завершённые релизы', type: 3 },
-    { id: 'on_hold',     label: 'Отложено',    desc: 'Отложенные релизы', type: 4 },
-    { id: 'dropped',     label: 'Брошено',     desc: 'Брошенные релизы', type: 5 },
-  ];
-
-  const DEFAULT_TAB_OPTIONS = TABS.map((t) => ({ id: t.id, label: t.label, desc: t.desc }));
-
   function mapReleaseToCardData(raw: Record<string, unknown>): ReleaseCardData {
     const p = raw.poster as Record<string, { url?: string }> | undefined;
     const posterRaw =
       p?.original?.url ?? p?.medium?.url ?? p?.small?.url
-      ?? (typeof raw.poster === 'string' ? raw.poster : undefined)
+      ?? (typeof raw.poster === 'string' && raw.poster !== 'string' ? raw.poster : undefined)
       ?? (typeof raw.image === 'string' ? raw.image : undefined);
     const posterStr = typeof posterRaw === 'string' ? posterRaw : undefined;
     const poster = posterStr ? buildPosterUrl(posterStr) || undefined : undefined;
@@ -131,6 +196,7 @@
       case 5: listStatus = 'dropped'; break;
       default: listStatus = undefined;
     }
+    const myVote = typeof raw.my_vote === 'number' && raw.my_vote > 0 ? raw.my_vote : undefined;
     return {
       id: raw.id as number | undefined,
       titleRu: (raw.title_ru ?? raw.titleRu) as string | undefined,
@@ -151,6 +217,7 @@
       releaseDate: (raw.release_date as string) || undefined,
       isFavorite: !!(raw.is_favorite),
       listStatus,
+      myVote,
     };
   }
 
@@ -204,11 +271,20 @@
   let unregisterScrollKey: (() => void) | null = null;
   let defaultTabModalOpen = $state(false);
   let defaultBookmarksTab = $state(getDefaultBookmarksTab());
-  let tabsSettingsBtn = $state<HTMLButtonElement | undefined>();
+  let profileLogin = $state('');
+  let profileAvatar = $state('');
+  let selfProfileId = $state<number | null>(null);
 
   const isCollectionsTab = $derived(activeTab === 'collections');
   const isHistoryTab = $derived(activeTab === 'history');
-  const isReleaseListTab = $derived(!isCollectionsTab && !isHistoryTab);
+  const isVotesTab = $derived(activeTab === 'votes');
+  const isReleaseListTab = $derived(!isCollectionsTab && !isHistoryTab && !isVotesTab);
+  const headerAvatarUrl = $derived(profileAvatar ? resolveCdnAssetUrl(profileAvatar) : '');
+  const profileIdForPanel = $derived(
+    isOtherProfile
+      ? listUserId!
+      : (cachedProfileId ?? selfProfileId ?? 0),
+  );
 
   let scrollEl: HTMLElement | null = null;
   let scrollListener: (() => void) | null = null;
@@ -245,13 +321,48 @@
   }
 
   async function ensureProfileId(): Promise<number | null> {
+    if (isOtherProfile && typeof listUserId === 'number') return listUserId;
     if (typeof cachedProfileId === 'number') return cachedProfileId;
     if (!window.anixApi) return null;
     const selfRes = await window.anixApi.profile.self() as Record<string, unknown>;
     const profile = (selfRes?.profile ?? selfRes) as Record<string, unknown>;
     const profileId = profile?.id ?? profile?.['@id'];
-    if (typeof profileId === 'number') cachedProfileId = profileId;
+    if (typeof profileId === 'number') {
+      cachedProfileId = profileId;
+      selfProfileId = profileId;
+      if (!profileLogin && typeof profile.login === 'string') profileLogin = profile.login;
+      if (!profileAvatar && typeof profile.avatar === 'string') profileAvatar = profile.avatar;
+    }
     return typeof profileId === 'number' ? profileId : null;
+  }
+
+  async function loadProfileHeader() {
+    if (!window.anixApi) return;
+    try {
+      if (isOtherProfile && typeof listUserId === 'number') {
+        const info = await window.anixApi.profile.info(listUserId) as {
+          profile?: { id?: number; login?: string; avatar?: string };
+          is_my_profile?: boolean;
+        };
+        const p = info?.profile;
+        cachedProfileId = p?.id ?? listUserId;
+        profileLogin = p?.login ?? '';
+        profileAvatar = p?.avatar ?? '';
+        return;
+      }
+      const self = await window.anixApi.profile.self() as {
+        profile?: { id?: number; login?: string; avatar?: string };
+      };
+      const p = self?.profile;
+      if (typeof p?.id === 'number') {
+        cachedProfileId = p.id;
+        selfProfileId = p.id;
+      }
+      profileLogin = p?.login ?? '';
+      profileAvatar = p?.avatar ?? '';
+    } catch {
+      /* ignore */
+    }
   }
 
   async function fetchPage(page: number): Promise<{ content: Record<string, unknown>[]; total: number }> {
@@ -269,6 +380,14 @@
       return { content, total: extractTotalCount(data, content.length) };
     }
 
+    if (activeTab === 'votes') {
+      const profileId = await ensureProfileId();
+      if (typeof profileId !== 'number') return { content: [], total: 0 };
+      const data = await window.anixApi.profile.getVotedReleases(profileId, page, 1) as Record<string, unknown>;
+      const content = (data?.content ?? []) as Record<string, unknown>[];
+      return { content, total: extractTotalCount(data, content.length) };
+    }
+
     if (activeTab === 'favorites') {
       const data = await window.anixApi.favorites.all(page, selectedSort, 0, 0) as Record<string, unknown>;
       const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
@@ -277,8 +396,8 @@
 
     const tab = TABS.find((t) => t.id === activeTab)!;
     const profileId = await ensureProfileId();
-    if (typeof profileId !== 'number') return { content: [], total: 0 };
-    const data = await window.anixApi.profile.getBookmarks(profileId, tab.type!, page, selectedSort, 0, 0) as Record<string, unknown>;
+    if (typeof profileId !== 'number' || tab.type == null) return { content: [], total: 0 };
+    const data = await window.anixApi.profile.getBookmarks(profileId, tab.type, page, selectedSort, 0, 0) as Record<string, unknown>;
     const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
     return { content, total: extractTotalCount(data, content.length) };
   }
@@ -297,7 +416,9 @@
         items = [...items, ...content.map(mapReleaseToCardData)];
       }
       if (typeof total === 'number' && total > 0) totalCount = total;
-      hasMore = content.length > 0;
+      hasMore = isVotesTab
+        ? content.length >= 25 && !(total > 0 && (nextPage + 1) * 25 >= total)
+        : content.length > 0;
       nextPage += 1;
       showEnd = !hasMore;
       isLoadingMore = false;
@@ -307,9 +428,21 @@
     }
   }
 
+  function listsBasePath(): string {
+    if (listsOnly) return '/profile/lists';
+    return '/bookmarks';
+  }
+
   function syncTabToUrl(tabId: TabId) {
-    const qs = tabId === 'collections' ? '' : `?tab=${encodeURIComponent(tabId)}`;
-    const path = `/bookmarks${qs}`;
+    let path: string;
+    if (listsOnly) {
+      path = `/profile/lists?tab=${encodeURIComponent(tabId)}`;
+    } else if (isOtherProfile && typeof listUserId === 'number') {
+      path = `/bookmarks?tab=${encodeURIComponent(tabId)}&user=${listUserId}`;
+    } else {
+      const qs = tabId === 'collections' ? '' : `?tab=${encodeURIComponent(tabId)}`;
+      path = `/bookmarks${qs}`;
+    }
     if (window.location.protocol === 'file:') {
       const hash = `#${path}`;
       if (window.location.hash !== hash) {
@@ -323,7 +456,73 @@
     }
   }
 
+  function tabFromLocationOrNav(detail?: string): TabId | null {
+    let tabParam: string | null = null;
+    if (detail) {
+      const q = detail.includes('?') ? detail.slice(detail.indexOf('?') + 1) : '';
+      tabParam = new URLSearchParams(q).get('tab');
+    } else {
+      tabParam = getSearchParams().get('tab');
+    }
+    if (tabParam && TABS.some((t) => t.id === tabParam)) return tabParam as TabId;
+    return null;
+  }
+
+  async function switchListUser(nextUserId: number | undefined, tab: TabId | null) {
+    const sameUser = nextUserId === listUserId;
+    if (sameUser) {
+      if (tab && tab !== activeTab) void loadTab(tab);
+      return;
+    }
+
+    if (items.length > 0 || collectionItems.length > 0) {
+      saveViewStateWithScroll(BOOKMARKS_VIEW_KEY(), bookmarksSnapshot());
+    }
+
+    listUserId = nextUserId;
+    cachedProfileId = typeof nextUserId === 'number' ? nextUserId : null;
+    profileLogin = '';
+    profileAvatar = '';
+    await loadProfileHeader();
+
+    const nextTab = tab
+      ?? (nextUserId != null ? 'votes' : resolveBookmarksTab(getDefaultBookmarksTab()));
+    void loadTab(nextTab, true, true);
+  }
+
+  function onExternalNavigate(e: Event) {
+    const to = navigateDetailToPath((e as CustomEvent).detail);
+    // Списки через Закладки (свои и чужие по ?user=)
+    if (to === '/bookmarks' || to.startsWith('/bookmarks?')) {
+      const nextUserId = readUserFromRoute(to);
+      const tab = tabFromLocationOrNav(to);
+      void switchListUser(
+        nextUserId,
+        tab ?? (nextUserId != null ? 'votes' : resolveBookmarksTab(getDefaultBookmarksTab())),
+      );
+      return;
+    }
+    // Legacy: /profile/:id/lists и /profile/lists
+    if (listsOnly && to.startsWith('/profile/lists')) {
+      const tab = tabFromLocationOrNav(to);
+      if (tab && tab !== activeTab) void loadTab(tab);
+      return;
+    }
+    const legacy = to.match(/^\/profile\/(\d+)\/lists/);
+    if (legacy) {
+      const uid = Number.parseInt(legacy[1], 10);
+      void switchListUser(
+        Number.isFinite(uid) && uid > 0 ? uid : undefined,
+        tabFromLocationOrNav(to) ?? 'votes',
+      );
+    }
+  }
+
   async function loadTab(tabId: TabId, resetSort = false, force = false) {
+    if (!TABS.some((t) => t.id === tabId)) {
+      tabId = TABS[0]?.id ?? 'watching';
+    }
+
     if (tabId !== activeTab && (items.length > 0 || collectionItems.length > 0)) {
       saveViewStateWithScroll(BOOKMARKS_VIEW_KEY(), bookmarksSnapshot());
     }
@@ -340,7 +539,7 @@
       }
     }
 
-    if (force) invalidateViewStatePrefix('/bookmarks');
+    if (force) invalidateViewStatePrefix(listsBasePath());
 
     if (resetSort) selectedSort = DEFAULT_BOOKMARK_SORT;
     nextPage = 0;
@@ -374,7 +573,9 @@
         items = content.map(mapReleaseToCardData);
       }
       totalCount = total;
-      hasMore = content.length > 0;
+      hasMore = isVotesTab
+        ? content.length >= 25 && !(total > 0 && 25 >= total)
+        : content.length > 0;
       nextPage = 1;
       showEnd = !hasMore;
       loadState = 'ready';
@@ -386,6 +587,7 @@
   }
 
   function onBookmarksChanged() {
+    if (isOtherProfile) return;
     void loadTab(activeTab, false, true);
   }
 
@@ -396,7 +598,7 @@
   }
 
   async function onRandom() {
-    if (!window.anixApi || randomLoading || totalCount === 0) return;
+    if (!window.anixApi || randomLoading || totalCount === 0 || isVotesTab) return;
     randomLoading = true;
     try {
       let res: Record<string, unknown> | undefined;
@@ -409,8 +611,8 @@
         res = await window.anixApi.release.randomProfileList(profileId, tab.type, true) as Record<string, unknown>;
       }
       const release = (res?.release ?? res) as Record<string, unknown> | undefined;
-      const id = release?.id ?? release?.['@id'];
-      if (typeof id === 'number') navigate(`/release/${id}`);
+      const rid = release?.id ?? release?.['@id'];
+      if (typeof rid === 'number') navigate(`/release/${rid}`);
     } catch {
       /* ignore */
     } finally {
@@ -419,7 +621,7 @@
   }
 
   async function onDeleteFromHistory(releaseId: number) {
-    if (!window.anixApi) return;
+    if (!window.anixApi || isOtherProfile) return;
     try {
       await window.anixApi.history.delete(releaseId);
       items = items.filter((item) => item.id !== releaseId);
@@ -443,28 +645,19 @@
   function handleTabsSettingsClick(e: MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    const btn = tabsSettingsBtn;
-    if (!btn) return;
-    openFloatingMenu({
-      anchor: btn,
-      entries: [
-        { id: 'default-tab', label: 'Изменить вкладку по умолч.', icon: iconHome(18) },
-      ],
-      onSelect: (id) => {
-        if (id === 'default-tab') openDefaultTabModal();
-      },
-    });
+    openDefaultTabModal();
   }
 
   function handleTabContextMenu(tab: TabItem, e: MouseEvent) {
+    if (isOtherProfile) return;
     openFloatingMenu({
       x: e.clientX,
       y: e.clientY,
       entries: [
         { id: 'set-default', label: 'Назначить по умолчанию', icon: iconHome(18) },
       ],
-      onSelect: (id) => {
-        if (id === 'set-default') {
+      onSelect: (menuId) => {
+        if (menuId === 'set-default') {
           defaultBookmarksTab = setDefaultBookmarksTab(tab.id);
         }
       },
@@ -477,8 +670,15 @@
   }
 
   function resolveInitialBookmarksTab(): TabId {
-    const tabParam = getSearchParams().get('tab');
+    if (initialTab && TABS.some((t) => t.id === initialTab)) return initialTab;
+    const params = getSearchParams();
+    const tabParam = params.get('tab');
     if (tabParam && TABS.some((t) => t.id === tabParam)) return tabParam as TabId;
+    const statusParam = params.get('status');
+    if (statusParam && STATUS_TO_TAB[statusParam] && TABS.some((t) => t.id === STATUS_TO_TAB[statusParam])) {
+      return STATUS_TO_TAB[statusParam];
+    }
+    if (isListsPage) return 'votes';
     return resolveBookmarksTab(getDefaultBookmarksTab());
   }
 
@@ -486,26 +686,23 @@
     unregisterScrollKey = registerActiveScrollKey(() => BOOKMARKS_VIEW_KEY());
     window.addEventListener('anix:beforeNavigate', onBeforeNavigate);
     window.addEventListener('anix:bookmarksChanged', onBookmarksChanged);
+    window.addEventListener('anix:navigate', onExternalNavigate);
     defaultBookmarksTab = getDefaultBookmarksTab();
 
-    const tabParam = getSearchParams().get('tab');
-    const hasExplicitTab = !!(tabParam && TABS.some((t) => t.id === tabParam));
+    void loadProfileHeader();
+
+    const params = getSearchParams();
+    const tabParam = params.get('tab');
+    const statusParam = params.get('status');
+    const hasExplicitTab = !!(
+      initialTab
+      || (tabParam && TABS.some((t) => t.id === tabParam))
+      || (statusParam && STATUS_TO_TAB[statusParam])
+    );
     const cached = getViewState<BookmarksViewState>(BOOKMARKS_VIEW_KEY());
 
-    // URL ?tab= имеет приоритет; иначе кэш; иначе вкладка по умолчанию.
-    if (!hasExplicitTab && cached?.data && (cached.data.items.length > 0 || cached.data.collectionItems.length > 0)) {
-      const s = cached.data;
-      activeTab = s.activeTab;
-      items = s.items;
-      collectionItems = s.collectionItems;
-      nextPage = s.nextPage;
-      hasMore = s.hasMore;
-      loadState = s.loadState;
-      showEnd = s.showEnd;
-      errorMsg = s.errorMsg;
-      selectedSort = s.selectedSort;
-      totalCount = s.totalCount;
-      cachedProfileId = s.cachedProfileId;
+    if (!hasExplicitTab && !isListsPage && cached?.data && hasBookmarkItems(cached.data)) {
+      applyBookmarksSnapshot(cached.data);
       restoreBookmarksScroll(cached.scrollTop);
       window.addEventListener('anix:cardLayoutChanged', onLayoutChanged);
       return;
@@ -519,6 +716,7 @@
   onDestroy(() => {
     window.removeEventListener('anix:beforeNavigate', onBeforeNavigate);
     window.removeEventListener('anix:bookmarksChanged', onBookmarksChanged);
+    window.removeEventListener('anix:navigate', onExternalNavigate);
     unregisterScrollKey?.();
     unregisterScrollKey = null;
     saveViewStateData(BOOKMARKS_VIEW_KEY(), bookmarksSnapshot());
@@ -528,26 +726,22 @@
 </script>
 
 <div class="view view-bookmarks" bind:this={wrapEl}>
-  <Tabs
-    tabs={TABS.map((t) => ({ id: t.id, label: t.label }))}
-    activeId={activeTab}
-    onChange={(id) => loadTab(id as TabId)}
-    onTabContextMenu={handleTabContextMenu}
-  >
-    {#snippet leftActions()}
-      <button
-        type="button"
-        class="bookmarks-toolbar__icon-btn bookmarks__tabs-settings"
-        title="Настройки вкладок"
-        aria-label="Настройки вкладок"
-        aria-haspopup="menu"
-        bind:this={tabsSettingsBtn}
-        onclick={handleTabsSettingsClick}
-      >
-        {@html iconSlidersHorizontal(18)}
-      </button>
-    {/snippet}
-    {#snippet rightActions()}
+  <div class="bookmarks__user-header">
+    <button
+      type="button"
+      class="bookmarks__user"
+      onclick={(e) => handleUserProfileClick(profileIdForPanel, e)}
+      title="Открыть профиль"
+    >
+      <span
+        class="bookmarks__user-avatar"
+        style={headerAvatarUrl ? `background-image:url('${headerAvatarUrl}')` : undefined}
+        aria-hidden="true"
+      ></span>
+      <span class="bookmarks__user-name">{profileLogin || (isOtherProfile ? 'Профиль' : 'Мои списки')}</span>
+    </button>
+
+    <div class="bookmarks__user-actions">
       {#if isReleaseListTab && loadState !== 'loading'}
         <BookmarksToolbar
           {totalCount}
@@ -555,10 +749,50 @@
           onSortChange={onSortChange}
           onRandom={onRandom}
           {randomLoading}
-        />
+        >
+          {#snippet leadingActions()}
+            {#if !isListsPage}
+              <button
+                type="button"
+                class="bookmarks-toolbar__icon-btn"
+                title="Изменить вкладку по умолчанию"
+                aria-label="Изменить вкладку по умолчанию"
+                onclick={handleTabsSettingsClick}
+              >
+                {@html iconHome(18)}
+              </button>
+            {/if}
+          {/snippet}
+        </BookmarksToolbar>
+      {:else}
+        {#if isVotesTab && loadState === 'ready' && totalCount > 0}
+          <span class="bookmarks-toolbar__count">{totalCount} всего</span>
+        {/if}
+        {#if !isListsPage}
+          <button
+            type="button"
+            class="bookmarks-toolbar__icon-btn"
+            title="Изменить вкладку по умолчанию"
+            aria-label="Изменить вкладку по умолчанию"
+            onclick={handleTabsSettingsClick}
+          >
+            {@html iconHome(18)}
+          </button>
+        {/if}
       {/if}
-    {/snippet}
-  </Tabs>
+    </div>
+  </div>
+
+  <Tabs
+    tabs={TABS.map((t) => ({
+      id: t.id,
+      label: t.label,
+      dividerBefore: isListsPage ? t.id === 'votes' : t.id === 'collections',
+    }))}
+    activeId={activeTab}
+    onChange={(tabId) => loadTab(tabId as TabId)}
+    onTabContextMenu={isListsPage ? undefined : handleTabContextMenu}
+  />
 
   <div class="bookmarks__content">
     <div class="bookmarks__grid">
@@ -588,7 +822,7 @@
   </div>
 </div>
 
-{#if defaultTabModalOpen}
+{#if defaultTabModalOpen && !isListsPage}
   <HomeDefaultTabModal
     options={DEFAULT_TAB_OPTIONS}
     value={resolveBookmarksTab(defaultBookmarksTab)}

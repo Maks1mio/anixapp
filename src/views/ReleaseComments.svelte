@@ -4,7 +4,7 @@
   import { navigate } from '../stores/navigation';
   import { CommentsSection } from '../components/comments';
   import CommentsPageHeader from '../components/comments/CommentsPageHeader.svelte';
-  import { normalizeComment } from '../utils/comment';
+  import { normalizeCommentsFromResponse } from '../utils/comment';
   import type { CommentData, CommentSort } from '../types/comment';
   import { COMMENT_SORT_DEFAULT } from '../types/comment';
   import { setDiscordContext, refreshDiscordPresence } from '../services/discord-presence';
@@ -52,7 +52,7 @@
         last?: boolean;
       };
 
-      const chunk = (data.content ?? []).map((raw) => normalizeComment(raw));
+      const chunk = normalizeCommentsFromResponse(data as Record<string, unknown>);
       items = append ? [...items, ...chunk] : chunk;
       totalCount = data.total_count ?? data.total_elements ?? items.length;
       hasMore = data.last === false || chunk.length > 0 && items.length < totalCount;

@@ -516,13 +516,34 @@ ipcMain.handle('anix:relatedReleases', async (_, relatedId, page = 0) => {
   }
 });
 
-ipcMain.handle('anix:votedReleases', async (_, profileId, page = 0) => {
+ipcMain.handle('anix:votedReleases', async (_, profileId, page = 0, sort = 1) => {
   try {
     const client = getAnixart();
-    const data = await client.endpoints.profile.getVotedReleases(profileId, page);
+    // API требует sort — без него отвечает HTTP 200 с пустым телом
+    const sortValue = Number(sort);
+    const safeSort = Number.isFinite(sortValue) && sortValue > 0 ? sortValue : 1;
+    const data = await client.endpoints.profileReleaseVote.allReleaseVoted(
+      profileId,
+      page,
+      { sort: safeSort },
+    );
     return data;
   } catch (err) {
+    const msg = String(err?.message || err || '');
+    // Без sort / за последней страницей API может отдать пустое тело
+    if (msg.includes('empty response')) {
+      return { content: [], last: true, total_count: 0, code: 0 };
+    }
     handleAnixError(err, 'votedReleases');
+  }
+});
+
+ipcMain.handle('anix:profileSocial', async (_, profileId) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profile.getSocialPages(profileId);
+  } catch (err) {
+    handleAnixError(err, 'profileSocial');
   }
 });
 
@@ -551,6 +572,33 @@ ipcMain.handle('anix:friendRequestRemove', async (_, profileId) => {
     return await client.endpoints.profile.removeFriendRequest(profileId);
   } catch (err) {
     handleAnixError(err, 'friendRequestRemove');
+  }
+});
+
+ipcMain.handle('anix:friendRequestHide', async (_, profileId) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profile.hideFriendRequest(profileId);
+  } catch (err) {
+    handleAnixError(err, 'friendRequestHide');
+  }
+});
+
+ipcMain.handle('anix:friendRequestsIn', async (_, page = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profile.getFriendRequestsIn(page);
+  } catch (err) {
+    handleAnixError(err, 'friendRequestsIn');
+  }
+});
+
+ipcMain.handle('anix:friendRequestsOut', async (_, page = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profile.getFriendRequestsOut(page);
+  } catch (err) {
+    handleAnixError(err, 'friendRequestsOut');
   }
 });
 
@@ -693,6 +741,15 @@ ipcMain.handle('anix:changeLogin', async (_, newLogin) => {
     return res;
   } catch (err) {
     handleAnixError(err, 'changeLogin');
+  }
+});
+
+ipcMain.handle('anix:loginHistory', async (_, profileId, page = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profile.changeLoginHistory(profileId, page);
+  } catch (err) {
+    handleAnixError(err, 'loginHistory');
   }
 });
 

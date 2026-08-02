@@ -48,11 +48,15 @@ function attachLegacyEndpoints(client) {
     ep.favorite.favorites(page, { sort, filter_announce, filter });
   ep.profile.getBookmarks = ({ id, type, page, sort, filter_announce, filter }) =>
     ep.profileList.profileListByProfile(id, type, page, { sort, filter_announce, filter });
-  ep.profile.getVotedReleases = (profileId, page) =>
-    ep.profileReleaseVote.allReleaseVoted(profileId, page);
+  ep.profile.getVotedReleases = (profileId, page, sort = 1) =>
+    ep.profileReleaseVote.allReleaseVoted(profileId, page, { sort });
+  ep.profile.getSocialPages = (id) => ep.profile.social(id);
   ep.profile.getFriends = ({ id, page }) => ep.profileFriend.friends(id, page);
   ep.profile.sendFriendRequest = (id) => ep.profileFriend.requestSend(id);
   ep.profile.removeFriendRequest = (id) => ep.profileFriend.requestRemove(id);
+  ep.profile.hideFriendRequest = (id) => ep.profileFriend.requestHide(id);
+  ep.profile.getFriendRequestsIn = (page = 0) => ep.profileFriend.requestsIn(page);
+  ep.profile.getFriendRequestsOut = (page = 0) => ep.profileFriend.requestsOut(page);
   ep.profile.getFriendRecommendations = () => ep.profileFriend.recommendations();
   ep.profile.getReleaseComments = (profileId, page, sort = 1) =>
     ep.releaseComment.profileComments(profileId, page, { sort });
@@ -102,14 +106,15 @@ function attachLegacyEndpoints(client) {
   return client;
 }
 
+/** Как в SocialPagesEditRequest (Jackson): camelCase, не snake_case. */
 function normalizeSocial(data) {
   if (!data || typeof data !== 'object') return data;
   return {
-    vk_page: data.vk_page ?? data.vkPage ?? '',
-    tg_page: data.tg_page ?? data.tgPage ?? '',
-    inst_page: data.inst_page ?? data.instPage ?? '',
-    tt_page: data.tt_page ?? data.ttPage ?? '',
-    discord_page: data.discord_page ?? data.discordPage ?? '',
+    vkPage: String(data.vk_page ?? data.vkPage ?? ''),
+    tgPage: String(data.tg_page ?? data.tgPage ?? ''),
+    instPage: String(data.inst_page ?? data.instPage ?? ''),
+    ttPage: String(data.tt_page ?? data.ttPage ?? ''),
+    discordPage: String(data.discord_page ?? data.discordPage ?? ''),
   };
 }
 

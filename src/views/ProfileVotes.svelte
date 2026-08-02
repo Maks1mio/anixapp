@@ -132,7 +132,7 @@
         isLoading = false;
         return;
       }
-      const data = await window.anixApi!.profile.getVotedReleases(uid, pageToLoad) as any;
+      const data = await window.anixApi!.profile.getVotedReleases(uid, pageToLoad, 1) as any;
       const content = (data?.content ?? []) as any[];
       if (!content.length) {
         if (!append) loadState = 'empty';
@@ -144,6 +144,8 @@
       items = append ? [...items, ...content.map(mapVoteToCardData)] : content.map(mapVoteToCardData);
       loadState = 'ready';
       currentPage += 1;
+      const totalCount = Number(data?.total_count ?? 0);
+      hasMore = !(data?.last === true || content.length < 25 || (totalCount > 0 && currentPage * 25 >= totalCount));
       isLoading = false;
       attachInfiniteScroll();
     } catch (err) {

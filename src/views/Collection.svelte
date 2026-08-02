@@ -3,6 +3,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { iconPencil, iconLock, iconTrash2 } from '../components/icons';
   import { navigate } from '../stores/navigation';
+  import { requireAuth } from '../stores/auth';
   import { handleUserProfileClick } from '../stores/user-profile';
   import { showToast } from '../stores/toast';
   import { COLLECTION_DELETE_ERROR_MESSAGES } from '../utils/collection';
@@ -155,6 +156,7 @@
   }
 
   async function toggleBookmark() {
+    if (!requireAuth()) return;
     if (!window.anixApi) return;
     try {
       if (isFavorite) {

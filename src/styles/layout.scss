@@ -369,6 +369,7 @@
 }
 
 $schedule-panel-width: 22rem;
+$profile-panel-width: 26rem;
 $schedule-panel-gap: 0.75rem;
 $schedule-ease: cubic-bezier(0.22, 1, 0.36, 1);
 $schedule-duration: 0.34s;
@@ -388,6 +389,10 @@ $schedule-duration: 0.34s;
     padding-right: $schedule-panel-gap;
     padding-bottom: $schedule-panel-gap;
   }
+
+  &--profile.schedule-panel-wrap--open {
+    width: calc(#{$profile-panel-width} + #{$schedule-panel-gap});
+  }
 }
 
 .schedule-panel-shell {
@@ -400,6 +405,10 @@ $schedule-duration: 0.34s;
   overflow: hidden;
   background: $color-bg;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+
+  &--profile {
+    width: $profile-panel-width;
+  }
 }
 
 .sidebar-schedule {

@@ -1,11 +1,13 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { navigate } from '../../stores/navigation';
+  import { requireAuth } from '../../stores/auth';
   import CommentList from './CommentList.svelte';
   import CommentComposer from './CommentComposer.svelte';
   import CommentsLoadSentinel from './CommentsLoadSentinel.svelte';
   import type { CommentData } from '../../types/comment';
   import { normalizeComment, patchCommentInTree, buildReleaseCommentAddBody } from '../../utils/comment';
+  import { resolveJacksonRefs } from '../../utils/jackson-refs';
 
   interface Props {
     title?: string;
@@ -88,6 +90,7 @@
   }
 
   function handleVote(updated: CommentData) {
+    if (!requireAuth()) return;
     const prev = localItems.find((c) => c.id === updated.id);
     if (!prev || !window.anixApi?.comments?.release) {
       updateItems(patchCommentInTree(localItems, updated.id, updated));
@@ -103,6 +106,7 @@
   }
 
   function handleReply(comment: CommentData) {
+    if (!requireAuth()) return;
     replyTarget = comment;
     if (composerDock) {
       focusComposer();
@@ -135,7 +139,9 @@
       }
 
       if (res.comment) {
-        const added = normalizeComment(res.comment);
+        const resolved = resolveJacksonRefs(res) as Record<string, unknown>;
+        const commentRaw = (resolved.comment ?? res.comment) as Record<string, unknown>;
+        const added = normalizeComment(commentRaw, resolved);
         updateItems([added, ...localItems]);
         onCommentAdded?.(added);
         replyTarget = null;

@@ -18,6 +18,7 @@ function registerAll(deps) {
   require('../services/media').register(deps);
   require('../windows/player').register(deps);
   require('./shell-logs').register();
+  require('./cdn').register();
   require('../services/updater').register();
   require('../windows/tools').register(deps);
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { iconArrowUp, iconClipboardList, iconEye } from '../icons';
+  import { requireAuth } from '../../stores/auth';
   import { COMMENT_RULES_FORBIDDEN, COMMENT_RULES_FOOTER } from '../../utils/commentRules';
   import { COMMENT_MIN_LENGTH, COMMENT_MAX_LENGTH } from '../../utils/comment';
 
@@ -48,6 +49,7 @@
   });
 
   async function submit() {
+    if (!requireAuth()) return;
     const text = message.trim();
     validationError = '';
     if (!text || busy) return;
@@ -101,6 +103,9 @@
         rows={2}
         disabled={busy}
         onkeydown={onKeydown}
+        onfocus={() => {
+          if (!requireAuth()) textareaEl?.blur();
+        }}
       ></textarea>
 
       {#if validationError}

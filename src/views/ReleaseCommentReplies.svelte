@@ -8,9 +8,11 @@
   import CommentsPageHeader from '../components/comments/CommentsPageHeader.svelte';
   import {
     normalizeComment,
+    normalizeCommentsFromResponse,
     patchCommentInTree,
     buildReleaseCommentAddBody,
   } from '../utils/comment';
+  import { resolveJacksonRefs } from '../utils/jackson-refs';
   import type { CommentData, CommentSort } from '../types/comment';
   import { COMMENT_REPLIES_SORT_DEFAULT } from '../types/comment';
 
@@ -42,7 +44,8 @@
     if (!window.anixApi?.comments?.release) return;
     try {
       const data = await window.anixApi.comments.release.get(commentId) as Record<string, unknown>;
-      parent = normalizeComment(data);
+      const resolved = resolveJacksonRefs(data) as Record<string, unknown>;
+      parent = normalizeComment(resolved, resolved);
     } catch {
       parent = null;
     }
@@ -66,7 +69,7 @@
         last?: boolean;
       };
 
-      const chunk = (data.content ?? []).map((raw) => normalizeComment(raw));
+      const chunk = normalizeCommentsFromResponse(data as Record<string, unknown>);
       replies = append ? [...replies, ...chunk] : chunk;
       totalCount = parent?.replyCount ?? data.total_count ?? data.total_elements ?? chunk.length;
       hasMore = data.last === false || chunk.length > 0 && replies.length < totalCount;
@@ -156,7 +159,9 @@
       }
 
       if (res.comment) {
-        const added = normalizeComment(res.comment);
+        const resolvedAdd = resolveJacksonRefs(res) as Record<string, unknown>;
+        const commentRaw = (resolvedAdd.comment ?? res.comment) as Record<string, unknown>;
+        const added = normalizeComment(commentRaw, resolvedAdd);
         replies = [added, ...replies];
         totalCount += 1;
         if (parent) {

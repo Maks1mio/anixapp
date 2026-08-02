@@ -1,16 +1,18 @@
 <script lang="ts">
   import { CommentsSection } from '../../../components/comments';
   import { navigate } from '../../../stores/navigation';
-  import { normalizeComment } from '../../../utils/comment';
+  import { normalizeCommentsFromResponse } from '../../../utils/comment';
   import type { CommentData } from '../../../types/comment';
 
   interface Props {
     releaseId: number;
     comments: Record<string, unknown>[];
     totalCount?: number;
+    /** Полный ответ API (для Jackson @id), если есть */
+    commentsRoot?: Record<string, unknown> | null;
   }
 
-  let { releaseId, comments, totalCount }: Props = $props();
+  let { releaseId, comments, totalCount, commentsRoot = null }: Props = $props();
 
   let selfProfileId = $state<number | null>(null);
   let loadedItems = $state<CommentData[]>([]);
@@ -18,7 +20,8 @@
 
   $effect(() => {
     releaseId;
-    const preview = comments.map((raw) => normalizeComment(raw));
+    const root = commentsRoot ?? { content: comments };
+    const preview = normalizeCommentsFromResponse(root);
 
     if (preview.length > 0) {
       loadedItems = preview;
@@ -38,7 +41,7 @@
       .list(releaseId, 0, 0)
       .then((data) => {
         if (cancelled) return;
-        loadedItems = (data.content ?? []).map((raw) => normalizeComment(raw));
+        loadedItems = normalizeCommentsFromResponse(data as Record<string, unknown>);
       })
       .catch(() => {
         if (!cancelled) loadedItems = [];

@@ -57,7 +57,8 @@
   const showOwnerActions = $derived(canManage && isMine && !comment.isDeleted && !!onEdit && !!onDelete);
 
   function openProfile(event: MouseEvent) {
-    if (comment.profile.id) handleUserProfileClick(comment.profile.id, event);
+    const profileId = Number(comment.profile?.id ?? 0);
+    if (profileId > 0) handleUserProfileClick(profileId, event);
   }
 
   function startEdit() {

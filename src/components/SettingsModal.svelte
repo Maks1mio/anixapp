@@ -4,6 +4,7 @@
   import Page from './Page.svelte';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import { settingsModalInitialTab, settingsModalLastTab } from '../stores/modals';
+  import { isAuthenticated, openLoginPrompt } from '../stores/auth';
   import AccountPage    from '../views/Settings/pages/AccountPage.svelte';
   import AppearancePage from '../views/Settings/pages/AppearancePage.svelte';
   import ConnectionPage from '../views/Settings/pages/ConnectionPage.svelte';
@@ -125,13 +126,17 @@
     document.removeEventListener('keydown', handleKeydown);
   });
 
-  function handleLogout() {
-    if (window.anixApi) {
-      close();
-      window.anixApi.auth.logout().then(() => {
-        window.location.reload();
-      });
-    }
+  async function handleLogout() {
+    if (!window.anixApi) return;
+    close();
+    try {
+      await window.anixApi.auth.logout();
+    } catch { /* ignore */ }
+    const { syncAuthStatus, notifyAuthChanged } = await import('../stores/auth');
+    await syncAuthStatus();
+    notifyAuthChanged();
+    const { navigate } = await import('../stores/navigation');
+    navigate('/');
   }
 
   function handleGithubLink(e: Event) {
@@ -231,10 +236,21 @@
       </div>
 
       <div class="settings-sidebar__footer-section">
-        <button class="settings-nav__item settings-nav__item--logout" id="s-logout" onclick={handleLogout}>
-          <i data-lucide="log-out"></i>
-          <span>Выйти</span>
-        </button>
+        {#if $isAuthenticated}
+          <button class="settings-nav__item settings-nav__item--logout" id="s-logout" onclick={handleLogout}>
+            <i data-lucide="log-out"></i>
+            <span>Выйти</span>
+          </button>
+        {:else}
+          <button
+            type="button"
+            class="settings-nav__item settings-nav__item--logout"
+            onclick={() => { close(); openLoginPrompt(); }}
+          >
+            <i data-lucide="user"></i>
+            <span>Войти</span>
+          </button>
+        {/if}
         <div class="settings-sidebar__meta">
           <span class="settings-sidebar__meta-version" id="s-version">AnixApp</span>
           <button type="button" class="settings-sidebar__meta-icon" id="s-github-link" title="GitHub" onclick={handleGithubLink}>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { navigate } from '../stores/navigation';
+  import { requireAuth } from '../stores/auth';
   import { toCdnProxyUrl } from '../utils/posterUrl';
   import { iconCheck, iconFlag, iconStar, iconClock, iconCircleCheck } from './icons';
   import { renderDotsMenu, type DotsMenuEntry } from './dots-menu';
@@ -149,6 +150,7 @@
       entries: buildEntries(),
       iconSize: 18,
       onSelect(entryId) {
+        if (!requireAuth()) return;
         const api = window.anixApi;
         if (!id || !api) return;
 

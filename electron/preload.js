@@ -66,7 +66,19 @@ ipcRenderer.on('player:closed', () => {
   window.dispatchEvent(new CustomEvent('player:windowClosed'));
 });
 
+let pendingDeepLinkPayload = null;
+
+ipcRenderer.on('anix:deepLink', (_, payload) => {
+  pendingDeepLinkPayload = payload ?? null;
+  window.dispatchEvent(new CustomEvent('anix:deepLink', { detail: payload }));
+});
+
 contextBridge.exposeInMainWorld('electron', {
+  consumePendingDeepLink: () => {
+    const payload = pendingDeepLinkPayload;
+    pendingDeepLinkPayload = null;
+    return payload;
+  },
   getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
   getVersions: () => ipcRenderer.invoke('app:getVersions'),
   getDeviceId: () => ipcRenderer.invoke('app:getDeviceId'),
@@ -87,6 +99,7 @@ contextBridge.exposeInMainWorld('electron', {
   togglePlayerAlwaysOnTop: () => ipcRenderer.invoke('player:toggleAlwaysOnTop'),
   isPlayerOpen: () => ipcRenderer.invoke('player:isOpen'),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+  fetchCdnJson: (url) => ipcRenderer.invoke('cdn:fetchJson', url),
   downloadEpisodes: (payload) => ipcRenderer.invoke('episode-download:download', payload),
   queueEpisodeDownloads: (payload) => ipcRenderer.invoke('episode-download:queue', payload),
   getDownloadSettings: () => ipcRenderer.invoke('downloads:getSettings'),
@@ -200,6 +213,10 @@ contextBridge.exposeInMainWorld('anixApi', {
 
   auth: {
     signIn: (username, password) => ipcRenderer.invoke('anix:login', username, password),
+    signInWithVk: () => ipcRenderer.invoke('anix:loginVk'),
+    signInWithGoogle: () => ipcRenderer.invoke('anix:loginGoogle'),
+    submitOAuthUrl: (url) => ipcRenderer.invoke('anix:oauthSubmitUrl', url),
+    cancelOAuth: () => ipcRenderer.invoke('anix:oauthCancel'),
     logout: () => ipcRenderer.invoke('anix:logout'),
     getStatus: () => ipcRenderer.invoke('anix:getAuthStatus'),
   },
@@ -207,13 +224,19 @@ contextBridge.exposeInMainWorld('anixApi', {
   profile: {
     self: () => ipcRenderer.invoke('anix:selfProfile'),
     info: (id) => ipcRenderer.invoke('anix:profileById', id),
+    getSocialPages: (profileId) => ipcRenderer.invoke('anix:profileSocial', profileId),
+    getLoginHistory: (profileId, page = 0) => ipcRenderer.invoke('anix:loginHistory', profileId, page),
     getFriends: (profileId, page = 0) => ipcRenderer.invoke('anix:friends', profileId, page),
     sendFriendRequest: (profileId) => ipcRenderer.invoke('anix:friendRequestSend', profileId),
     removeFriendRequest: (profileId) => ipcRenderer.invoke('anix:friendRequestRemove', profileId),
+    hideFriendRequest: (profileId) => ipcRenderer.invoke('anix:friendRequestHide', profileId),
+    getFriendRequestsIn: (page = 0) => ipcRenderer.invoke('anix:friendRequestsIn', page),
+    getFriendRequestsOut: (page = 0) => ipcRenderer.invoke('anix:friendRequestsOut', page),
     getFriendRecommendations: () => ipcRenderer.invoke('anix:friendRecommendations'),
     getBookmarks: (profileId, type, page = 0, sort = 1, filterAnnounce = 0, filter = 0) =>
       ipcRenderer.invoke('anix:getBookmarks', profileId, type, page, sort, filterAnnounce, filter),
-    getVotedReleases: (profileId, page = 0) => ipcRenderer.invoke('anix:votedReleases', profileId, page),
+    getVotedReleases: (profileId, page = 0, sort = 1) =>
+      ipcRenderer.invoke('anix:votedReleases', profileId, page, sort),
     getReleaseComments: (profileId, page = 0, sort = 1) =>
       ipcRenderer.invoke('anix:profileReleaseComments', profileId, page, sort),
     getCollectionComments: (profileId, page = 0, sort = 1) =>

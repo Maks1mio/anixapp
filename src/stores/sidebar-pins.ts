@@ -1,5 +1,6 @@
 import { writable, get } from 'svelte/store';
 import { DEFAULT_BOOKMARK_SORT } from '../constants/bookmarkSort';
+import { isAuthenticated } from './auth';
 import { buildPosterUrl } from '../utils/posterUrl';
 import { mapReleaseRawToCard, releaseCardTitle, releaseListStatusLabel } from '../utils/release-card';
 import type { ReleaseCardData } from '../types/release';
@@ -81,6 +82,12 @@ async function fetchAllFavoritePins(): Promise<SidebarPin[]> {
 }
 
 export async function refreshSidebarPins(): Promise<void> {
+  if (!get(isAuthenticated)) {
+    sidebarPins.set([]);
+    sidebarPinsLoading.set(false);
+    return;
+  }
+
   if (loadPromise) {
     refreshQueued = true;
     return loadPromise;
@@ -111,9 +118,14 @@ export function initSidebarPins(): () => void {
   const onFavoritesChanged = () => {
     void refreshSidebarPins();
   };
+  const onAuthChanged = () => {
+    void refreshSidebarPins();
+  };
   window.addEventListener('anix:favoritesChanged', onFavoritesChanged);
+  window.addEventListener('anix:authChanged', onAuthChanged);
 
   return () => {
     window.removeEventListener('anix:favoritesChanged', onFavoritesChanged);
+    window.removeEventListener('anix:authChanged', onAuthChanged);
   };
 }

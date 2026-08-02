@@ -1,13 +1,49 @@
 import { resolveCdnAssetUrl } from '../../utils/posterUrl';
 
-export function fmtTime(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
+function ruPlural(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
+  return many;
+}
+
+/**
+ * Время просмотра из профиля Anixart.
+ * API отдаёт `watched_time` в минутах (35524 → «24 дня 16 часов»).
+ */
+export function fmtWatchedTime(minutes: number): string {
+  const totalMin = Math.max(0, Math.floor(Number(minutes) || 0));
+  if (!totalMin) return '';
+
+  const h = Math.floor(totalMin / 60);
+  const d = Math.floor(h / 24);
+  const remH = h % 24;
+  const m = totalMin % 60;
+
+  if (d >= 1) {
+    const days = `${d} ${ruPlural(d, 'день', 'дня', 'дней')}`;
+    if (remH <= 0) return days;
+    return `${days} ${remH} ${ruPlural(remH, 'час', 'часа', 'часов')}`;
+  }
+  if (h >= 1) {
+    const hours = `${h} ${ruPlural(h, 'час', 'часа', 'часов')}`;
+    if (m <= 0) return hours;
+    return `${hours} ${m} ${ruPlural(m, 'минута', 'минуты', 'минут')}`;
+  }
+  const mins = Math.max(1, m || totalMin);
+  return `${mins} ${ruPlural(mins, 'минута', 'минуты', 'минут')}`;
+}
+
+/** Короткий формат; `watched_time` — минуты. */
+export function fmtTime(minutes: number): string {
+  const h = Math.floor(minutes / 60);
   const d = Math.floor(h / 24);
   if (d >= 1) {
     const rem = h % 24;
     return rem > 0 ? `${d} д. ${rem} ч.` : `${d} д.`;
   }
-  const m = Math.floor((seconds % 3600) / 60);
+  const m = minutes % 60;
   return h > 0 ? `${h} ч. ${m} мин.` : `${m} мин.`;
 }
 

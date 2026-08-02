@@ -49,6 +49,7 @@ export interface DevBridgeStatus {
 declare global {
   interface Window {
     electron?: {
+      consumePendingDeepLink?: () => { type?: string; id?: number; url?: string } | null;
       getAppVersion: () => Promise<string>;
       getVersions: () => Promise<{
         app: string;
@@ -66,6 +67,8 @@ declare global {
       togglePlayerAlwaysOnTop: () => Promise<boolean>;
       isPlayerOpen: () => Promise<boolean>;
       openExternal: (url: string) => void;
+      /** JSON с Anixart CDN (Lottie-бейджи) через main — без fetch(anix-cdn://) */
+      fetchCdnJson?: (url: string) => Promise<unknown | null>;
       downloadEpisodes?: (payload: {
         title?: string;
         items: Array<{

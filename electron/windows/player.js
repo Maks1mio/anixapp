@@ -84,7 +84,7 @@ function createPlayerWindow(params) {
   if (hasLocalFile) queryParams.playbackMode = 'local';
   if (isDev) {
     const q = new URLSearchParams(queryParams).toString();
-    playerWindow.loadURL('http://localhost:5173/player.html?' + q);
+    playerWindow.loadURL('http://127.0.0.1:5173/player.html?' + q);
   } else {
     const playerPath = path.join(electronDir, '../dist/player.html');
     playerWindow.loadFile(playerPath, { query: queryParams });

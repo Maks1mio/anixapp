@@ -15,7 +15,7 @@
         "build:linux-appimage": "vite build && yarn build:icon && electron-builder --linux AppImage --publish=never",
         "build:vite": "vite build",
         "rebuild:native": "electron-rebuild -f -w discord_bridge",
-        "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
+        "electron:dev": "concurrently \"vite\" \"wait-on http://127.0.0.1:5173 && cross-env NODE_ENV=development electron .\"",
         "electron:build": "vite build && yarn build:icon && electron-builder --publish=never",
         "preview": "vite preview"
     },
@@ -82,6 +82,14 @@
             "**/node_modules/ffmpeg-static/**"
         ],
         "icon": "public/logo/512x512.png",
+        "protocols": [
+            {
+                "name": "Anixart",
+                "schemes": [
+                    "anixart"
+                ]
+            }
+        ],
         "win": {
             "icon": "public/logo/icon.ico"
         },

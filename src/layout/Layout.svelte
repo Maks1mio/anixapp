@@ -5,7 +5,7 @@
   import { activeSidebarTab, isSidebarTabActive } from '../stores/tab-navigation';
   import { openAdminArea, restoreAdminSession, checkTeamMembership, isTeamMember } from '../stores/admin';
   import { openLobbyModal, openNotificationsModal, openSettingsModal } from '../stores/modals';
-  import { handleUserProfileClick } from '../stores/user-profile';
+  import { isAuthenticated, requireAuth } from '../stores/auth';
   import { ensureProfileId } from '../utils/profile';
   import { bindSearchHotkeys } from '../search-controller';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
@@ -15,9 +15,16 @@
   import TitleBar from '../components/TitleBar.svelte';
   import LobbyNowWatching from '../components/LobbyNowWatching.svelte';
   import SidebarSchedulePanel from '../components/SidebarSchedulePanel.svelte';
+  import SidebarProfilePanel from '../components/SidebarProfilePanel.svelte';
   import SidebarPins from '../components/SidebarPins.svelte';
   import Page from '../components/Page.svelte';
   import { initSidebarPins } from '../stores/sidebar-pins';
+  import {
+    profilePanelOpen,
+    profilePanelUserId,
+    resetProfilePanelHistory,
+    toggleProfilePanel,
+  } from '../stores/profile-panel';
 
   interface Props {
     children?: Snippet;
@@ -57,6 +64,15 @@
   let scheduleActive = $state(false);
   let scheduleCloseTimer: ReturnType<typeof setTimeout> | null = null;
 
+  let profileVisible = $state(false);
+  let profileActive = $state(false);
+  let profileCloseTimer: ReturnType<typeof setTimeout> | null = null;
+  let panelUserId = $state<number | null>(null);
+  /** После анимации закрытия профиля открыть расписание */
+  let openScheduleAfterProfileClose = $state(false);
+  /** После анимации закрытия расписания открыть профиль */
+  let openProfileAfterScheduleClose = $state<number | null>(null);
+
   function clearScheduleCloseTimer() {
     if (scheduleCloseTimer != null) {
       clearTimeout(scheduleCloseTimer);
@@ -64,12 +80,38 @@
     }
   }
 
+  function clearProfileCloseTimer() {
+    if (profileCloseTimer != null) {
+      clearTimeout(profileCloseTimer);
+      profileCloseTimer = null;
+    }
+  }
+
   function finishScheduleClose() {
     if (!scheduleActive) scheduleVisible = false;
     clearScheduleCloseTimer();
+    const pendingId = openProfileAfterScheduleClose;
+    if (pendingId != null) {
+      openProfileAfterScheduleClose = null;
+      actuallyOpenProfile(pendingId);
+    }
   }
 
-  function openSchedule() {
+  function finishProfileClose() {
+    if (!profileActive) {
+      profileVisible = false;
+      panelUserId = null;
+      profilePanelUserId.set(null);
+      resetProfilePanelHistory();
+    }
+    clearProfileCloseTimer();
+    if (openScheduleAfterProfileClose) {
+      openScheduleAfterProfileClose = false;
+      actuallyOpenSchedule();
+    }
+  }
+
+  function actuallyOpenSchedule() {
     if (scheduleVisible && scheduleActive) return;
     clearScheduleCloseTimer();
     scheduleVisible = true;
@@ -80,11 +122,78 @@
     });
   }
 
-  function closeSchedule() {
+  function openSchedule() {
+    if (profileVisible) {
+      // Сначала анимация закрытия профиля, потом расписание
+      openScheduleAfterProfileClose = true;
+      openProfileAfterScheduleClose = null;
+      closeProfile(false);
+      return;
+    }
+    actuallyOpenSchedule();
+  }
+
+  function closeSchedule(immediate = false) {
     if (!scheduleVisible) return;
     scheduleActive = false;
     clearScheduleCloseTimer();
+    if (immediate) {
+      scheduleVisible = false;
+      const pendingId = openProfileAfterScheduleClose;
+      if (pendingId != null) {
+        openProfileAfterScheduleClose = null;
+        actuallyOpenProfile(pendingId);
+      }
+      return;
+    }
     scheduleCloseTimer = setTimeout(finishScheduleClose, SCHEDULE_ANIM_MS + 50);
+  }
+
+  function actuallyOpenProfile(userId: number) {
+    clearProfileCloseTimer();
+    panelUserId = userId;
+    profilePanelUserId.set(userId);
+    profilePanelOpen.set(true);
+    if (profileVisible && profileActive) return;
+    profileVisible = true;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        profileActive = true;
+      });
+    });
+  }
+
+  function openProfile(userId: number) {
+    openScheduleAfterProfileClose = false;
+    if (scheduleVisible) {
+      // Сначала анимация закрытия расписания, потом профиль
+      openProfileAfterScheduleClose = userId;
+      closeSchedule(false);
+      return;
+    }
+    actuallyOpenProfile(userId);
+  }
+
+  function closeProfile(immediate = false) {
+    if (!profileVisible) {
+      if (immediate) openScheduleAfterProfileClose = false;
+      return;
+    }
+    profileActive = false;
+    profilePanelOpen.set(false);
+    clearProfileCloseTimer();
+    if (immediate) {
+      profileVisible = false;
+      panelUserId = null;
+      profilePanelUserId.set(null);
+      resetProfilePanelHistory();
+      if (openScheduleAfterProfileClose) {
+        openScheduleAfterProfileClose = false;
+        actuallyOpenSchedule();
+      }
+      return;
+    }
+    profileCloseTimer = setTimeout(finishProfileClose, SCHEDULE_ANIM_MS + 50);
   }
 
   function toggleSchedule() {
@@ -96,6 +205,12 @@
     if (e.target !== e.currentTarget) return;
     if (e.propertyName !== 'width') return;
     if (!scheduleActive) finishScheduleClose();
+  }
+
+  function onProfileTransitionEnd(e: TransitionEvent) {
+    if (e.target !== e.currentTarget) return;
+    if (e.propertyName !== 'width') return;
+    if (!profileActive) finishProfileClose();
   }
 
   const sidebarContextTab = $derived($activeSidebarTab);
@@ -121,9 +236,18 @@
 
   onMount(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeSchedule();
+      // Профиль закрывается только крестиком или расписанием — Esc только для расписания
+      if (e.key === 'Escape' && scheduleVisible && scheduleActive) closeSchedule();
     };
     window.addEventListener('keydown', onKeyDown);
+
+    const onProfilePanelOpen = (e: Event) => {
+      const id = Number((e as CustomEvent<{ userId?: number }>).detail?.userId ?? 0);
+      if (id > 0) openProfile(id);
+    };
+    const onProfilePanelClose = () => closeProfile();
+    window.addEventListener('anix:profilePanelOpen', onProfilePanelOpen);
+    window.addEventListener('anix:profilePanelClose', onProfilePanelClose);
 
     bindSearchHotkeys();
     void restoreAdminSession();
@@ -133,11 +257,18 @@
     };
     window.addEventListener('anix:profileUpdated', onProfileUpdated);
 
-    // Load profile avatar — stored in __anixProfile so TitleBar's $effect can pick it up
-    if (window.anixApi) {
+    function loadSelfProfile() {
+      if (!window.anixApi) {
+        void checkTeamMembership();
+        return;
+      }
       window.anixApi.profile.self().then((data: any) => {
         const profile = data?.profile;
-        if (!profile) return;
+        if (!profile) {
+          (window as any).__anixProfile = undefined;
+          window.dispatchEvent(new CustomEvent('anix:profileUpdated'));
+          return;
+        }
         const pid = profile.id ?? profile['@id'];
         const idNum = typeof pid === 'number' ? pid : Number(pid);
         (window as any).__anixProfile = {
@@ -148,20 +279,28 @@
         window.dispatchEvent(new CustomEvent('anix:profileUpdated'));
         void checkTeamMembership();
       }).catch(() => {});
-    } else {
-      void checkTeamMembership();
     }
+
+    loadSelfProfile();
+    const onAuthChanged = () => loadSelfProfile();
+    window.addEventListener('anix:authChanged', onAuthChanged);
 
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('anix:profileUpdated', onProfileUpdated);
+      window.removeEventListener('anix:profilePanelOpen', onProfilePanelOpen);
+      window.removeEventListener('anix:profilePanelClose', onProfilePanelClose);
+      window.removeEventListener('anix:authChanged', onAuthChanged);
     };
   });
 
   async function onProfileClick(event: MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!requireAuth()) return;
     const selfId = Number((window as { __anixProfile?: { id?: number } }).__anixProfile?.id ?? 0)
       || Number(await ensureProfileId() ?? 0);
-    if (selfId) handleUserProfileClick(selfId, event);
+    if (selfId) toggleProfilePanel(selfId);
   }
 </script>
 
@@ -170,7 +309,10 @@
     onLobby={() => openLobbyModal()}
     onSchedule={toggleSchedule}
     scheduleOpen={scheduleActive}
-    onNotifications={() => openNotificationsModal()}
+    onNotifications={() => {
+      if (!requireAuth()) return;
+      openNotificationsModal();
+    }}
     onSettings={() => openSettingsModal()}
     onProfile={onProfileClick}
     onSearchTab={navigateSearchTab}
@@ -189,10 +331,15 @@
               class="sidebar__link tooltip-trigger"
               class:sidebar__link--active={isActive(item.href)}
               class:sidebar__link--downloads={item.href === '/downloads'}
+              class:sidebar__link--guest-locked={item.href === '/bookmarks' && !$isAuthenticated}
               aria-label={item.label}
               onclick={(e) => {
                 closeSchedule();
                 e.preventDefault();
+                if (item.href === '/bookmarks' && !requireAuth()) {
+                  (e.currentTarget as HTMLElement).blur();
+                  return;
+                }
                 navigateSidebarTab(item.href);
                 (e.currentTarget as HTMLElement).blur();
               }}
@@ -298,7 +445,19 @@
         ontransitionend={onScheduleTransitionEnd}
       >
         <div class="schedule-panel-shell">
-          <SidebarSchedulePanel onClose={closeSchedule} />
+          <SidebarSchedulePanel onClose={() => closeSchedule()} />
+        </div>
+      </aside>
+    {:else if profileVisible && panelUserId}
+      <aside
+        class="schedule-panel-wrap schedule-panel-wrap--profile"
+        class:schedule-panel-wrap--open={profileActive}
+        aria-label="Профиль"
+        aria-hidden={!profileActive}
+        ontransitionend={onProfileTransitionEnd}
+      >
+        <div class="schedule-panel-shell schedule-panel-shell--profile">
+          <SidebarProfilePanel userId={panelUserId} onClose={() => closeProfile()} />
         </div>
       </aside>
     {/if}

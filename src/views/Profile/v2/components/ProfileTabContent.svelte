@@ -54,7 +54,11 @@
     </ProfileSection>
   {:else if activeTab === 'votes' && Array.isArray(profile.votes) && profile.votes.length}
     <ProfileSection title="Оценки">
-      <ProfileVotesSection items={profile.votes as Record<string, unknown>[]} {profileId} />
+      <ProfileVotesSection
+        items={profile.votes as Record<string, unknown>[]}
+        {profileId}
+        {isMyProfile}
+      />
     </ProfileSection>
   {:else if activeTab === 'collections' && (Number(profile.collection_count ?? 0) > 0 || (Array.isArray(profile.collections_preview) && profile.collections_preview.length))}
     <ProfileSection title="Коллекции">

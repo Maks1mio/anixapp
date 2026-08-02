@@ -121,6 +121,10 @@ export async function loadProfilePage(id?: number): Promise<ProfilePageData> {
       profile.comments_preview = resolveProfileCommentsPreview(profile.comments_preview, data);
     }
 
+    if (Array.isArray(profile.votes) && profile.votes.length) {
+      profile.votes = resolveJacksonPreviewList<Record<string, unknown>>(profile.votes, data);
+    }
+
     const cover =
       (data?.blogInfo as { channel?: { cover?: string } } | undefined)?.channel?.cover
       || (data?.blog_info as { channel?: { cover?: string } } | undefined)?.channel?.cover

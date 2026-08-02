@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../../stores/navigation';
+  import { requireAuth } from '../../stores/auth';
   import { openWatchModal } from '../../stores/modals';
   import { buildPosterUrl, buildScreenshotUrl } from '../../utils/posterUrl';
   import { setDiscordContext, refreshDiscordPresence } from '../../services/discord-presence';
@@ -244,6 +245,7 @@
 
   // ── Actions ───────────────────────────────────────────────────────────────
   async function toggleFavorite() {
+    if (!requireAuth()) return;
     if (!window.anixApi || !releaseId) return;
     try {
       if (isFavorite) await window.anixApi.release.removeFavorite(releaseId);
@@ -260,6 +262,7 @@
   }
 
   async function setStatus(value: string) {
+    if (!requireAuth()) return;
     if (!window.anixApi || !releaseId) return;
     const prev = currentStatus;
     const next = (value || null) as ListStatusId | null;
@@ -409,7 +412,7 @@
 
       <!-- Comments -->
       {#if commentCount > 0 || comments.length > 0}
-        <ReleaseComments releaseId={id} {comments} totalCount={commentCount} />
+        <ReleaseComments releaseId={id} {comments} totalCount={commentCount} commentsRoot={release} />
       {/if}
 
     </section>

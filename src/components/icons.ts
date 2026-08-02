@@ -21,7 +21,9 @@ import {
   ClipboardList,
   Copy,
   Download,
+  Ban,
   Eye,
+  EyeOff,
   FileVideo,
   Folder,
   Film,
@@ -40,13 +42,16 @@ import {
   Pencil,
   Pause,
   Play,
+  Plus,
   BookOpen,
   RefreshCw,
   Tags,
   Tv,
   RotateCcw,
+  ScanSearch,
   Search,
   Settings,
+  Share2,
   Shuffle,
   SlidersHorizontal,
   Star,
@@ -144,6 +149,18 @@ export function iconChevronUp(size = 20): string {
 /** Глаз (спойлер) */
 export function iconEye(size = 18): string {
   return toSvg(Eye, size);
+}
+
+export function iconEyeOff(size = 18): string {
+  return toSvg(EyeOff, size);
+}
+
+export function iconBan(size = 18): string {
+  return toSvg(Ban, size);
+}
+
+export function iconLoginHistory(size = 18): string {
+  return toSvg(ScanSearch, size);
 }
 
 /** Буфер обмена / правила */
@@ -266,6 +283,10 @@ export function iconPencil(size = 18): string {
   return toSvg(Pencil, size);
 }
 
+export function iconShare(size = 18): string {
+  return toSvg(Share2, size);
+}
+
 /** Замок (приватная коллекция) */
 export function iconLock(size = 18): string {
   return toSvg(Lock, size);
@@ -319,6 +340,11 @@ export function iconTriangleAlert(size = 16): string {
 /** Закрыть */
 export function iconX(size = 18): string {
   return toSvg(X, size);
+}
+
+/** Плюс */
+export function iconPlus(size = 18): string {
+  return toSvg(Plus, size);
 }
 
 /** Перемешать / случайный выбор */

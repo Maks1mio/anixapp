@@ -1,7 +1,7 @@
 import type { CommentData, CommentProfile, CommentVoteValue, CommentSort } from '../types/comment';
 import { resolveCdnAssetUrl } from './posterUrl';
 import { COMMENT_SORT_OPTIONS } from '../types/comment';
-import { resolveJacksonEntity } from './jackson-refs';
+import { resolveJacksonEntity, resolveJacksonRefs } from './jackson-refs';
 
 export { COMMENT_SORT_OPTIONS };
 export type { CommentSort };
@@ -48,8 +48,9 @@ export function normalizeCommentProfile(raw: Record<string, unknown> | undefined
   if (!raw) {
     return { id: 0, login: 'Пользователь', avatar: '' };
   }
+  const id = Number(raw.id ?? raw['@id'] ?? 0);
   return {
-    id: (raw.id as number) ?? 0,
+    id: Number.isFinite(id) && id > 0 ? id : 0,
     login: String(raw.login ?? raw.nickname ?? 'Пользователь'),
     avatar: resolveCdnAssetUrl(String(raw.avatar ?? '')),
     badgeUrl: resolveCdnAssetUrl((raw.badge_url as string) || undefined) || undefined,
@@ -58,8 +59,13 @@ export function normalizeCommentProfile(raw: Record<string, unknown> | undefined
   };
 }
 
-export function normalizeComment(raw: Record<string, unknown>): CommentData {
+export function normalizeComment(raw: Record<string, unknown>, root?: unknown): CommentData {
   const vote = raw.vote ?? raw.user_vote ?? 0;
+  const profileRaw = resolveJacksonEntity(raw.profile, root ?? raw)
+    ?? (raw.profile && typeof raw.profile === 'object' && !Array.isArray(raw.profile)
+      ? raw.profile as Record<string, unknown>
+      : undefined);
+
   return {
     id: raw.id as number,
     message: String(raw.message ?? ''),
@@ -72,8 +78,17 @@ export function normalizeComment(raw: Record<string, unknown>): CommentData {
     replyCount: Number(raw.reply_count ?? raw.replyCount ?? 0),
     parentCommentId: (raw.parent_comment_id ?? raw.parentCommentId ?? null) as number | null,
     postedAtEpisode: (raw.posted_at_episode ?? raw.postedAtEpisode ?? null) as number | null,
-    profile: normalizeCommentProfile(raw.profile as Record<string, unknown> | undefined),
+    profile: normalizeCommentProfile(profileRaw),
   };
+}
+
+/** Список комментариев из ответа API с разворотом Jackson @id. */
+export function normalizeCommentsFromResponse(data: Record<string, unknown>): CommentData[] {
+  const resolved = resolveJacksonRefs(data) as Record<string, unknown>;
+  const content = Array.isArray(resolved.content) ? resolved.content : [];
+  return content
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .map((raw) => normalizeComment(raw, resolved));
 }
 
 export function isCommentContentHidden(comment: CommentData, revealed: boolean): boolean {

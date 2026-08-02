@@ -1,6 +1,6 @@
 {
     "name": "anixapp",
-    "version": "0.1.5",
+    "version": "0.1.50",
     "description": "Быстрый клиент для просмотра аниме на базе Anixart API",
     "repository": "github:Maks1mio/anixapp",
     "main": "electron/main.js",

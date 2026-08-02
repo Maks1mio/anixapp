@@ -1,6 +1,6 @@
 {
     "name": "anixapp",
-    "version": "0.1.42",
+    "version": "0.1.5",
     "description": "Быстрый клиент для просмотра аниме на базе Anixart API",
     "repository": "github:Maks1mio/anixapp",
     "main": "electron/main.js",
@@ -51,21 +51,25 @@
         "hls.js": "^1.6.16",
         "html-to-image": "^1.11.13",
         "lottie-web": "^5.13.0",
-        "lucide": "^1.21.0"
+        "lucide": "^1.27.0"
     },
     "resolutions": {
         "axios": "^1.18.0",
         "follow-redirects": "^1.16.0",
-        "postcss": "^8.5.15",
+        "postcss": "^8.5.25",
         "@xmldom/xmldom": "^0.8.13",
         "ws": "^8.21.0",
         "tmp": "^0.2.7",
         "form-data": "^4.0.6",
-        "tar": "^7.5.16",
+        "tar": "^7.5.22",
         "undici": "^7.28.0",
         "ip-address": "^10.2.0",
-        "shell-quote": "^1.8.4",
-        "js-yaml": "^4.2.0"
+        "shell-quote": "^1.8.5",
+        "js-yaml": "^4.3.0",
+        "immutable": "^5.1.9",
+        "fast-uri": "^3.1.4",
+        "brace-expansion": "^5.0.8",
+        "minimatch/brace-expansion": "1.1.16"
     },
     "build": {
         "appId": "com.anixapp.client",

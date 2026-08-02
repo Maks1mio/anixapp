@@ -46,7 +46,6 @@ export function pathRequiresAuth(path: string): boolean {
   const p = (path.split('?')[0] || '/').replace(/\/+$/, '') || '/';
   if (p === '/bookmarks') return true;
   if (p === '/notifications') return true;
-  if (p === '/wrapped' || p.startsWith('/wrapped/')) return true;
   if (
     p === '/collections/my'
     || p === '/collections/create'

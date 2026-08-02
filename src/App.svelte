@@ -58,7 +58,6 @@
   import AdminLoginPage from './views/Admin/LoginPage.svelte';
   import AdminPanelPage from './views/Admin/PanelPage.svelte';
   import Downloads from './views/Downloads.svelte';
-  import WrappedPage from './views/Wrapped/WrappedPage.svelte';
   import WebPlayerShell from './components/WebPlayerShell.svelte';
 
   import SettingsModal from './components/SettingsModal.svelte';
@@ -599,8 +598,6 @@
       <Search q={searchQ} tab={searchTab} {searchBy} />
     {:else if path === '/downloads'}
       <Downloads />
-    {:else if path === '/wrapped/2026' || path.startsWith('/wrapped/')}
-      <WrappedPage year={2026} />
     {:else if path === '/uikit'}
       <Uikit />
     {:else if path === '/uikit-v2'}

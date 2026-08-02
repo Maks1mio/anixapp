@@ -13,9 +13,6 @@
   import type { ReleaseCardData } from '../types/release';
   import { fetchAnnouncements, type Announcement } from '../services/announcements';
   import AnnouncementBanner from '../components/AnnouncementBanner.svelte';
-  import YearWrappedBanner from '../components/YearWrappedBanner.svelte';
-  import { shouldShowWrappedBanner } from '../utils/yearWrapped';
-  import { fetchWrappedBannerPosters } from '../views/Wrapped/shared/wrapped-load';
   import {
     isHomeCustomTabConfigured,
     loadHomeCustomTab,
@@ -185,8 +182,6 @@
   let scrollListener: (() => void) | null = null;
   let wrapEl: HTMLElement | undefined = $state();
   let announcements = $state<Announcement[]>([]);
-  let showWrappedBanner = $state(shouldShowWrappedBanner());
-  let wrappedPreviewPosters = $state<string[]>([]);
 
   const isMyTab = $derived(activeTab === 'my');
   const showMyTabEmpty = $derived(isMyTab && !customTabConfigured);
@@ -418,11 +413,6 @@
     window.addEventListener('anix:cardLayoutChanged', onLayoutChanged);
     window.addEventListener('anix:homeCustomTabChanged', onHomeCustomTabChangedEvent);
     void loadAnnouncements();
-    if (showWrappedBanner) {
-      void fetchWrappedBannerPosters(5).then((urls) => {
-        if (urls.length) wrappedPreviewPosters = urls;
-      });
-    }
 
     const cached = findBestHomeCache();
     if (cached?.data && cached.data.items.length > 0) {
@@ -464,9 +454,6 @@
 </script>
 
 <div class="view view-home" bind:this={wrapEl}>
-  {#if showWrappedBanner}
-    <YearWrappedBanner previewPosters={wrappedPreviewPosters} />
-  {/if}
   {#if announcements.length > 0}
     <div class="ann-list">
       {#each announcements as ann (ann.id)}

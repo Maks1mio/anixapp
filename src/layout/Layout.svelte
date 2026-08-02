@@ -222,10 +222,7 @@
   }
 
   const isChatPage = $derived(/^\/announcement\/[^/]+\/chat$/.test(currentPath ?? ''));
-  const isWrappedPage = $derived((currentPath ?? '').startsWith('/wrapped/'));
-  const pageExtraClass = $derived(
-    isChatPage ? 'page--chat' : isWrappedPage ? 'page--wrapped' : undefined,
-  );
+  const pageExtraClass = $derived(isChatPage ? 'page--chat' : undefined);
 
   $effect(() => {
     if (currentPath === '/schedule') {

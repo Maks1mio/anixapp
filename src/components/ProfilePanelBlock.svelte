@@ -303,10 +303,15 @@
   }
 
   function onProfilePatched(patch: Record<string, unknown>) {
+    if ('cover' in patch) {
+      coverUrl = patch.cover ? String(patch.cover) : null;
+    }
     if (!profile) return;
-    profile = { ...profile, ...patch };
-    if (typeof patch.login === 'string' && patch.login) {
-      updateProfilePanelLogin(userId, patch.login);
+    const { cover: _cover, ...rest } = patch;
+    if (Object.keys(rest).length === 0) return;
+    profile = { ...profile, ...rest };
+    if (typeof rest.login === 'string' && rest.login) {
+      updateProfilePanelLogin(userId, rest.login);
     }
   }
 

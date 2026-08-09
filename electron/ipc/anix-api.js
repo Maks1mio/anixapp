@@ -771,6 +771,87 @@ ipcMain.handle('anix:changeLogin', async (_, newLogin) => {
   }
 });
 
+ipcMain.handle('anix:getBadges', async (_, page = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.settings.getBadges(page);
+  } catch (err) {
+    handleAnixError(err, 'getBadges');
+  }
+});
+
+ipcMain.handle('anix:setBadge', async (_, id) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.settings.setBadge(id);
+  } catch (err) {
+    handleAnixError(err, 'setBadge');
+  }
+});
+
+ipcMain.handle('anix:removeBadge', async () => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.settings.removeBadge();
+  } catch (err) {
+    handleAnixError(err, 'removeBadge');
+  }
+});
+
+ipcMain.handle('anix:selectTheme', async (_, id) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.settings.selectTheme(id);
+  } catch (err) {
+    handleAnixError(err, 'selectTheme');
+  }
+});
+
+ipcMain.handle('anix:setAvatar', async (_, imageBase64, fileName = 'image.jpg') => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.settings.setAvatar(imageBase64, fileName);
+  } catch (err) {
+    handleAnixError(err, 'setAvatar');
+  }
+});
+
+ipcMain.handle('anix:deleteAvatar', async () => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.settings.deleteAvatar();
+  } catch (err) {
+    handleAnixError(err, 'deleteAvatar');
+  }
+});
+
+ipcMain.handle('anix:channelUploadCover', async (_, channelId, imageBase64, fileName = 'image.jpg') => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.channel.uploadCover(channelId, imageBase64, fileName);
+  } catch (err) {
+    handleAnixError(err, 'channelUploadCover');
+  }
+});
+
+ipcMain.handle('anix:channelDeleteCover', async (_, channelId) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.channel.deleteCover(channelId);
+  } catch (err) {
+    handleAnixError(err, 'channelDeleteCover');
+  }
+});
+
+ipcMain.handle('anix:channelCreateBlog', async () => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.channel.createBlog();
+  } catch (err) {
+    handleAnixError(err, 'channelCreateBlog');
+  }
+});
+
 ipcMain.handle('anix:loginHistory', async (_, profileId, page = 0) => {
   try {
     const client = getAnixart();

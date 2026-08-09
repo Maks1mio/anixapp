@@ -8,17 +8,22 @@
   import UiV2BackBar from '../components/uikit-v2/UiV2BackBar.svelte';
   import UiV2ChoiceSheet from '../components/uikit-v2/UiV2ChoiceSheet.svelte';
   import UiV2Card from '../components/uikit-v2/UiV2Card.svelte';
+  import UiV2AnimeCard from '../components/uikit-v2/UiV2AnimeCard.svelte';
+  import { showToast } from '../stores/toast';
+  import { buildPosterUrl, toCdnProxyUrl } from '../utils/posterUrl';
+  import { getHomeTabFilterArgs } from '../data/homeTabs';
 
-  type SectionId = 'tokens' | 'type' | 'controls' | 'surfaces';
+  type SectionId = 'tokens' | 'type' | 'controls' | 'surfaces' | 'cards';
 
   const sections: { id: SectionId; title: string; desc: string }[] = [
     { id: 'tokens', title: 'Токены', desc: 'Цвета, радиусы, тени — основа V2' },
     { id: 'type', title: 'Типографика', desc: 'Иерархия заголовков и текста' },
     { id: 'controls', title: 'Контролы', desc: 'Кнопки, pill-навигация, поля' },
     { id: 'surfaces', title: 'Поверхности', desc: 'Панели, модалки, карточки взаимодействия' },
+    { id: 'cards', title: 'Карточки', desc: 'Карточки аниме: сетка и список' },
   ];
 
-  let active: SectionId = $state('controls');
+  let active: SectionId = $state('cards');
 
   const pillItems = [
     { id: '1', label: 'Maks1mio' },
@@ -39,9 +44,108 @@
   let demoPassword = $state('');
   let demoNickname = $state('');
   let demoStatus = $state('');
+
+  type AnimeCardDemo = {
+    id: number | string;
+    title: string;
+    posterUrl: string | null;
+    episodes: number | null;
+    year: string | number | null;
+    rating: number | null;
+    ratingCount: number | null;
+    country: string | null;
+    genres: string[];
+    description: string | null;
+  };
+
+  const API_ENDPOINT = "release.filter(0, { sort: 0, country: 'Япония' }, true)";
+  const API_FILTER = getHomeTabFilterArgs('anime');
+
+  let cardsLoadState = $state<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  let cardsError = $state('');
+  let cardsApiRaw = $state<unknown>(null);
+  let animeCards = $state<AnimeCardDemo[]>([]);
+
+  const cardsApiJson = $derived(
+    cardsApiRaw == null ? '' : JSON.stringify(cardsApiRaw, null, 2),
+  );
+
+  function resolvePoster(raw: Record<string, unknown>): string | null {
+    const p = raw.poster as Record<string, { url?: string }> | string | undefined;
+    let posterRaw: string | undefined;
+    if (p && typeof p === 'object') {
+      posterRaw = p.original?.url ?? p.medium?.url ?? p.small?.url;
+    } else if (typeof p === 'string') {
+      posterRaw = p;
+    } else if (typeof raw.image === 'string') {
+      posterRaw = raw.image;
+    }
+    if (!posterRaw) return null;
+    const built = buildPosterUrl(posterRaw);
+    return built ? toCdnProxyUrl(built) : null;
+  }
+
+  function parseGenres(raw: unknown): string[] {
+    if (Array.isArray(raw)) {
+      return raw
+        .map((g) => (typeof g === 'string' ? g : (g as { name?: string })?.name))
+        .filter((g): g is string => !!g && typeof g === 'string');
+    }
+    if (typeof raw === 'string' && raw.trim()) {
+      return raw.split(/,\s*/).map((g) => g.trim()).filter(Boolean);
+    }
+    return [];
+  }
+
+  function mapReleaseToAnimeCard(raw: Record<string, unknown>): AnimeCardDemo {
+    const title = String(
+      raw.title_ru ?? raw.titleRu ?? raw.title_original ?? raw.title ?? `Release ${raw.id ?? ''}`,
+    );
+    const episodesReleased = typeof raw.episodes_released === 'number' ? raw.episodes_released : null;
+    const episodesTotal = typeof raw.episodes_total === 'number' ? raw.episodes_total : null;
+    return {
+      id: (raw.id as number | string) ?? title,
+      title,
+      posterUrl: resolvePoster(raw),
+      episodes: episodesReleased ?? episodesTotal,
+      year: (raw.year as string | number | null | undefined) ?? null,
+      rating: typeof raw.grade === 'number' ? raw.grade : null,
+      ratingCount: typeof raw.vote_count === 'number' ? raw.vote_count : null,
+      country: typeof raw.country === 'string' ? raw.country : null,
+      genres: parseGenres(raw.genres),
+      description: typeof raw.description === 'string' ? raw.description : null,
+    };
+  }
+
+  async function loadAnimeCards(force = false) {
+    if (!force && (cardsLoadState === 'loading' || cardsLoadState === 'ready')) return;
+    if (!window.anixApi?.release?.filter) {
+      cardsError = 'API недоступно (нужен Electron / anixApi)';
+      cardsLoadState = 'error';
+      return;
+    }
+    cardsLoadState = 'loading';
+    cardsError = '';
+    try {
+      const data = await window.anixApi.release.filter(0, API_FILTER, true);
+      cardsApiRaw = data;
+      const content = Array.isArray((data as { content?: unknown[] })?.content)
+        ? ((data as { content: Record<string, unknown>[] }).content)
+        : [];
+      animeCards = content.map(mapReleaseToAnimeCard);
+      cardsLoadState = 'ready';
+    } catch (err) {
+      cardsError = String(err);
+      cardsLoadState = 'error';
+    }
+  }
+
+  $effect(() => {
+    if (active === 'cards') void loadAnimeCards();
+  });
 </script>
 
-<div class="view view-uikit-v2">
+<div class="view view-uikit-v2" class:view-uikit-v2--wide={active === 'cards'}>
   <header class="uikit-v2-header">
     <div class="uikit-v2-header__top">
       <button type="button" class="uikit-v2-back" onclick={() => navigate('/')}>
@@ -235,7 +339,7 @@
               />
             </div>
           </div>
-        {:else}
+        {:else if s.id === 'surfaces'}
           <div class="uikit-v2-demo-block">
             <h3 class="uikit-v2-demo-block__title">Choice Sheet</h3>
             <p class="uikit-v2-demo-block__desc">
@@ -274,6 +378,91 @@
                   Список недавних релизов с постером, названием и метаданными.
                 </p>
               </UiV2Card>
+            </div>
+          </div>
+        {:else if s.id === 'cards'}
+          <div class="uikit-v2-demo-block">
+            <h3 class="uikit-v2-demo-block__title">API ответ</h3>
+            <p class="uikit-v2-demo-block__desc">
+              Как вкладка «Аниме» на главной: <code>{API_ENDPOINT}</code>.
+              Полный JSON ответа ниже — карточки берут поля из <code>content[]</code>.
+            </p>
+            <div class="uikit-v2-api-toolbar">
+              <UiV2Button
+                label={cardsLoadState === 'loading' ? 'Загрузка…' : 'Обновить'}
+                size="sm"
+                disabled={cardsLoadState === 'loading'}
+                onclick={() => void loadAnimeCards(true)}
+              />
+              <span class="uikit-v2-api-toolbar__meta">
+                {#if cardsLoadState === 'ready'}
+                  {animeCards.length} релизов
+                {:else if cardsLoadState === 'loading'}
+                  Загрузка…
+                {:else if cardsLoadState === 'error'}
+                  Ошибка
+                {:else}
+                  —
+                {/if}
+              </span>
+            </div>
+            {#if cardsLoadState === 'error'}
+              <p class="uikit-v2-demo-block__desc uikit-v2-api-error">{cardsError}</p>
+            {:else if cardsApiJson}
+              <pre class="uikit-v2-api-json" tabindex="0">{cardsApiJson}</pre>
+            {:else if cardsLoadState === 'loading'}
+              <p class="uikit-v2-demo-block__desc">Ждём ответ API…</p>
+            {/if}
+          </div>
+
+          <div class="uikit-v2-demo-block">
+            <h3 class="uikit-v2-demo-block__title">Vertical</h3>
+            <p class="uikit-v2-demo-block__desc">
+              Сетка каталога: постер, меню «⋯», название и строка метаданных.
+            </p>
+            {#if animeCards.length === 0 && cardsLoadState === 'ready'}
+              <p class="uikit-v2-demo-block__desc">В ответе нет релизов.</p>
+            {:else}
+              <div class="uikit-v2-anime-grid">
+                {#each animeCards.slice(0, 10) as card (card.id)}
+                  <UiV2AnimeCard
+                    variant="vertical"
+                    title={card.title}
+                    posterUrl={card.posterUrl}
+                    episodes={card.episodes}
+                    year={card.year}
+                    rating={card.rating}
+                    onclick={() => showToast(`Открыть: ${card.title}`)}
+                    onMore={() => showToast('Меню карточки')}
+                  />
+                {/each}
+              </div>
+            {/if}
+          </div>
+
+          <div class="uikit-v2-demo-block">
+            <h3 class="uikit-v2-demo-block__title">Horizontal</h3>
+            <p class="uikit-v2-demo-block__desc">
+              Список: постер слева, рейтинг-пилюля, жанры и описание.
+            </p>
+            <div class="uikit-v2-anime-list">
+              {#each animeCards.slice(0, 5) as card (card.id)}
+                <UiV2AnimeCard
+                  variant="horizontal"
+                  title={card.title}
+                  posterUrl={card.posterUrl}
+                  episodes={card.episodes}
+                  year={card.year}
+                  rating={card.rating}
+                  ratingCount={card.ratingCount}
+                  country={card.country}
+                  genres={card.genres}
+                  description={card.description}
+                  onclick={() => showToast(`Открыть: ${card.title}`)}
+                  onMore={() => showToast('Меню карточки')}
+                  onInfo={() => showToast('Краткая информация')}
+                />
+              {/each}
             </div>
           </div>
         {/if}

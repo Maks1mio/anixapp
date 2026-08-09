@@ -174,6 +174,10 @@ function buildWebAnixApi(): AnixApi {
     channel: {
       info: (id) => invoke('anix:channelById', id),
       getBlog: (id) => invoke('anix:channelBlog', id),
+      uploadCover: (channelId, imageBase64, fileName) =>
+        invoke('anix:channelUploadCover', channelId, imageBase64, fileName),
+      deleteCover: (channelId) => invoke('anix:channelDeleteCover', channelId),
+      createBlog: () => invoke('anix:channelCreateBlog'),
     },
 
     notification: {
@@ -218,6 +222,12 @@ function buildWebAnixApi(): AnixApi {
       setPrivacyFriendRequests: (state) => invoke('anix:setPrivacyFriendRequests', state),
       getLoginInfo: () => invoke('anix:getLoginInfo'),
       changeLogin: (newLogin) => invoke('anix:changeLogin', newLogin),
+      getBadges: (page = 0) => invoke('anix:getBadges', page),
+      setBadge: (id) => invoke('anix:setBadge', id),
+      removeBadge: () => invoke('anix:removeBadge'),
+      selectTheme: (id) => invoke('anix:selectTheme', id),
+      setAvatar: (imageBase64, fileName) => invoke('anix:setAvatar', imageBase64, fileName),
+      deleteAvatar: () => invoke('anix:deleteAvatar'),
     },
   };
 }

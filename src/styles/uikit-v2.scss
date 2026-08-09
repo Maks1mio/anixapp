@@ -1080,3 +1080,322 @@ $uiv2-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
     transition: none !important;
   }
 }
+
+// ── Anime Card (каталог): vertical grid + horizontal list ────────────────────
+
+.uiv2-anime-card {
+  --uiv2-anime-radius: 14px;
+  --uiv2-anime-rating: #f0c14a;
+  min-width: 0;
+  color: var(--uikit-v2-text, #{$color-text});
+
+  &[role='button'] {
+    cursor: pointer;
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 55%, transparent);
+      outline-offset: 3px;
+      border-radius: 12px;
+    }
+  }
+}
+
+.uiv2-anime-card--vertical {
+  display: flex;
+  flex-direction: column;
+}
+
+.uiv2-anime-card__poster {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--uiv2-anime-radius);
+  overflow: hidden;
+  background: var(--uikit-v2-elevated, #{$color-surface-hover});
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.uiv2-anime-card__poster--h {
+  width: 7.5rem;
+  min-width: 7.5rem;
+  flex-shrink: 0;
+  aspect-ratio: 2 / 3;
+  border-radius: 12px;
+}
+
+.uiv2-anime-card__poster-fallback {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), transparent 42%),
+    linear-gradient(160deg, #2a2a32, #16161a);
+}
+
+.uiv2-anime-card__more-slot {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  z-index: 1;
+}
+
+.uiv2-anime-card__more {
+  background: rgba(20, 20, 22, 0.55) !important;
+  box-shadow: none !important;
+  backdrop-filter: blur(10px);
+  color: rgba(255, 255, 255, 0.92) !important;
+
+  &:hover:not(:disabled) {
+    background: rgba(28, 28, 32, 0.72) !important;
+  }
+
+  &--plain {
+    background: transparent !important;
+    backdrop-filter: none;
+    color: rgba(255, 255, 255, 0.55) !important;
+
+    &:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.06) !important;
+      color: #fff !important;
+    }
+  }
+}
+
+.uiv2-anime-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  padding: 0.55rem 0.1rem 0;
+}
+
+.uiv2-anime-card__title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #fff;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+
+  &--h {
+    flex: 1;
+    min-width: 0;
+    font-size: 1.05rem;
+    -webkit-line-clamp: 2;
+  }
+}
+
+.uiv2-anime-card__meta {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
+
+  &--inline {
+    font-size: 0.82rem;
+  }
+}
+
+.uiv2-anime-card__meta-star {
+  color: var(--uiv2-anime-rating);
+}
+
+.uiv2-anime-card--horizontal {
+  display: flex;
+  gap: 1rem;
+  align-items: stretch;
+  width: 100%;
+  text-align: left;
+}
+
+.uiv2-anime-card__content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.1rem 0;
+}
+
+.uiv2-anime-card__title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.uiv2-anime-card__info {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin: -0.1rem 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+
+  &:hover {
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 55%, transparent);
+    outline-offset: 2px;
+  }
+}
+
+.uiv2-anime-card__stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.75rem;
+}
+
+.uiv2-anime-card__rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  min-height: 1.55rem;
+  padding: 0.18rem 0.55rem 0.18rem 0.5rem;
+  border-radius: 999px;
+  background: var(--uiv2-anime-rating);
+  color: #1a1408;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.uiv2-anime-card__rating-star {
+  display: inline-flex;
+  color: #1a1408;
+
+  :global(svg) {
+    display: block;
+  }
+}
+
+.uiv2-anime-card__rating-count {
+  font-weight: 600;
+  opacity: 0.82;
+}
+
+.uiv2-anime-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.uiv2-anime-card__tag {
+  padding: 0.22rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.uiv2-anime-card__desc {
+  margin: 0.1rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.uikit-v2-anime-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1rem 0.85rem;
+}
+
+.uikit-v2-anime-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+@media (max-width: 900px) {
+  .uikit-v2-anime-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .uikit-v2-anime-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .uiv2-anime-card__poster--h {
+    width: 6.25rem;
+    min-width: 6.25rem;
+  }
+}
+
+.view-uikit-v2.view-uikit-v2--wide {
+  max-width: 64rem;
+}
+
+.uikit-v2-api-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.uikit-v2-api-toolbar__meta {
+  font-size: 0.8rem;
+  color: var(--uikit-v2-muted);
+}
+
+.uikit-v2-api-error {
+  color: var(--uikit-v2-danger) !important;
+}
+
+.uikit-v2-api-json {
+  margin: 0;
+  max-height: 28rem;
+  overflow: auto;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  border: 1px solid var(--uikit-v2-border);
+  background: #0a0a0c;
+  color: #c8d0dc;
+  font-family: var(--uikit-v2-mono);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  white-space: pre;
+  tab-size: 2;
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--uikit-v2-accent) 55%, transparent);
+    outline-offset: 2px;
+  }
+}
+
+.uikit-v2-demo-block__desc code {
+  font-family: var(--uikit-v2-mono);
+  font-size: 0.85em;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--uikit-v2-text);
+}

@@ -8,13 +8,28 @@
   import UiV2BackBar from './uikit-v2/UiV2BackBar.svelte';
   import UiV2ChoiceSheet from './uikit-v2/UiV2ChoiceSheet.svelte';
   import UiV2OutlinedField from './uikit-v2/UiV2OutlinedField.svelte';
+  import { isLottieBadgeUrl } from '../views/Profile/_utils';
+  import { compressImageForUpload } from '../utils/compressImage';
 
-  type EditScreen = 'menu' | 'status' | 'nickname' | 'social';
+  type EditScreen = 'menu' | 'status' | 'nickname' | 'social' | 'badge';
+  type MediaPickerKind = 'avatar' | 'cover';
 
   interface LoginHistoryItem {
     id: number;
     login: string;
     timestamp: number;
+  }
+
+  interface BadgeItem {
+    id: number;
+    name: string;
+    type: number;
+    image_url: string;
+  }
+
+  interface ThemeOption {
+    id: number;
+    name: string;
   }
 
   interface Props {
@@ -109,8 +124,28 @@
   let privacyFriendRequests = $state<0 | 1>(0);
   let privacySaving = $state(false);
   let privacyPicker = $state<{ kind: PrivacyKind; title: string } | null>(null);
+  let showcasePickerOpen = $state(false);
+  let mediaPicker = $state<MediaPickerKind | null>(null);
+
+  let channelId = $state<number | null>(null);
+  let hasCover = $state(false);
+  let avatarBanned = $state(false);
+  let mediaBusy = $state(false);
+  let avatarInputEl = $state<HTMLInputElement | undefined>();
+  let coverInputEl = $state<HTMLInputElement | undefined>();
 
   let logoutBusy = $state(false);
+
+  let currentBadgeName = $state<string | null>(null);
+  let currentBadgeUrl = $state<string | null>(null);
+  let currentBadgeId = $state<number | null>(null);
+  let badges = $state<BadgeItem[]>([]);
+  let badgesState = $state<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  let badgeBusy = $state(false);
+
+  let themes = $state<ThemeOption[]>([]);
+  let selectedThemeId = $state<number>(1);
+  let themeBusy = $state(false);
 
   type OAuthService = 'vk' | 'google' | 'telegram' | 'yandex';
   const OAUTH_SERVICES: {
@@ -249,6 +284,7 @@
       case 'status': return 'Изменить статус';
       case 'nickname': return 'Изменить никнейм';
       case 'social': return 'Социальные сети';
+      case 'badge': return 'Изменить значок';
       default: return 'Редактирование';
     }
   });
@@ -263,6 +299,11 @@
   );
 
   const statusPreview = $derived(statusValue.trim() || status.trim() || 'Не указан');
+  const badgePreview = $derived(currentBadgeName?.trim() || 'Не указан');
+  const showcasePreview = $derived(
+    themes.find((t) => t.id === selectedThemeId)?.name
+      || (selectedThemeId === 2 ? 'Без темы' : selectedThemeId === 1 ? 'Автоматически' : 'Не выбрана'),
+  );
 
   function goMenu() {
     screen = 'menu';
@@ -275,6 +316,261 @@
 
   function soon() {
     showToast('Скоро', 'err');
+  }
+
+  function openBadgeScreen() {
+    screen = 'badge';
+    void loadBadges();
+  }
+
+  function openShowcasePicker() {
+    if (themeBusy) return;
+    if (themes.length === 0) {
+      showToast('Список тем витрины недоступен', 'err');
+      return;
+    }
+    showcasePickerOpen = true;
+  }
+
+  function closeShowcasePicker() {
+    showcasePickerOpen = false;
+  }
+
+  const themeOptions = $derived(
+    themes.map((theme) => ({ value: theme.id, label: theme.name })),
+  );
+
+  function openAvatarPicker() {
+    if (mediaBusy) return;
+    if (avatarBanned) {
+      showToast('Смена фото профиля временно недоступна', 'err');
+      return;
+    }
+    mediaPicker = 'avatar';
+  }
+
+  function openCoverPicker() {
+    if (mediaBusy) return;
+    mediaPicker = 'cover';
+  }
+
+  function closeMediaPicker() {
+    mediaPicker = null;
+  }
+
+  const mediaPickerOptions = $derived.by(() => {
+    const options = [{ value: 'upload', label: 'Загрузить с устройства' }];
+    if (mediaPicker === 'avatar') {
+      options.push({ value: 'reset', label: 'Сбросить фото' });
+    } else if (mediaPicker === 'cover' && hasCover) {
+      options.push({ value: 'reset', label: 'Сбросить обложку' });
+    }
+    return options;
+  });
+
+  async function onMediaPickerSelect(value: string | number) {
+    const kind = mediaPicker;
+    closeMediaPicker();
+    if (!kind) return;
+    if (value === 'upload') {
+      queueMicrotask(() => {
+        if (kind === 'avatar') avatarInputEl?.click();
+        else coverInputEl?.click();
+      });
+      return;
+    }
+    if (value === 'reset') {
+      if (kind === 'avatar') void resetAvatar();
+      else void resetCover();
+    }
+  }
+
+  async function fileToDataUrl(file: File, maxWidth: number): Promise<{ dataUrl: string; name: string }> {
+    const compressed = await compressImageForUpload(file, maxWidth);
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ''));
+      reader.onerror = () => reject(reader.error ?? new Error('read failed'));
+      reader.readAsDataURL(compressed);
+    });
+    return { dataUrl, name: compressed.name || 'image.jpg' };
+  }
+
+  async function onAvatarFileChange(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file || mediaBusy) return;
+    if (!window.anixApi?.settings?.setAvatar) {
+      showToast('Загрузка фото недоступна', 'err');
+      return;
+    }
+    mediaBusy = true;
+    try {
+      const { dataUrl, name } = await fileToDataUrl(file, 1024);
+      const res = await window.anixApi.settings.setAvatar(dataUrl, name);
+      if (res?.code != null && res.code !== 0) {
+        showToast('Не удалось обновить фото профиля', 'err');
+        return;
+      }
+      const nextAvatar = String(res?.avatar ?? '');
+      if (nextAvatar) onProfilePatched?.({ avatar: nextAvatar });
+      showToast('Фото профиля обновлено');
+    } catch {
+      showToast('Не удалось обновить фото профиля', 'err');
+    } finally {
+      mediaBusy = false;
+    }
+  }
+
+  async function resetAvatar() {
+    if (mediaBusy || !window.anixApi?.settings?.deleteAvatar) return;
+    mediaBusy = true;
+    try {
+      const res = await window.anixApi.settings.deleteAvatar();
+      if (res?.code != null && res.code !== 0) {
+        showToast('Не удалось сбросить фото', 'err');
+        return;
+      }
+      onProfilePatched?.({ avatar: String(res?.avatar ?? '') });
+      showToast('Фото профиля сброшено');
+    } catch {
+      showToast('Не удалось сбросить фото', 'err');
+    } finally {
+      mediaBusy = false;
+    }
+  }
+
+  async function ensureBlogChannelId(): Promise<number | null> {
+    if (channelId && channelId > 0) return channelId;
+    const api = window.anixApi?.channel;
+    if (!api) return null;
+
+    try {
+      const blog = api.getBlog ? await api.getBlog(profileId) : await api.info(profileId);
+      const fromBlog = Number(
+        (blog as { channel?: { id?: number } })?.channel?.id
+        ?? (blog as { blogInfo?: { channel?: { id?: number } } })?.blogInfo?.channel?.id
+        ?? 0,
+      );
+      if (fromBlog > 0) {
+        channelId = fromBlog;
+        return fromBlog;
+      }
+    } catch {
+      /* create below */
+    }
+
+    if (!api.createBlog) return null;
+    try {
+      const created = await api.createBlog();
+      if (created?.code != null && created.code !== 0) return null;
+      const id = Number(created?.channel?.id ?? 0);
+      if (id > 0) {
+        channelId = id;
+        return id;
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
+  async function refreshCoverFlag() {
+    try {
+      const blog = window.anixApi?.channel?.getBlog
+        ? await window.anixApi.channel.getBlog(profileId)
+        : null;
+      const cover =
+        (blog as { channel?: { cover?: string } } | null)?.channel?.cover
+        || (blog as { blogInfo?: { channel?: { cover?: string } } } | null)?.blogInfo?.channel?.cover
+        || '';
+      hasCover = !!String(cover).trim();
+      const id = Number((blog as { channel?: { id?: number } } | null)?.channel?.id ?? 0);
+      if (id > 0) channelId = id;
+    } catch {
+      hasCover = false;
+    }
+  }
+
+  async function onCoverFileChange(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file || mediaBusy) return;
+    if (!window.anixApi?.channel?.uploadCover) {
+      showToast('Загрузка обложки недоступна', 'err');
+      return;
+    }
+    mediaBusy = true;
+    try {
+      const id = await ensureBlogChannelId();
+      if (!id) {
+        showToast('Не удалось подготовить канал для обложки', 'err');
+        return;
+      }
+      const { dataUrl, name } = await fileToDataUrl(file, 1920);
+      const res = await window.anixApi.channel.uploadCover(id, dataUrl, name);
+      if (res?.code != null && res.code !== 0) {
+        showToast('Не удалось обновить обложку', 'err');
+        return;
+      }
+      const next = String(res?.url ?? '');
+      hasCover = !!next;
+      onProfilePatched?.({ cover: next || null });
+      showToast('Обложка обновлена');
+    } catch {
+      showToast('Не удалось обновить обложку', 'err');
+    } finally {
+      mediaBusy = false;
+    }
+  }
+
+  async function resetCover() {
+    if (mediaBusy || !window.anixApi?.channel?.deleteCover) return;
+    mediaBusy = true;
+    try {
+      const id = channelId || await ensureBlogChannelId();
+      if (!id) {
+        showToast('Канал обложки не найден', 'err');
+        return;
+      }
+      const res = await window.anixApi.channel.deleteCover(id);
+      if (res?.code != null && res.code !== 0) {
+        showToast('Не удалось сбросить обложку', 'err');
+        return;
+      }
+      hasCover = false;
+      onProfilePatched?.({ cover: null });
+      showToast('Обложка сброшена');
+    } catch {
+      showToast('Не удалось сбросить обложку', 'err');
+    } finally {
+      mediaBusy = false;
+    }
+  }
+
+  function themeToProfilePatch(theme: Record<string, unknown> | null | undefined): Record<string, unknown> {
+    if (!theme) {
+      return { theme_enabled: false };
+    }
+    return {
+      theme_enabled: theme.theme_enabled ?? false,
+      theme_gradient_start_color: theme.theme_gradient_start_color ?? null,
+      theme_gradient_end_color: theme.theme_gradient_end_color ?? null,
+      theme_gradient_angle: theme.theme_gradient_angle ?? null,
+      theme_background_url: theme.theme_background_url ?? null,
+      theme_background_mode: theme.theme_background_mode ?? null,
+      theme_background_alpha: theme.theme_background_alpha ?? null,
+      theme_icon_res_name: theme.theme_icon_res_name ?? null,
+      theme_icon_url: theme.theme_icon_url ?? null,
+      theme_icon_color: theme.theme_icon_color ?? null,
+      theme_icon_alpha: theme.theme_icon_alpha ?? null,
+      theme_icon_density: theme.theme_icon_density ?? theme.theme_icon_destiny ?? null,
+      theme_icon_size: theme.theme_icon_size ?? null,
+      theme_animation_enabled: theme.theme_animation_enabled ?? false,
+      theme_animation_speed: theme.theme_animation_speed ?? null,
+    };
   }
 
   async function loadSettings() {
@@ -313,9 +609,150 @@
       privacySocial = Number(settings.privacy_social ?? 0) as PrivacyVal;
       privacyFriendRequests = Number(settings.privacy_friend_requests ?? 0) as 0 | 1;
       applyBoundFlags(settings as Record<string, unknown>);
+
+      const rawThemes = Array.isArray(settings.available_themes) ? settings.available_themes : [];
+      themes = rawThemes.map((t) => {
+        const row = t as { id?: number; name?: string };
+        return { id: Number(row.id ?? 0), name: String(row.name ?? `Тема ${row.id ?? ''}`) };
+      }).filter((t) => t.id > 0);
+      selectedThemeId = Number(settings.selected_theme_id ?? 1) || 1;
+
+      channelId = Number(settings.channel_id ?? 0) || null;
+      avatarBanned = !!(settings.is_change_avatar_banned);
+
+      const badge = settings.badge as BadgeItem | null | undefined;
+      if (badge && typeof badge === 'object') {
+        currentBadgeId = Number(badge.id) || null;
+        currentBadgeName = String(badge.name ?? currentBadgeName ?? '') || null;
+        currentBadgeUrl = String(badge.image_url ?? currentBadgeUrl ?? '') || null;
+      } else if (!badgeName && !badgeUrl) {
+        currentBadgeId = null;
+        currentBadgeName = null;
+        currentBadgeUrl = null;
+      }
+
       loadState = 'ready';
+      void refreshCoverFlag();
     } catch {
       loadState = 'error';
+    }
+  }
+
+  async function loadBadges() {
+    const api = window.anixApi?.settings;
+    if (!api?.getBadges) {
+      badgesState = 'error';
+      return;
+    }
+    badgesState = 'loading';
+    try {
+      const res = await api.getBadges(0);
+      const rows = Array.isArray(res?.content) ? res.content : [];
+      badges = rows.map((row) => {
+        const r = row as Record<string, unknown>;
+        return {
+          id: Number(r.id ?? 0),
+          name: String(r.name ?? ''),
+          type: Number(r.type ?? 0),
+          image_url: String(r.image_url ?? ''),
+        };
+      }).filter((b) => b.id > 0);
+
+      const profileBadge = res?.profile?.badge;
+      if (profileBadge && typeof profileBadge === 'object') {
+        currentBadgeId = Number(profileBadge.id) || null;
+        currentBadgeName = String(profileBadge.name ?? '') || null;
+        currentBadgeUrl = String(profileBadge.image_url ?? '') || null;
+      }
+      badgesState = 'ready';
+    } catch {
+      badgesState = 'error';
+    }
+  }
+
+  async function applyBadge(badge: BadgeItem) {
+    if (badgeBusy || !window.anixApi?.settings?.setBadge) return;
+    if (currentBadgeId === badge.id) return;
+    badgeBusy = true;
+    try {
+      const res = await window.anixApi.settings.setBadge(badge.id);
+      if (res?.code != null && res.code !== 0) {
+        showToast('Не удалось установить значок', 'err');
+        return;
+      }
+      currentBadgeId = badge.id;
+      currentBadgeName = badge.name;
+      currentBadgeUrl = badge.image_url;
+      onProfilePatched?.({
+        badge: {
+          id: badge.id,
+          name: badge.name,
+          type: badge.type,
+          image_url: badge.image_url,
+        },
+      });
+      showToast('Значок обновлён');
+      goMenu();
+    } catch {
+      showToast('Не удалось установить значок', 'err');
+    } finally {
+      badgeBusy = false;
+    }
+  }
+
+  async function clearBadge() {
+    if (badgeBusy || !window.anixApi?.settings?.removeBadge) return;
+    if (!currentBadgeId && !currentBadgeUrl) return;
+    badgeBusy = true;
+    try {
+      const res = await window.anixApi.settings.removeBadge();
+      if (res?.code != null && res.code !== 0) {
+        showToast('Не удалось сбросить значок', 'err');
+        return;
+      }
+      currentBadgeId = null;
+      currentBadgeName = null;
+      currentBadgeUrl = null;
+      onProfilePatched?.({ badge: null });
+      showToast('Значок сброшен');
+      goMenu();
+    } catch {
+      showToast('Не удалось сбросить значок', 'err');
+    } finally {
+      badgeBusy = false;
+    }
+  }
+
+  async function applyTheme(id: number) {
+    if (themeBusy || !window.anixApi?.settings?.selectTheme) return;
+    if (selectedThemeId === id) {
+      closeShowcasePicker();
+      return;
+    }
+    themeBusy = true;
+    try {
+      const res = await window.anixApi.settings.selectTheme(id);
+      const code = res?.code;
+      if (code === 2) {
+        showToast('Тема не найдена', 'err');
+        return;
+      }
+      if (code === 3) {
+        showToast('Тема недоступна', 'err');
+        return;
+      }
+      if (code != null && code !== 0) {
+        showToast('Не удалось сменить витрину', 'err');
+        return;
+      }
+      selectedThemeId = id;
+      onProfilePatched?.(themeToProfilePatch(res?.theme as Record<string, unknown> | null | undefined));
+      showToast('Витрина обновлена');
+      closeShowcasePicker();
+    } catch {
+      showToast('Не удалось сменить витрину', 'err');
+    } finally {
+      themeBusy = false;
     }
   }
 
@@ -594,6 +1031,11 @@
   }
 
   $effect(() => {
+    currentBadgeName = badgeName;
+    currentBadgeUrl = badgeUrl;
+  });
+
+  $effect(() => {
     if (screen === 'nickname') void loadLoginHistory();
   });
 
@@ -681,13 +1123,21 @@
 
       <h3 class="profile-panel__edit-section">Персонализация</h3>
 
-      <button type="button" class="profile-panel__edit-row" onclick={soon}>
+      <button type="button" class="profile-panel__edit-row" onclick={openAvatarPicker} disabled={mediaBusy}>
         <span class="profile-panel__edit-row-title">Изменить фото профиля</span>
-        <span class="profile-panel__edit-row-sub">Загрузить с устройства</span>
+        <span class="profile-panel__edit-row-sub">
+          {#if mediaBusy}
+            Загрузка…
+          {:else if avatarBanned}
+            Смена временно недоступна
+          {:else}
+            Загрузить с устройства
+          {/if}
+        </span>
       </button>
-      <button type="button" class="profile-panel__edit-row" onclick={soon}>
+      <button type="button" class="profile-panel__edit-row" onclick={openCoverPicker} disabled={mediaBusy}>
         <span class="profile-panel__edit-row-title">Изменить обложку</span>
-        <span class="profile-panel__edit-row-sub">Загрузить с устройства</span>
+        <span class="profile-panel__edit-row-sub">{mediaBusy ? 'Загрузка…' : 'Загрузить с устройства'}</span>
       </button>
       <button type="button" class="profile-panel__edit-row" onclick={() => { screen = 'status'; }}>
         <span class="profile-panel__edit-row-title">Изменить статус</span>
@@ -697,19 +1147,22 @@
         <span class="profile-panel__edit-row-title">Изменить никнейм</span>
         <span class="profile-panel__edit-row-sub">{loginValue || login}</span>
       </button>
-      <button type="button" class="profile-panel__edit-row" onclick={soon}>
+      <button type="button" class="profile-panel__edit-row" onclick={openBadgeScreen}>
         <span class="profile-panel__edit-row-title">Изменить значок</span>
-        {#if badgeName || badgeUrl}
-          <span class="profile-panel__edit-row-sub profile-panel__edit-row-sub--badge">
-            {#if badgeUrl}
-              <img class="profile-panel__edit-badge" src={toCdnProxyUrl(badgeUrl)} alt="" />
+        <span class="profile-panel__edit-row-sub profile-panel__edit-row-sub--badge">
+          {#if currentBadgeUrl}
+            {#if isLottieBadgeUrl(currentBadgeUrl)}
+              <span class="profile-panel__edit-badge profile-panel__edit-badge--lottie" aria-hidden="true"></span>
+            {:else}
+              <img class="profile-panel__edit-badge" src={toCdnProxyUrl(currentBadgeUrl)} alt="" />
             {/if}
-            {badgeName || 'Значок'}
-          </span>
-        {/if}
+          {/if}
+          {badgePreview}
+        </span>
       </button>
-      <button type="button" class="profile-panel__edit-row" onclick={soon}>
+      <button type="button" class="profile-panel__edit-row" onclick={openShowcasePicker}>
         <span class="profile-panel__edit-row-title">Изменить витрину</span>
+        <span class="profile-panel__edit-row-sub">{showcasePreview}</span>
       </button>
 
       <div class="profile-panel__edit-divider" aria-hidden="true"></div>
@@ -915,6 +1368,50 @@
         {socialSaving ? 'Сохранение…' : 'Сохранить'}
       </button>
     </div>
+  {:else if screen === 'badge'}
+    <div class="profile-panel__edit-form">
+      {#if badgesState === 'loading' || badgesState === 'idle'}
+        <p class="profile-panel__edit-hint">Загрузка значков…</p>
+      {:else if badgesState === 'error'}
+        <p class="profile-panel__edit-hint profile-panel__edit-hint--err">Не удалось загрузить значки</p>
+        <button type="button" class="profile-panel__retry" onclick={() => void loadBadges()}>Повторить</button>
+      {:else if badges.length === 0}
+        <p class="profile-panel__edit-hint">
+          У вас пока нет доступных значков. Они появляются за активность и достижения в Anixart.
+        </p>
+      {:else}
+        <div class="profile-panel__badge-grid" role="listbox" aria-label="Доступные значки">
+          {#each badges as badge (badge.id)}
+            <button
+              type="button"
+              class="profile-panel__badge-option"
+              class:profile-panel__badge-option--on={currentBadgeId === badge.id}
+              role="option"
+              aria-selected={currentBadgeId === badge.id}
+              disabled={badgeBusy}
+              onclick={() => void applyBadge(badge)}
+            >
+              {#if badge.image_url && !isLottieBadgeUrl(badge.image_url)}
+                <img class="profile-panel__badge-option-img" src={toCdnProxyUrl(badge.image_url)} alt="" />
+              {:else}
+                <span class="profile-panel__badge-option-img profile-panel__badge-option-img--placeholder" aria-hidden="true"></span>
+              {/if}
+              <span class="profile-panel__badge-option-name">{badge.name || `Значок ${badge.id}`}</span>
+            </button>
+          {/each}
+        </div>
+      {/if}
+      {#if currentBadgeId || currentBadgeUrl}
+        <button
+          type="button"
+          class="profile-panel__edit-save profile-panel__edit-save--ghost"
+          disabled={badgeBusy}
+          onclick={() => void clearBadge()}
+        >
+          {badgeBusy ? 'Сохранение…' : 'Сбросить значок'}
+        </button>
+      {/if}
+    </div>
   {/if}
 
   {#if privacyPicker}
@@ -928,4 +1425,41 @@
       onSelect={(v) => void setPrivacy(picker.kind, Number(v))}
     />
   {/if}
+
+  {#if showcasePickerOpen}
+    <UiV2ChoiceSheet
+      title="Изменить витрину"
+      options={themeOptions}
+      value={selectedThemeId}
+      disabled={themeBusy}
+      onClose={closeShowcasePicker}
+      onSelect={(v) => void applyTheme(Number(v))}
+    />
+  {/if}
+
+  {#if mediaPicker}
+    <UiV2ChoiceSheet
+      title={mediaPicker === 'avatar' ? 'Изменить фото профиля' : 'Изменить обложку'}
+      options={mediaPickerOptions}
+      value="upload"
+      disabled={mediaBusy}
+      onClose={closeMediaPicker}
+      onSelect={(v) => void onMediaPickerSelect(v)}
+    />
+  {/if}
+
+  <input
+    bind:this={avatarInputEl}
+    type="file"
+    accept="image/jpeg,image/png,image/webp,image/gif"
+    hidden
+    onchange={(e) => void onAvatarFileChange(e)}
+  />
+  <input
+    bind:this={coverInputEl}
+    type="file"
+    accept="image/jpeg,image/png,image/webp"
+    hidden
+    onchange={(e) => void onCoverFileChange(e)}
+  />
 </div>

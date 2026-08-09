@@ -291,6 +291,13 @@ export interface AnixApi {
   channel: {
     info: (id: number) => Promise<{ channel?: unknown }>;
     getBlog?: (id: number) => Promise<{ channel?: unknown; blogInfo?: unknown }>;
+    uploadCover: (
+      channelId: number,
+      imageBase64: string,
+      fileName?: string,
+    ) => Promise<{ code?: number; url?: string }>;
+    deleteCover: (channelId: number) => Promise<{ code?: number; url?: string }>;
+    createBlog: () => Promise<{ code?: number; channel?: { id?: number; cover?: string } }>;
   };
 
   notification: {
@@ -353,6 +360,15 @@ export interface AnixApi {
       is_change_login_banned: boolean;
       is_change_avatar_banned: boolean;
       channel_id: number;
+      available_themes?: { id: number; name?: string }[];
+      selected_theme_id?: number;
+      badge?: {
+        id: number;
+        name: string;
+        type: number;
+        image_url: string;
+        timestamp?: number;
+      } | null;
     }>;
     setStatus: (status: string) => Promise<{ code?: number }>;
     getSocial: () => Promise<{
@@ -383,6 +399,48 @@ export interface AnixApi {
       next_change_avaliable_at: number;
     }>;
     changeLogin: (newLogin: string) => Promise<{ code?: number }>;
+    getBadges: (page?: number) => Promise<{
+      code?: number;
+      content?: Array<{
+        id: number;
+        name: string;
+        type: number;
+        image_url: string;
+        timestamp?: number;
+      }>;
+      profile?: { badge?: { id: number; name: string; image_url: string; type: number } | null };
+    }>;
+    setBadge: (id: number) => Promise<{ code?: number }>;
+    removeBadge: () => Promise<{ code?: number }>;
+    selectTheme: (id: number) => Promise<{
+      code?: number;
+      theme?: {
+        id?: number;
+        name?: string;
+        theme_enabled?: boolean;
+        theme_gradient_start_color?: string | null;
+        theme_gradient_end_color?: string | null;
+        theme_gradient_angle?: string | null;
+        theme_background_url?: string | null;
+        theme_background_mode?: string | null;
+        theme_background_alpha?: number | null;
+        theme_icon_res_name?: string | null;
+        theme_icon_url?: string | null;
+        theme_icon_color?: string | null;
+        theme_icon_alpha?: number | null;
+        theme_icon_density?: string | null;
+        theme_icon_size?: string | null;
+        theme_animation_enabled?: boolean;
+        theme_animation_speed?: string | null;
+      } | null;
+    }>;
+    setAvatar: (imageBase64: string, fileName?: string) => Promise<{
+      code?: number;
+      avatar?: string;
+      is_change_avatar_banned?: boolean;
+      ban_change_avatar_expires?: number;
+    }>;
+    deleteAvatar: () => Promise<{ code?: number; avatar?: string }>;
   };
 }
 

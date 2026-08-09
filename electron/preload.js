@@ -363,6 +363,10 @@ contextBridge.exposeInMainWorld('anixApi', {
   channel: {
     info: (id) => ipcRenderer.invoke('anix:channelById', id),
     getBlog: (id) => ipcRenderer.invoke('anix:channelBlog', id),
+    uploadCover: (channelId, imageBase64, fileName) =>
+      ipcRenderer.invoke('anix:channelUploadCover', channelId, imageBase64, fileName),
+    deleteCover: (channelId) => ipcRenderer.invoke('anix:channelDeleteCover', channelId),
+    createBlog: () => ipcRenderer.invoke('anix:channelCreateBlog'),
   },
 
   notification: {
@@ -404,5 +408,11 @@ contextBridge.exposeInMainWorld('anixApi', {
     setPrivacyFriendRequests: (state) => ipcRenderer.invoke('anix:setPrivacyFriendRequests', state),
     getLoginInfo: () => ipcRenderer.invoke('anix:getLoginInfo'),
     changeLogin: (newLogin) => ipcRenderer.invoke('anix:changeLogin', newLogin),
+    getBadges: (page = 0) => ipcRenderer.invoke('anix:getBadges', page),
+    setBadge: (id) => ipcRenderer.invoke('anix:setBadge', id),
+    removeBadge: () => ipcRenderer.invoke('anix:removeBadge'),
+    selectTheme: (id) => ipcRenderer.invoke('anix:selectTheme', id),
+    setAvatar: (imageBase64, fileName) => ipcRenderer.invoke('anix:setAvatar', imageBase64, fileName),
+    deleteAvatar: () => ipcRenderer.invoke('anix:deleteAvatar'),
   },
 });

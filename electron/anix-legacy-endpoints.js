@@ -40,6 +40,11 @@ function attachLegacyEndpoints(client) {
   ep.channel.getArticle = (id) => ep.article.article(id);
   ep.channel.info = (id) => ep.channel.channel(id);
   ep.channel.getBlog = (id) => ep.channel.blog(id);
+  ep.channel.uploadCover = (channelId, imageBase64, fileName = 'image.jpg') => {
+    const base64 = typeof imageBase64 === 'string' ? imageBase64.replace(/^data:[^;]+;base64,/, '') : '';
+    return ep.channel.coverUpload(channelId, Buffer.from(base64, 'base64'), fileName);
+  };
+  ep.channel.deleteCover = (channelId) => ep.channel.coverDelete(channelId);
 
   const profileById = ep.profile.byId.bind(ep.profile);
   const profileInfo = ep.profile.info.bind(ep.profile);
@@ -92,6 +97,15 @@ function attachLegacyEndpoints(client) {
       setPrivacyFriendRequests: (state) => pref.privacyFriendRequestsEdit({ permission: state }),
       getLoginInfo: () => pref.changeLoginInfo(),
       changeLogin: (newLogin) => pref.changeLogin({ login: newLogin }),
+      getBadges: (page = 0) => ep.profileBadge.all(page),
+      setBadge: (id) => ep.profileBadge.edit(id),
+      removeBadge: () => ep.profileBadge.remove(),
+      selectTheme: (id) => pref.selectTheme({ id }),
+      setAvatar: (imageBase64, fileName = 'image.jpg') => {
+        const base64 = typeof imageBase64 === 'string' ? imageBase64.replace(/^data:[^;]+;base64,/, '') : '';
+        return pref.avatarEdit(Buffer.from(base64, 'base64'), fileName);
+      },
+      deleteAvatar: () => pref.avatarDelete(),
     },
     writable: true,
     configurable: true,

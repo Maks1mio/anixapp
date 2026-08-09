@@ -1171,6 +1171,12 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   height: 1.15rem;
   border-radius: 50%;
   object-fit: cover;
+
+  &--lottie {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+  }
 }
 
 .profile-panel__edit-form {
@@ -1178,6 +1184,70 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   flex-direction: column;
   gap: 0.85rem;
   padding: 0.5rem 1.1rem 1.5rem;
+}
+
+.profile-panel__badge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: 0.65rem;
+}
+
+.profile-panel__badge-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 6.25rem;
+  padding: 0.7rem 0.45rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s ease, background 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, $color-accent 70%, transparent);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+
+  &--on {
+    border-color: color-mix(in srgb, $color-accent 65%, transparent);
+    background: color-mix(in srgb, $color-accent 14%, transparent);
+  }
+}
+
+.profile-panel__badge-option-img {
+  width: 2.4rem;
+  height: 2.4rem;
+  object-fit: contain;
+
+  &--placeholder {
+    display: block;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.35), transparent 45%),
+      linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.05));
+    border: 1px solid rgba(255, 255, 255, 0.16);
+  }
+}
+
+.profile-panel__badge-option-name {
+  font-size: 0.72rem;
+  line-height: 1.25;
+  color: $color-text-muted;
+  word-break: break-word;
 }
 
 .profile-panel__edit-field {
@@ -1264,6 +1334,16 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   &:focus-visible {
     outline: 2px solid color-mix(in srgb, $color-accent 50%, transparent);
     outline-offset: 2px;
+  }
+
+  &--ghost {
+    background: transparent;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+
+    &:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.06);
+    }
   }
 }
 

@@ -37,7 +37,6 @@
           <span
             class="uiv2-back-bar__seg"
             class:uiv2-back-bar__seg--active={!!seg.active}
-            title={seg.label}
           >
             {seg.label}
           </span>

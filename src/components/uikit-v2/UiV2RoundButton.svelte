@@ -35,7 +35,7 @@
   class="uiv2-round-btn uiv2-round-btn--{size} {className}"
   {disabled}
   {tabindex}
-  {title}
+  title={title || undefined}
   aria-label={label}
   aria-haspopup={ariaHaspopup}
   aria-expanded={ariaExpanded}

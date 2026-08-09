@@ -585,6 +585,18 @@ function createAnixBridgeCore(options = {}) {
       c.getClient().endpoints.settings.setPrivacyFriendRequests(state)),
     'anix:getLoginInfo': h((c) => c.getClient().endpoints.settings.getLoginInfo()),
     'anix:changeLogin': h((c, newLogin) => c.getClient().endpoints.settings.changeLogin(newLogin)),
+    'anix:getBadges': h((c, page = 0) => c.getClient().endpoints.settings.getBadges(page)),
+    'anix:setBadge': h((c, id) => c.getClient().endpoints.settings.setBadge(id)),
+    'anix:removeBadge': h((c) => c.getClient().endpoints.settings.removeBadge()),
+    'anix:selectTheme': h((c, id) => c.getClient().endpoints.settings.selectTheme(id)),
+    'anix:setAvatar': h((c, imageBase64, fileName = 'image.jpg') =>
+      c.getClient().endpoints.settings.setAvatar(imageBase64, fileName)),
+    'anix:deleteAvatar': h((c) => c.getClient().endpoints.settings.deleteAvatar()),
+    'anix:channelUploadCover': h((c, channelId, imageBase64, fileName = 'image.jpg') =>
+      c.getClient().endpoints.channel.uploadCover(channelId, imageBase64, fileName)),
+    'anix:channelDeleteCover': h((c, channelId) =>
+      c.getClient().endpoints.channel.deleteCover(channelId)),
+    'anix:channelCreateBlog': h((c) => c.getClient().endpoints.channel.createBlog()),
     'anix:loginHistory': h((c, profileId, page = 0) =>
       c.getClient().endpoints.profile.changeLoginHistory(profileId, page)),
     'anix:searchReleases': h((c, query, page = 0, searchBy = 0) =>

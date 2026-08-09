@@ -197,10 +197,10 @@
     if (!window.anixApi) return;
     try {
       await window.anixApi.client.checkConnection();
-      await syncAuthStatus();
+      const ok = await syncAuthStatus();
       clearRetry();
-      // Без токена — гостевой режим (главная/каталог), не экран логина
       appScreen.set('main');
+      if (!ok) openLoginPrompt();
     } catch { /* stay offline */ }
   }
 
@@ -454,11 +454,14 @@
 
     window.addEventListener('keydown', handleZoomKeydown);
 
-    // Initial boot sequence — API доступен → main (гость или авторизован)
+    // Initial boot sequence — API доступен → main; без токена сразу модалка входа
     window.anixApi.client.checkConnection()
       .then(async () => {
-        await syncAuthStatus();
-        window.setTimeout(() => appScreen.set('main'), 500);
+        const ok = await syncAuthStatus();
+        window.setTimeout(() => {
+          appScreen.set('main');
+          if (!ok) openLoginPrompt();
+        }, 500);
       })
       .catch(() => {
         offlineRetryTimer = window.setInterval(checkAndShow, 7000);

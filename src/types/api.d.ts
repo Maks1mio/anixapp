@@ -1,4 +1,44 @@
 // ── Structured API (window.anixApi) — grouped endpoints ──
+
+export type OAuthSignInResult = {
+  success: boolean;
+  code?: number;
+  cancelled?: boolean;
+  error?: string;
+  needsSignup?: boolean;
+  email?: string | null;
+  suggestedLogins?: string[] | null;
+};
+
+export type OAuthSignUpResult = {
+  success: boolean;
+  code?: number;
+  error?: string;
+  needsVerify?: boolean;
+  hash?: string;
+  codeTimestampExpires?: number;
+  suggestedLogins?: string[] | null;
+};
+
+export type OAuthBindResult = {
+  success: boolean;
+  code?: number;
+  cancelled?: boolean;
+  error?: string;
+};
+
+export type AuthCodeResult = {
+  success: boolean;
+  code?: number;
+  error?: string;
+  needsVerify?: boolean;
+  needsLogin?: boolean;
+  hash?: string;
+  codeTimestampExpires?: number;
+  suggestedLogins?: string[] | null;
+  available?: boolean;
+};
+
 export interface AnixApi {
   client: {
     readonly baseUrl: string;
@@ -13,10 +53,43 @@ export interface AnixApi {
 
   auth: {
     signIn: (username: string, password: string) => Promise<{ success: boolean; code?: number }>;
-    signInWithVk: () => Promise<{ success: boolean; code?: number; cancelled?: boolean; error?: string }>;
-    signInWithGoogle: () => Promise<{ success: boolean; code?: number; cancelled?: boolean; error?: string }>;
+    signInWithVk: () => Promise<OAuthSignInResult>;
+    signInWithGoogle: () => Promise<OAuthSignInResult>;
+    signInWithTelegram: () => Promise<OAuthSignInResult>;
+    signInWithYandex: () => Promise<OAuthSignInResult>;
+    signUp: (payload: { login: string; email: string; password: string }) => Promise<AuthCodeResult>;
+    signUpVerify: (payload: {
+      login: string;
+      email: string;
+      password: string;
+      hash: string;
+      code: number;
+    }) => Promise<AuthCodeResult>;
+    signUpResend: (payload: {
+      login: string;
+      email: string;
+      password: string;
+      hash: string;
+    }) => Promise<AuthCodeResult>;
+    checkLogin: (login: string) => Promise<AuthCodeResult>;
+    restore: (data: string) => Promise<AuthCodeResult>;
+    restoreVerify: (payload: {
+      data: string;
+      password: string;
+      hash: string;
+      code: number;
+    }) => Promise<AuthCodeResult>;
+    restoreResend: (payload: {
+      data: string;
+      password: string;
+      hash: string;
+    }) => Promise<AuthCodeResult>;
+    completeOAuthSignUp: (payload: { login: string; email: string }) => Promise<OAuthSignUpResult>;
+    clearOAuthPending: () => Promise<{ ok: boolean }>;
     submitOAuthUrl: (url: string) => Promise<{ success: boolean; code?: number; error?: string }>;
     cancelOAuth: () => Promise<{ ok: boolean }>;
+    bindOAuthService: (provider: 'vk' | 'google' | 'telegram' | 'yandex') => Promise<OAuthBindResult>;
+    unbindOAuthService: (provider: 'vk' | 'google' | 'telegram' | 'yandex') => Promise<OAuthBindResult>;
     logout: () => Promise<void>;
     getStatus: () => Promise<{ hasToken: boolean }>;
   };
@@ -268,6 +341,14 @@ export interface AnixApi {
       privacy_social: number;
       privacy_friend_requests: number;
       is_vk_bound: boolean;
+      isVkBound?: boolean;
+      is_goolge_bound?: boolean;
+      is_google_bound?: boolean;
+      isGoogleBound?: boolean;
+      is_telegram_bound?: boolean;
+      isTelegramBound?: boolean;
+      is_yandex_bound?: boolean;
+      isYandexBound?: boolean;
       is_login_changed: boolean;
       is_change_login_banned: boolean;
       is_change_avatar_banned: boolean;

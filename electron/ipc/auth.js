@@ -1,15 +1,20 @@
 'use strict';
 
 const { ipcMain } = require('electron');
-const { DefaultResult } = require('anixapi');
+const { DefaultResult, OAuthAuthResult } = require('anixapi');
 const config = require('../lib/config-store');
 const state = require('../lib/app-state');
 const {
   getVkAccessToken,
   getGoogleFirebaseIdToken,
+  getTelegramIdToken,
+  getYandexAccessToken,
   extractTokenFromPastedUrl,
   cancelPending,
 } = require('../lib/oauth-login');
+
+/** @type {{ provider: string, token: string, email?: string | null, suggestedLogins?: string[] | null } | null} */
+let pendingOAuthSignup = null;
 
 function register(deps) {
   const {
@@ -25,6 +30,7 @@ function register(deps) {
 
 
   function applyLoginSuccess(profile, profileToken, baseUrl) {
+    pendingOAuthSignup = null;
     config.saveConfig({
       token: profileToken.token,
       profileId: profile?.id ?? null,
@@ -35,7 +41,16 @@ function register(deps) {
     state.anixart = createAnixClient({ baseUrl, token: profileToken.token });
   }
 
-  async function finishOAuthLogin(provider, apiCall) {
+  function rememberSignup(provider, token, res) {
+    pendingOAuthSignup = {
+      provider,
+      token,
+      email: res?.email || null,
+      suggestedLogins: Array.isArray(res?.suggested_logins) ? res.suggested_logins : null,
+    };
+  }
+
+  async function finishOAuthLogin(provider, token, apiCall) {
     const { baseUrl } = config.loadConfig();
     const loginClient = createAnixClient({ baseUrl });
     const res = await apiCall(loginClient);
@@ -55,12 +70,27 @@ function register(deps) {
       });
       return { success: true };
     }
+    const notRegistered = code === (OAuthAuthResult?.NotRegistered ?? 3);
+    if (notRegistered) {
+      rememberSignup(provider, token, res);
+      logger.info('auth', `${provider} needs signup`, {
+        email: res?.email || null,
+        suggested: res?.suggested_logins?.length || 0,
+      });
+      return {
+        success: false,
+        needsSignup: true,
+        code,
+        email: res?.email || null,
+        suggestedLogins: Array.isArray(res?.suggested_logins) ? res.suggested_logins : null,
+      };
+    }
     logger.warn('auth', `${provider} login failed`, { code });
     return { success: false, code };
   }
 
   const ANIX_UA =
-    'AnixartApp/9.0 BETA 19-26073118 (Android 9; SDK 28; x86_64; ROG ASUS AI2201_B; ru)';
+    'AnixartApp/9.0 BETA 21-26080522 (Android 9; SDK 28; x86_64; ROG ASUS AI2201_B; ru)';
 
   /** Прямой POST /auth/vk — обходим возможные нюансы URLSearchParams. */
   async function signInWithVkRaw(baseUrl, vkAccessToken, fieldName = 'vkAccessToken') {
@@ -96,44 +126,98 @@ function register(deps) {
     const token = String(vkAccessToken || '').trim();
     if (!token) return { success: false, error: 'vk_no_token' };
 
-    // 1) как в AnixartJS
-    let res = await finishOAuthLogin('vk', (client) =>
+    let res = await finishOAuthLogin('vk', token, (client) =>
       client.endpoints.auth.signInWithVk({ vkAccessToken: token }),
     );
-    if (res.success) return res;
+    if (res.success || res.needsSignup) return res;
 
-    // 2) код 2 при живом токене — пробуем прямой POST и snake_case
+    // код 2 (INVALID_REQUEST) — не гоняем snake_case/зеркала: это обычно неверный тип токена
     if (res.code === 2) {
-      const attempts = [
-        ['vkAccessToken', baseUrl],
-        ['vk_access_token', baseUrl],
-        ['vkAccessToken', 'https://api.anixsekai.com'],
-        ['vkAccessToken', 'https://api-s.anixsekai.com'],
-      ];
-      for (const [field, apiBase] of attempts) {
-        try {
-          const data = await signInWithVkRaw(apiBase, token, field);
-          const code = data?.code;
-          const profile = data?.profile;
-          const profileToken = data?.profileToken;
-          if (code === DefaultResult.Ok && profileToken?.token) {
-            applyLoginSuccess(profile, profileToken, baseUrl);
-            logger.info('auth', 'vk login success via raw', { field, apiBase });
-            return { success: true };
-          }
-          if (code != null && code !== 2) {
-            return { success: false, code };
-          }
-        } catch (err) {
-          logger.warn('auth', 'vk raw attempt failed', {
-            field,
-            apiBase,
-            error: String(err?.message || err),
-          });
-        }
-      }
+      logger.warn('auth', 'vk rejected by api (invalid request)', { code: 2 });
+      return res;
     }
+
     return res;
+  }
+
+  async function completeOAuthSignUp({ login, email }) {
+    const pending = pendingOAuthSignup;
+    if (!pending?.provider || !pending?.token) {
+      return { success: false, error: 'no_pending_oauth' };
+    }
+    const loginValue = String(login || '').trim();
+    const emailValue = String(email || pending.email || '').trim();
+    if (!loginValue || !emailValue) {
+      return { success: false, error: 'login_email_required' };
+    }
+
+    const { baseUrl } = config.loadConfig();
+    const client = createAnixClient({ baseUrl });
+    const token = pending.token;
+    let res;
+    switch (pending.provider) {
+      case 'vk':
+        res = await client.endpoints.auth.signUpWithVk({
+          login: loginValue,
+          email: emailValue,
+          vkAccessToken: token,
+        });
+        break;
+      case 'google':
+        res = await client.endpoints.auth.signUpWithGoogle({
+          login: loginValue,
+          email: emailValue,
+          googleIdToken: token,
+        });
+        break;
+      case 'telegram':
+        res = await client.endpoints.auth.signUpWithTelegram({
+          login: loginValue,
+          email: emailValue,
+          telegramIdToken: token,
+        });
+        break;
+      case 'yandex':
+        res = await client.endpoints.auth.signUpWithYandex({
+          login: loginValue,
+          email: emailValue,
+          yandexAccessToken: token,
+        });
+        break;
+      default:
+        return { success: false, error: 'unknown_provider' };
+    }
+
+    const code = res?.code;
+    const profile = res?.profile;
+    const profileToken = res?.profileToken;
+    logger.info('auth', `${pending.provider} signup attempt`, {
+      code,
+      profileId: profile?.id,
+      login: profile?.login,
+    });
+
+    if (code === DefaultResult.Ok && profileToken?.token) {
+      applyLoginSuccess(profile, profileToken, baseUrl);
+      return { success: true };
+    }
+
+    if (res?.hash) {
+      return {
+        success: false,
+        code,
+        needsVerify: true,
+        hash: res.hash,
+        codeTimestampExpires: res.codeTimestampExpires,
+        suggestedLogins: Array.isArray(res.suggested_logins) ? res.suggested_logins : null,
+      };
+    }
+
+    return {
+      success: false,
+      code,
+      suggestedLogins: Array.isArray(res?.suggested_logins) ? res.suggested_logins : null,
+    };
   }
 
 // ——— Auth ———
@@ -181,6 +265,172 @@ loggedHandle('anix:login', async (_, username, password) => {
   return { success: false, code };
 });
 
+loggedHandle('anix:signUp', async (_, payload) => {
+  const login = String(payload?.login || '').trim();
+  const email = String(payload?.email || '').trim();
+  const password = String(payload?.password || '');
+  if (!login || !email || !password) {
+    return { success: false, error: 'fields_required' };
+  }
+  const { baseUrl } = config.loadConfig();
+  const client = createAnixClient({ baseUrl });
+  const res = await client.endpoints.auth.signUp({ login, email, password });
+  const code = res?.code;
+  logger.info('auth', 'signUp attempt', { code, login });
+  if (code === DefaultResult.Ok && res?.hash) {
+    return {
+      success: true,
+      needsVerify: true,
+      hash: res.hash,
+      codeTimestampExpires: res.codeTimestampExpires,
+    };
+  }
+  if (res?.hash) {
+    return {
+      success: false,
+      needsVerify: true,
+      code,
+      hash: res.hash,
+      codeTimestampExpires: res.codeTimestampExpires,
+      suggestedLogins: Array.isArray(res.suggested_logins) ? res.suggested_logins : null,
+    };
+  }
+  return {
+    success: false,
+    code,
+    suggestedLogins: Array.isArray(res?.suggested_logins) ? res.suggested_logins : null,
+  };
+});
+
+loggedHandle('anix:signUpVerify', async (_, payload) => {
+  const login = String(payload?.login || '').trim();
+  const email = String(payload?.email || '').trim();
+  const password = String(payload?.password || '');
+  const hash = String(payload?.hash || '');
+  const code = Number(payload?.code);
+  if (!login || !email || !password || !hash || !Number.isFinite(code)) {
+    return { success: false, error: 'fields_required' };
+  }
+  const { baseUrl } = config.loadConfig();
+  const client = createAnixClient({ baseUrl });
+  const res = await client.endpoints.auth.verify({ login, email, password, hash, code });
+  const resultCode = res?.code;
+  logger.info('auth', 'signUp verify', { code: resultCode, login });
+  if (resultCode === DefaultResult.Ok) {
+    const loginRes = await client.endpoints.auth.signIn({ login, password });
+    if (loginRes?.code === DefaultResult.Ok && loginRes?.profileToken?.token) {
+      applyLoginSuccess(loginRes.profile, loginRes.profileToken, baseUrl);
+      return { success: true };
+    }
+    return { success: true, needsLogin: true };
+  }
+  return { success: false, code: resultCode };
+});
+
+loggedHandle('anix:signUpResend', async (_, payload) => {
+  const login = String(payload?.login || '').trim();
+  const email = String(payload?.email || '').trim();
+  const password = String(payload?.password || '');
+  const hash = String(payload?.hash || '');
+  if (!hash) return { success: false, error: 'hash_required' };
+  const { baseUrl } = config.loadConfig();
+  const client = createAnixClient({ baseUrl });
+  const res = await client.endpoints.auth.resend({ login, email, password, hash });
+  const code = res?.code;
+  logger.info('auth', 'signUp resend', { code });
+  if (code === DefaultResult.Ok || res?.hash) {
+    return {
+      success: true,
+      hash: res?.hash || hash,
+      codeTimestampExpires: res?.codeTimestampExpires,
+    };
+  }
+  return { success: false, code };
+});
+
+loggedHandle('anix:checkLogin', async (_, loginValue) => {
+  const login = String(loginValue || '').trim();
+  if (!login) return { available: false, code: 2 };
+  const { baseUrl } = config.loadConfig();
+  const client = createAnixClient({ baseUrl });
+  const res = await client.endpoints.auth.checkLogin({ login });
+  return {
+    available: !!res?.available,
+    code: res?.code,
+    suggestedLogins: Array.isArray(res?.suggested_logins) ? res.suggested_logins : null,
+  };
+});
+
+loggedHandle('anix:restore', async (_, dataValue) => {
+  const data = String(dataValue || '').trim();
+  if (!data) return { success: false, error: 'data_required' };
+  const { baseUrl } = config.loadConfig();
+  const client = createAnixClient({ baseUrl });
+  const res = await client.endpoints.auth.restore({ data });
+  const code = res?.code;
+  logger.info('auth', 'restore attempt', { code });
+  if ((code === DefaultResult.Ok || res?.hash) && res?.hash) {
+    return {
+      success: true,
+      needsVerify: true,
+      hash: res.hash,
+      codeTimestampExpires: res.codeTimestampExpires,
+    };
+  }
+  return { success: false, code };
+});
+
+loggedHandle('anix:restoreVerify', async (_, payload) => {
+  const data = String(payload?.data || '').trim();
+  const password = String(payload?.password || '');
+  const hash = String(payload?.hash || '');
+  const code = Number(payload?.code);
+  if (!data || !password || !hash || !Number.isFinite(code)) {
+    return { success: false, error: 'fields_required' };
+  }
+  const { baseUrl } = config.loadConfig();
+  const client = createAnixClient({ baseUrl });
+  const res = await client.endpoints.auth.restoreVerify({ data, password, hash, code });
+  const resultCode = res?.code;
+  const profile = res?.profile;
+  const profileToken = res?.profileToken;
+  logger.info('auth', 'restore verify', { code: resultCode, profileId: profile?.id });
+  if (resultCode === DefaultResult.Ok && profileToken?.token) {
+    applyLoginSuccess(profile, profileToken, baseUrl);
+    return { success: true };
+  }
+  if (resultCode === DefaultResult.Ok) {
+    // Фоллбэк: старые ответы без токена
+    const loginRes = await client.endpoints.auth.signIn({ login: data, password });
+    if (loginRes?.code === DefaultResult.Ok && loginRes?.profileToken?.token) {
+      applyLoginSuccess(loginRes.profile, loginRes.profileToken, baseUrl);
+      return { success: true };
+    }
+    return { success: true, needsLogin: true };
+  }
+  return { success: false, code: resultCode };
+});
+
+loggedHandle('anix:restoreResend', async (_, payload) => {
+  const data = String(payload?.data || '').trim();
+  const password = String(payload?.password || '');
+  const hash = String(payload?.hash || '');
+  if (!data || !password || !hash) return { success: false, error: 'fields_required' };
+  const { baseUrl } = config.loadConfig();
+  const client = createAnixClient({ baseUrl });
+  const res = await client.endpoints.auth.restoreResend({ data, password, hash });
+  const code = res?.code;
+  logger.info('auth', 'restore resend', { code });
+  if (code === DefaultResult.Ok || res?.hash) {
+    return {
+      success: true,
+      hash: res?.hash || hash,
+      codeTimestampExpires: res?.codeTimestampExpires,
+    };
+  }
+  return { success: false, code };
+});
+
 loggedHandle('anix:loginVk', async () => {
   try {
     const vkAccessToken = String(await getVkAccessToken() || '').trim();
@@ -200,7 +450,7 @@ loggedHandle('anix:loginGoogle', async () => {
     const googleIdToken = String(await getGoogleFirebaseIdToken() || '').trim();
     if (!googleIdToken) return { success: false, error: 'google_no_token' };
     logger.info('auth', 'google token ready', { len: googleIdToken.length });
-    return await finishOAuthLogin('google', (client) =>
+    return await finishOAuthLogin('google', googleIdToken, (client) =>
       client.endpoints.auth.signInWithGoogle({ googleIdToken }),
     );
   } catch (err) {
@@ -209,6 +459,53 @@ loggedHandle('anix:loginGoogle', async () => {
     logger.warn('auth', 'google oauth error', { error: msg });
     return { success: false, error: msg };
   }
+});
+
+loggedHandle('anix:loginTelegram', async () => {
+  try {
+    const telegramIdToken = String(await getTelegramIdToken() || '').trim();
+    if (!telegramIdToken) return { success: false, error: 'telegram_no_token' };
+    logger.info('auth', 'telegram token ready', { len: telegramIdToken.length });
+    return await finishOAuthLogin('telegram', telegramIdToken, (client) =>
+      client.endpoints.auth.signInWithTelegram({ telegramIdToken }),
+    );
+  } catch (err) {
+    const msg = String(err?.message || err);
+    if (msg === 'cancelled') return { success: false, cancelled: true };
+    logger.warn('auth', 'telegram oauth error', { error: msg });
+    return { success: false, error: msg };
+  }
+});
+
+loggedHandle('anix:loginYandex', async () => {
+  try {
+    const yandexAccessToken = String(await getYandexAccessToken() || '').trim();
+    if (!yandexAccessToken) return { success: false, error: 'yandex_no_token' };
+    logger.info('auth', 'yandex token ready', { len: yandexAccessToken.length });
+    return await finishOAuthLogin('yandex', yandexAccessToken, (client) =>
+      client.endpoints.auth.signInWithYandex({ yandexAccessToken }),
+    );
+  } catch (err) {
+    const msg = String(err?.message || err);
+    if (msg === 'cancelled') return { success: false, cancelled: true };
+    logger.warn('auth', 'yandex oauth error', { error: msg });
+    return { success: false, error: msg };
+  }
+});
+
+loggedHandle('anix:oauthCompleteSignUp', async (_, payload) => {
+  try {
+    return await completeOAuthSignUp(payload || {});
+  } catch (err) {
+    const msg = String(err?.message || err);
+    logger.warn('auth', 'oauth signup error', { error: msg });
+    return { success: false, error: msg };
+  }
+});
+
+loggedHandle('anix:oauthClearPending', async () => {
+  pendingOAuthSignup = null;
+  return { ok: true };
 });
 
 /** Запасной путь: вставка URL с blank.html (если окно OAuth не перехватило hash). */
@@ -226,6 +523,67 @@ ipcMain.handle('anix:oauthCancel', () => {
   cancelPending('cancelled');
   return { ok: true };
 });
+
+  // Привязка OAuth-сервиса к текущему аккаунту (profile/preference/<provider>/bind).
+  loggedHandle('anix:bindOAuthService', async (_, provider) => {
+    const p = String(provider || '').toLowerCase();
+    try {
+      const client = getAnixart();
+      const pref = client.endpoints.profilePreference;
+      let res;
+      if (p === 'vk') {
+        const accessToken = String(await getVkAccessToken() || '').trim();
+        if (!accessToken) return { success: false, error: 'vk_no_token' };
+        res = await pref.vkBind({ accessToken });
+      } else if (p === 'google') {
+        const idToken = String(await getGoogleFirebaseIdToken() || '').trim();
+        if (!idToken) return { success: false, error: 'google_no_token' };
+        res = await pref.googleBind({ idToken });
+      } else if (p === 'telegram') {
+        const idToken = String(await getTelegramIdToken() || '').trim();
+        if (!idToken) return { success: false, error: 'telegram_no_token' };
+        res = await pref.telegramBind({ idToken });
+      } else if (p === 'yandex') {
+        const accessToken = String(await getYandexAccessToken() || '').trim();
+        if (!accessToken) return { success: false, error: 'yandex_no_token' };
+        res = await pref.yandexBind({ accessToken });
+      } else {
+        return { success: false, error: 'unknown_provider' };
+      }
+      const code = res?.code ?? -1;
+      logger.info('auth', `${p} bind`, { code });
+      if (code === DefaultResult.Ok) return { success: true, code };
+      return { success: false, code };
+    } catch (err) {
+      const msg = String(err?.message || err);
+      if (msg === 'cancelled') return { success: false, cancelled: true };
+      logger.warn('auth', `${p} bind error`, { error: msg });
+      return { success: false, error: msg };
+    }
+  });
+
+  // Отвязка OAuth-сервиса (profile/preference/<provider>/unbind).
+  loggedHandle('anix:unbindOAuthService', async (_, provider) => {
+    const p = String(provider || '').toLowerCase();
+    try {
+      const client = getAnixart();
+      const pref = client.endpoints.profilePreference;
+      let res;
+      if (p === 'vk') res = await pref.vkUnbind();
+      else if (p === 'google') res = await pref.googleUnbind();
+      else if (p === 'telegram') res = await pref.telegramUnbind();
+      else if (p === 'yandex') res = await pref.yandexUnbind();
+      else return { success: false, error: 'unknown_provider' };
+      const code = res?.code ?? -1;
+      logger.info('auth', `${p} unbind`, { code });
+      if (code === DefaultResult.Ok) return { success: true, code };
+      return { success: false, code };
+    } catch (err) {
+      const msg = String(err?.message || err);
+      logger.warn('auth', `${p} unbind error`, { error: msg });
+      return { success: false, error: msg };
+    }
+  });
 
 loggedHandle('anix:logout', async () => {
   config.saveConfig({

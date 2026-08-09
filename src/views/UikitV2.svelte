@@ -3,6 +3,7 @@
   import { iconChevronLeft, iconChevronRight, iconPlus, iconX } from '../components/icons';
   import UiV2RoundButton from '../components/uikit-v2/UiV2RoundButton.svelte';
   import UiV2Button from '../components/uikit-v2/UiV2Button.svelte';
+  import UiV2OutlinedField from '../components/uikit-v2/UiV2OutlinedField.svelte';
   import UiV2PillBar from '../components/uikit-v2/UiV2PillBar.svelte';
   import UiV2BackBar from '../components/uikit-v2/UiV2BackBar.svelte';
   import UiV2ChoiceSheet from '../components/uikit-v2/UiV2ChoiceSheet.svelte';
@@ -33,6 +34,11 @@
     { value: 1, label: 'Только друзья' },
     { value: 2, label: 'Только я' },
   ];
+
+  let demoLogin = $state('');
+  let demoPassword = $state('');
+  let demoNickname = $state('');
+  let demoStatus = $state('');
 </script>
 
 <div class="view view-uikit-v2">
@@ -201,11 +207,34 @@
 
           </div>
 
-
-          <label class="uikit-v2-field">
-            <span class="uikit-v2-field__label">Поле ввода</span>
-            <input class="uikit-v2-input" type="text" placeholder="Placeholder…" />
-          </label>
+          <div class="uikit-v2-demo-block">
+            <h3 class="uikit-v2-demo-block__title">Outlined Field</h3>
+            <p class="uikit-v2-demo-block__desc">
+              Outlined-поле с плавающим лейблом, паролем, multiline и подсказкой.
+            </p>
+            <div class="uikit-v2-outlined-demo">
+              <UiV2OutlinedField label="Почта или никнейм" bind:value={demoLogin} />
+              <UiV2OutlinedField
+                label="Пароль"
+                type="password"
+                bind:value={demoPassword}
+                revealable
+              />
+              <UiV2OutlinedField label="Отключено" value="demo" disabled />
+              <UiV2OutlinedField
+                label="Новый никнейм"
+                bind:value={demoNickname}
+                hint="Никнейм можно менять раз в 30 дней · от 3 до 20 символов"
+              />
+              <UiV2OutlinedField
+                label="Статус"
+                bind:value={demoStatus}
+                multiline
+                rows={4}
+                maxlength={150}
+              />
+            </div>
+          </div>
         {:else}
           <div class="uikit-v2-demo-block">
             <h3 class="uikit-v2-demo-block__title">Choice Sheet</h3>

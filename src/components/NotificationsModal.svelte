@@ -12,10 +12,15 @@
     iconDownload,
     iconCheck,
     iconUser,
+    iconClipboardList,
+    iconMessageCircle,
   } from './icons';
   import type { AppUpdateProgress } from '../types/electron';
-  import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import Page from './Page.svelte';
+  import {
+    parseNotification,
+    type ParsedNotification,
+  } from '../utils/notification-format';
 
   interface Props {
     onClose: () => void;
@@ -23,198 +28,45 @@
 
   const { onClose }: Props = $props();
 
-  // ── types ─────────────────────────────────────────────────────────────────────
-  interface EpisodeNotification {
-    type: 'episode';
-    id: number;
-    timestamp: number;
-    is_new: boolean;
-    is_pushed: boolean;
-    episode?: {
-      name?: string;
-      position?: number;
-      release?: { id?: number; title_ru?: string; image?: string };
-      source?: { name?: string; type?: { name?: string } };
-    };
-  }
-
-  interface RelatedReleaseNotification {
-    type: 'relatedRelease';
-    id: number;
-    timestamp: number;
-    is_new: boolean;
-    is_pushed: boolean;
-    release?: { id?: number; title_ru?: string; image?: string };
-  }
-
-  type AnyNotification = EpisodeNotification | RelatedReleaseNotification | any;
-
-  // ── state ─────────────────────────────────────────────────────────────────────
   type LoadState = 'loading' | 'no-api' | 'empty' | 'error' | 'loaded';
 
   let loadState = $state<LoadState>('loading');
   let errorMsg = $state('');
-  let notifications = $state<AnyNotification[]>([]);
-
-  // update card state
+  let notifications = $state<unknown[]>([]);
   let updateCard = $state<AppUpdateProgress | null>(null);
 
-  // ── helpers ───────────────────────────────────────────────────────────────────
-  function cdnImage(raw: unknown): string {
-    if (typeof raw !== 'string') return '';
-    return resolveCdnAssetUrl(raw);
-  }
-
-  function formatTime(ts: number | undefined): string {
-    if (!ts) return '';
-    try {
-      const now = new Date();
-      const d = new Date(ts * 1000);
-      const diffMs = now.getTime() - d.getTime();
-      const diffSec = Math.max(0, Math.floor(diffMs / 1000));
-      const diffMin = Math.floor(diffSec / 60);
-      const diffHour = Math.floor(diffMin / 60);
-
-      const plural = (n: number, one: string, few: string, many: string) => {
-        const nAbs = Math.abs(n) % 100;
-        const n1 = nAbs % 10;
-        if (nAbs > 10 && nAbs < 20) return many;
-        if (n1 === 1) return one;
-        if (n1 >= 2 && n1 <= 4) return few;
-        return many;
-      };
-
-      if (diffSec < 60) {
-        const s = Math.max(1, diffSec);
-        return `${s} ${plural(s, 'секунду', 'секунды', 'секунд')} назад`;
-      }
-      if (diffMin < 60) {
-        const m = Math.max(1, diffMin);
-        return `${m} ${plural(m, 'минуту', 'минуты', 'минут')} назад`;
-      }
-      if (diffHour < 24 && d.getDate() === now.getDate()) {
-        const h = Math.max(1, diffHour);
-        return `${h} ${plural(h, 'час', 'часа', 'часов')} назад`;
-      }
-
-      const months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
-      const dd = d.getDate();
-      const mm = months[d.getMonth()];
-      const hh = d.getHours().toString().padStart(2, '0');
-      const mi = d.getMinutes().toString().padStart(2, '0');
-      const isSameYear = d.getFullYear() === now.getFullYear();
-      const yesterday = new Date(now);
-      yesterday.setDate(now.getDate() - 1);
-      const dayBeforeYesterday = new Date(now);
-      dayBeforeYesterday.setDate(now.getDate() - 2);
-      const isSameDay = (a: Date, b: Date) =>
-        a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-
-      if (isSameDay(d, yesterday)) return `Вчера в ${hh}:${mi}`;
-      if (isSameDay(d, dayBeforeYesterday)) return `Позавчера в ${hh}:${mi}`;
-      if (isSameYear) return `${dd} ${mm} в ${hh}:${mi}`;
-      return `${dd} ${mm} ${d.getFullYear()} в ${hh}:${mi}`;
-    } catch {
-      return '';
+  function markerHtml(kind: ParsedNotification['markerKind']): string {
+    switch (kind) {
+      case 'episode':
+        return `<span class="notifications-modal__marker notifications-modal__marker--episode">${iconPlay(12)}</span>`;
+      case 'article':
+        return `<span class="notifications-modal__marker notifications-modal__marker--article">${iconClipboardList(11)}</span>`;
+      case 'related':
+        return `<span class="notifications-modal__marker notifications-modal__marker--related">${iconBookmark(12)}</span>`;
+      case 'friend':
+        return `<span class="notifications-modal__marker notifications-modal__marker--friend">${iconUser(11)}</span>`;
+      case 'friend-accept':
+        return `<span class="notifications-modal__marker notifications-modal__marker--friend-accept">${iconCheck(11)}</span>`;
+      case 'comment':
+        return `<span class="notifications-modal__marker notifications-modal__marker--comment">${iconMessageCircle(11)}</span>`;
+      default:
+        return '';
     }
-  }
-
-  interface ParsedNotification {
-    title: string;
-    subtitle: string;
-    metaLeft: string;
-    image: string;
-    timeStr: string;
-    isNew: boolean;
-    markerHtml: string;
-    releaseId?: number;
-    profileId?: number;
-  }
-
-  function parseNotification(raw: AnyNotification): ParsedNotification {
-    const type = raw.type as string;
-    let title = 'Уведомление';
-    let subtitle = '';
-    let metaLeft = '';
-    let image = '';
-    let markerHtml = '';
-    let releaseId: number | undefined;
-    let profileId: number | undefined;
-
-    if (type === 'episode') {
-      const n = raw as EpisodeNotification;
-      const episode = n.episode;
-      const release = episode?.release;
-      releaseId = release?.id;
-      image = cdnImage(release?.image);
-      const pos = episode?.position;
-      const epName = episode?.name || '';
-      const posStr = typeof pos === 'number' ? `${pos} серия` : epName;
-      title = release?.title_ru || posStr || 'Новый эпизод';
-      subtitle = posStr ? `Новая серия · ${posStr}` : 'Новый эпизод';
-      const sourceName = episode?.source?.name;
-      const sourceType = episode?.source?.type?.name;
-      metaLeft = [sourceName, sourceType].filter(Boolean).join(' · ');
-      markerHtml = `<span class="notifications-modal__marker notifications-modal__marker--episode">${iconPlay(14)}</span>`;
-    } else if (type === 'relatedRelease') {
-      const n = raw as RelatedReleaseNotification;
-      const rel = n.release;
-      releaseId = rel?.id;
-      image = cdnImage(rel?.image);
-      title = rel?.title_ru || 'Релиз';
-      subtitle = 'Связанный релиз';
-      markerHtml = `<span class="notifications-modal__marker notifications-modal__marker--related">${iconBookmark(13)}</span>`;
-    } else if (type === 'friend') {
-      const p = raw.by_profile;
-      profileId = p?.id != null ? Number(p.id) : undefined;
-      image = cdnImage(p?.avatar);
-      const login = String(p?.login || 'Пользователь');
-      title = login;
-      const status = String(raw.status || '');
-      if (status === 'REQUEST') {
-        subtitle = 'Заявка в друзья';
-        markerHtml = `<span class="notifications-modal__marker notifications-modal__marker--friend">${iconUser(12)}</span>`;
-      } else if (status === 'ACCEPT') {
-        subtitle = 'Принял(а) вашу заявку';
-        markerHtml = `<span class="notifications-modal__marker notifications-modal__marker--friend-accept">${iconCheck(12)}</span>`;
-      } else {
-        subtitle = 'Уведомление о друзьях';
-        markerHtml = `<span class="notifications-modal__marker notifications-modal__marker--friend">${iconUser(12)}</span>`;
-      }
-      metaLeft = 'Друзья';
-    } else if (raw.release) {
-      const rel = raw.release;
-      releaseId = rel?.id;
-      image = cdnImage(rel?.image);
-      title = rel?.title_ru || 'Релиз';
-      subtitle = 'Уведомление о релизе';
-    } else {
-      title = String(raw.title || 'Уведомление');
-    }
-
-    return {
-      title,
-      subtitle,
-      metaLeft,
-      image,
-      timeStr: formatTime(raw.timestamp),
-      isNew: !!raw.is_new,
-      markerHtml,
-      releaseId,
-      profileId,
-    };
   }
 
   function handleItemClick(n: ParsedNotification, event: MouseEvent) {
     if (n.releaseId) {
       close();
       navigate(`/release/${n.releaseId}`);
-    } else if (n.profileId) {
-      handleUserProfileClick(n.profileId, event);
+      return;
+    }
+    // Channel pages are not routed yet; blog channel id matches profile id.
+    if (n.channelId || n.profileId) {
+      const profileId = n.profileId ?? n.channelId;
+      if (profileId) handleUserProfileClick(profileId, event);
     }
   }
 
-  // ── update progress ───────────────────────────────────────────────────────────
   function onUpdateProgress(e: Event) {
     const data = (e as CustomEvent<AppUpdateProgress>).detail;
     if (data) updateCard = data;
@@ -224,7 +76,6 @@
     window.electron?.installUpdate?.();
   }
 
-  // ── close / keyboard ──────────────────────────────────────────────────────────
   function close() {
     onClose();
   }
@@ -249,7 +100,6 @@
     void (async () => {
       try {
         const content = await fetchAllNotifications();
-        // Clear unread badge once the list is opened (Android-like).
         void markNotificationsRead();
 
         if (content.length === 0) {
@@ -257,15 +107,20 @@
           return;
         }
 
-        const byId = new Map<number | string, AnyNotification>();
+        const byId = new Map<number | string, unknown>();
         for (const item of content) {
-          const key = item?.id ?? `${item?.type}-${item?.timestamp}-${Math.random()}`;
+          const rec = item as { id?: number | string; type?: string; timestamp?: number };
+          const key = rec?.id ?? `${rec?.type}-${rec?.timestamp}-${Math.random()}`;
           if (!byId.has(key)) byId.set(key, item);
         }
         const unique = Array.from(byId.values());
-        unique.sort((a: any, b: any) => {
-          const ta = typeof a.timestamp === 'number' ? a.timestamp : 0;
-          const tb = typeof b.timestamp === 'number' ? b.timestamp : 0;
+        unique.sort((a, b) => {
+          const ta = typeof (a as { timestamp?: number }).timestamp === 'number'
+            ? (a as { timestamp: number }).timestamp
+            : 0;
+          const tb = typeof (b as { timestamp?: number }).timestamp === 'number'
+            ? (b as { timestamp: number }).timestamp
+            : 0;
           return tb - ta;
         });
         notifications = unique;
@@ -293,13 +148,12 @@
 >
   <div class="notifications-modal-panel">
     <div class="notifications-modal__header">
-      <h2 class="notifications-modal__title">Уведомления</h2>
+      <h2 class="notifications-modal__heading">Уведомления</h2>
       <button type="button" class="notifications-modal__close" aria-label="Закрыть" onclick={close}></button>
     </div>
 
-    <Page noPadding={true}>
+    <Page noPadding={true} extraClass="notifications-modal__page">
     <div class="notifications-modal__body">
-      <!-- App update card slot -->
       {#if updateCard}
         {#if updateCard.state === 'downloading'}
           {@const percent = updateCard.total > 0
@@ -310,10 +164,8 @@
               <span class="notifications-modal__marker notifications-modal__marker--update">{@html iconDownload(12)}</span>
             </div>
             <div class="notifications-modal__content">
-              <div class="notifications-modal__row">
-                <span class="notifications-modal__title">Скачивание обновления AnixApp</span>
-              </div>
-              <div class="notifications-modal__subtitle">Пожалуйста, подождите…</div>
+              <div class="notifications-modal__text">Скачивание обновления AnixApp</div>
+              <div class="notifications-modal__time">Пожалуйста, подождите…</div>
               <div class="notifications-modal__progress">
                 <div class="notifications-modal__progress-bar" style="width:{percent}%"></div>
               </div>
@@ -329,12 +181,9 @@
               <span class="notifications-modal__marker notifications-modal__marker--update-ready">{@html iconCheck(12)}</span>
             </div>
             <div class="notifications-modal__content">
-              <div class="notifications-modal__row">
-                <span class="notifications-modal__title">Обновление скачано</span>
-                <span class="notifications-modal__badge">Готово</span>
-              </div>
-              <div class="notifications-modal__subtitle">
-                Закройте приложение или нажмите на уведомление, чтобы начать установку.
+              <div class="notifications-modal__text">Обновление скачано</div>
+              <div class="notifications-modal__time">
+                Закройте приложение или нажмите, чтобы установить.
               </div>
             </div>
           </button>
@@ -344,10 +193,8 @@
               <span class="notifications-modal__marker notifications-modal__marker--update"></span>
             </div>
             <div class="notifications-modal__content">
-              <div class="notifications-modal__row">
-                <span class="notifications-modal__title">Ошибка при скачивании обновления</span>
-              </div>
-              <div class="notifications-modal__subtitle">
+              <div class="notifications-modal__text">Ошибка при скачивании обновления</div>
+              <div class="notifications-modal__time">
                 Попробуйте ещё раз позже.{updateCard.errorMessage ? ` (${updateCard.errorMessage})` : ''}
               </div>
             </div>
@@ -358,11 +205,8 @@
               <span class="notifications-modal__marker notifications-modal__marker--update-ready">{@html iconDownload(12)}</span>
             </div>
             <div class="notifications-modal__content">
-              <div class="notifications-modal__row">
-                <span class="notifications-modal__title">Установка обновления…</span>
-                <span class="notifications-modal__badge">Ожидание</span>
-              </div>
-              <div class="notifications-modal__subtitle">
+              <div class="notifications-modal__text">Установка обновления…</div>
+              <div class="notifications-modal__time">
                 Введите пароль в диалоге авторизации для завершения установки.
               </div>
             </div>
@@ -373,11 +217,9 @@
               <span class="notifications-modal__marker notifications-modal__marker--update"></span>
             </div>
             <div class="notifications-modal__content">
-              <div class="notifications-modal__row">
-                <span class="notifications-modal__title">Установка отменена</span>
-              </div>
-              <div class="notifications-modal__subtitle">
-                Вы отменили ввод пароля или произошла ошибка. Нажмите «Установить» чтобы повторить.
+              <div class="notifications-modal__text">Установка отменена</div>
+              <div class="notifications-modal__time">
+                Нажмите «Установить», чтобы повторить.
                 {updateCard.errorMessage ? ` (${updateCard.errorMessage})` : ''}
               </div>
             </div>
@@ -385,7 +227,6 @@
         {/if}
       {/if}
 
-      <!-- Notification list -->
       {#if loadState === 'loading'}
         <div class="notifications-modal__loading">Загрузка…</div>
       {:else if loadState === 'no-api'}
@@ -401,6 +242,7 @@
             <button
               type="button"
               class="notifications-modal__item"
+              class:notifications-modal__item--new={n.isNew}
               onclick={(event) => handleItemClick(n, event)}
             >
               {#if n.image}
@@ -408,31 +250,18 @@
                   class="notifications-modal__thumb"
                   style="background-image:url('{n.image}');"
                 >
-                  {@html n.markerHtml}
+                  {@html markerHtml(n.markerKind)}
                 </div>
               {:else}
                 <div class="notifications-modal__thumb notifications-modal__thumb--placeholder">
-                  {@html n.markerHtml}
+                  {@html markerHtml(n.markerKind)}
                 </div>
               {/if}
               <div class="notifications-modal__content">
-                <div class="notifications-modal__row">
-                  <span class="notifications-modal__title">{n.title}</span>
-                  {#if n.isNew}
-                    <span class="notifications-modal__badge">Новое</span>
-                  {/if}
-                </div>
-                {#if n.subtitle}
-                  <div class="notifications-modal__subtitle">{n.subtitle}</div>
+                <div class="notifications-modal__text">{@html n.bodyHtml}</div>
+                {#if n.timeStr}
+                  <div class="notifications-modal__time">{n.timeStr}</div>
                 {/if}
-                <div class="notifications-modal__meta">
-                  {#if n.metaLeft}
-                    <span class="notifications-modal__meta-left">{n.metaLeft}</span>
-                  {/if}
-                  {#if n.timeStr}
-                    <span class="notifications-modal__meta-time">{n.timeStr}</span>
-                  {/if}
-                </div>
               </div>
             </button>
           {/each}

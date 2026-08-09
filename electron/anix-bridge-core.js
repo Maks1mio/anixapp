@@ -127,6 +127,163 @@ function createAnixBridgeCore(options = {}) {
       }
       return { success: false, code };
     },
+    'anix:signUp': async (c, [payload]) => {
+      const login = String(payload?.login || '').trim();
+      const email = String(payload?.email || '').trim();
+      const password = String(payload?.password || '');
+      if (!login || !email || !password) return { success: false, error: 'fields_required' };
+      const { baseUrl } = c.loadConfig();
+      const client = c.createClient({ baseUrl, token: undefined });
+      const res = await client.endpoints.auth.signUp({ login, email, password });
+      if (res?.hash) {
+        return {
+          success: res?.code === DefaultResult.Ok,
+          needsVerify: true,
+          code: res?.code,
+          hash: res.hash,
+          codeTimestampExpires: res.codeTimestampExpires,
+          suggestedLogins: Array.isArray(res.suggested_logins) ? res.suggested_logins : null,
+        };
+      }
+      return {
+        success: false,
+        code: res?.code,
+        suggestedLogins: Array.isArray(res?.suggested_logins) ? res.suggested_logins : null,
+      };
+    },
+    'anix:signUpVerify': async (c, [payload]) => {
+      const login = String(payload?.login || '').trim();
+      const email = String(payload?.email || '').trim();
+      const password = String(payload?.password || '');
+      const hash = String(payload?.hash || '');
+      const code = Number(payload?.code);
+      if (!login || !email || !password || !hash || !Number.isFinite(code)) {
+        return { success: false, error: 'fields_required' };
+      }
+      const { baseUrl } = c.loadConfig();
+      const client = c.createClient({ baseUrl, token: undefined });
+      const res = await client.endpoints.auth.verify({ login, email, password, hash, code });
+      if (res?.code === DefaultResult.Ok) {
+        const loginRes = await client.endpoints.auth.signIn({ login, password });
+        if (loginRes?.code === DefaultResult.Ok && loginRes?.profileToken?.token) {
+          c.saveConfig({
+            token: loginRes.profileToken.token,
+            profileId: loginRes.profile?.id ?? null,
+            profileLogin: loginRes.profile?.login ?? null,
+            profileAvatar: loginRes.profile?.avatar ?? null,
+            profileRaw: loginRes.profile || null,
+          });
+          c.resetClient();
+          return { success: true };
+        }
+        return { success: true, needsLogin: true };
+      }
+      return { success: false, code: res?.code };
+    },
+    'anix:signUpResend': async (c, [payload]) => {
+      const hash = String(payload?.hash || '');
+      if (!hash) return { success: false, error: 'hash_required' };
+      const { baseUrl } = c.loadConfig();
+      const client = c.createClient({ baseUrl, token: undefined });
+      const res = await client.endpoints.auth.resend({
+        login: String(payload?.login || '').trim(),
+        email: String(payload?.email || '').trim(),
+        password: String(payload?.password || ''),
+        hash,
+      });
+      if (res?.code === DefaultResult.Ok || res?.hash) {
+        return {
+          success: true,
+          hash: res?.hash || hash,
+          codeTimestampExpires: res?.codeTimestampExpires,
+        };
+      }
+      return { success: false, code: res?.code };
+    },
+    'anix:checkLogin': async (c, [loginValue]) => {
+      const login = String(loginValue || '').trim();
+      if (!login) return { available: false, code: 2 };
+      const { baseUrl } = c.loadConfig();
+      const client = c.createClient({ baseUrl, token: undefined });
+      const res = await client.endpoints.auth.checkLogin({ login });
+      return {
+        available: !!res?.available,
+        code: res?.code,
+        suggestedLogins: Array.isArray(res?.suggested_logins) ? res.suggested_logins : null,
+      };
+    },
+    'anix:restore': async (c, [dataValue]) => {
+      const data = String(dataValue || '').trim();
+      if (!data) return { success: false, error: 'data_required' };
+      const { baseUrl } = c.loadConfig();
+      const client = c.createClient({ baseUrl, token: undefined });
+      const res = await client.endpoints.auth.restore({ data });
+      if (res?.hash) {
+        return {
+          success: true,
+          needsVerify: true,
+          hash: res.hash,
+          codeTimestampExpires: res.codeTimestampExpires,
+        };
+      }
+      return { success: false, code: res?.code };
+    },
+    'anix:restoreVerify': async (c, [payload]) => {
+      const data = String(payload?.data || '').trim();
+      const password = String(payload?.password || '');
+      const hash = String(payload?.hash || '');
+      const code = Number(payload?.code);
+      if (!data || !password || !hash || !Number.isFinite(code)) {
+        return { success: false, error: 'fields_required' };
+      }
+      const { baseUrl } = c.loadConfig();
+      const client = c.createClient({ baseUrl, token: undefined });
+      const res = await client.endpoints.auth.restoreVerify({ data, password, hash, code });
+      if (res?.code === DefaultResult.Ok && res?.profileToken?.token) {
+        c.saveConfig({
+          token: res.profileToken.token,
+          profileId: res.profile?.id ?? null,
+          profileLogin: res.profile?.login ?? null,
+          profileAvatar: res.profile?.avatar ?? null,
+          profileRaw: res.profile || null,
+        });
+        c.resetClient();
+        return { success: true };
+      }
+      if (res?.code === DefaultResult.Ok) {
+        const loginRes = await client.endpoints.auth.signIn({ login: data, password });
+        if (loginRes?.code === DefaultResult.Ok && loginRes?.profileToken?.token) {
+          c.saveConfig({
+            token: loginRes.profileToken.token,
+            profileId: loginRes.profile?.id ?? null,
+            profileLogin: loginRes.profile?.login ?? null,
+            profileAvatar: loginRes.profile?.avatar ?? null,
+            profileRaw: loginRes.profile || null,
+          });
+          c.resetClient();
+          return { success: true };
+        }
+        return { success: true, needsLogin: true };
+      }
+      return { success: false, code: res?.code };
+    },
+    'anix:restoreResend': async (c, [payload]) => {
+      const data = String(payload?.data || '').trim();
+      const password = String(payload?.password || '');
+      const hash = String(payload?.hash || '');
+      if (!data || !password || !hash) return { success: false, error: 'fields_required' };
+      const { baseUrl } = c.loadConfig();
+      const client = c.createClient({ baseUrl, token: undefined });
+      const res = await client.endpoints.auth.restoreResend({ data, password, hash });
+      if (res?.code === DefaultResult.Ok || res?.hash) {
+        return {
+          success: true,
+          hash: res?.hash || hash,
+          codeTimestampExpires: res?.codeTimestampExpires,
+        };
+      }
+      return { success: false, code: res?.code };
+    },
     'anix:loginVk': async () => ({
       success: false,
       error: 'oauth_electron_only',
@@ -135,6 +292,36 @@ function createAnixBridgeCore(options = {}) {
       success: false,
       error: 'oauth_electron_only',
     }),
+    'anix:loginTelegram': async () => ({
+      success: false,
+      error: 'oauth_electron_only',
+    }),
+    'anix:loginYandex': async () => ({
+      success: false,
+      error: 'oauth_electron_only',
+    }),
+    'anix:bindOAuthService': async () => ({
+      success: false,
+      error: 'oauth_electron_only',
+    }),
+    'anix:unbindOAuthService': h(async (c, provider) => {
+      const p = String(provider || '').toLowerCase();
+      const pref = c.getClient().endpoints.profilePreference;
+      let res;
+      if (p === 'vk') res = await pref.vkUnbind();
+      else if (p === 'google') res = await pref.googleUnbind();
+      else if (p === 'telegram') res = await pref.telegramUnbind();
+      else if (p === 'yandex') res = await pref.yandexUnbind();
+      else return { success: false, error: 'unknown_provider' };
+      const code = res?.code ?? -1;
+      if (code === 0) return { success: true, code };
+      return { success: false, code };
+    }),
+    'anix:oauthCompleteSignUp': async () => ({
+      success: false,
+      error: 'oauth_electron_only',
+    }),
+    'anix:oauthClearPending': async () => ({ ok: true }),
     'anix:oauthSubmitUrl': async () => ({ success: false, error: 'oauth_electron_only' }),
     'anix:oauthCancel': async () => ({ ok: true }),
     'anix:logout': async (c) => {

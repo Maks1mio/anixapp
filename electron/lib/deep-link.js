@@ -5,6 +5,10 @@ const state = require('./app-state');
 const logger = require('../logger');
 
 const PROTOCOL = 'anixart';
+/** VK ID redirect scheme из Anixart Android (VKIDRedirectScheme). */
+const VK_ID_PROTOCOL = 'vk54701760';
+
+const EXTRA_PROTOCOLS = [VK_ID_PROTOCOL];
 
 /** @type {string | null} */
 let pendingUrl = null;
@@ -37,9 +41,26 @@ function parseDeepLink(url) {
 function findDeepLinkInArgv(argv) {
   if (!Array.isArray(argv)) return null;
   for (const arg of argv) {
-    if (typeof arg === 'string' && arg.startsWith(`${PROTOCOL}://`)) return arg;
+    if (typeof arg !== 'string') continue;
+    if (arg.startsWith(`${PROTOCOL}://`)) return arg;
+    if (arg.startsWith(`${VK_ID_PROTOCOL}://`)) return arg;
   }
   return null;
+}
+
+/**
+ * @param {import('electron').App} app
+ * @param {string} protocol
+ */
+function registerOneProtocol(app, protocol) {
+  if (process.defaultApp) {
+    if (process.argv.length >= 2) {
+      app.setAsDefaultProtocolClient(protocol, process.execPath, [path.resolve(process.argv[1])]);
+    }
+  } else {
+    app.setAsDefaultProtocolClient(protocol);
+  }
+  logger.info('deep-link', 'protocol registered', { protocol });
 }
 
 /**
@@ -47,14 +68,10 @@ function findDeepLinkInArgv(argv) {
  */
 function registerProtocolClient(app) {
   try {
-    if (process.defaultApp) {
-      if (process.argv.length >= 2) {
-        app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
-      }
-    } else {
-      app.setAsDefaultProtocolClient(PROTOCOL);
+    registerOneProtocol(app, PROTOCOL);
+    for (const p of EXTRA_PROTOCOLS) {
+      registerOneProtocol(app, p);
     }
-    logger.info('deep-link', 'protocol registered', { protocol: PROTOCOL });
   } catch (err) {
     logger.error('deep-link', `register failed: ${err?.message || err}`);
   }
@@ -64,7 +81,7 @@ function registerProtocolClient(app) {
  * @param {string} url
  */
 function deliverDeepLink(url) {
-  // OAuth callback из браузера: anixart://oauth/…
+  // OAuth callback из браузера: anixart://oauth/… или vk54701760://…
   try {
     const { handleOAuthDeepLink } = require('./oauth-login');
     if (handleOAuthDeepLink(url)) {
@@ -145,6 +162,7 @@ function handleSecondInstanceArgv(commandLine) {
 
 module.exports = {
   PROTOCOL,
+  VK_ID_PROTOCOL,
   parseDeepLink,
   findDeepLinkInArgv,
   setupDeepLinks,

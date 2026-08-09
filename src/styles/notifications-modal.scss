@@ -13,16 +13,8 @@
   pointer-events: auto;
 }
 
-.notifications-modal-overlay--open {
-  // маркер класса нужен только для анимации панели
-}
-
-.notifications-modal-overlay--closing {
-  // см. анимацию панели ниже
-}
-
 .notifications-modal-panel {
-  width: 380px;
+  width: 400px;
   max-width: 100%;
   max-height: min(720px, calc(100vh - 4.5rem));
   background: $color-surface;
@@ -57,7 +49,7 @@
   flex-shrink: 0;
 }
 
-.notifications-modal__title {
+.notifications-modal__heading {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 600;
@@ -103,11 +95,9 @@
   flex-direction: column;
 }
 
-// Отступ кастомного скролла от края (число в px — можно менять под себя)
 .notifications-modal__page {
   flex: 1;
   min-height: 0;
-  --page-scrollbar-offset: 0.35rem 0.4rem 0.5rem;
   --page-scrollbar-offset: 1px;
 }
 
@@ -122,35 +112,39 @@
 .notifications-modal__list {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
 }
 
 .notifications-modal__item {
   display: flex;
+  align-items: flex-start;
   width: 100%;
-  padding: 0.5rem 0.6rem;
-  border-radius: $radius-md;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0;
   background: transparent;
   color: inherit;
   text-align: left;
   border: none;
-  transition: background $transition, transform 0.12s ease;
+  cursor: pointer;
+  transition: background $transition;
 
   &:hover {
     background: $color-surface-hover;
-    transform: translateX(-2px);
   }
 }
 
+.notifications-modal__item--new {
+  background: color-mix(in srgb, var(--color-accent, #{$color-accent}) 6%, transparent);
+}
+
 .notifications-modal__thumb {
-  width: 40px;
-  height: 40px;
-  border-radius: $radius-md;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
   background-size: cover;
   background-position: center;
   background-color: $color-surface-hover;
   flex-shrink: 0;
-  margin-right: 0.6rem;
+  margin-right: 0.75rem;
   position: relative;
 }
 
@@ -167,68 +161,38 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: 0.2rem;
+  padding-top: 0.05rem;
 }
 
-.notifications-modal__row {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
+.notifications-modal__text {
+  font-size: 0.84rem;
+  font-weight: 400;
+  line-height: 1.35;
+  color: $color-text;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+
+  b {
+    font-weight: 650;
+    color: $color-text;
+  }
 }
 
-.notifications-modal__title {
-  font-size: 0.9rem;
-  font-weight: 550;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.notifications-modal__subtitle {
-  font-size: 0.8rem;
-  color: $color-text-muted;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.notifications-modal__meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 0.05rem;
+.notifications-modal__time {
   font-size: 0.75rem;
+  line-height: 1.2;
   color: $color-text-muted;
-}
-
-.notifications-modal__meta-left {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-right: 0.5rem;
-}
-
-.notifications-modal__meta-time {
-  flex-shrink: 0;
-  opacity: 0.9;
-}
-
-.notifications-modal__badge {
-  padding: 0.05rem 0.35rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-accent) 15%, transparent);
-  color: $color-accent;
-  font-size: 0.7rem;
-  font-weight: 500;
 }
 
 .notifications-modal__marker {
   position: absolute;
-  right: -3px;
-  bottom: -3px;
-  width: 20px;
-  height: 20px;
-  border-radius: 999px;
+  right: -2px;
+  bottom: -2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -241,8 +205,14 @@
 }
 
 .notifications-modal__marker--episode {
-  background: $color-accent;
-  color: #000;
+  background: #3b82f6;
+  color: #fff;
+}
+
+.notifications-modal__marker--article {
+  border-radius: 5px;
+  background: #f59e0b;
+  color: #fff;
 }
 
 .notifications-modal__marker--related {
@@ -260,8 +230,9 @@
   color: #000;
 }
 
-.notifications-modal__app-update-slot {
-  margin-bottom: 0.5rem;
+.notifications-modal__marker--comment {
+  background: #8b5cf6;
+  color: #fff;
 }
 
 .notifications-modal__item--app-update {
@@ -279,7 +250,7 @@
 }
 
 .notifications-modal__progress {
-  margin-top: 0.4rem;
+  margin-top: 0.35rem;
   width: 100%;
   height: 5px;
   border-radius: 999px;
@@ -294,9 +265,8 @@
   background: linear-gradient(
     90deg,
     $color-accent 0%,
-    color-mix(in srgb, var(--color-accent) 70%, white) 50%,
+    color-mix(in srgb, var(--color-accent, #{$color-accent}) 70%, white) 50%,
     $color-accent 100%
   );
   transition: width 0.2s ease;
 }
-

@@ -1,11 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { iconPencil, iconShare } from './icons';
+  import OAuthBrandIcon from './OAuthBrandIcon.svelte';
   import { showToast } from '../stores/toast';
   import { toCdnProxyUrl } from '../utils/posterUrl';
   import { formatHistoryViewTime } from '../utils/historyFormat';
   import UiV2BackBar from './uikit-v2/UiV2BackBar.svelte';
   import UiV2ChoiceSheet from './uikit-v2/UiV2ChoiceSheet.svelte';
+  import UiV2OutlinedField from './uikit-v2/UiV2OutlinedField.svelte';
 
   type EditScreen = 'menu' | 'status' | 'nickname' | 'social';
 
@@ -110,6 +112,138 @@
 
   let logoutBusy = $state(false);
 
+  type OAuthService = 'vk' | 'google' | 'telegram' | 'yandex';
+  const OAUTH_SERVICES: {
+    id: OAuthService;
+    title: string;
+    unlinkConfirm: string;
+    linkedMsg: string;
+    unlinkedMsg: string;
+  }[] = [
+    {
+      id: 'vk',
+      title: 'ВКонтакте',
+      unlinkConfirm:
+        'Учётная запись ВКонтакте будет отвязана от этого аккаунта. Вход будет возможен только по логину и паролю, если больше нет привязки к другим сервисам. Вы действительно хотите продолжить?',
+      linkedMsg: 'Учётная запись ВКонтакте была успешно привязана к Вашему аккаунту.',
+      unlinkedMsg: 'Учётная запись ВКонтакте была успешно отвязана от Вашего аккаунта.',
+    },
+    {
+      id: 'google',
+      title: 'Google',
+      unlinkConfirm:
+        'Учётная запись Google будет отвязана от этого аккаунта. Вход будет возможен только по логину и паролю, если больше нет привязки к другим сервисам. Вы действительно хотите продолжить?',
+      linkedMsg: 'Учётная запись Google была успешно привязана к Вашему аккаунту.',
+      unlinkedMsg: 'Учётная запись Google была успешно отвязана от Вашего аккаунта.',
+    },
+    {
+      id: 'telegram',
+      title: 'Telegram',
+      unlinkConfirm:
+        'Учётная запись Telegram будет отвязана от этого аккаунта. Вход будет возможен только по логину и паролю, если больше нет привязки к другим сервисам. Вы действительно хотите продолжить?',
+      linkedMsg: 'Учётная запись Telegram была успешно привязана к Вашему аккаунту.',
+      unlinkedMsg: 'Учётная запись Telegram была успешно отвязана от Вашего аккаунта.',
+    },
+    {
+      id: 'yandex',
+      title: 'Яндекс',
+      unlinkConfirm:
+        'Учётная запись Яндекс будет отвязана от этого аккаунта. Вход будет возможен только по логину и паролю, если больше нет привязки к другим сервисам. Вы действительно хотите продолжить?',
+      linkedMsg: 'Учётная запись Яндекс была успешно привязана к Вашему аккаунту.',
+      unlinkedMsg: 'Учётная запись Яндекс была успешно отвязана от Вашего аккаунта.',
+    },
+  ];
+
+  let boundVk = $state(false);
+  let boundGoogle = $state(false);
+  let boundTelegram = $state(false);
+  let boundYandex = $state(false);
+  let oauthBusy = $state<OAuthService | null>(null);
+
+  function isServiceBound(id: OAuthService): boolean {
+    if (id === 'vk') return boundVk;
+    if (id === 'google') return boundGoogle;
+    if (id === 'telegram') return boundTelegram;
+    return boundYandex;
+  }
+
+  function setServiceBound(id: OAuthService, value: boolean) {
+    if (id === 'vk') boundVk = value;
+    else if (id === 'google') boundGoogle = value;
+    else if (id === 'telegram') boundTelegram = value;
+    else boundYandex = value;
+  }
+
+  function applyBoundFlags(settings: Record<string, unknown>) {
+    boundVk = !!(settings.is_vk_bound ?? settings.isVkBound);
+    boundGoogle = !!(
+      settings.is_google_bound
+      ?? settings.is_goolge_bound
+      ?? settings.isGoogleBound
+    );
+    boundTelegram = !!(settings.is_telegram_bound ?? settings.isTelegramBound);
+    boundYandex = !!(settings.is_yandex_bound ?? settings.isYandexBound);
+  }
+
+  function bindErrorMessage(service: (typeof OAUTH_SERVICES)[number], code?: number, error?: string): string {
+    if (error === 'cancelled') return '';
+    if (error === 'oauth_electron_only') return 'Привязка доступна только в приложении (Electron).';
+    if (error === 'timeout') return 'Время ожидания авторизации истекло.';
+    if (error) return `Ошибка: ${error}`;
+    if (code === 2) return 'Не удалось привязать аккаунт. Попробуйте ещё раз.';
+    if (code === 3) return `Этот аккаунт ${service.title} уже привязан к другой учётной записи`;
+    return `Не удалось привязать ${service.title}`;
+  }
+
+  function unbindErrorMessage(service: (typeof OAUTH_SERVICES)[number], code?: number, error?: string): string {
+    if (error) return `Ошибка: ${error}`;
+    if (code === 2) return `К этой учётной записи не привязан аккаунт ${service.title}`;
+    return `Не удалось отвязать ${service.title}`;
+  }
+
+  async function toggleOAuthService(id: OAuthService) {
+    const service = OAUTH_SERVICES.find((s) => s.id === id);
+    const api = window.anixApi?.auth;
+    if (!service || !api || oauthBusy) return;
+
+    if (isServiceBound(id)) {
+      if (!api.unbindOAuthService) return;
+      if (!confirm(service.unlinkConfirm)) return;
+      oauthBusy = id;
+      try {
+        const res = await api.unbindOAuthService(id);
+        if (res?.success) {
+          setServiceBound(id, false);
+          showToast(service.unlinkedMsg);
+        } else if (!res?.cancelled) {
+          showToast(unbindErrorMessage(service, res?.code, res?.error), 'err');
+        }
+      } catch {
+        showToast(`Не удалось отвязать ${service.title}`, 'err');
+      } finally {
+        oauthBusy = null;
+      }
+      return;
+    }
+
+    if (!api.bindOAuthService) return;
+    oauthBusy = id;
+    try {
+      const res = await api.bindOAuthService(id);
+      if (res?.success) {
+        setServiceBound(id, true);
+        showToast(service.linkedMsg);
+      } else if (!res?.cancelled) {
+        const msg = bindErrorMessage(service, res?.code, res?.error);
+        if (msg) showToast(msg, 'err');
+      }
+    } catch {
+      showToast(`Не удалось привязать ${service.title}`, 'err');
+    } finally {
+      oauthBusy = null;
+    }
+  }
+
   const headTitle = $derived.by(() => {
     switch (screen) {
       case 'status': return 'Изменить статус';
@@ -178,6 +312,7 @@
       privacyCounts = Number(settings.privacy_counts ?? 0) as PrivacyVal;
       privacySocial = Number(settings.privacy_social ?? 0) as PrivacyVal;
       privacyFriendRequests = Number(settings.privacy_friend_requests ?? 0) as 0 | 1;
+      applyBoundFlags(settings as Record<string, unknown>);
       loadState = 'ready';
     } catch {
       loadState = 'error';
@@ -630,6 +765,41 @@
 
       <div class="profile-panel__edit-divider" aria-hidden="true"></div>
 
+      <h3 class="profile-panel__edit-section">Привязка к сервисам</h3>
+      {#each OAUTH_SERVICES as service (service.id)}
+        <button
+          type="button"
+          class="profile-panel__edit-row profile-panel__edit-row--oauth profile-panel__edit-row--oauth-{service.id}"
+          disabled={oauthBusy !== null}
+          onclick={() => void toggleOAuthService(service.id)}
+        >
+          <span class="profile-panel__oauth-icon" aria-hidden="true">
+            <OAuthBrandIcon provider={service.id} size={18} />
+          </span>
+          <span class="profile-panel__oauth-text">
+            <span class="profile-panel__edit-row-title">{service.title}</span>
+            <span class="profile-panel__edit-row-sub">
+              {#if oauthBusy === service.id}
+                {isServiceBound(service.id) ? 'Отвязка…' : 'Привязка…'}
+              {:else if isServiceBound(service.id)}
+                Привязано
+              {:else}
+                Не привязано
+              {/if}
+            </span>
+          </span>
+          <span
+            class="profile-panel__oauth-dot"
+            class:profile-panel__oauth-dot--on={isServiceBound(service.id) && oauthBusy !== service.id}
+            class:profile-panel__oauth-dot--busy={oauthBusy === service.id}
+            class:profile-panel__oauth-dot--off={!isServiceBound(service.id) && oauthBusy !== service.id}
+            aria-hidden="true"
+          ></span>
+        </button>
+      {/each}
+
+      <div class="profile-panel__edit-divider" aria-hidden="true"></div>
+
       <h3 class="profile-panel__edit-section">Аккаунт</h3>
       <button type="button" class="profile-panel__edit-row" onclick={soon}>
         <span class="profile-panel__edit-row-title">Удаление аккаунта</span>
@@ -638,16 +808,13 @@
     </div>
   {:else if screen === 'status'}
     <div class="profile-panel__edit-form">
-      <label class="profile-panel__edit-field">
-        <span class="profile-panel__edit-field-label">Статус</span>
-        <textarea
-          class="profile-panel__edit-input profile-panel__edit-input--area"
-          maxlength="150"
-          rows="4"
-          bind:value={statusValue}
-          placeholder="Ваш статус"
-        ></textarea>
-      </label>
+      <UiV2OutlinedField
+        label="Статус"
+        bind:value={statusValue}
+        multiline
+        rows={4}
+        maxlength={150}
+      />
       <button
         type="button"
         class="profile-panel__edit-save"
@@ -659,38 +826,25 @@
     </div>
   {:else if screen === 'nickname'}
     <div class="profile-panel__edit-form">
-      <label class="profile-panel__edit-field">
-        <span class="profile-panel__edit-field-label">Новый никнейм</span>
-        <input
-          class="profile-panel__edit-input"
-          class:profile-panel__edit-input--err={loginCheckStatus === 'short' || loginCheckStatus === 'invalid' || loginCheckStatus === 'taken'}
-          maxlength={LOGIN_MAX}
-          value={loginValue}
-          oninput={onLoginInput}
-          autocomplete="username"
-          spellcheck="false"
-          disabled={!canChangeLogin || loginSaving}
-          aria-invalid={loginCheckStatus === 'short' || loginCheckStatus === 'invalid' || loginCheckStatus === 'taken'}
-          aria-describedby={loginCheckMsg ? 'login-check-msg' : undefined}
-        />
-      </label>
-      {#if loginCheckMsg}
-        <p
-          id="login-check-msg"
-          class="profile-panel__edit-hint"
-          class:profile-panel__edit-hint--err={loginCheckStatus === 'short' || loginCheckStatus === 'invalid' || loginCheckStatus === 'taken'}
-          class:profile-panel__edit-hint--ok={loginCheckStatus === 'available'}
-          role="status"
-        >
-          {loginCheckMsg}
-        </p>
-      {:else if !canChangeLogin && nextChangeAt}
-        <p class="profile-panel__edit-hint">
-          Следующая смена: {fmtNextChange(nextChangeAt)}
-        </p>
-      {:else}
-        <p class="profile-panel__edit-hint">Никнейм можно менять раз в 30 дней · от {LOGIN_MIN} до {LOGIN_MAX} символов</p>
-      {/if}
+      <UiV2OutlinedField
+        label="Новый никнейм"
+        bind:value={loginValue}
+        maxlength={LOGIN_MAX}
+        autocomplete="username"
+        spellcheck={false}
+        disabled={!canChangeLogin || loginSaving}
+        error={loginCheckStatus === 'short' || loginCheckStatus === 'invalid' || loginCheckStatus === 'taken'}
+        hint={loginCheckMsg
+          || (!canChangeLogin && nextChangeAt
+            ? `Следующая смена: ${fmtNextChange(nextChangeAt)}`
+            : `Никнейм можно менять раз в 30 дней · от ${LOGIN_MIN} до ${LOGIN_MAX} символов`)}
+        hintTone={loginCheckStatus === 'short' || loginCheckStatus === 'invalid' || loginCheckStatus === 'taken'
+          ? 'error'
+          : loginCheckStatus === 'available'
+            ? 'ok'
+            : 'default'}
+        oninput={onLoginInput}
+      />
       <div class="profile-panel__edit-actions">
         <button
           type="button"

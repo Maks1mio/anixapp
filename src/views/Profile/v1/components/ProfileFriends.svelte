@@ -1,6 +1,8 @@
 <script lang="ts">
   import { navigate } from '../../../../stores/navigation';
   import { posterUrl } from '../../_utils';
+  import UserBadge from '../../../../components/UserBadge.svelte';
+  import { resolveBadgeName, resolveProfileBadgeUrl } from '../../../../utils/badge';
 
   interface Props {
     friends:    any[];
@@ -26,12 +28,16 @@
 
   <div class="profile__friends-grid">
     {#each friends as fr}
+      {@const badgeUrl = resolveProfileBadgeUrl(fr as Record<string, unknown>)}
       <button type="button" class="profile__friend-card" onclick={() => navigate(`/profile/${fr.id}`)}>
         <div class="profile__friend-av" style={fr.avatar ? `background-image:url('${posterUrl(fr.avatar)}')` : ''}></div>
         {#if fr.is_online}
           <span class="profile__friend-online"></span>
         {/if}
-        <span class="profile__friend-name">{fr.login || ''}</span>
+        <span class="profile__friend-name-row">
+          <span class="profile__friend-name">{fr.login || ''}</span>
+          <UserBadge url={badgeUrl} name={resolveBadgeName(fr.badge)} size="xs" />
+        </span>
         {#if fr.friend_count != null}
           <span class="profile__friend-sub">{fr.friend_count} др.</span>
         {/if}

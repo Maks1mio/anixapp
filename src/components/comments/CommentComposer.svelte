@@ -2,7 +2,7 @@
   import { untrack } from 'svelte';
   import { iconArrowUp, iconClipboardList, iconEye } from '../icons';
   import { requireAuth } from '../../stores/auth';
-  import { COMMENT_RULES_FORBIDDEN, COMMENT_RULES_FOOTER } from '../../utils/commentRules';
+  import { COMMENT_RULES_FORBIDDEN, COMMENT_RULES_FOOTER_LINK_LABEL, COMMENT_RULES_FOOTER_PREFIX, COMMENT_RULES_URL } from '../../utils/commentRules';
   import { COMMENT_MIN_LENGTH, COMMENT_MAX_LENGTH } from '../../utils/comment';
 
   interface Props {
@@ -139,7 +139,21 @@
                   <li>{rule}</li>
                 {/each}
               </ul>
-              <p class="comment-rules-popover__footer">{COMMENT_RULES_FOOTER}</p>
+              <p class="comment-rules-popover__footer">
+                {COMMENT_RULES_FOOTER_PREFIX}
+                <a
+                  class="comment-rules-popover__link"
+                  href={COMMENT_RULES_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onclick={(e) => {
+                    if (window.electron?.openExternal) {
+                      e.preventDefault();
+                      window.electron.openExternal(COMMENT_RULES_URL);
+                    }
+                  }}
+                >{COMMENT_RULES_FOOTER_LINK_LABEL}</a>.
+              </p>
             </span>
           </span>
         </span>

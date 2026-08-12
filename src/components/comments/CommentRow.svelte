@@ -4,6 +4,7 @@
   import CommentVote from './CommentVote.svelte';
   import CommentComposer from './CommentComposer.svelte';
   import UserAvatar from '../UserAvatar.svelte';
+  import UserBadge from '../UserBadge.svelte';
   import {
     episodeContextLabel,
     formatCommentTimestamp,
@@ -103,9 +104,12 @@
     <div class="anix-comment__head">
       <button type="button" class="anix-comment__author" onclick={openProfile}>
         {comment.profile.login}
-        {#if comment.profile.badgeUrl}
-          <img class="anix-comment__badge" src={comment.profile.badgeUrl} alt="" />
-        {/if}
+        <UserBadge
+          url={comment.profile.badgeUrl}
+          name={comment.profile.badgeName}
+          size="sm"
+          class="anix-comment__badge"
+        />
       </button>
 
       {#if comment.timestamp}

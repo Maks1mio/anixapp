@@ -6,7 +6,10 @@
   import { handleUserProfileClick } from '../stores/user-profile';
   import Tabs from '../components/Tabs.svelte';
   import ScrollArea from '../components/ScrollArea.svelte';
+  import UserBadge from '../components/UserBadge.svelte';
+  import UiV2SearchFranchise from '../components/uikit-v2/UiV2SearchFranchise.svelte';
   import { iconSearch } from '../components/icons';
+  import { resolveBadgeName, resolveProfileBadgeUrl } from '../utils/badge';
   import { addSearchHistory, clearSearchHistory, getSearchHistory } from '../utils/search-history';
   import type { ReleaseCardData } from '../types/release';
   import { buildPosterUrl, resolveCdnAssetUrl } from '../utils/posterUrl';
@@ -613,31 +616,7 @@
       {:else}
         {#if currentTab === 'releases'}
           {#if franchiseData}
-            <button
-              type="button"
-              class="search-franchise"
-              onclick={() => {
-                const targetId = franchiseData?.relatedId ?? franchiseData?.firstReleaseId;
-                if (targetId) navigate(`/release/${targetId}/related`);
-              }}
-            >
-              <div class="search-franchise__thumbs">
-                {#each franchiseData.images.slice(0, 3) as img}
-                  <div class="search-franchise__thumb" style="background-image:url('{resolveCdnAssetUrl(img)}')"></div>
-                {/each}
-              </div>
-              <div class="search-franchise__content">
-                <span class="search-franchise__title">{franchiseData.name || 'Франшиза'}</span>
-                <span class="search-franchise__meta">
-                  {#if typeof franchiseData.releaseCount === 'number' && franchiseData.releaseCount > 0}
-                    {franchiseData.releaseCount} релизов во франшизе
-                  {:else}
-                    Релизы во франшизе
-                  {/if}
-                </span>
-              </div>
-              <span class="search-franchise__action">Перейти</span>
-            </button>
+            <UiV2SearchFranchise data={franchiseData} />
           {/if}
           <div class="search-page__results--wide" data-search-rel="releases">
             <ReleaseCardsGrid items={releaseResults} />
@@ -645,6 +624,7 @@
         {:else if currentTab === 'profiles'}
           <div class="search-page__profiles" data-search-rel="profiles">
             {#each profileResults as p}
+              {@const badgeUrl = resolveProfileBadgeUrl(p as Record<string, unknown>)}
               <button
                 type="button"
                 class="search-page__profile"
@@ -655,7 +635,10 @@
                   style={p.avatar ? `background-image:url('${resolveCdnAssetUrl(p.avatar)}')` : ''}
                 ></div>
                 <div class="search-page__profile-info">
-                  <span class="search-page__profile-name">{p.login || ''}</span>
+                  <span class="search-page__profile-name-row">
+                    <span class="search-page__profile-name">{p.login || ''}</span>
+                    <UserBadge url={badgeUrl} name={resolveBadgeName(p.badge)} size="sm" />
+                  </span>
                   {#if p.status}
                     <span class="search-page__profile-status">{p.status}</span>
                   {/if}

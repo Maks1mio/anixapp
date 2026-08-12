@@ -32,7 +32,7 @@
   });
 </script>
 
-<div class="player-titlebar">
+<div class="player-titlebar" role="banner">
   <div class="player-titlebar__drag">
     <span class="player-titlebar__logo" aria-hidden="true">
       <img src="logo/512x512.png" alt="" class="player-titlebar__logo-img" />

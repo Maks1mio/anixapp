@@ -1,6 +1,7 @@
 import { writable, get } from 'svelte/store';
 import { DEFAULT_BOOKMARK_SORT } from '../constants/bookmarkSort';
 import { isAuthenticated } from './auth';
+import { connectionKind } from './connection';
 import { buildPosterUrl } from '../utils/posterUrl';
 import { mapReleaseRawToCard, releaseCardTitle, releaseListStatusLabel } from '../utils/release-card';
 import type { ReleaseCardData } from '../types/release';
@@ -102,6 +103,7 @@ export async function refreshSidebarPins(): Promise<void> {
         sidebarPins.set(pins);
       } while (refreshQueued);
     } catch {
+      // Сеть упала mid-fetch — не затираем уже показанные пины
       if (get(sidebarPins).length === 0) sidebarPins.set([]);
     } finally {
       sidebarPinsLoading.set(false);
@@ -113,7 +115,20 @@ export async function refreshSidebarPins(): Promise<void> {
 }
 
 export function initSidebarPins(): () => void {
-  void refreshSidebarPins();
+  // isAuthenticated стартует false; после syncAuthStatus подписка подтянет избранное
+  const unsubAuth = isAuthenticated.subscribe(() => {
+    void refreshSidebarPins();
+  });
+
+  let prevConn: string | null = null;
+  const unsubConn = connectionKind.subscribe((kind) => {
+    const prev = prevConn;
+    prevConn = kind;
+    // После offline/checking → ok перезагружаем (Ctrl+R / восстановление сети)
+    if (kind === 'ok' && prev != null && prev !== 'ok') {
+      void refreshSidebarPins();
+    }
+  });
 
   const onFavoritesChanged = () => {
     void refreshSidebarPins();
@@ -125,6 +140,8 @@ export function initSidebarPins(): () => void {
   window.addEventListener('anix:authChanged', onAuthChanged);
 
   return () => {
+    unsubAuth();
+    unsubConn();
     window.removeEventListener('anix:favoritesChanged', onFavoritesChanged);
     window.removeEventListener('anix:authChanged', onAuthChanged);
   };

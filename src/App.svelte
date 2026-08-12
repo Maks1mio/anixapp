@@ -11,6 +11,11 @@
     pathRequiresAuth,
     notifyAuthChanged,
   } from './stores/auth';
+  import {
+    setConnectionChecking,
+    setConnectionOk,
+    setConnectionProblem,
+  } from './stores/connection';
   import { currentPath, navigate } from './stores/navigation';
   import { openLobbyModal, settingsModalOpen, lobbyModalOpen, lobbyModalInitialCode, notificationsModalOpen, watchModalOpen, watchModalReleaseId, watchModalReleaseTitle, lobbyCurrentPlayback, isPlayerWindowOpen, lobbyWatchingPeerIds } from './stores/modals';
   import { sendPlayerViewActive } from './services/lobby-ws';
@@ -65,7 +70,6 @@
   import NotificationsModal from './components/NotificationsModal.svelte';
   import WatchModal from './components/WatchModal.svelte';
   import Toast from './components/Toast.svelte';
-  import OfflineScreen from './views/OfflineScreen.svelte';
 
   initTheme();
 
@@ -195,13 +199,18 @@
 
   async function checkAndShow() {
     if (!window.anixApi) return;
+    setConnectionChecking();
     try {
       await window.anixApi.client.checkConnection();
       const ok = await syncAuthStatus();
       clearRetry();
+      setConnectionOk();
+      notifyAuthChanged();
       appScreen.set('main');
       if (!ok) openLoginPrompt();
-    } catch { /* stay offline */ }
+    } catch {
+      setConnectionProblem();
+    }
   }
 
   async function onLoginSuccess() {
@@ -261,9 +270,11 @@
 
     const handlers: [string, EventListener][] = [
       ['anix:offline', (() => {
-        clearRetry();
-        appScreen.set('offline');
-        offlineRetryTimer = window.setInterval(checkAndShow, 7000);
+        setConnectionProblem();
+        appScreen.set('main');
+        if (offlineRetryTimer === null) {
+          offlineRetryTimer = window.setInterval(checkAndShow, 7000);
+        }
       }) as EventListener],
 
       ['lobby:proposalSentLocal', ((e: CustomEvent) => {
@@ -391,6 +402,14 @@
         if (v.colorAccent)       r.style.setProperty('--color-accent', v.colorAccent);
         if (v.colorAccentHover)  r.style.setProperty('--color-accent-hover', v.colorAccentHover);
         if (v.fontFamily)        r.style.setProperty('--font-sans', v.fontFamily);
+        if (v.colorBg) {
+          const hex = v.colorBg.replace('#', '').slice(0, 6);
+          const lum = hex.length >= 6
+            ? (0.299 * parseInt(hex.slice(0, 2), 16) + 0.587 * parseInt(hex.slice(2, 4), 16) + 0.114 * parseInt(hex.slice(4, 6), 16)) / 255
+            : 0;
+          r.dataset.themeMode = lum > 0.55 ? 'light' : 'dark';
+          r.style.colorScheme = lum > 0.55 ? 'light' : 'dark';
+        }
       }) as EventListener],
 
       ['anix:themeEditorDeleted', ((e: CustomEvent) => {
@@ -454,18 +473,33 @@
 
     window.addEventListener('keydown', handleZoomKeydown);
 
-    // Initial boot sequence — API доступен → main; без токена сразу модалка входа
+    // Initial boot — UI сразу main, проблемы сети только баннером
+    setConnectionChecking();
     window.anixApi.client.checkConnection()
       .then(async () => {
         const ok = await syncAuthStatus();
+        setConnectionOk();
+        notifyAuthChanged();
         window.setTimeout(() => {
           appScreen.set('main');
           if (!ok) openLoginPrompt();
         }, 500);
       })
       .catch(() => {
-        offlineRetryTimer = window.setInterval(checkAndShow, 7000);
+        setConnectionProblem();
+        appScreen.set('main');
+        if (offlineRetryTimer === null) {
+          offlineRetryTimer = window.setInterval(checkAndShow, 7000);
+        }
       });
+
+    const onBrowserOffline = () => setConnectionProblem();
+    const onBrowserOnline = () => {
+      setConnectionChecking();
+      void checkAndShow();
+    };
+    window.addEventListener('offline', onBrowserOffline);
+    window.addEventListener('online', onBrowserOnline);
 
     return () => {
       window.removeEventListener('hashchange', onNav);
@@ -474,6 +508,8 @@
       handlers.forEach(([evt, fn]) => window.removeEventListener(evt, fn));
       window.removeEventListener('lobby:wsJoined', onWsJoined);
       window.removeEventListener('keydown', handleZoomKeydown);
+      window.removeEventListener('offline', onBrowserOffline);
+      window.removeEventListener('online', onBrowserOnline);
       unsubAppScreen();
       unsubPlayerView();
       clearRetry();
@@ -481,15 +517,13 @@
   });
 </script>
 
-{#if $appScreen === 'offline'}
-  <OfflineScreen onRetry={checkAndShow} />
-
-{:else if $appScreen === 'login'}
+{#if $appScreen === 'login'}
   <!-- Нет anixApi (браузер без моста) -->
   <Login
     onSuccess={() => { void onLoginSuccess(); appScreen.set('main'); }}
     allowGuest
     onDismiss={() => appScreen.set('main')}
+    onConnectionRetry={checkAndShow}
   />
   {#if $settingsModalOpen}
     <SettingsModal onClose={() => settingsModalOpen.set(false)} />
@@ -499,7 +533,7 @@
   <WebPlayerShell />
 
 {:else}
-  <Layout currentPath={path}>
+  <Layout currentPath={path} onConnectionRetry={checkAndShow}>
     {#if announcementChatMatch}
       {#key announcementChatMatch[1]}
         <AnnouncementChat id={announcementChatMatch[1]} />
@@ -632,6 +666,7 @@
       allowGuest
       onSuccess={() => void onLoginSuccess()}
       onDismiss={dismissLoginPrompt}
+      onConnectionRetry={checkAndShow}
     />
   {/if}
 {/if}

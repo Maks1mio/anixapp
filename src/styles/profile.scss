@@ -717,7 +717,7 @@
 }
 
 .profile__chart-grid {
-  stroke: rgba(255, 255, 255, 0.06);
+  stroke: color-mix(in srgb, $color-text 8%, transparent);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
@@ -728,7 +728,7 @@
   transition: fill 0.12s ease;
 
   &--empty {
-    fill: rgba(255, 255, 255, 0.03);
+    fill: color-mix(in srgb, $color-text 4%, transparent);
   }
 
   &--active {
@@ -1018,6 +1018,15 @@
   border-radius: 50%;
   background: $color-success;
   border: 2px solid $color-surface;
+}
+
+.profile__friend-name-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .profile__friend-name {

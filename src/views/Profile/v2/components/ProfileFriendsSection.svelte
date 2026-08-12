@@ -2,6 +2,8 @@
   import { onMount, onDestroy } from 'svelte';
   import { handleUserProfileClick } from '../../../../stores/user-profile';
   import { posterUrl } from '../../_utils';
+  import UserBadge from '../../../../components/UserBadge.svelte';
+  import { resolveBadgeName, resolveProfileBadgeUrl } from '../../../../utils/badge';
 
   interface Props {
     profileId: number;
@@ -93,6 +95,7 @@
       <h3 class="profile-friends__recs-title">Рекомендации</h3>
       <div class="search-page__profiles">
         {#each recommendations as fr}
+          {@const badgeUrl = resolveProfileBadgeUrl(fr)}
           <button
             type="button"
             class="search-page__profile"
@@ -103,7 +106,10 @@
               style={fr.avatar ? `background-image:url('${posterUrl(String(fr.avatar))}')` : ''}
             ></div>
             <div class="search-page__profile-info">
-              <span class="search-page__profile-name">{fr.login || ''}</span>
+              <span class="search-page__profile-name-row">
+                <span class="search-page__profile-name">{fr.login || ''}</span>
+                <UserBadge url={badgeUrl} name={resolveBadgeName(fr.badge)} size="sm" />
+              </span>
             </div>
           </button>
         {/each}
@@ -130,6 +136,7 @@
     {/if}
     <div class="profile__friends-grid">
       {#each friends as fr}
+        {@const badgeUrl = resolveProfileBadgeUrl(fr)}
         <button
           type="button"
           class="profile__friend-card"
@@ -142,7 +149,10 @@
           {#if fr.is_online}
             <span class="profile__friend-online"></span>
           {/if}
-          <span class="profile__friend-name">{fr.login || ''}</span>
+          <span class="profile__friend-name-row">
+            <span class="profile__friend-name">{fr.login || ''}</span>
+            <UserBadge url={badgeUrl} name={resolveBadgeName(fr.badge)} size="xs" />
+          </span>
           {#if fr.friend_count != null}
             <span class="profile__friend-sub">{fr.friend_count} др.</span>
           {/if}

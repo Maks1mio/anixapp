@@ -1,6 +1,7 @@
 <script lang="ts">
   import { navigate } from '../../stores/navigation';
   import UserAvatar from '../UserAvatar.svelte';
+  import UserBadge from '../UserBadge.svelte';
   import { iconChevronRight } from '../icons';
   import {
     formatCommentWeekTime,
@@ -40,7 +41,14 @@
           <UserAvatar src={item.profileAvatar} label={item.profileLogin} class="overview-comment-week__avatar" />
           <div class="overview-comment-week__main">
             <div class="overview-comment-week__head">
-              <span class="overview-comment-week__login">{item.profileLogin}</span>
+              <span class="overview-comment-week__login">
+                {item.profileLogin}
+                <UserBadge
+                  url={item.profileBadgeUrl}
+                  name={item.profileBadgeName}
+                  size="xs"
+                />
+              </span>
               <span class="overview-comment-week__to">к релизу</span>
             </div>
             <button type="button" class="overview-comment-week__release" onclick={() => openRelease(item.releaseId)}>

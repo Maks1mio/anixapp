@@ -651,6 +651,8 @@ function createAnixBridgeCore(options = {}) {
       if (res?.code !== DefaultResult.Ok) throw new Error(String(res?.code ?? 'comment vote failed'));
       return res;
     }),
+    'anix:releaseCommentVotes': h((c, commentId, page = 0, sort = 2) =>
+      c.getClient().endpoints.releaseComment.votes(commentId, page, { sort })),
     'anix:releaseCommentById': h((c, commentId) => c.getClient().endpoints.releaseComment.comment(commentId)),
     'anix:releaseCommentAdd': h(async (c, releaseId, body) => {
       const payload = {

@@ -1,5 +1,6 @@
 import type { CommentData, CommentProfile, CommentVoteValue, CommentSort } from '../types/comment';
 import { resolveCdnAssetUrl } from './posterUrl';
+import { resolveBadgeName, resolveBadgeImageUrl } from './badge';
 import { COMMENT_SORT_OPTIONS } from '../types/comment';
 import { resolveJacksonEntity, resolveJacksonRefs } from './jackson-refs';
 
@@ -44,16 +45,31 @@ export function getCommentSortLabel(sort: CommentSort): string {
   return COMMENT_SORT_OPTIONS.find((o) => o.value === sort)?.label ?? 'Сначала новые';
 }
 
-export function normalizeCommentProfile(raw: Record<string, unknown> | undefined): CommentProfile {
+export function normalizeCommentProfile(
+  raw: Record<string, unknown> | undefined,
+  root?: unknown,
+): CommentProfile {
   if (!raw) {
     return { id: 0, login: 'Пользователь', avatar: '' };
   }
   const id = Number(raw.id ?? raw['@id'] ?? 0);
+  const badgeRaw =
+    resolveJacksonEntity(raw.badge, root ?? raw) ??
+    (raw.badge && typeof raw.badge === 'object' && !Array.isArray(raw.badge)
+      ? (raw.badge as Record<string, unknown>)
+      : raw.badge);
+  const badgeUrl =
+    resolveBadgeImageUrl(badgeRaw) ??
+    resolveBadgeImageUrl(raw.badge_url) ??
+    resolveBadgeImageUrl(raw.badgeUrl) ??
+    undefined;
+  const badgeName = resolveBadgeName(badgeRaw) || undefined;
   return {
     id: Number.isFinite(id) && id > 0 ? id : 0,
     login: String(raw.login ?? raw.nickname ?? 'Пользователь'),
     avatar: resolveCdnAssetUrl(String(raw.avatar ?? '')),
-    badgeUrl: resolveCdnAssetUrl((raw.badge_url as string) || undefined) || undefined,
+    badgeUrl,
+    badgeName,
     isVerified: !!(raw.is_verified ?? raw.isVerified),
     isSponsor: !!(raw.is_sponsor ?? raw.isSponsor),
   };
@@ -78,7 +94,7 @@ export function normalizeComment(raw: Record<string, unknown>, root?: unknown): 
     replyCount: Number(raw.reply_count ?? raw.replyCount ?? 0),
     parentCommentId: (raw.parent_comment_id ?? raw.parentCommentId ?? null) as number | null,
     postedAtEpisode: (raw.posted_at_episode ?? raw.postedAtEpisode ?? null) as number | null,
-    profile: normalizeCommentProfile(profileRaw),
+    profile: normalizeCommentProfile(profileRaw, root ?? raw),
   };
 }
 
@@ -98,6 +114,11 @@ export function isCommentContentHidden(comment: CommentData, revealed: boolean):
   return false;
 }
 
+export function isCommentHideable(comment: Pick<CommentData, 'isSpoiler' | 'voteCount' | 'isDeleted'>): boolean {
+  if (comment.isDeleted) return false;
+  return !!comment.isSpoiler || comment.voteCount <= -5;
+}
+
 export function hiddenCommentLabel(comment: CommentData): string {
   const spoiler = comment.isSpoiler;
   const lowVotes = comment.voteCount <= -5;
@@ -114,6 +135,34 @@ export function hiddenCommentLabel(comment: CommentData): string {
   return '';
 }
 
+export function hiddenCommentMeta(comment: Pick<CommentData, 'isSpoiler' | 'voteCount'>): {
+  kind: 'spoiler' | 'rating' | 'both';
+  title: string;
+  desc: string;
+} {
+  const spoiler = !!comment.isSpoiler;
+  const lowVotes = comment.voteCount <= -5;
+  if (spoiler && lowVotes) {
+    return {
+      kind: 'both',
+      title: 'Спойлер и низкий рейтинг',
+      desc: 'Текст скрыт: возможны спойлеры и негативная оценка сообщества.',
+    };
+  }
+  if (lowVotes) {
+    return {
+      kind: 'rating',
+      title: 'Скрыто из‑за рейтинга',
+      desc: 'Комментарий получил много дизлайков. Нажмите, чтобы прочитать.',
+    };
+  }
+  return {
+    kind: 'spoiler',
+    title: 'Возможен спойлер',
+    desc: 'Автор отметил комментарий как спойлер. Нажмите, чтобы прочитать.',
+  };
+}
+
 export interface ProfileCommentPreviewItem {
   id: number;
   message: string;
@@ -122,6 +171,8 @@ export interface ProfileCommentPreviewItem {
   isSpoiler: boolean;
   profileLogin: string;
   profileAvatar: string;
+  profileBadgeUrl?: string;
+  profileBadgeName?: string;
   contextLabel: string;
   targetTitle: string;
   targetPath: string | null;
@@ -157,7 +208,11 @@ export function mapProfileCommentPreview(
   const id = raw.id as number;
   if (!id) return null;
 
-  const profile = normalizeCommentProfile(raw.profile as Record<string, unknown> | undefined);
+  const profile = normalizeCommentProfile(
+    (resolveJacksonEntity(raw.profile, profileRoot) ??
+      raw.profile) as Record<string, unknown> | undefined,
+    profileRoot,
+  );
   const commentType = String(raw.commentType ?? raw.comment_type ?? raw.type ?? '').toLowerCase();
 
   const release = resolveJacksonEntity(raw.release, profileRoot);
@@ -195,6 +250,8 @@ export function mapProfileCommentPreview(
     isSpoiler: !!(raw.is_spoiler ?? raw.isSpoiler),
     profileLogin: profile.login,
     profileAvatar: profile.avatar,
+    profileBadgeUrl: profile.badgeUrl,
+    profileBadgeName: profile.badgeName,
     contextLabel: profileCommentContext(commentType),
     targetTitle: targetTitle || 'Без названия',
     targetPath,

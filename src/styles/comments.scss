@@ -278,9 +278,6 @@ $anix-comment-thread-color: color-mix(in srgb, $color-border 85%, transparent);
 }
 
 .anix-comment__badge {
-  width: 1rem;
-  height: 1rem;
-  object-fit: contain;
   flex-shrink: 0;
 }
 
@@ -578,6 +575,16 @@ $anix-comment-thread-color: color-mix(in srgb, $color-border 85%, transparent);
     font-size: 0.75rem;
     line-height: 1.45;
     color: $color-text-muted;
+  }
+
+  &__link {
+    color: color-mix(in srgb, $color-accent 80%, #fff);
+    text-decoration: underline;
+    text-underline-offset: 0.12em;
+
+    &:hover {
+      color: $color-text;
+    }
   }
 }
 

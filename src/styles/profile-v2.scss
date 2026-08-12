@@ -375,7 +375,7 @@
     display: block;
     background: $color-border center / cover no-repeat;
     border: 2px solid $color-bg;
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
+    box-shadow: 0 0 0 1px var(--pp-divider);
   }
 
   &__friends-stack-online {
@@ -543,7 +543,36 @@
 
     &--themed {
       padding: 0.85rem 0.95rem;
-      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+      box-shadow: 0 1px 0 color-mix(in srgb, var(--uikit-v2-text) 6%, transparent) inset;
+
+      .profile-v2__stat-label,
+      .profile-v2__stat-value {
+        color: var(--pp-on-themed-fg);
+      }
+
+      .profile-v2__pref-line {
+        color: var(--pp-on-themed-fg-muted);
+
+        span {
+          color: var(--pp-on-themed-fg-soft);
+        }
+      }
+
+      .profile-v2__stats-totals p {
+        color: var(--pp-on-themed-fg-muted);
+      }
+
+      .profile-v2__stats-totals strong {
+        color: var(--pp-on-themed-fg);
+      }
+
+      .profile-v2__stats-more {
+        color: var(--pp-on-themed-fg-soft);
+
+        &:hover {
+          color: var(--pp-on-themed-fg);
+        }
+      }
     }
   }
 
@@ -605,14 +634,14 @@
   }
 
   &__stat-label {
-    color: rgba(226, 226, 226, 0.88);
+    color: $color-text-muted;
     font-weight: 400;
   }
 
   &__stat-value {
     font-weight: 600;
     font-variant-numeric: tabular-nums;
-    color: rgba(226, 226, 226, 0.88);
+    color: $color-text;
   }
 
   &__prefs {
@@ -627,7 +656,7 @@
     font-weight: 400;
 
     span {
-      color: #fff;
+      color: $color-text;
       font-weight: 500;
     }
   }
@@ -661,7 +690,7 @@
       }
 
       strong {
-        color: rgba(245, 245, 245, 0.95);
+        color: $color-text;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
       }
@@ -680,7 +709,7 @@
     padding: 0;
     border: 0;
     background: none;
-    color: rgba(230, 230, 230, 0.92);
+    color: $color-text-muted;
     font: inherit;
     font-size: 0.9rem;
     font-weight: 500;
@@ -688,7 +717,7 @@
     cursor: pointer;
 
     &:hover {
-      color: #fff;
+      color: $color-text;
       text-decoration: underline;
     }
   }
@@ -729,7 +758,7 @@
     border-radius: $radius-sm;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.03);
+      background: var(--pp-hover);
     }
   }
 

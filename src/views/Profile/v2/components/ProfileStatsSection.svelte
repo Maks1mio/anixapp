@@ -111,7 +111,7 @@
         return seg;
       }).join('');
     return `<svg width="148" height="148" viewBox="0 0 80 80" class="profile-v2__donut" aria-hidden="true">
-      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="${stroke}"></circle>
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--pp-donut-track)" stroke-width="${stroke}"></circle>
       ${segs}
     </svg>`;
   }

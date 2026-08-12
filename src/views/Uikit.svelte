@@ -72,13 +72,6 @@
   ];
   let selectDemoValue = $state('api-s.anixsekai.com');
 
-  // Franchise demo images
-  const FRANCHISE_IMGS = [
-    'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg',
-    'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg',
-    'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg',
-  ];
-
   const SAMPLE_COLLECTION: CollectionCardData = {
     id: 1,
     title: 'Этти 18+ Этти',
@@ -341,26 +334,6 @@
     <div class="uikit-collections">
       <CollectionCard data={SAMPLE_COLLECTION} />
       <CollectionCard data={{ ...SAMPLE_COLLECTION, isFavorite: true }} variant="cover" />
-    </div>
-  </section>
-
-  <!-- Franchise card -->
-  <section class="uikit-section">
-    <h2 class="uikit-section__title">Франшиза в поиске</h2>
-    <p class="uikit-section__desc">Компонент search-franchise с анимацией «колоды»</p>
-    <div class="uikit-franchise">
-      <button type="button" class="search-franchise" onclick={() => navigate('/release/20055/related')}>
-        <div class="search-franchise__thumbs">
-          {#each FRANCHISE_IMGS as img}
-            <div class="search-franchise__thumb" style="background-image:url('{img}')"></div>
-          {/each}
-        </div>
-        <div class="search-franchise__content">
-          <span class="search-franchise__title">black_clover</span>
-          <span class="search-franchise__meta">7 релизов во франшизе</span>
-        </div>
-        <span class="search-franchise__action">Перейти</span>
-      </button>
     </div>
   </section>
 

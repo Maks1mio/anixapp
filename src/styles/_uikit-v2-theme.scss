@@ -1,0 +1,152 @@
+// UI Kit V2 — semantic tokens derived from global --color-* (light / dark / custom themes)
+
+:root {
+  --uikit-v2-bg: var(--color-bg);
+  --uikit-v2-surface: var(--color-surface);
+  --uikit-v2-elevated: var(--color-surface-hover);
+  --uikit-v2-border: var(--color-border);
+  --uikit-v2-text: var(--color-text);
+  --uikit-v2-muted: var(--color-text-muted);
+  --uikit-v2-accent: var(--color-accent);
+  --uikit-v2-accent-hover: var(--color-accent-hover);
+  --uikit-v2-danger: var(--color-error);
+  --uikit-v2-radius: 8px;
+  --uikit-v2-font: var(--font-sans);
+  --uikit-v2-mono: 'Cascadia Code', Consolas, Monaco, monospace;
+
+  // Chrome (pill bar, back bar, round buttons)
+  --uiv2-chrome-bg: color-mix(in srgb, var(--uikit-v2-elevated) 90%, var(--uikit-v2-text) 10%);
+  --uiv2-chrome-bg-hover: color-mix(in srgb, var(--uikit-v2-elevated) 82%, var(--uikit-v2-text) 18%);
+  --uiv2-chrome-fg: var(--uikit-v2-text);
+  --uiv2-chrome-fg-muted: color-mix(in srgb, var(--uikit-v2-text) 55%, transparent);
+  --uiv2-chrome-fg-hover: color-mix(in srgb, var(--uikit-v2-text) 92%, transparent);
+  --uiv2-chrome-active-bg: color-mix(in srgb, var(--uikit-v2-accent) 14%, var(--uikit-v2-elevated));
+  --uiv2-chrome-active-fg: var(--uikit-v2-accent);
+  --uiv2-chrome-separator: color-mix(in srgb, var(--uikit-v2-text) 14%, transparent);
+  --uiv2-chrome-shadow: 0 1px 0 color-mix(in srgb, var(--uikit-v2-text) 7%, transparent) inset;
+  --uiv2-chrome-on-accent-fg: #fff;
+
+  // Foreground alphas (text-based, theme-aware)
+  --uiv2-fg-muted: color-mix(in srgb, var(--uikit-v2-text) 55%, transparent);
+  --uiv2-fg-soft: color-mix(in srgb, var(--uikit-v2-text) 78%, transparent);
+  --uiv2-fg-strong: color-mix(in srgb, var(--uikit-v2-text) 92%, transparent);
+  --uiv2-border-subtle: color-mix(in srgb, var(--uikit-v2-text) 8%, transparent);
+  --uiv2-border-strong: color-mix(in srgb, var(--uikit-v2-text) 35%, transparent);
+  --uiv2-hover-bg: color-mix(in srgb, var(--uikit-v2-text) 6%, transparent);
+  --uiv2-hover-subtle: color-mix(in srgb, var(--uikit-v2-text) 5%, transparent);
+  --uiv2-selected-bg: color-mix(in srgb, var(--uikit-v2-text) 7%, transparent);
+  --uiv2-surface-subtle: color-mix(in srgb, var(--uikit-v2-text) 4%, transparent);
+  --uiv2-surface-raised: color-mix(in srgb, var(--uikit-v2-text) 8%, transparent);
+  --uiv2-ghost-fg: color-mix(in srgb, var(--uikit-v2-text) 88%, transparent);
+
+  // Overlays & panels
+  --uiv2-overlay: color-mix(in srgb, #000 62%, transparent);
+  --uiv2-panel-bg: color-mix(in srgb, var(--uikit-v2-surface) 96%, var(--uikit-v2-bg));
+  --uiv2-panel-border: color-mix(in srgb, var(--uikit-v2-text) 8%, transparent);
+  --uiv2-panel-shadow: 0 24px 64px color-mix(in srgb, #000 55%, transparent);
+
+  // Cards
+  --uiv2-card-bg: var(--uiv2-surface-subtle);
+  --uiv2-card-title: var(--uiv2-fg-muted);
+
+  // Skeleton loaders
+  --uiv2-skeleton-base: color-mix(in srgb, var(--uikit-v2-text) 7%, transparent);
+  --uiv2-skeleton-highlight: color-mix(in srgb, var(--uikit-v2-text) 14%, transparent);
+
+  // Custom scroll (UiV2ScrollArea)
+  --uiv2-scroll-offset: 4px;
+  --uiv2-scroll-track-size: 8px;
+  --uiv2-scroll-thumb: color-mix(in srgb, var(--uikit-v2-text) 24%, transparent);
+  --uiv2-scroll-thumb-hover: color-mix(in srgb, var(--uikit-v2-text) 38%, transparent);
+  --uiv2-scroll-thumb-active: var(--uikit-v2-accent);
+  --uiv2-card-pill-bg: var(--uiv2-surface-raised);
+  --uiv2-card-pill-fg: var(--uiv2-fg-soft);
+
+  // Choice sheet / selection
+  --uiv2-choice-hover: var(--uiv2-hover-subtle);
+  --uiv2-choice-on-bg: color-mix(in srgb, var(--uikit-v2-accent) 10%, var(--uikit-v2-surface));
+  --uiv2-choice-radio-border: var(--uiv2-border-strong);
+  --uiv2-choice-radio-dot: var(--uikit-v2-accent);
+
+  // Danger ghost button
+  --uiv2-danger-bg: color-mix(in srgb, var(--uikit-v2-danger) 12%, transparent);
+  --uiv2-danger-bg-hover: color-mix(in srgb, var(--uikit-v2-danger) 20%, transparent);
+  --uiv2-danger-fg: color-mix(in srgb, var(--uikit-v2-danger) 82%, #fff);
+
+  // Popup menu (glass)
+  --uiv2-popup-bg: color-mix(in srgb, var(--uikit-v2-elevated) 82%, transparent);
+  --uiv2-popup-fg: color-mix(in srgb, var(--uikit-v2-text) 94%, transparent);
+  --uiv2-popup-fg-muted: color-mix(in srgb, var(--uikit-v2-text) 58%, transparent);
+  --uiv2-popup-fg-hover: color-mix(in srgb, var(--uikit-v2-text) 96%, transparent);
+  --uiv2-popup-item-hover-bg: color-mix(in srgb, var(--uikit-v2-text) 10%, transparent);
+  --uiv2-popup-checked-fg: var(--uiv2-fg-strong);
+  --uiv2-popup-danger-fg: color-mix(in srgb, var(--uikit-v2-danger) 70%, var(--uikit-v2-text));
+  --uiv2-popup-danger-hover-bg: color-mix(in srgb, var(--uikit-v2-danger) 14%, transparent);
+  --uiv2-popup-danger-hover-fg: color-mix(in srgb, var(--uikit-v2-danger) 88%, #fff);
+  --uiv2-popup-thumb-bg: var(--uikit-v2-elevated);
+  --uiv2-popup-shadow:
+    0 1px 0 var(--uiv2-hover-subtle) inset,
+    0 0 0 0.5px color-mix(in srgb, #000 28%, transparent),
+    0 16px 48px color-mix(in srgb, #000 42%, transparent);
+
+  // Tooltip (solid chrome surface)
+  --uiv2-tooltip-bg: var(--uikit-v2-elevated);
+  --uiv2-tooltip-fg: var(--uikit-v2-text);
+
+  // Status indicators (ping / latency)
+  --uiv2-status-good: #3ddc84;
+  --uiv2-status-medium: #f4c02a;
+  --uiv2-status-bad: #f97316;
+  --uiv2-status-offline: var(--uikit-v2-danger);
+
+  // Floating controls on posters / cover images (контраст не зависит от темы)
+  --uiv2-media-control-bg: color-mix(in srgb, #0a0a0c 78%, transparent);
+  --uiv2-media-control-bg-hover: color-mix(in srgb, #0a0a0c 90%, transparent);
+  --uiv2-media-control-fg: #fff;
+  --uiv2-media-control-border: color-mix(in srgb, #fff 16%, transparent);
+  --uiv2-media-control-shadow: 0 4px 14px color-mix(in srgb, #000 38%, transparent);
+
+  // Текст поверх обложек коллекций
+  --uiv2-on-image-fg: #fff;
+  --uiv2-on-image-fg-muted: color-mix(in srgb, #fff 82%, transparent);
+  --uiv2-on-image-shadow: 0 1px 10px color-mix(in srgb, #000 62%, transparent);
+
+  // Profile panel
+  --pp-divider: var(--uiv2-border-subtle);
+  --pp-hover: var(--uiv2-hover-bg);
+  --pp-surface: var(--uiv2-surface-subtle);
+  --pp-surface-hover: var(--uiv2-surface-raised);
+  --pp-border: var(--uiv2-border-subtle);
+  --pp-border-strong: var(--uiv2-border-strong);
+  --pp-fg-muted: var(--uiv2-fg-muted);
+  --pp-fg-soft: var(--uiv2-fg-soft);
+  --pp-fg-strong: var(--uiv2-fg-strong);
+  --pp-btn-bg: color-mix(in srgb, var(--uikit-v2-text) 10%, var(--uikit-v2-elevated));
+  --pp-btn-fg: var(--uikit-v2-text);
+  --pp-btn-bg-hover: color-mix(in srgb, var(--uikit-v2-text) 16%, var(--uikit-v2-elevated));
+  --pp-donut-track: color-mix(in srgb, var(--uikit-v2-text) 8%, transparent);
+  --pp-chart-bar: color-mix(in srgb, var(--uikit-v2-text) 22%, transparent);
+  --pp-chart-bar-active: color-mix(in srgb, var(--uikit-v2-accent) 72%, transparent);
+  --pp-on-themed-fg: rgba(255, 255, 255, 0.9);
+  --pp-on-themed-fg-muted: rgba(255, 255, 255, 0.48);
+  --pp-on-themed-fg-soft: rgba(255, 255, 255, 0.78);
+}
+
+:root[data-theme-mode='light'] {
+  --uiv2-overlay: color-mix(in srgb, #000 36%, transparent);
+  --uiv2-panel-shadow: 0 20px 48px color-mix(in srgb, #000 18%, transparent);
+  --uiv2-chrome-shadow: 0 1px 0 color-mix(in srgb, #fff 65%, transparent) inset,
+    0 1px 2px color-mix(in srgb, #000 6%, transparent);
+  --uiv2-popup-bg: color-mix(in srgb, var(--uikit-v2-elevated) 76%, transparent);
+  --uiv2-popup-shadow:
+    0 1px 0 color-mix(in srgb, #fff 85%, transparent) inset,
+    0 0 0 0.5px color-mix(in srgb, var(--uikit-v2-text) 10%, transparent),
+    0 12px 36px color-mix(in srgb, #000 14%, transparent);
+  --uiv2-popup-thumb-bg: #fff;
+}
+
+:root[data-theme-mode='dark'] {
+  --uiv2-overlay: color-mix(in srgb, #000 62%, transparent);
+  --uiv2-popup-bg: color-mix(in srgb, var(--uikit-v2-surface) 78%, transparent);
+  --uiv2-popup-thumb-bg: #fff;
+}

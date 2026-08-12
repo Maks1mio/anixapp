@@ -6,6 +6,7 @@
   import type { AppUpdateProgress } from '../types/electron';
   import { isAuthenticated } from '../stores/auth';
   import { notificationUnreadCount, refreshNotificationUnreadCount } from '../stores/notifications';
+  import ConnectionBanner from './ConnectionBanner.svelte';
 
   const hasWindowApi = typeof (window as any).electron?.window !== 'undefined';
 
@@ -18,6 +19,7 @@
     onProfile?: (event: MouseEvent) => void;
     onSearchTab?: () => void;
     searchTabActive?: boolean;
+    onConnectionRetry?: () => void | Promise<void>;
   }
 
   let {
@@ -29,6 +31,7 @@
     onProfile,
     onSearchTab,
     searchTabActive = false,
+    onConnectionRetry,
   }: Props = $props();
 
   let updateInfo: UpdateInfo | null = $state(null);
@@ -165,7 +168,10 @@
 
 </script>
 
-<div class="titlebar">
+<div
+  class="titlebar"
+  role="banner"
+>
   <div class="titlebar__drag">
     <span class="titlebar__logo" aria-hidden="true">
       <img src="logo/512x512.png" alt="" class="titlebar__logo-img" />
@@ -202,7 +208,11 @@
     </button>
   </div>
 
+  <!-- Явная зона drag / dblclick между навигацией и меню -->
+  <div class="titlebar__space" aria-hidden="true"></div>
+
   <div class="titlebar__menu" id="titlebar-menu">
+    <ConnectionBanner onRetry={onConnectionRetry} />
     <!-- Update button -->
     {#if updateInfo}
       {#if updateState === 'downloading'}

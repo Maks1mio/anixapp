@@ -72,9 +72,7 @@ export function posterUrl(raw: string | undefined): string {
   return resolveCdnAssetUrl(raw);
 }
 
-export function isLottieBadgeUrl(url: string): boolean {
-  return url.trim().toLowerCase().endsWith('.json');
-}
+export { isLottieBadgeUrl } from '../../utils/badge';
 
 /** «3 серия • 8 июн. в 17:31» для истории просмотра */
 export function fmtHistoryEpisodeMeta(item: Record<string, unknown>): string {

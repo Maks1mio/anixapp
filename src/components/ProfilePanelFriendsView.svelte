@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { iconMessageCircle } from './icons';
+  import UserBadge from './UserBadge.svelte';
+  import { resolveBadgeName, resolveProfileBadgeUrl } from '../utils/badge';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import UiV2BackBar from './uikit-v2/UiV2BackBar.svelte';
 
@@ -28,6 +30,10 @@
   let requestsIn = $state<Record<string, unknown>[]>([]);
   let requestsOut = $state<Record<string, unknown>[]>([]);
   let friends = $state<Record<string, unknown>[]>([]);
+  /** Корни ответов API — для Jackson @id у badge */
+  let friendsRoot = $state<unknown>(null);
+  let requestsInRoot = $state<unknown>(null);
+  let requestsOutRoot = $state<unknown>(null);
   let page = $state(0);
   let hasMore = $state(true);
   let loading = $state(false);
@@ -63,6 +69,8 @@
     if (!isMyProfile || !window.anixApi?.profile) {
       requestsIn = [];
       requestsOut = [];
+      requestsInRoot = null;
+      requestsOutRoot = null;
       return;
     }
     const api = window.anixApi.profile;
@@ -70,12 +78,20 @@
       api.getFriendRequestsIn?.(0),
       api.getFriendRequestsOut?.(0),
     ]);
-    requestsIn = inRes.status === 'fulfilled'
-      ? ((inRes.value as { content?: Record<string, unknown>[] } | undefined)?.content ?? [])
-      : [];
-    requestsOut = outRes.status === 'fulfilled'
-      ? ((outRes.value as { content?: Record<string, unknown>[] } | undefined)?.content ?? [])
-      : [];
+    if (inRes.status === 'fulfilled') {
+      requestsInRoot = inRes.value;
+      requestsIn = (inRes.value as { content?: Record<string, unknown>[] } | undefined)?.content ?? [];
+    } else {
+      requestsInRoot = null;
+      requestsIn = [];
+    }
+    if (outRes.status === 'fulfilled') {
+      requestsOutRoot = outRes.value;
+      requestsOut = (outRes.value as { content?: Record<string, unknown>[] } | undefined)?.content ?? [];
+    } else {
+      requestsOutRoot = null;
+      requestsOut = [];
+    }
   }
 
   async function loadFriends(append: boolean) {
@@ -86,6 +102,7 @@
       page = 0;
       hasMore = true;
       friends = [];
+      friendsRoot = null;
     }
     const pageToLoad = page;
     try {
@@ -99,7 +116,12 @@
         loading = false;
         return;
       }
-      friends = append ? [...friends, ...content] : content;
+      friendsRoot = append ? friendsRoot ?? data : data;
+      const enriched = content.map((fr) => ({
+        ...fr,
+        __badgeUrl: resolveProfileBadgeUrl(fr, data),
+      }));
+      friends = append ? [...friends, ...enriched] : enriched;
       loadState = 'ready';
       page += 1;
       hasMore = content.length >= 20;
@@ -193,6 +215,7 @@
       <ul class="profile-panel__request-list">
         {#each requestsIn as req (req.id)}
           {@const av = avatarOf(req)}
+          {@const badgeUrl = resolveProfileBadgeUrl(req, requestsInRoot)}
           <li class="profile-panel__request">
             <button
               type="button"
@@ -204,7 +227,10 @@
                 class:profile-panel__friend-row-av--online={!!req.is_online}
                 style={av ? `background-image:url('${av}')` : undefined}
               ></span>
-              <span class="profile-panel__friend-row-name">{req.login || 'Без имени'}</span>
+              <span class="profile-panel__friend-row-name">
+                {req.login || 'Без имени'}
+                <UserBadge url={badgeUrl} name={resolveBadgeName(req.badge)} size="xs" />
+              </span>
             </button>
             <div class="profile-panel__request-actions">
               <button
@@ -232,6 +258,7 @@
       <ul class="profile-panel__request-list">
         {#each requestsOut as req (req.id)}
           {@const av = avatarOf(req)}
+          {@const badgeUrl = resolveProfileBadgeUrl(req, requestsOutRoot)}
           <li class="profile-panel__request">
             <button
               type="button"
@@ -243,7 +270,10 @@
                 class:profile-panel__friend-row-av--online={!!req.is_online}
                 style={av ? `background-image:url('${av}')` : undefined}
               ></span>
-              <span class="profile-panel__friend-row-name">{req.login || 'Без имени'}</span>
+              <span class="profile-panel__friend-row-name">
+                {req.login || 'Без имени'}
+                <UserBadge url={badgeUrl} name={resolveBadgeName(req.badge)} size="xs" />
+              </span>
             </button>
             <div class="profile-panel__request-actions">
               <button
@@ -277,6 +307,9 @@
       <ul class="profile-panel__friend-rows">
         {#each friends as fr (fr.id)}
           {@const av = avatarOf(fr)}
+          {@const badgeUrl =
+            (typeof fr.__badgeUrl === 'string' ? fr.__badgeUrl : null) ??
+            resolveProfileBadgeUrl(fr, friendsRoot)}
           {@const n = Number(fr.friend_count ?? 0)}
           {@const social = hasSocial(fr)}
           <li class="profile-panel__friend-row">
@@ -291,7 +324,10 @@
                 style={av ? `background-image:url('${av}')` : undefined}
               ></span>
               <span class="profile-panel__friend-row-meta">
-                <span class="profile-panel__friend-row-name">{fr.login || 'Без имени'}</span>
+                <span class="profile-panel__friend-row-name">
+                  {fr.login || 'Без имени'}
+                  <UserBadge url={badgeUrl} name={resolveBadgeName(fr.badge)} size="xs" />
+                </span>
                 {#if Number.isFinite(n)}
                   <span class="profile-panel__friend-row-sub">{n} {friendWord(n)}</span>
                 {/if}

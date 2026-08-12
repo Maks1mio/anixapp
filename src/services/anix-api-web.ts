@@ -117,6 +117,8 @@ function buildWebAnixApi(): AnixApi {
         replies: (commentId, page = 0, sort = 2) =>
           invoke('anix:releaseCommentReplies', commentId, page, sort),
         vote: (commentId, vote) => invoke('anix:releaseCommentVote', commentId, vote),
+        votes: (commentId, page = 0, sort = 2) =>
+          invoke('anix:releaseCommentVotes', commentId, page, sort),
         add: (releaseId, body) => invoke('anix:releaseCommentAdd', releaseId, body),
         edit: (commentId, body) => invoke('anix:releaseCommentEdit', commentId, body),
         delete: (commentId) => invoke('anix:releaseCommentDelete', commentId),

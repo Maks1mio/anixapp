@@ -162,6 +162,15 @@ function resolveAutoTheme(): Theme {
 
 // ── Apply ─────────────────────────────────────────────────────────────────────
 
+function isLightTheme(v: ThemeVars): boolean {
+  const hex = v.colorBg.replace('#', '').slice(0, 6);
+  if (hex.length < 6) return false;
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.55;
+}
+
 export function applyTheme(theme: Theme): void {
   // For 'auto', resolve the actual theme based on OS preference
   const effective = theme.id === 'auto' ? resolveAutoTheme() : theme;
@@ -177,6 +186,10 @@ export function applyTheme(theme: Theme): void {
   root.style.setProperty('--color-accent',        v.colorAccent);
   root.style.setProperty('--color-accent-hover',  v.colorAccentHover);
   root.style.setProperty('--font-sans',           v.fontFamily);
+
+  const light = isLightTheme(v);
+  root.dataset.themeMode = light ? 'light' : 'dark';
+  root.style.colorScheme = light ? 'light' : 'dark';
 
   // Save the user's chosen id (may be 'auto'), not the effective id
   setActiveThemeId(theme.id);

@@ -7,6 +7,7 @@
   import { iconDownload } from '../components/icons';
   import { checkForUpdate, type UpdateInfo } from '../services/update-checker';
   import type { AppUpdateProgress } from '../types/electron';
+  import ConnectionBanner from '../components/ConnectionBanner.svelte';
 
   interface Props {
     onSuccess: () => void;
@@ -16,9 +17,10 @@
     allowGuest?: boolean;
     /** Компактный оверлей поверх приложения */
     overlay?: boolean;
+    onConnectionRetry?: () => void | Promise<void>;
   }
 
-  let { onSuccess, onDismiss, allowGuest = false, overlay = false }: Props = $props();
+  let { onSuccess, onDismiss, allowGuest = false, overlay = false, onConnectionRetry }: Props = $props();
 
   type OAuthProvider = 'vk' | 'google' | 'telegram' | 'yandex';
   type AuthPanel =
@@ -706,7 +708,7 @@
 </script>
 
 <div class="view view-auth view-auth--v2" class:view-auth--overlay={overlay} class:view-auth--fullscreen={!overlay} class:view-auth--exiting={exiting}>
-  <div class="titlebar titlebar--auth">
+  <div class="titlebar titlebar--auth" role="banner">
     <div class="titlebar__drag">
       <span class="titlebar__logo" aria-hidden="true">
         <img src="logo/512x512.png" alt="" class="titlebar__logo-img" />
@@ -720,8 +722,9 @@
       </div>
     </div>
 
-    {#if updateInfo}
-      <div class="titlebar__menu">
+    <div class="titlebar__menu">
+      <ConnectionBanner onRetry={onConnectionRetry} />
+      {#if updateInfo}
         {#if updateState === 'downloading'}
           <button
             type="button"
@@ -771,8 +774,8 @@
             </span>
           </button>
         {/if}
-      </div>
-    {/if}
+      {/if}
+    </div>
 
     {#if hasWindowApi}
       <div class="titlebar__controls">

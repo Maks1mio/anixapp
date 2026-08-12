@@ -2,9 +2,9 @@
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import CollectionCard from '../components/CollectionCard.svelte';
   import BookmarksToolbar from '../components/BookmarksToolbar.svelte';
-  import HomeDefaultTabModal from '../components/HomeDefaultTabModal.svelte';
   import { onMount, onDestroy } from 'svelte';
   import Tabs, { type TabItem } from '../components/Tabs.svelte';
+  import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../components/uikit-v2/UiV2PopupMenu.svelte';
   import { navigate } from '../stores/navigation';
   import { handleUserProfileClick } from '../stores/user-profile';
   import { getSearchParams } from '../router';
@@ -13,7 +13,6 @@
   import type { ReleaseCardData } from '../types/release';
   import { extractHistoryEpisodeInfo } from '../utils/historyFormat';
   import { iconHome } from '../components/icons';
-  import { openFloatingMenu } from '../components/dots-menu';
   import {
     getDefaultBookmarksTab,
     resolveBookmarksTab,
@@ -113,7 +112,6 @@
   /** Страница списков профиля: оценки + статусы (без коллекций/истории/избранного) */
   const isListsPage = $derived(listsOnly || isOtherProfile);
   const TABS = $derived(isListsPage ? OTHER_TABS : SELF_TABS);
-  const DEFAULT_TAB_OPTIONS = $derived(SELF_TABS.map((t) => ({ id: t.id, label: t.label, desc: t.desc })));
 
   const BOOKMARKS_VIEW_KEY = () =>
     buildViewStateKey(
@@ -269,10 +267,53 @@
   let randomLoading = $state(false);
   let wrapEl: HTMLElement | undefined = $state();
   let unregisterScrollKey: (() => void) | null = null;
-  let defaultTabModalOpen = $state(false);
   let defaultBookmarksTab = $state(getDefaultBookmarksTab());
+  let tabMenuOpen = $state(false);
+  let tabMenuX = $state(0);
+  let tabMenuY = $state(0);
+  let tabMenuPlacement = $state<'point' | 'anchor'>('point');
+  let tabMenuKind = $state<'context' | 'default-picker' | null>(null);
+  let tabMenuTabId = $state<TabId | null>(null);
   let profileLogin = $state('');
   let profileAvatar = $state('');
+
+  const tabMenuItems = $derived.by((): UiV2PopupMenuItem[] => {
+    if (tabMenuKind === 'default-picker') {
+      return SELF_TABS.map((tab) => ({
+        id: `bookmark-default-${tab.id}`,
+        label: tab.label,
+        type: 'radio' as const,
+        checked: defaultBookmarksTab === tab.id,
+        keepOpen: true,
+      }));
+    }
+
+    if (tabMenuKind === 'context' && tabMenuTabId) {
+      return [{ id: 'set-default', label: 'Назначить по умолчанию', icon: iconHome(18) }];
+    }
+
+    return [];
+  });
+
+  function closeTabMenu() {
+    tabMenuOpen = false;
+    tabMenuKind = null;
+    tabMenuTabId = null;
+  }
+
+  function handleTabMenuSelect(id: string) {
+    if (id.startsWith('bookmark-default-')) return;
+
+    if (id === 'set-default' && tabMenuTabId) {
+      defaultBookmarksTab = setDefaultBookmarksTab(tabMenuTabId);
+    }
+    closeTabMenu();
+  }
+
+  function handleTabMenuCheckedChange(id: string, checked: boolean) {
+    if (!checked || !id.startsWith('bookmark-default-')) return;
+    defaultBookmarksTab = setDefaultBookmarksTab(id.slice('bookmark-default-'.length));
+  }
   let selfProfileId = $state<number | null>(null);
 
   const isCollectionsTab = $derived(activeTab === 'collections');
@@ -638,35 +679,27 @@
     void loadTab(activeTab);
   }
 
-  function openDefaultTabModal() {
-    defaultTabModalOpen = true;
-  }
-
   function handleTabsSettingsClick(e: MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    openDefaultTabModal();
+    const btn = e.currentTarget as HTMLElement;
+    const rect = btn.getBoundingClientRect();
+    tabMenuKind = 'default-picker';
+    tabMenuTabId = null;
+    tabMenuX = (rect.left + rect.right) / 2;
+    tabMenuY = (rect.top + rect.bottom) / 2;
+    tabMenuPlacement = 'anchor';
+    tabMenuOpen = true;
   }
 
   function handleTabContextMenu(tab: TabItem, e: MouseEvent) {
     if (isOtherProfile) return;
-    openFloatingMenu({
-      x: e.clientX,
-      y: e.clientY,
-      entries: [
-        { id: 'set-default', label: 'Назначить по умолчанию', icon: iconHome(18) },
-      ],
-      onSelect: (menuId) => {
-        if (menuId === 'set-default') {
-          defaultBookmarksTab = setDefaultBookmarksTab(tab.id);
-        }
-      },
-    });
-  }
-
-  function onDefaultTabSave(tabId: string) {
-    defaultBookmarksTab = setDefaultBookmarksTab(tabId);
-    defaultTabModalOpen = false;
+    tabMenuKind = 'context';
+    tabMenuTabId = tab.id as TabId;
+    tabMenuX = e.clientX;
+    tabMenuY = e.clientY;
+    tabMenuPlacement = 'point';
+    tabMenuOpen = true;
   }
 
   function resolveInitialBookmarksTab(): TabId {
@@ -822,12 +855,13 @@
   </div>
 </div>
 
-{#if defaultTabModalOpen && !isListsPage}
-  <HomeDefaultTabModal
-    options={DEFAULT_TAB_OPTIONS}
-    value={resolveBookmarksTab(defaultBookmarksTab)}
-    subtitle="Выбранная вкладка будет открываться при переходе в закладки"
-    onSave={onDefaultTabSave}
-    onClose={() => { defaultTabModalOpen = false; }}
-  />
-{/if}
+<UiV2PopupMenu
+  open={tabMenuOpen}
+  x={tabMenuX}
+  y={tabMenuY}
+  placement={tabMenuPlacement}
+  items={tabMenuItems}
+  onClose={closeTabMenu}
+  onSelect={handleTabMenuSelect}
+  onCheckedChange={handleTabMenuCheckedChange}
+/>

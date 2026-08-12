@@ -984,6 +984,15 @@ ipcMain.handle('anix:releaseCommentVote', async (_, commentId, vote) => {
   }
 });
 
+ipcMain.handle('anix:releaseCommentVotes', async (_, commentId, page = 0, sort = 2) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.releaseComment.votes(commentId, page, { sort });
+  } catch (err) {
+    handleAnixError(err, 'releaseCommentVotes');
+  }
+});
+
 ipcMain.handle('anix:releaseCommentById', async (_, commentId) => {
   try {
     const client = getAnixart();

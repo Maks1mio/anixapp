@@ -6,6 +6,7 @@ export interface CommentProfile {
   login: string;
   avatar: string;
   badgeUrl?: string;
+  badgeName?: string;
   isVerified?: boolean;
   isSponsor?: boolean;
 }

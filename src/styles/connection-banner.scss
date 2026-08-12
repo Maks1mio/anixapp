@@ -1,0 +1,141 @@
+/* Connection banner in titlebar */
+
+.conn-banner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 1;
+  min-width: 0;
+  margin-left: 0.35rem;
+  margin-right: 0.35rem;
+  -webkit-app-region: no-drag;
+}
+
+.conn-banner__panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  left: auto;
+  z-index: 12040;
+  width: min(20rem, calc(100vw - 24px));
+  padding: 0.75rem 0.8rem 0.85rem;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-surface, #1c1c1e) 94%, #000);
+  border: 1px solid color-mix(in srgb, var(--color-border, #333) 80%, transparent);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(14px);
+}
+
+.conn-banner__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  max-width: min(22rem, 42vw);
+  min-height: 1.7rem;
+  padding: 0.28rem 0.7rem 0.28rem 0.5rem;
+  border: 0;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: filter 0.15s ease, background 0.15s ease;
+}
+
+.conn-banner__chip:hover {
+  filter: brightness(1.08);
+}
+
+.conn-banner__chip:focus-visible {
+  outline: 2px solid color-mix(in srgb, currentColor 45%, transparent);
+  outline-offset: 2px;
+}
+
+.conn-banner--server .conn-banner__chip {
+  background: color-mix(in srgb, #c47a22 18%, #1a1612);
+  color: #f0b45a;
+}
+
+.conn-banner--net .conn-banner__chip {
+  background: color-mix(in srgb, #c23a3a 18%, #1a1212);
+  color: #f07171;
+}
+
+.conn-banner__icon {
+  position: relative;
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.conn-banner__ring {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  box-sizing: border-box;
+  opacity: 0.95;
+  mask:
+    radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  -webkit-mask:
+    radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  background: currentColor;
+}
+
+.conn-banner__spin {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-top-color: currentColor;
+  box-sizing: border-box;
+  animation: conn-banner-spin 0.75s linear infinite;
+}
+
+.conn-banner__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conn-banner__panel-title {
+  margin: 0 0 0.2rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-text, #fff);
+}
+
+.conn-banner__panel-desc {
+  margin: 0 0 0.55rem;
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #999);
+}
+
+.conn-banner__panel .uiv2-endpoint-select__loading,
+.conn-banner__panel .uiv2-endpoint-select__fallback {
+  margin: 0;
+  font-size: 0.72rem;
+}
+
+.conn-banner__panel .uiv2-select {
+  width: 100%;
+}
+
+@keyframes conn-banner-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 720px) {
+  .conn-banner__text {
+    max-width: 9.5rem;
+  }
+}

@@ -144,7 +144,9 @@
         : [],
       commentsWeek: results[5].status === 'fulfilled'
         ? (results[5].value.content ?? [])
-            .map((raw) => mapOverviewCommentWeek(raw as Record<string, unknown>))
+            .map((raw) =>
+              mapOverviewCommentWeek(raw as Record<string, unknown>, results[5].value),
+            )
             .filter((c): c is OverviewCommentWeekItem => c != null)
         : [],
     };

@@ -29,9 +29,10 @@
   interface Props {
     children?: Snippet;
     currentPath?: string;
+    onConnectionRetry?: () => void | Promise<void>;
   }
 
-  let { children, currentPath = '/' }: Props = $props();
+  let { children, currentPath = '/', onConnectionRetry }: Props = $props();
 
   const SIDEBAR_NAV = [
     { href: '/', label: 'Главная', icon: iconHome(18) },
@@ -314,6 +315,7 @@
     onProfile={onProfileClick}
     onSearchTab={navigateSearchTab}
     {searchTabActive}
+    {onConnectionRetry}
   />
 
   <LobbyNowWatching />

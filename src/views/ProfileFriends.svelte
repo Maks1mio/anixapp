@@ -2,8 +2,10 @@
   import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../stores/navigation';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
+  import { resolveBadgeName, resolveProfileBadgeUrl } from '../utils/badge';
   import { setDiscordContext, refreshDiscordPresence } from '../services/discord-presence';
   import Tabs from '../components/Tabs.svelte';
+  import UserBadge from '../components/UserBadge.svelte';
 
   interface Props {
     id?: number;
@@ -158,6 +160,7 @@
           <h2 class="profile-friends__recs-title">Рекомендации</h2>
           <div class="search-page__profiles">
             {#each recommendations as fr}
+              {@const badgeUrl = resolveProfileBadgeUrl(fr as Record<string, unknown>)}
               <button
                 type="button"
                 class="search-page__profile"
@@ -168,7 +171,10 @@
                   style={fr.avatar ? `background-image:url('${resolveCdnAssetUrl(fr.avatar)}')` : ''}
                 ></div>
                 <div class="search-page__profile-info">
-                  <span class="search-page__profile-name">{fr.login || ''}</span>
+                  <span class="search-page__profile-name-row">
+                    <span class="search-page__profile-name">{fr.login || ''}</span>
+                    <UserBadge url={badgeUrl} name={resolveBadgeName(fr.badge)} size="sm" />
+                  </span>
                 </div>
               </button>
             {/each}
@@ -185,6 +191,7 @@
       {:else}
         <div class="search-page__profiles">
           {#each friends as fr}
+            {@const badgeUrl = resolveProfileBadgeUrl(fr as Record<string, unknown>)}
             <button
               type="button"
               class="search-page__profile"
@@ -195,7 +202,10 @@
                 style={fr.avatar ? `background-image:url('${resolveCdnAssetUrl(fr.avatar)}')` : ''}
               ></div>
               <div class="search-page__profile-info">
-                <span class="search-page__profile-name">{fr.login || ''}</span>
+                <span class="search-page__profile-name-row">
+                  <span class="search-page__profile-name">{fr.login || ''}</span>
+                  <UserBadge url={badgeUrl} name={resolveBadgeName(fr.badge)} size="sm" />
+                </span>
                 {#if fr.friend_count != null}
                   <span class="search-page__profile-status">{fr.friend_count} друзей</span>
                 {/if}

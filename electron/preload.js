@@ -305,6 +305,8 @@ contextBridge.exposeInMainWorld('anixApi', {
       replies: (commentId, page = 0, sort = 2) =>
         ipcRenderer.invoke('anix:releaseCommentReplies', commentId, page, sort),
       vote: (commentId, vote) => ipcRenderer.invoke('anix:releaseCommentVote', commentId, vote),
+      votes: (commentId, page = 0, sort = 2) =>
+        ipcRenderer.invoke('anix:releaseCommentVotes', commentId, page, sort),
       add: (releaseId, body) => ipcRenderer.invoke('anix:releaseCommentAdd', releaseId, body),
       edit: (commentId, body) => ipcRenderer.invoke('anix:releaseCommentEdit', commentId, body),
       delete: (commentId) => ipcRenderer.invoke('anix:releaseCommentDelete', commentId),

@@ -195,6 +195,11 @@ export interface AnixApi {
         content?: Record<string, unknown>[];
       }>;
       vote: (commentId: number, vote: number) => Promise<{ code?: number }>;
+      votes: (
+        commentId: number,
+        page?: number,
+        sort?: number,
+      ) => Promise<{ content?: Record<string, unknown>[]; last?: boolean }>;
       add: (
         releaseId: number,
         body: {
@@ -408,6 +413,9 @@ export interface AnixApi {
         image_url: string;
         timestamp?: number;
       }>;
+      total_count?: number;
+      total_page_count?: number;
+      current_page?: number;
       profile?: { badge?: { id: number; name: string; image_url: string; type: number } | null };
     }>;
     setBadge: (id: number) => Promise<{ code?: number }>;

@@ -46,6 +46,7 @@ import {
   Plus,
   BookOpen,
   RefreshCw,
+  Reply,
   Tags,
   Tv,
   RotateCcw,
@@ -116,6 +117,11 @@ export function iconHeart(size = 18, filled = false): string {
 /** Комментарий (счётчик на карточке коллекции) */
 export function iconMessageCircle(size = 16): string {
   return toSvg(MessageCircle, size);
+}
+
+/** Ответить (меню комментария) */
+export function iconReply(size = 16): string {
+  return toSvg(Reply, size);
 }
 
 /** Флажок / закладка (для избранного); filled — активна */

@@ -1006,21 +1006,8 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .releases-type {
-  position: sticky;
-  top: calc(-1 * var(--page-scroll-padding));
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  flex-wrap: nowrap;
-  gap: 0 1.5rem;
   margin-bottom: 1.5rem;
-  padding-bottom: 0.5rem;
-  background: $color-bg;
-  border-bottom: 1px solid $color-border;
-  margin-top: -0.5rem;
-  padding-top: 0.5rem;
-  min-width: 0;
+  margin-top: 0;
 }
 
 .home-toolbar__random {
@@ -1912,185 +1899,12 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .bookmarks__tabs {
-  position: sticky;
-  top: calc(-1 * var(--page-scroll-padding));
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 0.75rem;
   margin-bottom: 1.25rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid $color-border;
-  background: $color-bg;
-  margin-top: -0.5rem;
-  padding-top: 0.5rem;
-  min-width: 0;
-}
-
-.bookmarks__tabs-nav {
-  position: relative;
-  flex: 1 1 0;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.bookmarks__tabs-scroll {
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-  width: 100%;
-  min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  scroll-behavior: smooth;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
-
-  .bookmarks__tab {
-    flex-shrink: 0;
-  }
-}
-
-.bookmarks__tabs-divider {
-  flex-shrink: 0;
-  align-self: center;
-  width: 1px;
-  height: 1.1rem;
-  margin: 0 0.15rem;
-  background: rgba(255, 255, 255, 0.16);
-}
-
-.bookmarks__tabs-fade {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  width: 3.25rem;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.22s ease;
-
-  &--visible {
-    opacity: 1;
-  }
-
-  &--left {
-    left: 0;
-    justify-content: flex-start;
-    padding-left: 0.1rem;
-    background: linear-gradient(to right,
-        $color-bg 0%,
-        color-mix(in srgb, $color-bg 92%, transparent) 42%,
-        transparent 100%);
-  }
-
-  &--right {
-    right: 0;
-    justify-content: flex-end;
-    padding-right: 0.1rem;
-    background: linear-gradient(to left,
-        $color-bg 0%,
-        color-mix(in srgb, $color-bg 92%, transparent) 42%,
-        transparent 100%);
-  }
-}
-
-.bookmarks__tabs-arrow {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 1.75rem;
-  height: 1.75rem;
-  padding: 0;
-  border-radius: $radius-md;
-  border: none;
-  background: color-mix(in srgb, $color-bg 55%, transparent);
-  color: $color-text-muted;
-  cursor: pointer;
-  pointer-events: auto;
-  backdrop-filter: blur(4px);
-  transition:
-    color 0.18s ease,
-    background 0.18s ease,
-    transform 0.18s ease,
-    opacity 0.18s ease;
-
-  &:hover {
-    color: $color-text;
-    background: color-mix(in srgb, $color-bg 78%, $color-surface);
-    transform: scale(1.06);
-  }
-
-  &:active {
-    transform: scale(0.96);
-  }
-
-  .bookmarks__tabs-fade:not(.bookmarks__tabs-fade--visible) & {
-    pointer-events: none;
-    opacity: 0;
-  }
-}
-
-.bookmarks__tabs-actions {
-  display: flex;
-  align-items: center;
-  margin-left: auto;
-  flex-shrink: 0;
-  padding-left: 0.25rem;
-  background: $color-bg;
-}
-
-.bookmarks__tabs-left {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  padding-right: 0.15rem;
+  margin-top: 0;
 }
 
 .bookmarks__tabs-settings {
   margin-right: 0.15rem;
-}
-
-.bookmarks__tab {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.5rem 0;
-  font-size: 0.95rem;
-  font-family: inherit;
-  font-weight: 500;
-  color: $color-text-muted;
-  background: none;
-  border: none;
-  border-radius: 0;
-  cursor: pointer;
-  position: relative;
-  transition: color $transition;
-
-  &:hover {
-    color: $color-text;
-  }
-
-  &--active {
-    color: $color-text;
-
-    &::after {
-      content: '';
-      position: absolute;
-      left: 0;
-      right: 0;
-      bottom: -0.5rem;
-      height: 2px;
-      background: $color-text;
-    }
-  }
 }
 
 .bookmarks__content {

@@ -2,7 +2,8 @@ import { get, writable } from 'svelte/store';
 
 export type AppScreen = 'offline' | 'login' | 'main';
 
-export const appScreen = writable<AppScreen>('offline');
+/** Стартуем в main — проблемы сети показываем баннером в titlebar, не fullscreen. */
+export const appScreen = writable<AppScreen>('main');
 
 /** Есть сохранённый токен Anixart */
 export const isAuthenticated = writable(false);

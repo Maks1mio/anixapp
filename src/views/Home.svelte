@@ -1,20 +1,20 @@
 <script lang="ts">
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import HomeCustomFilterView from '../components/HomeCustomFilterView.svelte';
-  import HomeDefaultTabModal from '../components/HomeDefaultTabModal.svelte';
   import HomeTabRenameModal from '../components/HomeTabRenameModal.svelte';
   import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../stores/navigation';
   import { requireAuth } from '../stores/auth';
   import Tabs, { type TabItem } from '../components/Tabs.svelte';
+  import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../components/uikit-v2/UiV2PopupMenu.svelte';
   import { iconHome, iconPencil, iconShuffle, iconSlidersHorizontal } from '../components/icons';
-  import { openFloatingMenu } from '../components/dots-menu';
   import { buildPosterUrl } from '../utils/posterUrl';
   import type { ReleaseCardData } from '../types/release';
   import { fetchAnnouncements, type Announcement } from '../services/announcements';
   import AnnouncementBanner from '../components/AnnouncementBanner.svelte';
   import {
     isHomeCustomTabConfigured,
+    getMyTabLabel,
     loadHomeCustomTab,
     renameHomeCustomTab,
     saveHomeCustomTab,
@@ -173,9 +173,95 @@
   let errorMsg = $state('');
   let randomLoading = $state(false);
   let filterModalOpen = $state(false);
-  let defaultTabModalOpen = $state(false);
   let renameTabModalOpen = $state(false);
+  let tabMenuOpen = $state(false);
+  let tabMenuX = $state(0);
+  let tabMenuY = $state(0);
+  let tabMenuPlacement = $state<'point' | 'anchor'>('point');
+  let tabMenuKind = $state<'my-tab' | 'tab-default' | 'settings' | null>(null);
+  let tabMenuTabId = $state<string | null>(null);
   let tabsSettingsBtn = $state<HTMLButtonElement | undefined>();
+
+  const tabMenuItems = $derived.by((): UiV2PopupMenuItem[] => {
+    const currentDefaultTab = resolveHomeTab(customTabData.activeTab ?? activeTab);
+
+    switch (tabMenuKind) {
+      case 'my-tab':
+        return [
+          { id: 'rename', label: 'Переименовать', icon: iconPencil(18) },
+          { id: 'configure', label: 'Настроить вкладку', icon: iconSlidersHorizontal(18) },
+          { id: 'set-default', label: 'Назначить по умолчанию', icon: iconHome(18) },
+        ];
+      case 'tab-default':
+        return [{ id: 'set-default', label: 'Назначить по умолчанию', icon: iconHome(18) }];
+      case 'settings':
+        return [
+          {
+            id: 'default-tab',
+            label: 'Изменить вкладку по умолч.',
+            icon: iconHome(18),
+            submenuWide: true,
+            children: HOME_TAB_DEFS.map((tab) => ({
+              id: `home-default-${tab.id}`,
+              label: tab.id === 'my' ? getMyTabLabel(customTabData) : tab.label,
+              type: 'radio' as const,
+              checked: currentDefaultTab === tab.id,
+              keepOpen: true,
+            })),
+          },
+          { id: 'configure-my', label: 'Настроить мою вкладку', icon: iconSlidersHorizontal(18) },
+        ];
+      default:
+        return [];
+    }
+  });
+
+  function openTabMenu(opts: {
+    x: number;
+    y: number;
+    kind: NonNullable<typeof tabMenuKind>;
+    tabId?: string;
+    placement?: 'point' | 'anchor';
+  }) {
+    tabMenuX = opts.x;
+    tabMenuY = opts.y;
+    tabMenuKind = opts.kind;
+    tabMenuTabId = opts.tabId ?? null;
+    tabMenuPlacement = opts.placement ?? 'point';
+    tabMenuOpen = true;
+  }
+
+  function closeTabMenu() {
+    tabMenuOpen = false;
+    tabMenuKind = null;
+    tabMenuTabId = null;
+  }
+
+  function handleTabMenuSelect(id: string) {
+    if (id.startsWith('home-default-')) return;
+
+    if (tabMenuKind === 'my-tab') {
+      if (id === 'rename') openRenameTabModal();
+      else if (id === 'configure') openFilterModal();
+      else if (id === 'set-default') void applyDefaultHomeTab('my');
+    } else if (tabMenuKind === 'tab-default' && tabMenuTabId) {
+      if (id === 'set-default') void applyDefaultHomeTab(tabMenuTabId);
+    } else if (tabMenuKind === 'settings') {
+      if (id === 'configure-my') openFilterModal();
+    }
+    closeTabMenu();
+  }
+
+  function handleTabMenuCheckedChange(id: string, checked: boolean) {
+    if (!checked || !id.startsWith('home-default-')) return;
+    void applyDefaultHomeTab(id.slice('home-default-'.length));
+  }
+
+  async function applyDefaultHomeTab(tabId: string) {
+    await setDefaultHomeTab(tabId);
+    customTabData = { ...customTabData, activeTab: tabId };
+  }
+
   let unregisterScrollKey: (() => void) | null = null;
 
   let scrollEl: HTMLElement | null = null;
@@ -285,11 +371,6 @@
     filterModalOpen = true;
   }
 
-  function openDefaultTabModal() {
-    if (!requireAuth()) return;
-    defaultTabModalOpen = true;
-  }
-
   function openRenameTabModal() {
     if (!requireAuth()) return;
     renameTabModalOpen = true;
@@ -301,54 +382,32 @@
     if (!requireAuth()) return;
     const btn = tabsSettingsBtn;
     if (!btn) return;
-    openFloatingMenu({
-      anchor: btn,
-      entries: [
-        { id: 'default-tab', label: 'Изменить вкладку по умолч.', icon: iconHome(18) },
-        { id: 'configure-my', label: 'Настроить мою вкладку', icon: iconSlidersHorizontal(18) },
-      ],
-      onSelect: (id) => {
-        if (id === 'default-tab') openDefaultTabModal();
-        else if (id === 'configure-my') openFilterModal();
-      },
+    const rect = btn.getBoundingClientRect();
+    openTabMenu({
+      x: (rect.left + rect.right) / 2,
+      y: (rect.top + rect.bottom) / 2,
+      kind: 'settings',
+      placement: 'anchor',
     });
   }
 
   function handleTabContextMenu(tab: TabItem, e: MouseEvent) {
     if (tab.id === 'my') {
       if (!requireAuth()) return;
-      openFloatingMenu({
+      openTabMenu({
         x: e.clientX,
         y: e.clientY,
-        entries: [
-          { id: 'rename', label: 'Переименовать', icon: iconPencil(18) },
-          { id: 'configure', label: 'Настроить вкладку', icon: iconSlidersHorizontal(18) },
-          { id: 'set-default', label: 'Назначить по умолчанию', icon: iconHome(18) },
-        ],
-        onSelect: (id) => {
-          if (id === 'rename') openRenameTabModal();
-          else if (id === 'configure') openFilterModal();
-          else if (id === 'set-default') void setDefaultHomeTab('my');
-        },
+        kind: 'my-tab',
       });
       return;
     }
 
-    openFloatingMenu({
+    openTabMenu({
       x: e.clientX,
       y: e.clientY,
-      entries: [
-        { id: 'set-default', label: 'Назначить по умолчанию', icon: iconHome(18) },
-      ],
-      onSelect: (id) => {
-        if (id === 'set-default') void setDefaultHomeTab(tab.id);
-      },
+      kind: 'tab-default',
+      tabId: tab.id,
     });
-  }
-
-  async function onDefaultTabSave(tabId: string) {
-    await setDefaultHomeTab(tabId);
-    defaultTabModalOpen = false;
   }
 
   async function onRenameTabSave(name: string) {
@@ -471,7 +530,7 @@
     {#snippet leftActions()}
       <button
         type="button"
-        class="bookmarks-toolbar__icon-btn bookmarks__tabs-settings"
+        class="uiv2-tabs__tool-btn bookmarks__tabs-settings"
         title="Настройки вкладок"
         aria-label="Настройки вкладок"
         aria-haspopup="menu"
@@ -485,7 +544,7 @@
       <div class="bookmarks-toolbar">
         <button
           type="button"
-          class="bookmarks-toolbar__icon-btn"
+          class="uiv2-tabs__tool-btn"
           title="Случайный релиз"
           aria-label="Случайный релиз"
           disabled={randomLoading}
@@ -533,15 +592,6 @@
   />
 {/if}
 
-{#if defaultTabModalOpen}
-  <HomeDefaultTabModal
-    options={[...HOME_TAB_DEFS]}
-    value={resolveHomeTab(customTabData.activeTab ?? activeTab)}
-    onSave={onDefaultTabSave}
-    onClose={() => { defaultTabModalOpen = false; }}
-  />
-{/if}
-
 {#if renameTabModalOpen}
   <HomeTabRenameModal
     initialName={customTabData.tabName.trim() || 'Моя вкладка'}
@@ -549,3 +599,14 @@
     onClose={() => { renameTabModalOpen = false; }}
   />
 {/if}
+
+<UiV2PopupMenu
+  open={tabMenuOpen}
+  x={tabMenuX}
+  y={tabMenuY}
+  placement={tabMenuPlacement}
+  items={tabMenuItems}
+  onClose={closeTabMenu}
+  onSelect={handleTabMenuSelect}
+  onCheckedChange={handleTabMenuCheckedChange}
+/>

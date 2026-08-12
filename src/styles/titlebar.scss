@@ -3,7 +3,7 @@
 .titlebar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   height: 40px;
   min-height: 40px;
   background: $color-surface;
@@ -90,6 +90,15 @@
   align-items: center;
   gap: 2px;
   -webkit-app-region: no-drag;
+}
+
+/* Пустая середина titlebar — зона перетаскивания окна */
+.titlebar__space {
+  flex: 1 1 auto;
+  align-self: stretch;
+  min-width: 1.5rem;
+  min-height: 100%;
+  -webkit-app-region: drag;
 }
 
 .titlebar__nav-btn {
@@ -188,7 +197,7 @@
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  margin-left: auto;
+  flex-shrink: 0;
   padding: 0 0.5rem;
   -webkit-app-region: no-drag;
 }
@@ -381,6 +390,7 @@
 .titlebar__controls {
   display: flex;
   align-items: stretch;
+  flex-shrink: 0;
   -webkit-app-region: no-drag;
 }
 

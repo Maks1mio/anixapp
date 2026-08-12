@@ -1,3 +1,4 @@
+import { resolveBadgeImageUrl, resolveBadgeName } from './badge';
 import { resolveCdnAssetUrl } from './posterUrl';
 import { formatCommentTimestamp } from './comment';
 import { resolveJacksonEntity } from './jackson-refs';
@@ -27,6 +28,8 @@ export interface OverviewCommentWeekItem {
   isSpoiler: boolean;
   profileLogin: string;
   profileAvatar: string;
+  profileBadgeUrl?: string | null;
+  profileBadgeName?: string;
   releaseId: number;
   releaseTitle: string;
 }
@@ -62,13 +65,25 @@ export function mapOverviewCollection(raw: Record<string, unknown>): CollectionC
   return mapCollectionCard(raw);
 }
 
-export function mapOverviewCommentWeek(raw: Record<string, unknown>): OverviewCommentWeekItem | null {
+export function mapOverviewCommentWeek(
+  raw: Record<string, unknown>,
+  root?: unknown,
+): OverviewCommentWeekItem | null {
   const id = raw.id as number;
   if (!id) return null;
-  const profile = (raw.profile ?? {}) as Record<string, unknown>;
-  const release = resolveJacksonEntity(raw.release, raw);
+  const profileRaw =
+    resolveJacksonEntity(raw.profile, root ?? raw) ??
+    ((raw.profile ?? {}) as Record<string, unknown>);
+  const profile =
+    profileRaw && typeof profileRaw === 'object' && !Array.isArray(profileRaw)
+      ? (profileRaw as Record<string, unknown>)
+      : ({} as Record<string, unknown>);
+  const release = resolveJacksonEntity(raw.release, root ?? raw);
   const releaseId = Number(release?.id ?? 0);
   if (!releaseId) return null;
+
+  const badgeRaw =
+    resolveJacksonEntity(profile.badge, root ?? raw) ?? profile.badge;
 
   return {
     id,
@@ -78,6 +93,11 @@ export function mapOverviewCommentWeek(raw: Record<string, unknown>): OverviewCo
     isSpoiler: !!(raw.is_spoiler ?? raw.isSpoiler),
     profileLogin: String(profile.login ?? profile.nickname ?? 'Пользователь'),
     profileAvatar: resolveCdnAssetUrl(String(profile.avatar ?? '')),
+    profileBadgeUrl:
+      resolveBadgeImageUrl(badgeRaw) ??
+      resolveBadgeImageUrl(profile.badge_url) ??
+      resolveBadgeImageUrl(profile.badgeUrl),
+    profileBadgeName: resolveBadgeName(badgeRaw) || undefined,
     releaseId,
     releaseTitle: String(
       release?.title_ru ?? release?.titleRu ?? release?.title_original ?? release?.title ?? 'Релиз',

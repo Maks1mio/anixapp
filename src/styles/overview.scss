@@ -818,6 +818,9 @@ img.poster-image--loaded {
 }
 
 .overview-comment-week__login {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
   font-weight: 600;
   color: $color-text;
 }

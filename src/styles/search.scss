@@ -192,7 +192,7 @@
 }
 
 .search-page__tabs-wrap {
-  border-bottom: 1px solid $color-border;
+  margin-bottom: 0.15rem;
 }
 
 .search-page__tabs-bar {
@@ -210,131 +210,6 @@
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
-}
-
-// ——— Franchise card (related) ———
-.search-franchise {
-  width: 100%;
-  padding: 1.2rem 2.0rem;
-  border-radius: $radius-lg;
-  background: $color-surface;
-  display: flex;
-  align-items: center;
-  gap: 3.5rem;
-  cursor: pointer;
-  text-align: left;
-  font-family: inherit;
-  color: inherit;
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.2s ease;
-
-  &:hover {
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-    border-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
-
-    .search-franchise__thumb {
-      transform: translateX(0) scale(1);
-      opacity: 1;
-    }
-
-    .search-franchise__action {
-      color: $color-accent;
-    }
-  }
-
-  &:active {
-    transform: translateY(-1px);
-  }
-}
-
-.search-franchise__thumbs {
-  position: relative;
-  width: 100px;
-  min-height: 80px;
-  height: 80px;
-  flex-shrink: 0;
-  overflow: visible;
-}
-
-.search-franchise__thumb {
-  position: absolute;
-  width: 56px;
-  height: 80px;
-  left: 0;
-  top: 0;
-  border-radius: $radius-md;
-  background-position: center;
-  background-size: cover;
-  background-color: $color-surface-hover;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-  transition: transform 0.3s ease, opacity 0.25s ease;
-  transform-origin: center bottom;
-
-  &:nth-child(1) {
-    z-index: 3;
-    transform: translateX(0) rotate(-2deg) scale(0.98);
-    opacity: 0.95;
-  }
-
-  &:nth-child(2) {
-    z-index: 2;
-    left: 30px;
-    transform: translateX(0) rotate(0deg) scale(0.98);
-    opacity: 0.9;
-  }
-
-  &:nth-child(3) {
-    z-index: 1;
-    left: 60px;
-    transform: translateX(0) rotate(2deg) scale(0.98);
-    opacity: 0.85;
-  }
-}
-
-.search-franchise:hover .search-franchise__thumb {
-  &:nth-child(1) {
-    z-index: 3;
-    transform: translateX(-6px) rotate(-6deg) scale(0.98);
-    opacity: 1;
-  }
-
-  &:nth-child(2) {
-    z-index: 2;
-    transform: translateX(4px) rotate(0deg) scale(0.98);
-    opacity: 1;
-  }
-
-  &:nth-child(3) {
-    z-index: 1;
-    transform: translateX(14px) rotate(6deg) scale(0.98);
-    opacity: 1;
-  }
-}
-
-.search-franchise__content {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.search-franchise__title {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: $color-text;
-}
-
-.search-franchise__meta {
-  font-size: 0.82rem;
-  color: $color-text-muted;
-}
-
-.search-franchise__action {
-  flex-shrink: 0;
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: $color-text-muted;
-  transition: transform 0.2s ease, color 0.2s ease;
 }
 
 .search-page__state {
@@ -444,6 +319,14 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+}
+
+.search-page__profile-name-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .search-page__profile-name {

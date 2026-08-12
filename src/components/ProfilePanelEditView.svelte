@@ -1,14 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { iconPencil, iconShare } from './icons';
+  import { iconLock, iconPencil, iconShare } from './icons';
   import OAuthBrandIcon from './OAuthBrandIcon.svelte';
   import { showToast } from '../stores/toast';
-  import { toCdnProxyUrl } from '../utils/posterUrl';
   import { formatHistoryViewTime } from '../utils/historyFormat';
   import UiV2BackBar from './uikit-v2/UiV2BackBar.svelte';
   import UiV2ChoiceSheet from './uikit-v2/UiV2ChoiceSheet.svelte';
   import UiV2OutlinedField from './uikit-v2/UiV2OutlinedField.svelte';
-  import { isLottieBadgeUrl } from '../views/Profile/_utils';
+  import UserBadge from './UserBadge.svelte';
+  import { resolveBadgeImageUrl, resolveBadgeName, rememberBadgeCatalogEntries, enrichLockedBadgePreviews } from '../utils/badge';
+  import { resolveJacksonRefs } from '../utils/jackson-refs';
   import { compressImageForUpload } from '../utils/compressImage';
 
   type EditScreen = 'menu' | 'status' | 'nickname' | 'social' | 'badge';
@@ -25,6 +26,8 @@
     name: string;
     type: number;
     image_url: string;
+    timestamp: number;
+    available: boolean;
   }
 
   interface ThemeOption {
@@ -140,8 +143,40 @@
   let currentBadgeUrl = $state<string | null>(null);
   let currentBadgeId = $state<number | null>(null);
   let badges = $state<BadgeItem[]>([]);
+  let badgesTotalCount = $state(0);
   let badgesState = $state<'idle' | 'loading' | 'ready' | 'error'>('idle');
   let badgeBusy = $state(false);
+
+  const badgesAvailableCount = $derived(badges.filter((b) => b.available).length);
+
+  function mapBadgeRow(row: Record<string, unknown>): BadgeItem | null {
+    const id = Number(row.id ?? 0);
+    if (!id) return null;
+    const name = resolveBadgeName(row);
+    const imageUrl = resolveBadgeImageUrl(row) ?? '';
+    const timestamp = Number(row.timestamp ?? 0);
+    // Как в APK: слот без имени — ещё не получен (id есть, превью пустое).
+    const available = !!name;
+    return {
+      id,
+      name,
+      type: Number(row.type ?? 0),
+      image_url: imageUrl,
+      timestamp: Number.isFinite(timestamp) ? timestamp : 0,
+      available,
+    };
+  }
+
+  function onBadgeClick(badge: BadgeItem) {
+    if (!badge.available) {
+      showToast(
+        'Этот значок пока недоступен. Получайте достижения и проявляйте активность на Anixart.',
+        'err',
+      );
+      return;
+    }
+    void applyBadge(badge);
+  }
 
   let themes = $state<ThemeOption[]>([]);
   let selectedThemeId = $state<number>(1);
@@ -645,21 +680,69 @@
       return;
     }
     badgesState = 'loading';
+    badges = [];
+    badgesTotalCount = 0;
     try {
-      const res = await api.getBadges(0);
-      const rows = Array.isArray(res?.content) ? res.content : [];
-      badges = rows.map((row) => {
-        const r = row as Record<string, unknown>;
-        return {
-          id: Number(r.id ?? 0),
-          name: String(r.name ?? ''),
-          type: Number(r.type ?? 0),
-          image_url: String(r.image_url ?? ''),
-        };
-      }).filter((b) => b.id > 0);
+      const merged: BadgeItem[] = [];
+      let page = 0;
+      let totalCount = 0;
+      let totalPages = 1;
+      let profileBadge: Record<string, unknown> | null = null;
 
-      const profileBadge = res?.profile?.badge;
-      if (profileBadge && typeof profileBadge === 'object') {
+      while (page < totalPages) {
+        const res = resolveJacksonRefs(await api.getBadges(page)) as {
+          content?: unknown[];
+          profile?: { badge?: Record<string, unknown> };
+          total_count?: number;
+          totalCount?: number;
+          total_page_count?: number;
+          totalPageCount?: number;
+        };
+        const rows = Array.isArray(res?.content) ? res.content : [];
+        for (const row of rows) {
+          if (!row || typeof row !== 'object') continue;
+          const mapped = mapBadgeRow(row as Record<string, unknown>);
+          if (mapped) merged.push(mapped);
+        }
+
+        totalCount = Number(
+          (res as { total_count?: number; totalCount?: number }).total_count
+          ?? (res as { totalCount?: number }).totalCount
+          ?? totalCount,
+        );
+        totalPages = Number(
+          (res as { total_page_count?: number; totalPageCount?: number }).total_page_count
+          ?? (res as { totalPageCount?: number }).totalPageCount
+          ?? (rows.length >= 25 ? page + 2 : page + 1),
+        );
+
+        const pb = res?.profile?.badge;
+        if (pb && typeof pb === 'object') profileBadge = pb as Record<string, unknown>;
+
+        if (!rows.length) break;
+        page += 1;
+        if (rows.length < 25) break;
+      }
+
+      badges = await enrichLockedBadgePreviews(
+        merged,
+        window.anixApi?.search?.profiles
+          ? (query, page = 0) => window.anixApi!.search!.profiles(query, page)
+          : undefined,
+      );
+      rememberBadgeCatalogEntries(
+        badges
+          .filter((item) => item.available && item.name && item.image_url)
+          .map((item) => ({
+            id: item.id,
+            name: item.name,
+            type: item.type,
+            image_url: item.image_url,
+          })),
+      );
+      badgesTotalCount = totalCount > 0 ? totalCount : merged.length;
+
+      if (profileBadge) {
         currentBadgeId = Number(profileBadge.id) || null;
         currentBadgeName = String(profileBadge.name ?? '') || null;
         currentBadgeUrl = String(profileBadge.image_url ?? '') || null;
@@ -671,6 +754,7 @@
   }
 
   async function applyBadge(badge: BadgeItem) {
+    if (!badge.available) return;
     if (badgeBusy || !window.anixApi?.settings?.setBadge) return;
     if (currentBadgeId === badge.id) return;
     badgeBusy = true;
@@ -1151,11 +1235,12 @@
         <span class="profile-panel__edit-row-title">Изменить значок</span>
         <span class="profile-panel__edit-row-sub profile-panel__edit-row-sub--badge">
           {#if currentBadgeUrl}
-            {#if isLottieBadgeUrl(currentBadgeUrl)}
-              <span class="profile-panel__edit-badge profile-panel__edit-badge--lottie" aria-hidden="true"></span>
-            {:else}
-              <img class="profile-panel__edit-badge" src={toCdnProxyUrl(currentBadgeUrl)} alt="" />
-            {/if}
+            <UserBadge
+              url={currentBadgeUrl}
+              name={currentBadgeName}
+              size="sm"
+              class="profile-panel__edit-badge"
+            />
           {/if}
           {badgePreview}
         </span>
@@ -1380,23 +1465,58 @@
           У вас пока нет доступных значков. Они появляются за активность и достижения в Anixart.
         </p>
       {:else}
-        <div class="profile-panel__badge-grid" role="listbox" aria-label="Доступные значки">
+        {#if badgesTotalCount > 0}
+          <p class="profile-panel__badge-summary">
+            Получено {badgesAvailableCount} из {badgesTotalCount}
+          </p>
+        {/if}
+        <div class="profile-panel__badge-grid" role="listbox" aria-label="Значки профиля">
           {#each badges as badge (badge.id)}
             <button
               type="button"
               class="profile-panel__badge-option"
-              class:profile-panel__badge-option--on={currentBadgeId === badge.id}
+              class:profile-panel__badge-option--on={badge.available && currentBadgeId === badge.id}
+              class:profile-panel__badge-option--locked={!badge.available}
               role="option"
-              aria-selected={currentBadgeId === badge.id}
+              aria-selected={badge.available && currentBadgeId === badge.id}
+              aria-disabled={!badge.available}
               disabled={badgeBusy}
-              onclick={() => void applyBadge(badge)}
+              onclick={() => onBadgeClick(badge)}
             >
-              {#if badge.image_url && !isLottieBadgeUrl(badge.image_url)}
-                <img class="profile-panel__badge-option-img" src={toCdnProxyUrl(badge.image_url)} alt="" />
+              {#if badge.image_url}
+                <div
+                  class="profile-panel__badge-option-preview"
+                  class:profile-panel__badge-option-preview--locked={!badge.available}
+                >
+                  <UserBadge
+                    url={badge.image_url}
+                    name={badge.name}
+                    size="lg"
+                    class="profile-panel__badge-option-img"
+                    showTooltip={false}
+                  />
+                  {#if !badge.available}
+                    <span class="profile-panel__badge-option-lock" aria-hidden="true">{@html iconLock(18)}</span>
+                  {/if}
+                </div>
               {:else}
-                <span class="profile-panel__badge-option-img profile-panel__badge-option-img--placeholder" aria-hidden="true"></span>
+                <span
+                  class="profile-panel__badge-option-img profile-panel__badge-option-img--placeholder"
+                  class:profile-panel__badge-option-img--locked={!badge.available}
+                  aria-hidden="true"
+                >
+                  {#if !badge.available}
+                    <span class="profile-panel__badge-option-lock">{@html iconLock(18)}</span>
+                  {/if}
+                </span>
               {/if}
-              <span class="profile-panel__badge-option-name">{badge.name || `Значок ${badge.id}`}</span>
+              {#if badge.available && badge.name}
+                <span class="profile-panel__badge-option-name">{badge.name}</span>
+              {:else if !badge.available}
+                <span class="profile-panel__badge-option-name profile-panel__badge-option-name--locked">
+                  {badge.name || 'Недоступен'}
+                </span>
+              {/if}
             </button>
           {/each}
         </div>

@@ -1,5 +1,18 @@
 @use 'variables' as *;
 
+$pp-divider: var(--pp-divider);
+$pp-hover: var(--pp-hover);
+$pp-surface: var(--pp-surface);
+$pp-surface-hover: var(--pp-surface-hover);
+$pp-border: var(--pp-border);
+$pp-border-strong: var(--pp-border-strong);
+$pp-fg-muted: var(--pp-fg-muted);
+$pp-fg-soft: var(--pp-fg-soft);
+$pp-fg-strong: var(--pp-fg-strong);
+$pp-btn-bg: var(--pp-btn-bg);
+$pp-btn-fg: var(--pp-btn-fg);
+$pp-btn-bg-hover: var(--pp-btn-bg-hover);
+
 .profile-panel {
   position: relative;
   flex: 1;
@@ -63,10 +76,7 @@
   border-radius: 999px;
 }
 
-// Общий вид чипов хрома (стрелки / крестик / пилюля ников)
-$pp-chrome-bg: rgba(36, 36, 36, 0.94);
-$pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
-
+// Общий вид чипов хрома (стрелки / крестик / пилюля ников) — те же токены, что у UI Kit V2
 .profile-panel__nav-btn {
   display: inline-flex;
   align-items: center;
@@ -77,9 +87,9 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   padding: 0;
   border: 0;
   border-radius: 999px;
-  background: $pp-chrome-bg;
-  box-shadow: $pp-chrome-shadow;
-  color: #fff;
+  background: var(--uiv2-chrome-bg);
+  box-shadow: var(--uiv2-chrome-shadow);
+  color: var(--uiv2-chrome-fg);
   cursor: pointer;
   backdrop-filter: blur(10px);
   transition:
@@ -90,7 +100,7 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
     margin 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 
   &:hover:not(:disabled) {
-    background: rgba(48, 48, 48, 0.98);
+    background: var(--uiv2-chrome-bg-hover);
   }
 
   &:active:not(:disabled) {
@@ -127,7 +137,7 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
     opacity: 1;
     transform: scale(1);
     pointer-events: auto;
-    box-shadow: $pp-chrome-shadow;
+    box-shadow: var(--uiv2-chrome-shadow);
   }
 }
 
@@ -149,9 +159,9 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   overflow-y: hidden;
   border-radius: 999px;
   border: 0;
-  background: $pp-chrome-bg;
+  background: var(--uiv2-chrome-bg);
   backdrop-filter: blur(10px);
-  box-shadow: $pp-chrome-shadow;
+  box-shadow: var(--uiv2-chrome-shadow);
   display: flex;
   align-items: center;
   scrollbar-width: none;
@@ -201,8 +211,8 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   }
 
   &--active {
-    background: rgba(58, 58, 58, 0.98);
-    color: #fff;
+    background: var(--uiv2-chrome-active-bg);
+    color: var(--uiv2-chrome-active-fg);
     font-weight: 600;
   }
 
@@ -217,7 +227,7 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   width: 1px;
   height: 0.85rem;
   margin: 0 0.1rem;
-  background: rgba(255, 255, 255, 0.14);
+  background: $pp-border;
   border-radius: 1px;
   user-select: none;
 }
@@ -355,7 +365,11 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   flex-shrink: 0;
 
   &--empty {
-    background: linear-gradient(160deg, #2a2a2a 0%, #121212 80%);
+    background: linear-gradient(
+      160deg,
+      color-mix(in srgb, $color-surface 70%, $color-text) 0%,
+      $color-surface-hover 80%
+    );
   }
 }
 
@@ -541,16 +555,16 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   width: 2.35rem;
   height: 2.35rem;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid $pp-border;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff;
+  background: $pp-surface;
+  color: $color-text;
   cursor: pointer;
   transition: background $transition, border-color $transition;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.18);
+    background: $pp-surface-hover;
+    border-color: $pp-border-strong;
   }
 
   &:focus-visible {
@@ -559,7 +573,7 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   }
 
   &--add {
-    color: rgba(255, 255, 255, 0.72);
+    color: $pp-fg-soft;
   }
 
   &--discord {
@@ -608,12 +622,12 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   }
 
   &--light {
-    background: #e8e8e8;
-    color: #111;
+    background: $color-surface;
+    color: $color-text;
     border-color: transparent;
 
     &:hover:not(:disabled) {
-      background: #f3f3f3;
+      background: $color-surface-hover;
     }
   }
 
@@ -651,11 +665,11 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   }
 
   &--muted {
-    color: rgba(255, 255, 255, 0.38);
+    color: $pp-fg-muted;
   }
 
   &--accent {
-    color: #fff;
+    color: $color-accent;
   }
 }
 
@@ -775,9 +789,9 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   overflow-y: hidden;
   border-radius: 999px;
   border: 0;
-  background: $pp-chrome-bg;
+  background: var(--uiv2-chrome-bg);
   backdrop-filter: blur(10px);
-  box-shadow: $pp-chrome-shadow;
+  box-shadow: var(--uiv2-chrome-shadow);
   display: flex;
   align-items: center;
   scrollbar-width: none;
@@ -811,8 +825,8 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
 
   &--active {
     max-width: 12rem;
-    background: rgba(58, 58, 58, 0.98);
-    color: #fff;
+    background: var(--uiv2-chrome-active-bg);
+    color: var(--uiv2-chrome-active-fg);
     font-weight: 600;
   }
 }
@@ -834,7 +848,7 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   min-width: 1.5rem;
   padding: 0.1rem 0.4rem;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
+  background: $pp-surface-hover;
   font-size: 0.72rem;
   font-weight: 600;
   color: $color-text-muted;
@@ -856,7 +870,7 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   flex-direction: column;
   gap: 0.55rem;
   padding: 0.65rem 0.9rem 0.85rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid $pp-divider;
 }
 
 .profile-panel__request-user {
@@ -885,7 +899,7 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   padding: 0.45rem 0.75rem;
   border: 0;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.06);
+  background: $pp-surface-hover;
   color: $color-text;
   font: inherit;
   font-size: 0.8rem;
@@ -893,8 +907,8 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   cursor: pointer;
 
   &--accept {
-    background: rgba(230, 230, 230, 0.92);
-    color: #111;
+    background: $pp-btn-bg;
+    color: $pp-btn-fg;
   }
 
   &:disabled {
@@ -914,10 +928,10 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   gap: 0.25rem;
   width: 100%;
   padding: 0.35rem 0.55rem 0.35rem 0.9rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid $pp-divider;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.03);
+    background: $pp-hover;
   }
 }
 
@@ -959,7 +973,7 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
     height: 0.55rem;
     border-radius: 50%;
     background: #4caf50;
-    box-shadow: 0 0 0 2px #121212;
+    box-shadow: 0 0 0 2px $color-bg;
   }
 }
 
@@ -972,6 +986,10 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
 }
 
 .profile-panel__friend-row-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  max-width: 100%;
   font-size: 0.9rem;
   font-weight: 600;
   overflow: hidden;
@@ -995,15 +1013,15 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: rgba(255, 255, 255, 0.38);
+  color: $pp-fg-muted;
   cursor: pointer;
 
   &--accent {
-    color: #fff;
+    color: $color-accent;
   }
 
   &:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: $pp-surface-hover;
   }
 
   &:focus-visible {
@@ -1025,13 +1043,13 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   padding: 0.55rem 1.1rem 0.35rem;
   font-size: 1rem;
   font-weight: 700;
-  color: #fff;
+  color: $color-text;
 }
 
 .profile-panel__edit-divider {
   height: 1px;
   margin: 0.55rem 1.1rem;
-  background: rgba(255, 255, 255, 0.08);
+  background: $pp-surface-hover;
 }
 
 .profile-panel__edit-row {
@@ -1049,7 +1067,7 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   cursor: pointer;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: $pp-surface;
   }
 
   &:focus-visible {
@@ -1150,7 +1168,7 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
 .profile-panel__edit-row-title {
   font-size: 0.95rem;
   font-weight: 500;
-  color: #fff;
+  color: $color-text;
   line-height: 1.35;
 }
 
@@ -1167,15 +1185,39 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
 }
 
 .profile-panel__edit-badge {
-  width: 1.15rem;
-  height: 1.15rem;
-  border-radius: 50%;
-  object-fit: cover;
+  flex-shrink: 0;
 
-  &--lottie {
-    display: inline-block;
-    background: rgba(255, 255, 255, 0.18);
-    border: 1px solid rgba(255, 255, 255, 0.22);
+  &:global(.user-badge) {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+}
+
+.profile-panel__badge-option :global(.user-badge.profile-panel__badge-option-img) {
+  flex-shrink: 0;
+}
+
+.profile-panel__badge-option-preview {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &--locked :global(.user-badge) {
+    opacity: 0.42;
+    filter: grayscale(0.85);
+  }
+
+  .profile-panel__badge-option-lock {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: $pp-fg-soft;
+    background: rgba(0, 0, 0, 0.28);
+    border-radius: 50%;
+    pointer-events: none;
   }
 }
 
@@ -1192,6 +1234,12 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   gap: 0.65rem;
 }
 
+.profile-panel__badge-summary {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  color: $color-text-muted;
+}
+
 .profile-panel__badge-option {
   position: relative;
   display: flex;
@@ -1200,16 +1248,16 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   gap: 0.45rem;
   min-height: 6.25rem;
   padding: 0.7rem 0.45rem 0.55rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid $pp-border;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff;
+  background: $pp-surface;
+  color: $color-text;
   cursor: pointer;
   text-align: center;
   transition: border-color 0.15s ease, background 0.15s ease;
 
   &:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.07);
+    background: $pp-surface-hover;
   }
 
   &:focus-visible {
@@ -1226,6 +1274,15 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
     border-color: color-mix(in srgb, $color-accent 65%, transparent);
     background: color-mix(in srgb, $color-accent 14%, transparent);
   }
+
+  &--locked {
+    cursor: default;
+    opacity: 0.72;
+
+    &:hover:not(:disabled) {
+      background: $pp-surface;
+    }
+  }
 }
 
 .profile-panel__badge-option-img {
@@ -1234,13 +1291,28 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   object-fit: contain;
 
   &--placeholder {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border-radius: 50%;
     background:
-      radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.35), transparent 45%),
-      linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.05));
-    border: 1px solid rgba(255, 255, 255, 0.16);
+      radial-gradient(circle at 35% 30%, color-mix(in srgb, $color-text 28%, transparent), transparent 45%),
+      linear-gradient(145deg, color-mix(in srgb, $color-text 14%, transparent), $pp-surface);
+    border: 1px solid $pp-border-strong;
   }
+
+  &--locked {
+    background:
+      radial-gradient(circle at 35% 30%, color-mix(in srgb, $color-text 10%, transparent), transparent 45%),
+      linear-gradient(145deg, $pp-surface-hover, $pp-surface);
+    border-color: $pp-border;
+  }
+}
+
+.profile-panel__badge-option-lock {
+  display: inline-flex;
+  color: $pp-fg-muted;
+  line-height: 0;
 }
 
 .profile-panel__badge-option-name {
@@ -1248,6 +1320,10 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   line-height: 1.25;
   color: $color-text-muted;
   word-break: break-word;
+
+  &--locked {
+    color: $pp-fg-muted;
+  }
 }
 
 .profile-panel__edit-field {
@@ -1265,10 +1341,10 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
 .profile-panel__edit-input {
   width: 100%;
   padding: 0.7rem 0.85rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid $pp-border;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff;
+  background: $pp-surface;
+  color: $color-text;
   font: inherit;
   font-size: 0.92rem;
 
@@ -1315,15 +1391,15 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   padding: 0.7rem 1rem;
   border: 0;
   border-radius: 999px;
-  background: rgba(230, 230, 230, 0.92);
-  color: #111;
+  background: $pp-btn-bg;
+    color: $pp-btn-fg;
   font: inherit;
   font-size: 0.92rem;
   font-weight: 600;
   cursor: pointer;
 
   &:hover:not(:disabled) {
-    background: #fff;
+    background: $pp-btn-bg-hover;
   }
 
   &:disabled {
@@ -1338,11 +1414,11 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
 
   &--ghost {
     background: transparent;
-    color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: $color-text;
+    border: 1px solid $pp-border-strong;
 
     &:hover:not(:disabled) {
-      background: rgba(255, 255, 255, 0.06);
+      background: $pp-surface-hover;
     }
   }
 }
@@ -1363,15 +1439,15 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   padding: 0.6rem 0.85rem;
   border: 0;
   border-radius: 999px;
-  background: rgba(230, 230, 230, 0.92);
-  color: #111;
+  background: $pp-btn-bg;
+    color: $pp-btn-fg;
   font: inherit;
   font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
 
   &:hover:not(:disabled) {
-    background: #fff;
+    background: $pp-btn-bg-hover;
   }
 
   &:disabled {
@@ -1424,7 +1500,7 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: -0.01em;
-  color: #fff;
+  color: $color-text;
 }
 
 .profile-panel__subpage-sub {
@@ -1449,7 +1525,7 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   margin: 0;
   font-size: 0.95rem;
   font-weight: 700;
-  color: #fff;
+  color: $color-text;
 }
 
 .profile-panel__login-history-list {
@@ -1482,7 +1558,7 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   justify-content: space-between;
   gap: 0.85rem;
   padding: 0.72rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid $pp-divider;
 
   &:last-child {
     border-bottom: 0;
@@ -1493,7 +1569,7 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   font-size: 0.95rem;
   font-weight: 600;
   line-height: 1.25;
-  color: #fff;
+  color: $color-text;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1537,7 +1613,7 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   max-height: min(78%, 28rem);
   padding: 0.55rem 0 0.9rem;
   border-radius: 18px 18px 0 0;
-  background: color-mix(in srgb, $color-surface 92%, #1a1a1a);
+  background: var(--uiv2-panel-bg);
   box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
   pointer-events: auto;
 }
@@ -1547,7 +1623,7 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   height: 0.25rem;
   margin: 0 auto 0.35rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.22);
+  background: $pp-border-strong;
 }
 
 .profile-panel__social-sheet-title {
@@ -1556,7 +1632,7 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   font-size: 1.15rem;
   font-weight: 700;
   line-height: 1.25;
-  color: #fff;
+  color: $color-text;
 }
 
 .profile-panel__social-sheet-empty {
@@ -1583,7 +1659,7 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   padding: 0.7rem 1.35rem;
   border: 0;
   background: transparent;
-  color: #fff;
+  color: $color-text;
   font: inherit;
   font-size: 0.98rem;
   font-weight: 500;
@@ -1592,7 +1668,7 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   cursor: pointer;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: $pp-hover;
   }
 
   &:focus-visible {
@@ -1654,15 +1730,15 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   padding: 0.75rem 1rem;
   border: 0;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: $pp-surface-hover;
+  color: $color-text;
   font: inherit;
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: $pp-surface-hover;
   }
 
   &:focus-visible {
@@ -1680,7 +1756,7 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
 .profile-panel__section {
   margin: 1.15rem 0 0;
   padding-top: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid $pp-divider;
 }
 
 .profile-panel__section-title {
@@ -1688,11 +1764,10 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   font-size: 0.95rem;
   font-weight: 700;
   line-height: 1.25;
-  color: #fff;
+  color: $color-text;
 }
 
 .profile-panel__dynamics {
-  --color-accent: #fff;
   margin-top: 0.45rem;
 
   .profile__chart-wrap {
@@ -1708,23 +1783,23 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   }
 
   .profile__chart-bar {
-    fill: rgba(255, 255, 255, 0.2);
+    fill: var(--pp-chart-bar);
 
     &--active {
-      fill: rgba(255, 255, 255, 0.42);
+      fill: var(--pp-chart-bar-active);
     }
   }
 
   .profile__chart-line {
-    stroke: #fff;
+    stroke: var(--uikit-v2-accent);
   }
 
   .profile__chart-dot-ring {
-    stroke: #fff;
+    stroke: var(--uikit-v2-accent);
   }
 
   .profile__chart-hover-line {
-    stroke: rgba(255, 255, 255, 0.75);
+    stroke: color-mix(in srgb, var(--uikit-v2-accent) 75%, transparent);
   }
 
   .profile__chart-label {
@@ -1754,11 +1829,11 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
     border-radius: 12px;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.05);
+      background: $pp-hover;
     }
 
     &:focus-visible {
-      outline: 2px solid rgba(255, 255, 255, 0.35);
+      outline: 2px solid color-mix(in srgb, $color-accent 45%, transparent);
       outline-offset: 1px;
     }
   }
@@ -1778,12 +1853,12 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
     font-weight: 600;
     line-height: 1.25;
     -webkit-line-clamp: 1;
-    color: rgba(255, 255, 255, 0.92);
+    color: $pp-fg-strong;
   }
 
   .profile-v2__recent-meta {
     font-size: 0.72rem;
-    color: rgba(255, 255, 255, 0.42);
+    color: $pp-fg-muted;
   }
 }
 
@@ -1824,6 +1899,11 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
     height: 11px;
   }
 
+  .profile-v2__stat-label,
+  .profile-v2__stat-value {
+    color: $color-text;
+  }
+
   .profile-v2__prefs {
     margin-top: 0.65rem;
   }
@@ -1832,10 +1912,10 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
     margin: 0 0 0.25rem;
     font-size: 0.8rem;
     line-height: 1.4;
-    color: rgba(255, 255, 255, 0.45);
+    color: $color-text-muted;
 
     span {
-      color: rgba(255, 255, 255, 0.78);
+      color: $color-text;
       font-weight: 500;
     }
   }
@@ -1854,23 +1934,54 @@ $pp-chrome-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
     p {
       margin: 0 0 0.25rem;
       font-size: 0.84rem;
-      color: rgba(255, 255, 255, 0.45);
+      color: $color-text-muted;
     }
 
     strong {
-      color: rgba(245, 245, 245, 0.95);
+      color: $color-text;
       font-weight: 700;
     }
   }
 
   .profile-v2__stats-more {
     margin-top: 0.7rem;
-    color: rgba(230, 230, 230, 0.72);
+    color: $pp-fg-soft;
     font-size: 0.82rem;
     font-weight: 400;
 
     &:hover {
-      color: #fff;
+      color: $color-text;
+    }
+  }
+
+  .profile-v2__stats--themed {
+    .profile-v2__stat-label,
+    .profile-v2__stat-value {
+      color: var(--pp-on-themed-fg);
+    }
+
+    .profile-v2__pref-line {
+      color: var(--pp-on-themed-fg-muted);
+
+      span {
+        color: var(--pp-on-themed-fg-soft);
+      }
+    }
+
+    .profile-v2__stats-totals p {
+      color: var(--pp-on-themed-fg-muted);
+    }
+
+    .profile-v2__stats-totals strong {
+      color: var(--pp-on-themed-fg);
+    }
+
+    .profile-v2__stats-more {
+      color: var(--pp-on-themed-fg-soft);
+
+      &:hover {
+        color: var(--pp-on-themed-fg);
+      }
     }
   }
 }

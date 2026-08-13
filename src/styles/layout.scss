@@ -29,6 +29,16 @@
   flex-shrink: 0;
 }
 
+.sidebar__tooltip.uiv2-tooltip__trigger {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+}
+
+.sidebar__bottom .sidebar__tooltip.uiv2-tooltip__trigger {
+  width: auto;
+}
+
 .sidebar__link {
   display: flex;
   align-items: center;
@@ -427,7 +437,8 @@ $schedule-duration: 0.34s;
     z-index: 1;
   }
 
-  .page.sidebar-schedule__page .page__v-track {
+  .page.sidebar-schedule__page > .uiv2-scroll-area__v-track,
+  .page.sidebar-schedule__page > .uiv2-scroll-area__h-track {
     z-index: 2;
   }
 }

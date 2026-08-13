@@ -43,6 +43,7 @@
     iconMoreHorizontal,
     iconPencil,
     iconReply,
+    iconTrash2,
     iconTriangleAlert,
   } from '../icons';
   import UserAvatar from '../UserAvatar.svelte';
@@ -90,6 +91,15 @@
       node: UiV2CommentNode,
       payload: UiV2CommentComposerPayload,
     ) => void | Promise<void>;
+    /** Редактирование своего комментария */
+    onEdit?: (
+      node: UiV2CommentNode,
+      payload: UiV2CommentComposerPayload,
+    ) => void | Promise<void>;
+    /** Удаление своего комментария */
+    onDelete?: (node: UiV2CommentNode) => void | Promise<void>;
+    /** id текущего пользователя — для edit/delete в меню */
+    selfProfileId?: number | null;
     /** Показывать inline-композер при «Ответить» (по умолчанию да) */
     enableInlineReply?: boolean;
   };
@@ -107,6 +117,9 @@
     onCommentClick,
     onLoadReplies,
     onSubmitReply,
+    onEdit,
+    onDelete,
+    selfProfileId = null,
     enableInlineReply = true,
   }: Props = $props();
 
@@ -119,25 +132,48 @@
   let menuNode = $state<UiV2CommentNode | null>(null);
   let replyTargetId = $state<string | null>(null);
   let replyBusy = $state(false);
+  let editingId = $state<string | null>(null);
+  let editBusy = $state(false);
 
-  const menuItems = $derived.by((): UiV2PopupMenuItem[] => [
-    { id: 'reply', label: 'Ответить', icon: iconReply(16) },
-    {
-      id: 'reactions',
-      label: 'Посмотреть реакции',
-      icon: iconHeart(16),
-      customSubmenu: true,
-      submenuWide: true,
-    },
-    { id: 'copy', label: 'Копировать текст', icon: iconCopy(16), dividerBefore: true },
-    {
+  function isMine(node: UiV2CommentNode): boolean {
+    return selfProfileId != null && node.profile.id === selfProfileId;
+  }
+
+  function menuItemsFor(node: UiV2CommentNode): UiV2PopupMenuItem[] {
+    const items: UiV2PopupMenuItem[] = [
+      { id: 'reply', label: 'Ответить', icon: iconReply(16) },
+      {
+        id: 'reactions',
+        label: 'Посмотреть реакции',
+        icon: iconHeart(16),
+        customSubmenu: true,
+        submenuWide: true,
+      },
+      { id: 'copy', label: 'Копировать текст', icon: iconCopy(16), dividerBefore: true },
+    ];
+    if (isMine(node) && !node.isDeleted && (onEdit || onDelete)) {
+      if (onEdit) {
+        items.push({ id: 'edit', label: 'Редактировать', icon: iconPencil(16), dividerBefore: true });
+      }
+      if (onDelete) {
+        items.push({
+          id: 'delete',
+          label: 'Удалить',
+          icon: iconTrash2(16),
+          danger: true,
+          dividerBefore: !onEdit,
+        });
+      }
+    }
+    items.push({
       id: 'report',
       label: 'Пожаловаться',
       icon: iconTriangleAlert(16),
       danger: true,
       dividerBefore: true,
-    },
-  ]);
+    });
+    return items;
+  }
 
   function keyOf(id: number | string): string {
     return String(id);
@@ -303,7 +339,33 @@
     if (id === 'copy') {
       void navigator.clipboard?.writeText(menuNode.message).catch(() => {});
     }
+    if (id === 'edit' && onEdit) {
+      editingId = keyOf(menuNode.id);
+      spoilerOpen = { ...spoilerOpen, [keyOf(menuNode.id)]: true };
+      replyTargetId = null;
+    }
+    if (id === 'delete' && onDelete) {
+      if (window.confirm('Удалить комментарий?')) {
+        void onDelete(menuNode);
+      }
+    }
     onMenuSelect?.(id, menuNode);
+  }
+
+  async function submitEdit(node: UiV2CommentNode, payload: UiV2CommentComposerPayload) {
+    if (!onEdit || editBusy) return;
+    editBusy = true;
+    try {
+      await onEdit(node, payload);
+      editingId = null;
+      spoilerOpen = { ...spoilerOpen, [keyOf(node.id)]: !payload.isSpoiler };
+    } finally {
+      editBusy = false;
+    }
+  }
+
+  function cancelEdit() {
+    editingId = null;
   }
 
   function replyCount(node: UiV2CommentNode): number {
@@ -425,6 +487,21 @@
 
           {#if node.isDeleted}
             <div class="uiv2-comment__deleted">Комментарий удалён</div>
+          {:else if editingId === keyOf(node.id)}
+            <div class="uiv2-comment__edit">
+              {#key node.id}
+                <UiV2CommentComposer
+                  fieldLabel="Редактирование"
+                  initialMessage={node.message}
+                  initialIsSpoiler={!!node.isSpoiler}
+                  resetOnSubmit={false}
+                  busy={editBusy}
+                  autofocus={true}
+                  onCancel={cancelEdit}
+                  onSubmit={(payload) => submitEdit(node, payload)}
+                />
+              {/key}
+            </div>
           {:else if contentHidden}
             <button
               type="button"
@@ -545,6 +622,9 @@
                 {onCommentClick}
                 {onLoadReplies}
                 {onSubmitReply}
+                {onEdit}
+                {onDelete}
+                {selfProfileId}
                 {enableInlineReply}
               />
             {:else if loadingReplies[keyOf(node.id)]}
@@ -575,7 +655,7 @@
   open={menuOpen}
   x={menuX}
   y={menuY}
-  items={menuItems}
+  items={menuNode ? menuItemsFor(menuNode) : []}
   onClose={() => {
     menuOpen = false;
     menuNode = null;

@@ -662,7 +662,8 @@ img.poster-image--loaded {
 
 .overview-carousel__nav,
 .overview-banners__nav,
-.overview-collections-week .overview-carousel__nav {
+.overview-collections-week .overview-carousel__nav,
+.overview-collections-week .uiv2-carousel__nav {
   min-width: 0;
 }
 
@@ -673,8 +674,10 @@ img.poster-image--loaded {
 }
 
 .overview-collections-week__item {
-  flex: 0 0 11.5rem;
+  flex: 0 0 16.5rem;
+  width: 16.5rem;
   min-width: 0;
+  scroll-snap-align: start;
 }
 
 // ——— Discuss today ———
@@ -787,6 +790,8 @@ img.poster-image--loaded {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  width: 100%;
+  min-width: 0;
 }
 
 .overview-comment-week__bubble {

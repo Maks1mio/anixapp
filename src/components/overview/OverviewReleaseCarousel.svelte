@@ -1,6 +1,6 @@
 <script lang="ts">
-  import RecommendedReleaseCard from '../RecommendedReleaseCard.svelte';
-  import ReleaseCarouselNav from '../../views/Release/components/ReleaseCarouselNav.svelte';
+  import UiV2ReleaseCarousel from '../uikit-v2/UiV2ReleaseCarousel.svelte';
+  import ReleaseCardUiV2 from '../ReleaseCardUiV2.svelte';
   import type { ReleaseCardData } from '../../types/release';
 
   interface Props {
@@ -14,17 +14,11 @@
 </script>
 
 {#if items.length > 0}
-  <div class="overview-carousel">
-    <ReleaseCarouselNav
-      measureKey={items.length}
-      navClass="overview-carousel__nav"
-      scrollClass="overview-carousel__scroll"
-      {initialScrollLeft}
-      {onScrollLeftChange}
-    >
-      {#each items as item (item.id)}
-        <RecommendedReleaseCard data={item} />
-      {/each}
-    </ReleaseCarouselNav>
-  </div>
+  <UiV2ReleaseCarousel measureKey={items.length} {initialScrollLeft} {onScrollLeftChange}>
+    {#each items as item (item.id)}
+      <div class="uiv2-carousel__item">
+        <ReleaseCardUiV2 data={item} variant="vertical" />
+      </div>
+    {/each}
+  </UiV2ReleaseCarousel>
 {/if}

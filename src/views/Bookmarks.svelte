@@ -8,11 +8,12 @@
   import { navigate } from '../stores/navigation';
   import { handleUserProfileClick } from '../stores/user-profile';
   import { getSearchParams } from '../router';
-  import { buildPosterUrl, resolveCdnAssetUrl } from '../utils/posterUrl';
+  import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import { DEFAULT_BOOKMARK_SORT } from '../constants/bookmarkSort';
   import type { ReleaseCardData } from '../types/release';
+  import { mapReleaseRawToCard } from '../utils/release-card';
   import { extractHistoryEpisodeInfo } from '../utils/historyFormat';
-  import { iconHome } from '../components/icons';
+  import { iconHome, iconSearch, iconX } from '../components/icons';
   import {
     getDefaultBookmarksTab,
     resolveBookmarksTab,
@@ -175,46 +176,21 @@
   }
 
   function mapReleaseToCardData(raw: Record<string, unknown>): ReleaseCardData {
-    const p = raw.poster as Record<string, { url?: string }> | undefined;
-    const posterRaw =
-      p?.original?.url ?? p?.medium?.url ?? p?.small?.url
-      ?? (typeof raw.poster === 'string' && raw.poster !== 'string' ? raw.poster : undefined)
-      ?? (typeof raw.image === 'string' ? raw.image : undefined);
-    const posterStr = typeof posterRaw === 'string' ? posterRaw : undefined;
-    const poster = posterStr ? buildPosterUrl(posterStr) || undefined : undefined;
-    const grade = typeof raw.grade === 'number' ? raw.grade : (typeof raw.rating === 'number' ? raw.rating : undefined);
-    const statusObj = raw.status as { name?: string } | undefined;
-    const profileListStatus = typeof raw.profile_list_status === 'number' ? raw.profile_list_status : undefined;
-    let listStatus: ReleaseCardData['listStatus'];
-    switch (profileListStatus) {
-      case 1: listStatus = 'watching'; break;
-      case 2: listStatus = 'planned'; break;
-      case 3: listStatus = 'completed'; break;
-      case 4: listStatus = 'on_hold'; break;
-      case 5: listStatus = 'dropped'; break;
-      default: listStatus = undefined;
-    }
-    const myVote = typeof raw.my_vote === 'number' && raw.my_vote > 0 ? raw.my_vote : undefined;
+    const releaseRaw =
+      raw.release && typeof raw.release === 'object'
+        ? (raw.release as Record<string, unknown>)
+        : raw;
+    const voteRaw =
+      typeof raw.my_vote === 'number'
+        ? raw.my_vote
+        : typeof raw.vote === 'number'
+          ? raw.vote
+          : typeof releaseRaw.my_vote === 'number'
+            ? releaseRaw.my_vote
+            : undefined;
+    const myVote = typeof voteRaw === 'number' && voteRaw > 0 ? voteRaw : undefined;
     return {
-      id: raw.id as number | undefined,
-      titleRu: (raw.title_ru ?? raw.titleRu) as string | undefined,
-      titleEn: (raw.title_original ?? raw.titleEn) as string | undefined,
-      titleAlt: (raw.title_alt as string) || undefined,
-      description: (raw.description as string) || undefined,
-      poster: poster || undefined,
-      rating: grade,
-      voteCount: typeof raw.vote_count === 'number' ? raw.vote_count : undefined,
-      episodesReleased: typeof raw.episodes_released === 'number' ? raw.episodes_released : undefined,
-      episodesTotal: typeof raw.episodes_total === 'number' ? raw.episodes_total : undefined,
-      year: typeof raw.year === 'string' ? raw.year : (typeof raw.year === 'number' ? String(raw.year) : undefined),
-      country: (raw.country as string) || undefined,
-      genres: (raw.genres as string) || undefined,
-      status: statusObj?.name,
-      studio: (raw.studio as string) || undefined,
-      category: (raw.category as { name?: string })?.name,
-      releaseDate: (raw.release_date as string) || undefined,
-      isFavorite: !!(raw.is_favorite),
-      listStatus,
+      ...mapReleaseRawToCard(releaseRaw),
       myVote,
     };
   }
@@ -249,7 +225,66 @@
 
   function extractTotalCount(data: Record<string, unknown> | null | undefined, fallback: number): number {
     if (typeof data?.total_count === 'number') return data.total_count;
+    if (typeof data?.total === 'number') return data.total as number;
     return fallback;
+  }
+
+  function releaseRawHaystack(raw: Record<string, unknown>): string {
+    const release =
+      raw.release && typeof raw.release === 'object'
+        ? (raw.release as Record<string, unknown>)
+        : raw;
+    return [
+      release.title_ru,
+      release.title_original,
+      release.title_alt,
+      release.title,
+      release.titleRu,
+      release.titleEn,
+      raw.title,
+      raw.name,
+    ]
+      .filter((v) => typeof v === 'string' && v.trim())
+      .join(' ')
+      .toLowerCase();
+  }
+
+  function matchesSearchQuery(raw: Record<string, unknown>, q: string): boolean {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return true;
+    return releaseRawHaystack(raw).includes(needle);
+  }
+
+  type FetchPageResult = {
+    content: Record<string, unknown>[];
+    total: number;
+    /** Все совпадения уже собраны — больше страниц нет */
+    exhaustive?: boolean;
+  };
+
+  /** Обход всех страниц источника и фильтр по query (поиск по всему списку). */
+  async function scanAllPagesForQuery(
+    q: string,
+    fetchSourcePage: (page: number) => Promise<{ content: Record<string, unknown>[]; total: number }>,
+    pageSizeHint = 20,
+  ): Promise<FetchPageResult> {
+    const matches: Record<string, unknown>[] = [];
+    const needle = q.trim().toLowerCase();
+    let sourceTotal = 0;
+    const maxPages = 300;
+
+    for (let page = 0; page < maxPages; page++) {
+      const { content, total } = await fetchSourcePage(page);
+      if (total > 0) sourceTotal = total;
+      if (!content.length) break;
+      for (const raw of content) {
+        if (matchesSearchQuery(raw, needle)) matches.push(raw);
+      }
+      if (content.length < pageSizeHint) break;
+      if (sourceTotal > 0 && (page + 1) * pageSizeHint >= sourceTotal) break;
+    }
+
+    return { content: matches, total: matches.length, exhaustive: true };
   }
 
   let activeTab = $state<TabId>('collections');
@@ -276,6 +311,9 @@
   let tabMenuTabId = $state<TabId | null>(null);
   let profileLogin = $state('');
   let profileAvatar = $state('');
+  let searchInput = $state('');
+  let searchQuery = $state('');
+  let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
   const tabMenuItems = $derived.by((): UiV2PopupMenuItem[] => {
     if (tabMenuKind === 'default-picker') {
@@ -319,13 +357,49 @@
   const isCollectionsTab = $derived(activeTab === 'collections');
   const isHistoryTab = $derived(activeTab === 'history');
   const isVotesTab = $derived(activeTab === 'votes');
+  const isFavoritesTab = $derived(activeTab === 'favorites');
   const isReleaseListTab = $derived(!isCollectionsTab && !isHistoryTab && !isVotesTab);
+  const activeTabMeta = $derived(TABS.find((t) => t.id === activeTab) ?? TABS[0]);
+  const searchPlaceholder = $derived(`Поиск в «${activeTabMeta?.label ?? 'списке'}»`);
   const headerAvatarUrl = $derived(profileAvatar ? resolveCdnAssetUrl(profileAvatar) : '');
   const profileIdForPanel = $derived(
     isOtherProfile
       ? listUserId!
       : (cachedProfileId ?? selfProfileId ?? 0),
   );
+
+  function clearSearchTimer() {
+    if (searchTimer) {
+      clearTimeout(searchTimer);
+      searchTimer = null;
+    }
+  }
+
+  function applySearchQuery(next: string, reload = true) {
+    const normalized = next.trim();
+    if (normalized === searchQuery) return;
+    searchQuery = normalized;
+    if (reload) void loadTab(activeTab, false, true);
+  }
+
+  function onSearchInput(e: Event) {
+    const value = (e.currentTarget as HTMLInputElement).value;
+    searchInput = value;
+    clearSearchTimer();
+    searchTimer = setTimeout(() => {
+      searchTimer = null;
+      applySearchQuery(value, true);
+    }, 320);
+  }
+
+  function clearSearch() {
+    clearSearchTimer();
+    searchInput = '';
+    if (searchQuery) {
+      searchQuery = '';
+      void loadTab(activeTab, false, true);
+    }
+  }
 
   let scrollEl: HTMLElement | null = null;
   let scrollListener: (() => void) | null = null;
@@ -406,39 +480,116 @@
     }
   }
 
-  async function fetchPage(page: number): Promise<{ content: Record<string, unknown>[]; total: number }> {
-    if (!window.anixApi) return { content: [], total: 0 };
+  async function fetchPage(page: number): Promise<FetchPageResult> {
+    if (!window.anixApi) return { content: [], total: 0, exhaustive: true };
+
+    const q = searchQuery.trim();
+    const api = window.anixApi;
 
     if (activeTab === 'collections') {
-      const data = await window.anixApi.collection.favorites(page) as Record<string, unknown>;
+      if (q) {
+        if (page > 0) return { content: [], total: 0, exhaustive: true };
+        return scanAllPagesForQuery(q, async (p) => {
+          const data = await api.collection.favorites(p) as Record<string, unknown>;
+          const content = (data?.content ?? []) as Record<string, unknown>[];
+          return { content, total: extractTotalCount(data, content.length) };
+        });
+      }
+      const data = await api.collection.favorites(page) as Record<string, unknown>;
       const content = (data?.content ?? []) as Record<string, unknown>[];
       return { content, total: extractTotalCount(data, content.length) };
     }
 
     if (activeTab === 'history') {
-      const data = await window.anixApi.history.all(page) as Record<string, unknown>;
+      if (q) {
+        if (page > 0) return { content: [], total: 0, exhaustive: true };
+        return scanAllPagesForQuery(q, async (p) => {
+          const data = await api.history.all(p) as Record<string, unknown>;
+          const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
+          return { content, total: extractTotalCount(data, content.length) };
+        });
+      }
+      const data = await api.history.all(page) as Record<string, unknown>;
       const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
       return { content, total: extractTotalCount(data, content.length) };
     }
 
     if (activeTab === 'votes') {
       const profileId = await ensureProfileId();
-      if (typeof profileId !== 'number') return { content: [], total: 0 };
-      const data = await window.anixApi.profile.getVotedReleases(profileId, page, 1) as Record<string, unknown>;
+      if (typeof profileId !== 'number') return { content: [], total: 0, exhaustive: true };
+      if (q) {
+        if (page > 0) return { content: [], total: 0, exhaustive: true };
+        return scanAllPagesForQuery(
+          q,
+          async (p) => {
+            const data = await api.profile.getVotedReleases(profileId, p, 1) as Record<string, unknown>;
+            const content = (data?.content ?? []) as Record<string, unknown>[];
+            return { content, total: extractTotalCount(data, content.length) };
+          },
+          25,
+        );
+      }
+      const data = await api.profile.getVotedReleases(profileId, page, 1) as Record<string, unknown>;
       const content = (data?.content ?? []) as Record<string, unknown>[];
       return { content, total: extractTotalCount(data, content.length) };
     }
 
     if (activeTab === 'favorites') {
-      const data = await window.anixApi.favorites.all(page, selectedSort, 0, 0) as Record<string, unknown>;
+      if (q) {
+        if (page > 0) return { content: [], total: 0, exhaustive: true };
+        return scanAllPagesForQuery(q, async (p) => {
+          const data = await api.favorites.all(p, selectedSort, 0, 0) as Record<string, unknown>;
+          const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
+          return { content, total: extractTotalCount(data, content.length) };
+        });
+      }
+      const data = await api.favorites.all(page, selectedSort, 0, 0) as Record<string, unknown>;
       const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
       return { content, total: extractTotalCount(data, content.length) };
     }
 
     const tab = TABS.find((t) => t.id === activeTab)!;
     const profileId = await ensureProfileId();
-    if (typeof profileId !== 'number' || tab.type == null) return { content: [], total: 0 };
-    const data = await window.anixApi.profile.getBookmarks(profileId, tab.type, page, selectedSort, 0, 0) as Record<string, unknown>;
+    if (typeof profileId !== 'number' || tab.type == null) {
+      return { content: [], total: 0, exhaustive: true };
+    }
+
+    // Свои статусные списки — серверный поиск по всему списку
+    if (q && !isOtherProfile && typeof api.search?.profileList === 'function') {
+      try {
+        const data = await api.search.profileList(tab.type, q, page, 0) as Record<string, unknown>;
+        const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
+        return { content, total: extractTotalCount(data, content.length) };
+      } catch {
+        /* fallback ниже */
+      }
+    }
+
+    // Поиск: обходим все страницы списка, а не только загруженные
+    if (q) {
+      if (page > 0) return { content: [], total: 0, exhaustive: true };
+      return scanAllPagesForQuery(q, async (p) => {
+        const data = await api.profile.getBookmarks(
+          profileId,
+          tab.type!,
+          p,
+          selectedSort,
+          0,
+          0,
+        ) as Record<string, unknown>;
+        const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
+        return { content, total: extractTotalCount(data, content.length) };
+      });
+    }
+
+    const data = await api.profile.getBookmarks(
+      profileId,
+      tab.type,
+      page,
+      selectedSort,
+      0,
+      0,
+    ) as Record<string, unknown>;
     const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
     return { content, total: extractTotalCount(data, content.length) };
   }
@@ -448,7 +599,7 @@
     isLoadingMore = true;
 
     try {
-      const { content, total } = await fetchPage(nextPage);
+      const { content, total, exhaustive } = await fetchPage(nextPage);
       if (isCollectionsTab) {
         collectionItems = [...collectionItems, ...content.map(mapCollectionToCardData)];
       } else if (isHistoryTab) {
@@ -457,9 +608,11 @@
         items = [...items, ...content.map(mapReleaseToCardData)];
       }
       if (typeof total === 'number' && total > 0) totalCount = total;
-      hasMore = isVotesTab
-        ? content.length >= 25 && !(total > 0 && (nextPage + 1) * 25 >= total)
-        : content.length > 0;
+      hasMore = exhaustive
+        ? false
+        : isVotesTab
+          ? content.length >= 25 && !(total > 0 && (nextPage + 1) * 25 >= total)
+          : content.length > 0;
       nextPage += 1;
       showEnd = !hasMore;
       isLoadingMore = false;
@@ -571,6 +724,12 @@
     activeTab = tabId;
     syncTabToUrl(tabId);
 
+    if (!force) {
+      clearSearchTimer();
+      searchInput = '';
+      searchQuery = '';
+    }
+
     if (!resetSort && !force) {
       const cached = getViewState<BookmarksViewState>(BOOKMARKS_VIEW_KEY());
       if (cached?.data && hasBookmarkItems(cached.data) && cached.data.activeTab === tabId) {
@@ -599,7 +758,7 @@
     }
 
     try {
-      const { content, total } = await fetchPage(0);
+      const { content, total, exhaustive } = await fetchPage(0);
       if (!content.length) {
         loadState = 'empty';
         totalCount = total;
@@ -614,9 +773,11 @@
         items = content.map(mapReleaseToCardData);
       }
       totalCount = total;
-      hasMore = isVotesTab
-        ? content.length >= 25 && !(total > 0 && 25 >= total)
-        : content.length > 0;
+      hasMore = exhaustive
+        ? false
+        : isVotesTab
+          ? content.length >= 25 && !(total > 0 && 25 >= total)
+          : content.length > 0;
       nextPage = 1;
       showEnd = !hasMore;
       loadState = 'ready';
@@ -755,6 +916,7 @@
     saveViewStateData(BOOKMARKS_VIEW_KEY(), bookmarksSnapshot());
     detachScroll();
     window.removeEventListener('anix:cardLayoutChanged', onLayoutChanged);
+    clearSearchTimer();
   });
 </script>
 
@@ -798,8 +960,8 @@
           {/snippet}
         </BookmarksToolbar>
       {:else}
-        {#if isVotesTab && loadState === 'ready' && totalCount > 0}
-          <span class="bookmarks-toolbar__count">{totalCount} всего</span>
+        {#if (isVotesTab || isFavoritesTab || isHistoryTab || isCollectionsTab) && loadState === 'ready' && totalCount > 0}
+          <span class="bookmarks-toolbar__count" title="Всего в списке">{totalCount}</span>
         {/if}
         {#if !isListsPage}
           <button
@@ -815,6 +977,31 @@
       {/if}
     </div>
   </div>
+
+  <label class="bookmarks__search">
+    <span class="bookmarks__search-icon" aria-hidden="true">{@html iconSearch(18)}</span>
+    <input
+      class="bookmarks__search-input"
+      type="search"
+      enterkeyhint="search"
+      autocomplete="off"
+      spellcheck="false"
+      placeholder={searchPlaceholder}
+      value={searchInput}
+      oninput={onSearchInput}
+      aria-label={searchPlaceholder}
+    />
+    {#if searchInput}
+      <button
+        type="button"
+        class="bookmarks__search-clear"
+        aria-label="Очистить поиск"
+        onclick={clearSearch}
+      >
+        {@html iconX(14)}
+      </button>
+    {/if}
+  </label>
 
   <Tabs
     tabs={TABS.map((t) => ({
@@ -834,7 +1021,7 @@
       {:else if loadState === 'error'}
         <p class="bookmarks__error">{errorMsg}</p>
       {:else if loadState === 'empty'}
-        <p class="bookmarks__empty">Здесь пока ничего нет.</p>
+        <p class="bookmarks__empty">{searchQuery ? 'Ничего не найдено.' : 'Здесь пока ничего нет.'}</p>
       {:else if isHistoryTab}
         <ReleaseCardsGrid items={items} variant="history" onDeleteFromHistory={onDeleteFromHistory} />
       {:else if isCollectionsTab}

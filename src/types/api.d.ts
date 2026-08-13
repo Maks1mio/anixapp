@@ -255,11 +255,13 @@ export interface AnixApi {
     collectionsWeek: (page?: number, previousPage?: number) => Promise<{ content?: unknown[] }>;
   };
 
-  search: {
-    releases: (query: string, page?: number, searchBy?: number) => Promise<any>;
-    profiles: (query: string, page?: number) => Promise<any>;
-    collections: (query: string, page?: number) => Promise<any>;
-  };
+    search: {
+      releases: (query: string, page?: number, searchBy?: number) => Promise<any>;
+      profiles: (query: string, page?: number) => Promise<any>;
+      collections: (query: string, page?: number) => Promise<any>;
+      /** Поиск в своём списке статуса (Смотрю / В планах / …) */
+      profileList: (status: number, query: string, page?: number, searchBy?: number) => Promise<any>;
+    };
 
   collection: {
     info: (id: number) => Promise<any>;

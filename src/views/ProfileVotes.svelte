@@ -4,7 +4,8 @@
   import { navigate } from '../stores/navigation';
   import Tabs from '../components/Tabs.svelte';
   import type { ReleaseCardData } from '../types/release';
-  import { buildPosterUrl, resolveCdnAssetUrl } from '../utils/posterUrl';
+  import { resolveCdnAssetUrl } from '../utils/posterUrl';
+  import { mapReleaseRawToCard } from '../utils/release-card';
   import { setDiscordContext, refreshDiscordPresence } from '../services/discord-presence';
 
   interface Props {
@@ -24,38 +25,21 @@
   }
 
   function mapVoteToCardData(raw: any): ReleaseCardData {
-    const p = raw.poster as Record<string, { url?: string }> | undefined;
-    const posterRaw = p?.original?.url ?? p?.medium?.url ?? p?.small?.url
-      ?? (typeof raw.poster === 'string' ? raw.poster : undefined)
-      ?? (typeof raw.image === 'string' ? raw.image : undefined);
-    const poster = posterRaw ? buildPosterUrl(posterRaw) || undefined : undefined;
-    let listStatus: ReleaseCardData['listStatus'];
-    switch (raw.profile_list_status) {
-      case 1: listStatus = 'watching'; break;
-      case 2: listStatus = 'planned'; break;
-      case 3: listStatus = 'completed'; break;
-      case 4: listStatus = 'on_hold'; break;
-      case 5: listStatus = 'dropped'; break;
-    }
-    const genres = Array.isArray(raw.genres)
-      ? raw.genres.map((g: any) => g?.name || g).filter(Boolean).join(', ')
-      : (typeof raw.genres === 'string' ? raw.genres : undefined);
+    const releaseRaw =
+      raw?.release && typeof raw.release === 'object'
+        ? (raw.release as Record<string, unknown>)
+        : (raw as Record<string, unknown>);
+    const voteRaw =
+      typeof raw?.my_vote === 'number'
+        ? raw.my_vote
+        : typeof raw?.vote === 'number'
+          ? raw.vote
+          : typeof releaseRaw.my_vote === 'number'
+            ? releaseRaw.my_vote
+            : undefined;
     return {
-      id: raw.id,
-      titleRu: raw.title_ru || raw.title,
-      titleEn: raw.title_original,
-      poster,
-      rating: typeof raw.grade === 'number' ? raw.grade : undefined,
-      voteCount: typeof raw.vote_count === 'number' ? raw.vote_count : undefined,
-      episodesReleased: typeof raw.episodes_released === 'number' ? raw.episodes_released : undefined,
-      episodesTotal: typeof raw.episodes_total === 'number' ? raw.episodes_total : undefined,
-      year: raw.year ? String(raw.year) : undefined,
-      status: (raw.status as any)?.name || (typeof raw.status === 'string' ? raw.status : undefined),
-      genres,
-      description: typeof raw.description === 'string' ? raw.description : undefined,
-      isFavorite: !!raw.is_favorite,
-      listStatus,
-      myVote: typeof raw.my_vote === 'number' && raw.my_vote > 0 ? raw.my_vote : undefined,
+      ...mapReleaseRawToCard(releaseRaw),
+      myVote: typeof voteRaw === 'number' && voteRaw > 0 ? voteRaw : undefined,
     };
   }
 

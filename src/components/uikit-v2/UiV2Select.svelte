@@ -3,7 +3,7 @@
   import { scale } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { portal } from '../../actions/portal';
-  import { iconCheck, iconChevronDown } from '../icons';
+  import { iconArrowUpDown, iconCheck, iconChevronDown } from '../icons';
 
   export type UiV2SelectStatus = 'good' | 'medium' | 'bad' | 'offline' | 'neutral';
 
@@ -31,6 +31,8 @@
     disabled?: boolean;
     id?: string;
     class?: string;
+    /** Компактный триггер — только иконка (тулбары) */
+    compact?: boolean;
     onChange?: (value: string) => void;
   };
 
@@ -42,6 +44,7 @@
     disabled = false,
     id = `uiv2-select-${Math.random().toString(36).slice(2, 9)}`,
     class: className = '',
+    compact = false,
     onChange,
   }: Props = $props();
 
@@ -60,6 +63,9 @@
   const selected = $derived(options.find((o) => o.value === value) ?? null);
   const listboxId = `${id}-listbox`;
   const showLeading = $derived(options.some((o) => o.status || o.icon));
+  const compactTitle = $derived(
+    selected?.desc ? `${selected.label} · ${selected.desc}` : (selected?.label ?? placeholder),
+  );
 
   function isTriggerVisible(): boolean {
     if (!triggerEl) return false;
@@ -74,7 +80,7 @@
     await tick();
 
     const rect = triggerEl.getBoundingClientRect();
-    panelWidth = rect.width;
+    panelWidth = compact ? 0 : rect.width;
 
     const panelHeight = panelEl.offsetHeight;
     const spaceBelow = window.innerHeight - rect.bottom - GAP;
@@ -94,6 +100,9 @@
     }
 
     const nextRect = panelEl.getBoundingClientRect();
+    if (compact) {
+      panelLeft = Math.max(EDGE, rect.right - nextRect.width);
+    }
     if (nextRect.top < EDGE) {
       panelTop = EDGE;
     } else if (nextRect.bottom > window.innerHeight - EDGE) {
@@ -165,8 +174,13 @@
   });
 </script>
 
-<div class="uiv2-select {className}" class:uiv2-select--disabled={disabled} class:uiv2-select--open={open}>
-  {#if label}
+<div
+  class="uiv2-select {className}"
+  class:uiv2-select--disabled={disabled}
+  class:uiv2-select--open={open}
+  class:uiv2-select--compact={compact}
+>
+  {#if label && !compact}
     <label class="uiv2-select__label" for="{id}-trigger">{label}</label>
   {/if}
 
@@ -176,41 +190,50 @@
       id="{id}-trigger"
       type="button"
       class="uiv2-select__trigger"
-      class:uiv2-select__trigger--with-desc={!!selected?.desc}
+      class:uiv2-select__trigger--with-desc={!!selected?.desc && !compact}
+      class:uiv2-select__trigger--compact={compact}
       aria-haspopup="listbox"
       aria-expanded={open}
       aria-controls={open ? listboxId : undefined}
+      aria-label={compact ? compactTitle : undefined}
+      title={compact ? compactTitle : undefined}
       {disabled}
       onclick={togglePanel}
     >
-      <span class="uiv2-select__value">
-        {#if selected}
-          <span class="uiv2-select__value-main">
-            {#if selected.status || selected.icon}
-              <span class="uiv2-select__value-leading">
-                {#if selected.status}
-                  <span class="uiv2-status-dot uiv2-status-dot--{selected.status}" aria-hidden="true"></span>
-                {/if}
-                {#if selected.icon}
-                  <span class="uiv2-select__option-icon">{@html selected.icon}</span>
-                {/if}
-              </span>
+      {#if compact}
+        <span class="uiv2-select__compact-icon" aria-hidden="true">
+          {@html iconArrowUpDown(18)}
+        </span>
+      {:else}
+        <span class="uiv2-select__value">
+          {#if selected}
+            <span class="uiv2-select__value-main">
+              {#if selected.status || selected.icon}
+                <span class="uiv2-select__value-leading">
+                  {#if selected.status}
+                    <span class="uiv2-status-dot uiv2-status-dot--{selected.status}" aria-hidden="true"></span>
+                  {/if}
+                  {#if selected.icon}
+                    <span class="uiv2-select__option-icon">{@html selected.icon}</span>
+                  {/if}
+                </span>
+              {/if}
+              <span class="uiv2-select__value-label">{selected.label}</span>
+              {#if selected.hint}
+                <span class="uiv2-select__value-hint">{selected.hint}</span>
+              {/if}
+            </span>
+            {#if selected.desc}
+              <span class="uiv2-select__value-desc">{selected.desc}</span>
             {/if}
-            <span class="uiv2-select__value-label">{selected.label}</span>
-            {#if selected.hint}
-              <span class="uiv2-select__value-hint">{selected.hint}</span>
-            {/if}
-          </span>
-          {#if selected.desc}
-            <span class="uiv2-select__value-desc">{selected.desc}</span>
+          {:else}
+            <span class="uiv2-select__value-label uiv2-select__value-label--placeholder">{placeholder}</span>
           {/if}
-        {:else}
-          <span class="uiv2-select__value-label uiv2-select__value-label--placeholder">{placeholder}</span>
-        {/if}
-      </span>
-      <span class="uiv2-select__chevron" aria-hidden="true">
-        {@html iconChevronDown(16)}
-      </span>
+        </span>
+        <span class="uiv2-select__chevron" aria-hidden="true">
+          {@html iconChevronDown(16)}
+        </span>
+      {/if}
     </button>
   </div>
 </div>
@@ -227,7 +250,8 @@
       aria-labelledby="{id}-trigger"
       style:left="{panelLeft}px"
       style:top="{panelTop}px"
-      style:width="{panelWidth}px"
+      style:width={compact ? undefined : `${panelWidth}px`}
+      style:min-width={compact ? '15rem' : undefined}
       style:transform-origin="50% {originY}"
       transition:scale={{ duration: 200, start: 0.97, easing: cubicOut }}
     >

@@ -1,9 +1,9 @@
 <script lang="ts">
-  import ReleaseCardH from "../components/ReleaseCardH.svelte";
+  import RelatedReleaseRow from "../components/RelatedReleaseRow.svelte";
   import { onMount, onDestroy } from 'svelte';
   import { getSearchParams } from '../router';
-  import { buildPosterUrl } from '../utils/posterUrl';
   import type { ReleaseCardData } from '../types/release';
+  import { mapReleaseRawToCard } from '../utils/release-card';
 
   interface Props {
     /** Franchise related id (GET /related/{id}/{page}) */
@@ -22,43 +22,8 @@
   });
 
   function mapReleaseToCardData(raw: Record<string, unknown>): ReleaseCardData {
-    const p = raw.poster as Record<string, { url?: string }> | undefined;
-    const posterRaw = p?.original?.url ?? p?.medium?.url ?? p?.small?.url
-      ?? (typeof raw.poster === 'string' ? raw.poster : undefined)
-      ?? (typeof raw.image === 'string' ? raw.image : undefined);
-    const poster = posterRaw ? buildPosterUrl(posterRaw) : undefined;
-    const grade = typeof raw.grade === 'number' ? raw.grade : undefined;
-    const statusObj = raw.status as { name?: string } | undefined;
-    const categoryObj = raw.category as { name?: string } | undefined;
-    const pls = typeof raw.profile_list_status === 'number' ? raw.profile_list_status : undefined;
-    let listStatus: ReleaseCardData['listStatus'];
-    switch (pls) {
-      case 1: listStatus = 'watching'; break;
-      case 2: listStatus = 'planned'; break;
-      case 3: listStatus = 'completed'; break;
-      case 4: listStatus = 'on_hold'; break;
-      case 5: listStatus = 'dropped'; break;
-    }
     return {
-      id: raw.id as number | undefined,
-      titleRu: (raw.title_ru ?? raw.titleRu) as string | undefined,
-      titleEn: (raw.title_original ?? raw.titleEn) as string | undefined,
-      titleAlt: (raw.title_alt as string) || undefined,
-      description: (raw.description as string) || undefined,
-      poster: poster || undefined,
-      rating: grade,
-      voteCount: typeof raw.vote_count === 'number' ? raw.vote_count : undefined,
-      episodesReleased: typeof raw.episodes_released === 'number' ? raw.episodes_released : undefined,
-      episodesTotal: typeof raw.episodes_total === 'number' ? raw.episodes_total : undefined,
-      year: typeof raw.year === 'string' ? raw.year : (typeof raw.year === 'number' ? String(raw.year) : undefined),
-      country: (raw.country as string) || undefined,
-      genres: (raw.genres as string) || undefined,
-      status: statusObj?.name,
-      studio: (raw.studio as string) || undefined,
-      category: categoryObj?.name,
-      releaseDate: (raw.release_date as string) || undefined,
-      isFavorite: !!(raw.is_favorite),
-      listStatus,
+      ...mapReleaseRawToCard(raw),
       myVote: typeof raw.your_vote === 'number' ? raw.your_vote : undefined,
     };
   }
@@ -229,14 +194,11 @@
         {#each items as item, index (item.id)}
           {@const isCurrent = currentReleaseId != null && item.id === currentReleaseId}
           <div class="related__row" use:relatedRowRef={isCurrent}>
-            <ReleaseCardH
+            <RelatedReleaseRow
               data={item}
-              variant="related"
-              relatedChain={{
-                isFirst: index === 0,
-                isLast: index === items.length - 1 && !hasMore,
-                isCurrent,
-              }}
+              isFirst={index === 0}
+              isLast={index === items.length - 1 && !hasMore}
+              isCurrent={isCurrent}
             />
           </div>
         {/each}

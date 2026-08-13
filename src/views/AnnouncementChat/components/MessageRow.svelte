@@ -2,7 +2,8 @@
   import type { Comment } from "../../../services/announcements";
   import type { ReleaseEmbed } from "../_types";
   import type { ReleaseCardData } from "../../../types/release";
-  import ReleaseCardV from "../../../components/ReleaseCardV.svelte";
+  import ReleaseCardUiV2 from "../../../components/ReleaseCardUiV2.svelte";
+  import UiV2AnimeCardSkeleton from "../../../components/uikit-v2/UiV2AnimeCardSkeleton.svelte";
   import { parseMessage, renderText, timeStr, fullTime, extractPosterUrl } from "../_utils";
   import { resolveCdnAssetUrl } from "../../../utils/posterUrl";
 
@@ -232,10 +233,11 @@
         <div class="dc-row__card--error">Не удалось загрузить аниме</div>
       {:else}
         <div class="dc-row__release-embed">
-          <ReleaseCardV
-            data={embed && embed !== "loading" ? embedToCardData(embed) : undefined}
-            loading={embed === "loading"}
-          />
+          {#if embed === "loading"}
+            <UiV2AnimeCardSkeleton variant="vertical" />
+          {:else if embed && embed !== "error"}
+            <ReleaseCardUiV2 data={embedToCardData(embed)} variant="vertical" />
+          {/if}
         </div>
       {/if}
     {/if}

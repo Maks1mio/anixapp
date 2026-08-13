@@ -3,6 +3,7 @@
   import { lobbyCurrentPlayback, isPlayerWindowOpen, lobbyWatchingPeerIds } from '../stores/modals';
   import { getCurrentRoomId, getCurrentParticipants, leaveLobby } from '../services/lobby-state';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
+  import UiV2Tooltip from './uikit-v2/UiV2Tooltip.svelte';
 
   let playback = $derived($lobbyCurrentPlayback);
   let playerOpen = $derived($isPlayerWindowOpen);
@@ -118,19 +119,20 @@
     {#if avatarRows.length > 0}
       <div class="lobby-now-watching__avatars">
         {#each avatarRows as row (`${row.kind}:${row.p.peerId ?? ''}:${row.p.login}`)}
-          <span
-            class="lobby-now-watching__avatar tooltip-trigger"
-            class:lobby-now-watching__avatar--watching={row.kind === 'watch'}
-            class:lobby-now-watching__avatar--idle={row.kind === 'idle'}
-            title={row.p.login}
-          >
-            {#if row.p.avatar}
-              <img src={resolveCdnAssetUrl(row.p.avatar)} alt={row.p.login} />
-            {:else}
-              {row.p.login?.[0]?.toUpperCase() ?? '?'}
-            {/if}
-            <span class="tooltip tooltip--animated tooltip--bottom">{row.p.login}</span>
-          </span>
+          <UiV2Tooltip text={row.p.login} placement="bottom">
+            <span
+              class="lobby-now-watching__avatar"
+              class:lobby-now-watching__avatar--watching={row.kind === 'watch'}
+              class:lobby-now-watching__avatar--idle={row.kind === 'idle'}
+              title={row.p.login}
+            >
+              {#if row.p.avatar}
+                <img src={resolveCdnAssetUrl(row.p.avatar)} alt={row.p.login} />
+              {:else}
+                {row.p.login?.[0]?.toUpperCase() ?? '?'}
+              {/if}
+            </span>
+          </UiV2Tooltip>
         {/each}
       </div>
     {/if}
@@ -143,19 +145,20 @@
       Присоединиться
     </button>
 
-    <button
-      type="button"
-      class="lobby-now-watching__leave tooltip-trigger"
-      aria-label="Покинуть лобби"
-      onclick={handleLeave}
-    >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-        <polyline points="16 17 21 12 16 7"/>
-        <line x1="21" y1="12" x2="9" y2="12"/>
-      </svg>
-      <span class="tooltip tooltip--animated tooltip--bottom">Покинуть лобби</span>
-    </button>
+    <UiV2Tooltip text="Покинуть лобби" placement="bottom">
+      <button
+        type="button"
+        class="lobby-now-watching__leave"
+        aria-label="Покинуть лобби"
+        onclick={handleLeave}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+      </button>
+    </UiV2Tooltip>
   </div>
 {/if}
 

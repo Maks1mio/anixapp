@@ -202,6 +202,17 @@
   -webkit-app-region: no-drag;
 }
 
+.titlebar__nav .uiv2-tooltip__trigger,
+.titlebar__menu .uiv2-tooltip__trigger,
+.titlebar__controls .uiv2-tooltip__trigger {
+  display: inline-flex;
+}
+
+.titlebar__menu-item--update .uiv2-tooltip__trigger,
+.titlebar .uiv2-tooltip__trigger:has(.titlebar__menu-item--update) {
+  display: inline-flex;
+}
+
 .titlebar__menu-item {
   position: relative;
   display: flex;
@@ -245,7 +256,7 @@
   padding: 0;
 }
 
-.titlebar__menu-item--update.tooltip-trigger {
+.titlebar__menu-item--update {
   cursor: pointer;
   color: var(--color-accent, #7c8cff);
 

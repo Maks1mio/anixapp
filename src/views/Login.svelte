@@ -8,6 +8,7 @@
   import { checkForUpdate, type UpdateInfo } from '../services/update-checker';
   import type { AppUpdateProgress } from '../types/electron';
   import ConnectionBanner from '../components/ConnectionBanner.svelte';
+  import UiV2Tooltip from '../components/uikit-v2/UiV2Tooltip.svelte';
 
   interface Props {
     onSuccess: () => void;
@@ -736,43 +737,46 @@
             <span class="titlebar__update-label">{updatePct}%</span>
           </button>
         {:else if updateState === 'installing'}
-          <button
-            type="button"
-            class="titlebar__menu-item titlebar__menu-item--update titlebar__menu-item--update-downloading tooltip-trigger"
-            aria-label="Установка обновления…"
-          >
-            <span class="titlebar__update-fill titlebar__update-fill--pulse" style="width:100%"></span>
-            {@html iconDownload(14)}
-            <span class="titlebar__update-label">Установка…</span>
-            <span class="tooltip tooltip--animated">Введите пароль в диалоге авторизации</span>
-          </button>
+          <UiV2Tooltip text="Введите пароль в диалоге авторизации">
+            <button
+              type="button"
+              class="titlebar__menu-item titlebar__menu-item--update titlebar__menu-item--update-downloading"
+              aria-label="Установка обновления…"
+            >
+              <span class="titlebar__update-fill titlebar__update-fill--pulse" style="width:100%"></span>
+              {@html iconDownload(14)}
+              <span class="titlebar__update-label">Установка…</span>
+            </button>
+          </UiV2Tooltip>
         {:else if updateState === 'ready'}
-          <button
-            type="button"
-            class="titlebar__menu-item titlebar__menu-item--update titlebar__menu-item--update-downloading titlebar__menu-item--update-ready tooltip-trigger"
-            aria-label={installLabel()}
-            onclick={handleStartUpdate}
-          >
-            <span class="titlebar__update-fill" style="width:100%"></span>
-            {@html iconDownload(14)}
-            <span class="titlebar__update-label">{installLabel()}</span>
-            <span class="tooltip tooltip--animated">{installTooltip()}</span>
-          </button>
+          <UiV2Tooltip text={installTooltip()}>
+            <button
+              type="button"
+              class="titlebar__menu-item titlebar__menu-item--update titlebar__menu-item--update-downloading titlebar__menu-item--update-ready"
+              aria-label={installLabel()}
+              onclick={handleStartUpdate}
+            >
+              <span class="titlebar__update-fill" style="width:100%"></span>
+              {@html iconDownload(14)}
+              <span class="titlebar__update-label">{installLabel()}</span>
+            </button>
+          </UiV2Tooltip>
         {:else}
-          <button
-            type="button"
-            class="titlebar__menu-item titlebar__menu-item--update tooltip-trigger"
-            aria-label="Доступно обновление"
-            onclick={handleStartUpdate}
+          <UiV2Tooltip
+            text={updateState === 'error'
+              ? 'Ошибка загрузки. Нажмите для повтора'
+              : `Доступна версия ${updateInfo.version}. Нажмите для загрузки.`}
           >
-            <span class="titlebar__update-icon">{@html iconDownload(18)}</span>
-            <span class="titlebar__update-dot" aria-hidden="true"></span>
-            <span class="tooltip tooltip--animated">
-              {updateState === 'error'
-                ? 'Ошибка загрузки. Нажмите для повтора'
-                : `Доступна версия ${updateInfo.version}. Нажмите для загрузки.`}
-            </span>
-          </button>
+            <button
+              type="button"
+              class="titlebar__menu-item titlebar__menu-item--update"
+              aria-label="Доступно обновление"
+              onclick={handleStartUpdate}
+            >
+              <span class="titlebar__update-icon">{@html iconDownload(18)}</span>
+              <span class="titlebar__update-dot" aria-hidden="true"></span>
+            </button>
+          </UiV2Tooltip>
         {/if}
       {/if}
     </div>

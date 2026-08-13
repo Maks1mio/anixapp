@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { iconInfo, iconCopy } from './icons';
+  import { iconInfo, iconCopy, iconCheck } from './icons';
   import { parseAltTitles } from '../utils/titleInfo';
+  import UiV2Tooltip from './uikit-v2/UiV2Tooltip.svelte';
 
   interface Props {
     titleRu?: string;
@@ -45,85 +46,91 @@
 </script>
 
 {#if visible}
-  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-  <span
-    class="title-info-trigger tooltip-trigger {className}"
-    role="button"
-    tabindex="0"
-    aria-label="Названия"
-    onclick={stopBubble}
-    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') stopBubble(e as unknown as MouseEvent); }}
+  <UiV2Tooltip
+    class="title-info-trigger {className}"
+    placement="bottom"
+    interactive={true}
+    showDelay={80}
+    hideDelay={120}
   >
-    <span class="title-info-trigger__icon" aria-hidden="true">{@html iconInfo(16)}</span>
-    <span
-      class="tooltip title-info-popover tooltip--animated tooltip--below"
-      role="tooltip"
+    <button
+      type="button"
+      class="title-info-trigger__btn"
+      aria-label="Названия"
+      onclick={stopBubble}
     >
-      <span class="title-info-popover__inner">
+      <span class="title-info-trigger__icon" aria-hidden="true">{@html iconInfo(16)}</span>
+    </button>
+
+    {#snippet content()}
+      <div class="title-info-popover__inner uiv2-title-info">
         {#if showRu}
-          <section class="title-info-popover__block">
-            <div class="title-info-popover__head">
-              <span class="title-info-popover__label">Название</span>
+          <section class="uiv2-title-info__block">
+            <div class="uiv2-title-info__head">
+              <span class="uiv2-title-info__label">Название</span>
               <button
                 type="button"
-                class="title-info-popover__copy{copiedId === 'ru' ? ' title-info-popover__copy--done' : ''}"
+                class="uiv2-title-info__copy"
+                class:uiv2-title-info__copy--done={copiedId === 'ru'}
                 aria-label="Скопировать название"
                 onclick={(e) => {
                   stopBubble(e);
                   void copy(ru, 'ru');
                 }}
               >
-                {@html iconCopy(14)}
+                {@html copiedId === 'ru' ? iconCheck(14) : iconCopy(14)}
               </button>
             </div>
-            <p class="title-info-popover__value">{ru}</p>
+            <p class="uiv2-title-info__value">{ru}</p>
           </section>
         {/if}
 
         {#if showEn}
-          <section class="title-info-popover__block">
-            <div class="title-info-popover__head">
-              <span class="title-info-popover__label">Оригинальное название</span>
+          <section class="uiv2-title-info__block">
+            <div class="uiv2-title-info__head">
+              <span class="uiv2-title-info__label">Оригинальное название</span>
               <button
                 type="button"
-                class="title-info-popover__copy{copiedId === 'en' ? ' title-info-popover__copy--done' : ''}"
+                class="uiv2-title-info__copy"
+                class:uiv2-title-info__copy--done={copiedId === 'en'}
                 aria-label="Скопировать оригинальное название"
                 onclick={(e) => {
                   stopBubble(e);
                   void copy(en, 'en');
                 }}
               >
-                {@html iconCopy(14)}
+                {@html copiedId === 'en' ? iconCheck(14) : iconCopy(14)}
               </button>
             </div>
-            <p class="title-info-popover__value">{en}</p>
+            <p class="uiv2-title-info__value">{en}</p>
           </section>
         {/if}
 
         {#if showAlt}
-          <section class="title-info-popover__block">
-            <div class="title-info-popover__head">
-              <span class="title-info-popover__label">Альтернативные названия</span>
+          <section class="uiv2-title-info__block">
+            <div class="uiv2-title-info__head">
+              <span class="uiv2-title-info__label">Альтернативные названия</span>
               <button
                 type="button"
-                class="title-info-popover__copy{copiedId === 'alt' ? ' title-info-popover__copy--done' : ''}"
+                class="uiv2-title-info__copy"
+                class:uiv2-title-info__copy--done={copiedId === 'alt'}
                 aria-label="Скопировать альтернативные названия"
                 onclick={(e) => {
                   stopBubble(e);
                   void copy(altText, 'alt');
                 }}
               >
-                {@html iconCopy(14)}
+                {@html copiedId === 'alt' ? iconCheck(14) : iconCopy(14)}
               </button>
             </div>
-            <p class="title-info-popover__value">
+            <p class="uiv2-title-info__value">
               {#each altTitles as alt, i}
                 {#if i > 0}<br />{/if}{alt}
               {/each}
             </p>
           </section>
         {/if}
-      </span>
-    </span>
-  </span>
+      </div>
+    {/snippet}
+  </UiV2Tooltip>
 {/if}

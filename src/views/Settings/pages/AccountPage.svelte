@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount } from 'svelte';
   import ProfileHero from '../../Profile/v1/components/ProfileHero.svelte';
-  import { renderSelect } from '../../../components/select';
+  import Select from '../../../components/Select.svelte';
   import { showToast } from '../../../stores/toast';
 
   type PrivacyVal = 0 | 1 | 2;
@@ -47,6 +47,11 @@
   let socialValues  = $state<SocialSettings>({ vk_page: '', tg_page: '', inst_page: '', tt_page: '', discord_page: '' });
   let socialSaving  = $state(false);
 
+  let privacyStats = $state('0');
+  let privacyCounts = $state('0');
+  let privacySocial = $state('0');
+  let privacyFr = $state('0');
+
   // Normalize both spellings — API may return either variant
   const canChangeLogin = $derived(
     loginInfo
@@ -70,16 +75,6 @@
     tt_page:      socialValues.tt_page,
     discord_page: socialValues.discord_page,
   } : null);
-
-  // Privacy bind:this containers
-  // svelte-ignore non_reactive_update
-  let privacyStatsEl:  HTMLElement;
-  // svelte-ignore non_reactive_update
-  let privacyCountsEl: HTMLElement;
-  // svelte-ignore non_reactive_update
-  let privacySocialEl: HTMLElement;
-  // svelte-ignore non_reactive_update
-  let privacyFrEl:     HTMLElement;
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   function requestLoginChange() {
@@ -139,25 +134,24 @@
     socialSaving = false;
   }
 
-  function mountPrivacySelects(settings: ProfileSettings) {
-    const api = (window as any).anixApi.settings;
-    const defs = [
-      { el: privacyStatsEl,   val: settings.privacy_stats,             opts: PRIVACY_OPTIONS,    setter: (v: number) => api.setPrivacyStats(v) },
-      { el: privacyCountsEl,  val: settings.privacy_counts,            opts: PRIVACY_OPTIONS,    setter: (v: number) => api.setPrivacyCounts(v) },
-      { el: privacySocialEl,  val: settings.privacy_social,            opts: PRIVACY_OPTIONS,    setter: (v: number) => api.setPrivacySocial(v) },
-      { el: privacyFrEl,      val: settings.privacy_friend_requests,   opts: PRIVACY_FR_OPTIONS, setter: (v: number) => api.setPrivacyFriendRequests(v) },
-    ];
-    for (const d of defs) {
-      if (!d.el) continue;
-      d.el.innerHTML = '';
-      d.el.appendChild(renderSelect({
-        value: String(d.val),
-        options: d.opts,
-        onChange: (v) => {
-          void d.setter(Number(v)).then(() => showToast('Сохранено')).catch(() => showToast('Ошибка', 'err'));
-        },
-      }));
-    }
+  function savePrivacy(
+    kind: 'stats' | 'counts' | 'social' | 'friend_requests',
+    value: string,
+  ) {
+    const api = (window as any).anixApi?.settings;
+    if (!api) return;
+    const n = Number(value);
+    const setter =
+      kind === 'stats'
+        ? api.setPrivacyStats?.(n)
+        : kind === 'counts'
+          ? api.setPrivacyCounts?.(n)
+          : kind === 'social'
+            ? api.setPrivacySocial?.(n)
+            : api.setPrivacyFriendRequests?.(n);
+    void Promise.resolve(setter)
+      .then(() => showToast('Сохранено'))
+      .catch(() => showToast('Ошибка', 'err'));
   }
 
   onMount(async () => {
@@ -194,11 +188,13 @@
         tt_page:      (social as any).tt_page      ?? (social as any).ttPage      ?? '',
         discord_page: (social as any).discord_page ?? (social as any).discordPage ?? '',
       };
+      privacyStats = String(settings.privacy_stats ?? 0);
+      privacyCounts = String(settings.privacy_counts ?? 0);
+      privacySocial = String(settings.privacy_social ?? 0);
+      privacyFr = String(settings.privacy_friend_requests ?? 0);
       loginInfo  = loginInfoRes;
       loginValue = loginInfoRes.login ?? '';
       loadState  = 'ready';
-      await tick();
-      mountPrivacySelects(settings);
     } catch {
       loadState = 'error';
     }
@@ -323,19 +319,55 @@
 
     <div class="acc-field">
       <span class="acc-field__label">статистика</span>
-      <div class="acc-field__body" bind:this={privacyStatsEl}></div>
+      <div class="acc-field__body">
+        <Select
+          options={PRIVACY_OPTIONS}
+          value={privacyStats}
+          onChange={(v) => {
+            privacyStats = v;
+            savePrivacy('stats', v);
+          }}
+        />
+      </div>
     </div>
     <div class="acc-field">
       <span class="acc-field__label">счётчики</span>
-      <div class="acc-field__body" bind:this={privacyCountsEl}></div>
+      <div class="acc-field__body">
+        <Select
+          options={PRIVACY_OPTIONS}
+          value={privacyCounts}
+          onChange={(v) => {
+            privacyCounts = v;
+            savePrivacy('counts', v);
+          }}
+        />
+      </div>
     </div>
     <div class="acc-field">
       <span class="acc-field__label">соц. сети</span>
-      <div class="acc-field__body" bind:this={privacySocialEl}></div>
+      <div class="acc-field__body">
+        <Select
+          options={PRIVACY_OPTIONS}
+          value={privacySocial}
+          onChange={(v) => {
+            privacySocial = v;
+            savePrivacy('social', v);
+          }}
+        />
+      </div>
     </div>
     <div class="acc-field">
       <span class="acc-field__label">заявки</span>
-      <div class="acc-field__body" bind:this={privacyFrEl}></div>
+      <div class="acc-field__body">
+        <Select
+          options={PRIVACY_FR_OPTIONS}
+          value={privacyFr}
+          onChange={(v) => {
+            privacyFr = v;
+            savePrivacy('friend_requests', v);
+          }}
+        />
+      </div>
     </div>
   </div>
 

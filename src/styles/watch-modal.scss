@@ -164,7 +164,12 @@
   scroll-behavior: smooth;
 }
 
-.watch-modal__page .page__v-track {
+.watch-modal__page.uiv2-scroll-area {
+  --uiv2-scroll-offset: 0.45rem;
+  --uiv2-scroll-track-size: 0.45rem;
+}
+
+.watch-modal__page > .uiv2-scroll-area__v-track {
   top: 0.75rem;
   right: 0.35rem;
   bottom: 0.75rem;
@@ -176,11 +181,11 @@
   transition: opacity 0.18s ease, background $transition;
 }
 
-.watch-modal__page.page--v-scrollbar-visible .page__v-track {
+.watch-modal__page.uiv2-scroll-area--v-visible > .uiv2-scroll-area__v-track {
   opacity: 1;
 }
 
-.watch-modal__page .page__v-thumb {
+.watch-modal__page > .uiv2-scroll-area__v-track .uiv2-scroll-area__v-thumb {
   left: 0;
   right: 0;
   min-height: 2.4rem;
@@ -190,10 +195,6 @@
 
   &:hover {
     background: color-mix(in srgb, $color-accent 78%, white 4%);
-  }
-
-  &--active {
-    background: $color-accent !important;
   }
 }
 

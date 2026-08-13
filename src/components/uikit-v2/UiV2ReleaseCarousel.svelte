@@ -7,9 +7,17 @@
     children: Snippet;
     measureKey?: unknown;
     class?: string;
+    initialScrollLeft?: number;
+    onScrollLeftChange?: (left: number) => void;
   };
 
-  let { children, measureKey, class: className = '' }: Props = $props();
+  let {
+    children,
+    measureKey,
+    class: className = '',
+    initialScrollLeft = 0,
+    onScrollLeftChange,
+  }: Props = $props();
 </script>
 
 <div
@@ -20,6 +28,8 @@
     {measureKey}
     navClass="uiv2-carousel__nav"
     scrollClass="uiv2-carousel__scroll"
+    {initialScrollLeft}
+    {onScrollLeftChange}
   >
     {@render children()}
   </ReleaseCarouselNav>

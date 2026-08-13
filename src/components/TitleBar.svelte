@@ -7,6 +7,7 @@
   import { isAuthenticated } from '../stores/auth';
   import { notificationUnreadCount, refreshNotificationUnreadCount } from '../stores/notifications';
   import ConnectionBanner from './ConnectionBanner.svelte';
+  import UiV2Tooltip from './uikit-v2/UiV2Tooltip.svelte';
 
   const hasWindowApi = typeof (window as any).electron?.window !== 'undefined';
 
@@ -186,26 +187,28 @@
   </div>
 
   <div class="titlebar__nav" id="titlebar-nav">
-    <button
-      type="button"
-      class="titlebar__nav-btn tooltip-trigger"
-      id="titlebar-back"
-      aria-label="Назад"
-      onclick={handleBack}
-    >
-      {@html iconArrowLeft(16)}
-      <span class="tooltip tooltip--animated">Назад</span>
-    </button>
-    <button
-      type="button"
-      class="titlebar__nav-btn tooltip-trigger"
-      id="titlebar-forward"
-      aria-label="Вперёд"
-      onclick={handleForward}
-    >
-      {@html iconArrowRight(16)}
-      <span class="tooltip tooltip--animated">Вперёд</span>
-    </button>
+    <UiV2Tooltip text="Назад">
+      <button
+        type="button"
+        class="titlebar__nav-btn"
+        id="titlebar-back"
+        aria-label="Назад"
+        onclick={handleBack}
+      >
+        {@html iconArrowLeft(16)}
+      </button>
+    </UiV2Tooltip>
+    <UiV2Tooltip text="Вперёд">
+      <button
+        type="button"
+        class="titlebar__nav-btn"
+        id="titlebar-forward"
+        aria-label="Вперёд"
+        onclick={handleForward}
+      >
+        {@html iconArrowRight(16)}
+      </button>
+    </UiV2Tooltip>
   </div>
 
   <!-- Явная зона drag / dblclick между навигацией и меню -->
@@ -227,161 +230,161 @@
           <span class="titlebar__update-label">{updatePct}%</span>
         </button>
       {:else if updateState === 'installing'}
-        <!-- Waiting for password input / install in progress -->
-        <button
-          type="button"
-          class="titlebar__menu-item titlebar__menu-item--update titlebar__menu-item--update-downloading tooltip-trigger"
-          aria-label="Установка обновления…"
-        >
-          <span class="titlebar__update-fill titlebar__update-fill--pulse" style="width:100%"></span>
-          {@html iconDownload(14)}
-          <span class="titlebar__update-label">Установка…</span>
-          <span class="tooltip tooltip--animated">Введите пароль в диалоге авторизации</span>
-        </button>
+        <UiV2Tooltip text="Введите пароль в диалоге авторизации">
+          <button
+            type="button"
+            class="titlebar__menu-item titlebar__menu-item--update titlebar__menu-item--update-downloading"
+            aria-label="Установка обновления…"
+          >
+            <span class="titlebar__update-fill titlebar__update-fill--pulse" style="width:100%"></span>
+            {@html iconDownload(14)}
+            <span class="titlebar__update-label">Установка…</span>
+          </button>
+        </UiV2Tooltip>
       {:else if updateState === 'ready'}
-        <!-- Downloaded: click to install -->
-        <button
-          type="button"
-          class="titlebar__menu-item titlebar__menu-item--update titlebar__menu-item--update-downloading titlebar__menu-item--update-ready tooltip-trigger"
-          aria-label={installLabel()}
-          onclick={handleStartUpdate}
-        >
-          <span class="titlebar__update-fill" style="width:100%"></span>
-          {@html iconDownload(14)}
-          <span class="titlebar__update-label">{installLabel()}</span>
-          <span class="tooltip tooltip--animated">{installTooltip()}</span>
-        </button>
+        <UiV2Tooltip text={installTooltip()}>
+          <button
+            type="button"
+            class="titlebar__menu-item titlebar__menu-item--update titlebar__menu-item--update-downloading titlebar__menu-item--update-ready"
+            aria-label={installLabel()}
+            onclick={handleStartUpdate}
+          >
+            <span class="titlebar__update-fill" style="width:100%"></span>
+            {@html iconDownload(14)}
+            <span class="titlebar__update-label">{installLabel()}</span>
+          </button>
+        </UiV2Tooltip>
       {:else}
-        <!-- Idle / error: click to start download -->
-        <button
-          type="button"
-          class="titlebar__menu-item titlebar__menu-item--update tooltip-trigger"
-          id="titlebar-update"
-          aria-label="Доступно обновление"
-          onclick={handleStartUpdate}
+        <UiV2Tooltip
+          text={updateState === 'error'
+            ? 'Ошибка загрузки. Нажмите для повтора'
+            : `Доступна версия ${updateInfo.version}. Нажмите для загрузки.`}
         >
-          <span class="titlebar__update-icon">{@html iconDownload(18)}</span>
-          <span class="titlebar__update-dot" aria-hidden="true"></span>
-          <span class="tooltip tooltip--animated">
-            {updateState === 'error'
-              ? 'Ошибка загрузки. Нажмите для повтора'
-              : `Доступна версия ${updateInfo.version}. Нажмите для загрузки.`}
-          </span>
-        </button>
+          <button
+            type="button"
+            class="titlebar__menu-item titlebar__menu-item--update"
+            id="titlebar-update"
+            aria-label="Доступно обновление"
+            onclick={handleStartUpdate}
+          >
+            <span class="titlebar__update-icon">{@html iconDownload(18)}</span>
+            <span class="titlebar__update-dot" aria-hidden="true"></span>
+          </button>
+        </UiV2Tooltip>
       {/if}
     {/if}
 
-    <!-- Lobby -->
-    <button
-      type="button"
-      class="titlebar__menu-item tooltip-trigger"
-      id="titlebar-lobby"
-      aria-label="Совместный просмотр"
-      onclick={onLobby}
-    >
-      {@html iconUsers(18)}
-      <span class="tooltip tooltip--animated">Совместный просмотр</span>
-    </button>
-
-    <!-- Schedule -->
-    <button
-      type="button"
-      class="titlebar__menu-item tooltip-trigger"
-      class:titlebar__menu-item--active={scheduleOpen}
-      id="titlebar-schedule"
-      aria-label="Расписание"
-      aria-expanded={scheduleOpen}
-      onclick={onSchedule}
-    >
-      {@html iconCalendar(18)}
-      <span class="tooltip tooltip--animated">Расписание</span>
-    </button>
-
-    <!-- Notifications -->
-    <button
-      type="button"
-      class="titlebar__menu-item tooltip-trigger"
-      class:titlebar__menu-item--has-badge={hasUnreadNotifications}
-      id="titlebar-notifications"
-      aria-label={hasUnreadNotifications ? 'Уведомления (есть новые)' : 'Уведомления'}
-      onclick={onNotifications}
-    >
-      {@html iconBell(18)}
-      {#if hasUnreadNotifications}
-        <span class="titlebar__notif-dot" aria-hidden="true"></span>
-      {/if}
-      <span class="tooltip tooltip--animated">Уведомления</span>
-    </button>
-
-    <!-- Profile -->
-    <button
-      type="button"
-      class="titlebar__menu-item titlebar__menu-item--avatar tooltip-trigger"
-      id="titlebar-profile"
-      aria-label="Профиль"
-      onclick={onProfile}
-    >
-      <span
-        class="titlebar__avatar {avatarUrl ? 'titlebar__avatar--image' : 'titlebar__avatar--placeholder'}"
-        style={avatarUrl ? `background-image:url(${avatarUrl})` : ''}
+    <UiV2Tooltip text="Совместный просмотр">
+      <button
+        type="button"
+        class="titlebar__menu-item"
+        id="titlebar-lobby"
+        aria-label="Совместный просмотр"
+        onclick={onLobby}
       >
-        {#if !avatarUrl}{@html iconUser(18)}{/if}
-      </span>
-      <span class="tooltip tooltip--animated">Профиль</span>
-    </button>
+        {@html iconUsers(18)}
+      </button>
+    </UiV2Tooltip>
 
-    <!-- Settings -->
-    <button
-      type="button"
-      class="titlebar__menu-item tooltip-trigger"
-      id="titlebar-settings"
-      aria-label="Настройки"
-      onclick={onSettings}
-    >
-      {@html iconSettings(18)}
-      <span class="tooltip tooltip--animated">Настройки</span>
-    </button>
+    <UiV2Tooltip text="Расписание">
+      <button
+        type="button"
+        class="titlebar__menu-item"
+        class:titlebar__menu-item--active={scheduleOpen}
+        id="titlebar-schedule"
+        aria-label="Расписание"
+        aria-expanded={scheduleOpen}
+        onclick={onSchedule}
+      >
+        {@html iconCalendar(18)}
+      </button>
+    </UiV2Tooltip>
 
-    <!-- Independent search tab -->
-    <button
-      type="button"
-      class="titlebar__menu-item tooltip-trigger"
-      class:titlebar__menu-item--active={searchTabActive}
-      aria-label="Поиск"
-      aria-current={searchTabActive ? 'page' : undefined}
-      onclick={onSearchTab}
-    >
-      {@html iconSearch(18)}
-      <span class="tooltip tooltip--animated">Поиск</span>
-    </button>
+    <UiV2Tooltip text="Уведомления">
+      <button
+        type="button"
+        class="titlebar__menu-item"
+        class:titlebar__menu-item--has-badge={hasUnreadNotifications}
+        id="titlebar-notifications"
+        aria-label={hasUnreadNotifications ? 'Уведомления (есть новые)' : 'Уведомления'}
+        onclick={onNotifications}
+      >
+        {@html iconBell(18)}
+        {#if hasUnreadNotifications}
+          <span class="titlebar__notif-dot" aria-hidden="true"></span>
+        {/if}
+      </button>
+    </UiV2Tooltip>
+
+    <UiV2Tooltip text="Профиль">
+      <button
+        type="button"
+        class="titlebar__menu-item titlebar__menu-item--avatar"
+        id="titlebar-profile"
+        aria-label="Профиль"
+        onclick={onProfile}
+      >
+        <span
+          class="titlebar__avatar {avatarUrl ? 'titlebar__avatar--image' : 'titlebar__avatar--placeholder'}"
+          style={avatarUrl ? `background-image:url(${avatarUrl})` : ''}
+        >
+          {#if !avatarUrl}{@html iconUser(18)}{/if}
+        </span>
+      </button>
+    </UiV2Tooltip>
+
+    <UiV2Tooltip text="Настройки">
+      <button
+        type="button"
+        class="titlebar__menu-item"
+        id="titlebar-settings"
+        aria-label="Настройки"
+        onclick={onSettings}
+      >
+        {@html iconSettings(18)}
+      </button>
+    </UiV2Tooltip>
+
+    <UiV2Tooltip text="Поиск">
+      <button
+        type="button"
+        class="titlebar__menu-item"
+        class:titlebar__menu-item--active={searchTabActive}
+        aria-label="Поиск"
+        aria-current={searchTabActive ? 'page' : undefined}
+        onclick={onSearchTab}
+      >
+        {@html iconSearch(18)}
+      </button>
+    </UiV2Tooltip>
   </div>
 
   {#if hasWindowApi}
     <div class="titlebar__controls">
-      <button
-        type="button"
-        class="titlebar__btn titlebar__btn--min tooltip-trigger"
-        aria-label="Свернуть"
-        onclick={handleMinimize}
-      >
-        <span class="tooltip tooltip--animated">Свернуть</span>
-      </button>
-      <button
-        type="button"
-        class="titlebar__btn titlebar__btn--max tooltip-trigger"
-        aria-label="Развернуть"
-        onclick={handleMaximize}
-      >
-        <span class="tooltip tooltip--animated">Развернуть</span>
-      </button>
-      <button
-        type="button"
-        class="titlebar__btn titlebar__btn--close tooltip-trigger"
-        aria-label="Закрыть"
-        onclick={handleClose}
-      >
-        <span class="tooltip tooltip--animated">Закрыть</span>
-      </button>
+      <UiV2Tooltip text="Свернуть">
+        <button
+          type="button"
+          class="titlebar__btn titlebar__btn--min"
+          aria-label="Свернуть"
+          onclick={handleMinimize}
+        ></button>
+      </UiV2Tooltip>
+      <UiV2Tooltip text="Развернуть">
+        <button
+          type="button"
+          class="titlebar__btn titlebar__btn--max"
+          aria-label="Развернуть"
+          onclick={handleMaximize}
+        ></button>
+      </UiV2Tooltip>
+      <UiV2Tooltip text="Закрыть">
+        <button
+          type="button"
+          class="titlebar__btn titlebar__btn--close"
+          aria-label="Закрыть"
+          onclick={handleClose}
+        ></button>
+      </UiV2Tooltip>
     </div>
   {/if}
 </div>

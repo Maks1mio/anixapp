@@ -1,5 +1,6 @@
-import { buildPosterUrl, toCdnProxyUrl } from '../../utils/posterUrl';
+import { toCdnProxyUrl } from '../../utils/posterUrl';
 import type { ReleaseCardData } from '../../types/release';
+import { mapReleaseRawToCard } from '../../utils/release-card';
 import type { ListStatusId } from './_types';
 
 // ── Text helpers ──────────────────────────────────────────────────────────────
@@ -104,44 +105,7 @@ export function openImageLightbox(imageUrl: string) {
 // ── Card mapper ───────────────────────────────────────────────────────────────
 
 export function mapCardData(raw: Record<string, unknown>): ReleaseCardData {
-  const p = raw.poster as Record<string, { url?: string }> | undefined;
-  const posterRaw =
-    p?.original?.url ?? p?.medium?.url ?? p?.small?.url
-    ?? (typeof raw.poster === 'string' ? raw.poster : undefined)
-    ?? (typeof raw.image  === 'string' ? raw.image  : undefined);
-  const poster = typeof posterRaw === 'string' ? buildPosterUrl(posterRaw) || undefined : undefined;
-  const statusObj   = raw.status   as { name?: string } | undefined;
-  const categoryObj = raw.category as { name?: string } | undefined;
-  const pls = typeof raw.profile_list_status === 'number' ? raw.profile_list_status : undefined;
-  let listStatus: ReleaseCardData['listStatus'];
-  switch (pls) {
-    case 1: listStatus = 'watching';   break;
-    case 2: listStatus = 'planned';    break;
-    case 3: listStatus = 'completed';  break;
-    case 4: listStatus = 'on_hold';    break;
-    case 5: listStatus = 'dropped';    break;
-  }
-  return {
-    id:               raw.id as number | undefined,
-    titleRu:          (raw.title_ru    ?? raw.titleRu)  as string | undefined,
-    titleEn:          (raw.title_original ?? raw.titleEn) as string | undefined,
-    titleAlt:         (raw.title_alt   as string) || undefined,
-    description:      (raw.description as string) || undefined,
-    poster,
-    rating:           typeof raw.grade      === 'number' ? raw.grade      : undefined,
-    voteCount:        typeof raw.vote_count === 'number' ? raw.vote_count : undefined,
-    episodesReleased: typeof raw.episodes_released === 'number' ? raw.episodes_released : undefined,
-    episodesTotal:    typeof raw.episodes_total    === 'number' ? raw.episodes_total    : undefined,
-    year:             typeof raw.year === 'string' ? raw.year : (typeof raw.year === 'number' ? String(raw.year) : undefined),
-    country:          (raw.country as string) || undefined,
-    genres:           (raw.genres  as string) || undefined,
-    status:           statusObj?.name,
-    studio:           (raw.studio  as string) || undefined,
-    category:         categoryObj?.name,
-    releaseDate:      (raw.release_date as string) || undefined,
-    isFavorite:       !!(raw.is_favorite),
-    listStatus,
-  };
+  return mapReleaseRawToCard(raw);
 }
 
 export interface EpisodeLastUpdateData {

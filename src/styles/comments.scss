@@ -688,8 +688,8 @@ $anix-comment-thread-color: color-mix(in srgb, $color-border 85%, transparent);
 }
 
 .anix-comments-page {
-  max-width: 42rem;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   width: 100%;
   min-width: 0;
   flex: 1;

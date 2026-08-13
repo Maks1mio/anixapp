@@ -339,6 +339,8 @@ contextBridge.exposeInMainWorld('anixApi', {
       ipcRenderer.invoke('anix:searchReleases', query, page, searchBy),
     profiles: (query, page = 0) => ipcRenderer.invoke('anix:searchProfiles', query, page),
     collections: (query, page = 0) => ipcRenderer.invoke('anix:searchCollections', query, page),
+    profileList: (status, query, page = 0, searchBy = 0) =>
+      ipcRenderer.invoke('anix:searchProfileList', status, query, page, searchBy),
   },
 
   collection: {

@@ -61,6 +61,19 @@
     background: $color-surface-hover;
     border-color: color-mix(in srgb, $color-border 70%, $color-accent 30%);
   }
+
+  &--v2 {
+    padding: 0.35rem 0.5rem 0.35rem 0.65rem;
+
+    .top-release-row__card {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .uiv2-anime-card--horizontal {
+      width: 100%;
+    }
+  }
 }
 
 .top-release-row__rank {

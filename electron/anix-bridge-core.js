@@ -603,6 +603,8 @@ function createAnixBridgeCore(options = {}) {
       c.getClient().endpoints.search.releases(query, page, searchBy)),
     'anix:searchProfiles': h((c, query, page = 0) => c.getClient().endpoints.search.profiles(query, page)),
     'anix:searchCollections': h((c, query, page = 0) => c.getClient().endpoints.search.collections(query, page)),
+    'anix:searchProfileList': h((c, status, query, page = 0, searchBy = 0) =>
+      c.getClient().endpoints.search.profileListSearch(status, page, { query, page, searchBy })),
     'anix:addToFavorites': h(async (c, releaseId) => {
       const res = await c.getClient().endpoints.release.addFavorite(releaseId);
       if (res?.code !== DefaultResult.Ok) throw new Error(String(res?.code ?? 'fail'));

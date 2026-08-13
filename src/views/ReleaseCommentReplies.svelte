@@ -1,19 +1,30 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { navigate } from '../stores/navigation';
-  import CommentRow from '../components/comments/CommentRow.svelte';
-  import CommentList from '../components/comments/CommentList.svelte';
-  import CommentComposer from '../components/comments/CommentComposer.svelte';
+  import { requireAuth } from '../stores/auth';
+  import { handleUserProfileClick } from '../stores/user-profile';
+  import UiV2CommentThread, {
+    type UiV2CommentNode,
+  } from '../components/uikit-v2/UiV2CommentThread.svelte';
+  import UiV2CommentComposer, {
+    type UiV2CommentComposerPayload,
+  } from '../components/uikit-v2/UiV2CommentComposer.svelte';
   import CommentsLoadSentinel from '../components/comments/CommentsLoadSentinel.svelte';
   import CommentsPageHeader from '../components/comments/CommentsPageHeader.svelte';
   import {
     normalizeComment,
     normalizeCommentsFromResponse,
-    patchCommentInTree,
     buildReleaseCommentAddBody,
   } from '../utils/comment';
   import { resolveJacksonRefs } from '../utils/jackson-refs';
-  import type { CommentData, CommentSort } from '../types/comment';
+  import {
+    appendUiV2CommentReply,
+    commentDataToUiV2Node,
+    patchUiV2CommentNode,
+    setUiV2CommentReplies,
+    uiV2NodeToCommentData,
+  } from '../utils/comment-v2';
+  import type { CommentSort } from '../types/comment';
   import { COMMENT_REPLIES_SORT_DEFAULT } from '../types/comment';
 
   interface Props {
@@ -27,8 +38,8 @@
 
   let loadState = $state<LoadState>('loading');
   let errorMsg = $state('');
-  let parent = $state<CommentData | null>(null);
-  let replies = $state<CommentData[]>([]);
+  let parent = $state<UiV2CommentNode | null>(null);
+  let replyNodes = $state<UiV2CommentNode[]>([]);
   let totalCount = $state(0);
   let page = $state(0);
   let hasMore = $state(false);
@@ -36,16 +47,17 @@
   let sort = $state<CommentSort>(COMMENT_REPLIES_SORT_DEFAULT);
   let selfProfileId = $state<number | null>(null);
   let submitting = $state(false);
-  let replyTarget = $state<CommentData | null>(null);
+  let dockReplyLogin = $state<string | null>(null);
+  let dockReplyParent = $state<UiV2CommentNode | null>(null);
   let scrollRootEl = $state<HTMLElement | null>(null);
   let releaseTitle = $state('');
 
   async function loadParent() {
     if (!window.anixApi?.comments?.release) return;
     try {
-      const data = await window.anixApi.comments.release.get(commentId) as Record<string, unknown>;
+      const data = (await window.anixApi.comments.release.get(commentId)) as Record<string, unknown>;
       const resolved = resolveJacksonRefs(data) as Record<string, unknown>;
-      parent = normalizeComment(resolved, resolved);
+      parent = commentDataToUiV2Node(normalizeComment(resolved, resolved));
     } catch {
       parent = null;
     }
@@ -62,17 +74,23 @@
     else if (nextPage === 0) loadState = 'loading';
 
     try {
-      const data = await window.anixApi.comments.release.replies(commentId, nextPage, sort) as {
+      const data = (await window.anixApi.comments.release.replies(commentId, nextPage, sort)) as {
         content?: Record<string, unknown>[];
         total_count?: number;
         total_elements?: number;
         last?: boolean;
       };
 
-      const chunk = normalizeCommentsFromResponse(data as Record<string, unknown>);
-      replies = append ? [...replies, ...chunk] : chunk;
-      totalCount = parent?.replyCount ?? data.total_count ?? data.total_elements ?? chunk.length;
-      hasMore = data.last === false || chunk.length > 0 && replies.length < totalCount;
+      const chunk = normalizeCommentsFromResponse(data as Record<string, unknown>).map((c) =>
+        commentDataToUiV2Node(c),
+      );
+      replyNodes = append ? [...replyNodes, ...chunk] : chunk;
+      totalCount =
+        (typeof parent?.replyCount === 'number' ? parent.replyCount : 0) ||
+        data.total_count ||
+        data.total_elements ||
+        chunk.length;
+      hasMore = data.last === false || (chunk.length > 0 && replyNodes.length < totalCount);
       page = nextPage;
       loadState = 'ready';
     } catch (err) {
@@ -94,10 +112,12 @@
     void window.anixApi?.profile?.self?.().then((data: { profile?: { id?: number } }) => {
       selfProfileId = data?.profile?.id ?? null;
     });
-    void window.anixApi?.release?.info(releaseId, false).then((data: { release?: { title_ru?: string; title_original?: string } }) => {
-      const r = data.release;
-      releaseTitle = r?.title_ru || r?.title_original || '';
-    });
+    void window.anixApi?.release?.info(releaseId, false).then(
+      (data: { release?: { title_ru?: string; title_original?: string } }) => {
+        const r = data.release;
+        releaseTitle = r?.title_ru || r?.title_original || '';
+      },
+    );
     void reloadAll();
   });
 
@@ -106,68 +126,116 @@
     void loadReplies(0);
   }
 
-  function handleVote(updated: CommentData) {
-    const prev =
-      updated.id === parent?.id
-        ? parent
-        : replies.find((c) => c.id === updated.id);
+  function findInReplies(id: number | string): UiV2CommentNode | null {
+    for (const n of replyNodes) {
+      if (n.id === id) return n;
+      if (n.replies?.length) {
+        const nested = findInRepliesDeep(n.replies, id);
+        if (nested) return nested;
+      }
+    }
+    return null;
+  }
+
+  function findInRepliesDeep(list: UiV2CommentNode[], id: number | string): UiV2CommentNode | null {
+    for (const n of list) {
+      if (n.id === id) return n;
+      if (n.replies?.length) {
+        const found = findInRepliesDeep(n.replies, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  function handleVote(updated: UiV2CommentNode) {
+    if (!requireAuth()) return;
+    const isParent = parent?.id === updated.id;
+    const prev = isParent ? parent : findInReplies(updated.id);
     if (!prev) return;
 
-    if (updated.id === parent?.id) {
-      parent = updated;
+    if (isParent) {
+      parent = { ...parent!, userVote: updated.userVote, voteCount: updated.voteCount };
     } else {
-      replies = patchCommentInTree(replies, updated.id, updated);
+      replyNodes = patchUiV2CommentNode(replyNodes, updated.id, {
+        userVote: updated.userVote,
+        voteCount: updated.voteCount,
+      });
     }
 
     if (!window.anixApi?.comments?.release) return;
-
-    window.anixApi.comments.release.vote(updated.id, updated.userVote).catch(() => {
-      if (updated.id === parent?.id) parent = prev;
-      else replies = patchCommentInTree(replies, updated.id, prev);
+    const id = typeof updated.id === 'number' ? updated.id : Number(updated.id);
+    window.anixApi.comments.release.vote(id, updated.userVote ?? 0).catch(() => {
+      if (isParent) {
+        parent = prev;
+      } else {
+        replyNodes = patchUiV2CommentNode(replyNodes, updated.id, {
+          userVote: prev.userVote,
+          voteCount: prev.voteCount,
+        });
+      }
     });
   }
 
   function focusComposer() {
     queueMicrotask(() => {
-      document.querySelector<HTMLTextAreaElement>('#replies-composer textarea')?.focus();
+      document
+        .querySelector<HTMLTextAreaElement>('#replies-composer textarea, #replies-composer [id^="uiv2-composer-"]')
+        ?.focus();
     });
   }
 
-  function handleReply(comment: CommentData) {
-    replyTarget = comment;
+  function handleReply(node: UiV2CommentNode) {
+    if (!requireAuth()) return;
+    dockReplyParent = node;
+    dockReplyLogin = node.profile.login;
     focusComposer();
   }
 
-  function handleNavigateReplies(reply: CommentData) {
-    navigate(`/release/${releaseId}/comment/${reply.id}/replies`);
+  async function loadNestedReplies(node: UiV2CommentNode) {
+    const id = typeof node.id === 'number' ? node.id : Number(node.id);
+    if (!Number.isFinite(id) || !window.anixApi?.comments?.release?.replies) return;
+    try {
+      const data = await window.anixApi.comments.release.replies(id, 0, 2);
+      const list = normalizeCommentsFromResponse(data as Record<string, unknown>).map((c) =>
+        commentDataToUiV2Node(c),
+      );
+      replyNodes = setUiV2CommentReplies(replyNodes, node.id, list);
+    } catch {
+      /* ignore */
+    }
   }
 
-  async function handleSubmit(payload: { message: string; isSpoiler: boolean }) {
+  async function handleSubmit(payload: UiV2CommentComposerPayload) {
     if (!window.anixApi?.comments?.release) return;
     submitting = true;
     try {
-      const res = await window.anixApi.comments.release.add(
+      const replyTarget = dockReplyParent ? uiV2NodeToCommentData(dockReplyParent) : null;
+      const res = (await window.anixApi.comments.release.add(
         releaseId,
         buildReleaseCommentAddBody(payload, {
           replyTarget,
           threadRootCommentId: commentId,
         }),
-      ) as { comment?: Record<string, unknown>; code?: number };
+      )) as { comment?: Record<string, unknown>; code?: number };
 
-      if (res.code != null && res.code !== 0) {
-        throw new Error(String(res.code));
-      }
+      if (res.code != null && res.code !== 0) throw new Error(String(res.code));
 
       if (res.comment) {
         const resolvedAdd = resolveJacksonRefs(res) as Record<string, unknown>;
         const commentRaw = (resolvedAdd.comment ?? res.comment) as Record<string, unknown>;
-        const added = normalizeComment(commentRaw, resolvedAdd);
-        replies = [added, ...replies];
+        const added = commentDataToUiV2Node(normalizeComment(commentRaw, resolvedAdd));
+        if (dockReplyParent && dockReplyParent.id !== parent?.id) {
+          replyNodes = appendUiV2CommentReply(replyNodes, dockReplyParent.id, added);
+        } else {
+          replyNodes = [added, ...replyNodes];
+        }
         totalCount += 1;
         if (parent) {
-          parent = { ...parent, replyCount: parent.replyCount + 1 };
+          parent = { ...parent, replyCount: (parent.replyCount ?? 0) + 1 };
         }
-        replyTarget = null;
+        dockReplyParent = null;
+        dockReplyLogin = null;
       }
     } catch {
       /* ignore */
@@ -176,58 +244,54 @@
     }
   }
 
-  async function handleEdit(
-    comment: CommentData,
-    payload: { message: string; isSpoiler: boolean },
-  ) {
+  async function handleEdit(node: UiV2CommentNode, payload: UiV2CommentComposerPayload) {
     if (!window.anixApi?.comments?.release?.edit) return;
-
-    const isParent = comment.id === parent?.id;
-    const prev = isParent ? parent : replies.find((c) => c.id === comment.id);
+    const isParent = parent?.id === node.id;
+    const prev = isParent ? parent : findInReplies(node.id);
     if (!prev) return;
+    const id = typeof node.id === 'number' ? node.id : Number(node.id);
 
-    const optimistic: CommentData = {
-      ...prev,
-      message: payload.message,
-      isSpoiler: payload.isSpoiler,
-      isEdited: true,
-    };
-
-    if (isParent) parent = optimistic;
-    else replies = patchCommentInTree(replies, comment.id, optimistic);
+    const optimistic = { message: payload.message, isSpoiler: payload.isSpoiler, isEdited: true as const };
+    if (isParent) parent = { ...parent!, ...optimistic };
+    else replyNodes = patchUiV2CommentNode(replyNodes, node.id, optimistic);
 
     try {
-      await window.anixApi.comments.release.edit(comment.id, {
+      await window.anixApi.comments.release.edit(id, {
         message: payload.message,
         isSpoiler: payload.isSpoiler,
       });
     } catch {
       if (isParent) parent = prev;
-      else replies = patchCommentInTree(replies, comment.id, prev);
+      else {
+        replyNodes = patchUiV2CommentNode(replyNodes, node.id, {
+          message: prev.message,
+          isSpoiler: prev.isSpoiler,
+          isEdited: prev.isEdited,
+        });
+      }
     }
   }
 
-  async function handleDelete(comment: CommentData) {
+  async function handleDelete(node: UiV2CommentNode) {
     if (!window.anixApi?.comments?.release?.delete) return;
-
-    const isParent = comment.id === parent?.id;
-    const prev = isParent ? parent : replies.find((c) => c.id === comment.id);
+    const isParent = parent?.id === node.id;
+    const prev = isParent ? parent : findInReplies(node.id);
     if (!prev) return;
+    const id = typeof node.id === 'number' ? node.id : Number(node.id);
 
-    const optimistic: CommentData = {
-      ...prev,
-      isDeleted: true,
-      message: '',
-    };
-
-    if (isParent) parent = optimistic;
-    else replies = patchCommentInTree(replies, comment.id, optimistic);
+    if (isParent) parent = { ...parent!, isDeleted: true, message: '' };
+    else replyNodes = patchUiV2CommentNode(replyNodes, node.id, { isDeleted: true, message: '' });
 
     try {
-      await window.anixApi.comments.release.delete(comment.id);
+      await window.anixApi.comments.release.delete(id);
     } catch {
       if (isParent) parent = prev;
-      else replies = patchCommentInTree(replies, comment.id, prev);
+      else {
+        replyNodes = patchUiV2CommentNode(replyNodes, node.id, {
+          isDeleted: prev.isDeleted,
+          message: prev.message,
+        });
+      }
     }
   }
 
@@ -244,12 +308,14 @@
     }
   }
 
-  const composerReplyLogin = $derived(replyTarget?.profile.login ?? null);
+  function openAuthor(node: UiV2CommentNode, e?: MouseEvent) {
+    if (node.profile.id) handleUserProfileClick(node.profile.id, e);
+  }
 
   $effect(() => {
     hasMore;
     loadingMore;
-    replies.length;
+    replyNodes.length;
     const root = scrollRootEl;
     if (!hasMore || loadingMore || !root) return;
 
@@ -284,38 +350,34 @@
       {:else}
         {#if parent}
           <div class="anix-comments-replies-page__parent">
-            <CommentRow
-              comment={parent}
-              canReply={true}
-              canVote={!!window.anixApi?.comments?.release}
-              canManage={!!window.anixApi?.comments?.release}
-              showRepliesToggle={false}
-              isMine={selfProfileId != null && parent.profile.id === selfProfileId}
-              onReply={() => handleReply(parent!)}
-              onVote={(c) => handleVote(c)}
+            <UiV2CommentThread
+              nodes={[parent]}
+              {selfProfileId}
+              enableInlineReply={false}
+              onVote={handleVote}
+              onReply={handleReply}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              onAuthorClick={openAuthor}
             />
           </div>
         {/if}
 
         {#if loadState === 'loading'}
           <div class="anix-comments__empty">Загрузка…</div>
-        {:else if replies.length === 0}
+        {:else if replyNodes.length === 0}
           <div class="anix-comments__empty">Ответов пока нет</div>
         {:else}
-          <CommentList
-            items={replies}
-            {releaseId}
-            canReply={true}
-            canVote={!!window.anixApi?.comments?.release}
-            navigateReplies={true}
+          <UiV2CommentThread
+            nodes={replyNodes}
             {selfProfileId}
-            onReply={handleReply}
+            enableInlineReply={false}
             onVote={handleVote}
-            onNavigateReplies={handleNavigateReplies}
+            onReply={handleReply}
+            onLoadReplies={loadNestedReplies}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            onAuthorClick={openAuthor}
           />
         {/if}
 
@@ -329,11 +391,15 @@
     </div>
 
     {#if loadState !== 'error'}
-      <div class="anix-comments__dock" id="replies-composer">
-        <CommentComposer
+      <div class="anix-comments__dock uiv2-comments-composer" id="replies-composer">
+        <UiV2CommentComposer
           busy={submitting}
-          replyToLogin={composerReplyLogin}
-          onCancelReply={() => { replyTarget = null; }}
+          replyToLogin={dockReplyLogin}
+          requireLogin={true}
+          onCancelReply={() => {
+            dockReplyParent = null;
+            dockReplyLogin = null;
+          }}
           onSubmit={handleSubmit}
         />
       </div>

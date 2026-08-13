@@ -6,6 +6,7 @@
   import Tabs from '../components/Tabs.svelte';
   import type { ReleaseCardData } from '../types/release';
   import { buildPosterUrl } from '../utils/posterUrl';
+  import { mapReleaseRawToCard } from '../utils/release-card';
   import { setDiscordContext, refreshDiscordPresence } from '../services/discord-presence';
 
   interface Props { id?: number; }
@@ -35,32 +36,8 @@
   let scrollListener: (() => void) | null = null;
 
   function mapRelease(raw: Record<string, unknown>): ReleaseCardData {
-    const p = raw.poster as Record<string, { url?: string }> | undefined;
-    const posterRaw = p?.original?.url ?? p?.medium?.url ?? p?.small?.url
-      ?? (typeof raw.poster === 'string' ? raw.poster : undefined)
-      ?? (typeof raw.image === 'string' ? raw.image : undefined);
-    const poster = posterRaw ? buildPosterUrl(posterRaw) || undefined : undefined;
-    let listStatus: ReleaseCardData['listStatus'];
-    switch (raw.profile_list_status) {
-      case 1: listStatus = 'watching'; break;
-      case 2: listStatus = 'planned'; break;
-      case 3: listStatus = 'completed'; break;
-      case 4: listStatus = 'on_hold'; break;
-      case 5: listStatus = 'dropped'; break;
-    }
     return {
-      id: raw.id as number | undefined,
-      titleRu: (raw.title_ru ?? raw.title) as string | undefined,
-      titleEn: raw.title_original as string | undefined,
-      poster,
-      rating: typeof raw.grade === 'number' ? raw.grade : undefined,
-      voteCount: typeof raw.vote_count === 'number' ? raw.vote_count : undefined,
-      episodesReleased: typeof raw.episodes_released === 'number' ? raw.episodes_released : undefined,
-      episodesTotal: typeof raw.episodes_total === 'number' ? raw.episodes_total : undefined,
-      year: raw.year ? String(raw.year) : undefined,
-      status: (raw.status as { name?: string } | undefined)?.name,
-      isFavorite: !!raw.is_favorite,
-      listStatus,
+      ...mapReleaseRawToCard(raw),
       myVote: typeof raw.my_vote === 'number' && raw.my_vote > 0 ? raw.my_vote : undefined,
     };
   }

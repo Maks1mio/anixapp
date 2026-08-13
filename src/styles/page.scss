@@ -11,6 +11,11 @@
   --page-scroll-padding: 0;
 }
 
+.page.uiv2-scroll-area {
+  --uiv2-scroll-offset: var(--page-scrollbar-offset);
+  flex-direction: column;
+}
+
 .page__scroll {
   position: relative;
   flex: 1;
@@ -61,132 +66,8 @@
   overflow: hidden;
 }
 
-// Вертикальный скроллбар — справа, всегда поверх контента страницы
-.page__v-track {
-  position: absolute;
-  top: var(--page-scrollbar-offset);
-  right: var(--page-scrollbar-offset);
-  bottom: var(--page-scrollbar-offset);
-  width: 10px;
-  padding: 4px 0;
+// Скроллбары страницы — UI Kit V2 (поверх контента)
+.page.uiv2-scroll-area > .uiv2-scroll-area__v-track,
+.page.uiv2-scroll-area > .uiv2-scroll-area__h-track {
   z-index: 100;
-  opacity: 0.22;
-  pointer-events: auto;
-  transition: opacity 0.2s ease;
-  cursor: grab;
-}
-
-.page--v-scrollbar-visible .page__v-track {
-  opacity: 1;
-}
-
-.page__v-track:active {
-  cursor: grabbing;
-}
-
-.page__v-thumb {
-  position: absolute;
-  left: 2px;
-  right: 2px;
-  min-height: 24px;
-  background: $color-border;
-  border-radius: 4px;
-  cursor: grab;
-  transition: background $transition, left $transition, right $transition;
-
-  &:hover {
-    background: $color-text-muted;
-  }
-
-  &:active {
-    cursor: grabbing;
-  }
-
-  &--active {
-    left: 0;
-    right: 0;
-    background: $color-accent !important;
-    animation: page-thumb-bounce 0.4s ease;
-  }
-
-  &--release {
-    animation: page-thumb-release 0.35s ease forwards;
-  }
-}
-
-// Горизонтальный скроллбар — показываем только при реальном горизонтальном overflow
-.page:not(.page--has-h-scroll) .page__h-track {
-  display: none;
-}
-
-.page__h-track {
-  position: absolute;
-  left: var(--page-scrollbar-offset);
-  right: var(--page-scrollbar-offset);
-  bottom: var(--page-scrollbar-offset);
-  height: 10px;
-  padding: 0 4px;
-  z-index: 100;
-  opacity: 0.22;
-  pointer-events: auto;
-  transition: opacity 0.2s ease;
-  cursor: grab;
-}
-
-.page--h-scrollbar-visible .page__h-track {
-  opacity: 1;
-}
-
-.page__h-track:active {
-  cursor: grabbing;
-}
-
-.page--v-scrollbar-visible .page__h-track {
-  right: calc(var(--page-scrollbar-offset) + 10px);
-}
-
-.page--h-scrollbar-visible .page__v-track {
-  bottom: calc(var(--page-scrollbar-offset) + 10px);
-}
-
-.page__h-thumb {
-  position: absolute;
-  top: 2px;
-  bottom: 2px;
-  min-width: 24px;
-  background: $color-border;
-  border-radius: 4px;
-  cursor: grab;
-  transition: background $transition, top $transition, bottom $transition;
-
-  &:hover {
-    background: $color-text-muted;
-  }
-
-  &:active {
-    cursor: grabbing;
-  }
-
-  &--active {
-    top: 0;
-    bottom: 0;
-    background: $color-accent !important;
-    animation: page-thumb-bounce 0.4s ease;
-  }
-
-  &--release {
-    animation: page-thumb-release 0.35s ease forwards;
-  }
-}
-
-@keyframes page-thumb-bounce {
-  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 55%, transparent); }
-  50%  { box-shadow: 0 0 0 10px color-mix(in srgb, var(--color-accent) 0%, transparent); }
-  100% { box-shadow: 0 0 0 0 transparent; }
-}
-
-@keyframes page-thumb-release {
-  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 40%, transparent); }
-  50%  { box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-accent) 0%, transparent); }
-  100% { box-shadow: 0 0 0 0 transparent; }
 }

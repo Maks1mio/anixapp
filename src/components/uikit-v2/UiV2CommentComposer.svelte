@@ -24,6 +24,8 @@
     requireLogin?: boolean;
     onSubmit?: (payload: UiV2CommentComposerPayload) => void | Promise<void>;
     onCancelReply?: () => void;
+    /** Отмена редактирования / общий cancel */
+    onCancel?: () => void;
   };
 
   let {
@@ -37,7 +39,14 @@
     requireLogin = false,
     onSubmit,
     onCancelReply,
+    onCancel,
   }: Props = $props();
+
+  const showCancel = $derived(!!onCancel || (!!replyToLogin && !!onCancelReply));
+  function handleCancel() {
+    onCancel?.();
+    onCancelReply?.();
+  }
 
   let message = $state(untrack(() => initialMessage));
   let isSpoiler = $state(untrack(() => initialIsSpoiler));
@@ -99,14 +108,18 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="uiv2-comment-composer" onkeydown={onKeydown}>
-  {#if replyToLogin}
+  {#if replyToLogin || showCancel}
     <div class="uiv2-comment-composer__label">
-      <span>
-        Ответ для <span class="uiv2-comment-composer__reply-name">{replyToLogin}</span>
-      </span>
-      {#if onCancelReply}
+      {#if replyToLogin}
+        <span>
+          Ответ для <span class="uiv2-comment-composer__reply-name">{replyToLogin}</span>
+        </span>
+      {:else}
+        <span>{fieldLabel}</span>
+      {/if}
+      {#if showCancel}
         <span class="uiv2-comment-composer__sep" aria-hidden="true">·</span>
-        <button type="button" class="uiv2-comment-composer__cancel" onclick={onCancelReply}>
+        <button type="button" class="uiv2-comment-composer__cancel" onclick={handleCancel}>
           Отмена
         </button>
       {/if}

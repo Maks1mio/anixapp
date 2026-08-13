@@ -1,65 +1,43 @@
 <script lang="ts">
-  import { navigate } from '../stores/navigation';
-  import { toCdnProxyUrl } from '../utils/posterUrl';
-  import { iconStar } from './icons';
+  import ReleaseCardUiV2 from './ReleaseCardUiV2.svelte';
   import type { ReleaseCardData } from '../types/release';
 
   interface Props {
     data: ReleaseCardData;
-    current?: boolean;
+    isFirst?: boolean;
+    isLast?: boolean;
+    isCurrent?: boolean;
   }
 
-  let { data, current = false }: Props = $props();
-
-  const posterSrc = $derived(toCdnProxyUrl(data.poster || ''));
-  const title = $derived(data.titleRu || data.titleEn || 'Без названия');
-  const hasRating = $derived((data.voteCount ?? 0) > 50 && data.rating != null);
-  const ratingText = $derived(
-    data.rating != null ? (Math.round(data.rating * 10) / 10).toFixed(1) : '',
-  );
-
-  function openRelease() {
-    if (current || !data.id) return;
-    navigate(`/release/${data.id}`);
-  }
+  let {
+    data,
+    isFirst = false,
+    isLast = false,
+    isCurrent = false,
+  }: Props = $props();
 </script>
 
-<button
-  type="button"
-  class="related-release-row"
-  class:related-release-row--current={current}
-  disabled={current}
-  onclick={openRelease}
+<div
+  class="related-v2-row"
+  class:related-v2-row--first={isFirst}
+  class:related-v2-row--last={isLast}
+  class:related-v2-row--current={isCurrent}
 >
-  <div class="related-release-row__poster">
-    {#if posterSrc}
-      <img src={posterSrc} alt="" loading="lazy" decoding="async" />
+  <div class="related-v2-row__rail" aria-hidden="true">
+    {#if !isFirst}
+      <span class="related-v2-row__line related-v2-row__line--top"></span>
+    {:else}
+      <span class="related-v2-row__spacer"></span>
+    {/if}
+    <span class="related-v2-row__node"></span>
+    {#if !isLast}
+      <span class="related-v2-row__line related-v2-row__line--bottom"></span>
+    {:else}
+      <span class="related-v2-row__spacer"></span>
     {/if}
   </div>
 
-  <div class="related-release-row__body">
-    <span class="related-release-row__title">{title}</span>
-    <div class="related-release-row__meta">
-      {#if data.year}
-        <span class="related-release-row__year">{data.year} год</span>
-      {/if}
-      {#if hasRating}
-        <span class="related-release-row__dot" aria-hidden="true">•</span>
-        <span class="related-release-row__grade">
-          {ratingText}
-          <span class="related-release-row__star" aria-hidden="true">{@html iconStar(13, true)}</span>
-        </span>
-      {/if}
-      {#if data.category}
-        <span class="related-release-row__category">{data.category}</span>
-      {/if}
-    </div>
+  <div class="related-v2-row__card">
+    <ReleaseCardUiV2 data={data} variant="horizontal" disableOpen={isCurrent} />
   </div>
-
-  {#if current}
-    <div class="related-release-row__here" aria-label="Вы здесь">
-      <span class="related-release-row__here-line" aria-hidden="true"></span>
-      <span class="related-release-row__here-label">Вы<br />здесь</span>
-    </div>
-  {/if}
-</button>
+</div>

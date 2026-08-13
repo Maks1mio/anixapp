@@ -2,6 +2,7 @@
   import type { LobbyParticipant, LobbyActivityEntry } from '../_types';
   import { lobbyActionText } from '../_utils';
   import { resolveCdnAssetUrl } from '../../../utils/posterUrl';
+  import UiV2Tooltip from '../../../components/uikit-v2/UiV2Tooltip.svelte';
 
   interface Props {
     participants: LobbyParticipant[];
@@ -18,18 +19,20 @@
   <div class="watch-lobby-panel">
     <div class="watch-lobby-panel__avatars">
       {#each shown as p, i (`${p.peerId ?? ''}:${p.login}:${i}`)}
-        <div class="watch-lobby-avatar" data-tooltip={p.login}>
-          {#if p.avatar}
-            <img
-              src={resolveCdnAssetUrl(p.avatar)}
-              alt={p.login}
-              class="watch-lobby-avatar__img"
-              onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-            />
-          {:else}
-            {(p.login[0] ?? '?').toUpperCase()}
-          {/if}
-        </div>
+        <UiV2Tooltip text={p.login} placement="top" showDelay={80}>
+          <div class="watch-lobby-avatar">
+            {#if p.avatar}
+              <img
+                src={resolveCdnAssetUrl(p.avatar)}
+                alt={p.login}
+                class="watch-lobby-avatar__img"
+                onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+              />
+            {:else}
+              {(p.login[0] ?? '?').toUpperCase()}
+            {/if}
+          </div>
+        </UiV2Tooltip>
       {/each}
       {#if overflow > 0}
         <div class="watch-lobby-avatar watch-lobby-avatar--more">+{overflow}</div>

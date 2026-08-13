@@ -150,6 +150,8 @@ function buildWebAnixApi(): AnixApi {
       releases: (query, page = 0, searchBy = 0) => invoke('anix:searchReleases', query, page, searchBy),
       profiles: (query, page = 0) => invoke('anix:searchProfiles', query, page),
       collections: (query, page = 0) => invoke('anix:searchCollections', query, page),
+      profileList: (status, query, page = 0, searchBy = 0) =>
+        invoke('anix:searchProfileList', status, query, page, searchBy),
     },
 
     collection: {

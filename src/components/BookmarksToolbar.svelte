@@ -10,8 +10,9 @@
     onSortChange: (sort: number) => void;
     onRandom: () => void;
     randomLoading?: boolean;
-    /** Кнопки слева от сортировки/рандома (уже справа от счётчика) */
+    /** Кнопки слева от сортировки/рандома */
     leadingActions?: Snippet;
+    showCount?: boolean;
   }
 
   let {
@@ -21,13 +22,16 @@
     onRandom,
     randomLoading = false,
     leadingActions,
+    showCount = true,
   }: Props = $props();
 
   const sortOptions = bookmarkSortSelectOptions();
 </script>
 
-<div class="bookmarks-toolbar">
-  <span class="bookmarks-toolbar__count">{totalCount} всего</span>
+<div class="bookmarks-toolbar" role="toolbar" aria-label="Действия списка">
+  {#if showCount}
+    <span class="bookmarks-toolbar__count" title="Всего в списке">{totalCount}</span>
+  {/if}
   <div class="bookmarks-toolbar__actions">
     {#if leadingActions}
       {@render leadingActions()}

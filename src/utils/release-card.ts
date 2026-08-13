@@ -1,13 +1,22 @@
 import { buildPosterUrl } from './posterUrl';
 import type { ReleaseCardData } from '../types/release';
 
+function strField(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
 export function mapReleaseRawToCard(raw: Record<string, unknown>): ReleaseCardData {
   const p = raw.poster as Record<string, { url?: string }> | undefined;
   const posterRaw = p?.original?.url ?? p?.medium?.url ?? p?.small?.url
     ?? (typeof raw.poster === 'string' ? raw.poster : undefined)
     ?? (typeof raw.image === 'string' ? raw.image : undefined);
   const poster = posterRaw ? buildPosterUrl(posterRaw) || undefined : undefined;
-  const grade = typeof raw.grade === 'number' ? raw.grade : undefined;
+  const grade =
+    typeof raw.grade === 'number'
+      ? raw.grade
+      : typeof raw.rating === 'number'
+        ? raw.rating
+        : undefined;
   const profileListStatus = typeof raw.profile_list_status === 'number' ? raw.profile_list_status : undefined;
   let listStatus: ReleaseCardData['listStatus'];
   switch (profileListStatus) {
@@ -33,8 +42,21 @@ export function mapReleaseRawToCard(raw: Record<string, unknown>): ReleaseCardDa
     country: (raw.country as string) || undefined,
     genres: (raw.genres as string) || undefined,
     status: (raw.status as { name?: string })?.name,
-    studio: (raw.studio as string) || undefined,
+    statusId:
+      typeof (raw.status as { id?: number } | undefined)?.id === 'number'
+        ? (raw.status as { id: number }).id
+        : typeof raw.status_id === 'number'
+          ? raw.status_id
+          : undefined,
+    studio: strField(raw.studio),
     category: (raw.category as { name?: string })?.name,
+    source: strField(raw.source),
+    author: strField(raw.author),
+    director: strField(raw.director),
+    duration: typeof raw.duration === 'number' ? raw.duration : undefined,
+    season: typeof raw.season === 'number' ? raw.season : undefined,
+    airedOnDate: typeof raw.aired_on_date === 'number' ? raw.aired_on_date : undefined,
+    favoritesCount: typeof raw.favorites_count === 'number' ? raw.favorites_count : undefined,
     releaseDate: (raw.release_date as string) || undefined,
     isFavorite: !!(raw.is_favorite),
     listStatus,
@@ -63,6 +85,15 @@ export function releaseCardMeta(data: ReleaseCardData): string {
 export function releaseListStatusLabel(status?: ReleaseCardData['listStatus']): string | null {
   if (!status) return null;
   return LIST_STATUS_LABELS[status] ?? null;
+}
+
+/** Anixart ReleaseStatus.Announced = 3 */
+export function isReleaseAnnounce(
+  status?: string | null,
+  statusId?: number | null,
+): boolean {
+  if (statusId === 3) return true;
+  return /^анонс$/i.test(String(status ?? '').trim());
 }
 
 export function releaseRawToStored(raw: Record<string, unknown>): Record<string, unknown> {

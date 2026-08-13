@@ -15,6 +15,7 @@
   } from '../utils/collection';
   import { COLLECTION_RULES_FORBIDDEN, COLLECTION_RULES_FOOTER } from '../utils/collectionRules';
   import { ensureProfileId } from '../utils/profile';
+  import UiV2Tooltip from '../components/uikit-v2/UiV2Tooltip.svelte';
   import {
     mapReleaseRawToCard,
     releaseCardMeta,
@@ -326,25 +327,21 @@
 
     <div class="collection-editor__rules">
       Создавая коллекцию, Вы подтверждаете, что ознакомлены с
-      <span class="collection-editor__rules-trigger tooltip-trigger">
+      <UiV2Tooltip placement="top" interactive={true} showDelay={80} hideDelay={150}>
         <button type="button" class="collection-editor__rules-link">правилами</button>
-        <span
-          class="tooltip tooltip--animated comment-rules-popover collection-rules-popover"
-          role="tooltip"
-          aria-hidden="true"
-        >
-          <span class="comment-rules-popover__inner">
-            <p class="comment-rules-popover__title">Правила</p>
-            <p class="comment-rules-popover__heading">Запрещено:</p>
-            <ul class="comment-rules-popover__list">
+        {#snippet content()}
+          <div class="uiv2-rules-popover">
+            <p class="uiv2-rules-popover__title">Правила</p>
+            <p class="uiv2-rules-popover__heading">Запрещено:</p>
+            <ul class="uiv2-rules-popover__list">
               {#each COLLECTION_RULES_FORBIDDEN as rule}
                 <li>{rule}</li>
               {/each}
             </ul>
-            <p class="comment-rules-popover__footer">{COLLECTION_RULES_FOOTER}</p>
-          </span>
-        </span>
-      </span>
+            <p class="uiv2-rules-popover__footer">{COLLECTION_RULES_FOOTER}</p>
+          </div>
+        {/snippet}
+      </UiV2Tooltip>
       »
     </div>
 
@@ -368,12 +365,12 @@
         ondrop={() => onDrop(index)}
       >
         <span class="collection-editor__drag" aria-hidden="true">⋮⋮</span>
-        <div class="release-card-v__poster collection-editor__release-poster">
+        <div class="collection-editor__release-poster">
           {#if card.poster}
             <img src={card.poster} alt="" />
           {/if}
           {#if statusLabel}
-            <div class="release-card-v__badge" style="background:rgba(139, 92, 246, 0.85)">{statusLabel}</div>
+            <div class="collection-editor__release-badge">{statusLabel}</div>
           {/if}
         </div>
         <div class="collection-editor__release-body">

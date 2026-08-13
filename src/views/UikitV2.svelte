@@ -1392,6 +1392,7 @@
                   <UiV2AnimeCard
                     variant="vertical"
                     title={card.title}
+                    releaseId={card.id}
                     titleOriginal={card.titleOriginal}
                     titleAlt={card.titleAlt}
                     posterUrl={card.posterUrl}
@@ -1428,6 +1429,7 @@
                 <UiV2AnimeCard
                   variant="horizontal"
                   title={card.title}
+                  releaseId={card.id}
                   titleOriginal={card.titleOriginal}
                   titleAlt={card.titleAlt}
                   posterUrl={card.posterUrl}
@@ -1477,6 +1479,7 @@
                     <UiV2AnimeCard
                       variant="vertical"
                       title={card.title}
+                      releaseId={card.id}
                       titleOriginal={card.titleOriginal}
                       titleAlt={card.titleAlt}
                       posterUrl={card.posterUrl}

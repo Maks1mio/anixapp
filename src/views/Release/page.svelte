@@ -18,6 +18,7 @@
     getAgeRateText, getSeasonName, stripHtmlToText, sanitizeRichHtml,
     numToStatusId, ratingHue, mapCardData, formatEpisodeAdded,
   } from './_utils';
+  import { isReleaseAnnounce } from '../../utils/release-card';
   import { ReleaseHead, ReleaseVideos, ReleaseRating, ReleaseRelated, ReleaseRecommendations, ReleaseScreenshots, ReleaseComments } from './components';
   import { notifyFavoritesChanged } from '../../utils/favorites-events';
   import { applyReleaseListStatus } from '../../utils/release-list-status';
@@ -128,6 +129,9 @@
   const episodesReleased = $derived(release?.episodes_released as number | null | undefined);
   const episodesTotal    = $derived(release?.episodes_total    as number | null | undefined);
   const statusName   = $derived((release?.status   as { name?: string } | undefined)?.name ?? '');
+  const statusId     = $derived((release?.status as { id?: number } | undefined)?.id);
+  const isAnnounce   = $derived(isReleaseAnnounce(statusName, statusId));
+  const canVote      = $derived(!isAnnounce && release?.rating_available !== false);
   const studio       = $derived((release?.studio   ?? '') as string);
   const source       = $derived((release?.source   ?? '') as string);
   const genres       = $derived((release?.genres   ?? '') as string);
@@ -390,6 +394,7 @@
         {vote1} {vote2} {vote3} {vote4} {vote5}
         {yourVote}
         {watchingCount} {planCount} {completedCount} {holdOnCount} {droppedCount}
+        {canVote}
         onRefresh={refreshReleaseData}
       />
 

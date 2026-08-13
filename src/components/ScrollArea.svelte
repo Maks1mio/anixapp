@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { customScrollbar } from '../actions/customScrollbar';
   import type { Snippet } from 'svelte';
+  import UiV2ScrollArea from './uikit-v2/UiV2ScrollArea.svelte';
 
   interface Props {
     extraClass?: string;
@@ -9,22 +9,13 @@
   }
 
   let { extraClass, scrollId, children }: Props = $props();
-
-  const rootClass = $derived(
-    ['page', 'page--scroll-area', extraClass ?? ''].filter(Boolean).join(' '),
-  );
 </script>
 
-<div class={rootClass} use:customScrollbar>
-  <div id={scrollId || undefined} class="page__scroll" data-page-scroll>
-    {@render children?.()}
-  </div>
-
-  <div class="page__v-track">
-    <div class="page__v-thumb"></div>
-  </div>
-
-  <div class="page__h-track">
-    <div class="page__h-thumb"></div>
-  </div>
-</div>
+<UiV2ScrollArea
+  class={extraClass}
+  viewportClass="page__scroll"
+  {scrollId}
+  axis="y"
+>
+  {@render children?.()}
+</UiV2ScrollArea>

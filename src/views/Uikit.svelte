@@ -1,16 +1,20 @@
 <script lang="ts">
-  import ReleaseCardH from "../components/ReleaseCardH.svelte";
-  import ReleaseCardV from "../components/ReleaseCardV.svelte";
+  import ReleaseCardUiV2 from "../components/ReleaseCardUiV2.svelte";
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import CollectionCard, { type CollectionCardData } from '../components/CollectionCard.svelte';
   import Select from '../components/Select.svelte';
   import Tabs from '../components/Tabs.svelte';
-  import CommentRow from '../components/comments/CommentRow.svelte';
+  import UiV2Tooltip from '../components/uikit-v2/UiV2Tooltip.svelte';
+  import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../components/uikit-v2/UiV2PopupMenu.svelte';
+  import UiV2CommentThread, {
+    type UiV2CommentNode,
+  } from '../components/uikit-v2/UiV2CommentThread.svelte';
+  import { commentDataToUiV2Node } from '../utils/comment-v2';
   import type { SelectOption } from '../components/select';
   import type { CommentData } from '../types/comment';
-  import { onMount } from 'svelte';
   import { navigate } from '../stores/navigation';
   import type { ReleaseCardData } from '../types/release';
+  import { iconMoreHorizontal } from '../components/icons';
 
   const SAMPLE_CARD: ReleaseCardData = {
     id: 2,
@@ -61,9 +65,6 @@
   // Rating slider
   let ratingValue = $state(4.23);
 
-  // Dots menu demo (still vanilla — renderDotsMenu is a helper used by card components)
-  let dotsMenuEl: HTMLElement | undefined = $state();
-
   // Select demo state
   const SELECT_OPTIONS: SelectOption[] = [
     { value: 'api-s.anixsekai.com', label: 'api-s.anixsekai.com' },
@@ -105,60 +106,84 @@
     };
   }
 
-  const COMMENT_THREAD_DEMOS: { label: string; comment: CommentData; nested?: boolean }[] = [
-    { label: 'Короткий (1 строка)', comment: mockComment(101, 'Огонь!') },
-    { label: 'Средний (2–3 строки)', comment: mockComment(102, 'Какая это имба просто огонь ту...') },
+  const COMMENT_THREAD_DEMOS: { label: string; nodes: UiV2CommentNode[]; nested?: boolean }[] = [
+    { label: 'Короткий (1 строка)', nodes: [commentDataToUiV2Node(mockComment(101, 'Огонь!'))] },
+    { label: 'Средний (2–3 строки)', nodes: [commentDataToUiV2Node(mockComment(102, 'Какая это имба просто огонь ту...'))] },
     {
       label: 'Длинный абзац',
-      comment: mockComment(
-        103,
-        'Это один из лучших релизов сезона. Сюжет держит с первой серии, персонажи проработаны, а финал вообще не оставляет равнодушным. Рекомендую всем, кто любит жанр.',
-      ),
+      nodes: [
+        commentDataToUiV2Node(
+          mockComment(
+            103,
+            'Это один из лучших релизов сезона. Сюжет держит с первой серии, персонажи проработаны, а финал вообще не оставляет равнодушным. Рекомендую всем, кто любит жанр.',
+          ),
+        ),
+      ],
     },
     {
       label: 'Очень длинный текст',
-      comment: mockComment(
-        104,
-        'Смотрел на одном дыхании — и это не преувеличение. Первая половина кажется спокойной, но дальше начинается настоящий разворот, который меняет восприятие всего, что было до. Анимация на ключевых сценах на высоте, музыка попадает в настроение идеально. Единственный минус — пару серий середины чуть провисают по темпу, но финальная арка полностью компенсирует.',
-      ),
+      nodes: [
+        commentDataToUiV2Node(
+          mockComment(
+            104,
+            'Смотрел на одном дыхании — и это не преувеличение. Первая половина кажется спокойной, но дальше начинается настоящий разворот, который меняет восприятие всего, что было до. Анимация на ключевых сценах на высоте, музыка попадает в настроение идеально. Единственный минус — пару серий середины чуть провисают по темпу, но финальная арка полностью компенсирует.',
+          ),
+        ),
+      ],
     },
     {
       label: 'С контекстом серии',
-      comment: mockComment(105, 'На этом моменте я понял, что досмотрю до конца.', { postedAtEpisode: 7 }),
+      nodes: [
+        commentDataToUiV2Node(
+          mockComment(105, 'На этом моменте я понял, что досмотрю до конца.', { postedAtEpisode: 7 }),
+        ),
+      ],
     },
     {
       label: 'Изменённый комментарий',
-      comment: mockComment(106, 'Пересмотрел второй раз — оценка только выросла.', { isEdited: true }),
+      nodes: [
+        commentDataToUiV2Node(
+          mockComment(106, 'Пересмотрел второй раз — оценка только выросла.', { isEdited: true }),
+        ),
+      ],
     },
     {
       label: 'Вложенный (nested)',
-      comment: mockComment(107, 'Ответ в ветке — проверка линии на узком аватаре.'),
+      nodes: [
+        commentDataToUiV2Node(mockComment(107, 'Ответ в ветке — проверка линии на узком аватаре.')),
+      ],
       nested: true,
     },
   ];
 
-  onMount(async () => {
-    // Dots menu demo (vanilla helper, still used by ReleaseCardH/V)
-    if (dotsMenuEl) {
-      const { renderDotsMenu } = await import('../components/dots-menu');
-      const { iconHeart } = await import('../components/icons');
-      const menu = renderDotsMenu({
-        entries: [
-          { id: 'favorite', label: 'Добавить в избранное', icon: iconHeart(16, false) },
-          { type: 'divider' },
-          { type: 'label', text: 'СТАТУС' },
-          { id: 'none', label: 'Не в списке' },
-          { id: 'watching', label: 'Смотрю' },
-          { id: 'planned', label: 'В планах' },
-          { id: 'completed', label: 'Просмотрено' },
-          { id: 'dropped', label: 'Брошено' },
-          { id: 'on_hold', label: 'Отложено' },
-        ],
-        onSelect: (id) => console.log('[Dots menu] Выбрано:', id),
-      });
-      dotsMenuEl.appendChild(menu);
-    }
-  });
+  let dotsMenuOpen = $state(false);
+  let dotsMenuX = $state(0);
+  let dotsMenuY = $state(0);
+
+  const dotsMenuItems: UiV2PopupMenuItem[] = [
+    { id: 'favorite', label: 'Добавить в избранное' },
+    {
+      id: 'status',
+      label: 'Статус',
+      dividerBefore: true,
+      children: [
+        { id: 'none', label: 'Не в списке', type: 'radio', checked: true },
+        { id: 'watching', label: 'Смотрю', type: 'radio' },
+        { id: 'planned', label: 'В планах', type: 'radio' },
+        { id: 'completed', label: 'Просмотрено', type: 'radio' },
+        { id: 'dropped', label: 'Брошено', type: 'radio' },
+        { id: 'on_hold', label: 'Отложено', type: 'radio' },
+      ],
+    },
+  ];
+
+  function openDotsDemo(e: MouseEvent) {
+    const btn = e.currentTarget as HTMLButtonElement;
+    const r = btn.getBoundingClientRect();
+    dotsMenuX = r.left + r.width / 2;
+    dotsMenuY = r.bottom + 4;
+    dotsMenuOpen = true;
+  }
 
   function handleNavLink(e: MouseEvent, href: string) {
     if (href.startsWith('/')) {
@@ -171,7 +196,12 @@
 <div class="view view-uikit">
   <header class="uikit-header">
     <h1 class="uikit-title">UI Kit</h1>
-    <p class="uikit-desc">Компоненты и стили приложения AnixApp</p>
+    <p class="uikit-desc">
+      Legacy-витрина. Актуальный кит —
+      <button type="button" class="uikit-link" style="background:none;border:0;padding:0;cursor:pointer;font:inherit" onclick={() => navigate('/uikit-v2')}>
+        UI Kit V2
+      </button>
+    </p>
   </header>
 
   <!-- Colors -->
@@ -252,21 +282,26 @@
 
   <!-- Tooltip -->
   <section class="uikit-section">
-    <h2 class="uikit-section__title">Тултип (кастомный, анимированный)</h2>
+    <h2 class="uikit-section__title">Тултип (UiV2)</h2>
     <p class="uikit-section__desc">Наведи на элемент — появляется подсказка с плавной анимацией</p>
     <div class="uikit-tooltip-demo">
-      <span class="tooltip-trigger uikit-tooltip-trigger" role="button" tabindex="0">
-        Наведи на меня
-        <span class="tooltip tooltip--animated">Обычный анимированный тултип</span>
-      </span>
-      <span class="tooltip-trigger uikit-tooltip-trigger" role="button" tabindex="0">
-        Ещё пример
-        <span class="tooltip tooltip--animated">Оригинал: Jigoku Shoujo<br />Альт: 地獄少女</span>
-      </span>
-      <button type="button" class="btn btn-secondary tooltip-trigger uikit-tooltip-trigger" tabindex="0">
-        Кнопка с тултипом
-        <span class="tooltip tooltip--animated">Подсказка для кнопки</span>
-      </button>
+      <UiV2Tooltip text="Обычный анимированный тултип">
+        <span class="uikit-tooltip-trigger" role="button" tabindex="0">Наведи на меня</span>
+      </UiV2Tooltip>
+      <UiV2Tooltip
+        title="Названия"
+        lines={[
+          { label: 'Оригинал', value: 'Jigoku Shoujo' },
+          { label: 'Альт', value: '地獄少女' },
+        ]}
+      >
+        <span class="uikit-tooltip-trigger" role="button" tabindex="0">Ещё пример</span>
+      </UiV2Tooltip>
+      <UiV2Tooltip text="Подсказка для кнопки">
+        <button type="button" class="btn btn-secondary uikit-tooltip-trigger" tabindex="0">
+          Кнопка с тултипом
+        </button>
+      </UiV2Tooltip>
     </div>
   </section>
 
@@ -285,9 +320,13 @@
 
   <!-- Dots menu -->
   <section class="uikit-section">
-    <h2 class="uikit-section__title">Меню три точки</h2>
-    <p class="uikit-section__desc">Отдельный компонент dots-menu, открывается в body (position: fixed)</p>
-    <div class="uikit-dots-menu-demo" bind:this={dotsMenuEl}></div>
+    <h2 class="uikit-section__title">Меню (UiV2PopupMenu)</h2>
+    <p class="uikit-section__desc">Контекстное меню V2 с подменю статусов</p>
+    <div class="uikit-dots-menu-demo">
+      <button type="button" class="btn btn-secondary" onclick={openDotsDemo}>
+        {@html iconMoreHorizontal(18)} Открыть меню
+      </button>
+    </div>
   </section>
 
   <!-- Links -->
@@ -302,7 +341,7 @@
 
   <!-- Horizontal release card demo -->
   <section class="uikit-section">
-    <h2 class="uikit-section__title">Карточка релиза (каталог)</h2>
+    <h2 class="uikit-section__title">Карточка релиза (каталог, V2)</h2>
     <p class="uikit-section__desc">Горизонтальная карточка с данными из API (grade, poster, episodes)</p>
     <div class="uikit-rating-demo">
       <label class="uikit-rating-demo__control">
@@ -312,17 +351,17 @@
       </label>
     </div>
     <div class="uikit-catalog-cards">
-      <ReleaseCardH data={{ ...SAMPLE_CARD, rating: ratingValue }} />
+      <ReleaseCardUiV2 data={{ ...SAMPLE_CARD, rating: ratingValue }} variant="horizontal" />
     </div>
   </section>
 
   <!-- Mini cards -->
   <section class="uikit-section">
-    <h2 class="uikit-section__title">Карточка мини (сетка)</h2>
+    <h2 class="uikit-section__title">Карточка мини (сетка, V2)</h2>
     <p class="uikit-section__desc">Вертикальная компактная карточка для режима сетки</p>
     <div class="release-cards-grid">
       {#each MINI_SAMPLES as item (item.id)}
-        <ReleaseCardV data={item} />
+        <ReleaseCardUiV2 data={item} variant="vertical" />
       {/each}
     </div>
   </section>
@@ -349,23 +388,19 @@
 
   <!-- Comment thread lines -->
   <section class="uikit-section">
-    <h2 class="uikit-section__title">Комментарии — линия к ответам</h2>
+    <h2 class="uikit-section__title">Комментарии (UiV2)</h2>
     <p class="uikit-section__desc">
-      Разная длина текста, у всех «Показать 67 ответ» — проверка изгиба thread-линии
+      Разная длина текста — проверка thread-линии и футера V2
     </p>
-    <div class="uikit-comments-demo anix-comments__list">
-      {#each COMMENT_THREAD_DEMOS as demo (demo.comment.id)}
+    <div class="uikit-comments-demo">
+      {#each COMMENT_THREAD_DEMOS as demo (demo.nodes[0].id)}
         <div class="uikit-comments-demo__item">
           <p class="uikit-comments-demo__label">{demo.label}</p>
-          <div class="anix-comment-wrap" class:anix-comment-wrap--nested={demo.nested}>
-            <CommentRow
-              comment={demo.comment}
-              nested={demo.nested}
-              canReply={true}
-              canVote={false}
-              onToggleReplies={() => {}}
-            />
-          </div>
+          <UiV2CommentThread
+            nodes={demo.nodes}
+            depth={demo.nested ? 1 : 0}
+            enableInlineReply={false}
+          />
         </div>
       {/each}
     </div>
@@ -381,3 +416,12 @@
     </div>
   </section>
 </div>
+
+<UiV2PopupMenu
+  open={dotsMenuOpen}
+  x={dotsMenuX}
+  y={dotsMenuY}
+  items={dotsMenuItems}
+  onClose={() => { dotsMenuOpen = false; }}
+  onSelect={(id) => console.log('[UiV2PopupMenu]', id)}
+/>

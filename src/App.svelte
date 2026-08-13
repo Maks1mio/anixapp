@@ -25,8 +25,7 @@
   import { initTheme, applyThemeById } from './services/themes';
   import { initAnixbackEndpoint } from './services/anixback-endpoint';
   import { getCurrentRoomId, getCurrentRoomCode, getCurrentParticipants, pushCommand, voteOnProposal, notifyLobbyBufferingStart } from './services/lobby-state';
-  import { initTooltipPlacement } from './utils/tooltip-place';
-  import { initBodyTooltip } from './utils/body-tooltip';
+  import { initTooltipSystem } from './utils/body-tooltip';
   import { stepZoom } from './utils/zoom';
   import {
     clearDiscordContext,
@@ -225,8 +224,7 @@
   }
 
   onMount(() => {
-    initTooltipPlacement();
-    initBodyTooltip();
+    initTooltipSystem();
     void initAnixbackEndpoint();
 
     if (!window.anixApi) {
@@ -672,4 +670,4 @@
 {/if}
 
 <Toast />
-<div id="ui-tooltip-root"></div>
+<div id="ui-tooltip-root" aria-hidden="true"></div>

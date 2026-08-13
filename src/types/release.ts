@@ -17,8 +17,21 @@ export interface ReleaseCardData {
   /** Жанры через запятую */
   genres?: string;
   status?: string;
+  /** ReleaseStatus id: 1 finished, 2 airing, 3 announced */
+  statusId?: number;
   studio?: string;
   category?: string;
+  /** Источник (манга, ранобэ…) */
+  source?: string;
+  author?: string;
+  director?: string;
+  /** Длительность серии в минутах */
+  duration?: number;
+  /** 1 зима … 4 осень */
+  season?: number;
+  /** unix sec — для сезона анонса */
+  airedOnDate?: number;
+  favoritesCount?: number;
   releaseDate?: string;
   /** В избранном (is_favorite из API) */
   isFavorite?: boolean;

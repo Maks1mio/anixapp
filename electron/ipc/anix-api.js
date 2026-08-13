@@ -874,6 +874,21 @@ loggedHandle('anix:searchReleases', async (_, query, page = 0, searchBy = 0) => 
   }
 });
 
+loggedHandle('anix:searchProfileList', async (_, status, query, page = 0, searchBy = 0) => {
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.search.profileListSearch(status, page, {
+      query,
+      page,
+      searchBy,
+    });
+    logger.info('search', 'profileList', { status, query, page, searchBy, total: data?.total_count ?? data?.total });
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'searchProfileList');
+  }
+});
+
 ipcMain.handle('anix:searchProfiles', async (_, query, page = 0) => {
   try {
     const client = getAnixart();

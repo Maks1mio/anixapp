@@ -2,22 +2,26 @@
   import {
     iconBookOpen,
     iconCalendar,
-    iconCheck,
-    iconClipboardList,
-    iconCopy,
     iconFilm,
     iconFlag,
     iconMoreHorizontal,
     iconPalette,
-    iconShare,
     iconStar,
     iconTags,
     iconTv,
   } from '../icons';
   import UiV2RoundButton from './UiV2RoundButton.svelte';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from './UiV2PopupMenu.svelte';
-  import { parseAltTitles } from '../../utils/titleInfo';
   import { showToast } from '../../stores/toast';
+  import {
+    buildReleaseDefaultMenuItems,
+    copyTextToClipboard,
+    releasePublicUrl,
+    type ReleaseMenuListStatus,
+  } from '../../utils/release-menu-v2';
+  import { parseAltTitles } from '../../utils/titleInfo';
+  import { formatHistoryViewTime } from '../../utils/historyFormat';
+  import { isReleaseAnnounce } from '../../utils/release-card';
 
   export type UiV2AnimeCardVariant = 'vertical' | 'horizontal';
 
@@ -30,20 +34,7 @@
     | 'season'
     | 'genre';
 
-  export type UiV2AnimeCardListStatus =
-    | 'watching'
-    | 'planned'
-    | 'completed'
-    | 'dropped'
-    | 'on_hold';
-
-  const LIST_STATUSES: { id: UiV2AnimeCardListStatus; label: string }[] = [
-    { id: 'watching', label: 'Смотрю' },
-    { id: 'planned', label: 'В планах' },
-    { id: 'completed', label: 'Просмотрено' },
-    { id: 'dropped', label: 'Брошено' },
-    { id: 'on_hold', label: 'Отложено' },
-  ];
+  export type UiV2AnimeCardListStatus = ReleaseMenuListStatus;
 
   const STATUS_BADGE: Record<UiV2AnimeCardListStatus, { label: string; tone: string }> = {
     watching: { label: 'смотрю', tone: 'watching' },
@@ -57,6 +48,8 @@
     variant?: UiV2AnimeCardVariant;
     title: string;
     posterUrl?: string | null;
+    /** id релиза — для «Копировать ссылку» */
+    releaseId?: number | string | null;
     /** Число серий или готовая строка («6 эп.») */
     episodes?: number | string | null;
     year?: number | string | null;
@@ -67,6 +60,8 @@
     description?: string | null;
     /** Доп. факты для широкой горизонтальной карточки */
     status?: string | null;
+    /** ReleaseStatus id: 3 = анонс */
+    statusId?: number | null;
     studio?: string | null;
     source?: string | null;
     author?: string | null;
@@ -83,9 +78,21 @@
     airedOnDate?: number | null;
     isFavorite?: boolean;
     listStatus?: UiV2AnimeCardListStatus | null;
+    /** Личная оценка 1–5 — для вкладки «Оценки» */
+    myVote?: number | null;
+    /** Последний просмотр — для вкладки «История» */
+    historyView?: {
+      episodeLabel?: string | null;
+      dubberLabel?: string | null;
+      viewedAt?: number | null;
+    } | null;
     moreLabel?: string;
-    /** Пункты меню «⋯» / ПКМ. Если не заданы — кнопки меню нет. */
+    /** Показывать ⋯ / ПКМ. По умолчанию да. */
+    showMenu?: boolean;
+    /** Кастомные пункты меню. Если не заданы — стандартное меню. */
     menuItems?: UiV2PopupMenuItem[];
+    /** Доп. пункты перед стандартным меню (например «Удалить из истории») */
+    prependMenuItems?: UiV2PopupMenuItem[];
     class?: string;
     onclick?: (e: MouseEvent) => void;
     onMore?: (e: MouseEvent) => void;
@@ -100,6 +107,7 @@
     variant = 'vertical',
     title,
     posterUrl = null,
+    releaseId = null,
     episodes = null,
     year = null,
     rating = null,
@@ -108,6 +116,7 @@
     genres = [],
     description = null,
     status = null,
+    statusId = null,
     studio = null,
     source = null,
     author = null,
@@ -121,8 +130,12 @@
     airedOnDate = null,
     isFavorite = false,
     listStatus = null,
+    myVote = null,
+    historyView = null,
     moreLabel = 'Ещё',
+    showMenu = true,
     menuItems,
+    prependMenuItems,
     class: className = '',
     onclick,
     onMore,
@@ -156,120 +169,26 @@
     }),
   );
 
-  const titleCopyItems = $derived.by((): UiV2PopupMenuItem[] => {
-    const items: UiV2PopupMenuItem[] = [];
-    if (title.trim()) {
-      items.push({
-        id: 'titles-label-ru',
-        label: 'Название',
-        type: 'label',
-      });
-      items.push({
-        id: 'copy-title-ru',
-        label: copiedTitleId === 'copy-title-ru' ? 'Скопировано' : title.trim(),
-        icon: copiedTitleId === 'copy-title-ru' ? iconCheck(16) : iconCopy(16),
-        keepOpen: true,
-      });
-    }
-    if (titleOriginalClean) {
-      items.push({
-        id: 'titles-label-orig',
-        label: 'Оригинал',
-        type: 'label',
-        dividerBefore: true,
-      });
-      items.push({
-        id: 'copy-title-orig',
-        label: copiedTitleId === 'copy-title-orig' ? 'Скопировано' : titleOriginalClean,
-        icon: copiedTitleId === 'copy-title-orig' ? iconCheck(16) : iconCopy(16),
-        keepOpen: true,
-      });
-    }
-    if (altTitles.length) {
-      items.push({
-        id: 'titles-label-alt',
-        label: 'Альтернативные',
-        type: 'label',
-        dividerBefore: true,
-      });
-      for (let i = 0; i < altTitles.length; i++) {
-        const id = `copy-title-alt-${i}`;
-        items.push({
-          id,
-          label: copiedTitleId === id ? 'Скопировано' : altTitles[i],
-          icon: copiedTitleId === id ? iconCheck(16) : iconCopy(16),
-          keepOpen: true,
-        });
-      }
-    }
-    return items;
-  });
-
-  const statusLabel = $derived(
-    localListStatus
-      ? (LIST_STATUSES.find((s) => s.id === localListStatus)?.label ?? 'Не смотрю')
-      : 'Не смотрю',
+  const defaultMenuItems = $derived(
+    buildReleaseDefaultMenuItems({
+      isFavorite: localFavorite,
+      listStatus: localListStatus,
+      releaseId,
+      title,
+      titleOriginal,
+      titleAlt,
+      copiedId: copiedTitleId,
+    }),
   );
 
   const posterStatusBadge = $derived(
     localListStatus ? STATUS_BADGE[localListStatus] : null,
   );
 
-  const defaultMenuItems = $derived.by((): UiV2PopupMenuItem[] => {
-    const items: UiV2PopupMenuItem[] = [
-      {
-        id: 'favorite',
-        label: localFavorite ? 'Убрать из избранного' : 'Добавить в избранное',
-        icon: iconFlag(18, localFavorite),
-        keepOpen: true,
-      },
-      {
-        id: 'status',
-        label: statusLabel,
-        icon: iconClipboardList(18),
-        dividerBefore: true,
-        children: [
-          {
-            id: 'status-none',
-            label: 'Не смотрю',
-            type: 'radio',
-            checked: localListStatus == null,
-            keepOpen: true,
-          },
-          ...LIST_STATUSES.map((s) => ({
-            id: `status-${s.id}`,
-            label: s.label,
-            type: 'radio' as const,
-            checked: localListStatus === s.id,
-            keepOpen: true,
-          })),
-        ],
-      },
-      {
-        id: 'share',
-        label: 'Поделиться',
-        icon: iconShare(18),
-        dividerBefore: true,
-        children: [
-          { id: 'copy-link', label: 'Копировать ссылку', icon: iconCopy(16), keepOpen: true },
-          { id: 'copy-title', label: 'Копировать название', icon: iconCopy(16), keepOpen: true },
-        ],
-      },
-    ];
-    if (titleCopyItems.length) {
-      items.push({
-        id: 'titles',
-        label: 'Названия',
-        icon: iconCopy(18),
-        children: titleCopyItems,
-        submenuWide: true,
-      });
-    }
-    return items;
-  });
-
   const resolvedMenu = $derived(
-    menuItems ?? (onMore || onMenuSelect || onFavoriteChange || onListStatusChange ? defaultMenuItems : []),
+    !showMenu
+      ? []
+      : (menuItems ?? [...(prependMenuItems ?? []), ...defaultMenuItems]),
   );
   const hasMenu = $derived(resolvedMenu.length > 0);
 
@@ -328,7 +247,7 @@
     return `${t}...`;
   }
 
-  const isAnnounce = $derived(/^анонс$/i.test(String(status ?? '').trim()));
+  const isAnnounce = $derived(isReleaseAnnounce(status, statusId));
 
   const resolvedSeason = $derived.by(() => {
     if (season != null && season >= 1 && season <= 4) return season;
@@ -352,13 +271,29 @@
   const rate = $derived(ratingLabel(rating));
   const dur = $derived(durationLabel(duration));
   const descriptionText = $derived(description ? withEllipsis(description) : null);
-
-  const verticalMetaLeft = $derived(
-    [ep, year != null && year !== '' ? String(year) : null].filter(Boolean) as string[],
+  const myVoteValue = $derived(
+    typeof myVote === 'number' && myVote > 0 ? Math.min(5, Math.round(myVote)) : null,
   );
 
-  const horizontalMeta = $derived(
-    [
+  const historyMetaParts = $derived.by((): string[] => {
+    if (!historyView) return [];
+    const parts: string[] = [];
+    if (historyView.episodeLabel?.trim()) parts.push(historyView.episodeLabel.trim());
+    if (historyView.dubberLabel?.trim()) parts.push(historyView.dubberLabel.trim());
+    if (typeof historyView.viewedAt === 'number' && historyView.viewedAt > 0) {
+      parts.push(formatHistoryViewTime(historyView.viewedAt));
+    }
+    return parts;
+  });
+
+  const verticalMetaLeft = $derived.by((): string[] => {
+    if (historyMetaParts.length) return historyMetaParts;
+    return [ep, year != null && year !== '' ? String(year) : null].filter(Boolean) as string[];
+  });
+
+  const horizontalMeta = $derived.by((): string => {
+    if (historyMetaParts.length) return historyMetaParts.join(' · ');
+    return [
       ep,
       year != null && year !== '' ? String(year) : null,
       country ? String(country) : null,
@@ -366,8 +301,10 @@
       dur,
     ]
       .filter(Boolean)
-      .join(' · '),
-  );
+      .join(' · ');
+  });
+
+  const showSiteRating = $derived(!historyMetaParts.length && myVoteValue == null);
 
   type MetaLink = {
     kind: UiV2AnimeCardMetaKind;
@@ -424,12 +361,7 @@
   }
 
   async function copyText(text: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch {
-      return false;
-    }
+    return copyTextToClipboard(text);
   }
 
   function markCopied(id: string) {
@@ -462,6 +394,18 @@
       const next = statusMatch[1] as UiV2AnimeCardListStatus;
       localListStatus = next;
       onListStatusChange?.(next);
+      onMenuSelect?.(id);
+      return;
+    }
+
+    if (id === 'copy-link') {
+      if (releaseId != null && String(releaseId).trim() !== '') {
+        const ok = await copyText(releasePublicUrl(releaseId));
+        if (ok) {
+          markCopied('copy-link');
+          showToast('Ссылка скопирована');
+        }
+      }
       onMenuSelect?.(id);
       return;
     }
@@ -565,13 +509,28 @@
             <span class="uiv2-anime-card__favorite" aria-label="В избранном">{@html iconFlag(12, true)}</span>
           {/if}
         </p>
-      {:else if verticalMetaLeft.length || rate || localFavorite}
+      {:else if verticalMetaLeft.length || showSiteRating || myVoteValue != null || localFavorite}
         <p class="uiv2-anime-card__meta">
           {#each verticalMetaLeft as part, i (part)}
             {#if i > 0}<span class="uiv2-anime-card__meta-sep" aria-hidden="true">·</span>{/if}
             <span class="uiv2-anime-card__meta-text">{part}</span>
           {/each}
-          {#if rate}
+          {#if myVoteValue != null}
+            {#if verticalMetaLeft.length}
+              <span class="uiv2-anime-card__meta-sep" aria-hidden="true">·</span>
+            {/if}
+            <span class="uiv2-anime-card__my-vote" title="Моя оценка" aria-label="Оценка {myVoteValue} из 5">
+              <span class="uiv2-anime-card__my-vote-stars">
+                {#each [1, 2, 3, 4, 5] as n (n)}
+                  <span
+                    class="uiv2-anime-card__my-vote-star"
+                    class:uiv2-anime-card__my-vote-star--on={n <= myVoteValue}
+                    aria-hidden="true"
+                  >{@html iconStar(11)}</span>
+                {/each}
+              </span>
+            </span>
+          {:else if showSiteRating && rate}
             {#if verticalMetaLeft.length}
               <span class="uiv2-anime-card__meta-sep" aria-hidden="true">·</span>
             {/if}
@@ -651,7 +610,19 @@
             <span class="uiv2-anime-card__favorite uiv2-anime-card__favorite--h" aria-label="В избранном">{@html iconFlag(16, true)}</span>
           {/if}
         {:else}
-          {#if rate}
+          {#if myVoteValue != null}
+            <span class="uiv2-anime-card__my-vote uiv2-anime-card__my-vote--h" title="Моя оценка" aria-label="Оценка {myVoteValue} из 5">
+              <span class="uiv2-anime-card__my-vote-stars">
+                {#each [1, 2, 3, 4, 5] as n (n)}
+                  <span
+                    class="uiv2-anime-card__my-vote-star"
+                    class:uiv2-anime-card__my-vote-star--on={n <= myVoteValue}
+                    aria-hidden="true"
+                  >{@html iconStar(12)}</span>
+                {/each}
+              </span>
+            </span>
+          {:else if showSiteRating && rate}
             <span class="uiv2-anime-card__score">
               <span class="uiv2-anime-card__score-star" aria-hidden="true">{@html iconStar(12)}</span>
               <span class="uiv2-anime-card__score-value">{rate}</span>

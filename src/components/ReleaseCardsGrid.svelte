@@ -2,8 +2,7 @@
   import { onMount, onDestroy, untrack } from 'svelte';
   import { getCardLayout } from '../prefs';
   import type { ReleaseCardData } from '../types/release';
-  import ReleaseCardV from './ReleaseCardV.svelte';
-  import ReleaseCardH from './ReleaseCardH.svelte';
+  import ReleaseCardUiV2 from './ReleaseCardUiV2.svelte';
 
   export type GridLayoutMode = 'auto' | 'wide' | 'mini';
 
@@ -57,16 +56,17 @@
       className,
     ]
       .filter(Boolean)
-      .join(' ')
+      .join(' '),
   );
 </script>
 
 <div class={rootClass}>
   {#each items as item (item.id)}
-    {#if effectiveLayout === 'mini'}
-      <ReleaseCardV data={item} {variant} {onDeleteFromHistory} />
-    {:else}
-      <ReleaseCardH data={item} {variant} {onDeleteFromHistory} />
-    {/if}
+    <ReleaseCardUiV2
+      data={item}
+      variant={effectiveLayout === 'mini' ? 'vertical' : 'horizontal'}
+      cardVariant={variant}
+      {onDeleteFromHistory}
+    />
   {/each}
 </div>

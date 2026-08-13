@@ -105,6 +105,42 @@
 }
 
 // ── Enhanced Select (search in field, multi, year range) ─────────────────────
+.custom-select--enhanced.uiv2-select {
+  .custom-select__trigger--field {
+    cursor: default;
+    min-height: 2.75rem;
+    padding: 0.45rem 0.65rem 0.45rem 0.85rem;
+    border: 1px solid color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 42%, transparent);
+    border-radius: 10px;
+    background: transparent;
+    box-shadow: none;
+    transition:
+      border-color 0.22s ease,
+      box-shadow 0.22s ease,
+      background 0.22s ease;
+
+    &:hover {
+      border-color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 62%, transparent);
+      background: var(--uiv2-hover-subtle, color-mix(in srgb, #{$color-text} 4%, transparent));
+    }
+
+    &.custom-select__trigger--open,
+    &.uiv2-select--open {
+      border-color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 82%, transparent);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 12%, transparent);
+      background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 3%, transparent);
+    }
+  }
+
+  .custom-select__trigger-label {
+    font-size: 0.92rem;
+  }
+
+  .custom-select__trigger-chevron {
+    color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 55%, transparent);
+  }
+}
+
 .custom-select__trigger--field {
   cursor: default;
   min-height: 2.5rem;
@@ -201,6 +237,7 @@
   flex: 1;
   min-height: 0;
 
+  .uiv2-scroll-area__viewport,
   .page__scroll {
     padding: 0.15rem 0;
   }

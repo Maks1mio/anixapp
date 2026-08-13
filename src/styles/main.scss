@@ -11,12 +11,8 @@
 @use 'profile';
 @use 'profile-v2';
 @use 'select';
-@use 'dots-menu';
-@use 'release-card-h';
-@use 'release-card-v';
 @use 'collection-card';
 @use 'collection-page';
-@use 'tooltip';
 @use 'title-info-popover';
 @use 'user-avatar';
 @use 'search';
@@ -93,4 +89,37 @@ img {
   max-width: 100%;
   height: auto;
   display: block;
+}
+
+/* Global body tooltip (#ui-tooltip-root) — must stay fixed or text dumps into page flow */
+#ui-tooltip-root {
+  position: fixed;
+  z-index: 10003;
+  top: 0;
+  left: 0;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--color-text, #{$color-text});
+  background: var(--color-surface, #{$color-surface});
+  border: 1px solid var(--color-border, #{$color-border});
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(var(--tip-from-y, -4px));
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0s linear 0.15s;
+}
+
+#ui-tooltip-root.ui-tooltip--visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0s linear 0s;
 }

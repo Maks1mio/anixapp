@@ -20,6 +20,8 @@
     completedCount: number;
     holdOnCount: number;
     droppedCount: number;
+    /** false для анонсов — нельзя ставить оценку */
+    canVote?: boolean;
     onRefresh: () => void | Promise<void>;
   }
 
@@ -39,6 +41,7 @@
     completedCount,
     holdOnCount,
     droppedCount,
+    canVote = true,
     onRefresh,
   }: Props = $props();
 
@@ -50,7 +53,7 @@
   const totalList = $derived(watchingCount + planCount + completedCount + holdOnCount + droppedCount);
   const lp = (n: number) => totalList > 0 ? (n / totalList) * 100 : 0;
   const hasYourVote = $derived(yourVote > 0);
-  const showPicker = $derived(!hasYourVote || picking);
+  const showPicker = $derived(canVote && (!hasYourVote || picking));
   const displayStars = $derived(showPicker ? (hoverStar || 0) : yourVote);
 
   $effect(() => {
@@ -67,6 +70,7 @@
   });
 
   async function submitVote(stars: number) {
+    if (!canVote) return;
     if (!requireAuth()) return;
     if (!window.anixApi || busy || stars < 1 || stars > 5) return;
     busy = true;
@@ -82,6 +86,7 @@
   }
 
   async function startChangeVote() {
+    if (!canVote) return;
     if (!requireAuth()) return;
     if (!window.anixApi || busy || !hasYourVote) return;
     busy = true;
@@ -111,7 +116,11 @@
         {/if}
       </div>
 
-      <div class="release-page__rating-vote" class:release-page__rating-vote--busy={busy}>
+      <div
+        class="release-page__rating-vote"
+        class:release-page__rating-vote--busy={busy}
+        class:release-page__rating-vote--disabled={!canVote}
+      >
         <div
           class="release-page__rating-vote-avatar{profileAvatar ? ' release-page__rating-vote-avatar--img' : ''}"
           style={profileAvatar ? `background-image:url(${profileAvatar})` : ''}
@@ -119,7 +128,16 @@
         ></div>
 
         <div class="release-page__rating-vote-body">
-          {#if showPicker}
+          {#if !canVote}
+            <div class="release-page__rating-vote-stars" aria-hidden="true">
+              {#each [1, 2, 3, 4, 5] as star}
+                <span class="release-page__rating-vote-star">
+                  {@html iconStar(18, false)}
+                </span>
+              {/each}
+            </div>
+            <span class="release-page__rating-vote-hint">Оценка недоступна для анонса</span>
+          {:else if showPicker}
             <div
               class="release-page__rating-stars"
               role="group"

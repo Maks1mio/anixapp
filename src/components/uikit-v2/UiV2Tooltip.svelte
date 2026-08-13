@@ -12,7 +12,7 @@
     value: string;
   };
 
-  type Placement = 'auto' | 'top' | 'bottom';
+  type Placement = 'auto' | 'top' | 'bottom' | 'left' | 'right';
 
   type Props = {
     /** Однострочный текст (простой режим) */
@@ -37,6 +37,11 @@
     showDelay?: number;
     hideDelay?: number;
     disabled?: boolean;
+    /**
+     * Интерактивный tip: pointer-events + не закрывается при наведении на tip.
+     * Нужен для popover с кнопками (TitleInfoTrigger и т.п.).
+     */
+    interactive?: boolean;
     class?: string;
   };
 
@@ -54,6 +59,7 @@
     showDelay = 120,
     hideDelay = 60,
     disabled = false,
+    interactive = false,
     class: className = '',
   }: Props = $props();
 
@@ -65,6 +71,7 @@
   let tipEl = $state<HTMLElement | null>(null);
   let visible = $state(false);
   let below = $state(true);
+  let side: 'top' | 'bottom' | 'left' | 'right' = $state('bottom');
   let tipLeft = $state(0);
   let tipTop = $state(0);
   let showTimer: ReturnType<typeof setTimeout> | null = null;
@@ -93,15 +100,33 @@
     const tw = tipRect.width || tipEl.offsetWidth;
     const th = tipRect.height || tipEl.offsetHeight;
     const anchorCenterX = anchor.left + anchor.width / 2;
+    const anchorCenterY = anchor.top + anchor.height / 2;
+
+    if (placement === 'right' || placement === 'left') {
+      side = placement;
+      tipTop = Math.max(
+        EDGE,
+        Math.min(anchorCenterY - th / 2, window.innerHeight - EDGE - th),
+      );
+      tipLeft =
+        placement === 'right'
+          ? Math.min(anchor.right + GAP, window.innerWidth - EDGE - tw)
+          : Math.max(EDGE, anchor.left - GAP - tw);
+      below = false;
+      return;
+    }
 
     if (placement === 'bottom') {
       below = true;
+      side = 'bottom';
     } else if (placement === 'top') {
       below = false;
+      side = 'top';
     } else {
       const spaceAbove = anchor.top;
       const spaceBelow = window.innerHeight - anchor.bottom;
       below = spaceBelow >= spaceAbove;
+      side = below ? 'bottom' : 'top';
     }
 
     tipTop = below ? anchor.bottom + GAP : anchor.top - th - GAP;
@@ -137,6 +162,19 @@
   function onTriggerLeave(e: FocusEvent | MouseEvent) {
     const related = (e as MouseEvent).relatedTarget as Node | null;
     if (related && triggerEl?.contains(related)) return;
+    if (interactive && related && tipEl?.contains(related)) return;
+    scheduleHide();
+  }
+
+  function onTipEnter() {
+    if (!interactive) return;
+    clearTimers();
+  }
+
+  function onTipLeave(e: MouseEvent) {
+    if (!interactive) return;
+    const related = e.relatedTarget as Node | null;
+    if (related && (triggerEl?.contains(related) || tipEl?.contains(related))) return;
     scheduleHide();
   }
 
@@ -173,11 +211,16 @@
     id={tipId}
     class="uiv2-tooltip"
     class:uiv2-tooltip--rich={hasStructured && !content}
-    role="tooltip"
+    class:uiv2-tooltip--side={side === 'left' || side === 'right'}
+    class:uiv2-tooltip--interactive={interactive}
+    role={interactive ? 'dialog' : 'tooltip'}
+    data-placement={side}
     style:left="{tipLeft}px"
     style:top="{tipTop}px"
     use:portal
     transition:scale={{ duration: 140, start: 0.97, easing: cubicOut }}
+    onmouseenter={onTipEnter}
+    onmouseleave={onTipLeave}
   >
     {#if content}
       <div class="uiv2-tooltip__content">

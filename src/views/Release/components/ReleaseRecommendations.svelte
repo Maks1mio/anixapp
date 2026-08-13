@@ -1,7 +1,7 @@
 <script lang="ts">
-  import RecommendedReleaseCard from '../../../components/RecommendedReleaseCard.svelte';
+  import ReleaseCardUiV2 from '../../../components/ReleaseCardUiV2.svelte';
+  import UiV2ReleaseCarousel from '../../../components/uikit-v2/UiV2ReleaseCarousel.svelte';
   import type { ReleaseCardData } from '../../../types/release';
-  import ReleaseCarouselNav from './ReleaseCarouselNav.svelte';
 
   interface Props {
     items: ReleaseCardData[];
@@ -79,11 +79,13 @@
     <div class="release-page__recommended-panel" bind:this={panelEl}>
       <h2 class="release-page__block-title">Рекомендуем также</h2>
 
-      <ReleaseCarouselNav measureKey={items.length}>
+      <UiV2ReleaseCarousel measureKey={items.length}>
         {#each items as item (item.id)}
-          <RecommendedReleaseCard data={item} />
+          <div class="uiv2-carousel__item">
+            <ReleaseCardUiV2 data={item} variant="vertical" />
+          </div>
         {/each}
-      </ReleaseCarouselNav>
+      </UiV2ReleaseCarousel>
     </div>
   </div>
 {/if}

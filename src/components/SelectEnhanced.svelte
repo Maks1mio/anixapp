@@ -313,17 +313,18 @@
   });
 </script>
 
-<div class="custom-select custom-select--enhanced{disabled ? ' custom-select--disabled' : ''}">
+<div class="custom-select custom-select--enhanced uiv2-select{disabled ? ' custom-select--disabled uiv2-select--disabled' : ''}">
   {#if label}
-    <span class="custom-select__label">{label}</span>
+    <span class="custom-select__label uiv2-select__label">{label}</span>
   {/if}
 
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     bind:this={triggerEl}
-    class="custom-select__trigger custom-select__trigger--field"
+    class="custom-select__trigger custom-select__trigger--field uiv2-select__field"
     class:custom-select__trigger--open={isOpen}
+    class:uiv2-select--open={isOpen}
     aria-expanded={isOpen ? 'true' : 'false'}
     onclick={(e) => {
       const t = e.target as HTMLElement;

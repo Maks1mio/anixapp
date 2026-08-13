@@ -109,7 +109,8 @@
   --page-scroll-padding: 0;
 }
 
-.search-page__suggest-scroll .page__scroll {
+.search-page__suggest-scroll .page__scroll,
+.search-page__suggest-scroll .uiv2-scroll-area__viewport {
   max-height: 14rem;
 }
 

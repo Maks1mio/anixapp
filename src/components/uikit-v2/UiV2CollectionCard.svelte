@@ -1,16 +1,17 @@
 <script lang="ts">
   import {
+    iconCheck,
     iconCopy,
     iconFlag,
     iconFilm,
     iconLock,
     iconMessageCircle,
     iconMoreHorizontal,
-    iconShare,
     iconTrash2,
   } from '../icons';
   import UiV2RoundButton from './UiV2RoundButton.svelte';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from './UiV2PopupMenu.svelte';
+  import { showToast } from '../../stores/toast';
 
   export type UiV2CollectionCardData = {
     id: number | string;
@@ -29,10 +30,14 @@
     /** grid — текст под обложкой; cover — заголовок на обложке */
     variant?: 'grid' | 'cover';
     moreLabel?: string;
+    /** Показывать ⋯ / ПКМ. По умолчанию да. */
+    showMenu?: boolean;
     menuItems?: UiV2PopupMenuItem[];
     onclick?: (data: UiV2CollectionCardData) => void;
     onMore?: (e: MouseEvent) => void;
     onMenuSelect?: (id: string) => void;
+    onFavoriteChange?: (next: boolean) => void;
+    onHide?: () => void;
     class?: string;
   };
 
@@ -40,10 +45,13 @@
     data,
     variant = 'cover',
     moreLabel = 'Ещё',
+    showMenu = true,
     menuItems,
     onclick,
     onMore,
     onMenuSelect,
+    onFavoriteChange,
+    onHide,
     class: className = '',
   }: Props = $props();
 
@@ -52,41 +60,49 @@
   let menuY = $state(0);
   let localFavorite = $state(false);
   let localFavoritesCount = $state(0);
+  let copiedId = $state<string | null>(null);
+  let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
   $effect(() => {
     localFavorite = !!data.isFavorite;
     localFavoritesCount = typeof data.favoritesCount === 'number' ? data.favoritesCount : 0;
   });
 
-  const defaultMenuItems = $derived.by((): UiV2PopupMenuItem[] => [
-    {
-      id: 'favorite',
-      label: localFavorite ? 'Убрать из избранного' : 'Добавить в избранное',
-      icon: iconFlag(18, localFavorite),
-      keepOpen: true,
-    },
-    {
-      id: 'share',
-      label: 'Поделиться',
-      icon: iconShare(18),
-      dividerBefore: true,
-      children: [
-        { id: 'copy-link', label: 'Копировать ссылку', icon: iconCopy(16), keepOpen: true },
-        { id: 'copy-title', label: 'Копировать название', icon: iconCopy(16), keepOpen: true },
-      ],
-    },
-    {
-      id: 'remove',
-      label: 'Скрыть',
-      icon: iconTrash2(18),
-      danger: true,
-      dividerBefore: true,
-    },
-  ]);
+  const defaultMenuItems = $derived.by((): UiV2PopupMenuItem[] => {
+    const items: UiV2PopupMenuItem[] = [
+      {
+        id: 'favorite',
+        label: localFavorite ? 'Убрать из избранного' : 'Добавить в избранное',
+        icon: iconFlag(18, localFavorite),
+        keepOpen: true,
+      },
+      {
+        id: 'copy-link',
+        label: copiedId === 'copy-link' ? 'Скопировано' : 'Копировать ссылку',
+        icon: copiedId === 'copy-link' ? iconCheck(18) : iconCopy(18),
+        dividerBefore: true,
+        keepOpen: true,
+      },
+      {
+        id: 'copy-title',
+        label: copiedId === 'copy-title' ? 'Скопировано' : 'Копировать название',
+        icon: copiedId === 'copy-title' ? iconCheck(18) : iconCopy(18),
+        keepOpen: true,
+      },
+    ];
+    if (onHide) {
+      items.push({
+        id: 'remove',
+        label: 'Скрыть',
+        icon: iconTrash2(18),
+        danger: true,
+        dividerBefore: true,
+      });
+    }
+    return items;
+  });
 
-  const resolvedMenu = $derived(
-    menuItems ?? (onMore || onMenuSelect ? defaultMenuItems : []),
-  );
+  const resolvedMenu = $derived(!showMenu ? [] : (menuItems ?? defaultMenuItems));
   const hasMenu = $derived(resolvedMenu.length > 0);
 
   const showFavoritesMeta = $derived(
@@ -152,11 +168,56 @@
     }
   }
 
-  function handleMenuSelect(id: string) {
+  async function copyText(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function markCopied(id: string) {
+    copiedId = id;
+    if (copyTimer) clearTimeout(copyTimer);
+    copyTimer = setTimeout(() => {
+      if (copiedId === id) copiedId = null;
+      copyTimer = null;
+    }, 1400);
+  }
+
+  async function handleMenuSelect(id: string) {
     if (id === 'favorite') {
       const next = !localFavorite;
       localFavorite = next;
       localFavoritesCount = Math.max(0, localFavoritesCount + (next ? 1 : -1));
+      onFavoriteChange?.(next);
+      onMenuSelect?.(id);
+      return;
+    }
+    if (id === 'copy-link') {
+      const url = `https://anixart-app.com/collection/${data.id}`;
+      const ok = await copyText(url);
+      if (ok) {
+        markCopied('copy-link');
+        showToast('Ссылка скопирована');
+      }
+      onMenuSelect?.(id);
+      return;
+    }
+    if (id === 'copy-title') {
+      const ok = await copyText(data.title.trim());
+      if (ok) {
+        markCopied('copy-title');
+        showToast('Название скопировано');
+      }
+      onMenuSelect?.(id);
+      return;
+    }
+    if (id === 'remove') {
+      onHide?.();
+      onMenuSelect?.(id);
+      return;
     }
     onMenuSelect?.(id);
   }

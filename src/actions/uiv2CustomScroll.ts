@@ -17,7 +17,6 @@ const DEFAULT_VIEWPORT = '.uiv2-scroll-area__viewport, [data-uiv2-scroll]';
 const SCROLLBAR_PROXIMITY = 36;
 const THUMB_MIN = 20;
 const SCROLLBAR_SHOW_DURATION = 1200;
-const TRACK_CLICK_SCROLL_DURATION = 220;
 
 function resolveViewport(root: HTMLElement, selector: string): HTMLElement | null {
   return root.querySelector<HTMLElement>(selector);
@@ -50,7 +49,6 @@ export function uiv2CustomScroll(
   let dragAxis: 'v' | 'h' | null = null;
   let dragGrabOffsetRatio = 0;
   let dragThumbEl: HTMLElement | null = null;
-  let smoothScrollRaf = 0;
 
   function axisAllowsV() {
     return axis === 'y' || axis === 'both';
@@ -159,36 +157,6 @@ export function uiv2CustomScroll(
     document.body.style.userSelect = on ? 'none' : '';
   }
 
-  function cancelSmoothScroll() {
-    if (smoothScrollRaf) {
-      cancelAnimationFrame(smoothScrollRaf);
-      smoothScrollRaf = 0;
-    }
-  }
-
-  function smoothScrollTo(axisDir: 'v' | 'h', target: number) {
-    if (!scrollEl) return;
-    cancelSmoothScroll();
-    const prop = axisDir === 'v' ? 'scrollTop' : 'scrollLeft';
-    const start = scrollEl[prop];
-    const delta = target - start;
-    if (Math.abs(delta) < 1) return;
-    const startTime = performance.now();
-    const tick = (now: number) => {
-      if (!scrollEl) return;
-      const t = Math.min(1, (now - startTime) / TRACK_CLICK_SCROLL_DURATION);
-      const eased = 1 - (1 - t) ** 3;
-      scrollEl[prop] = start + delta * eased;
-      updateScrollbars();
-      if (t < 1) {
-        smoothScrollRaf = requestAnimationFrame(tick);
-      } else {
-        smoothScrollRaf = 0;
-      }
-    };
-    smoothScrollRaf = requestAnimationFrame(tick);
-  }
-
   function computeTargetScroll(axisDir: 'v' | 'h', clientPos: number): number {
     if (!scrollEl) return 0;
     if (axisDir === 'v') {
@@ -226,7 +194,6 @@ export function uiv2CustomScroll(
 
   function cancelDrag() {
     if (!dragAxis) return;
-    cancelSmoothScroll();
     isDraggingV = false;
     isDraggingH = false;
     applyDraggingStyles(false);
@@ -261,7 +228,6 @@ export function uiv2CustomScroll(
 
   function onPointerMove(ev: PointerEvent) {
     if (!scrollEl || dragPointerId == null || ev.pointerId !== dragPointerId) return;
-    cancelSmoothScroll();
     if (dragRaf) return;
     dragRaf = requestAnimationFrame(() => {
       dragRaf = 0;
@@ -393,7 +359,10 @@ export function uiv2CustomScroll(
     captureEl.addEventListener('lostpointercapture', onLostPointerCapture, { once: true });
 
     if (opts.animateTo != null) {
-      smoothScrollTo(axisDir, opts.animateTo);
+      // Клик по треку — мгновенно; плавность только у стрелок карусели.
+      const prop = axisDir === 'v' ? 'scrollTop' : 'scrollLeft';
+      scrollEl[prop] = opts.animateTo;
+      updateScrollbars();
     }
 
     document.addEventListener('pointermove', onPointerMove, true);
@@ -470,7 +439,6 @@ export function uiv2CustomScroll(
 
   function detachListeners() {
     cancelDrag();
-    cancelSmoothScroll();
     if (scrollbarHideTimeout) clearTimeout(scrollbarHideTimeout);
 
     if (scrollEl) {

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { navigate } from '../../../stores/navigation';
-  import ReleaseCardH from '../../../components/ReleaseCardH.svelte';
+  import ReleaseCardUiV2 from '../../../components/ReleaseCardUiV2.svelte';
   import type { ReleaseCardData } from '../../../types/release';
 
   const SAMPLE_CARD: ReleaseCardData = {
@@ -31,16 +31,13 @@
   <button
     class="settings-nav__item"
     style="width:auto;display:inline-flex;padding:8px 16px;background:rgba(255,255,255,0.06);border-radius:4px;"
-    onclick={() => navigate('/uikit')}
+    onclick={() => navigate('/uikit-v2')}
   >
-    Открыть UI Kit
+    Открыть UI Kit V2
   </button>
 
   <div class="uikit-section" style="margin-top:1.5rem">
-    <h3 class="uikit-section__title" style="margin:0 0 0.35rem;font-size:1rem;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:0.05em">Карточка релиза (каталог)</h3>
-    <p class="uikit-section__desc" style="margin:0 0 1rem;font-size:0.9rem;color:var(--color-text-muted)">Горизонтальная карточка с данными из API (grade, poster, episodes)</p>
-    <div class="uikit-catalog-cards" style="display:flex;flex-direction:column;gap:1rem;max-width:100%">
-      <ReleaseCardH data={SAMPLE_CARD} />
-    </div>
+    <h3 class="uikit-section__title" style="margin:0 0 0.35rem;font-size:1rem;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:0.05em">Карточка релиза (V2)</h3>
+    <ReleaseCardUiV2 data={SAMPLE_CARD} variant="horizontal" />
   </div>
 </div>

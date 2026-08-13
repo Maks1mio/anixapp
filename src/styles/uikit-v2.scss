@@ -679,6 +679,11 @@
     top: auto;
     z-index: auto;
   }
+
+  &.bookmarks__tabs {
+    padding-top: 0.4rem;
+    margin-bottom: 1.1rem;
+  }
 }
 
 .uiv2-tabs__row {
@@ -1459,6 +1464,49 @@
   pointer-events: none;
 }
 
+.uiv2-tooltip--interactive {
+  pointer-events: auto;
+}
+
+.uiv2-rules-popover {
+  min-width: 16rem;
+  max-width: min(92vw, 22rem);
+  text-align: left;
+}
+
+.uiv2-rules-popover__title {
+  margin: 0 0 0.45rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--uikit-v2-text);
+}
+
+.uiv2-rules-popover__heading {
+  margin: 0 0 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--uiv2-fg-muted);
+}
+
+.uiv2-rules-popover__list {
+  margin: 0 0 0.55rem;
+  padding-left: 1.1rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--uiv2-fg-muted);
+
+  li + li {
+    margin-top: 0.2rem;
+  }
+}
+
+.uiv2-rules-popover__footer {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--uiv2-fg-muted);
+}
+
 .uiv2-tooltip--rich {
   padding: 0.55rem 0.72rem;
   min-width: 9rem;
@@ -1576,6 +1624,52 @@
 .uiv2-select--disabled {
   opacity: 0.72;
   pointer-events: none;
+}
+
+.uiv2-select--compact {
+  width: auto;
+}
+
+.uiv2-select--compact .uiv2-select__field {
+  border: none;
+  background: transparent;
+}
+
+.uiv2-select--compact .uiv2-select__trigger--compact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0;
+  border-radius: var(--uiv2-radius-md, 8px);
+  border: 1px solid color-mix(in srgb, var(--uikit-v2-text) 28%, transparent);
+  background: color-mix(in srgb, var(--uikit-v2-surface) 80%, transparent);
+  color: var(--uiv2-fg-muted);
+  cursor: pointer;
+  transition:
+    color 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease;
+
+  &:hover:not(:disabled) {
+    color: var(--uikit-v2-text);
+    border-color: color-mix(in srgb, var(--uikit-v2-text) 42%, transparent);
+    background: var(--uiv2-hover-subtle);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+.uiv2-select__compact-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
 }
 
 .uiv2-select__label {
@@ -2286,6 +2380,33 @@
     content: '·';
     margin-right: 0.2rem;
     opacity: 0.7;
+  }
+}
+
+.uiv2-anime-card__my-vote {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  min-width: 0;
+}
+
+.uiv2-anime-card__my-vote-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.05rem;
+}
+
+.uiv2-anime-card__my-vote-star {
+  display: inline-flex;
+  color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 18%, transparent);
+  line-height: 0;
+
+  &--on {
+    color: #fbbf24;
+  }
+
+  :global(svg) {
+    display: block;
   }
 }
 
@@ -3104,6 +3225,11 @@
   overflow-y: hidden;
 }
 
+.uiv2-scroll-area--y.uiv2-scroll-area--x > .uiv2-scroll-area__viewport {
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
 body.uiv2-scroll-dragging,
 body.uiv2-scroll-dragging * {
   cursor: grabbing !important;
@@ -3685,6 +3811,7 @@ body.uiv2-scroll-dragging * {
   gap: 0.85rem;
   overflow-x: auto;
   scroll-snap-type: x proximity;
+  scroll-behavior: auto;
   scrollbar-width: none;
   padding: 0.15rem 0.1rem 0.35rem;
   -webkit-overflow-scrolling: touch;
@@ -3692,6 +3819,10 @@ body.uiv2-scroll-dragging * {
   &::-webkit-scrollbar {
     display: none;
   }
+}
+
+.uiv2-scroll-area--dragging .uiv2-carousel__scroll {
+  scroll-snap-type: none;
 }
 
 .uiv2-carousel__item {
@@ -3901,6 +4032,22 @@ body.uiv2-scroll-dragging * {
     margin-right: 0.2rem;
     opacity: 0.7;
   }
+}
+
+.uiv2-discuss__announce {
+  display: inline-flex;
+  align-items: center;
+  height: 1.35rem;
+  padding: 0 0.5rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--uikit-v2-text) 10%, transparent);
+  color: color-mix(in srgb, var(--uikit-v2-text) 92%, transparent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .uiv2-discuss__meta {
@@ -4530,8 +4677,8 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
   display: flex;
   flex-direction: column;
   gap: 0;
+  width: 100%;
   min-width: 0;
-  max-width: 44rem;
 
   &--nested {
     margin: 0;
@@ -4554,6 +4701,22 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
     --uiv2-avatar-size: 2.1rem;
     --uiv2-thread-col-gap: 0.55rem;
     padding: 0.55rem 0;
+  }
+
+  > .uiv2-comment__avatar {
+    grid-column: 1;
+  }
+
+  > .uiv2-comment__main {
+    grid-column: 2;
+    min-width: 0;
+  }
+
+  > .uiv2-comment__replies-row,
+  > .uiv2-comment__replies,
+  > .uiv2-comment__composer-slot {
+    grid-column: 1 / -1;
+    min-width: 0;
   }
 
   &--thread {
@@ -5313,7 +5476,8 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
 }
 
 .uikit-v2-comments-wrap {
-  max-width: 44rem;
+  width: 100%;
+  max-width: none;
 }
 
 
@@ -5498,8 +5662,13 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
 /* ——— V2 comment composer (inline reply) ——— */
 .uiv2-comment__composer-slot {
   margin: 0.45rem 0 0.65rem;
+  width: 100%;
   min-width: 0;
   padding-left: calc(var(--uiv2-avatar-size, 2.5rem) + var(--uiv2-thread-col-gap, 0.7rem));
+
+  .uiv2-comment-composer {
+    width: 100%;
+  }
 }
 
 .uiv2-comment--thread > .uiv2-comment__replies > .uiv2-comments--nested > .uiv2-comment > .uiv2-comment__composer-slot {
@@ -5564,7 +5733,8 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
 }
 
 .uiv2-comment-composer__field {
-  flex: 1;
+  flex: 1 1 auto;
+  width: 100%;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -5573,9 +5743,16 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
 
 .uiv2-comment-composer__outlined {
   margin: 0;
+  width: 100%;
+  display: block;
+
+  :global(.uiv2-outlined-wrap) {
+    width: 100%;
+  }
 
   :global(.uiv2-outlined-field) {
     margin: 0;
+    width: 100%;
     --uiv2-field-notch: var(--uikit-v2-bg, #{$color-bg});
   }
 

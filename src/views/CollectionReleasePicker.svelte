@@ -196,12 +196,12 @@
       {@const card = mapReleaseRawToCard(raw)}
       {@const statusLabel = releaseListStatusLabel(card.listStatus)}
       <button type="button" class="collection-release-picker__result" onclick={() => persistRelease(raw)}>
-        <div class="release-card-v__poster collection-editor__release-poster">
+        <div class="collection-editor__release-poster">
           {#if card.poster}
             <img src={card.poster} alt="" />
           {/if}
           {#if statusLabel}
-            <div class="release-card-v__badge" style="background:rgba(139, 92, 246, 0.85)">{statusLabel}</div>
+            <div class="collection-editor__release-badge">{statusLabel}</div>
           {/if}
         </div>
         <div class="collection-editor__release-body">

@@ -30,6 +30,7 @@ function createPlayerWindow(params) {
     frame: false,
     titleBarStyle: 'hidden',
     title: 'AnixApp — Просмотр',
+    backgroundColor: '#0d0d0d',
     show: false,
     webPreferences: {
       preload: path.join(electronDir, 'preload.js'),

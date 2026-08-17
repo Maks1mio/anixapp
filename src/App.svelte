@@ -26,6 +26,7 @@
   import { initAnixbackEndpoint } from './services/anixback-endpoint';
   import { getCurrentRoomId, getCurrentRoomCode, getCurrentParticipants, pushCommand, voteOnProposal, notifyLobbyBufferingStart } from './services/lobby-state';
   import { initTooltipSystem } from './utils/body-tooltip';
+  import { initBookmarksChangeSync } from './utils/favorites-events';
   import { stepZoom } from './utils/zoom';
   import {
     clearDiscordContext,
@@ -225,11 +226,12 @@
 
   onMount(() => {
     initTooltipSystem();
+    const stopBookmarksSync = initBookmarksChangeSync();
     void initAnixbackEndpoint();
 
     if (!window.anixApi) {
       appScreen.set('login');
-      return;
+      return () => stopBookmarksSync();
     }
 
     // Routing listeners
@@ -511,6 +513,7 @@
       unsubAppScreen();
       unsubPlayerView();
       clearRetry();
+      stopBookmarksSync();
     };
   });
 </script>

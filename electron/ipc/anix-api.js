@@ -2,6 +2,7 @@
 
 const { ipcMain } = require('electron');
 const { BookmarkType, BookmarkSortType, DefaultResult } = require('anixapi');
+const { broadcastBookmarksChanged } = require('../lib/broadcast');
 
 function register(deps) {
   const {
@@ -302,7 +303,9 @@ ipcMain.handle('anix:collectionRandomRelease', async (_, id) => {
 ipcMain.handle('anix:addCollectionFavorite', async (_, id) => {
   try {
     const client = getAnixart();
-    return await client.endpoints.collection.addCollectionFavorite(id);
+    const res = await client.endpoints.collection.addCollectionFavorite(id);
+    broadcastBookmarksChanged({ kind: 'collections', releaseId: id });
+    return res;
   } catch (err) {
     handleAnixError(err, 'addCollectionFavorite');
   }
@@ -311,7 +314,9 @@ ipcMain.handle('anix:addCollectionFavorite', async (_, id) => {
 ipcMain.handle('anix:removeCollectionFavorite', async (_, id) => {
   try {
     const client = getAnixart();
-    return await client.endpoints.collection.removeCollectionFavorite(id);
+    const res = await client.endpoints.collection.removeCollectionFavorite(id);
+    broadcastBookmarksChanged({ kind: 'collections', releaseId: id });
+    return res;
   } catch (err) {
     handleAnixError(err, 'removeCollectionFavorite');
   }
@@ -499,7 +504,9 @@ ipcMain.handle('anix:history', async (_, page = 0) => {
 ipcMain.handle('anix:deleteFromHistory', async (_, releaseId) => {
   try {
     const client = getAnixart();
-    return await client.endpoints.history.delete(releaseId);
+    const res = await client.endpoints.history.delete(releaseId);
+    broadcastBookmarksChanged({ kind: 'history', releaseId });
+    return res;
   } catch (err) {
     handleAnixError(err, 'deleteFromHistory');
   }
@@ -509,6 +516,7 @@ ipcMain.handle('anix:addToHistory', async (_, releaseId, sourceId, episodePositi
   try {
     const client = getAnixart();
     await client.endpoints.release.addToHistory(releaseId, sourceId, episodePosition);
+    broadcastBookmarksChanged({ kind: 'history', releaseId });
   } catch (err) {
     handleAnixError(err, 'addToHistory');
   }
@@ -916,13 +924,17 @@ ipcMain.handle('anix:searchCollections', async (_, query, page = 0) => {
 ipcMain.handle('anix:addToFavorites', async (_, releaseId) => {
   const client = getAnixart();
   const res = await client.endpoints.release.addFavorite(releaseId);
-  return res?.code === DefaultResult.Ok ? undefined : Promise.reject(new Error(res?.code ?? 'fail'));
+  if (res?.code !== DefaultResult.Ok) return Promise.reject(new Error(res?.code ?? 'fail'));
+  broadcastBookmarksChanged({ kind: 'favorites', releaseId });
+  return undefined;
 });
 
 ipcMain.handle('anix:removeFromFavorites', async (_, releaseId) => {
   const client = getAnixart();
   const res = await client.endpoints.release.removeFavorite(releaseId);
-  return res?.code === DefaultResult.Ok ? undefined : Promise.reject(new Error(res?.code ?? 'fail'));
+  if (res?.code !== DefaultResult.Ok) return Promise.reject(new Error(res?.code ?? 'fail'));
+  broadcastBookmarksChanged({ kind: 'favorites', releaseId });
+  return undefined;
 });
 
 ipcMain.handle('anix:setListStatus', async (_, releaseId, statusId) => {
@@ -939,7 +951,9 @@ ipcMain.handle('anix:setListStatus', async (_, releaseId, statusId) => {
     }
   }
   const res = await client.endpoints.release.addToProfileList(releaseId, type);
-  return res?.code === DefaultResult.Ok ? undefined : Promise.reject(new Error(res?.code ?? 'fail'));
+  if (res?.code !== DefaultResult.Ok) return Promise.reject(new Error(res?.code ?? 'fail'));
+  broadcastBookmarksChanged({ kind: 'list', releaseId, statusId });
+  return undefined;
 });
 
 ipcMain.handle('anix:clearListStatus', async (_, releaseId, statusId) => {
@@ -947,7 +961,9 @@ ipcMain.handle('anix:clearListStatus', async (_, releaseId, statusId) => {
   if (type == null) return Promise.reject(new Error('unknown status'));
   const client = getAnixart();
   const res = await client.endpoints.release.removeFromProfileList(releaseId, type);
-  return res?.code === DefaultResult.Ok ? undefined : Promise.reject(new Error(res?.code ?? 'fail'));
+  if (res?.code !== DefaultResult.Ok) return Promise.reject(new Error(res?.code ?? 'fail'));
+  broadcastBookmarksChanged({ kind: 'list', releaseId, statusId: null });
+  return undefined;
 });
 
 ipcMain.handle('anix:releaseVote', async (_, releaseId, vote) => {
@@ -956,6 +972,7 @@ ipcMain.handle('anix:releaseVote', async (_, releaseId, vote) => {
   if (res?.code !== DefaultResult.Ok) {
     return Promise.reject(new Error(String(res?.code ?? 'vote failed')));
   }
+  broadcastBookmarksChanged({ kind: 'votes', releaseId });
   return res;
 });
 
@@ -965,6 +982,7 @@ ipcMain.handle('anix:releaseDeleteVote', async (_, releaseId) => {
   if (res?.code !== DefaultResult.Ok) {
     return Promise.reject(new Error(String(res?.code ?? 'delete vote failed')));
   }
+  broadcastBookmarksChanged({ kind: 'votes', releaseId });
   return res;
 });
 

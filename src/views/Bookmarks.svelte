@@ -827,7 +827,7 @@
   function onBookmarksChanged(e: Event) {
     if (isOtherProfile) return;
     const detail = (e as CustomEvent<{
-      kind?: 'favorites' | 'list' | 'collections';
+      kind?: 'favorites' | 'list' | 'collections' | 'history' | 'votes';
       releaseId?: number;
       statusId?: number | string | null;
     }>).detail ?? {};
@@ -838,6 +838,7 @@
       return;
     }
 
+    if (detail.kind && detail.kind !== activeTab) return;
     void loadTab(activeTab, false, true);
   }
 

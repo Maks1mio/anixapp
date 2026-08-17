@@ -76,6 +76,10 @@ ipcRenderer.on('player:closed', () => {
   window.dispatchEvent(new CustomEvent('player:windowClosed'));
 });
 
+ipcRenderer.on('bookmarks:changed', (_, detail) => {
+  window.dispatchEvent(new CustomEvent('anix:bookmarksChanged', { detail: detail ?? {} }));
+});
+
 let pendingDeepLinkPayload = null;
 
 ipcRenderer.on('anix:deepLink', (_, payload) => {

@@ -5,7 +5,7 @@
 
 import Hls from 'hls.js';
 import { getWatchParams } from '../router';
-import { resolveCdnAssetUrl } from '../utils/posterUrl';
+import { notifyHistoryChanged } from '../utils/favorites-events';
 import { renderPage } from '../components/page';
 import { createIcons, Play, Pause, Volume2, Maximize, List, Headphones, SkipForward, Check, ChevronRight, Zap } from 'lucide';
 import {
@@ -659,6 +659,7 @@ export function renderWatch(): HTMLElement {
           const sId = parseInt(state.sourceId, 10);
           window.anixApi?.history?.add?.(rId, sId, ep);
           window.anixApi?.history?.markWatched?.(rId, sId, ep).catch(() => {});
+          if (Number.isFinite(rId)) notifyHistoryChanged({ releaseId: rId });
         }, { once: true });
         doPlay();
       } else {
@@ -669,6 +670,7 @@ export function renderWatch(): HTMLElement {
         const sId = parseInt(state.sourceId, 10);
         window.anixApi?.history?.add?.(rId, sId, ep);
         window.anixApi?.history?.markWatched?.(rId, sId, ep).catch(() => {});
+        if (Number.isFinite(rId)) notifyHistoryChanged({ releaseId: rId });
       }
     };
 

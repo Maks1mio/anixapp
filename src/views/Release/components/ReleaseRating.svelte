@@ -3,6 +3,7 @@
   import { requireAuth } from '../../../stores/auth';
   import { resolveCdnAssetUrl } from '../../../utils/posterUrl';
   import { iconStar } from '../../../components/icons';
+  import { notifyVotesChanged } from '../../../utils/favorites-events';
 
   interface Props {
     releaseId: number;
@@ -76,6 +77,7 @@
     busy = true;
     try {
       await window.anixApi.release.vote(releaseId, stars);
+      notifyVotesChanged({ releaseId });
       picking = false;
       hoverStar = 0;
       await onRefresh();
@@ -92,6 +94,7 @@
     busy = true;
     try {
       await window.anixApi.release.deleteVote(releaseId);
+      notifyVotesChanged({ releaseId });
       picking = true;
       hoverStar = 0;
       await onRefresh();

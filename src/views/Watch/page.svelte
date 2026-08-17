@@ -12,6 +12,7 @@
   import type { WatchState, EpisodeItem, DubberItem, LobbyActivityEntry, PopoverType, NextEpAltDub, DownloadedEpisodeItem } from './_types';
   import { isHlsUrl, stripKodikQueryParams, resolveEpisodeUrl, resolveEpisodeUrlWithRetry, isDubberBlacklisted } from './_utils';
   import { pathToLocalMediaUrl, isLocalMediaUrl } from '../../utils/local-media-url';
+  import { notifyHistoryChanged } from '../../utils/favorites-events';
   import { sortDubbersPinnedFirst, readLastEpisodeTypeUpdateId } from '../../utils/dubber-meta';
   import { PlayerState } from './_usePlayer.svelte';
   import { LobbyState }  from './_useLobby.svelte';
@@ -825,6 +826,7 @@
       const sId = parseInt(watchState.sourceId, 10);
       (window as any).anixApi?.history?.add?.(rId, sId, ep);
       (window as any).anixApi?.history?.markWatched?.(rId, sId, ep).catch?.(() => {});
+      if (Number.isFinite(rId)) notifyHistoryChanged({ releaseId: rId });
     }, { once: true });
 
     // Watchdog: if video doesn't start within WD_DELAY_MS, keep re-resolving the URL

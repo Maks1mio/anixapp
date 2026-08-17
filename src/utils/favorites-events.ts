@@ -14,9 +14,21 @@ export function notifyListStatusChanged(detail?: {
   notifyBookmarksChanged({ kind: 'list', ...detail });
 }
 
+/** История просмотра (после play / удаления). */
+export function notifyHistoryChanged(detail?: { releaseId?: number }): void {
+  notifyBookmarksChanged({ kind: 'history', ...detail });
+}
+
+/** Оценки релизов. */
+export function notifyVotesChanged(detail?: { releaseId?: number }): void {
+  notifyBookmarksChanged({ kind: 'votes', ...detail });
+}
+
+export type BookmarksChangeKind = 'favorites' | 'list' | 'collections' | 'history' | 'votes';
+
 /** Общий сигнал для страницы закладок: сбросить кэш и перезагрузить. */
 export function notifyBookmarksChanged(detail?: {
-  kind?: 'favorites' | 'list' | 'collections';
+  kind?: BookmarksChangeKind;
   releaseId?: number;
   statusId?: number | string | null;
 }): void {
@@ -24,4 +36,11 @@ export function notifyBookmarksChanged(detail?: {
   // сбрасываем все варианты, а не только голый /bookmarks.
   invalidateViewStatePrefix('/bookmarks');
   window.dispatchEvent(new CustomEvent('anix:bookmarksChanged', { detail: detail ?? {} }));
+}
+
+/** Слушать изменения из любого окна (плеер) и сбрасывать кэш закладок. */
+export function initBookmarksChangeSync(): () => void {
+  const onChanged = () => invalidateViewStatePrefix('/bookmarks');
+  window.addEventListener('anix:bookmarksChanged', onChanged);
+  return () => window.removeEventListener('anix:bookmarksChanged', onChanged);
 }

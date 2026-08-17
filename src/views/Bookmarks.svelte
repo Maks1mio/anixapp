@@ -9,7 +9,7 @@
   import { handleUserProfileClick } from '../stores/user-profile';
   import { getSearchParams } from '../router';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
-  import { DEFAULT_BOOKMARK_SORT } from '../constants/bookmarkSort';
+  import { getBookmarksSort, setBookmarksSort } from '../constants/bookmarkSort';
   import type { ReleaseCardData } from '../types/release';
   import { mapReleaseRawToCard } from '../utils/release-card';
   import { extractHistoryEpisodeInfo } from '../utils/historyFormat';
@@ -141,6 +141,20 @@
     };
   }
 
+  function tabUsesSort(tabId: TabId): boolean {
+    return tabId === 'favorites'
+      || tabId === 'watching'
+      || tabId === 'planned'
+      || tabId === 'completed'
+      || tabId === 'on_hold'
+      || tabId === 'dropped';
+  }
+
+  function snapshotMatchesCurrentSort(s: BookmarksViewState): boolean {
+    if (!tabUsesSort(s.activeTab)) return true;
+    return s.selectedSort === getBookmarksSort();
+  }
+
   function applyBookmarksSnapshot(s: BookmarksViewState) {
     activeTab = s.activeTab;
     items = s.items;
@@ -150,7 +164,7 @@
     loadState = s.loadState;
     showEnd = s.showEnd;
     errorMsg = s.errorMsg;
-    selectedSort = s.selectedSort;
+    selectedSort = tabUsesSort(s.activeTab) ? getBookmarksSort() : s.selectedSort;
     totalCount = s.totalCount;
     cachedProfileId = s.cachedProfileId;
     profileLogin = s.profileLogin;
@@ -298,7 +312,7 @@
   let errorMsg = $state('');
   let cachedProfileId = $state<number | null>(null);
   let totalCount = $state(0);
-  let selectedSort = $state(DEFAULT_BOOKMARK_SORT);
+  let selectedSort = $state(getBookmarksSort());
   let randomLoading = $state(false);
   let wrapEl: HTMLElement | undefined = $state();
   let unregisterScrollKey: (() => void) | null = null;
@@ -732,7 +746,12 @@
 
     if (!resetSort && !force) {
       const cached = getViewState<BookmarksViewState>(BOOKMARKS_VIEW_KEY());
-      if (cached?.data && hasBookmarkItems(cached.data) && cached.data.activeTab === tabId) {
+      if (
+        cached?.data
+        && hasBookmarkItems(cached.data)
+        && cached.data.activeTab === tabId
+        && snapshotMatchesCurrentSort(cached.data)
+      ) {
         applyBookmarksSnapshot(cached.data);
         restoreBookmarksScroll(cached.scrollTop);
         return;
@@ -740,8 +759,7 @@
     }
 
     if (force) invalidateViewStatePrefix(listsBasePath());
-
-    if (resetSort) selectedSort = DEFAULT_BOOKMARK_SORT;
+    if (tabUsesSort(tabId)) selectedSort = getBookmarksSort();
     nextPage = 0;
     hasMore = true;
     items = [];
@@ -788,15 +806,43 @@
     }
   }
 
-  function onBookmarksChanged() {
+  function applyListChangeToCurrentTab(releaseId: number, statusId: string | null) {
+    const belongsHere = isReleaseListTab && statusId === activeTab;
+    if (belongsHere) {
+      items = items.map((item) => (
+        item.id === releaseId ? { ...item, listStatus: statusId as ReleaseCardData['listStatus'] } : item
+      ));
+    } else {
+      const next = items.filter((item) => item.id !== releaseId);
+      if (next.length === items.length) return;
+      items = next;
+      totalCount = Math.max(0, totalCount - 1);
+      if (!items.length) loadState = 'empty';
+    }
+    saveViewStateData(BOOKMARKS_VIEW_KEY(), bookmarksSnapshot());
+  }
+
+  function onBookmarksChanged(e: Event) {
     if (isOtherProfile) return;
+    const detail = (e as CustomEvent<{
+      kind?: 'favorites' | 'list' | 'collections';
+      releaseId?: number;
+      statusId?: number | string | null;
+    }>).detail ?? {};
+
+    if (detail.kind === 'list' && typeof detail.releaseId === 'number') {
+      const statusId = typeof detail.statusId === 'string' ? detail.statusId : null;
+      applyListChangeToCurrentTab(detail.releaseId, statusId);
+      return;
+    }
+
     void loadTab(activeTab, false, true);
   }
 
   function onSortChange(sort: number) {
     if (sort === selectedSort) return;
-    selectedSort = sort;
-    void loadTab(activeTab);
+    selectedSort = setBookmarksSort(sort);
+    void loadTab(activeTab, false, true);
   }
 
   async function onRandom() {
@@ -837,7 +883,7 @@
 
   function onLayoutChanged() {
     if (!wrapEl) return;
-    void loadTab(activeTab);
+    tryLoadMoreIfNeeded();
   }
 
   function handleTabsSettingsClick(e: MouseEvent) {
@@ -895,7 +941,7 @@
     );
     const cached = getViewState<BookmarksViewState>(BOOKMARKS_VIEW_KEY());
 
-    if (!hasExplicitTab && !isListsPage && cached?.data && hasBookmarkItems(cached.data)) {
+    if (!hasExplicitTab && !isListsPage && cached?.data && hasBookmarkItems(cached.data) && snapshotMatchesCurrentSort(cached.data)) {
       applyBookmarksSnapshot(cached.data);
       restoreBookmarksScroll(cached.scrollTop);
       window.addEventListener('anix:cardLayoutChanged', onLayoutChanged);

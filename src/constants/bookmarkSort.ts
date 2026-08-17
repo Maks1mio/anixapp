@@ -12,6 +12,28 @@ export const BOOKMARK_SORT_OPTIONS = [
 
 export const DEFAULT_BOOKMARK_SORT = 1;
 
+const BOOKMARKS_SORT_KEY = 'anixapp.bookmarksSort';
+
+export function isBookmarkSortValue(value: number): boolean {
+  return BOOKMARK_SORT_OPTIONS.some((o) => o.value === value);
+}
+
+export function getBookmarksSort(): number {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+    return DEFAULT_BOOKMARK_SORT;
+  }
+  const n = Number.parseInt(window.localStorage.getItem(BOOKMARKS_SORT_KEY) || '', 10);
+  return isBookmarkSortValue(n) ? n : DEFAULT_BOOKMARK_SORT;
+}
+
+export function setBookmarksSort(sort: number): number {
+  const next = isBookmarkSortValue(sort) ? sort : DEFAULT_BOOKMARK_SORT;
+  if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+    window.localStorage.setItem(BOOKMARKS_SORT_KEY, String(next));
+  }
+  return next;
+}
+
 export function bookmarkSortSelectOptions() {
   return BOOKMARK_SORT_OPTIONS.map((o) => ({
     value: String(o.value),

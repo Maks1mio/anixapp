@@ -1,5 +1,7 @@
 <script lang="ts">
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
+  import ReleaseCardsGridSkeleton from '../components/ReleaseCardsGridSkeleton.svelte';
+  import UiV2CollectionCardSkeleton from '../components/uikit-v2/UiV2CollectionCardSkeleton.svelte';
   import CollectionCard from '../components/CollectionCard.svelte';
   import BookmarksToolbar from '../components/BookmarksToolbar.svelte';
   import { onMount, onDestroy } from 'svelte';
@@ -1063,7 +1065,13 @@
   <div class="bookmarks__content">
     <div class="bookmarks__grid">
       {#if loadState === 'loading'}
-        <div class="bookmarks__loading">Загрузка…</div>
+        {#if isCollectionsTab}
+          <div class="bookmarks__collections">
+            <UiV2CollectionCardSkeleton count={6} />
+          </div>
+        {:else}
+          <ReleaseCardsGridSkeleton />
+        {/if}
       {:else if loadState === 'error'}
         <p class="bookmarks__error">{errorMsg}</p>
       {:else if loadState === 'empty'}
@@ -1083,7 +1091,13 @@
     {#if showEnd}
       <div class="bookmarks__more">это всё :)</div>
     {:else if isLoadingMore}
-      <div class="bookmarks__more">Загрузка…</div>
+      {#if isCollectionsTab}
+        <div class="bookmarks__collections">
+          <UiV2CollectionCardSkeleton count={2} />
+        </div>
+      {:else}
+        <ReleaseCardsGridSkeleton count={4} />
+      {/if}
     {/if}
   </div>
 </div>

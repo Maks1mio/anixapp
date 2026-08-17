@@ -3535,6 +3535,11 @@ body.uiv2-scroll-dragging * {
   }
 }
 
+.collections-feed > .uiv2-collection-skeleton-wrap,
+.bookmarks__collections > .uiv2-collection-skeleton-wrap {
+  display: contents;
+}
+
 .uiv2-collection-skeleton {
   position: relative;
   display: flex;

@@ -1,5 +1,6 @@
 <script lang="ts">
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
+  import ReleaseCardsGridSkeleton from '../components/ReleaseCardsGridSkeleton.svelte';
   import HomeCustomFilterView from '../components/HomeCustomFilterView.svelte';
   import HomeTabRenameModal from '../components/HomeTabRenameModal.svelte';
   import { onMount, onDestroy } from 'svelte';
@@ -526,7 +527,9 @@
           </button>
         </div>
       {:else if loadState === 'loading'}
-        <div class="home-list__loading">Загрузка…</div>
+        <div class="bookmarks__grid">
+          <ReleaseCardsGridSkeleton />
+        </div>
       {:else if loadState === 'error'}
         <p class="home-list__error">Ошибка: {errorMsg}</p>
       {:else if loadState === 'empty'}

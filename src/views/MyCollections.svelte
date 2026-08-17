@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import CollectionCard from '../components/CollectionCard.svelte';
+  import UiV2CollectionCardSkeleton from '../components/uikit-v2/UiV2CollectionCardSkeleton.svelte';
   import CollectionsHeaderActions from '../components/collections/CollectionsHeaderActions.svelte';
   import { iconArrowLeft } from '../components/icons';
   import { navigate } from '../stores/navigation';
@@ -102,7 +103,9 @@
   <CollectionsHeaderActions showMyCollections={false} />
 
   {#if loadState === 'loading' && items.length === 0}
-    <div class="discover-page__loading">Загрузка…</div>
+    <div class="collections-feed" aria-busy="true">
+      <UiV2CollectionCardSkeleton count={6} />
+    </div>
   {:else if loadState === 'error'}
     <div class="discover-page__error">
       <p>{errorMsg || 'Не удалось загрузить коллекции'}</p>
@@ -129,7 +132,9 @@
       {/each}
     </div>
     {#if isLoading}
-      <div class="discover-page__loading discover-page__loading--inline">Загрузка…</div>
+      <div class="collections-feed" aria-busy="true">
+        <UiV2CollectionCardSkeleton count={2} />
+      </div>
     {/if}
   {/if}
 </div>

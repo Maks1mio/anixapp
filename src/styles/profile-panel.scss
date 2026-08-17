@@ -1842,6 +1842,14 @@ $pp-btn-bg-hover: var(--pp-btn-bg-hover);
     width: 34px;
     height: 48px;
     border-radius: 8px;
+    overflow: hidden;
+
+    img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
   }
 
   .profile-v2__recent-body {

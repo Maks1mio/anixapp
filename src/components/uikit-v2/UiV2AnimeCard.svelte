@@ -22,6 +22,7 @@
   import { parseAltTitles } from '../../utils/titleInfo';
   import { formatHistoryViewTime } from '../../utils/historyFormat';
   import { isReleaseAnnounce } from '../../utils/release-card';
+  import { toPosterDisplayUrl } from '../../utils/posterUrl';
 
   export type UiV2AnimeCardVariant = 'vertical' | 'horizontal';
 
@@ -271,6 +272,14 @@
   const rate = $derived(ratingLabel(rating));
   const dur = $derived(durationLabel(duration));
   const descriptionText = $derived(description ? withEllipsis(description) : null);
+  const displayPosterUrl = $derived(
+    posterUrl
+      ? toPosterDisplayUrl(
+          posterUrl,
+          variant === 'horizontal' ? 'cardHorizontal' : 'cardVertical',
+        )
+      : null,
+  );
   const myVoteValue = $derived(
     typeof myVote === 'number' && myVote > 0 ? Math.min(5, Math.round(myVote)) : null,
   );
@@ -474,8 +483,8 @@
     oncontextmenu={onContextMenu}
   >
     <div class="uiv2-anime-card__poster">
-      {#if posterUrl}
-        <img src={posterUrl} alt="" loading="lazy" decoding="async" />
+      {#if displayPosterUrl}
+        <img src={displayPosterUrl} alt="" loading="lazy" decoding="async" />
       {:else}
         <span class="uiv2-anime-card__poster-fallback" aria-hidden="true"></span>
       {/if}
@@ -560,8 +569,8 @@
   >
     <div class="uiv2-anime-card__media">
       <div class="uiv2-anime-card__poster uiv2-anime-card__poster--h">
-        {#if posterUrl}
-          <img src={posterUrl} alt="" loading="lazy" decoding="async" />
+        {#if displayPosterUrl}
+          <img src={displayPosterUrl} alt="" loading="lazy" decoding="async" />
         {:else}
           <span class="uiv2-anime-card__poster-fallback" aria-hidden="true"></span>
         {/if}

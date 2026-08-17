@@ -12,6 +12,7 @@
   import UiV2RoundButton from './UiV2RoundButton.svelte';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from './UiV2PopupMenu.svelte';
   import { showToast } from '../../stores/toast';
+  import { toPosterDisplayUrl } from '../../utils/posterUrl';
 
   export type UiV2CollectionCardData = {
     id: number | string;
@@ -104,6 +105,9 @@
 
   const resolvedMenu = $derived(!showMenu ? [] : (menuItems ?? defaultMenuItems));
   const hasMenu = $derived(resolvedMenu.length > 0);
+  const displayImageUrl = $derived(
+    data.image ? toPosterDisplayUrl(data.image, 'collectionCover') : '',
+  );
 
   const showFavoritesMeta = $derived(
     typeof data.favoritesCount === 'number' || localFavorite || localFavoritesCount > 0,
@@ -241,8 +245,8 @@
 
   <div class="uiv2-collection__card">
     <div class="uiv2-collection__media">
-      {#if data.image}
-        <img src={data.image} alt="" loading="lazy" decoding="async" />
+      {#if displayImageUrl}
+        <img src={displayImageUrl} alt="" loading="lazy" decoding="async" />
       {:else}
         <span class="uiv2-collection__media-fallback" aria-hidden="true"></span>
       {/if}

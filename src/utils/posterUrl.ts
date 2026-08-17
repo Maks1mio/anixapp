@@ -75,12 +75,49 @@ export function toCdnThumbnailUrl(url: string, width: number, height = width): s
   try {
     const parsed = new URL(proxied);
     parsed.searchParams.delete('size');
-    parsed.searchParams.set('w', String(Math.max(16, Math.min(512, Math.round(width)))));
-    parsed.searchParams.set('h', String(Math.max(16, Math.min(768, Math.round(height)))));
+    parsed.searchParams.set('w', String(Math.max(16, Math.min(640, Math.round(width)))));
+    parsed.searchParams.set('h', String(Math.max(16, Math.min(960, Math.round(height)))));
     return parsed.toString();
   } catch {
     return proxied;
   }
+}
+
+/** Пресеты под CSS-размер постера (до учёта DPR / запаса резкости). */
+export const POSTER_THUMB_PRESETS = {
+  /** Вертикальная карточка / карусель (~160–180 CSS px) */
+  cardVertical: { w: 200, h: 300 },
+  /** Горизонтальная карточка / discuss (~176 CSS px) */
+  cardHorizontal: { w: 220, h: 330 },
+  /** Крупный постер на странице релиза */
+  releaseHero: { w: 400, h: 600 },
+  /** Обложка коллекции (~карточка 16:10) */
+  collectionCover: { w: 420, h: 262 },
+  /** «Просмотрено недавно» в профиле (~34–44 CSS px) */
+  profileRecent: { w: 120, h: 180 },
+  /** Мелкие превью в сайдбаре / slash */
+  pin: { w: 96, h: 144 },
+} as const;
+
+export type PosterThumbPreset = keyof typeof POSTER_THUMB_PRESETS;
+
+function displayDpr(): number {
+  if (typeof window === 'undefined') return 1.5;
+  const dpr = window.devicePixelRatio || 1;
+  // Минимум 1.5× — иначе на 100% zoom intrinsic < rendered и картинка мылится
+  return Math.min(2, Math.max(1.5, Math.round(dpr * 2) / 2));
+}
+
+/** URL постера, подогнанный под реальный размер области на экране. */
+export function toPosterDisplayUrl(
+  url: string | null | undefined,
+  preset: PosterThumbPreset = 'cardVertical',
+): string {
+  const raw = (url ?? '').trim();
+  if (!raw) return '';
+  const { w, h } = POSTER_THUMB_PRESETS[preset];
+  const dpr = displayDpr();
+  return toCdnThumbnailUrl(raw, Math.round(w * dpr), Math.round(h * dpr));
 }
 
 /** Извлекает оригинальный HTTPS URL из anix-cdn:// или возвращает как есть */

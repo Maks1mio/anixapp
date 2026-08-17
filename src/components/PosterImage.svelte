@@ -1,6 +1,12 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { toCdnProxyUrl, buildCdnMirrorUrl, fromCdnProxyUrl } from '../utils/posterUrl';
+  import {
+    toCdnProxyUrl,
+    toPosterDisplayUrl,
+    buildCdnMirrorUrl,
+    fromCdnProxyUrl,
+    type PosterThumbPreset,
+  } from '../utils/posterUrl';
 
   const MAX_RETRIES = 2;
   const RETRY_MS = [800, 2000];
@@ -10,9 +16,17 @@
     alt?: string;
     class?: string;
     loading?: 'lazy' | 'eager';
+    /** Если задан — Electron отдаёт физически уменьшенный постер под область */
+    thumb?: PosterThumbPreset | null;
   }
 
-  let { src = '', alt = '', class: className = '', loading = 'lazy' }: Props = $props();
+  let {
+    src = '',
+    alt = '',
+    class: className = '',
+    loading = 'lazy',
+    thumb = null,
+  }: Props = $props();
 
   let attempt = $state(0);
   let useMirror = $state(false);
@@ -21,7 +35,11 @@
   let imgSrc = $state('');
   let retryTimer = $state<ReturnType<typeof setTimeout> | null>(null);
 
-  const normalizedSrc = $derived(toCdnProxyUrl(src?.trim() ?? ''));
+  const normalizedSrc = $derived(
+    thumb
+      ? toPosterDisplayUrl(src?.trim() ?? '', thumb)
+      : toCdnProxyUrl(src?.trim() ?? ''),
+  );
   const mirrorSrc = $derived(buildCdnMirrorUrl(fromCdnProxyUrl(src?.trim() ?? '')));
   const showImage = $derived(Boolean(normalizedSrc) && !failed && Boolean(imgSrc));
   const showFallback = $derived(!normalizedSrc || failed);

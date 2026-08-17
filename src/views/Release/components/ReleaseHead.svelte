@@ -12,7 +12,7 @@
   import { openReleaseMetaSearch } from '../../../utils/releaseMetaSearch';
   import type { ListStatusId } from '../_types';
   import { openImageLightbox, formatVoteCount } from '../_utils';
-  import { toCdnProxyUrl } from '../../../utils/posterUrl';
+  import { toPosterDisplayUrl } from '../../../utils/posterUrl';
 
   interface Props {
     posterUrl:       string;
@@ -52,7 +52,7 @@
     onToggleFavorite, onWatch, onSetStatus, onToggleDesc,
   }: Props = $props();
 
-  const displayPosterUrl = $derived(toCdnProxyUrl(posterUrl));
+  const displayPosterUrl = $derived(toPosterDisplayUrl(posterUrl, 'releaseHero'));
 
   let isWide = $state(typeof window !== 'undefined' ? window.matchMedia('(min-width: 961px)').matches : true);
 

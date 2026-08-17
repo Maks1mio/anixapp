@@ -7,7 +7,7 @@ function strField(value: unknown): string | undefined {
 
 export function mapReleaseRawToCard(raw: Record<string, unknown>): ReleaseCardData {
   const p = raw.poster as Record<string, { url?: string }> | undefined;
-  const posterRaw = p?.original?.url ?? p?.medium?.url ?? p?.small?.url
+  const posterRaw = p?.small?.url ?? p?.medium?.url ?? p?.original?.url
     ?? (typeof raw.poster === 'string' ? raw.poster : undefined)
     ?? (typeof raw.image === 'string' ? raw.image : undefined);
   const poster = posterRaw ? buildPosterUrl(posterRaw) || undefined : undefined;

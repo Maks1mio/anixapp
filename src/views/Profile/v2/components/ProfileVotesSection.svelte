@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../../../../stores/navigation';
-  import { posterUrl } from '../../_utils';
+  import { toPosterDisplayUrl } from '../../../../utils/posterUrl';
   import { resolveJacksonRefs } from '../../../../utils/jackson-refs';
 
   interface Props {
@@ -159,10 +159,14 @@
       {#each allItems as item (voteId(item))}
         <button type="button" class="profile-ui__vote-card" onclick={() => navigate(`/release/${voteId(item)}`)}>
           {#if item.image}
-            <div
-              class="profile-ui__vote-poster"
-              style="background-image:url('{posterUrl(String(item.image))}')"
-            ></div>
+            <div class="profile-ui__vote-poster">
+              <img
+                src={toPosterDisplayUrl(String(item.image), 'cardVertical')}
+                alt=""
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
           {:else}
             <div class="profile-ui__vote-poster"></div>
           {/if}

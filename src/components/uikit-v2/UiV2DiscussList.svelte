@@ -15,6 +15,7 @@
   } from '../../utils/release-menu-v2';
   import { parseAltTitles } from '../../utils/titleInfo';
   import { isReleaseAnnounce } from '../../utils/release-card';
+  import { toPosterDisplayUrl } from '../../utils/posterUrl';
 
   export type UiV2DiscussItem = {
     id: number | string;
@@ -306,7 +307,12 @@
       >
         <span class="uiv2-discuss__poster">
           {#if item.posterUrl}
-            <img src={item.posterUrl} alt="" loading="lazy" decoding="async" />
+            <img
+              src={toPosterDisplayUrl(item.posterUrl, 'cardHorizontal')}
+              alt=""
+              loading="lazy"
+              decoding="async"
+            />
           {:else}
             <span class="uiv2-discuss__poster-fallback" aria-hidden="true"></span>
           {/if}

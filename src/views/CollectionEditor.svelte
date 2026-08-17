@@ -23,7 +23,7 @@
     releaseListStatusLabel,
   } from '../utils/release-card';
   import type { ReleaseCardData } from '../types/release';
-  import { buildPosterUrl } from '../utils/posterUrl';
+  import { buildPosterUrl, toPosterDisplayUrl } from '../utils/posterUrl';
 
   interface Props {
     editId?: number | null;
@@ -367,7 +367,7 @@
         <span class="collection-editor__drag" aria-hidden="true">⋮⋮</span>
         <div class="collection-editor__release-poster">
           {#if card.poster}
-            <img src={card.poster} alt="" />
+            <img src={toPosterDisplayUrl(card.poster, 'cardHorizontal')} alt="" />
           {/if}
           {#if statusLabel}
             <div class="collection-editor__release-badge">{statusLabel}</div>

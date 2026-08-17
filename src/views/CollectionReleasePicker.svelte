@@ -20,6 +20,7 @@
     releaseListStatusLabel,
     releaseRawToStored,
   } from '../utils/release-card';
+  import { toPosterDisplayUrl } from '../utils/posterUrl';
 
   interface Props {
     returnPath?: string;
@@ -198,7 +199,7 @@
       <button type="button" class="collection-release-picker__result" onclick={() => persistRelease(raw)}>
         <div class="collection-editor__release-poster">
           {#if card.poster}
-            <img src={card.poster} alt="" />
+            <img src={toPosterDisplayUrl(card.poster, 'cardHorizontal')} alt="" />
           {/if}
           {#if statusLabel}
             <div class="collection-editor__release-badge">{statusLabel}</div>

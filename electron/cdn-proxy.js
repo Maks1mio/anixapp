@@ -78,17 +78,18 @@ function createThumbnail(buffer, width, height) {
     width: cropWidth,
     height: cropHeight,
   });
-  return cropped.resize({ width, height, quality: 'good' }).toPNG();
+  // JPEG: меньше PNG при постерах, качество достаточно для превью
+  return cropped.resize({ width, height, quality: 'better' }).toJPEG(88);
 }
 
 function getThumbnail(url, sourceBuffer, width, height) {
-  const key = `${url}|${width}x${height}`;
+  const key = `${url}|${width}x${height}|jpg88`;
   const cached = thumbnailCache.get(key);
   if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached;
 
   const entry = {
     buffer: createThumbnail(sourceBuffer, width, height),
-    mimeType: 'image/png',
+    mimeType: 'image/jpeg',
     ts: Date.now(),
   };
   thumbnailCache.set(key, entry);
@@ -173,8 +174,8 @@ function setupCdnProtocol(logger) {
       const width = requestedWidth || requestedSize;
       const height = requestedHeight || requestedSize;
       const hasValidDimensions = Number.isFinite(width) && Number.isFinite(height)
-        && width >= 16 && width <= 512
-        && height >= 16 && height <= 768;
+        && width >= 16 && width <= 640
+        && height >= 16 && height <= 960;
       const output = hasValidDimensions
         ? getThumbnail(target, asset.buffer, width, height)
         : asset;

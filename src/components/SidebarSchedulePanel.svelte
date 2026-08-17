@@ -93,7 +93,7 @@
                 {@const ep = formatScheduleEpisodes(item)}
                 <button type="button" class="sidebar-schedule__card" onclick={() => openRelease(item.id)}>
                   <div class="sidebar-schedule__poster">
-                    <PosterImage src={item.poster} alt="" loading="lazy" />
+                    <PosterImage src={item.poster} alt="" loading="lazy" thumb="cardVertical" />
                   </div>
                   <span class="sidebar-schedule__card-title">{item.titleRu || item.titleEn || 'Без названия'}</span>
                   {#if ep}

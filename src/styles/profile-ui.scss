@@ -672,8 +672,16 @@
   width: 100%;
   aspect-ratio: 2 / 3;
   border-radius: $radius-sm;
+  overflow: hidden;
   background: $color-surface center / cover no-repeat;
   transition: opacity $transition;
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
 }
 
 .profile-ui__vote-body {

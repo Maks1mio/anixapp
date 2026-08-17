@@ -1,6 +1,6 @@
 <script lang="ts">
   import { navigate } from '../../../../stores/navigation';
-  import { posterUrl } from '../../_utils';
+  import { toPosterDisplayUrl } from '../../../../utils/posterUrl';
 
   interface Props {
     title:     string;
@@ -22,9 +22,14 @@
 
   <div class="profile__media-grid">
     {#each items as item}
+      {@const thumb = item.image
+        ? toPosterDisplayUrl(String(item.image), 'cardVertical')
+        : ''}
       <button type="button" class="profile__card" onclick={() => navigate(`/release/${item.id}`)}>
-        {#if item.image}
-          <div class="profile__card-poster" style="background-image:url('{posterUrl(item.image)}')"></div>
+        {#if thumb}
+          <div class="profile__card-poster">
+            <img src={thumb} alt="" loading="lazy" decoding="async" />
+          </div>
         {:else}
           <div class="profile__card-poster"></div>
         {/if}

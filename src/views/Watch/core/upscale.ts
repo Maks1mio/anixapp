@@ -1,4 +1,4 @@
-import { GPU_AVAILABLE, startAnime4kUpscale, type Anime4kSession } from '../../../utils/anime4kUpscale';
+import { GPU_AVAILABLE, startAnime4kUpscale, restoreNativeVideoFrameCallback, type Anime4kSession } from '../../../utils/anime4kUpscale';
 
 const HIDE_CLASS = 'watch-page__video--hidden-for-upscale';
 
@@ -36,6 +36,7 @@ export class UpscaleController {
       canvas.classList.remove('hero-media__canvas--visible');
     }
     video?.classList.remove(HIDE_CLASS);
+    restoreNativeVideoFrameCallback(video);
   }
 
   async start(opts: {

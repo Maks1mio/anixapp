@@ -191,6 +191,15 @@ function copyExtentWH(copySize: GPUExtent3D): { w: number; h: number } {
   return { w: Number(d?.width) || 0, h: Number(d?.height) || 0 };
 }
 
+/** Снять monkey-patch anime4k-webgpu, иначе следующий requestVideoFrameCallback молча ничего не делает. */
+export function restoreNativeVideoFrameCallback(video: HTMLVideoElement | null | undefined): void {
+  if (!video) return;
+  const rvfc = HTMLVideoElement.prototype.requestVideoFrameCallback;
+  if (typeof rvfc === 'function') video.requestVideoFrameCallback = rvfc.bind(video);
+  const cancel = HTMLVideoElement.prototype.cancelVideoFrameCallback;
+  if (typeof cancel === 'function') video.cancelVideoFrameCallback = cancel.bind(video);
+}
+
 export async function startAnime4kUpscale(opts: {
   video: HTMLVideoElement;
   canvas: HTMLCanvasElement;
@@ -235,13 +244,13 @@ export async function startAnime4kUpscale(opts: {
   let upscaleStopFn: (() => void) | null = null;
   let capturedDevice: GPUDevice | null = null;
   let latestRvfcId: number | null = null;
-  const origRvfc = video.requestVideoFrameCallback.bind(video);
+  const origRvfc = HTMLVideoElement.prototype.requestVideoFrameCallback.bind(video);
 
   const manageCanvasHidden = canvasVisibleClass !== '';
 
   const stop = (opts?: { detachOutput?: boolean }) => {
     stopped = true;
-    video.requestVideoFrameCallback = origRvfc;
+    restoreNativeVideoFrameCallback(video);
     if (upscaleStopFn) {
       try { upscaleStopFn(); } catch { /* ignore */ }
       upscaleStopFn = null;
@@ -373,7 +382,7 @@ export async function startAnime4kUpscale(opts: {
 
   upscaleStopFn = () => {
     stopped = true;
-    video.requestVideoFrameCallback = origRvfc;
+    restoreNativeVideoFrameCallback(video);
     if (latestRvfcId !== null) {
       try { video.cancelVideoFrameCallback(latestRvfcId); } catch { /* ignore */ }
     }

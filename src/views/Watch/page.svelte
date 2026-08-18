@@ -339,7 +339,9 @@
 
   function bindCoreEls() {
     core.video = videoEl ?? null;
-    core.canvas = canvasEl ?? null;
+    core.canvas = canvasEl
+      ?? (playerWrapEl?.querySelector('.watch-page__upscale-canvas') as HTMLCanvasElement | null)
+      ?? null;
     core.iframe = iframeEl ?? null;
   }
 
@@ -355,23 +357,22 @@
   }
 
   let upscaleStartGen = 0;
-  let upscaleHoldToken = 0;
   let upscaleHoldForNewFrame = false;
   let upscaleCanvasEpoch = $state(0);
-  let upscaleArmTimer: ReturnType<typeof setTimeout> | 0 = 0;
+  let upscaleRestartTimer: ReturnType<typeof setTimeout> | 0 = 0;
+  let upscaleRestartTries = 0;
 
-  function clearUpscaleArmTimer() {
-    if (upscaleArmTimer) {
-      clearTimeout(upscaleArmTimer);
-      upscaleArmTimer = 0;
+  function clearUpscaleRestartTimer() {
+    if (upscaleRestartTimer) {
+      clearTimeout(upscaleRestartTimer);
+      upscaleRestartTimer = 0;
     }
   }
 
   function holdUpscaleForNewSource(_expectTime = 0) {
     if (!player.upscaleEnabled || !gpuAvailable) return;
-    upscaleHoldToken++;
     upscaleHoldForNewFrame = true;
-    clearUpscaleArmTimer();
+    clearUpscaleRestartTimer();
     stopUpscale();
   }
 
@@ -386,84 +387,58 @@
 
   async function startUpscale() {
     bindCoreEls();
-    if (upscaleHoldForNewFrame) return;
     const gen = ++upscaleStartGen;
     if (!player.upscaleEnabled || !gpuAvailable) {
       if (gen === upscaleStartGen) stopUpscale();
       return;
     }
-    if (!videoEl || videoEl.videoWidth < 2 || videoEl.videoHeight < 2) return;
+    if (!player.useVideo) return;
     await tick();
-    if (gen !== upscaleStartGen || upscaleHoldForNewFrame) return;
+    if (gen !== upscaleStartGen) return;
     bindCoreEls();
-    if (!canvasEl) {
-      await tick();
-      bindCoreEls();
-    }
-    if (!canvasEl) return;
+    const video = core.video;
+    const canvas = core.canvas;
+    if (!video || video.videoWidth < 2 || video.videoHeight < 2 || video.readyState < 2) return;
+    if (!canvas) return;
     player.upscaleCanvasOn = true;
     await tick();
-    if (gen !== upscaleStartGen || upscaleHoldForNewFrame) return;
+    if (gen !== upscaleStartGen) return;
     bindCoreEls();
     const ok = await core.startUpscale(player.upscaleEnabled, player.upscaleMode, player.aspectRatio);
-    if (gen !== upscaleStartGen || upscaleHoldForNewFrame) return;
+    if (gen !== upscaleStartGen) return;
     player.upscaleCanvasOn = ok;
     if (!ok) videoEl?.classList.remove('watch-page__video--hidden-for-upscale');
   }
 
-  /** Показать оригинал, дождаться живых кадров новой серии, поднять Anime4K на свежем canvas. */
-  function armUpscaleAfterNewMedia() {
-    if (!player.upscaleEnabled || !gpuAvailable) {
+  /** После смены src всегда заново поднять Anime4K. Не блокируем start флагом hold. */
+  function scheduleUpscaleRestart() {
+    if (!player.upscaleEnabled || !gpuAvailable || !player.useVideo) {
       upscaleHoldForNewFrame = false;
       revealPlayerMedia();
       return;
     }
-    const video = videoEl;
-    const token = upscaleHoldToken;
     revealPlayerMedia();
-    if (!video || !player.useVideo) {
-      upscaleHoldForNewFrame = false;
-      return;
-    }
-
-    const finish = () => {
-      if (token !== upscaleHoldToken) return;
-      upscaleHoldForNewFrame = false;
-      clearUpscaleArmTimer();
-      void startUpscale();
-    };
-
-    const waitFramesThenStart = () => {
-      if (token !== upscaleHoldToken) return;
-      if (video.paused) {
-        upscaleArmTimer = window.setTimeout(waitFramesThenStart, 80);
-        return;
-      }
-      if (video.videoWidth < 2 || video.readyState < 2) {
-        upscaleArmTimer = window.setTimeout(waitFramesThenStart, 80);
-        return;
-      }
-      let n = 0;
-      const onFrame: VideoFrameRequestCallback = () => {
-        if (token !== upscaleHoldToken) return;
-        n += 1;
-        if (n < 2) {
-          try { video.requestVideoFrameCallback(onFrame); } catch { finish(); }
-          return;
+    upscaleHoldForNewFrame = false;
+    if (upscaleRestartTimer) return;
+    upscaleRestartTries = 0;
+    const attempt = () => {
+      upscaleRestartTimer = 0;
+      if (!player.upscaleEnabled || !gpuAvailable || !player.useVideo) return;
+      const v = videoEl;
+      if (!v || v.videoWidth < 2 || v.readyState < 2) {
+        if (upscaleRestartTries++ < 40) {
+          upscaleRestartTimer = window.setTimeout(attempt, 120);
         }
-        finish();
-      };
-      if (typeof video.requestVideoFrameCallback === 'function') {
-        try { video.requestVideoFrameCallback(onFrame); } catch { finish(); return; }
-        upscaleArmTimer = window.setTimeout(finish, 1200);
-      } else {
-        upscaleArmTimer = window.setTimeout(finish, 160);
+        return;
       }
+      void startUpscale().then(() => {
+        if (core.upscale.active) return;
+        if (upscaleRestartTries++ < 8) {
+          upscaleRestartTimer = window.setTimeout(attempt, 250);
+        }
+      });
     };
-
-    video.addEventListener('playing', waitFramesThenStart, { once: true });
-    if (!video.paused && video.readyState >= 2) waitFramesThenStart();
-    else upscaleArmTimer = window.setTimeout(waitFramesThenStart, 400);
+    upscaleRestartTimer = window.setTimeout(attempt, 280);
   }
 
   function restartUpscaleIfFrameSizeChanged() {
@@ -473,7 +448,7 @@
     if (w < 2 || h < 2) return;
     if (core.upscale.active && core.upscale.inputWidth === w && core.upscale.inputHeight === h) return;
     upscaleHoldForNewFrame = false;
-    startUpscale();
+    scheduleUpscaleRestart();
   }
 
   /** Счётчик тиков rAF, когда canvas апскейла реально показан (прокси «кадров вывода») */
@@ -894,9 +869,8 @@
     player.loadState = 'error';
     player.errorText = text || userPlaybackError(embedUrl || core.origEpUrl);
     bindCoreEls();
-    upscaleHoldToken++;
     upscaleHoldForNewFrame = false;
-    clearUpscaleArmTimer();
+    clearUpscaleRestartTimer();
     core.hideMedia();
     releaseLobbySyncAfterPlaybackError();
     if (text !== 'Не удалось воспроизвести скачанный файл.') {
@@ -992,7 +966,7 @@
       videoEl?.addEventListener('seeked', onSeeked, { once: true });
     }
     if (useVid) bindVideoElementListeners();
-    armUpscaleAfterNewMedia();
+    scheduleUpscaleRestart();
     void prefetchNearby();
   }
 
@@ -1879,7 +1853,10 @@
       player.currentTime = v.currentTime;
       player.duration    = v.duration || 0;
       player.bufferedEnd = v.buffered.length ? v.buffered.end(v.buffered.length - 1) : 0;
-      if (upscaleHoldForNewFrame) return;
+      if (player.upscaleEnabled && gpuAvailable && player.useVideo && !core.upscale.active
+        && v.readyState >= 2 && v.videoWidth >= 2 && player.loadState === 'ready' && !player.switching) {
+        scheduleUpscaleRestart();
+      }
       if ((player.switching || player.loadState === 'loading') && mediaHasRenderableFrame(v)) {
         revealPlayerMedia();
       }

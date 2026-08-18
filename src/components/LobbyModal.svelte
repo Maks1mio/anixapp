@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { closeLobbyModal } from '../stores/modals';
   import LobbyChooser from './LobbyChooser.svelte';
+  import UiV2Tooltip from './uikit-v2/UiV2Tooltip.svelte';
   import { getCurrentRoomId } from '../services/lobby-state';
   import {
     createLobbyRoomAndOpenPlayer,
@@ -124,6 +125,9 @@
           </svg>
         </div>
         <h2 class="lobby-modal__title">Совместный просмотр</h2>
+        <UiV2Tooltip text="Может быть переделано в будущем" placement="bottom" showDelay={80}>
+          <span class="beta-badge" tabindex="0">beta</span>
+        </UiV2Tooltip>
       </div>
       <button type="button" class="lobby-modal__close" aria-label="Закрыть" onclick={close}></button>
     </div>

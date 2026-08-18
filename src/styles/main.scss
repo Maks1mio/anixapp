@@ -50,7 +50,6 @@ html {
   -webkit-font-smoothing: antialiased;
   height: 100%;
   overflow: hidden;
-  transform: translate3d(0%, 0px, 0px);
 }
 
 body {
@@ -83,6 +82,29 @@ button {
   cursor: pointer;
   border: none;
   background: none;
+}
+
+.beta-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.15rem;
+  padding: 0 0.42rem;
+  border-radius: 74px;
+  background: var(--color-accent, #{$color-accent});
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1;
+  flex-shrink: 0;
+  cursor: help;
+
+  &:focus-visible {
+    outline: 2px solid #fff !important;
+    outline-offset: 2px !important;
+  }
 }
 
 img {

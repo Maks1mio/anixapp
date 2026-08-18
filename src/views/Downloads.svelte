@@ -32,6 +32,7 @@
     iconTrash2,
     iconFilm,
   } from '../components/icons';
+  import UiV2Tooltip from '../components/uikit-v2/UiV2Tooltip.svelte';
 
   interface DownloadsViewState {
     expandedGroups: Record<string, boolean>;
@@ -198,7 +199,12 @@
 
 <div class="view view-downloads">
   <div class="view-header">
-    <h1 class="view-header__title">Загрузки</h1>
+    <div class="view-header__title-row">
+      <h1 class="view-header__title">Загрузки</h1>
+      <UiV2Tooltip text="Может быть переделано в будущем" placement="bottom" showDelay={80}>
+        <span class="beta-badge" tabindex="0">beta</span>
+      </UiV2Tooltip>
+    </div>
     <p class="view-header__subtitle">
       {#if activeCount > 0}
         Скачивается {activeCount} {activeCount === 1 ? 'файл' : activeCount < 5 ? 'файла' : 'файлов'} · по одному

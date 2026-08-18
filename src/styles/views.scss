@@ -1808,10 +1808,21 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   margin-bottom: 1.5rem;
 }
 
+.view-header__title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0 0 0.25rem;
+}
+
 .view-header__title {
   margin: 0 0 0.25rem;
   font-size: 1.75rem;
   font-weight: 600;
+}
+
+.view-header__title-row .view-header__title {
+  margin: 0;
 }
 
 .view-header__subtitle {

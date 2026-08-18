@@ -1,4 +1,5 @@
 import { setEmbedMediaContext } from './core/hls-media-context';
+import { normalizeSkipMarks, type SkipMarks } from './_skipMarks';
 
 export function isVideoEmbedPageUrl(url: string): boolean {
   return /kodikplayer\.com|kodik\.info|aniqit\.com|anixis\.com|aniqart\.com/i.test(url)
@@ -135,14 +136,14 @@ const QUALITY_PRIORITY = ['2160', '2160p', '1440', '1440p', '1080', '1080p', '72
 export async function resolveEpisodeUrl(
   episodeUrl: string,
   iframe: boolean,
-): Promise<{ playUrl: string; useVideo: boolean; qualityMap: Record<string, string>; currentQuality: string }> {
+): Promise<{ playUrl: string; useVideo: boolean; qualityMap: Record<string, string>; currentQuality: string; skip: SkipMarks | null }> {
   let url = episodeUrl.startsWith('http') ? episodeUrl : `https:${episodeUrl}`;
   url = stripKodikQueryParams(url);
   const host = (url.match(/https?:\/\/([^/]+)/) || [])[1] || '';
   const isAniqit   = /aniqit\.com|anixis\.com|aniqart\.com/i.test(host);
   const isKodik    = /kodikplayer\.com|kodik\.info/i.test(host);
   const isSibnet   = /sibnet\.ru/i.test(host);
-  const isLibria   = /aniliberty\.top|anilibria\.tv|libria\.fun/i.test(host);
+  const isLibria   = /aniliberty\.top|anilibria\.(tv|top)|libria\.fun/i.test(host);
   const isVk       = /vk\.com|vk\.ru|vkvideo/i.test(host);
   const isRutube   = /rutube\.ru/i.test(host);
   const isOk       = /ok\.ru|odnoklassniki/i.test(host);
@@ -160,6 +161,7 @@ export async function resolveEpisodeUrl(
   let qualityMap: Record<string, string> = {};
   let currentQuality = '';
   let embedReferer = url;
+  let skip: SkipMarks | null = null;
 
   setEmbedMediaContext(url);
 
@@ -169,6 +171,7 @@ export async function resolveEpisodeUrl(
       const directUrl: string | null = res?.directUrl ?? null;
       const remoteMap: Record<string, string> = res?.qualityMap ?? {};
       const dlHeaders = (res?.downloadHeaders as Record<string, string> | undefined) ?? {};
+      skip = normalizeSkipMarks(res?.skip);
       setEmbedMediaContext(url, dlHeaders);
       if (dlHeaders.Referer) embedReferer = dlHeaders.Referer;
 
@@ -224,7 +227,7 @@ export async function resolveEpisodeUrl(
   }
 
   if (!useVideo && iframe) { playUrl = url; useVideo = false; }
-  return { playUrl, useVideo, qualityMap, currentQuality };
+  return { playUrl, useVideo, qualityMap, currentQuality, skip };
 }
 
 /**
@@ -240,7 +243,7 @@ export async function resolveEpisodeUrlWithRetry(
   const iframeOnly = /youtube\.com|youtu\.be/i.test(abs);
   const retryableSocial = /vk\.com|vkvideo|rutube\.ru|ok\.ru|studiomir/i.test(abs);
   const attempts = iframeOnly ? 1 : maxAttempts;
-  let lastResult = { playUrl: abs, useVideo: false, qualityMap: {} as Record<string, string>, currentQuality: '' };
+  let lastResult = { playUrl: abs, useVideo: false, qualityMap: {} as Record<string, string>, currentQuality: '', skip: null as SkipMarks | null };
   for (let i = 0; i < attempts; i++) {
     try {
       const result = await resolveEpisodeUrl(episodeUrl, iframe);

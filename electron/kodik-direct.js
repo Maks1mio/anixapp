@@ -1,6 +1,8 @@
 /**
  * Kodik / aniqit direct link resolution (Node fetch — для web-bridge и dev).
  */
+const { parseKodikSkipButton } = require('./lib/skip-marks');
+
 const KODIK_PLAYER_ORIGIN = 'https://kodikplayer.com/';
 /** Уже расшифрованный URL — не трогаем (solodcdn /s/m/, useruploads, cloud и т.п.). */
 const KODIK_PLAIN_SRC = /(?:kodik-storage|solodcdn)\.com\//i;
@@ -117,31 +119,40 @@ async function resolveKodikEmbedUrl(embedUrl) {
   return url;
 }
 
-async function getKodikDirectLinks(embedUrl) {
+async function loadKodikPlayer(embedUrl) {
   const pageUrl = await resolveKodikEmbedUrl(embedUrl);
   let videoInfo = parseKodikLinkFromUrl(pageUrl);
+  const htmlPromise = fetchText(pageUrl, {
+    Referer: KODIK_PLAYER_ORIGIN,
+    Accept: 'text/html,application/xhtml+xml',
+  }).catch(() => '');
+  const ftorEarly = (videoInfo?.hash && videoInfo?.id && videoInfo?.type)
+    ? fetchKodikFtorLinks(pageUrl, videoInfo).catch(() => null)
+    : Promise.resolve(null);
 
+  const html = await htmlPromise;
+  const skip = parseKodikSkipButton(html);
   if (!videoInfo?.hash || !videoInfo?.id || !videoInfo?.type) {
+    videoInfo = parseKodikEmbedHtml(html);
+  }
+  let links = await ftorEarly;
+  if (!links) {
     try {
-      const html = await fetchText(pageUrl, {
-        Referer: KODIK_PLAYER_ORIGIN,
-        Accept: 'text/html,application/xhtml+xml',
-      });
-      videoInfo = parseKodikEmbedHtml(html);
+      links = await fetchKodikFtorLinks(pageUrl, videoInfo || {});
     } catch {
-      /* ignore */
+      links = null;
     }
   }
+  return { links, skip };
+}
 
-  try {
-    return await fetchKodikFtorLinks(pageUrl, videoInfo || {});
-  } catch {
-    return null;
-  }
+async function getKodikDirectLinks(embedUrl) {
+  const { links } = await loadKodikPlayer(embedUrl);
+  return links;
 }
 
 async function getDirectVideoLink(embedUrl) {
-  const EMPTY = { directUrl: null, quality: null, qualityMap: {} };
+  const EMPTY = { directUrl: null, quality: null, qualityMap: {}, skip: null };
   if (!embedUrl || typeof embedUrl !== 'string') return EMPTY;
 
   const url = embedUrl.startsWith('http') ? embedUrl : `https:${embedUrl}`;
@@ -151,8 +162,8 @@ async function getDirectVideoLink(embedUrl) {
 
   try {
     if (host.includes('kodik') || host.includes('aniqit') || host.includes('anixis') || host.includes('aniqart')) {
-      const links = await getKodikDirectLinks(url);
-      if (!links || typeof links !== 'object') return EMPTY;
+      const { links, skip } = await loadKodikPlayer(url);
+      if (!links || typeof links !== 'object') return { ...EMPTY, skip: skip || null };
       const qualityMap = {};
       for (const [key, arr] of Object.entries(links)) {
         const src = toAbs(arr?.[0]?.src);
@@ -164,6 +175,7 @@ async function getDirectVideoLink(embedUrl) {
         directUrl,
         quality: best || null,
         qualityMap,
+        skip: skip || null,
         downloadHeaders: directUrl
           ? { Referer: 'https://kodikplayer.com/', 'User-Agent': BROWSER_UA }
           : {},

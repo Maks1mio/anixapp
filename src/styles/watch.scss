@@ -155,6 +155,42 @@ $p-font-size:  16px;
   outline-offset: 3px;
 }
 
+.watch-page__skip-mark {
+  position: absolute;
+  right: 20px;
+  bottom: 28px;
+  z-index: 7;
+  padding: 0.55rem 1rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+
+  &--chrome-up {
+    bottom: 108px;
+  }
+}
+
+.watch-page__skip-mark:hover {
+  filter: brightness(1.08);
+}
+
+.watch-page__skip-mark:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+.watch-page--chrome-hidden .watch-page__skip-mark {
+  cursor: pointer;
+}
+
 .watch-page__player-loading {
   &::after {
     content: '';
@@ -626,6 +662,7 @@ $p-font-size:  16px;
   background: rgba(255, 255, 255, 0.25);
   border-radius: 3px;
   pointer-events: none;
+  z-index: 0;
 }
 
 .watch-page__progress-bar {
@@ -638,6 +675,18 @@ $p-font-size:  16px;
   border-radius: 3px;
   pointer-events: none;
   transition: width 0.1s linear;
+  z-index: 1;
+}
+
+.watch-page__timeline-skip {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: #3ecf6a;
+  border-radius: 3px;
+  pointer-events: none;
+  z-index: 2;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
 }
 
 .watch-page__timeline-dot {
@@ -651,7 +700,11 @@ $p-font-size:  16px;
   background: var(--color-accent);
   box-shadow: 0 0 4px rgba(0, 0, 0, 0.25);
   pointer-events: none;
-  z-index: 2;
+  z-index: 3;
+
+  &--skip {
+    background: #3ecf6a;
+  }
 }
 
 // ── Button row ────────────────────────────────────────────────────────────────

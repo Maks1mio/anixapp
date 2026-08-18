@@ -4,9 +4,11 @@
     totalTime:   string;
     progressPct: number;
     bufferedPct: number;
+    skipSegments?: Array<{ startPct: number; widthPct: number; kind: 'opening' | 'ending' }>;
+    skipDotActive?: boolean;
     onseek:      (e: MouseEvent) => void;
   }
-  let { currentTime, totalTime, progressPct, bufferedPct, onseek }: Props = $props();
+  let { currentTime, totalTime, progressPct, bufferedPct, skipSegments = [], skipDotActive = false, onseek }: Props = $props();
 </script>
 
 <div class="watch-page__timeline-row">
@@ -24,6 +26,9 @@
     onclick={onseek}
     role="slider"
     aria-valuenow={progressPct}
+    aria-valuetext={skipSegments.length
+      ? `${currentTime} из ${totalTime}, отмечены опенинг и эндинг`
+      : undefined}
     tabindex="0"
   >
     <div
@@ -32,7 +37,16 @@
     >
       <div class="watch-page__timeline-loaded" style="width:{bufferedPct}%"></div>
       <div class="watch-page__progress-bar"    style="width:{progressPct}%"></div>
-      <div class="watch-page__timeline-dot"></div>
+      {#each skipSegments as seg (seg.kind)}
+        <div
+          class="watch-page__timeline-skip"
+          class:watch-page__timeline-skip--opening={seg.kind === 'opening'}
+          class:watch-page__timeline-skip--ending={seg.kind === 'ending'}
+          style="left:{seg.startPct}%; width:{seg.widthPct}%"
+          title={seg.kind === 'opening' ? 'Опенинг' : 'Эндинг'}
+        ></div>
+      {/each}
+      <div class="watch-page__timeline-dot" class:watch-page__timeline-dot--skip={skipDotActive}></div>
     </div>
   </div>
 

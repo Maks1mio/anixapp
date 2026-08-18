@@ -14,6 +14,8 @@ export type HlsFatalKind = 'recover' | 'reresolve' | 'fallback';
 export interface SwapMediaHandlers {
   onReady?: () => void;
   onFatal?: (kind: HlsFatalKind) => void;
+  /** Полностью пересоздать HLS — иначе старый кадр остаётся в <video> и Anime4K «залипает». */
+  forceNew?: boolean;
 }
 
 export function getAttachedHls(video: HTMLVideoElement): Hls | undefined {
@@ -86,12 +88,13 @@ export function swapMediaSource(
   const existing = getAttachedHls(video);
 
   if (wantHls) {
-    if (existing) {
+    if (existing && !handlers.forceNew) {
       bindHlsHandlers(existing, video, handlers);
       existing.loadSource(url);
       existing.startLoad();
       return { reused: true, isHls: true };
     }
+    detachHls(video);
     const hls = new Hls(buildHlsConfig());
     bindHlsHandlers(hls, video, handlers);
     hls.loadSource(url);

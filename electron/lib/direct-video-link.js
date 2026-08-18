@@ -7,6 +7,7 @@
 
 const { RutubeParser, VKVideoParser, OKParser } = require('anixapi');
 const { getDirectVideoLink: getKodikDirectVideoLink } = require('../kodik-direct');
+const { skipFromLibriaEpisode } = require('./skip-marks');
 
 const BROWSER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
@@ -16,6 +17,7 @@ const EMPTY = Object.freeze({
   quality: null,
   qualityMap: {},
   downloadHeaders: {},
+  skip: null,
 });
 
 const PRIO = ['2160', '2160p', '1440', '1440p', '1080', '1080p', '720', '720p', '480', '480p', '360', '360p', '240', '240p'];
@@ -42,7 +44,7 @@ const SIBNET_PAGE_HEADERS = {
 };
 
 function empty() {
-  return { directUrl: null, quality: null, qualityMap: {}, downloadHeaders: {} };
+  return { directUrl: null, quality: null, qualityMap: {}, downloadHeaders: {}, skip: null };
 }
 
 function toAbs(src) {
@@ -91,7 +93,7 @@ function pickBest(qualityMap) {
   return best || null;
 }
 
-function resultFromMap(qualityMap, headers) {
+function resultFromMap(qualityMap, headers, extra = {}) {
   const cleaned = {};
   for (const [k, v] of Object.entries(qualityMap || {})) {
     const abs = toAbs(typeof v === 'string' ? v : v?.src);
@@ -100,12 +102,13 @@ function resultFromMap(qualityMap, headers) {
   }
   const best = pickBest(cleaned);
   const directUrl = best ? cleaned[best] : null;
-  if (!directUrl) return empty();
+  if (!directUrl) return { ...empty(), skip: extra.skip || null };
   return {
     directUrl,
     quality: best,
     qualityMap: cleaned,
     downloadHeaders: headers || {},
+    skip: extra.skip || null,
   };
 }
 
@@ -219,28 +222,36 @@ async function getLibriaDirectLink(url, host) {
   const epOrdinal = parsed.searchParams.get('ep');
   if (!releaseId || !epOrdinal) return empty();
 
-  const apiBase = host.includes('aniliberty') || host.includes('libria.fun')
-    ? 'https://aniliberty.top/api/v1/anime/releases'
-    : 'https://aniliberty.top/api/v1/anime/releases';
-
   const headers = { Referer: url.split('?')[0], 'User-Agent': BROWSER_UA };
-  const directMap = await scrapeAnilibriaDirectFiles(url, parseInt(epOrdinal, 10));
-  if (directMap && Object.keys(directMap).length) {
-    return resultFromMap(directMap, headers);
-  }
+  const epNum = parseInt(epOrdinal, 10);
+  const apiBases = host.includes('aniliberty') || host.includes('libria.fun')
+    ? ['https://aniliberty.top/api/v1/anime/releases', 'https://anilibria.top/api/v1/anime/releases']
+    : ['https://anilibria.top/api/v1/anime/releases', 'https://aniliberty.top/api/v1/anime/releases'];
+  const [directMap, apiBody] = await Promise.all([
+    scrapeAnilibriaDirectFiles(url, epNum),
+    (async () => {
+      for (const base of apiBases) {
+        try {
+          const r = await fetch(`${base}/${releaseId}`);
+          if (r.ok) return await r.json();
+        } catch { /* next host */ }
+      }
+      return null;
+    })(),
+  ]);
+  const ep = (apiBody?.episodes || []).find((e) => String(e.ordinal) === String(epNum));
+  const skip = skipFromLibriaEpisode(ep);
 
-  const apiResp = await fetch(`${apiBase}/${releaseId}`);
-  if (!apiResp.ok) return empty();
-  const body = await apiResp.json();
-  if (!body?.episodes) return empty();
-  const ep = body.episodes.find((e) => String(e.ordinal) === String(parseInt(epOrdinal, 10)));
-  if (!ep) return empty();
+  if (directMap && Object.keys(directMap).length) {
+    return resultFromMap(directMap, headers, { skip });
+  }
+  if (!ep) return { ...empty(), skip };
 
   const qualityMap = {};
   if (ep.hls_1080) qualityMap['1080'] = toAbs(ep.hls_1080);
   if (ep.hls_720) qualityMap['720'] = toAbs(ep.hls_720);
   if (ep.hls_480) qualityMap['480'] = toAbs(ep.hls_480);
-  return resultFromMap(qualityMap, headers);
+  return resultFromMap(qualityMap, headers, { skip });
 }
 
 function normalizeParserMap(links) {
@@ -398,6 +409,7 @@ async function getDirectVideoLink(embedUrl) {
         quality: '720',
         qualityMap: { '720': direct },
         downloadHeaders: { Referer: url, 'User-Agent': BROWSER_UA },
+        skip: null,
       };
     }
 

@@ -60,6 +60,7 @@ export class PlayerCore {
     const iframeEl = this.iframe;
     if (!opts.useVideo) {
       this.wdClear();
+      this.stopUpscale();
       if (video) {
         detachHls(video);
         video.hidden = true;
@@ -70,6 +71,7 @@ export class PlayerCore {
     if (!video) return;
 
     this.wdClear();
+    this.stopUpscale();
     const myGen = ++this.wdGen;
     this.playGen++;
     const isLocal = isLocalMediaUrl(opts.url);
@@ -97,9 +99,6 @@ export class PlayerCore {
       };
       video.addEventListener('loadeddata', restoreTime, { once: true });
       video.addEventListener('canplay', restoreTime, { once: true });
-      if (opts.seekTime === 0) {
-        try { video.currentTime = 0; } catch { /* ignore */ }
-      }
     }
 
     const fallback = () => {
@@ -111,6 +110,7 @@ export class PlayerCore {
     };
 
     const { isHls } = swapMediaSource(video, opts.url, {
+      forceNew: true,
       onReady: () => {
         doPlay();
         opts.syncPlaybackRate();

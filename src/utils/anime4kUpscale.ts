@@ -250,10 +250,9 @@ export async function startAnime4kUpscale(opts: {
       try { video.cancelVideoFrameCallback(latestRvfcId); } catch { /* ignore */ }
       latestRvfcId = null;
     }
-    if (capturedDevice) {
-      try { capturedDevice.destroy?.(); } catch { /* ignore */ }
-      capturedDevice = null;
-    }
+    // Не вызывать device.destroy(): в Chromium это ломает следующий
+    // getContext('webgpu') на том же canvas — Anime4K «залипает» или не стартует.
+    capturedDevice = null;
     if (opts?.detachOutput === false) return;
     if (manageCanvasHidden) {
       canvas.hidden = true;
@@ -283,16 +282,24 @@ export async function startAnime4kUpscale(opts: {
   const wrapCopyQueue = (device: GPUDevice) => {
     const queue = device.queue;
     const origCopy = queue.copyExternalImageToTexture.bind(queue);
+    let copyFails = 0;
     queue.copyExternalImageToTexture = (source, destination, copySize) => {
       const src = source?.source;
       if (src instanceof HTMLVideoElement) {
         const { w, h } = copyExtentWH(copySize);
-        if (src.videoWidth < w || src.videoHeight < h || w < 2 || h < 2) return;
+        if (src.videoWidth < w || src.videoHeight < h || w < 2 || h < 2) {
+          copyFails++;
+          if (copyFails >= 6) stop();
+          return;
+        }
       }
       try {
-        return origCopy(source, destination, copySize);
+        const result = origCopy(source, destination, copySize);
+        copyFails = 0;
+        return result;
       } catch {
-        /* кадр другого размера — пайплайн пересоберётся снаружи */
+        copyFails++;
+        if (copyFails >= 6) stop();
       }
     };
   };
@@ -325,38 +332,39 @@ export async function startAnime4kUpscale(opts: {
   }
 
   const origRequestAdapter = gpuAny.requestAdapter.bind(gpuAny);
-  gpuAny.requestAdapter = async (...args: Parameters<GPU['requestAdapter']>) => {
-    const adapter = await origRequestAdapter(...args);
-    if (!adapter) return adapter;
-    const origRD = adapter.requestDevice.bind(adapter);
-    adapter.requestDevice = async (...dArgs: Parameters<GPUAdapter['requestDevice']>) => {
-      const device = await origRD(...dArgs);
-      capturedDevice = device;
-      wrapCopyQueue(device);
-      return device;
-    };
-    return adapter;
-  };
-
-  const ModeClass = MODE_MAP[mode] ?? ModeB;
-
   try {
-    await anime4kRender({
-      video,
-      canvas,
-      pipelineBuilder: (device: GPUDevice, inputTexture: GPUTexture) => {
-        const native = { width: capturedW, height: capturedH };
-        const target = { width: canvas.width, height: canvas.height };
-        return [new ModeClass({ device, inputTexture, nativeDimensions: native, targetDimensions: target }) as never];
-      },
-    });
-  } catch {
-    gpuAny.requestAdapter = origRequestAdapter;
-    stop();
-    return null;
-  }
+    gpuAny.requestAdapter = async (...args: Parameters<GPU['requestAdapter']>) => {
+      const adapter = await origRequestAdapter(...args);
+      if (!adapter) return adapter;
+      const origRD = adapter.requestDevice.bind(adapter);
+      adapter.requestDevice = async (...dArgs: Parameters<GPUAdapter['requestDevice']>) => {
+        const device = await origRD(...dArgs);
+        capturedDevice = device;
+        wrapCopyQueue(device);
+        return device;
+      };
+      return adapter;
+    };
 
-  gpuAny.requestAdapter = origRequestAdapter;
+    const ModeClass = MODE_MAP[mode] ?? ModeB;
+
+    try {
+      await anime4kRender({
+        video,
+        canvas,
+        pipelineBuilder: (device: GPUDevice, inputTexture: GPUTexture) => {
+          const native = { width: capturedW, height: capturedH };
+          const target = { width: canvas.width, height: canvas.height };
+          return [new ModeClass({ device, inputTexture, nativeDimensions: native, targetDimensions: target }) as never];
+        },
+      });
+    } catch {
+      stop();
+      return null;
+    }
+  } finally {
+    gpuAny.requestAdapter = origRequestAdapter;
+  }
 
   if (stopped) {
     stop();

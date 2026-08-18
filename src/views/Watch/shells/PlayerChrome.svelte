@@ -25,6 +25,8 @@
     totalTime: string;
     progressPct: number;
     bufferedPct: number;
+    skipSegments?: Array<{ startPct: number; widthPct: number; kind: 'opening' | 'ending' }>;
+    skipDotActive?: boolean;
     muted: boolean;
     volume: number;
     isFullscreen: boolean;
@@ -118,6 +120,8 @@
       totalTime={props.totalTime}
       progressPct={props.progressPct}
       bufferedPct={props.bufferedPct}
+      skipSegments={props.skipSegments ?? []}
+      skipDotActive={props.skipDotActive === true}
       onseek={props.onseek}
     />
     <ActionsBar

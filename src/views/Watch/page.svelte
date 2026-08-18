@@ -5,6 +5,7 @@
   import { logLobbyAction, snapshotPlayback } from '../../services/lobby-action-log';
   import type { WatchState, EpisodeItem, DubberItem, LobbyActivityEntry, LobbyChatMessage, PopoverType, NextEpAltDub, DownloadedEpisodeItem, PlaybackAlt } from './_types';
   import { isHlsUrl, isDubberBlacklisted, lobbyActionText, allowsIframeFallback, userPlaybackError } from './_utils';
+  import { normalizeSkipMarks, skipMarkActive, skipMarkOnPlayhead, endingIsAtEpisodeEnd, type SkipMarkKind, type SkipMarks } from './_skipMarks';
   import { pathToLocalMediaUrl } from '../../utils/local-media-url';
   import { sortDubbersPinnedFirst, readLastEpisodeTypeUpdateId } from '../../utils/dubber-meta';
   import { PlayerState } from './_usePlayer.svelte';
@@ -126,6 +127,7 @@
   let lastEpisodeTypeUpdateId = $state<number | null>(null);
   let playbackAlt = $state<PlaybackAlt | null>(null);
   let playbackAltGen = 0;
+  let skipMarks = $state<SkipMarks | null>(null);
 
   // ── Hotkeys + OSD ──────────────────────────────────────────────────────────
   let hotkeys = $state<PlayerHotkeysSettings>({ ...DEFAULT_PLAYER_HOTKEYS });
@@ -345,7 +347,6 @@
   function revealPlayerMedia() {
     player.switching = false;
     if (player.loadState === 'loading') player.loadState = 'ready';
-    upscaleHoldForNewFrame = false;
   }
 
   function mediaHasRenderableFrame(el: HTMLVideoElement | null | undefined): boolean {
@@ -354,7 +355,25 @@
   }
 
   let upscaleStartGen = 0;
+  let upscaleHoldToken = 0;
   let upscaleHoldForNewFrame = false;
+  let upscaleCanvasEpoch = $state(0);
+  let upscaleArmTimer: ReturnType<typeof setTimeout> | 0 = 0;
+
+  function clearUpscaleArmTimer() {
+    if (upscaleArmTimer) {
+      clearTimeout(upscaleArmTimer);
+      upscaleArmTimer = 0;
+    }
+  }
+
+  function holdUpscaleForNewSource(_expectTime = 0) {
+    if (!player.upscaleEnabled || !gpuAvailable) return;
+    upscaleHoldToken++;
+    upscaleHoldForNewFrame = true;
+    clearUpscaleArmTimer();
+    stopUpscale();
+  }
 
   function stopUpscale() {
     upscaleStartGen++;
@@ -362,6 +381,7 @@
     core.stopUpscale();
     player.upscaleCanvasOn = false;
     videoEl?.classList.remove('watch-page__video--hidden-for-upscale');
+    upscaleCanvasEpoch += 1;
   }
 
   async function startUpscale() {
@@ -373,6 +393,14 @@
       return;
     }
     if (!videoEl || videoEl.videoWidth < 2 || videoEl.videoHeight < 2) return;
+    await tick();
+    if (gen !== upscaleStartGen || upscaleHoldForNewFrame) return;
+    bindCoreEls();
+    if (!canvasEl) {
+      await tick();
+      bindCoreEls();
+    }
+    if (!canvasEl) return;
     player.upscaleCanvasOn = true;
     await tick();
     if (gen !== upscaleStartGen || upscaleHoldForNewFrame) return;
@@ -381,6 +409,61 @@
     if (gen !== upscaleStartGen || upscaleHoldForNewFrame) return;
     player.upscaleCanvasOn = ok;
     if (!ok) videoEl?.classList.remove('watch-page__video--hidden-for-upscale');
+  }
+
+  /** Показать оригинал, дождаться живых кадров новой серии, поднять Anime4K на свежем canvas. */
+  function armUpscaleAfterNewMedia() {
+    if (!player.upscaleEnabled || !gpuAvailable) {
+      upscaleHoldForNewFrame = false;
+      revealPlayerMedia();
+      return;
+    }
+    const video = videoEl;
+    const token = upscaleHoldToken;
+    revealPlayerMedia();
+    if (!video || !player.useVideo) {
+      upscaleHoldForNewFrame = false;
+      return;
+    }
+
+    const finish = () => {
+      if (token !== upscaleHoldToken) return;
+      upscaleHoldForNewFrame = false;
+      clearUpscaleArmTimer();
+      void startUpscale();
+    };
+
+    const waitFramesThenStart = () => {
+      if (token !== upscaleHoldToken) return;
+      if (video.paused) {
+        upscaleArmTimer = window.setTimeout(waitFramesThenStart, 80);
+        return;
+      }
+      if (video.videoWidth < 2 || video.readyState < 2) {
+        upscaleArmTimer = window.setTimeout(waitFramesThenStart, 80);
+        return;
+      }
+      let n = 0;
+      const onFrame: VideoFrameRequestCallback = () => {
+        if (token !== upscaleHoldToken) return;
+        n += 1;
+        if (n < 2) {
+          try { video.requestVideoFrameCallback(onFrame); } catch { finish(); }
+          return;
+        }
+        finish();
+      };
+      if (typeof video.requestVideoFrameCallback === 'function') {
+        try { video.requestVideoFrameCallback(onFrame); } catch { finish(); return; }
+        upscaleArmTimer = window.setTimeout(finish, 1200);
+      } else {
+        upscaleArmTimer = window.setTimeout(finish, 160);
+      }
+    };
+
+    video.addEventListener('playing', waitFramesThenStart, { once: true });
+    if (!video.paused && video.readyState >= 2) waitFramesThenStart();
+    else upscaleArmTimer = window.setTimeout(waitFramesThenStart, 400);
   }
 
   function restartUpscaleIfFrameSizeChanged() {
@@ -811,6 +894,9 @@
     player.loadState = 'error';
     player.errorText = text || userPlaybackError(embedUrl || core.origEpUrl);
     bindCoreEls();
+    upscaleHoldToken++;
+    upscaleHoldForNewFrame = false;
+    clearUpscaleArmTimer();
     core.hideMedia();
     releaseLobbySyncAfterPlaybackError();
     if (text !== 'Не удалось воспроизвести скачанный файл.') {
@@ -841,12 +927,14 @@
     player.useVideo = useVid;
     bindCoreEls();
     player.loadState = 'ready';
+    holdUpscaleForNewSource(seekTime ?? 0);
     if (!useVid) {
       core.applySource({
         url: pUrl, useVideo: false, ep, title: titleStr, sourceName: srcName, dubberId: dubId,
         volume: player.volume, onFallback: () => {}, onReresolve: () => {},
         onWatchdogReresolve: async () => null, syncPlaybackRate: syncVideoPlaybackRate,
       });
+      upscaleHoldForNewFrame = false;
       revealPlayerMedia();
       return;
     }
@@ -903,19 +991,8 @@
       const onSeeked = () => sendToLobby('seek');
       videoEl?.addEventListener('seeked', onSeeked, { once: true });
     }
-    videoEl?.addEventListener('loadeddata', revealPlayerMedia, { once: true });
-    videoEl?.addEventListener('canplay', revealPlayerMedia, { once: true });
-    videoEl?.addEventListener('playing', () => {
-      revealPlayerMedia();
-      player.paused = false;
-    }, { once: true });
     if (useVid) bindVideoElementListeners();
-    if (mediaHasRenderableFrame(videoEl)) {
-      revealPlayerMedia();
-    } else {
-      queueMicrotask(() => { if (mediaHasRenderableFrame(videoEl)) revealPlayerMedia(); });
-      window.setTimeout(() => { if (mediaHasRenderableFrame(videoEl)) revealPlayerMedia(); }, 400);
-    }
+    armUpscaleAfterNewMedia();
     void prefetchNearby();
   }
 
@@ -926,6 +1003,7 @@
   function beginMediaCover(nextReleaseId?: string) {
     player.switching = true;
     try { videoEl?.pause(); } catch { /* ignore */ }
+    holdUpscaleForNewSource(0);
     player.upscaleCanvasOn = false;
     const nextId = nextReleaseId != null ? String(nextReleaseId) : '';
     if (nextId && nextId !== posterReleaseId) {
@@ -940,11 +1018,13 @@
     if (!api?.getEpisode) return Promise.resolve();
     const myGen = ++episodeLoadGen;
     playbackAlt = null;
+    setSkipMarks(null);
     const fromError = player.loadState === 'error';
     if (fromError) player.loadState = 'loading';
     player.switching = player.loadState === 'ready' || fromError || player.loadState === 'loading';
     if (player.switching) {
       try { videoEl?.pause(); } catch { /* ignore */ }
+      holdUpscaleForNewSource(seekTime ?? 0);
     }
     if (String(rId) !== posterReleaseId) {
       posterUrl = '';
@@ -959,8 +1039,9 @@
         return;
       }
       setOrigEpisodeUrl(episode.url);
-      const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq } = await core.resolve(episode.url, episode.iframe);
+      const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq, skip } = await core.resolve(episode.url, episode.iframe);
       if (myGen !== episodeLoadGen) return;
+      setSkipMarks(skip);
       const resolved = applyQualityMap(qualityMap, cq, pUrl, { resetManualLock: true });
       applyVideoAndUI(resolved.url, uv, ep, titleStr, srcName, dubId, seekTime, initialPaused);
     }).catch(() => {
@@ -1457,16 +1538,13 @@
       return;
     }
     bindCoreEls();
-    if (player.upscaleEnabled && gpuAvailable) {
-      upscaleHoldForNewFrame = true;
-      stopUpscale();
-    }
+    holdUpscaleForNewSource(savedTime);
 
     const finishSwap = () => {
       preventAutoPause = false;
       upscaleHoldForNewFrame = false;
       syncVideoPlaybackRate();
-      restartUpscaleIfFrameSizeChanged();
+      if (player.upscaleEnabled && gpuAvailable) startUpscale();
       if (inLobbyRoom()) {
         armLobbyPlayerSyncedOnce();
       } else {
@@ -1534,11 +1612,76 @@
     popoverType = 'settings';
   }
 
-  function skipOpening() {
+  function skipForward85() {
     if (videoEl && !isNaN(videoEl.duration)) {
       videoEl.currentTime = Math.min(videoEl.currentTime + 85, videoEl.duration);
       sendToLobby('seek');
     }
+  }
+
+  function setSkipMarks(raw: SkipMarks | null | undefined) {
+    skipMarks = normalizeSkipMarks(raw);
+  }
+
+  const skipPrompt = $derived.by((): SkipMarkKind | null => {
+    if (!skipMarks || !player.useVideo || player.loadState !== 'ready' || player.switching) return null;
+    const t = player.currentTime;
+    if (lobbyWaitOverlay) return null;
+    if (skipMarkActive(t, skipMarks.opening)) return 'opening';
+    if (skipMarkActive(t, skipMarks.ending)) return 'ending';
+    return null;
+  });
+
+  const skipDotActive = $derived(
+    !!(skipMarks && player.useVideo && player.loadState === 'ready'
+      && (skipMarkOnPlayhead(player.currentTime, skipMarks.opening)
+        || skipMarkOnPlayhead(player.currentTime, skipMarks.ending))),
+  );
+
+  const skipToNextEpisode = $derived.by(() => {
+    if (skipPrompt !== 'ending' || !endingIsAtEpisodeEnd(skipMarks?.ending, player.duration)) return null;
+    if (nextEpisodePosition != null) return { ep: nextEpisodePosition, alt: false as const };
+    if (nextEpAltDub) return { ep: nextEpAltDub.targetEp, alt: true as const };
+    return null;
+  });
+
+  const skipSegments = $derived.by(() => {
+    const dur = player.duration;
+    if (!skipMarks || !(dur > 0)) return [] as Array<{ startPct: number; widthPct: number; kind: SkipMarkKind }>;
+    const segs: Array<{ startPct: number; widthPct: number; kind: SkipMarkKind }> = [];
+    const push = (range: { start: number; end: number } | null, kind: SkipMarkKind) => {
+      if (!range) return;
+      const startPct = Math.max(0, Math.min(100, (range.start / dur) * 100));
+      const endPct = Math.max(0, Math.min(100, (range.end / dur) * 100));
+      const widthPct = endPct - startPct;
+      if (widthPct < 0.12) return;
+      segs.push({ startPct, widthPct, kind });
+    };
+    push(skipMarks.opening, 'opening');
+    push(skipMarks.ending, 'ending');
+    return segs;
+  });
+
+  function skipMediaMark(kind: SkipMarkKind) {
+    if (kind === 'ending' && skipToNextEpisode) {
+      if (skipToNextEpisode.alt && nextEpAltDub) {
+        goToNextEpisodeInAltDub(nextEpAltDub);
+        return;
+      }
+      goToEpisode(skipToNextEpisode.ep);
+      return;
+    }
+    const range = kind === 'opening' ? skipMarks?.opening : skipMarks?.ending;
+    if (!range || !videoEl) return;
+    const dur = videoEl.duration;
+    const target = Number.isFinite(dur) && dur > 0
+      ? Math.min(range.end + 0.05, Math.max(0, dur - 0.05))
+      : range.end;
+    player.currentTime = target;
+    videoEl.currentTime = target;
+    sendToLobby('seek', inLobbyRoom() ? target : undefined);
+    showOsd(kind === 'opening' ? 'Опенинг пропущен' : 'Эндинг пропущен');
+    showAndSchedule();
   }
 
   function onKeyDown(e: KeyboardEvent) {
@@ -1700,6 +1843,7 @@
     watchState.dubberName = 'Скаченное';
     watchState.sourceName = 'Скачано';
     player.loadState = 'ready';
+    setSkipMarks(null);
     await tick();
     applyVideoAndUI(fileUrl, true, watchState.ep, watchState.title, 'Скачано', watchState.dubberId);
     bindVideoElementListeners();
@@ -1735,6 +1879,7 @@
       player.currentTime = v.currentTime;
       player.duration    = v.duration || 0;
       player.bufferedEnd = v.buffered.length ? v.buffered.end(v.buffered.length - 1) : 0;
+      if (upscaleHoldForNewFrame) return;
       if ((player.switching || player.loadState === 'loading') && mediaHasRenderableFrame(v)) {
         revealPlayerMedia();
       }
@@ -1761,27 +1906,28 @@
       const v = fromEvent(e);
       if (!v) return;
       player.duration = v.duration || 0;
-      revealPlayerMedia();
+      if (!upscaleHoldForNewFrame) revealPlayerMedia();
       try { (window as any).electron?.sendPlayerState?.(getPlaybackPayload()); } catch {}
       syncVideoPlaybackRate();
-      if (player.upscaleEnabled && gpuAvailable && !upscaleHoldForNewFrame) startUpscale();
+      if (!upscaleHoldForNewFrame && player.upscaleEnabled && gpuAvailable) startUpscale();
       if (pendingSync && !localMediaSwap) applyPendingSync();
       maybeArmLobbySyncAfterLoad(pendingBarrierPlayback);
     }, { signal });
     el.addEventListener('playing', () => {
       if (lastLobbyPausedIntent === true) return;
       player.paused = false;
-      revealPlayerMedia();
+      if (!upscaleHoldForNewFrame) revealPlayerMedia();
       if (!isApplyingSync) preventAutoPause = false;
       syncVideoPlaybackRate();
+      if (!upscaleHoldForNewFrame && player.upscaleEnabled && gpuAvailable && !core.upscale.active) startUpscale();
     }, { signal });
     el.addEventListener('resize', () => {
       restartUpscaleIfFrameSizeChanged();
     }, { signal });
     el.addEventListener('loadeddata', () => {
-      revealPlayerMedia();
+      if (!upscaleHoldForNewFrame) revealPlayerMedia();
       seedPlayerTimeFromVideo();
-      if (player.upscaleEnabled && gpuAvailable && !core.upscale.active && !upscaleHoldForNewFrame) startUpscale();
+      if (!upscaleHoldForNewFrame && player.upscaleEnabled && gpuAvailable && !core.upscale.active) startUpscale();
     }, { signal });
     el.addEventListener('canplay',    doAutoPlay, { once: true, signal });
     el.addEventListener('loadeddata', doAutoPlay, { once: true, signal });
@@ -1843,8 +1989,9 @@
       const episode = res?.episode;
       if (!episode?.url) { player.loadState = 'error'; player.errorText = 'Серия недоступна.'; return; }
       setOrigEpisodeUrl(episode.url);
-      const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq } = await core.resolve(episode.url, episode.iframe);
+      const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq, skip } = await core.resolve(episode.url, episode.iframe);
       const resolved = applyQualityMap(qualityMap, cq, pUrl, { resetManualLock: true });
+      setSkipMarks(skip);
       player.loadState = 'ready';
       await tick();
       applyVideoAndUI(resolved.url, uv, watchState.ep, watchState.title, watchState.sourceName, watchState.dubberId);
@@ -2227,6 +2374,8 @@
     totalTime: player.totalTimeDisplay,
     progressPct: player.progressPct,
     bufferedPct: player.bufferedPct,
+    skipSegments,
+    skipDotActive,
     muted: player.muted,
     volume: player.volume,
     isFullscreen: player.isFullscreen,
@@ -2258,7 +2407,7 @@
     ontoggleMute: toggleMute,
     onvolumechange: onVolumeChange,
     onchangeAnime4k: applyAnime4kPreset,
-    onskipOpening: skipOpening,
+    onskipOpening: skipForward85,
     onopenSeries: openSeriesPopover,
     onopenDubbing: openDubbingPopover,
     onopenSettings: openSettingsPopover,
@@ -2313,11 +2462,13 @@
           crossorigin="anonymous"
           hidden={!player.useVideo || player.loadState === 'error' || player.switching || player.loadState === 'loading'}
         ></video>
-        <canvas
-          bind:this={canvasEl}
-          class="watch-page__upscale-canvas {player.aspectRatio !== 'auto' ? `watch-page__upscale-canvas--ratio watch-page__upscale-canvas--ratio-${player.aspectRatio.replace('/', '-')}` : ''}"
-          class:watch-page__upscale-canvas--on={player.upscaleCanvasOn && !player.switching}
-        ></canvas>
+        {#key upscaleCanvasEpoch}
+          <canvas
+            bind:this={canvasEl}
+            class="watch-page__upscale-canvas {player.aspectRatio !== 'auto' ? `watch-page__upscale-canvas--ratio watch-page__upscale-canvas--ratio-${player.aspectRatio.replace('/', '-')}` : ''}"
+            class:watch-page__upscale-canvas--on={player.upscaleCanvasOn && !player.switching}
+          ></canvas>
+        {/key}
 
         {#if player.loadState === 'loading' || player.switching}
           <div class="watch-page__poster-layer" aria-hidden="true">
@@ -2418,6 +2569,26 @@
           role="status"
           aria-live="polite"
         >{osdText}</div>
+      {/if}
+
+      {#if skipPrompt && player.useVideo && player.loadState === 'ready'}
+        <button
+          type="button"
+          class="watch-page__skip-mark"
+          class:watch-page__skip-mark--chrome-up={player.overlayVisible}
+          aria-label={skipToNextEpisode
+            ? `Следующая серия ${skipToNextEpisode.ep}`
+            : skipPrompt === 'opening' ? 'Пропустить опенинг' : 'Пропустить эндинг'}
+          onclick={(e) => { e.stopPropagation(); skipMediaMark(skipPrompt); }}
+        >
+          {#if skipToNextEpisode}
+            Следующая серия {skipToNextEpisode.ep}
+          {:else if skipPrompt === 'opening'}
+            Пропустить опенинг
+          {:else}
+            Пропустить эндинг
+          {/if}
+        </button>
       {/if}
 
       <div

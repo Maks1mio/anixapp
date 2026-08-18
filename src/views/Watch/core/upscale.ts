@@ -69,22 +69,16 @@ export class UpscaleController {
     myRun: number,
   ): Promise<boolean> {
     const { enabled, mode, aspectRatio = 'auto', video, canvas } = opts;
-    if (this.session) {
-      try { this.session.stop({ detachOutput: false }); } catch { /* ignore */ }
-      this.session = null;
-    }
+    this.teardown(video, canvas);
     if (!gpuAvailable || !enabled || !video || !canvas) {
-      this.teardown(video, canvas);
       return false;
     }
     if (video.readyState < 1) {
-      this.teardown(video, canvas);
       return false;
     }
 
     this.lastError = '';
     if (video.videoWidth < 2 || video.videoHeight < 2) {
-      this.teardown(video, canvas);
       return false;
     }
     video.classList.remove(HIDE_CLASS);

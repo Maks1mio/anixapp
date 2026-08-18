@@ -465,7 +465,7 @@
       sourceId: String(selectedSource.id),
       ep: String(epPosition),
       title: releaseTitle,
-      sourceName: selectedDubber ? selectedDubber.name : selectedSource.name,
+      sourceName: selectedSource.name,
       ...(selectedDubber ? { dubberId: String(selectedDubber.id) } : {}),
     };
 
@@ -475,7 +475,7 @@
         sourceId: selectedSource.id,
         ep: epPosition,
         title: releaseTitle,
-        sourceName: selectedDubber ? selectedDubber.name : selectedSource.name,
+        sourceName: selectedSource.name,
         dubberId: selectedDubber?.id,
       }).then(() => {
         void markEpisodeWatched(epPosition);

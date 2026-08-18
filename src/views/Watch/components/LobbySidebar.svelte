@@ -1,11 +1,24 @@
 <script lang="ts">
   import type { LobbyChatMessage, LobbyParticipant } from '../_types';
-  import { iconCopy, iconLogOut, iconX } from '../../../components/icons';
+  import {
+    iconArrowUp,
+    iconClipboardList,
+    iconCopy,
+    iconLogOut,
+    iconUsers,
+  } from '../../../components/icons';
   import { resolveCdnAssetUrl } from '../../../utils/posterUrl';
-  import UiV2Button from '../../../components/uikit-v2/UiV2Button.svelte';
-  import UiV2OutlinedField from '../../../components/uikit-v2/UiV2OutlinedField.svelte';
   import UiV2RoundButton from '../../../components/uikit-v2/UiV2RoundButton.svelte';
+  import UiV2Tooltip from '../../../components/uikit-v2/UiV2Tooltip.svelte';
+  import { slide } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
   import { uiv2CustomScroll } from '../../../actions/uiv2CustomScroll';
+
+  const NAME_COLORS = [
+    '#FF8A7A', '#F0B429', '#7DDE8A', '#6EC8FF',
+    '#C9A0FF', '#FF8EC8', '#5EEAD4', '#E8A87C',
+    '#9AB8FF', '#F3D15A',
+  ];
 
   type Props = {
     roomCode: string;
@@ -13,7 +26,7 @@
     messages: LobbyChatMessage[];
     actionLogOpen?: boolean;
     ontogglelog?: () => void;
-    onhide: () => void;
+    collapsed?: boolean;
     onleave: () => void;
     onsend: (text: string) => void;
   };
@@ -24,16 +37,18 @@
     messages,
     actionLogOpen = false,
     ontogglelog,
-    onhide,
+    collapsed = false,
     onleave,
     onsend,
   }: Props = $props();
 
   let draft = $state('');
   let copyDone = $state(false);
+  let peopleOpen = $state(false);
   let chatViewport: HTMLDivElement | null = $state(null);
 
   const participantCount = $derived(participants.length);
+  const canSend = $derived(draft.trim().length > 0);
 
   $effect(() => {
     messages.length;
@@ -50,7 +65,7 @@
       copyDone = true;
       setTimeout(() => { copyDone = false; }, 1500);
     } catch {
-      // ignore
+      /* ignore */
     }
   }
 
@@ -69,7 +84,7 @@
     const login = p.login?.trim() || 'Пользователь';
     const dupes = participants.filter((x) => x.login === p.login).length;
     if (dupes <= 1) return login;
-    const tag = p.deviceId ? String(p.deviceId).slice(-4) : String(p.peerId ?? p.id).slice(-4);
+    const tag = String(p.peerId ?? '').slice(-4);
     return `${login} · ${tag}`;
   }
 
@@ -80,98 +95,141 @@
       return '';
     }
   }
+
+  function nameColor(login: string): string {
+    let hash = 0;
+    for (let i = 0; i < login.length; i++) hash = login.charCodeAt(i) + ((hash << 5) - hash);
+    return NAME_COLORS[Math.abs(hash) % NAME_COLORS.length];
+  }
+
+  function onComposerKey(e: KeyboardEvent) {
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    e.preventDefault();
+    send();
+  }
 </script>
 
-<aside class="watch-lobby-sidebar" aria-label="Совместный просмотр">
+<aside
+  class="watch-lobby-sidebar"
+  class:watch-lobby-sidebar--collapsed={collapsed}
+  aria-label="Чат комнаты"
+  aria-hidden={collapsed}
+  inert={collapsed ? true : undefined}
+>
+  <div class="watch-lobby-sidebar__inner">
   <header class="watch-lobby-sidebar__header">
-    <div class="watch-lobby-sidebar__header-text">
-      <h2 class="watch-lobby-sidebar__title">Совместный просмотр</h2>
-      {#if ontogglelog}
-        <button
-          type="button"
-          class="watch-lobby-sidebar__log-toggle"
-          class:watch-lobby-sidebar__log-toggle--active={actionLogOpen}
-          aria-pressed={actionLogOpen}
-          onclick={ontogglelog}
-        >Журнал</button>
-      {/if}
-      {#if roomCode}
-        <button
-          type="button"
-          class="watch-lobby-sidebar__code"
-          class:watch-lobby-sidebar__code--done={copyDone}
-          title="Скопировать код"
-          onclick={copyCode}
-        >
-          <span>{copyDone ? 'Скопировано' : roomCode}</span>
-          {@html iconCopy(14)}
-        </button>
-      {/if}
+    <div class="watch-lobby-sidebar__header-main">
+      <h2 class="watch-lobby-sidebar__title">Чат комнаты</h2>
+      <div class="watch-lobby-sidebar__header-meta">
+        {#if roomCode}
+          <UiV2Tooltip text={copyDone ? 'Скопировано' : 'Скопировать код'} placement="bottom" showDelay={80}>
+            <button
+              type="button"
+              class="watch-lobby-sidebar__code"
+              class:watch-lobby-sidebar__code--done={copyDone}
+              onclick={copyCode}
+            >
+              <span>{copyDone ? 'Скопировано' : roomCode}</span>
+              {@html iconCopy(12)}
+            </button>
+          </UiV2Tooltip>
+        {/if}
+        <span class="watch-lobby-sidebar__viewers" aria-label={`${participantCount} участников`}>
+          {@html iconUsers(12)}
+          {participantCount}
+        </span>
+      </div>
     </div>
-    <UiV2RoundButton
-      label="Скрыть панель"
-      size="sm"
-      class="watch-lobby-sidebar__hide"
-      onclick={onhide}
-    >
-      {@html iconX(16)}
-    </UiV2RoundButton>
+    <div class="watch-lobby-sidebar__header-actions">
+      <UiV2Tooltip text="Участники" placement="bottom" showDelay={80}>
+        <UiV2RoundButton
+          label="Участники"
+          size="sm"
+          class={peopleOpen ? 'watch-lobby-sidebar__tool watch-lobby-sidebar__tool--on' : 'watch-lobby-sidebar__tool'}
+          ariaExpanded={peopleOpen}
+          onclick={() => { peopleOpen = !peopleOpen; }}
+        >
+          {@html iconUsers(15)}
+        </UiV2RoundButton>
+      </UiV2Tooltip>
+      {#if ontogglelog}
+        <UiV2Tooltip text="Журнал" placement="bottom" showDelay={80}>
+          <UiV2RoundButton
+            label="Журнал"
+            size="sm"
+            class={actionLogOpen ? 'watch-lobby-sidebar__tool watch-lobby-sidebar__tool--on' : 'watch-lobby-sidebar__tool'}
+            ariaExpanded={actionLogOpen}
+            onclick={ontogglelog}
+          >
+            {@html iconClipboardList(15)}
+          </UiV2RoundButton>
+        </UiV2Tooltip>
+      {/if}
+      <UiV2Tooltip text="Покинуть комнату" placement="bottom" showDelay={80}>
+        <UiV2RoundButton
+          label="Покинуть комнату"
+          size="sm"
+          class="watch-lobby-sidebar__tool watch-lobby-sidebar__tool--danger"
+          onclick={onleave}
+        >
+          {@html iconLogOut(15)}
+        </UiV2RoundButton>
+      </UiV2Tooltip>
+    </div>
   </header>
 
-  <section class="watch-lobby-sidebar__people" aria-label="Участники">
-    <div class="watch-lobby-sidebar__people-head">
-      <span>Участники</span>
-      <span class="watch-lobby-sidebar__count">{participantCount}</span>
-    </div>
-    <div class="watch-lobby-sidebar__people-list">
+  {#if peopleOpen}
+    <section
+      class="watch-lobby-sidebar__people"
+      aria-label="Участники"
+      transition:slide={{ duration: 180, easing: cubicOut }}
+    >
       {#if participants.length === 0}
         <p class="watch-lobby-sidebar__empty">Ожидание участников…</p>
       {:else}
-        {#each participants as p (String(p.peerId ?? p.id))}
+        {#each participants as p (String(p.peerId ?? p.login))}
           <div class="watch-lobby-sidebar__person">
             <span
               class="watch-lobby-sidebar__avatar"
               class:watch-lobby-sidebar__avatar--img={!!p.avatar}
-              style={p.avatar ? `background-image:url('${resolveCdnAssetUrl(p.avatar)}')` : ''}
+              style={p.avatar
+                ? `background-image:url('${resolveCdnAssetUrl(p.avatar)}')`
+                : `background:${nameColor(p.login || '')}`}
             >
               {#if !p.avatar}{initials(p.login)}{/if}
             </span>
-            <span class="watch-lobby-sidebar__name">{participantLabel(p)}</span>
+            <span class="watch-lobby-sidebar__name" style={`color:${nameColor(p.login || '')}`}>
+              {participantLabel(p)}
+            </span>
           </div>
         {/each}
       {/if}
-    </div>
-  </section>
+    </section>
+  {/if}
 
-  <section class="watch-lobby-sidebar__chat" aria-label="Чат">
+  <section class="watch-lobby-sidebar__chat" aria-label="Сообщения">
     <div
       class="watch-lobby-sidebar__messages uiv2-scroll-area uiv2-scroll-area--y"
       use:uiv2CustomScroll={{ axis: 'y' }}
     >
       <div class="uiv2-scroll-area__viewport" data-uiv2-scroll bind:this={chatViewport}>
         {#if messages.length === 0}
-          <p class="watch-lobby-sidebar__empty">Напишите первое сообщение</p>
+          <p class="watch-lobby-sidebar__empty">Добро пожаловать в чат комнаты. Напишите первое сообщение.</p>
         {:else}
           {#each messages as msg (msg.id)}
             {#if msg.system}
               <p class="watch-lobby-sidebar__system">{msg.text}</p>
             {:else}
-              <article class="watch-lobby-sidebar__msg" class:watch-lobby-sidebar__msg--self={msg.self}>
+              <p class="watch-lobby-sidebar__line" class:watch-lobby-sidebar__line--self={msg.self}>
+                <time class="watch-lobby-sidebar__line-time" datetime={new Date(msg.ts).toISOString()}>
+                  {formatTime(msg.ts)}
+                </time>
                 <span
-                  class="watch-lobby-sidebar__avatar watch-lobby-sidebar__avatar--sm"
-                  class:watch-lobby-sidebar__avatar--img={!!msg.avatar}
-                  style={msg.avatar ? `background-image:url('${resolveCdnAssetUrl(msg.avatar)}')` : ''}
-                >
-                  {#if !msg.avatar}{initials(msg.login)}{/if}
-                </span>
-                <div class="watch-lobby-sidebar__bubble">
-                  <div class="watch-lobby-sidebar__meta">
-                    <span class="watch-lobby-sidebar__msg-name">{msg.self ? 'Вы' : msg.login}</span>
-                    <span class="watch-lobby-sidebar__msg-time">{formatTime(msg.ts)}</span>
-                  </div>
-                  <p class="watch-lobby-sidebar__msg-text">{msg.text}</p>
-                </div>
-              </article>
+                  class="watch-lobby-sidebar__line-name"
+                  style={`color:${msg.self ? 'var(--uikit-v2-accent)' : nameColor(msg.login)}`}
+                >{msg.self ? 'Вы' : msg.login}</span>
+                <span class="watch-lobby-sidebar__line-text">{msg.text}</span>
+              </p>
             {/if}
           {/each}
         {/if}
@@ -185,32 +243,26 @@
       class="watch-lobby-sidebar__composer"
       onsubmit={(e) => { e.preventDefault(); send(); }}
     >
-      <UiV2OutlinedField
-        label="Сообщение"
-        bind:value={draft}
+      <label class="watch-lobby-sidebar__sr" for="lobby-chat-input">Сообщение</label>
+      <input
+        id="lobby-chat-input"
+        class="watch-lobby-sidebar__input"
+        type="text"
         maxlength={500}
+        placeholder="Написать в чат…"
+        autocomplete="off"
+        bind:value={draft}
+        onkeydown={onComposerKey}
       />
-      <UiV2Button
-        label="Отправить"
-        variant="primary"
-        size="sm"
-        disabled={!draft.trim()}
-        onclick={send}
-      />
+      <button
+        type="submit"
+        class="watch-lobby-sidebar__send"
+        disabled={!canSend}
+        aria-label="Отправить"
+      >
+        {@html iconArrowUp(16)}
+      </button>
     </form>
   </section>
-
-  <footer class="watch-lobby-sidebar__footer">
-    <UiV2Button
-      label="Покинуть комнату"
-      variant="danger"
-      size="sm"
-      block
-      onclick={onleave}
-    >
-      {#snippet icon()}
-        {@html iconLogOut(14)}
-      {/snippet}
-    </UiV2Button>
-  </footer>
+  </div>
 </aside>

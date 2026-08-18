@@ -1,4 +1,6 @@
 <script lang="ts">
+  import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../../../components/uikit-v2/UiV2PopupMenu.svelte';
+  import { iconSettings, iconSparkles, iconTv } from '../../../components/icons';
   import {
     DEFAULT_PLAYBACK_RATE,
     PLAYBACK_RATE_MAX,
@@ -7,7 +9,6 @@
     PLAYBACK_RATE_WARN,
     clampPlaybackRate,
     formatPlaybackRate,
-    stepPlaybackRate,
   } from '../../../utils/player-hotkeys';
   import {
     ANIME4K_INTENSITIES,
@@ -17,27 +18,33 @@
   } from '../core/anime4k-presets';
 
   interface Props {
-    gpuAvailable:       boolean;
-    upscaleEnabled:     boolean;
-    upscaleType:        Anime4kType;
-    upscaleIntensity:   Anime4kIntensity;
-    playbackRate:       number;
-    aspectRatio:        string;
+    open: boolean;
+    x: number;
+    y: number;
+    anchor?: HTMLElement | null;
+    gpuAvailable: boolean;
+    upscaleEnabled: boolean;
+    upscaleType: Anime4kType;
+    upscaleIntensity: Anime4kIntensity;
+    playbackRate: number;
+    aspectRatio: string;
     availableQualities: Record<string, string>;
-    currentQuality:     string;
-    speedLocked?:       boolean;
-    onchangeAnime4k:    (type: Anime4kType, intensity: Anime4kIntensity) => void;
-    onchangeRate:       (r: number) => void;
-    onchangeAspect:     (a: string) => void;
-    onchangeQuality:    (q: string) => void;
+    currentQuality: string;
+    speedLocked?: boolean;
+    onchangeAnime4k: (type: Anime4kType, intensity: Anime4kIntensity) => void;
+    onchangeRate: (r: number) => void;
+    onchangeAspect: (a: string) => void;
+    onchangeQuality: (q: string) => void;
+    onclose: () => void;
   }
 
   let {
-    gpuAvailable, upscaleEnabled, upscaleType, upscaleIntensity,
+    open, x, y, anchor = null,
+    gpuAvailable, upscaleType, upscaleIntensity,
     playbackRate, aspectRatio,
     availableQualities, currentQuality,
     speedLocked = false,
-    onchangeAnime4k, onchangeRate, onchangeAspect, onchangeQuality,
+    onchangeAnime4k, onchangeRate, onchangeAspect, onchangeQuality, onclose,
   }: Props = $props();
 
   const ASPECTS = [
@@ -57,191 +64,120 @@
 
   const hasQualities = $derived(sortedQualities.length > 1);
   const rate = $derived(clampPlaybackRate(playbackRate));
-  const isFast = $derived(rate > PLAYBACK_RATE_WARN);
-  const canReset = $derived(rate !== DEFAULT_PLAYBACK_RATE);
-  const fillPercent = $derived(
-    ((rate - PLAYBACK_RATE_MIN) / (PLAYBACK_RATE_MAX - PLAYBACK_RATE_MIN)) * 100,
-  );
-  const warnMarkPercent = $derived(
-    ((PLAYBACK_RATE_WARN - PLAYBACK_RATE_MIN) / (PLAYBACK_RATE_MAX - PLAYBACK_RATE_MIN)) * 100,
-  );
 
-  function setRate(next: number) {
-    if (speedLocked) return;
-    onchangeRate(clampPlaybackRate(next));
-  }
+  const items = $derived.by((): UiV2PopupMenuItem[] => {
+    const next: UiV2PopupMenuItem[] = [];
 
-  function onSliderInput(e: Event) {
-    if (speedLocked) return;
-    setRate(Number((e.target as HTMLInputElement).value));
+    if (hasQualities) {
+      next.push({
+        id: 'quality',
+        label: currentQuality ? `Качество · ${currentQuality}p` : 'Качество',
+        icon: iconSettings(18),
+        children: sortedQualities.map((q) => ({
+          id: `quality:${q}`,
+          label: `${q}p`,
+          type: 'radio' as const,
+          checked: currentQuality === q,
+          keepOpen: true,
+        })),
+      });
+    }
+
+    const a4kTypeLabel = ANIME4K_TYPES.find((t) => t.id === upscaleType)?.label;
+    next.push({
+      id: 'anime4k',
+      label: gpuAvailable && upscaleType !== 'off' && a4kTypeLabel ? `Anime4K · ${a4kTypeLabel}` : 'Anime4K',
+      icon: iconSparkles(18),
+      children: gpuAvailable
+        ? [
+            ...ANIME4K_TYPES.map((opt, i) => ({
+              id: `a4k-type:${opt.id}`,
+              label: opt.recommended ? `${opt.label} ★` : opt.label,
+              type: 'radio' as const,
+              checked: upscaleType === opt.id,
+              keepOpen: true,
+              dividerBefore: i === 0 ? false : undefined,
+            })),
+            ...ANIME4K_INTENSITIES.map((opt, i) => ({
+              id: `a4k-intensity:${opt.id}`,
+              label: opt.label,
+              type: 'radio' as const,
+              checked: upscaleIntensity === opt.id,
+              disabled: upscaleType === 'off',
+              keepOpen: true,
+              dividerBefore: i === 0,
+            })),
+          ]
+        : [{ id: 'a4k-unavailable', label: 'Нет WebGPU — фильтр недоступен', disabled: true }],
+    });
+
+    const aspectLabel = ASPECTS.find((a) => a.value === aspectRatio)?.label;
+    next.push({
+      id: 'aspect',
+      label: aspectLabel ? `Соотношение сторон · ${aspectLabel}` : 'Соотношение сторон',
+      icon: iconTv(18),
+      children: ASPECTS.map((opt) => ({
+        id: `aspect:${opt.value}`,
+        label: opt.label,
+        type: 'radio' as const,
+        checked: aspectRatio === opt.value,
+        keepOpen: true,
+      })),
+    });
+
+    next.push({
+      id: 'playback-rate',
+      label: 'Скорость',
+      type: 'slider',
+      value: rate,
+      valueText: formatPlaybackRate(rate),
+      min: PLAYBACK_RATE_MIN,
+      max: PLAYBACK_RATE_MAX,
+      step: PLAYBACK_RATE_STEP,
+      minLabel: `${PLAYBACK_RATE_MIN}×`,
+      maxLabel: `${PLAYBACK_RATE_MAX}×`,
+      warnAt: PLAYBACK_RATE_WARN,
+      warnText: speedLocked
+        ? 'В совместном просмотре скорость всегда 1×.'
+        : 'Выше 2× плеер может не успевать буферизировать видео.',
+      showReset: true,
+      resetValue: DEFAULT_PLAYBACK_RATE,
+      disabled: speedLocked,
+      keepOpen: true,
+      dividerBefore: true,
+    });
+
+    return next;
+  });
+
+  function onSelect(id: string) {
+    if (id.startsWith('quality:')) {
+      onchangeQuality(id.slice('quality:'.length));
+      return;
+    }
+    if (id.startsWith('a4k-type:')) {
+      onchangeAnime4k(id.slice('a4k-type:'.length) as Anime4kType, upscaleIntensity);
+      return;
+    }
+    if (id.startsWith('a4k-intensity:')) {
+      onchangeAnime4k(upscaleType, id.slice('a4k-intensity:'.length) as Anime4kIntensity);
+      return;
+    }
+    if (id.startsWith('aspect:')) {
+      onchangeAspect(id.slice('aspect:'.length));
+    }
   }
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="watch-panel watch-panel--settings">
-
-  <div class="watch-panel__header">
-    <span class="watch-panel__title">Настройки</span>
-  </div>
-
-  <div class="watch-panel__settings-body">
-
-    {#if hasQualities}
-      <div class="watch-panel__setting-row">
-        <div class="watch-panel__setting-label">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
-            <circle cx="12" cy="12" r="3"/>
-          </svg>
-          Качество
-        </div>
-        <div class="watch-panel__setting-chips">
-          {#each sortedQualities as q (q)}
-            <button
-              type="button"
-              class="watch-panel__chip {currentQuality === q ? 'watch-panel__chip--active' : ''}"
-              onclick={(e) => { e.stopPropagation(); onchangeQuality(q); }}
-            >{q}p</button>
-          {/each}
-        </div>
-      </div>
-    {/if}
-
-    <div class="watch-panel__setting-row">
-      <div class="watch-panel__setting-label">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/>
-          <path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/>
-        </svg>
-        Anime4K
-      </div>
-      {#if !gpuAvailable}
-        <p class="watch-panel__a4k-hint" role="status">Нет WebGPU — фильтр недоступен.</p>
-      {:else}
-        <div class="watch-panel__setting-chips" role="radiogroup" aria-label="Тип улучшения">
-          {#each ANIME4K_TYPES as opt (opt.id)}
-            <button
-              type="button"
-              role="radio"
-              aria-checked={upscaleType === opt.id}
-              class="watch-panel__chip {upscaleType === opt.id ? 'watch-panel__chip--active' : ''}"
-              disabled={!gpuAvailable}
-              title={opt.recommended ? `${opt.hint} (рекомендуется)` : opt.hint}
-              onclick={(e) => { e.stopPropagation(); onchangeAnime4k(opt.id, upscaleIntensity); }}
-            >{opt.label}{opt.recommended ? ' ★' : ''}</button>
-          {/each}
-        </div>
-        <div class="watch-panel__setting-chips" role="radiogroup" aria-label="Нагрузка">
-          {#each ANIME4K_INTENSITIES as opt (opt.id)}
-            <button
-              type="button"
-              role="radio"
-              aria-checked={upscaleIntensity === opt.id}
-              class="watch-panel__chip {upscaleIntensity === opt.id ? 'watch-panel__chip--active' : ''}"
-              disabled={!gpuAvailable || upscaleType === 'off'}
-              onclick={(e) => { e.stopPropagation(); onchangeAnime4k(upscaleType, opt.id); }}
-            >{opt.label}</button>
-          {/each}
-        </div>
-        {#if upscaleEnabled}
-          <p class="watch-panel__a4k-hint">
-            {ANIME4K_TYPES.find((t) => t.id === upscaleType)?.hint ?? ''}
-          </p>
-        {/if}
-      {/if}
-    </div>
-
-    <div class="watch-panel__setting-row">
-      <div class="watch-panel__setting-label">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect width="20" height="16" x="2" y="4" rx="2"/>
-          <path d="M12 12H8"/>
-          <path d="M17 9H7"/>
-        </svg>
-        Соотношение сторон
-      </div>
-      <div class="watch-panel__setting-chips">
-        {#each ASPECTS as opt (opt.value)}
-          <button
-            type="button"
-            class="watch-panel__chip {aspectRatio === opt.value ? 'watch-panel__chip--active' : ''}"
-            onclick={(e) => { e.stopPropagation(); onchangeAspect(opt.value); }}
-          >{opt.label}</button>
-        {/each}
-      </div>
-    </div>
-
-    <div class="watch-panel__setting-row">
-      <div class="watch-panel__setting-label-row">
-        <div class="watch-panel__setting-label">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M15.6 2.7a10 10 0 1 0 5.7 5.7"/>
-            <circle cx="12" cy="12" r="2"/>
-            <path d="M13.4 10.6 19 5"/>
-          </svg>
-          Скорость
-        </div>
-        <button
-          type="button"
-          class="watch-speed__reset"
-          disabled={!canReset || speedLocked}
-          onclick={(e) => { e.stopPropagation(); setRate(DEFAULT_PLAYBACK_RATE); }}
-        >Сброс</button>
-      </div>
-
-      <div class="watch-speed" class:watch-speed--fast={isFast && !speedLocked} class:watch-speed--locked={speedLocked}>
-        <div class="watch-speed__value">{formatPlaybackRate(rate)}</div>
-        {#if speedLocked}
-          <p class="watch-speed__locked-hint" role="status">
-            В совместном просмотре скорость всегда 1×.
-          </p>
-        {:else}
-          <div class="watch-speed__row">
-            <button
-              type="button"
-              class="watch-speed__step"
-              aria-label="Замедлить"
-              disabled={rate <= PLAYBACK_RATE_MIN}
-              onclick={(e) => { e.stopPropagation(); setRate(stepPlaybackRate(rate, -1)); }}
-            >−</button>
-            <div class="watch-speed__track-wrap">
-              <input
-                type="range"
-                class="watch-speed__input"
-                style="--speed-fill: {fillPercent}%; --speed-warn: {warnMarkPercent}%"
-                min={PLAYBACK_RATE_MIN}
-                max={PLAYBACK_RATE_MAX}
-                step={PLAYBACK_RATE_STEP}
-                value={rate}
-                aria-label="Скорость воспроизведения"
-                aria-valuemin={PLAYBACK_RATE_MIN}
-                aria-valuemax={PLAYBACK_RATE_MAX}
-                aria-valuenow={rate}
-                aria-valuetext={formatPlaybackRate(rate)}
-                oninput={onSliderInput}
-                onclick={(e) => e.stopPropagation()}
-              />
-            </div>
-            <button
-              type="button"
-              class="watch-speed__step"
-              aria-label="Ускорить"
-              disabled={rate >= PLAYBACK_RATE_MAX}
-              onclick={(e) => { e.stopPropagation(); setRate(stepPlaybackRate(rate, 1)); }}
-            >+</button>
-          </div>
-          <div class="watch-speed__ends" aria-hidden="true">
-            <span>{PLAYBACK_RATE_MIN}×</span>
-            <span>{PLAYBACK_RATE_MAX}×</span>
-          </div>
-          {#if isFast}
-            <p class="watch-speed__warn" role="status">
-              Выше 2× плеер может не успевать буферизировать видео.
-            </p>
-          {/if}
-        {/if}
-      </div>
-    </div>
-
-  </div>
-</div>
+<UiV2PopupMenu
+  {open}
+  {x}
+  {y}
+  {anchor}
+  {items}
+  wide
+  placement="anchor"
+  onClose={onclose}
+  onSelect={onSelect}
+  onValueChange={(_id, value) => onchangeRate(value)}
+/>

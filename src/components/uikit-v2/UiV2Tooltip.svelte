@@ -42,6 +42,13 @@
      * Нужен для popover с кнопками (TitleInfoTrigger и т.п.).
      */
     interactive?: boolean;
+    /**
+     * Позиция по X следует за курсором; по Y — край триггера (над/под полосой).
+     * Для таймлайна плеера и похожих широких зон.
+     */
+    followCursor?: boolean;
+    /** Растянуть триггер на ширину родителя */
+    block?: boolean;
     class?: string;
   };
 
@@ -60,6 +67,8 @@
     hideDelay = 60,
     disabled = false,
     interactive = false,
+    followCursor = false,
+    block = false,
     class: className = '',
   }: Props = $props();
 
@@ -74,6 +83,7 @@
   let side: 'top' | 'bottom' | 'left' | 'right' = $state('bottom');
   let tipLeft = $state(0);
   let tipTop = $state(0);
+  let cursorX = $state<number | null>(null);
   let showTimer: ReturnType<typeof setTimeout> | null = null;
   let hideTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -91,15 +101,14 @@
     }
   }
 
-  async function updatePosition() {
+  function layoutTip() {
     if (!triggerEl || !tipEl) return;
-    await tick();
 
     const anchor = triggerEl.getBoundingClientRect();
-    const tipRect = tipEl.getBoundingClientRect();
-    const tw = tipRect.width || tipEl.offsetWidth;
-    const th = tipRect.height || tipEl.offsetHeight;
-    const anchorCenterX = anchor.left + anchor.width / 2;
+    const tw = tipEl.offsetWidth || tipEl.getBoundingClientRect().width;
+    const th = tipEl.offsetHeight || tipEl.getBoundingClientRect().height;
+    const anchorCenterX =
+      followCursor && cursorX != null ? cursorX : anchor.left + anchor.width / 2;
     const anchorCenterY = anchor.top + anchor.height / 2;
 
     if (placement === 'right' || placement === 'left') {
@@ -135,6 +144,12 @@
     tipLeft = left;
   }
 
+  async function updatePosition() {
+    if (!triggerEl || !tipEl) return;
+    await tick();
+    layoutTip();
+  }
+
   function scheduleShow() {
     if (disabled || !hasContent) return;
     clearTimers();
@@ -155,8 +170,15 @@
     }, hideDelay);
   }
 
-  function onTriggerEnter() {
+  function onTriggerEnter(e: MouseEvent | FocusEvent) {
+    if (followCursor && e instanceof MouseEvent) cursorX = e.clientX;
     scheduleShow();
+  }
+
+  function onTriggerMove(e: MouseEvent) {
+    if (!followCursor) return;
+    cursorX = e.clientX;
+    if (visible) layoutTip();
   }
 
   function onTriggerLeave(e: FocusEvent | MouseEvent) {
@@ -196,9 +218,11 @@
 <span
   bind:this={triggerEl}
   class="uiv2-tooltip__trigger {className}"
+  class:uiv2-tooltip__trigger--block={block}
   aria-describedby={visible && hasContent ? tipId : undefined}
   onmouseenter={onTriggerEnter}
   onmouseleave={onTriggerLeave}
+  onmousemove={onTriggerMove}
   onfocusin={onTriggerEnter}
   onfocusout={onTriggerLeave}
 >

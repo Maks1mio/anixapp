@@ -88,6 +88,6 @@ export interface DownloadedEpisodeItem {
   name: string;
 }
 
-export type PopoverType      = 'series' | 'dubbing' | 'settings' | null;
+export type PopoverType      = 'series' | 'dubbing' | 'source' | 'settings' | null;
 export type PlayerLoadState  = 'loading' | 'ready' | 'error';
 export type VoteState        = 'hidden' | 'vote' | 'waiting' | 'result';

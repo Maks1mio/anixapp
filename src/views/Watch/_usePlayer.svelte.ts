@@ -11,6 +11,7 @@ export class PlayerState {
   currentTime    = $state(0);
   duration       = $state(0);
   bufferedEnd    = $state(0);
+  bufferedRanges = $state<{ start: number; end: number }[]>([]);
   volume         = $state(100);
   useVideo       = $state(false);
   playUrl        = $state('');
@@ -40,4 +41,11 @@ export class PlayerState {
   timeDisplay        = $derived(`${fmtTime(this.currentTime)} / ${fmtTime(this.duration)}`);
   progressPct        = $derived(this.duration > 0 ? (this.currentTime / this.duration) * 100 : 0);
   bufferedPct        = $derived(this.duration > 0 ? (this.bufferedEnd  / this.duration) * 100 : 0);
+  bufferedRangePcts  = $derived.by(() => {
+    if (!(this.duration > 0)) return [] as { startPct: number; endPct: number }[];
+    return this.bufferedRanges.map((r) => ({
+      startPct: (r.start / this.duration) * 100,
+      endPct: (r.end / this.duration) * 100,
+    }));
+  });
 }

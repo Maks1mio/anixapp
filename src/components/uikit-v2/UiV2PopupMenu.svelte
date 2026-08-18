@@ -1,10 +1,11 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { scale } from 'svelte/transition';
+  import { scale, fly, fade } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { portal } from '../../actions/portal';
   import { tick } from 'svelte';
-  import { iconCheck, iconChevronRight } from '../icons';
+  import { iconCheck, iconChevronRight, iconSearch, iconX } from '../icons';
+  import UiV2Tooltip from './UiV2Tooltip.svelte';
 
   export type UiV2PopupMenuItemType = 'action' | 'toggle' | 'radio' | 'slider' | 'label';
 
@@ -45,6 +46,10 @@
     showReset?: boolean;
     resetValue?: number;
     resetLabel?: string;
+    /** Кнопка справа от пункта (вне основного button — валидный HTML) */
+    trailingIcon?: string;
+    trailingLabel?: string;
+    trailingActive?: boolean;
   };
 
   type Props = {
@@ -64,6 +69,19 @@
     onValueChange?: (id: string, value: number, item: UiV2PopupMenuItem) => void;
     /** Кастомное содержимое подменю (для item.customSubmenu) */
     submenuContent?: Snippet<[UiV2PopupMenuItem]>;
+    /** Заголовок панели (как «10 серий») */
+    title?: string;
+    /** Кнопка лупы и поле фильтра по label */
+    searchable?: boolean;
+    searchPlaceholder?: string;
+    searchInputMode?: 'text' | 'search' | 'numeric' | 'decimal';
+    emptyLabel?: string;
+    /** Шире обычного меню (длинные названия, слайдер на корне) */
+    wide?: boolean;
+    /** Триггер: клик по нему не считается click-outside */
+    anchor?: HTMLElement | null;
+    /** Клик по trailingIcon */
+    onTrailingClick?: (id: string, item: UiV2PopupMenuItem) => void;
   };
 
   let {
@@ -77,6 +95,14 @@
     onCheckedChange,
     onValueChange,
     submenuContent,
+    title = '',
+    searchable = false,
+    searchPlaceholder = 'Поиск…',
+    searchInputMode = 'text',
+    emptyLabel = 'Нет результатов',
+    wide = false,
+    anchor = null,
+    onTrailingClick,
   }: Props = $props();
 
   let panelEl = $state<HTMLDivElement | null>(null);
@@ -94,9 +120,17 @@
   let subOpenRight = $state(true);
   let subHideTimer: ReturnType<typeof setTimeout> | null = null;
   let lastSubHeight = 0;
+  let lastSubPlaceId = '';
 
   const SUBMENU_GAP = 12;
   const labelId = `uiv2-popup-menu-${Math.random().toString(36).slice(2, 9)}`;
+
+  let searchOpen = $state(false);
+  let searchQuery = $state('');
+  let searchInputEl = $state<HTMLInputElement | null>(null);
+
+  const panelWide = $derived(wide || items.some((it) => it.type === 'slider'));
+  const visibleItems = $derived(filterMenuItems(items, searchQuery));
 
   const activeSubItem = $derived(
     openSubId ? items.find((it) => it.id === openSubId) ?? null : null,
@@ -111,6 +145,44 @@
     return !!(item.children?.length || item.customSubmenu || item.hasSubmenu);
   }
 
+  function filterMenuItems(list: UiV2PopupMenuItem[], query: string): UiV2PopupMenuItem[] {
+    const q = query.trim().toLowerCase();
+    if (!q) return list;
+    const out: UiV2PopupMenuItem[] = [];
+    let pendingLabel: UiV2PopupMenuItem | null = null;
+    for (const item of list) {
+      if (item.type === 'label') {
+        pendingLabel = item;
+        continue;
+      }
+      const hay = `${item.label} ${item.id}`.toLowerCase();
+      if (hay.includes(q)) {
+        if (pendingLabel) {
+          out.push(pendingLabel);
+          pendingLabel = null;
+        }
+        out.push(item);
+      }
+    }
+    return out;
+  }
+
+  function resetSearch() {
+    searchOpen = false;
+    searchQuery = '';
+  }
+
+  async function toggleSearch() {
+    searchOpen = !searchOpen;
+    if (!searchOpen) {
+      searchQuery = '';
+      return;
+    }
+    await tick();
+    searchInputEl?.focus();
+    searchInputEl?.select();
+  }
+
   function clearSubHideTimer() {
     if (subHideTimer != null) {
       clearTimeout(subHideTimer);
@@ -122,6 +194,7 @@
     clearSubHideTimer();
     openSubId = null;
     lastSubHeight = 0;
+    lastSubPlaceId = '';
   }
 
   function scheduleCloseSubmenu() {
@@ -186,29 +259,35 @@
     originY = `${Math.max(0, Math.min(100, oy))}%`;
   }
 
-  async function placeSubmenu(anchorEl: HTMLElement) {
+  async function placeSubmenu(anchorEl: HTMLElement, itemId?: string) {
     await tick();
     const sub = subPanelEl;
     if (!sub) return;
     const pad = 8;
     const gap = SUBMENU_GAP;
     const ar = anchorEl.getBoundingClientRect();
-    const w = sub.offsetWidth || 200;
-    const h = sub.offsetHeight || 120;
+    const panelRect = panelEl?.getBoundingClientRect();
+    const w = sub.offsetWidth || sub.getBoundingClientRect().width || 200;
+    const h = sub.offsetHeight || sub.getBoundingClientRect().height || 120;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    const spaceRight = vw - pad - ar.right;
-    const spaceLeft = ar.left - pad;
-    const preferRight = spaceRight >= w + gap || spaceRight >= spaceLeft;
+    const edgeLeft = panelRect?.left ?? ar.left;
+    const edgeRight = panelRect?.right ?? ar.right;
+    const spaceRight = vw - pad - edgeRight;
+    const spaceLeft = edgeLeft - pad;
+    const preferRight = spaceRight >= w + gap && spaceRight >= spaceLeft;
     subOpenRight = preferRight;
 
-    let nextLeft = preferRight ? ar.right + gap : ar.left - gap - w;
-    let nextTop = ar.top - 6;
+    let nextLeft = preferRight ? edgeRight + gap : edgeLeft - gap - w;
 
-    // Keep current top when the panel shrinks — otherwise it jumps down,
-    // the cursor leaves the panel, and hover-close kills the submenu.
-    if (lastSubHeight > 0 && h <= lastSubHeight && subTop > 0) {
+    const rowTop = (
+      panelRect && (ar.top < panelRect.top - 24 || ar.top > panelRect.bottom + 24)
+    ) ? panelRect.top : ar.top;
+    let nextTop = rowTop - 4;
+
+    const sameItem = !!itemId && lastSubPlaceId === itemId;
+    if (sameItem && lastSubHeight > 0 && h <= lastSubHeight && subTop > 0) {
       nextTop = subTop;
     }
 
@@ -218,6 +297,7 @@
     subLeft = nextLeft;
     subTop = nextTop;
     lastSubHeight = h;
+    if (itemId) lastSubPlaceId = itemId;
   }
 
   function openSubmenu(item: UiV2PopupMenuItem, rowEl: HTMLElement) {
@@ -227,12 +307,16 @@
     }
     clearSubHideTimer();
     openSubId = item.id;
-    void placeSubmenu(rowEl);
+    void placeSubmenu(rowEl, item.id);
+    window.setTimeout(() => {
+      if (openSubId === item.id) void placeSubmenu(rowEl, item.id);
+    }, 200);
   }
 
   $effect(() => {
     if (!open) {
       closeSubmenu();
+      resetSearch();
       return;
     }
 
@@ -258,6 +342,13 @@
       ? new ResizeObserver(schedule)
       : null;
     ro?.observe(document.documentElement);
+    if (panelEl) ro?.observe(panelEl);
+
+    void tick().then(() => {
+      panelEl
+        ?.querySelector<HTMLElement>('.uiv2-popup-menu__item--checked')
+        ?.scrollIntoView({ block: 'nearest' });
+    });
 
     return () => {
       if (raf) cancelAnimationFrame(raf);
@@ -270,20 +361,34 @@
   });
 
   $effect(() => {
+    if (!open) return;
+    const count = visibleItems.length;
+    const q = searchQuery;
+    void count;
+    void q;
+    void place();
+  });
+
+  $effect(() => {
     if (!open || !openSubId || !subVisible) return;
+    void left;
+    void top;
     void tick().then(() => {
-      const row = panelEl?.querySelector<HTMLElement>(`[data-menu-id="${CSS.escape(openSubId!)}"]`);
-      if (row) void placeSubmenu(row);
+      const id = openSubId;
+      if (!id) return;
+      const row = panelEl?.querySelector<HTMLElement>(`[data-menu-id="${CSS.escape(id)}"]`);
+      if (row) void placeSubmenu(row, id);
     });
   });
 
   $effect(() => {
     if (!open || !openSubId || !subPanelEl) return;
-    const row = () => panelEl?.querySelector<HTMLElement>(`[data-menu-id="${CSS.escape(openSubId!)}"]`);
+    const id = openSubId;
+    const row = () => panelEl?.querySelector<HTMLElement>(`[data-menu-id="${CSS.escape(id)}"]`);
     const ro = typeof ResizeObserver !== 'undefined'
       ? new ResizeObserver(() => {
           const el = row();
-          if (el) void placeSubmenu(el);
+          if (el) void placeSubmenu(el, id);
         })
       : null;
     ro?.observe(subPanelEl);
@@ -294,6 +399,10 @@
     if (!open) return;
     if (e.key === 'Escape') {
       e.preventDefault();
+      if (searchOpen) {
+        resetSearch();
+        return;
+      }
       if (openSubId) closeSubmenu();
       else onClose?.();
     }
@@ -304,6 +413,7 @@
     const t = e.target;
     if (t instanceof Node) {
       if (panelEl?.contains(t) || subPanelEl?.contains(t)) return;
+      if (anchor?.contains(t)) return;
     }
     onClose?.();
   }
@@ -414,6 +524,13 @@
   function resetSlider(item: UiV2PopupMenuItem) {
     emitSliderValue(item, item.resetValue ?? 1);
   }
+
+  function onTrailing(item: UiV2PopupMenuItem, e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (item.disabled) return;
+    onTrailingClick?.(item.id, item);
+  }
 </script>
 
 {#snippet menuRow(item: UiV2PopupMenuItem, opts?: { root?: boolean })}
@@ -511,7 +628,7 @@
       </div>
     </li>
   {:else}
-    <li role="none">
+    <li role="none" class="uiv2-popup-menu__row">
       <button
         type="button"
         class="uiv2-popup-menu__item"
@@ -563,6 +680,26 @@
           <span class="uiv2-popup-menu__chevron" aria-hidden="true">{@html iconChevronRight(14)}</span>
         {/if}
       </button>
+      {#if item.trailingIcon}
+        <UiV2Tooltip
+          text={item.trailingLabel ?? ''}
+          placement="top"
+          showDelay={80}
+          disabled={!item.trailingLabel}
+          class="uiv2-popup-menu__trailing-tip"
+        >
+          <button
+            type="button"
+            class="uiv2-popup-menu__trailing"
+            class:uiv2-popup-menu__trailing--active={!!item.trailingActive}
+            aria-label={item.trailingLabel ?? 'Дополнительно'}
+            disabled={item.disabled}
+            onclick={(e) => onTrailing(item, e)}
+          >
+            {@html item.trailingIcon}
+          </button>
+        </UiV2Tooltip>
+      {/if}
     </li>
   {/if}
 {/snippet}
@@ -574,16 +711,61 @@
       class="uiv2-popup-menu__panel"
       class:uiv2-popup-menu__panel--up={!openDown}
       class:uiv2-popup-menu__panel--left={!openRight}
+      class:uiv2-popup-menu__panel--wide={panelWide}
       style={`left:${left}px;top:${top}px;transform-origin:${originX} ${originY};`}
       role="menu"
       aria-labelledby={labelId}
       tabindex="-1"
       transition:scale={{ duration: 180, start: 0.88, opacity: 0, easing: cubicOut }}
     >
-      <span id={labelId} class="uiv2-popup-menu__sr">Меню</span>
+      <span id={labelId} class="uiv2-popup-menu__sr">{title || 'Меню'}</span>
+      {#if title || searchable}
+        <div class="uiv2-popup-menu__header">
+          <div class="uiv2-popup-menu__header-slot">
+            {#if searchOpen}
+              <!-- svelte-ignore a11y_autofocus -->
+              <input
+                bind:this={searchInputEl}
+                class="uiv2-popup-menu__search-input"
+                type="search"
+                inputmode={searchInputMode}
+                placeholder={searchPlaceholder}
+                autocomplete="off"
+                spellcheck="false"
+                bind:value={searchQuery}
+                onclick={(e) => e.stopPropagation()}
+                onkeydown={(e) => e.stopPropagation()}
+                in:fly={{ x: 20, duration: 180, easing: cubicOut, opacity: 0 }}
+                out:fade={{ duration: 100 }}
+              />
+            {:else if title}
+              <span
+                class="uiv2-popup-menu__header-title"
+                in:fade={{ duration: 140 }}
+                out:fly={{ x: -8, duration: 120, easing: cubicOut }}
+              >{title}</span>
+            {/if}
+          </div>
+          {#if searchable}
+            <button
+              type="button"
+              class="uiv2-popup-menu__header-btn"
+              class:uiv2-popup-menu__header-btn--active={searchOpen}
+              aria-label={searchOpen ? 'Закрыть поиск' : 'Поиск'}
+              aria-pressed={searchOpen}
+              onclick={(e) => {
+                e.stopPropagation();
+                void toggleSearch();
+              }}
+            >{@html searchOpen ? iconX(16) : iconSearch(16)}</button>
+          {/if}
+        </div>
+      {/if}
       <ul class="uiv2-popup-menu__list">
-        {#each items as item (item.id)}
+        {#each visibleItems as item (item.id)}
           {@render menuRow(item, { root: true })}
+        {:else}
+          <li class="uiv2-popup-menu__empty" role="presentation">{emptyLabel}</li>
         {/each}
       </ul>
     </div>

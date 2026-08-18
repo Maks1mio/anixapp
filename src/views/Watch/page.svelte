@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { getWatchParams } from '../../router';
   import { getCurrentRoomId, sendLobbyChat, isLobbyAwaitingPlayerSync } from '../../services/lobby-state';
   import { logLobbyAction, snapshotPlayback } from '../../services/lobby-action-log';
-  import type { WatchState, EpisodeItem, DubberItem, LobbyActivityEntry, LobbyChatMessage, PopoverType, NextEpAltDub, DownloadedEpisodeItem, PlaybackAlt } from './_types';
+  import type { WatchState, EpisodeItem, DubberItem, LobbyActivityEntry, LobbyChatMessage, PopoverType, NextEpAltDub, DownloadedEpisodeItem, PlaybackAlt, SourceItem } from './_types';
   import { isHlsUrl, isDubberBlacklisted, lobbyActionText, allowsIframeFallback, userPlaybackError } from './_utils';
-  import { normalizeSkipMarks, skipMarkActive, skipMarkOnPlayhead, endingIsAtEpisodeEnd, type SkipMarkKind, type SkipMarks } from './_skipMarks';
+  import { normalizeSkipMarks, mergeSkipMarks, clampSkipMarksToDuration, skipMarkActive, endingIsAtEpisodeEnd, buildTimelineSausages, type SkipMarkKind, type SkipMarks } from './_skipMarks';
+  import { getSkipAutoPref, setSkipAutoPref } from './_skipPrefs';
   import { pathToLocalMediaUrl } from '../../utils/local-media-url';
   import { sortDubbersPinnedFirst, readLastEpisodeTypeUpdateId } from '../../utils/dubber-meta';
   import { PlayerState } from './_usePlayer.svelte';
@@ -90,6 +91,22 @@
     }).catch(() => {});
   }
 
+  function applySourceNameFromList(list: SourceItem[]) {
+    dubberSources = list;
+    const match = list.find((s) => String(s.id) === String(watchState.sourceId));
+    if (match?.name) watchState.sourceName = match.name;
+  }
+
+  function refreshSourceNameFromApi() {
+    const rId = parseInt(watchState.releaseId, 10);
+    const dubId = parseInt(watchState.dubberId, 10);
+    const api = (window as any).anixApi?.release;
+    if (!Number.isFinite(rId) || !Number.isFinite(dubId) || !api?.getDubberSources) return;
+    api.getDubberSources(rId, dubId).then((res: { sources?: SourceItem[] }) => {
+      applySourceNameFromList(res?.sources ?? []);
+    }).catch(() => {});
+  }
+
   /** Оставляем в выборе только озвучки, у которых есть текущая серия (как при переключении — первый источник). */
   async function filterDubbersForCurrentEp(
     all: DubberItem[],
@@ -122,12 +139,18 @@
   let popoverLoading = $state(false);
   let episodes       = $state<EpisodeItem[]>([]);
   let dubbers        = $state<DubberItem[]>([]);
+  let dubberSources  = $state<SourceItem[]>([]);
   let downloadedEpisodes = $state<DownloadedEpisodeItem[]>([]);
   let localPlaybackPath = $state('');
   let lastEpisodeTypeUpdateId = $state<number | null>(null);
   let playbackAlt = $state<PlaybackAlt | null>(null);
   let playbackAltGen = 0;
   let skipMarks = $state<SkipMarks | null>(null);
+  let skipMarksCarry = $state<SkipMarks | null>(null);
+  let skipMarksCarryKey = '';
+  let skipDismissedKind = $state<SkipMarkKind | null>(null);
+  let skipPrefTick = $state(0);
+  let skipCountdownPct = $state(0);
 
   // ── Hotkeys + OSD ──────────────────────────────────────────────────────────
   let hotkeys = $state<PlayerHotkeysSettings>({ ...DEFAULT_PLAYER_HOTKEYS });
@@ -315,6 +338,10 @@
   }
   function scheduleHide() {
     if (popoverType != null) return; // не гасим интерфейс, пока открыты «Серии» / «Озвучка»
+    if (skipPromptVisible && skipAutoPref === 'auto') {
+      player.overlayVisible = true;
+      return;
+    }
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => { player.overlayVisible = false; idleTimer = null; }, IDLE_MS);
   }
@@ -345,9 +372,21 @@
     core.iframe = iframeEl ?? null;
   }
 
-  /** Снять постер/«Загрузка…» и показать кадр. После Sibnet loadState иначе так и остаётся loading — звук идёт, видео hidden. */
+  /** Снять постер/«Загрузка…» и показать кадр. Плашку ошибки убираем только если серия реально идёт. */
   function revealPlayerMedia() {
     player.switching = false;
+    if (player.loadState === 'error') {
+      const v = videoEl;
+      const live = !!(player.useVideo && v && (
+        mediaHasRenderableFrame(v)
+        || (v.readyState >= 2 && (v.currentTime > 0.1 || (Number.isFinite(v.duration) && v.duration > 1)))
+      ));
+      if (!live) return;
+      player.loadState = 'ready';
+      player.errorText = '';
+      playbackAlt = null;
+      return;
+    }
     if (player.loadState === 'loading') player.loadState = 'ready';
   }
 
@@ -992,7 +1031,7 @@
     if (!api?.getEpisode) return Promise.resolve();
     const myGen = ++episodeLoadGen;
     playbackAlt = null;
-    setSkipMarks(null);
+    skipDismissedKind = null;
     const fromError = player.loadState === 'error';
     if (fromError) player.loadState = 'loading';
     player.switching = player.loadState === 'ready' || fromError || player.loadState === 'loading';
@@ -1015,11 +1054,16 @@
       setOrigEpisodeUrl(episode.url);
       const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq, skip } = await core.resolve(episode.url, episode.iframe);
       if (myGen !== episodeLoadGen) return;
-      setSkipMarks(skip);
+      setSkipMarks(skip, { carry: true });
       const resolved = applyQualityMap(qualityMap, cq, pUrl, { resetManualLock: true });
       applyVideoAndUI(resolved.url, uv, ep, titleStr, srcName, dubId, seekTime, initialPaused);
+      refreshSourceNameFromApi();
     }).catch(() => {
       if (myGen !== episodeLoadGen) return;
+      if (mediaHasRenderableFrame(videoEl) || player.currentTime > 0.15 || (player.useVideo && !!player.playUrl)) {
+        revealPlayerMedia();
+        return;
+      }
       player.switching = false;
       showPlayerError('', 'Не удалось загрузить серию');
     });
@@ -1180,6 +1224,35 @@
       .sort((a, b) => a.episodePosition - b.episodePosition)[0];
     const target = exact || first;
     if (target) await selectDownloadedEpisode(target);
+  }
+
+  async function openSourcePopover() {
+    if (popoverType === 'source') return;
+    popoverType = 'source';
+    if (isLocalPlaybackMode) {
+      dubberSources = [];
+      return;
+    }
+    const rId = parseInt(watchState.releaseId, 10);
+    const dubId = parseInt(watchState.dubberId, 10);
+    if (!Number.isFinite(rId) || !Number.isFinite(dubId)) {
+      dubberSources = [];
+      return;
+    }
+    popoverLoading = true;
+    try {
+      const res = await (window as any).anixApi.release.getDubberSources(rId, dubId);
+      applySourceNameFromList((res?.sources ?? []) as SourceItem[]);
+    } catch {
+      dubberSources = [];
+    }
+    popoverLoading = false;
+  }
+
+  function selectSource(src: SourceItem) {
+    const dubId = parseInt(watchState.dubberId, 10);
+    if (!Number.isFinite(dubId)) return;
+    switchDubbing(src.id, src.name, dubId, watchState.dubberName);
   }
 
   async function openSeriesPopover() {
@@ -1593,9 +1666,40 @@
     }
   }
 
-  function setSkipMarks(raw: SkipMarks | null | undefined) {
-    skipMarks = normalizeSkipMarks(raw);
+  function skipCarryKey() {
+    return `${watchState.releaseId}:${watchState.sourceId}`;
   }
+
+  function setSkipMarks(raw: SkipMarks | null | undefined, opts?: { carry?: boolean }) {
+    const key = skipCarryKey();
+    if (skipMarksCarryKey !== key) {
+      skipMarksCarry = null;
+      skipMarksCarryKey = key;
+    }
+    const incoming = normalizeSkipMarks(raw);
+    const next = opts?.carry ? mergeSkipMarks(incoming, skipMarksCarry) : incoming;
+    skipMarksCarry = next;
+    skipMarksCarryKey = key;
+    skipMarks = clampSkipMarksToDuration(next, player.duration) ?? next;
+  }
+
+  $effect(() => {
+    const dur = player.duration;
+    const marks = skipMarks;
+    if (!marks || !(dur > 2)) return;
+    const clamped = clampSkipMarksToDuration(marks, dur);
+    if (!clamped) {
+      skipMarks = null;
+      return;
+    }
+    if (
+      clamped.opening?.start === marks.opening?.start &&
+      clamped.opening?.end === marks.opening?.end &&
+      clamped.ending?.start === marks.ending?.start &&
+      clamped.ending?.end === marks.ending?.end
+    ) return;
+    skipMarks = clamped;
+  });
 
   const skipPrompt = $derived.by((): SkipMarkKind | null => {
     if (!skipMarks || !player.useVideo || player.loadState !== 'ready' || player.switching) return null;
@@ -1606,11 +1710,18 @@
     return null;
   });
 
-  const skipDotActive = $derived(
-    !!(skipMarks && player.useVideo && player.loadState === 'ready'
-      && (skipMarkOnPlayhead(player.currentTime, skipMarks.opening)
-        || skipMarkOnPlayhead(player.currentTime, skipMarks.ending))),
-  );
+  $effect(() => {
+    if (!skipPrompt) skipDismissedKind = null;
+    else if (skipDismissedKind && skipPrompt !== skipDismissedKind) skipDismissedKind = null;
+  });
+
+  const skipPromptVisible = $derived(skipPrompt && skipPrompt !== skipDismissedKind ? skipPrompt : null);
+
+  const skipAutoPref = $derived.by((): 'auto' | 'watch' | null => {
+    void skipPrefTick;
+    if (!skipPromptVisible) return null;
+    return getSkipAutoPref(watchState.releaseId, skipPromptVisible);
+  });
 
   const skipToNextEpisode = $derived.by(() => {
     if (skipPrompt !== 'ending' || !endingIsAtEpisodeEnd(skipMarks?.ending, player.duration)) return null;
@@ -1619,30 +1730,110 @@
     return null;
   });
 
-  const skipSegments = $derived.by(() => {
-    const dur = player.duration;
-    if (!skipMarks || !(dur > 0)) return [] as Array<{ startPct: number; widthPct: number; kind: SkipMarkKind }>;
-    const segs: Array<{ startPct: number; widthPct: number; kind: SkipMarkKind }> = [];
-    const push = (range: { start: number; end: number } | null, kind: SkipMarkKind) => {
-      if (!range) return;
-      const startPct = Math.max(0, Math.min(100, (range.start / dur) * 100));
-      const endPct = Math.max(0, Math.min(100, (range.end / dur) * 100));
-      const widthPct = endPct - startPct;
-      if (widthPct < 0.12) return;
-      segs.push({ startPct, widthPct, kind });
-    };
-    push(skipMarks.opening, 'opening');
-    push(skipMarks.ending, 'ending');
-    return segs;
+  const sausages = $derived.by(() =>
+    buildTimelineSausages(player.duration, skipMarks?.opening ?? null, skipMarks?.ending ?? null),
+  );
+
+  const SKIP_AUTO_MS = 7000;
+  const WATCH_AUTO_MS = 10000;
+  let skipCountdownKind = $state<SkipMarkKind | null>(null);
+  let watchCountdownPct = $state(0);
+
+  function confirmWatchSkip(kind: SkipMarkKind) {
+    rememberSkipPref(kind, 'watch');
+    skipDismissedKind = kind;
+  }
+
+  $effect(() => {
+    const kind = skipPromptVisible;
+    const autoSkip = skipAutoPref === 'auto';
+    const autoWatch = !!kind && !autoSkip;
+
+    if (kind !== skipCountdownKind) {
+      skipCountdownKind = kind;
+      skipCountdownPct = 0;
+      watchCountdownPct = 0;
+    }
+
+    if (!kind) {
+      skipCountdownPct = 0;
+      watchCountdownPct = 0;
+      return;
+    }
+
+    const paused = player.paused;
+    const blocked = inLobby || player.switching || lobbyWaitOverlay != null;
+    if (paused || blocked || !player.useVideo || player.loadState !== 'ready') return;
+
+    if (autoSkip) {
+      watchCountdownPct = 0;
+      const range = untrack(() => (kind === 'opening' ? skipMarks?.opening : skipMarks?.ending) ?? null);
+      const t = untrack(() => player.currentTime);
+      const remainSec = range ? Math.max(0.5, range.end - t) : SKIP_AUTO_MS / 1000;
+      const duration = Math.min(SKIP_AUTO_MS, Math.max(1500, remainSec * 1000));
+      const elapsed0 = untrack(() => (skipCountdownPct / 100) * duration);
+      const startedAt = performance.now() - elapsed0;
+      let raf = 0;
+
+      const tickFrame = (now: number) => {
+        const elapsed = now - startedAt;
+        skipCountdownPct = Math.min(100, (elapsed / duration) * 100);
+        if (elapsed >= duration) {
+          skipCountdownPct = 100;
+          skipMediaMark(kind);
+          return;
+        }
+        raf = requestAnimationFrame(tickFrame);
+      };
+      raf = requestAnimationFrame(tickFrame);
+      player.overlayVisible = true;
+
+      return () => {
+        if (raf) cancelAnimationFrame(raf);
+      };
+    }
+
+    if (autoWatch) {
+      skipCountdownPct = 0;
+      const duration = WATCH_AUTO_MS;
+      const elapsed0 = untrack(() => (watchCountdownPct / 100) * duration);
+      const startedAt = performance.now() - elapsed0;
+      let raf = 0;
+
+      const tickFrame = (now: number) => {
+        const elapsed = now - startedAt;
+        watchCountdownPct = Math.min(100, (elapsed / duration) * 100);
+        if (elapsed >= duration) {
+          watchCountdownPct = 100;
+          confirmWatchSkip(kind);
+          return;
+        }
+        raf = requestAnimationFrame(tickFrame);
+      };
+      raf = requestAnimationFrame(tickFrame);
+      player.overlayVisible = true;
+
+      return () => {
+        if (raf) cancelAnimationFrame(raf);
+      };
+    }
   });
 
+  function rememberSkipPref(kind: SkipMarkKind, pref: 'auto' | 'watch') {
+    setSkipAutoPref(watchState.releaseId, kind, pref);
+    skipPrefTick += 1;
+  }
+
   function skipMediaMark(kind: SkipMarkKind) {
-    if (kind === 'ending' && skipToNextEpisode) {
-      if (skipToNextEpisode.alt && nextEpAltDub) {
+    const goNext = kind === 'ending' ? skipToNextEpisode : null;
+    skipDismissedKind = kind;
+    rememberSkipPref(kind, 'auto');
+    if (goNext) {
+      if (goNext.alt && nextEpAltDub) {
         goToNextEpisodeInAltDub(nextEpAltDub);
         return;
       }
-      goToEpisode(skipToNextEpisode.ep);
+      goToEpisode(goNext.ep);
       return;
     }
     const range = kind === 'opening' ? skipMarks?.opening : skipMarks?.ending;
@@ -1825,13 +2016,22 @@
     void loadDownloadedEpisodes();
   }
 
+  function readVideoBuffer(v: HTMLVideoElement) {
+    const ranges: { start: number; end: number }[] = [];
+    for (let i = 0; i < v.buffered.length; i++) {
+      ranges.push({ start: v.buffered.start(i), end: v.buffered.end(i) });
+    }
+    player.bufferedRanges = ranges;
+    player.bufferedEnd = ranges.length ? ranges[ranges.length - 1].end : 0;
+  }
+
   function seedPlayerTimeFromVideo() {
     const v = videoEl;
     if (!v) return;
     if (isFinite(v.currentTime)) player.currentTime = v.currentTime;
     if (isFinite(v.duration) && v.duration > 0) player.duration = v.duration;
     player.paused = v.paused;
-    if (v.buffered.length) player.bufferedEnd = v.buffered.end(v.buffered.length - 1);
+    readVideoBuffer(v);
   }
 
   let videoListenersAbort: AbortController | null = null;
@@ -1852,12 +2052,12 @@
       if (!v) return;
       player.currentTime = v.currentTime;
       player.duration    = v.duration || 0;
-      player.bufferedEnd = v.buffered.length ? v.buffered.end(v.buffered.length - 1) : 0;
+      readVideoBuffer(v);
       if (player.upscaleEnabled && gpuAvailable && player.useVideo && !core.upscale.active
         && v.readyState >= 2 && v.videoWidth >= 2 && player.loadState === 'ready' && !player.switching) {
         scheduleUpscaleRestart();
       }
-      if ((player.switching || player.loadState === 'loading') && mediaHasRenderableFrame(v)) {
+      if ((player.switching || player.loadState === 'loading' || player.loadState === 'error') && mediaHasRenderableFrame(v)) {
         revealPlayerMedia();
       }
     }, { signal });
@@ -1878,6 +2078,10 @@
       }
       player.paused = true;
       sendToLobby('pause');
+    }, { signal });
+    el.addEventListener('progress', (e) => {
+      const v = fromEvent(e);
+      if (v) readVideoBuffer(v);
     }, { signal });
     el.addEventListener('loadedmetadata', (e) => {
       const v = fromEvent(e);
@@ -1968,18 +2172,27 @@
       setOrigEpisodeUrl(episode.url);
       const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq, skip } = await core.resolve(episode.url, episode.iframe);
       const resolved = applyQualityMap(qualityMap, cq, pUrl, { resetManualLock: true });
-      setSkipMarks(skip);
+      setSkipMarks(skip, { carry: true });
       player.loadState = 'ready';
       await tick();
       applyVideoAndUI(resolved.url, uv, watchState.ep, watchState.title, watchState.sourceName, watchState.dubberId);
       refreshDubberNameFromApi();
+      refreshSourceNameFromApi();
       fetchEpisodesSilently();
 
       if (uv) {
         bindVideoElementListeners();
       }
       showAndSchedule();
-    }).catch(() => { player.loadState = 'error'; player.errorText = 'Ошибка загрузки серии.'; });
+    }).catch(() => {
+      if (mediaHasRenderableFrame(videoEl) || player.currentTime > 0.15 || (player.useVideo && !!player.playUrl)) {
+        revealPlayerMedia();
+        return;
+      }
+      player.switching = false;
+      player.loadState = 'error';
+      player.errorText = 'Ошибка загрузки серии.';
+    });
     }
 
     const handlers: [string, EventListener][] = [
@@ -2058,6 +2271,7 @@
         watchState.dubberName = p.dubberName != null && p.dubberName !== '' ? String(p.dubberName) : '';
         invalidateDubbersPickerCache();
         if (!watchState.dubberName && watchState.dubberId) refreshDubberNameFromApi();
+        refreshSourceNameFromApi();
         if (p.local && !p.applyRoomPlayback) sendToLobby('changeEpisode', 0);
         isApplyingSync = true;
         const joinSeek = typeof p.currentTime === 'number' ? p.currentTime : (p.applyRoomPlayback ? 0 : undefined);
@@ -2351,18 +2565,25 @@
     totalTime: player.totalTimeDisplay,
     progressPct: player.progressPct,
     bufferedPct: player.bufferedPct,
-    skipSegments,
-    skipDotActive,
+    bufferedRanges: player.bufferedRangePcts,
+    duration: player.duration,
+    sausages,
+    skipPrompt: skipPromptVisible,
+    skipNextEp: skipToNextEpisode?.ep ?? null,
+    skipCountdownPct,
+    watchCountdownPct,
     muted: player.muted,
     volume: player.volume,
     isFullscreen: player.isFullscreen,
     episodes,
     dubbers,
+    sources: dubberSources,
     downloadedEpisodes,
     downloadedPositions,
     localMode: isLocalPlaybackMode,
     currentDownloadedPath: localPlaybackPath,
     currentDubberId: watchState.dubberId,
+    currentSourceId: watchState.sourceId,
     popoverType,
     popoverLoading,
     gpuAvailable,
@@ -2375,6 +2596,7 @@
     currentQuality: player.currentQuality,
     speedLocked: inLobby,
     lastEpisodeTypeUpdateId,
+    seekSeconds: hotkeys.seekSeconds,
     onprevEp: () => { if (prevEpisodePosition != null) goToEpisode(prevEpisodePosition); },
     onnextEp: () => { if (nextEpisodePosition != null) goToEpisode(nextEpisodePosition); },
     onnextAltDub: goToNextEpisodeInAltDub,
@@ -2384,12 +2606,18 @@
     ontoggleMute: toggleMute,
     onvolumechange: onVolumeChange,
     onchangeAnime4k: applyAnime4kPreset,
-    onskipOpening: skipForward85,
+    onskipMark: () => { if (skipPromptVisible) skipMediaMark(skipPromptVisible); },
+    onwatchSkip: () => {
+      if (!skipPromptVisible) return;
+      confirmWatchSkip(skipPromptVisible);
+    },
     onopenSeries: openSeriesPopover,
     onopenDubbing: openDubbingPopover,
+    onopenSource: openSourcePopover,
     onopenSettings: openSettingsPopover,
     onselectEp: goToEpisode,
     onselectDub: selectDubber,
+    onselectSource: selectSource,
     onselectDownloadedMode: selectDownloadedMode,
     ontogglePinDub: togglePinDubber,
     onclosePopover: () => { popoverType = null; },
@@ -2397,10 +2625,15 @@
     onchangeRate: changePlaybackRate,
     onchangeAspect: changeAspectRatio,
     onchangeQuality: changeQuality,
+    onseekBack: () => seekBySeconds(-hotkeys.seekSeconds),
+    onseekForward: () => seekBySeconds(hotkeys.seekSeconds),
     inLobby,
+    sidebarOpen,
     onopenLobby: () => {
-      if (inLobby) sidebarOpen = !sidebarOpen;
-      else chooserOpen = true;
+      if (inLobby) {
+        sidebarOpen = !sidebarOpen;
+        if (!sidebarOpen) actionLogOpen = false;
+      } else chooserOpen = true;
     },
   } satisfies PlayerChromeProps);
 </script>
@@ -2548,26 +2781,6 @@
         >{osdText}</div>
       {/if}
 
-      {#if skipPrompt && player.useVideo && player.loadState === 'ready'}
-        <button
-          type="button"
-          class="watch-page__skip-mark"
-          class:watch-page__skip-mark--chrome-up={player.overlayVisible}
-          aria-label={skipToNextEpisode
-            ? `Следующая серия ${skipToNextEpisode.ep}`
-            : skipPrompt === 'opening' ? 'Пропустить опенинг' : 'Пропустить эндинг'}
-          onclick={(e) => { e.stopPropagation(); skipMediaMark(skipPrompt); }}
-        >
-          {#if skipToNextEpisode}
-            Следующая серия {skipToNextEpisode.ep}
-          {:else if skipPrompt === 'opening'}
-            Пропустить опенинг
-          {:else}
-            Пропустить эндинг
-          {/if}
-        </button>
-      {/if}
-
       <div
         class="watch-page__chrome-hotspot"
         aria-hidden="true"
@@ -2575,14 +2788,14 @@
       ></div>
     </div>
 
-    {#if inLobby && sidebarOpen}
+    {#if inLobby}
       <LobbySidebar
         roomCode={lobby.roomCode}
         participants={lobby.participants}
         messages={lobby.chatMessages}
         actionLogOpen={actionLogOpen}
+        collapsed={!sidebarOpen}
         ontogglelog={() => { actionLogOpen = !actionLogOpen; }}
-        onhide={() => { sidebarOpen = false; actionLogOpen = false; }}
         onleave={() => {
           if (window.electron?.lobbyLeaveFromPlayer) window.electron.lobbyLeaveFromPlayer();
           else void leaveLobbyRoomFromUi();
@@ -2596,7 +2809,7 @@
           sendLobbyChat({ text, login: profile.login, avatar: profile.avatar });
         }}
       />
-      {#if actionLogOpen}
+      {#if actionLogOpen && sidebarOpen}
         <LobbyActionLogPanel onclose={() => { actionLogOpen = false; }} />
       {/if}
     {/if}

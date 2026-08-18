@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import type { EpisodeItem, DubberItem, DownloadedEpisodeItem, NextEpAltDub, PopoverType } from '../_types';
+  import type { EpisodeItem, DubberItem, DownloadedEpisodeItem, NextEpAltDub, PopoverType, SourceItem } from '../_types';
   import type { Anime4kIntensity, Anime4kType } from '../core/anime4k-presets';
+  import type { SkipMarkKind, TimelineSausage } from '../_skipMarks';
   import ControlsBar from '../components/ControlsBar.svelte';
   import ActionsBar from '../components/ActionsBar.svelte';
   import TopBar from '../components/TopBar.svelte';
@@ -25,18 +26,25 @@
     totalTime: string;
     progressPct: number;
     bufferedPct: number;
-    skipSegments?: Array<{ startPct: number; widthPct: number; kind: 'opening' | 'ending' }>;
-    skipDotActive?: boolean;
+    bufferedRanges?: { startPct: number; endPct: number }[];
+    duration?: number;
+    sausages?: TimelineSausage[];
+    skipPrompt?: SkipMarkKind | null;
+    skipNextEp?: number | null;
+    skipCountdownPct?: number;
+    watchCountdownPct?: number;
     muted: boolean;
     volume: number;
     isFullscreen: boolean;
     episodes: EpisodeItem[];
     dubbers: DubberItem[];
+    sources: SourceItem[];
     downloadedEpisodes: DownloadedEpisodeItem[];
     downloadedPositions: number[];
     localMode: boolean;
     currentDownloadedPath: string;
     currentDubberId: string;
+    currentSourceId: string;
     popoverType: PopoverType;
     popoverLoading: boolean;
     gpuAvailable: boolean;
@@ -49,6 +57,7 @@
     currentQuality: string;
     speedLocked: boolean;
     lastEpisodeTypeUpdateId: number | null;
+    seekSeconds: number;
     onprevEp: () => void;
     onnextEp: () => void;
     onnextAltDub: (alt: NextEpAltDub) => void;
@@ -58,12 +67,15 @@
     ontoggleMute: () => void;
     onvolumechange: (e: Event) => void;
     onchangeAnime4k: (type: Anime4kType, intensity: Anime4kIntensity) => void;
-    onskipOpening: () => void;
+    onskipMark: () => void;
+    onwatchSkip: () => void;
     onopenSeries: () => void;
     onopenDubbing: () => void;
+    onopenSource: () => void;
     onopenSettings: () => void;
     onselectEp: (ep: number) => void;
     onselectDub: (dub: DubberItem) => void;
+    onselectSource: (src: SourceItem) => void;
     onselectDownloadedMode: () => void;
     ontogglePinDub: (dub: DubberItem) => void | Promise<void>;
     onclosePopover: () => void;
@@ -71,7 +83,10 @@
     onchangeRate: (r: number) => void;
     onchangeAspect: (a: string) => void;
     onchangeQuality: (q: string) => void;
+    onseekBack: () => void;
+    onseekForward: () => void;
     inLobby?: boolean;
+    sidebarOpen?: boolean;
     onopenLobby?: () => void;
     lobby?: Snippet;
   }
@@ -86,15 +101,30 @@
     dubberName={props.dubberName}
     sourceName={props.sourceName}
     useVideo={props.useVideo}
-    hasPrevEp={props.hasPrevEp}
-    hasNextEp={props.hasNextEp}
-    prevEp={props.prevEp}
-    nextEp={props.nextEp}
-    nextEpAltDub={props.nextEpAltDub}
-    currentDubLabel={props.currentDubLabel}
-    onprevEp={props.onprevEp}
-    onnextEp={props.onnextEp}
-    onnextAltDub={props.onnextAltDub}
+    episodes={props.episodes}
+    dubbers={props.dubbers}
+    sources={props.sources}
+    downloadedEpisodes={props.downloadedEpisodes}
+    downloadedPositions={props.downloadedPositions}
+    localMode={props.localMode}
+    currentDownloadedPath={props.currentDownloadedPath}
+    currentDubberId={props.currentDubberId}
+    currentSourceId={props.currentSourceId}
+    popoverType={props.popoverType}
+    popoverLoading={props.popoverLoading}
+    lastEpisodeTypeUpdateId={props.lastEpisodeTypeUpdateId}
+    inLobby={props.inLobby === true}
+    sidebarOpen={props.sidebarOpen === true}
+    onopenSeries={props.onopenSeries}
+    onopenDubbing={props.onopenDubbing}
+    onopenSource={props.onopenSource}
+    onopenLobby={props.onopenLobby}
+    onselectEp={props.onselectEp}
+    onselectDub={props.onselectDub}
+    onselectSource={props.onselectSource}
+    onselectDownloadedMode={props.onselectDownloadedMode}
+    ontogglePinDub={props.ontogglePinDub}
+    onclosePopover={props.onclosePopover}
   />
 
   <div
@@ -120,25 +150,23 @@
       totalTime={props.totalTime}
       progressPct={props.progressPct}
       bufferedPct={props.bufferedPct}
-      skipSegments={props.skipSegments ?? []}
-      skipDotActive={props.skipDotActive === true}
+      bufferedRanges={props.bufferedRanges ?? []}
+      duration={props.duration ?? 0}
+      sausages={props.sausages ?? []}
+      skipPrompt={props.skipPrompt ?? null}
+      skipNextEp={props.skipNextEp ?? null}
+      skipCountdownPct={props.skipCountdownPct ?? 0}
+      watchCountdownPct={props.watchCountdownPct ?? 0}
       onseek={props.onseek}
+      onskipMark={props.onskipMark}
+      onwatchSkip={props.onwatchSkip}
     />
     <ActionsBar
       paused={props.paused}
       muted={props.muted}
       volume={props.volume}
       isFullscreen={props.isFullscreen}
-      episodes={props.episodes}
-      dubbers={props.dubbers}
-      downloadedEpisodes={props.downloadedEpisodes}
-      downloadedPositions={props.downloadedPositions}
-      localMode={props.localMode}
-      currentDownloadedPath={props.currentDownloadedPath}
-      currentEp={props.ep}
-      currentDubberId={props.currentDubberId}
       popoverType={props.popoverType}
-      popoverLoading={props.popoverLoading}
       useVideo={props.useVideo}
       gpuAvailable={props.gpuAvailable}
       upscaleEnabled={props.upscaleEnabled}
@@ -149,26 +177,21 @@
       availableQualities={props.availableQualities}
       currentQuality={props.currentQuality}
       speedLocked={props.speedLocked}
-      lastEpisodeTypeUpdateId={props.lastEpisodeTypeUpdateId}
+      currentTime={props.currentTime}
+      totalTime={props.totalTime}
+      seekSeconds={props.seekSeconds}
       ontogglePlay={props.ontogglePlay}
       ontoggleMute={props.ontoggleMute}
       onvolumechange={props.onvolumechange}
       onchangeAnime4k={props.onchangeAnime4k}
-      onskipOpening={props.onskipOpening}
-      onopenSeries={props.onopenSeries}
-      onopenDubbing={props.onopenDubbing}
       onopenSettings={props.onopenSettings}
-      onselectEp={props.onselectEp}
-      onselectDub={props.onselectDub}
-      onselectDownloadedMode={props.onselectDownloadedMode}
-      ontogglePinDub={props.ontogglePinDub}
       onclosePopover={props.onclosePopover}
       onfullscreen={props.onfullscreen}
       onchangeRate={props.onchangeRate}
       onchangeAspect={props.onchangeAspect}
       onchangeQuality={props.onchangeQuality}
-      inLobby={props.inLobby}
-      onopenLobby={props.onopenLobby}
+      onseekBack={props.onseekBack}
+      onseekForward={props.onseekForward}
     />
   </div>
 </div>

@@ -14,7 +14,12 @@
     block?: boolean;
     /** Иконка слева от текста */
     icon?: Snippet;
+    /** Иконка справа (шеврон селекта) */
+    trailing?: Snippet;
     class?: string;
+    title?: string;
+    ariaHaspopup?: 'dialog' | 'menu' | 'listbox' | 'tree' | 'grid' | boolean;
+    ariaExpanded?: boolean;
     onclick?: (e: MouseEvent) => void;
   };
 
@@ -25,7 +30,11 @@
     disabled = false,
     block = false,
     icon,
+    trailing,
     class: className = '',
+    title,
+    ariaHaspopup,
+    ariaExpanded,
     onclick,
   }: Props = $props();
 </script>
@@ -34,8 +43,12 @@
   type="button"
   class="uiv2-btn uiv2-btn--{size} uiv2-btn--{variant} {className}"
   class:uiv2-btn--icon={!!icon}
+  class:uiv2-btn--trailing={!!trailing}
   class:uiv2-btn--block={block}
   {disabled}
+  {title}
+  aria-haspopup={ariaHaspopup}
+  aria-expanded={ariaExpanded}
   {onclick}
 >
   {#if icon}
@@ -44,4 +57,9 @@
     </span>
   {/if}
   <span class="uiv2-btn__label">{label}</span>
+  {#if trailing}
+    <span class="uiv2-btn__trailing" aria-hidden="true">
+      {@render trailing()}
+    </span>
+  {/if}
 </button>

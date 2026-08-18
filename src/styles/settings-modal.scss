@@ -1775,6 +1775,60 @@ $toggle-switch-travel: calc(#{$toggle-switch-w} - #{$toggle-switch-thumb} - #{$t
 }
 
 // ── Upscale / Playback tab ─────────────────────────────────────────────────────
+.settings-a4k {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0 8px;
+
+  &--disabled {
+    opacity: 0.55;
+  }
+}
+
+.settings-a4k__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.settings-a4k__chip {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid $color-border;
+  color: $color-text;
+  font-size: 0.8125rem;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  &--active {
+    background: var(--color-accent, $color-accent);
+    border-color: var(--color-accent, $color-accent);
+    color: #fff;
+    font-weight: 600;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+  }
+}
+
+.settings-a4k__star {
+  margin-left: 2px;
+  opacity: 0.85;
+}
+
+.settings-a4k__hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: $color-text-muted;
+}
+
 .settings-upscale-notice {
   display: flex;
   align-items: center;
@@ -2078,6 +2132,19 @@ $toggle-switch-travel: calc(#{$toggle-switch-w} - #{$toggle-switch-thumb} - #{$t
   &:hover {
     background: $color-surface-hover;
   }
+
+  &--lobby {
+    display: block;
+    padding: 3px 8px;
+  }
+}
+
+.log-lobby-line {
+  display: block;
+  font-size: 0.72rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: $color-text;
 }
 
 .log-entry__data-toggle {

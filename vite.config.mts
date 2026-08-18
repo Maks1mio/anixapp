@@ -3,9 +3,12 @@ import { resolve } from 'path';
 import { svelte, vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { anixWebBridgePlugin } from './vite/anix-web-bridge-plugin.mjs';
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   root: __dirname,
-  base: './',
+  // Dev: absolute `/` so SPA routes (/watch, /release/…) don't 404 Vite deps.
+  // Build: `./` so Electron file:// still resolves assets.
+  base: command === 'serve' ? '/' : './',
+  appType: 'spa',
   plugins: [svelte({ preprocess: vitePreprocess() }), anixWebBridgePlugin()],
   optimizeDeps: {
     include: ['anixapi'],
@@ -31,10 +34,20 @@ export default defineConfig({
     },
   },
   server: {
-    // IPv4 явно: на Windows Vite иначе слушает только [::1], а wait-on/Electron
-    // ходят на 127.0.0.1 → ECONNREFUSED, и electron:dev зависает без окна.
-    host: '127.0.0.1',
+    // 0.0.0.0: IPv4 на всех интерфейсах. 127.0.0.1 остаётся для wait-on/Electron,
+    // LAN-IP — для телефона. Не использовать host: true на Windows: Vite тогда
+    // может слушать только [::1], и electron:dev зависает с ECONNREFUSED.
+    host: '0.0.0.0',
     port: 5173,
     strictPort: true,
+    allowedHosts: true,
+    proxy: {
+      // Same-origin WS so phone/LAN can join lobby without hitting localhost:8787.
+      '/anixapp/lobby/ws': {
+        target: 'http://127.0.0.1:8787',
+        ws: true,
+        changeOrigin: true,
+      },
+    },
   },
-});
+}));

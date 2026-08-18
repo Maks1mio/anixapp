@@ -80,6 +80,7 @@ function createPlayerWindow(params) {
     title: params.title ?? '',
     sourceName: params.sourceName ?? '',
     ...(params.dubberId != null && params.dubberId !== '' ? { dubberId: params.dubberId } : {}),
+    ...(params.lobbyIdle ? { lobbyIdle: '1' } : {}),
   };
   const hasLocalFile = typeof params.localFile === 'string' && params.localFile.trim() !== '';
   if (hasLocalFile) queryParams.playbackMode = 'local';
@@ -140,17 +141,20 @@ ipcMain.handle('player:openWindow', async (_, params) => {
     sourceName: String(params.sourceName ?? ''),
     ...(params.dubberId != null && params.dubberId !== '' ? { dubberId: String(params.dubberId) } : {}),
     ...(params.localFile ? { localFile: String(params.localFile) } : {}),
+    ...(params.lobbyIdle ? { lobbyIdle: true } : {}),
   };
   // If player window already exists — change content dynamically without closing/reopening
   if (state.playerWindowRef && !state.playerWindowRef.isDestroyed()) {
-    state.currentPlayerPlayback = {
-      releaseId: safe.releaseId,
-      sourceId: safe.sourceId,
-      ep: safe.ep,
-      dubberId: safe.dubberId || '',
-    };
-    // local: true → player knows to send changeEpisode command to lobby
-    state.playerWindowRef.webContents.send('player:changeContent', { ...safe, local: true });
+    if (safe.releaseId) {
+      state.currentPlayerPlayback = {
+        releaseId: safe.releaseId,
+        sourceId: safe.sourceId,
+        ep: safe.ep,
+        dubberId: safe.dubberId || '',
+      };
+      // local: true → player knows to send changeEpisode command to lobby
+      state.playerWindowRef.webContents.send('player:changeContent', { ...safe, local: true });
+    }
     state.playerWindowRef.focus();
     return;
   }
@@ -168,6 +172,7 @@ ipcMain.on('player:syncState', async (_, playback) => {
     ...(playback.dubberId != null && playback.dubberId !== '' ? { dubberId: String(playback.dubberId) } : {}),
     paused: !!playback.paused,
     currentTime: typeof playback.currentTime === 'number' ? playback.currentTime : 0,
+    ...(playback.action ? { action: String(playback.action) } : {}),
   };
   const incomingContent = { releaseId: params.releaseId, sourceId: params.sourceId, ep: params.ep, dubberId: params.dubberId || '' };
   if (state.playerWindowRef && !state.playerWindowRef.isDestroyed()) {
@@ -221,6 +226,54 @@ ipcMain.on('lobby:participantsToPlayer', (_, participants) => {
   }
 });
 
+ipcMain.on('lobby:sessionToPlayer', (_, session) => {
+  if (state.playerWindowRef && !state.playerWindowRef.isDestroyed()) {
+    state.playerWindowRef.webContents.send('lobby:session', session);
+  }
+});
+
+ipcMain.on('lobby:chatToPlayer', (_, msg) => {
+  if (state.playerWindowRef && !state.playerWindowRef.isDestroyed()) {
+    state.playerWindowRef.webContents.send('lobby:chatToPlayer', msg);
+  }
+});
+
+ipcMain.on('lobby:chooserErrorToPlayer', (_, msg) => {
+  if (state.playerWindowRef && !state.playerWindowRef.isDestroyed()) {
+    state.playerWindowRef.webContents.send('lobby:chooserErrorToPlayer', msg);
+  }
+});
+
+ipcMain.on('lobby:createFromPlayer', () => {
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    state.mainWindow.webContents.send('lobby:createFromPlayer');
+  }
+});
+
+ipcMain.on('lobby:joinFromPlayer', (_, code) => {
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    state.mainWindow.webContents.send('lobby:joinFromPlayer', code);
+  }
+});
+
+ipcMain.on('lobby:leaveFromPlayer', () => {
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    state.mainWindow.webContents.send('lobby:leaveFromPlayer');
+  }
+});
+
+ipcMain.on('lobby:chatFromPlayer', (_, text) => {
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    state.mainWindow.webContents.send('lobby:chatFromPlayer', text);
+  }
+});
+
+ipcMain.on('lobby:requestSession', () => {
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    state.mainWindow.webContents.send('lobby:requestSession');
+  }
+});
+
 ipcMain.on('lobby:bufferingStartFromPlayer', () => {
   if (state.mainWindow && !state.mainWindow.isDestroyed()) {
     state.mainWindow.webContents.send('lobby:bufferingStartFromPlayer');
@@ -236,6 +289,30 @@ ipcMain.on('lobby:playerSyncedFromPlayer', () => {
 ipcMain.on('lobby:waitingOverlayToPlayer', (_, payload) => {
   if (state.playerWindowRef && !state.playerWindowRef.isDestroyed()) {
     state.playerWindowRef.webContents.send('lobby:playerWaitingOverlay', payload);
+  }
+});
+
+ipcMain.on('lobby:barrierSyncToPlayer', (_, playback) => {
+  if (state.playerWindowRef && !state.playerWindowRef.isDestroyed()) {
+    state.playerWindowRef.webContents.send('lobby:barrierSyncToPlayer', playback ?? null);
+  }
+});
+
+ipcMain.on('lobby:syncResumeToPlayer', () => {
+  if (state.playerWindowRef && !state.playerWindowRef.isDestroyed()) {
+    state.playerWindowRef.webContents.send('lobby:syncResumeToPlayer');
+  }
+});
+
+ipcMain.on('lobby:syncStateToPlayer', (_, syncState) => {
+  if (state.playerWindowRef && !state.playerWindowRef.isDestroyed()) {
+    state.playerWindowRef.webContents.send('lobby:syncStateToPlayer', syncState ?? {});
+  }
+});
+
+ipcMain.on('lobby:actionLogToPlayer', (_, entry) => {
+  if (state.playerWindowRef && !state.playerWindowRef.isDestroyed()) {
+    state.playerWindowRef.webContents.send('lobby:actionLogEntry', entry);
   }
 });
 

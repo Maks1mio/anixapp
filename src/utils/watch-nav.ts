@@ -9,6 +9,7 @@ export interface WatchLaunchParams {
   title: string;
   sourceName: string;
   dubberId?: string | number;
+  lobbyIdle?: boolean;
 }
 
 export function canOpenInAppPlayer(): boolean {
@@ -26,13 +27,23 @@ export function openInAppPlayer(params: WatchLaunchParams): Promise<void> {
   };
 
   if (window.electron?.openPlayerWindow) {
-    return window.electron.openPlayerWindow(payload).then(() => {
+    return window.electron.openPlayerWindow({
+      ...payload,
+      ...(params.lobbyIdle ? { lobbyIdle: true } : {}),
+    }).then(() => {
       isPlayerWindowOpen.set(true);
     });
   }
 
-  const qs = new URLSearchParams(payload);
+  const alreadyWatching = isEmbeddedWebPlayer();
+  const qs = new URLSearchParams({
+    ...payload,
+    ...(params.lobbyIdle ? { lobbyIdle: '1' } : {}),
+  });
   navigate(`/watch?${qs.toString()}`);
+  if (alreadyWatching && !params.lobbyIdle) {
+    window.dispatchEvent(new CustomEvent('player:changeContent', { detail: payload }));
+  }
   return Promise.resolve();
 }
 

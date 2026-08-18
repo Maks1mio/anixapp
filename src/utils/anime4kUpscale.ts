@@ -21,7 +21,8 @@ export const GPU_AVAILABLE =
   typeof navigator !== 'undefined' && typeof (navigator as Navigator & { gpu?: unknown }).gpu !== 'undefined';
 
 export interface Anime4kSession {
-  stop: () => void;
+  /** `detachOutput: false` — остановить GPU, не трогая общий canvas/video (смена пресета). */
+  stop: (opts?: { detachOutput?: boolean }) => void;
 }
 
 interface CanvasLayout {
@@ -36,12 +37,16 @@ function computeCanvasLayout(
   sourceH: number,
   container: HTMLElement | null | undefined,
   fit: 'contain' | 'cover' = 'contain',
+  pixelRatio?: number,
 ): CanvasLayout {
   const aspect = sourceW / sourceH;
   const rect = container?.getBoundingClientRect();
   const containerW = rect ? Math.round(rect.width) : 1280;
   const containerH = rect ? Math.round(rect.height) : 720;
-  const dpr = Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 2);
+  const dpr = Math.min(
+    pixelRatio ?? (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1),
+    2,
+  );
 
   let cssW: number;
   let cssH: number;
@@ -178,6 +183,14 @@ export async function startAnime4kImageUpscale(opts: {
   };
 }
 
+function copyExtentWH(copySize: GPUExtent3D): { w: number; h: number } {
+  if (Array.isArray(copySize)) {
+    return { w: Number(copySize[0]) || 0, h: Number(copySize[1]) || 0 };
+  }
+  const d = copySize as GPUExtent3DDict;
+  return { w: Number(d?.width) || 0, h: Number(d?.height) || 0 };
+}
+
 export async function startAnime4kUpscale(opts: {
   video: HTMLVideoElement;
   canvas: HTMLCanvasElement;
@@ -185,6 +198,12 @@ export async function startAnime4kUpscale(opts: {
   container?: HTMLElement | null;
   fit?: 'contain' | 'cover';
   hideSourceClass?: string;
+  /** Класс видимости canvas. Пустая строка — не трогать (плеер). */
+  canvasVisibleClass?: string;
+  /** 1 = как старый плеер, без DPR-буфера. */
+  pixelRatio?: number;
+  /** ratio — размер/позиция canvas задаёт CSS (соотношение сторон плеера). */
+  cssLayout?: 'contain' | 'ratio';
 }): Promise<Anime4kSession | null> {
   if (!GPU_AVAILABLE) return null;
 
@@ -195,16 +214,34 @@ export async function startAnime4kUpscale(opts: {
     mode = 15,
     fit = 'contain',
     hideSourceClass = 'hero-media__video--upscaled',
+    canvasVisibleClass = 'hero-media__canvas--visible',
+    pixelRatio,
+    cssLayout = 'contain',
   } = opts;
+  if (video.readyState < HTMLVideoElement.HAVE_FUTURE_DATA) {
+    await new Promise<void>((resolve) => {
+      const done = () => resolve();
+      video.addEventListener('loadeddata', done, { once: true });
+      video.addEventListener('canplay', done, { once: true });
+      setTimeout(done, 1200);
+    });
+  }
   if (video.readyState < 1) return null;
+  const capturedW = video.videoWidth;
+  const capturedH = video.videoHeight;
+  if (capturedW < 2 || capturedH < 2) return null;
 
   let stopped = false;
   let upscaleStopFn: (() => void) | null = null;
   let capturedDevice: GPUDevice | null = null;
   let latestRvfcId: number | null = null;
+  const origRvfc = video.requestVideoFrameCallback.bind(video);
 
-  const stop = () => {
+  const manageCanvasHidden = canvasVisibleClass !== '';
+
+  const stop = (opts?: { detachOutput?: boolean }) => {
     stopped = true;
+    video.requestVideoFrameCallback = origRvfc;
     if (upscaleStopFn) {
       try { upscaleStopFn(); } catch { /* ignore */ }
       upscaleStopFn = null;
@@ -217,29 +254,63 @@ export async function startAnime4kUpscale(opts: {
       try { capturedDevice.destroy?.(); } catch { /* ignore */ }
       capturedDevice = null;
     }
-    canvas.hidden = true;
+    if (opts?.detachOutput === false) return;
+    if (manageCanvasHidden) {
+      canvas.hidden = true;
+      canvas.classList.remove(canvasVisibleClass);
+    }
     canvas.width = 1;
     canvas.height = 1;
     canvas.style.width = '';
     canvas.style.height = '';
     video.classList.remove(hideSourceClass);
-    canvas.classList.remove('hero-media__canvas--visible');
   };
 
-  const videoW = video.videoWidth || 1280;
-  const videoH = video.videoHeight || 720;
-  const layout = computeCanvasLayout(videoW, videoH, container, fit);
+  const videoW = capturedW;
+  const videoH = capturedH;
+  const layout = computeCanvasLayout(videoW, videoH, container, fit, pixelRatio);
 
   canvas.width = layout.bufferW;
   canvas.height = layout.bufferH;
-  canvas.style.width = `${layout.cssW}px`;
-  canvas.style.height = `${layout.cssH}px`;
+  if (cssLayout === 'ratio') {
+    canvas.style.width = '';
+    canvas.style.height = '';
+  } else {
+    canvas.style.width = `${layout.cssW}px`;
+    canvas.style.height = `${layout.cssH}px`;
+  }
 
-  const origRvfc = video.requestVideoFrameCallback.bind(video);
+  const wrapCopyQueue = (device: GPUDevice) => {
+    const queue = device.queue;
+    const origCopy = queue.copyExternalImageToTexture.bind(queue);
+    queue.copyExternalImageToTexture = (source, destination, copySize) => {
+      const src = source?.source;
+      if (src instanceof HTMLVideoElement) {
+        const { w, h } = copyExtentWH(copySize);
+        if (src.videoWidth < w || src.videoHeight < h || w < 2 || h < 2) return;
+      }
+      try {
+        return origCopy(source, destination, copySize);
+      } catch {
+        /* кадр другого размера — пайплайн пересоберётся снаружи */
+      }
+    };
+  };
+
   video.requestVideoFrameCallback = (cb: VideoFrameRequestCallback): number => {
     const wrapped: VideoFrameRequestCallback = (now, meta) => {
       if (stopped) return;
-      cb(now, meta);
+      if (video.videoWidth !== capturedW || video.videoHeight !== capturedH) {
+        stop({ detachOutput: false });
+        video.classList.remove(hideSourceClass);
+        return;
+      }
+      try {
+        cb(now, meta);
+      } catch {
+        stop({ detachOutput: false });
+        video.classList.remove(hideSourceClass);
+      }
     };
     const id = origRvfc(wrapped);
     latestRvfcId = id;
@@ -261,6 +332,7 @@ export async function startAnime4kUpscale(opts: {
     adapter.requestDevice = async (...dArgs: Parameters<GPUAdapter['requestDevice']>) => {
       const device = await origRD(...dArgs);
       capturedDevice = device;
+      wrapCopyQueue(device);
       return device;
     };
     return adapter;
@@ -273,19 +345,17 @@ export async function startAnime4kUpscale(opts: {
       video,
       canvas,
       pipelineBuilder: (device: GPUDevice, inputTexture: GPUTexture) => {
-        const native = { width: video.videoWidth || videoW, height: video.videoHeight || videoH };
+        const native = { width: capturedW, height: capturedH };
         const target = { width: canvas.width, height: canvas.height };
         return [new ModeClass({ device, inputTexture, nativeDimensions: native, targetDimensions: target }) as never];
       },
     });
   } catch {
-    video.requestVideoFrameCallback = origRvfc;
     gpuAny.requestAdapter = origRequestAdapter;
     stop();
     return null;
   }
 
-  video.requestVideoFrameCallback = origRvfc;
   gpuAny.requestAdapter = origRequestAdapter;
 
   if (stopped) {
@@ -295,13 +365,16 @@ export async function startAnime4kUpscale(opts: {
 
   upscaleStopFn = () => {
     stopped = true;
+    video.requestVideoFrameCallback = origRvfc;
     if (latestRvfcId !== null) {
       try { video.cancelVideoFrameCallback(latestRvfcId); } catch { /* ignore */ }
     }
   };
 
-  canvas.hidden = false;
-  canvas.classList.add('hero-media__canvas--visible');
+  if (manageCanvasHidden) {
+    canvas.hidden = false;
+    canvas.classList.add(canvasVisibleClass);
+  }
   video.classList.add(hideSourceClass);
 
   return { stop };

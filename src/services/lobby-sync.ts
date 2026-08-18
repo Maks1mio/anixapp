@@ -3,7 +3,8 @@
  */
 
 import { getRoom, type LobbyPlayback, type LobbyParticipant, type LobbyRoom } from './lobby-api';
-import { connect, disconnect, sendCommand, sendSyncReady, sendProposal, sendVote, sendBufferingStart, type LobbyCommandAction } from './lobby-ws';
+import { connect, disconnect, sendCommand, sendSyncReady, sendProposal, sendVote, sendBufferingStart, sendChat, type LobbyCommandAction } from './lobby-ws';
+import { logLobbyAction, snapshotPlayback } from './lobby-action-log';
 
 export type { LobbyCommandAction } from './lobby-ws';
 import {
@@ -11,6 +12,7 @@ import {
   stopLobbyRtc,
   updateLobbyRtcPeers,
   broadcastSyncCommand,
+  broadcastChat,
   hasP2PSync,
   getClockOffsets,
   type RemoteSyncPayload,
@@ -28,29 +30,107 @@ let syncReadyTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingProposalId: string | null = null;
 /** Ждём seeked+canplay в плеере перед sync_ready / снятием блока. */
 let awaitingPlayerSync = false;
+/** Локально инициировали buffering_start — не сбрасывать awaitingPlayerSync на чужой sync_resume. */
+let localBufferingPending = false;
+
+const SYNC_STALL_MS = 8_000;
+
+function pushSyncStateToPlayer(): void {
+  const state = { blocked: isSyncBlocked, awaiting: awaitingPlayerSync };
+  window.dispatchEvent(new CustomEvent('lobby:syncState', { detail: state }));
+  try {
+    (window as { electron?: { sendLobbySyncStateToPlayer?: (s: { blocked: boolean; awaiting: boolean }) => void } }).electron
+      ?.sendLobbySyncStateToPlayer?.(state);
+  } catch { /* ignore */ }
+}
+
+export function pushLobbySyncStateToPlayer(): void {
+  pushSyncStateToPlayer();
+}
+
+function scheduleSyncStallWatchdog(reason: string): void {
+  if (syncReadyTimer) clearTimeout(syncReadyTimer);
+  syncReadyTimer = setTimeout(() => {
+    syncReadyTimer = null;
+    if (!awaitingPlayerSync && !isSyncBlocked) return;
+    console.warn('[lobby] sync stall timeout:', reason);
+    logLobbyAction({
+      origin: 'local',
+      action: 'sync.stall_timeout',
+      note: reason,
+    });
+    awaitingPlayerSync = false;
+    isSyncBlocked = false;
+    sendSyncReady();
+    flushOutboundQueue();
+    pushSyncStateToPlayer();
+    window.dispatchEvent(new CustomEvent('lobby:playerWaitingOverlay', { detail: null }));
+  }, SYNC_STALL_MS);
+}
+
+function clearSyncStallWatchdog(): void {
+  if (syncReadyTimer) {
+    clearTimeout(syncReadyTimer);
+    syncReadyTimer = null;
+  }
+}
+
+function dedupeParticipants(list: LobbyParticipant[]): LobbyParticipant[] {
+  const byPeer = new Map<string, LobbyParticipant>();
+  for (const p of list) {
+    const id = String(p.peerId ?? p.id);
+    byPeer.set(id, p);
+  }
+  return [...byPeer.values()];
+}
 
 type QueuedCmd = { action: LobbyCommandAction; playback: LobbyPlayback };
 const pendingOutbound: QueuedCmd[] = [];
 
-function flushOutboundQueue(): void {
-  while (pendingOutbound.length > 0) {
-    if (roomHasPlayback && !hasAuthoritativePlayback) break;
-    if (isSyncBlocked) break;
-    const next = pendingOutbound.shift();
-    if (!next) break;
-    const { action, playback } = next;
-    const isAnimeChange =
-      lastPlayback && playback.releaseId && lastPlayback.releaseId !== playback.releaseId;
-    if (isAnimeChange && participants.length > 1) continue;
-    lastPlayback = playback;
-    pushLog({
-      ts: Date.now(),
-      type: 'local-playback',
-      playback,
-      note: `command=${action}`,
-    });
-    sendCommandOrP2p(action, playback);
+function dedupePendingOutbound(): void {
+  const latest = new Map<LobbyCommandAction, QueuedCmd>();
+  for (const cmd of pendingOutbound) {
+    latest.set(cmd.action, cmd);
   }
+  pendingOutbound.length = 0;
+  for (const cmd of latest.values()) pendingOutbound.push(cmd);
+}
+
+function queueOutbound(action: LobbyCommandAction, playback: LobbyPlayback): void {
+  const playPause = action === 'play' || action === 'pause';
+  for (let i = pendingOutbound.length - 1; i >= 0; i--) {
+    const a = pendingOutbound[i]!.action;
+    if (a === action || (playPause && (a === 'play' || a === 'pause'))) {
+      pendingOutbound.splice(i, 1);
+    }
+  }
+  pendingOutbound.push({ action, playback });
+}
+
+function flushOutboundQueue(): void {
+  dedupePendingOutbound();
+  const next = pendingOutbound.shift();
+  if (!next) return;
+  if (roomHasPlayback && !hasAuthoritativePlayback) {
+    pendingOutbound.unshift(next);
+    return;
+  }
+  const { action, playback } = next;
+  if (isSyncBlocked && action !== 'seek') {
+    pendingOutbound.unshift(next);
+    return;
+  }
+  const isAnimeChange =
+    lastPlayback && playback.releaseId && lastPlayback.releaseId !== playback.releaseId;
+  if (isAnimeChange && participants.length > 1) return;
+  lastPlayback = playback;
+  pushLog({
+    ts: Date.now(),
+    type: 'local-playback',
+    playback,
+    note: `command=${action}`,
+  });
+  sendCommandOrP2p(action, playback);
 }
 
 function sendCommandOrP2p(action: LobbyCommandAction, playback: LobbyPlayback): void {
@@ -64,7 +144,8 @@ function sendCommandOrP2p(action: LobbyCommandAction, playback: LobbyPlayback): 
     paused: playback.paused,
     currentTime: playback.currentTime,
   };
-  if (hasP2PSync()) broadcastSyncCommand(action, playback);
+  const viaP2p = hasP2PSync() && participants.length <= 1;
+  if (viaP2p) broadcastSyncCommand(action, playback);
   else sendCommand(action, payload);
 }
 
@@ -74,6 +155,7 @@ function startP2pIfNeeded(): void {
 }
 
 function onP2pRemoteSync(p: RemoteSyncPayload): void {
+  if (participants.length > 1) return;
   const { action, playback, fromPeerId, executeAt } = p;
   const off = getClockOffsets().offsetFromPeerMs(fromPeerId);
   const localAt = executeAt + off;
@@ -104,8 +186,8 @@ function handleParticipantsUpdate(list: LobbyParticipant[]): void {
     }
   }
 
-  participants = list.slice();
-  window.dispatchEvent(new CustomEvent('lobby:participantsChanged', { detail: { participants: list } }));
+  participants = dedupeParticipants(list.slice());
+  window.dispatchEvent(new CustomEvent('lobby:participantsChanged', { detail: { participants } }));
   updateLobbyRtcPeers(participants);
 }
 
@@ -131,23 +213,20 @@ window.addEventListener('lobby:authoritativeConfirmed', () => {
 window.addEventListener('lobby:syncNeeded', () => {
   isSyncBlocked = true;
   awaitingPlayerSync = true;
-  if (syncReadyTimer) {
-    clearTimeout(syncReadyTimer);
-    syncReadyTimer = null;
-  }
-  // Не показываем полноэкранное «ожидание» при входе — синхронизация идёт в фоне до sync_ready.
+  clearSyncStallWatchdog();
+  scheduleSyncStallWatchdog('syncNeeded');
+  pushSyncStateToPlayer();
 });
 
 window.addEventListener('lobby:playerSynced', () => {
-  if (!awaitingPlayerSync) return;
+  if (!awaitingPlayerSync && !isSyncBlocked) return;
   awaitingPlayerSync = false;
-  if (syncReadyTimer) {
-    clearTimeout(syncReadyTimer);
-    syncReadyTimer = null;
-  }
+  localBufferingPending = false;
+  clearSyncStallWatchdog();
   isSyncBlocked = false;
   sendSyncReady();
   flushOutboundQueue();
+  pushSyncStateToPlayer();
   window.dispatchEvent(new CustomEvent('lobby:playerWaitingOverlay', { detail: null }));
   console.log('[lobby] sync_ready after player seeked+canplay');
 });
@@ -156,24 +235,47 @@ window.addEventListener('lobby:playerSynced', () => {
 export function notifyLobbyBufferingStart(): void {
   if (!roomId) return;
   awaitingPlayerSync = true;
+  localBufferingPending = true;
   isSyncBlocked = true;
+  logLobbyAction({ origin: 'local', action: 'sync.buffering_start', note: 'локальная смена качества/озвучки' });
   sendBufferingStart();
   window.dispatchEvent(new CustomEvent('lobby:playerWaitingOverlay', { detail: { mode: 'localBuffering' } }));
 }
 
 window.addEventListener('lobby:syncPause', () => {
   isSyncBlocked = true;
-  console.log('[lobby] sync_pause: blocked commands until resume');
+  awaitingPlayerSync = true;
+  for (let i = pendingOutbound.length - 1; i >= 0; i--) {
+    const a = pendingOutbound[i]!.action;
+    if (a === 'play' || a === 'pause') pendingOutbound.splice(i, 1);
+  }
+  clearSyncStallWatchdog();
+  scheduleSyncStallWatchdog('sync_pause');
+  pushSyncStateToPlayer();
+  window.dispatchEvent(new CustomEvent('lobby:syncNeeded'));
+  const playback = lastPlayback;
+  window.dispatchEvent(new CustomEvent('lobby:barrierSync', { detail: { playback } }));
+  console.log('[lobby] sync_pause: all wait for sync_ready');
+  try {
+    (window as { electron?: { sendLobbyBarrierSyncToPlayer?: (pb: LobbyPlayback | null) => void } }).electron
+      ?.sendLobbyBarrierSyncToPlayer?.(playback ?? null);
+  } catch { /* ignore */ }
 });
 
 window.addEventListener('lobby:syncResume', () => {
   isSyncBlocked = false;
-  awaitingPlayerSync = false;
-  if (syncReadyTimer) {
-    clearTimeout(syncReadyTimer);
-    syncReadyTimer = null;
+  if (!localBufferingPending) {
+    awaitingPlayerSync = false;
   }
+  clearSyncStallWatchdog();
   flushOutboundQueue();
+  pushSyncStateToPlayer();
+  if (!localBufferingPending) {
+    window.dispatchEvent(new CustomEvent('lobby:playerWaitingOverlay', { detail: null }));
+  }
+  try {
+    (window as { electron?: { sendLobbySyncResumeToPlayer?: () => void } }).electron?.sendLobbySyncResumeToPlayer?.();
+  } catch { /* ignore */ }
   console.log('[lobby] sync_resume: unblocked commands');
 });
 
@@ -251,10 +353,9 @@ function dispatchRemotePlayback(playback: LobbyPlayback, fromPeerId?: string | n
   if (isFirstAuthoritative) {
     isSyncBlocked = true;
     awaitingPlayerSync = true;
-    if (syncReadyTimer) {
-      clearTimeout(syncReadyTimer);
-      syncReadyTimer = null;
-    }
+    clearSyncStallWatchdog();
+    scheduleSyncStallWatchdog('first_authoritative_playback');
+    pushSyncStateToPlayer();
   }
 
   if (fromPeerId && action && fromPeerId !== myPeerId) {
@@ -275,9 +376,22 @@ function dispatchRemotePlayback(playback: LobbyPlayback, fromPeerId?: string | n
     playback,
     fromPeerId: fromPeerId ?? null,
   });
+  const actor = fromPeerId
+    ? participants.find(p => String(p.peerId ?? p.id) === fromPeerId)
+    : undefined;
+  if (fromPeerId !== myPeerId) {
+    logLobbyAction({
+      origin: fromPeerId ? 'peer' : 'server',
+      action: `apply.remote${action ? `.${action}` : ''}`,
+      actor: { login: actor?.login, peerId: fromPeerId ?? null },
+      playback: snapshotPlayback(playback),
+      note: isFirstAuthoritative ? 'первый авторитетный playback' : undefined,
+    });
+  }
   const meta = {
     playback,
     fromPeerId: fromPeerId ?? null,
+    action: action ?? null,
   };
   console.log('[lobby] playback', {
     releaseId: playback.releaseId,
@@ -329,6 +443,7 @@ export function setLobbyRoom(
   isSyncBlocked = false;
   pendingProposalId = null;
   awaitingPlayerSync = false;
+  localBufferingPending = false;
   if (syncReadyTimer) {
     clearTimeout(syncReadyTimer);
     syncReadyTimer = null;
@@ -338,6 +453,12 @@ export function setLobbyRoom(
       ts: Date.now(),
       type: 'join',
       note: `Вход в комнату ${roomId}`,
+    });
+    logLobbyAction({
+      origin: 'local',
+      action: 'room.join',
+      actor: { peerId: myPeerId },
+      detail: { roomId, roomCode, participants: participants.length },
     });
   }
   if (roomId) {
@@ -352,17 +473,34 @@ export function setLobbyRoom(
 export function pushCommand(action: LobbyCommandAction, playback: LobbyPlayback): void {
   if (!roomId) return;
   if (roomHasPlayback && !hasAuthoritativePlayback) {
-    pendingOutbound.push({ action, playback });
+    queueOutbound(action, playback);
+    logLobbyAction({
+      origin: 'local',
+      action: `sync.queued.${action}`,
+      playback: snapshotPlayback(playback),
+      note: 'ждём авторитетный playback с сервера',
+    });
     return;
   }
-  if (isSyncBlocked) {
-    pendingOutbound.push({ action, playback });
+  if (isSyncBlocked && action !== 'seek') {
+    queueOutbound(action, playback);
+    logLobbyAction({
+      origin: 'local',
+      action: `sync.queued.${action}`,
+      playback: snapshotPlayback(playback),
+      note: 'синхронизация: команда в очереди',
+    });
     return;
   }
 
   const isAnimeChange = lastPlayback && playback.releaseId && lastPlayback.releaseId !== playback.releaseId;
   if (isAnimeChange && participants.length > 1) {
-    console.log('[lobby] anime change blocked in pushCommand — use proposeAnimeChange() via watch-modal instead');
+    logLobbyAction({
+      origin: 'local',
+      action: 'sync.blocked.animeChange',
+      playback: snapshotPlayback(playback),
+      note: 'смена аниме только через голосование',
+    });
     return;
   }
 
@@ -397,11 +535,50 @@ export function getLastPlayback(): LobbyPlayback | null {
 }
 
 export function voteOnProposal(proposalId: string, accept: boolean): void {
+  logLobbyAction({
+    origin: 'local',
+    action: accept ? 'vote.accept' : 'vote.reject',
+    detail: { proposalId },
+  });
   sendVote(proposalId, accept);
+}
+
+export function sendLobbyChat(payload: { text: string; login?: string; avatar?: string | null }): void {
+  if (!roomId) return;
+  const text = String(payload.text ?? '').trim().slice(0, 500);
+  if (!text) return;
+  const msg = {
+    id: `${myPeerId ?? 'local'}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    text,
+    login: payload.login?.trim() || 'Участник',
+    avatar: payload.avatar ?? null,
+    ts: Date.now(),
+    peerId: myPeerId,
+  };
+  broadcastChat(msg);
+  sendChat(msg);
+  logLobbyAction({
+    origin: 'local',
+    action: 'chat.send',
+    actor: { login: msg.login, peerId: myPeerId },
+    via: hasP2PSync() ? 'p2p' : 'ws',
+    note: text.slice(0, 80),
+  });
+  window.dispatchEvent(new CustomEvent('lobby:chat', {
+    detail: { ...msg, self: true },
+  }));
 }
 
 export function getPendingProposalId(): string | null {
   return pendingProposalId;
+}
+
+export function isLobbyAwaitingPlayerSync(): boolean {
+  return awaitingPlayerSync;
+}
+
+export function isLobbySyncBlocked(): boolean {
+  return isSyncBlocked;
 }
 
 export function getLobbyMyPeerId(): string | null {
@@ -409,15 +586,16 @@ export function getLobbyMyPeerId(): string | null {
 }
 
 export function leaveLobby(): void {
+  const leavingId = roomId;
   stopLobbyRtc();
   disconnect();
-  if (roomId) {
+  if (leavingId) {
     pushLog({
       ts: Date.now(),
       type: 'leave',
-      note: `Выход из комнаты ${roomId}`,
+      note: `Выход из комнаты ${leavingId}`,
     });
-    window.dispatchEvent(new CustomEvent('lobby:left'));
+    logLobbyAction({ origin: 'local', action: 'room.leave', detail: { roomId: leavingId } });
   }
   roomId = null;
   roomCode = null;
@@ -427,9 +605,13 @@ export function leaveLobby(): void {
   isSyncBlocked = false;
   pendingProposalId = null;
   awaitingPlayerSync = false;
+  localBufferingPending = false;
   pendingOutbound.length = 0;
   if (syncReadyTimer) {
     clearTimeout(syncReadyTimer);
     syncReadyTimer = null;
+  }
+  if (leavingId) {
+    window.dispatchEvent(new CustomEvent('lobby:left'));
   }
 }

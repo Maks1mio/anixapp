@@ -61,7 +61,7 @@ declare global {
         anixartjs: string;
       }>;
       window: ElectronWindowAPI;
-      openPlayerWindow: (params: { releaseId: string; sourceId: string; ep: string; title: string; sourceName: string; dubberId?: string; localFile?: string }) => Promise<void>;
+      openPlayerWindow: (params: { releaseId: string; sourceId: string; ep: string; title: string; sourceName: string; dubberId?: string; localFile?: string; lobbyIdle?: boolean }) => Promise<void>;
       closePlayerWindow: () => void;
       togglePlayerFullScreen: () => Promise<boolean>;
       togglePlayerAlwaysOnTop: () => Promise<boolean>;
@@ -173,7 +173,12 @@ declare global {
         titleAlt?: string;
         year?: string | number;
       }) => Promise<string | null>;
-      sendUpscaleSettings?: (settings: { upscaleEnabled: boolean; upscaleMode: number }) => void;
+      sendUpscaleSettings?: (settings: {
+        upscaleEnabled: boolean;
+        upscaleMode: number;
+        upscaleType?: string;
+        upscaleIntensity?: string;
+      }) => void;
       sendPlayerHotkeys?: (hotkeys: PlayerHotkeysSettings) => void;
       // Lobby proposal IPC
       sendProposalToPlayer?: (data: Record<string, unknown>) => void;
@@ -181,6 +186,19 @@ declare global {
       // Lobby participant & activity feed → player window
       sendActivityToPlayer?: (data: Record<string, unknown>) => void;
       sendParticipantsToPlayer?: (participants: unknown[]) => void;
+      sendLobbySessionToPlayer?: (session: {
+        inLobby: boolean;
+        roomId: string | null;
+        roomCode: string | null;
+        participants: unknown[];
+      }) => void;
+      sendLobbyChatToPlayer?: (msg: Record<string, unknown>) => void;
+      sendLobbyChooserErrorToPlayer?: (msg: string) => void;
+      lobbyCreateFromPlayer?: () => void;
+      lobbyJoinFromPlayer?: (code: string) => void;
+      lobbyLeaveFromPlayer?: () => void;
+      lobbyChatFromPlayer?: (text: string) => void;
+      lobbyRequestSession?: () => void;
       /** Окно плеера → главное: началась смена качества/озвучки в лобби */
       lobbyNotifyBufferingStart?: () => void;
       /** Окно плеера → главное: плеер готов после sync (sync_ready на сервер) */
@@ -205,6 +223,19 @@ declare global {
       openOverviewVideoEditor?: (payload: Record<string, unknown>) => Promise<void>;
       getOverviewEditorPayload?: () => Promise<Record<string, unknown> | null>;
       overviewEditorDone?: () => void;
+      // Logging (diagnostics)
+      logRenderer?: (entry: { level?: string; ch?: string; msg?: string; data?: unknown }) => Promise<void>;
+      logGetSessions?: () => Promise<Array<{ id: string; ts: string }>>;
+      logGetSessionLog?: (sessionId: string, file: string, limit?: number) => Promise<Array<Record<string, unknown>>>;
+      logGetSystemInfo?: () => Promise<Record<string, unknown>>;
+      logCollectZip?: () => Promise<{ ok: boolean; path?: string; error?: string }>;
+      logOpenZip?: (path: string) => Promise<void>;
+      logOpenFolder?: () => Promise<void>;
+      logGetFolderPath?: () => Promise<string | null>;
+      logGetSessionDir?: () => Promise<string | null>;
+      logGetLobbyPath?: () => Promise<string | null>;
+      logLobbyLine?: (line: string) => Promise<void>;
+      sendLobbyActionLogToPlayer?: (entry: Record<string, unknown>) => void;
     };
   }
 }
@@ -226,6 +257,8 @@ export interface AppSettings {
   adaptiveAcceleration?: boolean;
   upscaleEnabled?: boolean;
   upscaleMode?: number;
+  upscaleType?: string;
+  upscaleIntensity?: string;
   playerDebugOverlay?: boolean;
   /** Cap stream quality by player window size (default off). */
   adaptiveQualityByWindow?: boolean;

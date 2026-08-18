@@ -114,6 +114,7 @@ function buildSystemInfo(appVersion, electronVersion) {
 // ── State ────────────────────────────────────────────────────────────────────
 let _sessionsRoot = null;   // <userData>/logs/sessions/
 let _sessionDir   = null;   // current session dir
+let _logsRoot     = null;   // <userData>/logs
 let _appVersion   = '';
 let _electronVersion = '';
 
@@ -144,6 +145,35 @@ function rotateIfNeeded(filePath) {
   } catch (_) {}
 }
 
+function writeLobbyPlain(line) {
+  const text = String(line || '').replace(/\r?\n/g, ' ').trim();
+  if (!text) return;
+  const row = `${text}\n`;
+  const targets = [];
+  if (_sessionDir) targets.push(path.join(_sessionDir, 'lobby.txt'));
+  if (_logsRoot) targets.push(path.join(_logsRoot, 'lobby.txt'));
+  for (const fp of targets) {
+    try { fs.appendFile(fp, row, 'utf8', () => {}); } catch (_) {}
+  }
+}
+
+function writeLobbyHeader() {
+  const header = [
+    'AnixApp — журнал совместного просмотра',
+    `сессия: ${_sessionDir || ''}`,
+    `старт: ${new Date().toISOString()}`,
+    'колонки: время | кто | действие | серия/таймкод',
+    '---',
+    '',
+  ].join('\n');
+  const files = [];
+  if (_sessionDir) files.push(path.join(_sessionDir, 'lobby.txt'));
+  if (_logsRoot) files.push(path.join(_logsRoot, 'lobby.txt'));
+  for (const fp of files) {
+    try { fs.writeFileSync(fp, header, 'utf8'); } catch (_) {}
+  }
+}
+
 function writeLog(file, level, ch, msg, data, sync = false) {
   if (!_sessionDir) return;
   try {
@@ -166,7 +196,8 @@ function writeLog(file, level, ch, msg, data, sync = false) {
 function init(userData, appVer, electronVer) {
   _appVersion      = appVer || '';
   _electronVersion = electronVer || '';
-  _sessionsRoot    = path.join(userData, 'logs', 'sessions');
+  _logsRoot        = path.join(userData, 'logs');
+  _sessionsRoot    = path.join(_logsRoot, 'sessions');
 
   try { fs.mkdirSync(_sessionsRoot, { recursive: true }); } catch (_) {}
 
@@ -175,6 +206,7 @@ function init(userData, appVer, electronVer) {
   const ts     = sessionTimestamp();
   _sessionDir  = path.join(_sessionsRoot, ts);
   try { fs.mkdirSync(_sessionDir, { recursive: true }); } catch (_) {}
+  writeLobbyHeader();
 
   // Process-level capture
   process.on('uncaughtException',   (err) => writeLog('errors', 'ERROR', 'process', 'uncaughtException',   { message: err.message, stack: err.stack }, true));
@@ -214,6 +246,14 @@ function getSessions() {
 function getSessionLog(sessionId, file, limit = 500) {
   if (!_sessionsRoot) return [];
   const safeName = path.basename(sessionId);
+  if (file === 'lobby') {
+    const txt = path.join(_sessionsRoot, safeName, 'lobby.txt');
+    try {
+      if (!fs.existsSync(txt)) return [];
+      const lines = fs.readFileSync(txt, 'utf8').split('\n').filter(Boolean);
+      return lines.slice(-limit).map((msg) => ({ ts: '', level: 'INFO', ch: 'lobby', msg }));
+    } catch { return []; }
+  }
   const fp = path.join(_sessionsRoot, safeName, `${file}.log`);
   try {
     if (!fs.existsSync(fp)) return [];
@@ -226,7 +266,7 @@ function getSessionLog(sessionId, file, limit = 500) {
 function collectZip() {
   const sessions = getSessions();
   const entries  = [];
-  const logs     = ['main.log', 'ipc.log', 'renderer.log', 'errors.log'];
+  const logs     = ['main.log', 'ipc.log', 'renderer.log', 'errors.log', 'lobby.txt'];
 
   for (const sess of sessions) {
     for (const logFile of logs) {
@@ -252,6 +292,10 @@ function getSystemInfo() {
 
 function getCurrentSessionDir() { return _sessionDir; }
 
+function getLogsRootDir() {
+  return _sessionsRoot ? path.dirname(_sessionsRoot) : null;
+}
+
 const logger = {
   init,
   patchConsole,
@@ -262,6 +306,10 @@ const logger = {
   ipc:      (ch, dir, data) => writeLog('ipc',    'INFO',  'ipc', `${dir} ${ch}`, data),
   update:   (msg, data)     => writeLog('main',   'INFO',  'update', msg, data),
   renderer: (level, ch, msg, data) => {
+    if (ch === 'lobby' || String(ch).startsWith('lobby')) {
+      writeLobbyPlain(msg);
+      return;
+    }
     const file = level === 'ERROR' ? 'errors' : 'renderer';
     writeLog(file, level, `renderer:${ch}`, msg, data, level === 'ERROR');
   },
@@ -270,6 +318,13 @@ const logger = {
   collectZip,
   getSystemInfo,
   getCurrentSessionDir,
+  getLogsRootDir,
+  getLobbyLogPath: () => {
+    if (_sessionDir) return path.join(_sessionDir, 'lobby.txt');
+    if (_logsRoot) return path.join(_logsRoot, 'lobby.txt');
+    return null;
+  },
+  writeLobbyPlain,
 };
 
 module.exports = logger;

@@ -24,7 +24,14 @@
   import { initTabNavigation, recordTabNavigation } from './stores/tab-navigation';
   import { initTheme, applyThemeById } from './services/themes';
   import { initAnixbackEndpoint } from './services/anixback-endpoint';
-  import { getCurrentRoomId, getCurrentRoomCode, getCurrentParticipants, pushCommand, voteOnProposal, notifyLobbyBufferingStart } from './services/lobby-state';
+  import { getCurrentRoomId, getCurrentRoomCode, getCurrentParticipants, pushCommand, voteOnProposal, notifyLobbyBufferingStart, sendLobbyChat } from './services/lobby-state';
+  import {
+    createLobbyRoomAndOpenPlayer,
+    joinLobbyRoomAndOpenPlayer,
+    leaveLobbyRoomFromUi,
+    getLobbyProfile,
+    pushLobbySessionToPlayer,
+  } from './utils/lobby-player';
   import { initTooltipSystem } from './utils/body-tooltip';
   import { initBookmarksChangeSync } from './utils/favorites-events';
   import { stepZoom } from './utils/zoom';
@@ -64,6 +71,7 @@
   import AdminPanelPage from './views/Admin/PanelPage.svelte';
   import Downloads from './views/Downloads.svelte';
   import WebPlayerShell from './components/WebPlayerShell.svelte';
+  import { isEmbeddedWebPlayer } from './utils/watch-nav';
 
   import SettingsModal from './components/SettingsModal.svelte';
   import LobbyModal from './components/LobbyModal.svelte';
@@ -278,19 +286,27 @@
       }) as EventListener],
 
       ['lobby:proposalSentLocal', ((e: CustomEvent) => {
-        window.electron?.sendProposalToPlayer?.({ type: 'waiting', newPlayback: e.detail?.newPlayback ?? null });
+        const payload = { type: 'waiting', newPlayback: e.detail?.newPlayback ?? null };
+        window.electron?.sendProposalToPlayer?.(payload);
+        if (!window.electron) window.dispatchEvent(new CustomEvent('lobby:proposal', { detail: payload }));
       }) as EventListener],
 
       ['lobby:proposalNew', ((e: CustomEvent) => {
-        window.electron?.sendProposalToPlayer?.({ type: 'vote', proposalId: e.detail?.proposalId, proposerLogin: e.detail?.proposerLogin ?? 'Участник', playback: e.detail?.playback ?? null });
+        const payload = { type: 'vote', proposalId: e.detail?.proposalId, proposerLogin: e.detail?.proposerLogin ?? 'Участник', playback: e.detail?.playback ?? null };
+        window.electron?.sendProposalToPlayer?.(payload);
+        if (!window.electron) window.dispatchEvent(new CustomEvent('lobby:proposal', { detail: payload }));
       }) as EventListener],
 
       ['lobby:proposalAccepted', ((e: CustomEvent) => {
-        window.electron?.sendProposalToPlayer?.({ type: 'accepted', proposalId: e.detail?.proposalId, playback: e.detail?.playback ?? null });
+        const payload = { type: 'accepted', proposalId: e.detail?.proposalId, playback: e.detail?.playback ?? null };
+        window.electron?.sendProposalToPlayer?.(payload);
+        if (!window.electron) window.dispatchEvent(new CustomEvent('lobby:proposal', { detail: payload }));
       }) as EventListener],
 
       ['lobby:proposalRejected', ((e: CustomEvent) => {
-        window.electron?.sendProposalToPlayer?.({ type: 'rejected', proposalId: e.detail?.proposalId, reason: e.detail?.reason ?? '' });
+        const payload = { type: 'rejected', proposalId: e.detail?.proposalId, reason: e.detail?.reason ?? '' };
+        window.electron?.sendProposalToPlayer?.(payload);
+        if (!window.electron) window.dispatchEvent(new CustomEvent('lobby:proposal', { detail: payload }));
       }) as EventListener],
 
       ['lobby:voteFromPlayer', ((e: CustomEvent) => {
@@ -302,18 +318,20 @@
         const raw = (e.detail as any);
         const rp = raw?.playback ?? raw;
         if (!rp) return;
+        const action = raw?.action != null ? String(raw.action) : null;
         const pb = {
           releaseId: String(rp.releaseId ?? ''), sourceId: String(rp.sourceId ?? ''),
           ep: String(rp.ep ?? ''), dubberId: rp.dubberId != null ? String(rp.dubberId) : undefined,
           title: String(rp.title ?? ''), sourceName: String(rp.sourceName ?? ''),
           paused: Boolean(rp.paused), currentTime: Number(rp.currentTime) || 0,
+          ...(action ? { action } : {}),
         };
-        // Always keep widget up-to-date regardless of player state
         lobbyCurrentPlayback.set(pb);
-        // Only sync to player if it's already open — don't auto-open it
-        if (_isPlayerOpen && window.electron?.syncPlayerState) {
+        if (window.electron?.syncPlayerState) {
           window.electron.syncPlayerState(pb);
           window.electron?.sendParticipantsToPlayer?.(getCurrentParticipants());
+        } else if (isEmbeddedWebPlayer()) {
+          window.dispatchEvent(new CustomEvent('player:applySync', { detail: pb }));
         }
         const parts = getCurrentParticipants();
         discordUpdate({ type: 'partyInfo', partyId: getCurrentRoomId() ?? undefined, partySize: parts.length, partyMax: Math.max(parts.length, 10), joinSecret: getCurrentRoomCode() ?? undefined });
@@ -321,12 +339,57 @@
 
       ['lobby:participantsChanged', ((e: CustomEvent) => {
         window.electron?.sendParticipantsToPlayer?.(e.detail?.participants ?? []);
+        if (!window.electron) {
+          window.dispatchEvent(new CustomEvent('lobby:participantsList', { detail: e.detail?.participants ?? [] }));
+        }
+        pushLobbySessionToPlayer();
         const parts = getCurrentParticipants();
         discordUpdate({ type: 'partyInfo', partyId: getCurrentRoomId() ?? undefined, partySize: parts.length, partyMax: Math.max(parts.length, 10), joinSecret: getCurrentRoomCode() ?? undefined });
       }) as EventListener],
 
+      ['lobby:chat', ((e: CustomEvent) => {
+        const msg = e.detail;
+        if (msg && window.electron?.sendLobbyChatToPlayer) {
+          window.electron.sendLobbyChatToPlayer(msg);
+        }
+      }) as EventListener],
+
+      ['lobby:createFromPlayer', (() => {
+        void createLobbyRoomAndOpenPlayer().catch(() => {
+          window.electron?.sendLobbyChooserErrorToPlayer?.('Не удалось создать комнату. Попробуйте ещё раз.');
+        });
+      }) as EventListener],
+
+      ['lobby:joinFromPlayer', ((e: CustomEvent) => {
+        const code = String(e.detail ?? '').trim();
+        if (!code) {
+          window.electron?.sendLobbyChooserErrorToPlayer?.('Введите код комнаты');
+          return;
+        }
+        void joinLobbyRoomAndOpenPlayer(code).catch(() => {
+          window.electron?.sendLobbyChooserErrorToPlayer?.('Неверный код или комната не найдена');
+        });
+      }) as EventListener],
+
+      ['lobby:leaveFromPlayer', (() => {
+        void leaveLobbyRoomFromUi();
+      }) as EventListener],
+
+      ['lobby:chatFromPlayer', ((e: CustomEvent) => {
+        const text = String(e.detail ?? '');
+        const profile = getLobbyProfile();
+        sendLobbyChat({ text, login: profile.login, avatar: profile.avatar });
+      }) as EventListener],
+
+      ['lobby:requestSession', (() => {
+        pushLobbySessionToPlayer();
+      }) as EventListener],
+
       ['lobby:activityEvent', ((e: CustomEvent) => {
         window.electron?.sendActivityToPlayer?.(e.detail ?? {});
+        if (!window.electron) {
+          window.dispatchEvent(new CustomEvent('lobby:activityFeed', { detail: e.detail ?? {} }));
+        }
       }) as EventListener],
 
       ['lobby:playerStateChanged', ((e: CustomEvent) => {
@@ -336,12 +399,14 @@
         let rp: any = d;
         if (d?.playback) { rp = d.playback; if (typeof d.action === 'string') action = d.action; }
         if (!rp || typeof rp !== 'object' || !('releaseId' in rp)) return;
-        if (action === 'play' || action === 'pause') action = rp.paused ? 'pause' : 'play';
+        if (action === 'play') rp = { ...rp, paused: false };
+        else if (action === 'pause') rp = { ...rp, paused: true };
         pushCommand(action, { releaseId: String(rp.releaseId ?? ''), sourceId: String(rp.sourceId ?? ''), ep: String(rp.ep ?? ''), dubberId: rp.dubberId != null ? String(rp.dubberId) : undefined, title: String(rp.title ?? ''), sourceName: String(rp.sourceName ?? ''), paused: Boolean(rp.paused), currentTime: Number(rp.currentTime) || 0 });
       }) as EventListener],
 
       ['lobby:left', (() => {
         window.electron?.sendParticipantsToPlayer?.([]);
+        pushLobbySessionToPlayer();
         discordUpdate({ type: 'partyInfo', partyId: null });
         lobbyCurrentPlayback.set(null);
         lobbyWatchingPeerIds.set([]);
@@ -361,7 +426,7 @@
       }) as EventListener],
 
       ['lobby:playerWaitingOverlay', ((e: CustomEvent) => {
-        if (_isPlayerOpen && window.electron?.sendLobbyWaitingOverlayToPlayer) {
+        if (window.electron?.sendLobbyWaitingOverlayToPlayer) {
           window.electron.sendLobbyWaitingOverlayToPlayer(e.detail ?? null);
         }
       }) as EventListener],

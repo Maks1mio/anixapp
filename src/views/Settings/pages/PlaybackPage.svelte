@@ -1,7 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Select from '../../../components/Select.svelte';
-  import { iconTriangleAlert } from '../../../components/icons';
   import {
     DEFAULT_PLAYER_HOTKEYS,
     SEEK_SECONDS_OPTIONS,
@@ -12,47 +10,35 @@
     type PlayerHotkeyBindField,
     type PlayerHotkeysSettings,
   } from '../../../utils/player-hotkeys';
-
-  const UPSCALE_MODES = [
-    { id: 14, label: 'ModeA [Preset]', desc: 'Быстрый пресет с умеренным восстановлением и апскейлом.' },
-    { id: 15, label: 'ModeB [Preset]', desc: 'Сбалансированный пресет с акцентом на детализацию.' },
-    { id: 16, label: 'ModeC [Preset]', desc: 'Качественный пресет с более агрессивным улучшением.' },
-    { id: 17, label: 'ModeA+A [Preset]', desc: 'Расширенный ModeA с дополнительной обработкой.' },
-    { id: 18, label: 'ModeB+B [Preset]', desc: 'Улучшенный ModeB, обеспечивает более высокое качество.' },
-    { id: 19, label: 'ModeC+A [Preset]', desc: 'Комбинированный пресет с высокой чёткостью и восстановлением.' },
-    { id: 0, label: 'DoG [Deblur]', desc: 'Удаление размытия и усиление границ с помощью фильтра разности Гауссиан.' },
-    { id: 1, label: 'BilateralMean [Denoise]', desc: 'Снижение шума без потери резкости с помощью билинейного среднего.' },
-    { id: 2, label: 'CNNM [Restore]', desc: 'Нейросетевое восстановление с умеренной глубиной, хорошо для общего улучшения.' },
-    { id: 3, label: 'CNNSoftM [Restore]', desc: 'Более мягкое восстановление, минимизирующее артефакты и перегибы.' },
-    { id: 4, label: 'CNNSoftVLM [Restore]', desc: 'Очень лёгкое и мягкое восстановление, подходит для слабых устройств.' },
-    { id: 5, label: 'CNNVL [Restore]', desc: 'Восстановление с малой задержкой и быстрой обработкой.' },
-    { id: 6, label: 'CNNUL [Restore]', desc: 'Универсальное восстановление с акцентом на стабильность.' },
-    { id: 7, label: 'GANUUL [Restore]', desc: 'GAN-реконструкция изображения для высокого качества.' },
-    { id: 8, label: 'CNNx2M [Upscale]', desc: 'Апскейл ×2 с сохранением структуры кадра.' },
-    { id: 9, label: 'CNNx2VL [Upscale]', desc: 'Быстрый апскейл ×2 для слабых систем.' },
-    { id: 10, label: 'DenoiseCNNx2VL [Upscale]', desc: 'Апскейл ×2 с предварительным шумоподавлением.' },
-    { id: 11, label: 'CNNx2UL [Upscale]', desc: 'Универсальный сбалансированный апскейл ×2.' },
-    { id: 12, label: 'GANx3L [Upscale]', desc: 'GAN апскейл ×3 для высокого качества.' },
-    { id: 13, label: 'GANx4UUL [Upscale]', desc: 'GAN апскейл ×4 — максимальное качество.' },
-  ];
+  import {
+    ANIME4K_INTENSITIES,
+    ANIME4K_TYPES,
+    mapAnime4kPreset,
+    normalizeAnime4kPreset,
+    type Anime4kIntensity,
+    type Anime4kType,
+  } from '../../Watch/core/anime4k-presets';
 
   type BindField = PlayerHotkeyBindField;
 
   let gpuAvailable = $state(false);
-  let upscaleEnabled = $state(false);
-  let upscaleMode = $state(15);
+  let upscaleType = $state<Anime4kType>('off');
+  let upscaleIntensity = $state<Anime4kIntensity>('optimal');
   let playerDebugOverlay = $state(false);
   let adaptiveQualityByWindow = $state(false);
   let hotkeys = $state<PlayerHotkeysSettings>({ ...DEFAULT_PLAYER_HOTKEYS });
   let capturing = $state<BindField | null>(null);
   let playbackLoaded = $state(false);
 
+  const mappedUpscale = $derived(mapAnime4kPreset({ type: upscaleType, intensity: upscaleIntensity }));
+
   async function loadPlayback() {
     if (!window.electron?.getSettings) return;
     gpuAvailable = 'gpu' in navigator;
     const settings = await window.electron.getSettings();
-    upscaleEnabled = settings.upscaleEnabled ?? false;
-    upscaleMode = settings.upscaleMode ?? 15;
+    const preset = normalizeAnime4kPreset(settings);
+    upscaleType = preset.type;
+    upscaleIntensity = preset.intensity;
     playerDebugOverlay = settings.playerDebugOverlay === true;
     adaptiveQualityByWindow = settings.adaptiveQualityByWindow === true;
     hotkeys = normalizePlayerHotkeys(settings.playerHotkeys);
@@ -60,9 +46,27 @@
   }
 
   function saveUpscale() {
-    window.electron?.saveSettings?.({ upscaleEnabled, upscaleMode });
-    window.electron?.sendUpscaleSettings?.({ upscaleEnabled, upscaleMode });
-    window.dispatchEvent(new CustomEvent('anix:upscaleChanged', { detail: { upscaleEnabled, upscaleMode } }));
+    const mapped = mapAnime4kPreset({ type: upscaleType, intensity: upscaleIntensity });
+    window.electron?.saveSettings?.({
+      upscaleEnabled: mapped.enabled,
+      upscaleMode: mapped.mode,
+      upscaleType,
+      upscaleIntensity,
+    });
+    window.electron?.sendUpscaleSettings?.({
+      upscaleEnabled: mapped.enabled,
+      upscaleMode: mapped.mode,
+      upscaleType,
+      upscaleIntensity,
+    });
+    window.dispatchEvent(new CustomEvent('anix:upscaleChanged', {
+      detail: {
+        upscaleEnabled: mapped.enabled,
+        upscaleMode: mapped.mode,
+        upscaleType,
+        upscaleIntensity,
+      },
+    }));
   }
 
   function savePlayerDebug() {
@@ -306,54 +310,43 @@
     </div>
 
     <div class="settings-section">
-      <p class="settings-section__label">Улучшение качества (Anime4K / WebGPU)</p>
+      <p class="settings-section__label">Anime4K</p>
+      <p class="settings-section__desc">Тип обработки и нагрузка — как в AnixPlayer. Без WebGPU пресеты недоступны.</p>
       <div class="settings-section__body">
-        <div class="settings-row">
-          <div class="settings-row__info">
-            <div class="settings-row__label">Включить улучшение качества</div>
-            <div class="settings-row__desc">Активирует улучшение через GPU с использованием WebGPU и Anime4K.</div>
-          </div>
-          <div class="settings-row__control">
-            <label class="settings-toggle-switch" aria-label="Улучшение качества">
-              <input
-                type="checkbox"
-                checked={upscaleEnabled}
+        <div class="settings-a4k" class:settings-a4k--disabled={!gpuAvailable}>
+          <div class="settings-a4k__row" role="radiogroup" aria-label="Тип улучшения">
+            {#each ANIME4K_TYPES as opt (opt.id)}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={upscaleType === opt.id}
+                class="settings-a4k__chip {upscaleType === opt.id ? 'settings-a4k__chip--active' : ''}"
                 disabled={!gpuAvailable}
-                onchange={(e) => {
-                  upscaleEnabled = (e.target as HTMLInputElement).checked;
-                  saveUpscale();
-                }}
-              />
-              <span class="settings-toggle-switch__track"></span>
-              <span class="settings-toggle-switch__thumb"></span>
-            </label>
+                title={opt.recommended ? `${opt.hint} (рекомендуется)` : opt.hint}
+                onclick={() => { upscaleType = opt.id; saveUpscale(); }}
+              >
+                {opt.label}
+                {#if opt.recommended}<span class="settings-a4k__star">★</span>{/if}
+              </button>
+            {/each}
           </div>
+          <div class="settings-a4k__row" role="radiogroup" aria-label="Нагрузка">
+            {#each ANIME4K_INTENSITIES as opt (opt.id)}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={upscaleIntensity === opt.id}
+                class="settings-a4k__chip {upscaleIntensity === opt.id ? 'settings-a4k__chip--active' : ''}"
+                disabled={!gpuAvailable || upscaleType === 'off'}
+                onclick={() => { upscaleIntensity = opt.id; saveUpscale(); }}
+              >{opt.label}</button>
+            {/each}
+          </div>
+          {#if mappedUpscale.enabled}
+            <p class="settings-a4k__hint">{ANIME4K_TYPES.find((t) => t.id === upscaleType)?.hint}</p>
+          {/if}
         </div>
       </div>
-    </div>
-
-    <div class="settings-section">
-      <p class="settings-section__label">Режим улучшения</p>
-      <Select
-        options={UPSCALE_MODES.map((m) => ({
-          value: String(m.id),
-          label: m.label,
-          desc: m.desc,
-          warning: m.label.includes('[Upscale]') ? 'Модель сложная, может привести к зависанию' : undefined,
-        }))}
-        value={String(upscaleMode)}
-        onChange={(v) => {
-          upscaleMode = Number(v);
-          saveUpscale();
-        }}
-        disabled={!gpuAvailable || !upscaleEnabled}
-      />
-      {#if [8, 9, 10, 11, 12, 13].includes(upscaleMode)}
-        <div class="settings-upscale-warning">
-          <span class="settings-upscale-warning__icon" aria-hidden="true">{@html iconTriangleAlert(14)}</span>
-          <span>Модель сложная, может привести к зависанию</span>
-        </div>
-      {/if}
     </div>
 
     <div class="settings-section">

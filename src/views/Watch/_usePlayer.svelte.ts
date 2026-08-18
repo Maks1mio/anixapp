@@ -1,5 +1,6 @@
 import { fmtTime } from './_utils';
 import type { PlayerLoadState } from './_types';
+import type { Anime4kIntensity, Anime4kType } from './core/anime4k-presets';
 
 export class PlayerState {
   loadState      = $state<PlayerLoadState>('loading');
@@ -15,9 +16,15 @@ export class PlayerState {
   playUrl        = $state('');
   upscaleEnabled = $state(false);
   upscaleMode    = $state(15);
+  upscaleType    = $state<Anime4kType>('off');
+  upscaleIntensity = $state<Anime4kIntensity>('optimal');
+  /** Canvas Anime4K показан (Svelte не должен заново ставить hidden). */
+  upscaleCanvasOn = $state(false);
   /** Оверлей отладки (настройки → воспроизведение) */
   debugOverlay   = $state(false);
-  overlayVisible = $state(false);
+  overlayVisible = $state(true);
+  /** Смена серии/тайтла: поверх видео постер и «Загрузка…». */
+  switching      = $state(false);
 
   // ── Playback settings ───────────────────────────────────────────────────
   playbackRate       = $state(1);

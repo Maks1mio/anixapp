@@ -27,6 +27,30 @@ ipcRenderer.on('lobby:voteFromPlayer', (_, data) => {
   window.dispatchEvent(new CustomEvent('lobby:voteFromPlayer', { detail: data }));
 });
 
+ipcRenderer.on('lobby:createFromPlayer', () => {
+  window.dispatchEvent(new CustomEvent('lobby:createFromPlayer'));
+});
+
+ipcRenderer.on('lobby:joinFromPlayer', (_, code) => {
+  window.dispatchEvent(new CustomEvent('lobby:joinFromPlayer', { detail: code }));
+});
+
+ipcRenderer.on('lobby:leaveFromPlayer', () => {
+  window.dispatchEvent(new CustomEvent('lobby:leaveFromPlayer'));
+});
+
+ipcRenderer.on('lobby:chatFromPlayer', (_, text) => {
+  window.dispatchEvent(new CustomEvent('lobby:chatFromPlayer', { detail: text }));
+});
+
+ipcRenderer.on('lobby:actionLogEntry', (_, entry) => {
+  window.dispatchEvent(new CustomEvent('lobby:actionLogIngest', { detail: entry }));
+});
+
+ipcRenderer.on('lobby:requestSession', () => {
+  window.dispatchEvent(new CustomEvent('lobby:requestSession'));
+});
+
 // Участники и события активности от главного окна → плеер
 ipcRenderer.on('lobby:activityFeed', (_, data) => {
   window.dispatchEvent(new CustomEvent('lobby:activityFeed', { detail: data }));
@@ -34,6 +58,28 @@ ipcRenderer.on('lobby:activityFeed', (_, data) => {
 
 ipcRenderer.on('lobby:participantsList', (_, participants) => {
   window.dispatchEvent(new CustomEvent('lobby:participantsList', { detail: participants }));
+});
+
+ipcRenderer.on('lobby:session', (_, session) => {
+  window.dispatchEvent(new CustomEvent('lobby:session', { detail: session }));
+});
+
+ipcRenderer.on('lobby:chatToPlayer', (_, msg) => {
+  window.dispatchEvent(new CustomEvent('lobby:chat', { detail: msg }));
+});
+
+ipcRenderer.on('lobby:chooserErrorToPlayer', (_, msg) => {
+  window.dispatchEvent(new CustomEvent('lobby:chooserError', { detail: msg }));
+});
+
+ipcRenderer.on('lobby:barrierSyncToPlayer', (_, playback) => {
+  window.dispatchEvent(new CustomEvent('lobby:barrierSync', { detail: { playback: playback ?? null } }));
+});
+ipcRenderer.on('lobby:syncResumeToPlayer', () => {
+  window.dispatchEvent(new CustomEvent('lobby:syncResume'));
+});
+ipcRenderer.on('lobby:syncStateToPlayer', (_, state) => {
+  window.dispatchEvent(new CustomEvent('lobby:syncState', { detail: state ?? {} }));
 });
 
 ipcRenderer.on('app:update-progress', (_, payload) => {
@@ -145,9 +191,20 @@ contextBridge.exposeInMainWorld('electron', {
   // Участники и события активности → плеер
   sendActivityToPlayer: (data) => ipcRenderer.send('lobby:activityToPlayer', data),
   sendParticipantsToPlayer: (participants) => ipcRenderer.send('lobby:participantsToPlayer', participants),
+  sendLobbySessionToPlayer: (session) => ipcRenderer.send('lobby:sessionToPlayer', session),
+  sendLobbyChatToPlayer: (msg) => ipcRenderer.send('lobby:chatToPlayer', msg),
+  sendLobbyChooserErrorToPlayer: (msg) => ipcRenderer.send('lobby:chooserErrorToPlayer', msg),
+  lobbyCreateFromPlayer: () => ipcRenderer.send('lobby:createFromPlayer'),
+  lobbyJoinFromPlayer: (code) => ipcRenderer.send('lobby:joinFromPlayer', code),
+  lobbyLeaveFromPlayer: () => ipcRenderer.send('lobby:leaveFromPlayer'),
+  lobbyChatFromPlayer: (text) => ipcRenderer.send('lobby:chatFromPlayer', text),
+  lobbyRequestSession: () => ipcRenderer.send('lobby:requestSession'),
   lobbyNotifyBufferingStart: () => ipcRenderer.send('lobby:bufferingStartFromPlayer'),
   lobbyPlayerSynced: () => ipcRenderer.send('lobby:playerSyncedFromPlayer'),
   sendLobbyWaitingOverlayToPlayer: (payload) => ipcRenderer.send('lobby:waitingOverlayToPlayer', payload),
+  sendLobbyBarrierSyncToPlayer: (playback) => ipcRenderer.send('lobby:barrierSyncToPlayer', playback ?? null),
+  sendLobbySyncResumeToPlayer: () => ipcRenderer.send('lobby:syncResumeToPlayer'),
+  sendLobbySyncStateToPlayer: (state) => ipcRenderer.send('lobby:syncStateToPlayer', state),
   // Discord Rich Presence update from renderer
   discordUpdate: (data) => ipcRenderer.send('discord:update', data),
   // Theme editor
@@ -177,6 +234,11 @@ contextBridge.exposeInMainWorld('electron', {
   logCollectZip:    ()      => ipcRenderer.invoke('log:collectZip'),
   logOpenZip:       (p)     => ipcRenderer.invoke('log:openZip', p),
   logOpenFolder:    ()      => ipcRenderer.invoke('log:openFolder'),
+  logGetFolderPath: ()      => ipcRenderer.invoke('log:getFolderPath'),
+  logGetSessionDir: ()      => ipcRenderer.invoke('log:getSessionDir'),
+  logGetLobbyPath:  ()      => ipcRenderer.invoke('log:getLobbyPath'),
+  logLobbyLine:     (line)  => ipcRenderer.invoke('log:lobbyLine', line),
+  sendLobbyActionLogToPlayer: (entry) => ipcRenderer.send('lobby:actionLogToPlayer', entry),
 });
 
 // Download progress events: main → renderer

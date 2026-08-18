@@ -9,27 +9,35 @@
     formatPlaybackRate,
     stepPlaybackRate,
   } from '../../../utils/player-hotkeys';
+  import {
+    ANIME4K_INTENSITIES,
+    ANIME4K_TYPES,
+    type Anime4kIntensity,
+    type Anime4kType,
+  } from '../core/anime4k-presets';
 
   interface Props {
     gpuAvailable:       boolean;
     upscaleEnabled:     boolean;
+    upscaleType:        Anime4kType;
+    upscaleIntensity:   Anime4kIntensity;
     playbackRate:       number;
     aspectRatio:        string;
     availableQualities: Record<string, string>;
     currentQuality:     string;
     speedLocked?:       boolean;
-    ontoggleUpscale:    () => void;
+    onchangeAnime4k:    (type: Anime4kType, intensity: Anime4kIntensity) => void;
     onchangeRate:       (r: number) => void;
     onchangeAspect:     (a: string) => void;
     onchangeQuality:    (q: string) => void;
   }
 
   let {
-    gpuAvailable, upscaleEnabled,
+    gpuAvailable, upscaleEnabled, upscaleType, upscaleIntensity,
     playbackRate, aspectRatio,
     availableQualities, currentQuality,
     speedLocked = false,
-    ontoggleUpscale, onchangeRate, onchangeAspect, onchangeQuality,
+    onchangeAnime4k, onchangeRate, onchangeAspect, onchangeQuality,
   }: Props = $props();
 
   const ASPECTS = [
@@ -99,25 +107,49 @@
       </div>
     {/if}
 
-    {#if gpuAvailable}
-      <div class="watch-panel__setting-row watch-panel__setting-row--toggle">
-        <div class="watch-panel__setting-label">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/>
-            <path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/>
-          </svg>
-          Улучшение качества
-        </div>
-        <div
-          role="switch"
-          tabindex="0"
-          aria-checked={upscaleEnabled}
-          class="watch-panel__toggle {upscaleEnabled ? 'watch-panel__toggle--on' : ''}"
-          onclick={(e) => { e.stopPropagation(); ontoggleUpscale(); }}
-          onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); ontoggleUpscale(); } }}
-        ></div>
+    <div class="watch-panel__setting-row">
+      <div class="watch-panel__setting-label">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/>
+          <path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/>
+        </svg>
+        Anime4K
       </div>
-    {/if}
+      {#if !gpuAvailable}
+        <p class="watch-panel__a4k-hint" role="status">Нет WebGPU — фильтр недоступен.</p>
+      {:else}
+        <div class="watch-panel__setting-chips" role="radiogroup" aria-label="Тип улучшения">
+          {#each ANIME4K_TYPES as opt (opt.id)}
+            <button
+              type="button"
+              role="radio"
+              aria-checked={upscaleType === opt.id}
+              class="watch-panel__chip {upscaleType === opt.id ? 'watch-panel__chip--active' : ''}"
+              disabled={!gpuAvailable}
+              title={opt.recommended ? `${opt.hint} (рекомендуется)` : opt.hint}
+              onclick={(e) => { e.stopPropagation(); onchangeAnime4k(opt.id, upscaleIntensity); }}
+            >{opt.label}{opt.recommended ? ' ★' : ''}</button>
+          {/each}
+        </div>
+        <div class="watch-panel__setting-chips" role="radiogroup" aria-label="Нагрузка">
+          {#each ANIME4K_INTENSITIES as opt (opt.id)}
+            <button
+              type="button"
+              role="radio"
+              aria-checked={upscaleIntensity === opt.id}
+              class="watch-panel__chip {upscaleIntensity === opt.id ? 'watch-panel__chip--active' : ''}"
+              disabled={!gpuAvailable || upscaleType === 'off'}
+              onclick={(e) => { e.stopPropagation(); onchangeAnime4k(upscaleType, opt.id); }}
+            >{opt.label}</button>
+          {/each}
+        </div>
+        {#if upscaleEnabled}
+          <p class="watch-panel__a4k-hint">
+            {ANIME4K_TYPES.find((t) => t.id === upscaleType)?.hint ?? ''}
+          </p>
+        {/if}
+      {/if}
+    </div>
 
     <div class="watch-panel__setting-row">
       <div class="watch-panel__setting-label">

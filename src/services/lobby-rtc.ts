@@ -54,6 +54,20 @@ function wireSyncDc(dc: RTCDataChannel, otherPeerId: string): void {
     try {
       const raw = JSON.parse(ev.data as string) as Record<string, unknown>;
       if (raw.v === 1 && raw.t === 'ack' && typeof raw.forSeq === 'number') return;
+      if (raw.v === 1 && raw.t === 'chat' && typeof raw.text === 'string') {
+        window.dispatchEvent(new CustomEvent('lobby:chat', {
+          detail: {
+            id: String(raw.id ?? `${otherPeerId}-${Date.now()}`),
+            text: String(raw.text).slice(0, 500),
+            login: String(raw.login ?? 'Участник'),
+            avatar: typeof raw.avatar === 'string' ? raw.avatar : null,
+            ts: typeof raw.ts === 'number' ? raw.ts : Date.now(),
+            peerId: String(raw.peerId ?? otherPeerId),
+            self: false,
+          },
+        }));
+        return;
+      }
       if (raw.v === 1 && raw.action && raw.playback && raw.fromPeerId && typeof raw.seq === 'number' && typeof raw.executeAt === 'number') {
         onRemoteSync?.({
           action: raw.action as LobbySyncAction,
@@ -349,4 +363,31 @@ export function hasP2PSync(): boolean {
     if (e.syncDc?.readyState === 'open') return true;
   }
   return false;
+}
+
+export function broadcastChat(msg: {
+  id: string;
+  text: string;
+  login: string;
+  avatar?: string | null;
+  ts: number;
+  peerId?: string | null;
+}): void {
+  const raw = JSON.stringify({
+    v: 1,
+    t: 'chat',
+    id: msg.id,
+    text: msg.text,
+    login: msg.login,
+    avatar: msg.avatar ?? null,
+    ts: msg.ts,
+    peerId: msg.peerId ?? myPeerId,
+  });
+  peers.forEach((e) => {
+    if (e.syncDc && e.syncDc.readyState === 'open') {
+      try {
+        e.syncDc.send(raw);
+      } catch (_) {}
+    }
+  });
 }

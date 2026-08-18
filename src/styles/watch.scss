@@ -25,7 +25,19 @@ $p-font-size:  16px;
   min-height: 0;
 }
 
-// Скрытый интерфейс (idle) — без курсора, пока не подвинули мышь
+.watch-page--lobby-sidebar {
+  flex-direction: row;
+}
+
+.watch-page--lobby-log {
+  .watch-page__player-wrap {
+    min-width: 0;
+  }
+}
+
+// Скрытый интерфейс (idle) — без курсора, пока не подвинули мышь.
+// Видимость chrome только здесь: проп overlayVisible в PlayerChrome
+// через {...spread} в Svelte 5 может остаться false после показа.
 .watch-page--chrome-hidden {
   cursor: none;
 
@@ -35,6 +47,25 @@ $p-font-size:  16px;
   .watch-page__upscale-canvas {
     cursor: none;
   }
+
+  .watch-page__gui-overlay {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+// Ловит pointer, когда chrome скрыт (video/canvas/iframe события не отдают).
+.watch-page__chrome-hotspot {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  background: transparent;
+  -webkit-app-region: no-drag;
+}
+
+.watch-page:not(.watch-page--chrome-hidden) .watch-page__chrome-hotspot {
+  pointer-events: none;
 }
 
 // ── Player wrap ────────────────────────────────────────────────────────────────
@@ -43,9 +74,14 @@ $p-font-size:  16px;
   flex: 1;
   position: relative;
   min-height: 200px;
+  min-width: 0;
   background: #000;
   width: 100%;
   height: 100%;
+}
+
+.watch-page--lobby-sidebar.watch-page--anidesk .watch-page__player-wrap {
+  width: auto;
 }
 
 .watch-page__player-wrap--cursor-hidden {
@@ -104,6 +140,33 @@ $p-font-size:  16px;
   width: 100%;
   height: 100%;
   z-index: 0;
+  pointer-events: auto;
+  overflow: hidden;
+}
+
+.watch-page__poster-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  overflow: hidden;
+  pointer-events: none;
+  background: #0d0d0d;
+}
+
+.watch-page__poster-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(18px) saturate(1.05);
+  transform: scale(1.12);
+  opacity: 0.55;
+}
+
+.watch-panel__a4k-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.45);
 }
 
 .watch-page__iframe,
@@ -164,14 +227,18 @@ $p-font-size:  16px;
 }
 
 .watch-page__upscale-canvas {
-  // Размеры задаются JS (style.width/height) — canvas не поддерживает object-fit
+  // Размеры задаются JS (style.width/height) — canvas не поддерживает object-fit как video,
+  // поэтому при forced ratio классы ниже совпадают с .watch-page__video--ratio.
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  display: block;
+  display: none;
+  z-index: 1;
+  pointer-events: none;
+  object-fit: contain;
 
-  &[hidden] { display: none; }
+  &--on { display: block; }
 }
 
 .watch-page__video--hidden-for-upscale { visibility: hidden; }
@@ -1102,7 +1169,8 @@ $watch-float-panel-height: min(480px, 70vh);
 // Overriding to height:100% + left:50% + translateX(-50%) + aspect-ratio
 // lets the browser compute the correct width automatically.
 
-.watch-page__video--ratio {
+.watch-page__video--ratio,
+.watch-page__upscale-canvas--ratio {
   inset: auto !important;
   top: 0 !important;
   bottom: 0 !important;
@@ -1734,6 +1802,445 @@ $watch-float-panel-height: min(480px, 70vh);
   color: rgba(255, 255, 255, 0.78);
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.watch-page__lobby-idle {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  text-align: center;
+  pointer-events: none;
+}
+
+.watch-page__lobby-idle-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.watch-page__lobby-idle-hint {
+  margin: 0;
+  max-width: 22rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.watch-lobby-sidebar {
+  width: 320px;
+  flex-shrink: 0;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--uiv2-panel-bg);
+  border-left: 1px solid var(--uiv2-panel-border);
+  color: var(--uikit-v2-text);
+  z-index: 8;
+  -webkit-app-region: no-drag;
+}
+
+.watch-page--chrome-hidden .watch-lobby-sidebar {
+  cursor: default;
+}
+
+.watch-lobby-sidebar__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.75rem 0.85rem 0.65rem;
+  border-bottom: 1px solid var(--uiv2-border-subtle);
+}
+
+.watch-lobby-sidebar__header-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.watch-lobby-sidebar__title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.watch-lobby-sidebar__code {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: fit-content;
+  padding: 0.2rem 0.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--uiv2-surface-raised);
+  color: var(--uikit-v2-accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.watch-lobby-sidebar__code--done {
+  color: var(--uikit-v2-text);
+}
+
+.watch-lobby-sidebar__people {
+  padding: 0.7rem 0.85rem 0.4rem;
+  border-bottom: 1px solid var(--uiv2-border-subtle);
+}
+
+.watch-lobby-sidebar__people-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.45rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--uiv2-fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.watch-lobby-sidebar__count {
+  min-width: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--uikit-v2-accent) 16%, transparent);
+  color: var(--uikit-v2-accent);
+  text-align: center;
+}
+
+.watch-lobby-sidebar__people-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 7.5rem;
+  overflow: auto;
+}
+
+.watch-lobby-sidebar__person {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.watch-lobby-sidebar__avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--uikit-v2-accent) 55%, transparent);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background-size: cover;
+  background-position: center;
+}
+
+.watch-lobby-sidebar__avatar--sm {
+  width: 24px;
+  height: 24px;
+  font-size: 0.65rem;
+}
+
+.watch-lobby-sidebar__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+
+.watch-lobby-sidebar__chat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.watch-lobby-sidebar__messages {
+  flex: 1;
+  min-height: 0;
+}
+
+.watch-lobby-sidebar__messages .uiv2-scroll-area__viewport {
+  padding: 0.7rem 0.85rem;
+}
+
+.watch-lobby-sidebar__empty {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--uiv2-fg-muted);
+}
+
+.watch-lobby-sidebar__system {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  color: var(--uiv2-fg-muted);
+  text-align: center;
+}
+
+.watch-lobby-sidebar__msg {
+  display: flex;
+  gap: 0.45rem;
+  margin-bottom: 0.65rem;
+}
+
+.watch-lobby-sidebar__bubble {
+  min-width: 0;
+  flex: 1;
+}
+
+.watch-lobby-sidebar__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.watch-lobby-sidebar__msg-name {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--uikit-v2-accent);
+}
+
+.watch-lobby-sidebar__msg--self .watch-lobby-sidebar__msg-name {
+  color: var(--uikit-v2-text);
+}
+
+.watch-lobby-sidebar__msg-time {
+  font-size: 0.68rem;
+  color: var(--uiv2-fg-muted);
+}
+
+.watch-lobby-sidebar__msg-text {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.watch-lobby-sidebar__composer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.65rem 0.85rem;
+  border-top: 1px solid var(--uiv2-border-subtle);
+}
+
+.watch-lobby-sidebar__footer {
+  padding: 0.55rem 0.85rem 0.85rem;
+}
+
+.watch-lobby-sidebar__log-toggle {
+  align-self: flex-start;
+  margin-top: 0.15rem;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--uiv2-border-subtle);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--uiv2-fg-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--uikit-v2-text);
+    border-color: var(--uiv2-border-strong, rgba(255, 255, 255, 0.18));
+  }
+}
+
+.watch-lobby-sidebar__log-toggle--active {
+  color: var(--uikit-v2-accent);
+  border-color: color-mix(in srgb, var(--uikit-v2-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--uikit-v2-accent) 12%, transparent);
+}
+
+// ── Lobby action log panel ─────────────────────────────────────────────────────
+
+.watch-lobby-log {
+  width: min(360px, 42vw);
+  flex-shrink: 0;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--uiv2-panel-bg);
+  border-left: 1px solid var(--uiv2-panel-border);
+  color: var(--uikit-v2-text);
+  z-index: 8;
+  -webkit-app-region: no-drag;
+}
+
+.watch-lobby-log__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem 0.5rem;
+  border-bottom: 1px solid var(--uiv2-border-subtle);
+}
+
+.watch-lobby-log__title {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.watch-lobby-log__hint {
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+  color: var(--uiv2-fg-muted);
+  line-height: 1.35;
+}
+
+.watch-lobby-log__file {
+  margin: 0.15rem 0 0;
+  font-size: 0.65rem;
+  color: var(--uiv2-fg-muted);
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(100%, 22rem);
+}
+
+.watch-lobby-log__close {
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.watch-lobby-log__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.45rem 0.75rem 0.35rem;
+}
+
+.watch-lobby-log__filter {
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--uiv2-border-subtle);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--uiv2-fg-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  &--active {
+    color: var(--uikit-v2-text);
+    border-color: color-mix(in srgb, var(--uikit-v2-accent) 45%, transparent);
+    background: rgba(255, 255, 255, 0.06);
+  }
+}
+
+.watch-lobby-log__search {
+  margin: 0 0.75rem 0.4rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--uiv2-border-subtle);
+  border-radius: 8px;
+  background: var(--uiv2-surface-raised);
+  color: inherit;
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.watch-lobby-log__list {
+  flex: 1;
+  min-height: 0;
+  margin: 0 0.35rem;
+}
+
+.watch-lobby-log__list .uiv2-scroll-area__viewport {
+  padding: 0.25rem 0.4rem 0.5rem;
+}
+
+.watch-lobby-log__empty {
+  margin: 0.5rem 0;
+  font-size: 0.76rem;
+  color: var(--uiv2-fg-muted);
+  line-height: 1.4;
+}
+
+.watch-lobby-log__row {
+  padding: 0.28rem 0.35rem;
+  border-radius: 6px;
+  margin-bottom: 0.15rem;
+  border-left: 2px solid transparent;
+}
+
+.watch-lobby-log__row--local {
+  border-left-color: var(--uikit-v2-accent);
+  background: color-mix(in srgb, var(--uikit-v2-accent) 8%, transparent);
+}
+
+.watch-lobby-log__row--server {
+  border-left-color: #5b9cff;
+  background: rgba(91, 156, 255, 0.08);
+}
+
+.watch-lobby-log__row--peer {
+  border-left-color: #7dd3a8;
+  background: rgba(125, 211, 168, 0.08);
+}
+
+.watch-lobby-log__row--system {
+  border-left-color: var(--uiv2-fg-muted);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.watch-lobby-log__line {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.68rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.watch-lobby-log__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.45rem 0.75rem 0.55rem;
+  border-top: 1px solid var(--uiv2-border-subtle);
+}
+
+.watch-lobby-log__path {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0 0.75rem 0.65rem;
+  font-size: 0.68rem;
+  color: var(--uiv2-fg-muted);
+  word-break: break-all;
+  line-height: 1.35;
 }
 
 // ── Anime4K upscale ────────────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import './styles/main.scss';
 import './styles/player-titlebar.scss';
+import './services/lobby-action-log';
 import { mount } from 'svelte';
 import PlayerApp from './PlayerApp.svelte';
 

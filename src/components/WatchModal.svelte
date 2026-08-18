@@ -493,10 +493,11 @@
           yesLabel: 'Предложить',
           onYes: () => {
             proposeAnimeChange(params);
-            window.electron?.sendProposalToPlayer?.({
-              type: 'waiting',
-              newPlayback: { title: releaseTitle, ep: params.ep },
-            });
+            const waiting = { type: 'waiting' as const, newPlayback: { title: releaseTitle, ep: params.ep } };
+            window.electron?.sendProposalToPlayer?.(waiting);
+            if (!window.electron) {
+              window.dispatchEvent(new CustomEvent('lobby:proposal', { detail: waiting }));
+            }
             close();
           },
         });

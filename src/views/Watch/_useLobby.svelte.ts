@@ -1,4 +1,4 @@
-import type { LobbyParticipant, LobbyActivityEntry, ProposalData, VoteState } from './_types';
+import type { LobbyParticipant, LobbyActivityEntry, LobbyChatMessage, ProposalData, VoteState } from './_types';
 
 const LOG_MAX = 5;
 const LOG_TTL = 10000;
@@ -6,6 +6,8 @@ const LOG_TTL = 10000;
 export class LobbyState {
   participants = $state<LobbyParticipant[]>([]);
   activityLog  = $state<LobbyActivityEntry[]>([]);
+  chatMessages = $state<LobbyChatMessage[]>([]);
+  roomCode     = $state('');
   voteState    = $state<VoteState>('hidden');
   voteProposal = $state<ProposalData | null>(null);
   waitingTitle = $state('');
@@ -26,6 +28,9 @@ export class LobbyState {
 
   handleVote(proposalId: string, accept: boolean) {
     (window as any).electron?.sendLobbyVote?.(proposalId, accept);
+    if (!window.electron?.sendLobbyVote) {
+      window.dispatchEvent(new CustomEvent('lobby:voteFromPlayer', { detail: { proposalId, accept } }));
+    }
     if (!accept) this.voteState = 'hidden';
   }
 
@@ -38,6 +43,19 @@ export class LobbyState {
       this.logTimers.delete(id);
     }, LOG_TTL);
     this.logTimers.set(id, t);
+  }
+
+  addChat(msg: LobbyChatMessage) {
+    if (this.chatMessages.some((m) => m.id === msg.id)) return;
+    this.chatMessages = [...this.chatMessages, msg].slice(-200);
+  }
+
+  resetRoom() {
+    this.participants = [];
+    this.chatMessages = [];
+    this.roomCode = '';
+    this.voteState = 'hidden';
+    this.voteProposal = null;
   }
 
   destroy() {

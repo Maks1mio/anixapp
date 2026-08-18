@@ -17,13 +17,11 @@ function viteOriginOverride(): string | null {
   return raw || null;
 }
 
-/** Same-origin Vite proxy for local anixback (avoids CSP connect-src blocks on :8787). */
+/** Same-origin Vite proxy for local anixback (LAN/phone + CSP). */
 function devAnixbackProxyOrigin(): string | null {
   if (!import.meta.env.DEV || typeof window === 'undefined') return null;
   if (viteOriginOverride()) return null;
   if (currentMode !== 'local') return null;
-  const host = window.location.hostname;
-  if (host !== 'localhost' && host !== '127.0.0.1') return null;
   return `${window.location.origin}/__anixback`;
 }
 
@@ -62,7 +60,20 @@ export function getLobbyHttpBase(): string {
 }
 
 export function getLobbyWsBase(): string {
-  // WS не идёт через HTTP middleware /__anixback — только прямой origin.
+  // Dev + local: Electron/localhost → напрямую :8787 (без Vite WS proxy, стабильнее).
+  if (
+    import.meta.env.DEV
+    && typeof window !== 'undefined'
+    && currentMode === 'local'
+    && !viteOriginOverride()
+  ) {
+    const host = window.location.hostname;
+    if (host === '127.0.0.1' || host === 'localhost') {
+      return 'ws://127.0.0.1:8787/anixapp/lobby/ws';
+    }
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${proto}//${window.location.host}/anixapp/lobby/ws`;
+  }
   const origin = getAnixbackDirectOrigin();
   if (origin.startsWith('https://')) {
     return `${origin.replace('https://', 'wss://')}/anixapp/lobby/ws`;

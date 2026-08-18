@@ -4,12 +4,16 @@
 
 import type { LobbyPlayback, LobbyParticipant } from './lobby-api';
 import { getLobbyWsBase } from './anixback-endpoint';
+import { logLobbyAction, snapshotPlayback } from './lobby-action-log';
 
 function getWsUrl(): string {
   return getLobbyWsBase();
 }
 
 let ws: WebSocket | null = null;
+/** Активный сокет — onclose от старых инстансов игнорируем (иначе reconnect-loop ~3 с). */
+let activeWs: WebSocket | null = null;
+let hadJoinedOnce = false;
 let roomId: string | null = null;
 let myPeerId: string | null = null;
 let onRemotePlayback: ((playback: LobbyPlayback, fromPeerId?: string | null, action?: string | null) => void) | null = null;
@@ -106,7 +110,8 @@ function handleMessage(e: MessageEvent): void {
     }
 
     if (msg.type === 'playback' && msg.playback && typeof msg.playback.releaseId !== 'undefined') {
-      onRemotePlayback?.(msg.playback, msg.fromPeerId ?? null, (msg as Record<string, unknown>).action as string ?? null);
+      const action = (msg as Record<string, unknown>).action as string ?? null;
+      onRemotePlayback?.(msg.playback, msg.fromPeerId ?? null, action);
       return;
     }
 
@@ -119,19 +124,28 @@ function handleMessage(e: MessageEvent): void {
       window.dispatchEvent(new CustomEvent('lobby:viewerState', { detail: { watchingPeerIds } }));
 
       const syncing = !!rawJoined.syncing;
+      logLobbyAction({
+        origin: 'server',
+        action: 'ws.joined',
+        playback: snapshotPlayback(msg.playback),
+        via: 'ws',
+        detail: { syncing, participants: msg.participants?.length ?? 0, watching: watchingPeerIds.length },
+      });
       if (msg.playback && typeof msg.playback.releaseId !== 'undefined') {
-        onRemotePlayback?.(msg.playback, null);
+        // При reconnect без syncing не затираем локальный play/pause — WS мог быть offline.
+        if (syncing || !hadJoinedOnce) {
+          onRemotePlayback?.(msg.playback, null);
+        }
         if (syncing) {
-          // Server paused everyone for us to sync. After applying playback,
-          // we need to send sync_ready once our player has loaded/seeked.
           window.dispatchEvent(new CustomEvent('lobby:syncNeeded'));
         }
-      } else {
+      } else if (!hadJoinedOnce) {
         // Room has no playback yet — still dispatch an empty signal
         // so lobby-state sets hasAuthoritativePlayback = true and
         // unblocks local commands for the first user who starts playing.
         window.dispatchEvent(new CustomEvent('lobby:authoritativeConfirmed'));
       }
+      hadJoinedOnce = true;
       if (msg.participants) {
         onParticipantsChanged?.(msg.participants);
       }
@@ -142,35 +156,52 @@ function handleMessage(e: MessageEvent): void {
     // Server paused playback (новый участник или смена качества/озвучки у кого-то).
     if (msg.type === 'sync_pause') {
       const raw = msg as Record<string, unknown>;
+      logLobbyAction({
+        origin: 'server',
+        action: 'ws.sync_pause',
+        actor: {
+          login: raw.waitingLogin != null ? String(raw.waitingLogin) : undefined,
+          peerId: raw.joinerPeerId != null ? String(raw.joinerPeerId) : null,
+        },
+        playback: snapshotPlayback(msg.playback),
+        via: 'ws',
+        note: 'сервер поставил всех на паузу',
+      });
+      const joinerPeerId = raw.joinerPeerId != null ? String(raw.joinerPeerId) : null;
+      const waitingLogin = raw.waitingLogin != null ? String(raw.waitingLogin) : null;
+      const waitingAvatar = raw.waitingAvatar != null ? String(raw.waitingAvatar) : null;
       if (msg.playback && typeof msg.playback.releaseId !== 'undefined') {
         onRemotePlayback?.(msg.playback, null);
       }
       if (msg.participants) {
         onParticipantsChanged?.(msg.participants);
       }
-      const joinerPeerId = raw.joinerPeerId != null ? String(raw.joinerPeerId) : null;
-      const waitingLogin = raw.waitingLogin != null ? String(raw.waitingLogin) : null;
-      const waitingAvatar = raw.waitingAvatar != null ? String(raw.waitingAvatar) : null;
       window.dispatchEvent(new CustomEvent('lobby:syncPause', {
         detail: { joinerPeerId, waitingLogin, waitingAvatar },
       }));
-      // Инициатор buffering_start в broadcast не попадает; на всякий случай не затираем localBuffering оверлеем «ожидаем себя».
-      const isSelfBuffering = myPeerId && joinerPeerId === myPeerId;
-      if (!isSelfBuffering) {
-        window.dispatchEvent(new CustomEvent('lobby:playerWaitingOverlay', {
-          detail: {
+      const isSelf = myPeerId && joinerPeerId === myPeerId;
+      window.dispatchEvent(new CustomEvent('lobby:playerWaitingOverlay', {
+        detail: isSelf
+          ? { mode: 'localBuffering', label: 'Синхронизация…' }
+          : {
             mode: 'peer',
             login: waitingLogin ?? 'Участник',
             avatar: waitingAvatar,
             peerId: joinerPeerId,
           },
-        }));
-      }
+      }));
       return;
     }
 
     // Server resumed playback after sync — everyone can play again.
     if (msg.type === 'sync_resume') {
+      logLobbyAction({
+        origin: 'server',
+        action: 'ws.sync_resume',
+        playback: snapshotPlayback(msg.playback),
+        via: 'ws',
+        note: 'сервер снял паузу синхронизации',
+      });
       if (msg.playback && typeof msg.playback.releaseId !== 'undefined') {
         onRemotePlayback?.(msg.playback, null);
       }
@@ -181,12 +212,26 @@ function handleMessage(e: MessageEvent): void {
 
     // Real-time participant list updates
     if ((msg.type === 'participant_joined' || msg.type === 'participant_left') && msg.participants) {
+      logLobbyAction({
+        origin: 'server',
+        action: `ws.${msg.type}`,
+        via: 'ws',
+        detail: { count: msg.participants.length },
+      });
       onParticipantsChanged?.(msg.participants);
       return;
     }
 
     // ── Proposal (голосование за смену аниме) ──
     if (msg.type === 'proposal_new' && msg.proposalId && msg.playback) {
+      logLobbyAction({
+        origin: 'peer',
+        action: 'ws.proposal_new',
+        actor: { login: msg.proposerLogin, peerId: msg.proposerPeerId ?? null },
+        playback: snapshotPlayback(msg.playback),
+        via: 'ws',
+        detail: { proposalId: msg.proposalId },
+      });
       window.dispatchEvent(new CustomEvent('lobby:proposalNew', {
         detail: {
           proposalId: msg.proposalId,
@@ -206,6 +251,13 @@ function handleMessage(e: MessageEvent): void {
     }
 
     if (msg.type === 'proposal_accepted' && msg.proposalId) {
+      logLobbyAction({
+        origin: 'server',
+        action: 'ws.proposal_accepted',
+        playback: snapshotPlayback(msg.playback),
+        via: 'ws',
+        detail: { proposalId: msg.proposalId },
+      });
       if (msg.playback && typeof msg.playback.releaseId !== 'undefined') {
         onRemotePlayback?.(msg.playback, null);
       }
@@ -216,6 +268,12 @@ function handleMessage(e: MessageEvent): void {
     }
 
     if (msg.type === 'proposal_rejected' && msg.proposalId) {
+      logLobbyAction({
+        origin: 'server',
+        action: 'ws.proposal_rejected',
+        via: 'ws',
+        detail: { proposalId: msg.proposalId, reason: msg.reason ?? 'unknown' },
+      });
       window.dispatchEvent(new CustomEvent('lobby:proposalRejected', {
         detail: {
           proposalId: msg.proposalId,
@@ -244,7 +302,39 @@ function handleMessage(e: MessageEvent): void {
       window.dispatchEvent(new CustomEvent('lobby:viewerState', { detail: { watchingPeerIds } }));
       return;
     }
+
+    if (msg.type === 'chat' && typeof (msg as Record<string, unknown>).text === 'string') {
+      const raw = msg as Record<string, unknown>;
+      const from = String(raw.fromPeerId ?? '');
+      if (myPeerId && from && from === myPeerId) return;
+      logLobbyAction({
+        origin: 'peer',
+        action: 'ws.chat',
+        actor: { login: String(raw.login ?? 'Участник'), peerId: from || null },
+        via: 'ws',
+        note: String(raw.text).slice(0, 80),
+      });
+      window.dispatchEvent(new CustomEvent('lobby:chat', {
+        detail: {
+          id: String(raw.id ?? `${from}-${raw.ts ?? Date.now()}`),
+          text: String(raw.text).slice(0, 500),
+          login: String(raw.login ?? 'Участник'),
+          avatar: typeof raw.avatar === 'string' ? raw.avatar : null,
+          ts: typeof raw.ts === 'number' ? raw.ts : Date.now(),
+          peerId: from || null,
+          self: false,
+        },
+      }));
+      return;
+    }
   } catch (_) {}
+}
+
+function detachWsHandlers(socket: WebSocket): void {
+  socket.onopen = null;
+  socket.onmessage = null;
+  socket.onerror = null;
+  socket.onclose = null;
 }
 
 export function connect(
@@ -253,49 +343,76 @@ export function connect(
   peerId?: string | null,
   onParticipants?: (participants: LobbyParticipant[]) => void,
 ): void {
-  disconnect();
+  if (activeWs) {
+    detachWsHandlers(activeWs);
+    try { activeWs.close(); } catch { /* ignore */ }
+    activeWs = null;
+    ws = null;
+  }
+  clearReconnect();
   roomId = rId;
   myPeerId = peerId ?? null;
   onRemotePlayback = onPlayback;
   onParticipantsChanged = onParticipants ?? null;
   intentionalClose = false;
   const url = getWsUrl();
+  let socket: WebSocket;
   try {
-    ws = new WebSocket(url);
+    socket = new WebSocket(url);
   } catch (e) {
     console.warn('[lobby-ws] connect error', e);
     scheduleReconnect();
     return;
   }
+  ws = socket;
+  activeWs = socket;
 
-  ws.onopen = () => {
+  socket.onopen = () => {
+    if (socket !== activeWs) return;
     clearReconnect();
     reconnectAttempts = 0;
-    ws?.send(JSON.stringify({ type: 'join', roomId: rId, peerId: myPeerId ?? undefined }));
+    logLobbyAction({
+      origin: 'system',
+      action: 'ws.open',
+      via: 'ws',
+      detail: { roomId: rId, peerId: myPeerId },
+      note: url,
+    });
+    socket.send(JSON.stringify({ type: 'join', roomId: rId, peerId: myPeerId ?? undefined }));
   };
 
-  ws.onmessage = handleMessage;
+  socket.onmessage = handleMessage;
 
-  ws.onclose = () => {
+  socket.onclose = () => {
+    if (socket !== activeWs) return;
+    activeWs = null;
     ws = null;
+    logLobbyAction({
+      origin: 'system',
+      action: 'ws.close',
+      via: 'ws',
+      note: intentionalClose ? 'закрыто намеренно' : 'обрыв, переподключение',
+    });
     if (!intentionalClose && roomId) scheduleReconnect();
   };
 
-  ws.onerror = () => {
-    if (!intentionalClose) scheduleReconnect();
+  socket.onerror = () => {
+    if (socket !== activeWs) return;
+    // reconnect только в onclose — иначе двойной scheduleReconnect
   };
 }
 
 export function disconnect(): void {
   intentionalClose = true;
   reconnectAttempts = 0;
+  hadJoinedOnce = false;
   clearReconnect();
-  if (ws) {
-    try {
-      ws.close();
-    } catch (_) {}
-    ws = null;
+  if (activeWs) {
+    detachWsHandlers(activeWs);
+    try { activeWs.close(); } catch { /* ignore */ }
+    activeWs = null;
   }
+  ws = null;
   roomId = null;
   myPeerId = null;
   onRemotePlayback = null;
@@ -372,6 +489,30 @@ export function sendVote(proposalId: string, accept: boolean): void {
     ws.send(JSON.stringify({ type: 'vote_change', proposalId, accept }));
   } catch (e) {
     console.warn('[lobby-ws] sendVote error', e);
+  }
+}
+
+export function sendChat(msg: {
+  id: string;
+  text: string;
+  login: string;
+  avatar?: string | null;
+  ts: number;
+  peerId?: string | null;
+}): void {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !roomId) return;
+  try {
+    ws.send(JSON.stringify({
+      type: 'chat',
+      id: msg.id,
+      text: msg.text,
+      login: msg.login,
+      avatar: msg.avatar ?? null,
+      ts: msg.ts,
+      fromPeerId: msg.peerId ?? myPeerId,
+    }));
+  } catch (e) {
+    console.warn('[lobby-ws] sendChat error', e);
   }
 }
 

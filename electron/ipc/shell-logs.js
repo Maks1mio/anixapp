@@ -22,9 +22,19 @@ ipcMain.handle('log:renderer', (_, entry) => {
 ipcMain.handle('log:getSessions', () => logger.getSessions().map(s => ({ id: s.id, ts: s.ts })));
 
 ipcMain.handle('log:getSessionLog', (_, sessionId, file, limit) => {
-  const allowed = ['main', 'ipc', 'renderer', 'errors'];
+  const allowed = ['main', 'ipc', 'renderer', 'errors', 'lobby'];
   const safeFile = allowed.includes(file) ? file : 'main';
   return logger.getSessionLog(sessionId, safeFile, limit || 500);
+});
+
+ipcMain.handle('log:getFolderPath', () => logger.getLogsRootDir());
+
+ipcMain.handle('log:getSessionDir', () => logger.getCurrentSessionDir());
+
+ipcMain.handle('log:getLobbyPath', () => logger.getLobbyLogPath());
+
+ipcMain.handle('log:lobbyLine', (_, line) => {
+  if (typeof line === 'string') logger.writeLobbyPlain(line);
 });
 
 ipcMain.handle('log:getSystemInfo', () => logger.getSystemInfo());
@@ -51,7 +61,7 @@ ipcMain.handle('log:openZip', async (_, zipPath) => {
 ipcMain.handle('log:openFolder', async () => {
   const { shell: s } = require('electron');
   const dir = logger.getCurrentSessionDir();
-  if (dir) await s.openPath(path.dirname(dir));
+  if (dir) await s.openPath(dir);
 });
 
 ipcMain.handle('app:getVersions', () => {

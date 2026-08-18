@@ -55,6 +55,16 @@ export interface LobbyActivityEntry {
   avatar?: string | null;
 }
 
+export interface LobbyChatMessage {
+  id: string;
+  text: string;
+  login: string;
+  avatar?: string | null;
+  ts: number;
+  self?: boolean;
+  system?: boolean;
+}
+
 export interface NextEpAltDub {
   targetEp:   number;
   dubber:     DubberItem;

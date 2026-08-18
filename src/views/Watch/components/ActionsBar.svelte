@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fade, scale } from 'svelte/transition';
   import type { EpisodeItem, DubberItem, DownloadedEpisodeItem } from '../_types';
+  import type { Anime4kIntensity, Anime4kType } from '../core/anime4k-presets';
   import EpisodesPopover  from './EpisodesPopover.svelte';
   import DubbingPopover   from './DubbingPopover.svelte';
   import SettingsPopover  from './SettingsPopover.svelte';
@@ -23,6 +24,8 @@
     useVideo:        boolean;
     gpuAvailable:    boolean;
     upscaleEnabled:  boolean;
+    upscaleType:     Anime4kType;
+    upscaleIntensity: Anime4kIntensity;
     playbackRate:    number;
     aspectRatio:     string;
     availableQualities: Record<string, string>;
@@ -32,7 +35,7 @@
     ontogglePlay:    () => void;
     ontoggleMute:    () => void;
     onvolumechange:  (e: Event) => void;
-    ontoggleUpscale: () => void;
+    onchangeAnime4k: (type: Anime4kType, intensity: Anime4kIntensity) => void;
     onskipOpening:   () => void;
     onopenSeries:    () => void;
     onopenDubbing:   () => void;
@@ -46,6 +49,8 @@
     onchangeRate:     (r: number) => void;
     onchangeAspect:   (a: string) => void;
     onchangeQuality:  (q: string) => void;
+    inLobby?:         boolean;
+    onopenLobby?:     () => void;
   }
 
   let {
@@ -54,14 +59,17 @@
     currentDownloadedPath = '',
     currentEp, currentDubberId,
     popoverType, popoverLoading, useVideo, gpuAvailable, upscaleEnabled,
+    upscaleType, upscaleIntensity,
     playbackRate, aspectRatio, availableQualities, currentQuality,
     speedLocked = false,
     lastEpisodeTypeUpdateId = null,
-    ontogglePlay, ontoggleMute, onvolumechange, ontoggleUpscale, onskipOpening,
+    ontogglePlay, ontoggleMute, onvolumechange, onchangeAnime4k, onskipOpening,
     onopenSeries, onopenDubbing, onopenSettings,
     onselectEp, onselectDub, onselectDownloadedMode, ontogglePinDub,
     onclosePopover, onfullscreen,
     onchangeRate, onchangeAspect, onchangeQuality,
+    inLobby = false,
+    onopenLobby,
   }: Props = $props();
 
   const sliderValue = $derived(muted ? 0 : volume);
@@ -292,12 +300,14 @@
           <SettingsPopover
             {gpuAvailable}
             {upscaleEnabled}
+            {upscaleType}
+            {upscaleIntensity}
             {playbackRate}
             {aspectRatio}
             {availableQualities}
             {currentQuality}
             {speedLocked}
-            {ontoggleUpscale}
+            {onchangeAnime4k}
             {onchangeRate}
             {onchangeAspect}
             {onchangeQuality}
@@ -305,6 +315,24 @@
         </div>
       {/if}
     </div>
+
+    {#if onopenLobby}
+      <button
+        type="button"
+        class="watch-page__ctrl-btn"
+        class:watch-page__ctrl-btn--active={inLobby}
+        aria-label="Совместный просмотр"
+        title="Совместный просмотр"
+        onclick={(e) => { e.stopPropagation(); onopenLobby(); }}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+      </button>
+    {/if}
 
     <!-- Fullscreen — Maximize2 / Minimize2 -->
     <button

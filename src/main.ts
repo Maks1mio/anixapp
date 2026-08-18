@@ -3,6 +3,7 @@ import './styles/main.scss';
 import { mount } from 'svelte';
 import App from './App.svelte';
 import { initRendererLogging } from './services/logger';
+import './services/lobby-action-log';
 import { initWebAnixApi } from './services/anix-api-web';
 
 // Init renderer-side logging before anything else

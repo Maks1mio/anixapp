@@ -4,10 +4,13 @@
  */
 import type { AnixApi } from '../types/api';
 
-const INVOKE_URL = '/__anix/invoke';
+function invokeUrl(): string {
+  if (typeof window === 'undefined') return '/__anix/invoke';
+  return `${window.location.origin}/__anix/invoke`;
+}
 
 async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
-  const res = await fetch(INVOKE_URL, {
+  const res = await fetch(invokeUrl(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ channel, args }),
@@ -241,7 +244,7 @@ export async function initWebAnixApi(): Promise<boolean> {
   if (typeof window === 'undefined' || window.anixApi || window.electron) return false;
 
   try {
-    const health = await fetch('/__anix/health');
+    const health = await fetch(`${window.location.origin}/__anix/health`);
     if (!health.ok) return false;
     window.anixApi = buildWebAnixApi();
     return true;

@@ -17,7 +17,7 @@
         <div class="log-toolbar__left">
           <select class="log-session-select" id="log-session-sel" title="Сессия запуска"></select>
           <div class="log-file-tabs" id="log-file-tabs">
-            ${['errors','main','ipc','renderer'].map(f => `
+            ${['errors','main','ipc','renderer','lobby'].map(f => `
               <button class="log-file-tab ${f === currentFile ? 'log-file-tab--active' : ''}" data-file="${f}">${f}</button>
             `).join('')}
           </div>
@@ -26,6 +26,10 @@
           <button class="log-btn log-btn--icon" id="log-refresh" title="Обновить">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
             Обновить
+          </button>
+          <button class="log-btn log-btn--icon" id="log-copy-path" title="Скопировать путь к папке логов">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+            Путь
           </button>
           <button class="log-btn log-btn--icon" id="log-open-folder" title="Открыть папку с логами">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
@@ -66,7 +70,7 @@
           <div class="log-modal__section log-modal__section--include">
             <div class="log-modal__label log-modal__label--include">Включено в архив</div>
             <ul>
-              <li>Журналы событий: main.log, ipc.log, renderer.log, errors.log</li>
+              <li>Журналы событий: main.log, ipc.log, renderer.log, lobby.txt, errors.log</li>
               <li>Системная информация: ОС, процессор, объём ОЗУ</li>
               <li>Версии: приложение, Electron, Chrome, Node.js</li>
               <li>Все сессии (последние 5 запусков)</li>
@@ -108,7 +112,14 @@
       const listEl = root.querySelector('#log-list') as HTMLElement;
       if (!listEl) return;
 
+      const isLobbyPlain = currentFile === 'lobby';
+
       const filtered = allEntries.filter(e => {
+        if (isLobbyPlain) {
+          if (!filterText) return true;
+          const q = filterText.toLowerCase();
+          return String(e.msg || '').toLowerCase().includes(q);
+        }
         if (levelFilter !== 'ALL' && e.level !== levelFilter) return false;
         if (filterText) {
           const q = filterText.toLowerCase();
@@ -118,17 +129,29 @@
       });
 
       const statsEl = root.querySelector('#log-stats') as HTMLElement;
-      const counts = { ERROR: 0, WARN: 0, INFO: 0, DEBUG: 0 };
-      for (const e of allEntries) if (e.level in counts) counts[e.level as keyof typeof counts]++;
-      statsEl.innerHTML = `
-        <span class="log-stat log-stat--error">${counts.ERROR} ошибок</span>
-        <span class="log-stat log-stat--warn">${counts.WARN} предупреждений</span>
-        <span class="log-stat log-stat--info">${counts.INFO} инфо</span>
-        <span class="log-stat log-stat--total">${allEntries.length} всего</span>
-      `;
+      if (isLobbyPlain) {
+        statsEl.innerHTML = `<span class="log-stat log-stat--total">${allEntries.length} строк · lobby.txt (читаемый текст)</span>`;
+      } else {
+        const counts = { ERROR: 0, WARN: 0, INFO: 0, DEBUG: 0 };
+        for (const e of allEntries) if (e.level in counts) counts[e.level as keyof typeof counts]++;
+        statsEl.innerHTML = `
+          <span class="log-stat log-stat--error">${counts.ERROR} ошибок</span>
+          <span class="log-stat log-stat--warn">${counts.WARN} предупреждений</span>
+          <span class="log-stat log-stat--info">${counts.INFO} инфо</span>
+          <span class="log-stat log-stat--total">${allEntries.length} всего</span>
+        `;
+      }
 
       if (!filtered.length) {
         listEl.innerHTML = `<div class="log-empty">${allEntries.length ? 'Нет записей по фильтру' : 'Записей нет 🎉'}</div>`;
+        return;
+      }
+
+      if (isLobbyPlain) {
+        listEl.innerHTML = [...filtered].reverse().map(e => {
+          const msg = String(e.msg || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          return `<div class="log-entry log-entry--lobby"><code class="log-lobby-line">${msg}</code></div>`;
+        }).join('');
         return;
       }
 
@@ -196,6 +219,8 @@
       if (!btn) return;
       currentFile = btn.dataset.file!;
       root.querySelectorAll('.log-file-tab').forEach(b => b.classList.toggle('log-file-tab--active', b === btn));
+      const filtersEl = root.querySelector('#log-filters') as HTMLElement;
+      if (filtersEl) filtersEl.style.display = currentFile === 'lobby' ? 'none' : '';
       loadLogs();
     });
 
@@ -216,6 +241,30 @@
 
     root.querySelector('#log-open-folder')?.addEventListener('click', () => {
       (window.electron as any)?.logOpenFolder?.();
+    });
+
+    root.querySelector('#log-copy-path')?.addEventListener('click', async () => {
+      const api = window.electron as {
+        logGetSessionDir?: () => Promise<string | null>;
+        logGetLobbyPath?: () => Promise<string | null>;
+        logGetFolderPath?: () => Promise<string | null>;
+      } | undefined;
+      const folder = await api?.logGetSessionDir?.().catch(() => null)
+        || await api?.logGetLobbyPath?.().catch(() => null)
+        || await api?.logGetFolderPath?.().catch(() => null);
+      if (!folder) {
+        alert('Путь доступен только в Electron');
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(folder);
+        const btn = root.querySelector('#log-copy-path') as HTMLButtonElement;
+        const prev = btn.textContent;
+        btn.textContent = 'Скопировано';
+        window.setTimeout(() => { btn.textContent = prev; }, 1600);
+      } catch {
+        prompt('Путь к логам:', folder);
+      }
     });
 
     const backdrop = root.querySelector('#log-modal-backdrop') as HTMLElement;

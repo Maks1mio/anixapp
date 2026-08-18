@@ -1,28 +1,30 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import Hls from 'hls.js';
-  import {
-    DoG, BilateralMean, CNNM, CNNSoftM, CNNSoftVL, CNNVL, CNNUL, GANUUL,
-    CNNx2M, CNNx2VL, DenoiseCNNx2VL, CNNx2UL, GANx3L, GANx4UUL,
-    ModeA, ModeB, ModeC, ModeAA, ModeBB, ModeCA,
-    render as anime4kRender,
-  } from 'anime4k-webgpu';
   import { getWatchParams } from '../../router';
-  import { getCurrentRoomId } from '../../services/lobby-state';
-  import type { WatchState, EpisodeItem, DubberItem, LobbyActivityEntry, PopoverType, NextEpAltDub, DownloadedEpisodeItem } from './_types';
-  import { isHlsUrl, stripKodikQueryParams, resolveEpisodeUrl, resolveEpisodeUrlWithRetry, isDubberBlacklisted } from './_utils';
-  import { pathToLocalMediaUrl, isLocalMediaUrl } from '../../utils/local-media-url';
-  import { notifyHistoryChanged } from '../../utils/favorites-events';
+  import { getCurrentRoomId, sendLobbyChat, isLobbyAwaitingPlayerSync } from '../../services/lobby-state';
+  import { logLobbyAction, snapshotPlayback } from '../../services/lobby-action-log';
+  import type { WatchState, EpisodeItem, DubberItem, LobbyActivityEntry, LobbyChatMessage, PopoverType, NextEpAltDub, DownloadedEpisodeItem } from './_types';
+  import { isHlsUrl, isDubberBlacklisted, lobbyActionText } from './_utils';
+  import { pathToLocalMediaUrl } from '../../utils/local-media-url';
   import { sortDubbersPinnedFirst, readLastEpisodeTypeUpdateId } from '../../utils/dubber-meta';
   import { PlayerState } from './_usePlayer.svelte';
   import { LobbyState }  from './_useLobby.svelte';
-  import LobbyPanel      from './components/LobbyPanel.svelte';
-  import LobbyVote       from './components/LobbyVote.svelte';
-  import ControlsBar     from './components/ControlsBar.svelte';
-  import ActionsBar      from './components/ActionsBar.svelte';
-  import TopBar          from './components/TopBar.svelte';
-  import CenterPlay      from './components/CenterPlay.svelte';
-  import { resolveCdnAssetUrl } from '../../utils/posterUrl';
+  import { PlayerCore, gpuAvailable } from './core/PlayerCore';
+  import { swapMediaSource } from './core/hls-engine';
+  import {
+    mapAnime4kPreset,
+    normalizeAnime4kPreset,
+    type Anime4kIntensity,
+    type Anime4kType,
+  } from './core/anime4k-presets';
+  import SoloShell from './shells/SoloShell.svelte';
+  import LobbyShell from './shells/LobbyShell.svelte';
+  import LobbySidebar from './components/LobbySidebar.svelte';
+  import LobbyActionLogPanel from './components/LobbyActionLogPanel.svelte';
+  import LobbyChooserOverlay from './components/LobbyChooserOverlay.svelte';
+  import type { PlayerChromeProps } from './shells/PlayerChrome.svelte';
+  import { mapReleaseRawToCard } from '../../utils/release-card';
+  import { resolveCdnAssetUrl, toPosterDisplayUrl } from '../../utils/posterUrl';
   import {
     DEFAULT_PLAYBACK_RATE,
     DEFAULT_PLAYER_HOTKEYS,
@@ -37,14 +39,7 @@
     getPlayerViewportWidth,
     pickAdaptiveQuality,
   } from '../../utils/adaptive-quality';
-
-  // WebGPU types fallback:
-  // В некоторых конфигурациях TS не подтягивает типы WebGPU (GPUDevice/navigator.gpu),
-  // хотя рантайм их поддерживает. Чтобы не ломать сборку, даём минимальные типы.
-  // При наличии @webgpu/types этот alias будет не нужен, но и не мешает.
-  type GPUDevice = {
-    destroy?: () => void;
-  } & Record<string, unknown>;
+  import { getLobbyProfile, leaveLobbyRoomFromUi, joinLobbyRoomAndOpenPlayer } from '../../utils/lobby-player';
 
   // ── URL params ─────────────────────────────────────────────────────────────
   const params          = getWatchParams();
@@ -56,10 +51,14 @@
   const initialDubId    = params.get('dubberId') || '';
   const initialLocalFile = params.get('localFile') || '';
   const playbackMode = params.get('playbackMode') || '';
+  const initialLobbyCode = (params.get('lobby') || params.get('lobbyCode') || '').trim().toUpperCase();
 
   // ── Reactive state ─────────────────────────────────────────────────────────
   const player = new PlayerState();
   const lobby  = new LobbyState();
+  const core   = new PlayerCore();
+  let posterUrl = $state('');
+  let posterReleaseId = '';
 
   let watchState: WatchState = $state({
     releaseId:  releaseId,
@@ -129,6 +128,9 @@
   // ── Hotkeys + OSD ──────────────────────────────────────────────────────────
   let hotkeys = $state<PlayerHotkeysSettings>({ ...DEFAULT_PLAYER_HOTKEYS });
   let inLobby = $state(!!getCurrentRoomId());
+  let sidebarOpen = $state(!!getCurrentRoomId());
+  let actionLogOpen = $state(false);
+  let chooserOpen = $state(false);
   let osdText = $state('');
   let osdWarn = $state(false);
   let osdTimer: ReturnType<typeof setTimeout> | null = null;
@@ -161,6 +163,14 @@
   function seekBySeconds(delta: number) {
     if (!videoEl || !player.useVideo || isNaN(videoEl.duration)) return;
     const next = Math.min(Math.max(0, videoEl.currentTime + delta), videoEl.duration);
+    if (inLobbyRoom()) {
+      player.currentTime = next;
+      videoEl.currentTime = next;
+      sendToLobby('seek', next);
+      showOsd(formatSeekDelta(delta));
+      showAndSchedule();
+      return;
+    }
     videoEl.currentTime = next;
     sendToLobby('seek');
     showOsd(formatSeekDelta(delta));
@@ -311,6 +321,11 @@
   }
   function showAndSchedule() { showOverlay(); scheduleHide(); }
 
+  function onPointerActivity(e: Event) {
+    if (e instanceof PointerEvent && e.pointerType === 'touch' && e.type === 'pointermove') return;
+    showAndSchedule();
+  }
+
   $effect(() => {
     if (popoverType != null) {
       if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
@@ -318,43 +333,50 @@
     }
   });
 
-  // ── Upscale ────────────────────────────────────────────────────────────────
-  const gpuAvailable = typeof navigator !== 'undefined' && typeof (navigator as any).gpu !== 'undefined';
-  let upscaleStopFn: (() => void) | null = null;
-  /** GPU-устройство, перехваченное из anime4k-webgpu — чистим при stopUpscale */
-  let _capturedGpuDevice: GPUDevice | null = null;
-  /** Флаг: если true — requestVideoFrameCallback-loop внутри anime4k не будет продолжаться */
-  let _upscaleRenderStopped = false;
-  /** Счётчик запусков: отменяет устаревший anime4kRender при очередном resize/повторном старте */
-  let upscaleRunId = 0;
-  let upscaleLastError = $state('');
+  function bindCoreEls() {
+    core.video = videoEl ?? null;
+    core.canvas = canvasEl ?? null;
+    core.iframe = iframeEl ?? null;
+  }
 
-  const upscaleModeMap: Record<number, any> = {
-    0: DoG, 1: BilateralMean, 2: CNNM, 3: CNNSoftM, 4: CNNSoftVL,
-    5: CNNVL, 6: CNNUL, 7: GANUUL,
-    8: CNNx2M, 9: CNNx2VL, 10: DenoiseCNNx2VL, 11: CNNx2UL, 12: GANx3L, 13: GANx4UUL,
-    14: ModeA, 15: ModeB, 16: ModeC, 17: ModeAA, 18: ModeBB, 19: ModeCA,
-  };
+  let upscaleStartGen = 0;
+  let upscaleHoldForNewFrame = false;
 
   function stopUpscale() {
-    // 1. Останавливаем render-loop (флаг проверяется в обёртке requestVideoFrameCallback)
-    _upscaleRenderStopped = true;
-    // 2. Вызываем stop-callback библиотеки (если есть)
-    if (upscaleStopFn) { try { upscaleStopFn(); } catch {} upscaleStopFn = null; }
-    // 3. Уничтожаем GPU-устройство — освобождаем всю GPU-память (текстуры, буферы, пайплайны)
-    if (_capturedGpuDevice) {
-      try { _capturedGpuDevice.destroy?.(); } catch {}
-      _capturedGpuDevice = null;
-    }
-    // 4. Сбрасываем canvas
-    if (canvasEl) {
-      canvasEl.hidden = true;
-      canvasEl.width = 1;
-      canvasEl.height = 1;
-      canvasEl.style.width = '';
-      canvasEl.style.height = '';
-    }
+    upscaleStartGen++;
+    bindCoreEls();
+    core.stopUpscale();
+    player.upscaleCanvasOn = false;
     videoEl?.classList.remove('watch-page__video--hidden-for-upscale');
+  }
+
+  async function startUpscale() {
+    bindCoreEls();
+    if (upscaleHoldForNewFrame) return;
+    const gen = ++upscaleStartGen;
+    if (!player.upscaleEnabled || !gpuAvailable) {
+      if (gen === upscaleStartGen) stopUpscale();
+      return;
+    }
+    if (!videoEl || videoEl.videoWidth < 2 || videoEl.videoHeight < 2) return;
+    player.upscaleCanvasOn = true;
+    await tick();
+    if (gen !== upscaleStartGen || upscaleHoldForNewFrame) return;
+    bindCoreEls();
+    const ok = await core.startUpscale(player.upscaleEnabled, player.upscaleMode, player.aspectRatio);
+    if (gen !== upscaleStartGen || upscaleHoldForNewFrame) return;
+    player.upscaleCanvasOn = ok;
+    if (!ok) videoEl?.classList.remove('watch-page__video--hidden-for-upscale');
+  }
+
+  function restartUpscaleIfFrameSizeChanged() {
+    if (!player.upscaleEnabled || !gpuAvailable || !videoEl) return;
+    const w = videoEl.videoWidth;
+    const h = videoEl.videoHeight;
+    if (w < 2 || h < 2) return;
+    if (core.upscale.active && core.upscale.inputWidth === w && core.upscale.inputHeight === h) return;
+    upscaleHoldForNewFrame = false;
+    startUpscale();
   }
 
   /** Счётчик тиков rAF, когда canvas апскейла реально показан (прокси «кадров вывода») */
@@ -369,10 +391,11 @@
     const cw = Math.round(v.clientWidth);
     const ch = Math.round(v.clientHeight);
     lines.push(`Поток: ${vw}×${vh} · окно: ${cw}×${ch}`);
-    const hls = (v as any)._hls as Hls | undefined;
+    const hls = (v as any)._hls as { levels?: Array<{ bitrate?: number; width?: number; height?: number }>; currentLevel?: number; loadLevel?: number } | undefined;
     if (hls?.levels?.length) {
-      const ci = hls.currentLevel;
-      const li = ci >= 0 ? ci : (typeof hls.loadLevel === 'number' && hls.loadLevel >= 0 ? hls.loadLevel : -1);
+      const ci = typeof hls.currentLevel === 'number' ? hls.currentLevel : -1;
+      const loadLevel = typeof hls.loadLevel === 'number' ? hls.loadLevel : -1;
+      const li = ci >= 0 ? ci : (loadLevel >= 0 ? loadLevel : -1);
       const lv = li >= 0 ? hls.levels[li] : null;
       if (lv) {
         const kbps = Math.round((lv.bitrate || 0) / 1000);
@@ -391,7 +414,7 @@
     } catch {
       /* optional API */
     }
-    if (canvasEl && !canvasEl.hidden && upscaleStopFn) {
+    if (canvasEl && player.upscaleCanvasOn && core.upscale.active) {
       lines.push(`Кадры вывода (canvas rAF): ${debugCanvasRafTicks}`);
     }
     const buf = v.buffered.length ? v.buffered.end(v.buffered.length - 1) : 0;
@@ -399,17 +422,17 @@
     const bufPct = dur > 0 ? Math.round((buf / dur) * 100) : 0;
     lines.push(`Буфер: ~${bufPct}% · ${v.paused ? 'пауза' : 'воспроизведение'} · ×${v.playbackRate.toFixed(2)}`);
     lines.push(`Состояние: readyState ${v.readyState} · network ${v.networkState}`);
-    if (player.upscaleEnabled && gpuAvailable && canvasEl && !canvasEl.hidden && upscaleStopFn) {
-      lines.push(`Anime4K: активен · режим ${player.upscaleMode} · canvas ${canvasEl.width}×${canvasEl.height}`);
+    if (player.upscaleEnabled && gpuAvailable && canvasEl && player.upscaleCanvasOn && core.upscale.active) {
+      lines.push(`Anime4K: активен · ${player.upscaleType} · canvas ${canvasEl.width}×${canvasEl.height}`);
     } else if (player.upscaleEnabled && gpuAvailable) {
-      const err = upscaleLastError.trim();
+      const err = core.upscale.lastError.trim();
       lines.push(
         err
-          ? `Anime4K: ошибка · режим ${player.upscaleMode} — ${err.slice(0, 120)}`
-          : `Anime4K: запуск… · режим ${player.upscaleMode}`,
+          ? `Anime4K: ошибка · ${player.upscaleType} — ${err.slice(0, 120)}`
+          : `Anime4K: запуск… · ${player.upscaleType}`,
       );
     } else {
-      lines.push(`Anime4K: ${gpuAvailable ? 'выкл' : 'нет WebGPU'} · режим ${player.upscaleMode}`);
+      lines.push(`Anime4K: ${gpuAvailable ? 'выкл' : 'нет WebGPU'} · ${player.upscaleType}`);
     }
     lines.push(`WebGPU: ${gpuAvailable ? 'да' : 'нет'} · DPR ${typeof window !== 'undefined' ? window.devicePixelRatio : 1}`);
     return lines.join('\n');
@@ -428,7 +451,7 @@
       if (!alive) return;
       rafId = requestAnimationFrame(() => {
         if (!alive) return;
-        if (canvasEl && !canvasEl.hidden && upscaleStopFn) debugCanvasRafTicks++;
+        if (canvasEl && !canvasEl.hidden && core.upscale.active) debugCanvasRafTicks++;
         rafStep();
       });
     };
@@ -442,142 +465,47 @@
     };
   });
 
-  async function startUpscale() {
-    if (!gpuAvailable || !player.upscaleEnabled || !canvasEl || !videoEl) return;
-    stopUpscale();
-    if (videoEl.readyState < 1) return;
-
-    const myRun = ++upscaleRunId;
-    _upscaleRenderStopped = false;
-
-    const videoW = videoEl.videoWidth  || 1920;
-    const videoH = videoEl.videoHeight || 1080;
-    const aspect = videoW / videoH;
-
-    // Размер контейнера в CSS-пикселях (без DPR — экономит GPU-память)
-    const rect = canvasEl.parentElement?.getBoundingClientRect();
-    const containerW = rect ? Math.round(rect.width)  : 1920;
-    const containerH = rect ? Math.round(rect.height) : 1080;
-
-    // Размер области отрисовки с учётом aspect ratio (letterbox)
-    let cssW: number, cssH: number;
-    if (containerW / containerH > aspect) {
-      cssH = containerH;
-      cssW = Math.round(cssH * aspect);
-    } else {
-      cssW = containerW;
-      cssH = Math.round(cssW / aspect);
-    }
-
-    // Буфер WebGPU: не больше 2× от нативного разрешения видео и не больше контейнера
-    const maxBufferW = Math.min(videoW * 2, cssW);
-    const maxBufferH = Math.min(videoH * 2, cssH);
-    let tW: number, tH: number;
-    if (maxBufferW / maxBufferH > aspect) {
-      tH = maxBufferH; tW = Math.round(tH * aspect);
-    } else {
-      tW = maxBufferW; tH = Math.round(tW / aspect);
-    }
-    tW = Math.max(videoW, tW);
-    tH = Math.max(videoH, tH);
-
-    canvasEl.width  = tW;
-    canvasEl.height = tH;
-    canvasEl.style.width  = cssW + 'px';
-    canvasEl.style.height = cssH + 'px';
-
-    // ── Перехват: anime4k-webgpu создаёт GPUDevice и render-loop внутри,
-    // но не предоставляет cleanup. Мы оборачиваем requestVideoFrameCallback
-    // и navigator.gpu чтобы перехватить ресурсы и мочь убить их при stop.
-    const origRVFC = videoEl.requestVideoFrameCallback.bind(videoEl);
-    let latestRvfcId: number | null = null;
-    videoEl.requestVideoFrameCallback = (cb: VideoFrameRequestCallback): number => {
-      const wrapped: VideoFrameRequestCallback = (now, meta) => {
-        if (_upscaleRenderStopped) return; // цепочка прервана
-        cb(now, meta);
-      };
-      const id = origRVFC(wrapped);
-      latestRvfcId = id;
-      return id;
-    };
-
-    const navAny = navigator as any;
-    const gpuAny = navAny.gpu;
-    if (!gpuAny?.requestAdapter) throw new Error('WebGPU: navigator.gpu.requestAdapter is unavailable');
-
-    const origRequestAdapter = gpuAny.requestAdapter.bind(gpuAny);
-    gpuAny.requestAdapter = async (...args: any[]) => {
-      const adapter = await origRequestAdapter(...args);
-      if (!adapter) return adapter;
-      const origRD = adapter.requestDevice.bind(adapter);
-      adapter.requestDevice = async (...dArgs: any[]) => {
-        const device = await origRD(...dArgs);
-        _capturedGpuDevice = device;
-        return device;
-      };
-      return adapter;
-    };
-
-    const ModeClass = upscaleModeMap[player.upscaleMode] ?? ModeB;
-    try {
-      upscaleLastError = '';
-      await anime4kRender({
-        video: videoEl,
-        canvas: canvasEl,
-        pipelineBuilder: (device: any, inputTexture: any) => {
-          const native = { width: videoEl.videoWidth || videoW, height: videoEl.videoHeight || videoH };
-          const target = { width: canvasEl.width, height: canvasEl.height };
-          return [new ModeClass({ device, inputTexture, nativeDimensions: native, targetDimensions: target }) as any];
-        },
-      });
-
-      // Восстанавливаем оригинальные методы
-      videoEl.requestVideoFrameCallback = origRVFC;
-      gpuAny.requestAdapter = origRequestAdapter;
-
-      if (myRun !== upscaleRunId) {
-        // Устаревший запуск — чистим
-        _upscaleRenderStopped = true;
-        if (latestRvfcId !== null) try { videoEl.cancelVideoFrameCallback(latestRvfcId); } catch {}
-        if (_capturedGpuDevice) { try { _capturedGpuDevice.destroy?.(); } catch {} _capturedGpuDevice = null; }
-        return;
-      }
-
-      upscaleStopFn = () => {
-        _upscaleRenderStopped = true;
-        if (latestRvfcId !== null) {
-          try { videoEl.cancelVideoFrameCallback(latestRvfcId); } catch {}
-        }
-      };
-      canvasEl.hidden = false;
-      videoEl.classList.add('watch-page__video--hidden-for-upscale');
-      debugCanvasRafTicks = 0;
-    } catch (err) {
-      // Восстанавливаем оригинальные методы при ошибке тоже
-      videoEl.requestVideoFrameCallback = origRVFC;
-      gpuAny.requestAdapter = origRequestAdapter;
-      const msg = err instanceof Error ? err.message : String(err);
-      upscaleLastError = msg || 'unknown';
-      console.warn('[Anime4K]', err);
-      stopUpscale();
-    }
-  }
-
   // ── Sync state ─────────────────────────────────────────────────────────────
   let isApplyingSync   = false;
   let applySyncTimer: ReturnType<typeof setTimeout> | null = null;
   let pendingSync: any = null;
   let preventAutoPause = false;
-  let stallCheckTimer: ReturnType<typeof setInterval> | null = null;
-  let origEpUrl        = '';
   let episodeLoadGen   = 0;
+  /** Локальная смена качества/источника: игнорировать remote pause, иначе кадр замирает. */
+  let localMediaSwap = false;
+  /** Barrier-sync в окне плеера (WS в main — локальный флаг для sync_ready). */
+  let lobbyBarrierPending = false;
+  /** Зеркало main awaitingPlayerSync — приходит по IPC (модуль lobby-sync в player пустой). */
+  let lobbySyncAwaiting = false;
+  let pendingBarrierPlayback: Record<string, unknown> | null = null;
+
+  function needsLobbySyncReady(): boolean {
+    return lobbyBarrierPending || lobbySyncAwaiting || isLobbyAwaitingPlayerSync();
+  }
+
+  function barrierTargetTime(): number | undefined {
+    const p = pendingBarrierPlayback;
+    return p && typeof p.currentTime === 'number' ? p.currentTime : undefined;
+  }
+
+  function maybeArmLobbySyncAfterLoad(playback?: Record<string, unknown> | null): void {
+    if (!inLobbyRoom() || !needsLobbySyncReady()) return;
+    const ct = playback && typeof playback.currentTime === 'number'
+      ? playback.currentTime
+      : barrierTargetTime();
+    queueMicrotask(() => armLobbyPlayerSyncedOnce(ct));
+  }
+
+  function inLobbyRoom(): boolean {
+    return inLobby || !!getCurrentRoomId();
+  }
 
   /** Снимок комнатного playback до смены озвучки/серии — чтобы игнорировать sync_resume с устаревшим состоянием сервера (до changeEpisode). */
   type LobbyStaleSnap = { releaseId: string; sourceId: string; ep: number; dubberId: string };
   let lobbyStalePlaybackBeforeSwitch: LobbyStaleSnap | null = null;
 
   function lobbyCaptureStalePlaybackSnapshot(): void {
-    if (!getCurrentRoomId()) {
+    if (!inLobbyRoom()) {
       lobbyStalePlaybackBeforeSwitch = null;
       return;
     }
@@ -605,20 +533,6 @@
     peerId?: string | null;
   } | null;
   let lobbyWaitOverlay = $state<LobbyWaitOverlay>(null);
-
-  // ── Playback watchdog ─────────────────────────────────────────────────────
-  // Catches silent HLS failures: manifest loads but segments never arrive,
-  // so the video stays at 0:00 forever without any error event.
-  // Retries indefinitely ("до талого") — only stops when video actually plays
-  // or the user switches episode/source (generation counter changes).
-  let wdTimer: ReturnType<typeof setTimeout> | null = null;
-  let wdGen   = 0;   // incremented per applyVideoAndUI call — stale callbacks exit early
-  const WD_DELAY_MS      = 5_000;  // ms without `playing` before first trigger
-  const WD_RETRY_DELAY_MS = 4_000; // ms between subsequent retry attempts
-
-  function wdClear() {
-    if (wdTimer) { clearTimeout(wdTimer); wdTimer = null; }
-  }
 
   const VOLUME_KEY = 'anixapp_player_volume';
   const RATE_KEY = 'anixapp_player_playback_rate';
@@ -655,50 +569,98 @@
   function notifyLobbyPlayerSyncedIfReady() {
     const el = (window as any).electron;
     if (el?.lobbyPlayerSynced) {
+      logLobbyAction({ origin: 'local', action: 'player.sync_ready', via: 'player' });
       el.lobbyPlayerSynced();
       return;
     }
-    if (getCurrentRoomId()) {
+    if (inLobbyRoom()) {
+      logLobbyAction({ origin: 'local', action: 'player.sync_ready', via: 'player' });
       window.dispatchEvent(new CustomEvent('lobby:playerSynced'));
     }
   }
 
-  function armLobbyPlayerSyncedOnce() {
-    const el = (window as any).electron;
-    if (el?.lobbyPlayerSynced && videoEl) {
-      let fired = false;
-      const onReady = () => {
-        if (fired) return;
-        fired = true;
-        videoEl!.removeEventListener('seeked', onReady);
-        videoEl!.removeEventListener('canplay', onReady);
-        videoEl!.removeEventListener('playing', onReady);
-        notifyLobbyPlayerSyncedIfReady();
-      };
-      videoEl.addEventListener('seeked', onReady);
-      videoEl.addEventListener('canplay', onReady);
-      videoEl.addEventListener('playing', onReady);
-      return;
-    }
-    if (!getCurrentRoomId() || !videoEl) return;
-    let fired = false;
-    const onReady = () => {
-      if (fired) return;
-      fired = true;
-      videoEl.removeEventListener('seeked', onReady);
-      videoEl.removeEventListener('canplay', onReady);
-      videoEl.removeEventListener('playing', onReady);
+  function armLobbyPlayerSyncedOnce(targetTime?: number) {
+    const wantTime = targetTime ?? (videoEl && !isNaN(videoEl.currentTime) ? videoEl.currentTime : undefined);
+    const barrierStartedAt = Date.now();
+
+    const markReady = () => {
+      if (inLobbyRoom()) {
+        localMediaSwap = false;
+        lobbyBarrierPending = false;
+      }
+      if (applySyncTimer) clearTimeout(applySyncTimer);
+      applySyncTimer = window.setTimeout(() => { isApplyingSync = false; applySyncTimer = null; }, 400);
       notifyLobbyPlayerSyncedIfReady();
     };
-    videoEl.addEventListener('seeked', onReady);
-    videoEl.addEventListener('canplay', onReady);
-    videoEl.addEventListener('playing', onReady);
+
+    const attachReadyListeners = (el: HTMLVideoElement) => {
+      let fired = false;
+      let seekedOk = false;
+      let canplayOk = false;
+      const tryFire = () => {
+        if (fired || !seekedOk || !canplayOk) return;
+        if (wantTime != null && Math.abs(el.currentTime - wantTime) > 0.65) return;
+        if (Date.now() - barrierStartedAt < 400) return;
+        fired = true;
+        el.removeEventListener('seeked', onSeeked);
+        el.removeEventListener('canplay', onCanplay);
+        markReady();
+      };
+      const onSeeked = () => { seekedOk = true; tryFire(); };
+      const onCanplay = () => { canplayOk = true; tryFire(); };
+      el.addEventListener('seeked', onSeeked);
+      el.addEventListener('canplay', onCanplay);
+      if (wantTime != null && Math.abs(el.currentTime - wantTime) <= 0.65) seekedOk = true;
+      if (el.readyState >= 3) canplayOk = true;
+      window.setTimeout(() => {
+        if (!fired) {
+          seekedOk = true;
+          canplayOk = true;
+          tryFire();
+        }
+      }, 12000);
+    };
+
+    const el = (window as any).electron;
+    if (el?.lobbyPlayerSynced && videoEl) {
+      attachReadyListeners(videoEl);
+      return;
+    }
+    if (!inLobbyRoom() || !videoEl) return;
+    attachReadyListeners(videoEl);
+  }
+
+  function notifyLobbyBufferingFromUi() {
+    if (!inLobbyRoom()) return;
+    const elE = (window as any).electron;
+    if (elE?.lobbyNotifyBufferingStart) {
+      elE.lobbyNotifyBufferingStart();
+      return;
+    }
+    window.dispatchEvent(new CustomEvent('lobby:bufferingStartFromPlayer'));
   }
 
   function sendToLobby(action: 'play' | 'pause' | 'seek' | 'changeEpisode', ctOverride?: number) {
-    if (isApplyingSync || !(window as any).electron?.sendPlayerState) return;
-    const p = ctOverride !== undefined ? { ...getPlaybackPayload(), currentTime: ctOverride } : getPlaybackPayload();
-    (window as any).electron.sendPlayerState({ action, playback: p });
+    if (action !== 'seek' && (isApplyingSync || lobbyBarrierPending)) return;
+    const base = ctOverride !== undefined ? { ...getPlaybackPayload(), currentTime: ctOverride } : getPlaybackPayload();
+    const p = action === 'play'
+      ? { ...base, paused: false }
+      : action === 'pause'
+        ? { ...base, paused: true }
+        : base;
+    if (inLobbyRoom()) {
+      logLobbyAction({
+        origin: 'local',
+        action: `player.${action}`,
+        playback: snapshotPlayback(p),
+        via: 'player',
+      });
+    }
+    if ((window as any).electron?.sendPlayerState) {
+      (window as any).electron.sendPlayerState({ action, playback: p });
+      return;
+    }
+    window.dispatchEvent(new CustomEvent('lobby:playerStateChanged', { detail: { action, playback: p } }));
   }
 
   // ── Video playback ─────────────────────────────────────────────────────────
@@ -707,13 +669,8 @@
     titleStr: string, srcName: string, dubId: string,
     seekTime?: number, initialPaused?: boolean,
   ) {
-    const isLocal = isLocalMediaUrl(pUrl);
     watchState.ep = ep; watchState.title = titleStr;
     watchState.sourceName = srcName; watchState.dubberId = dubId;
-
-    // ── Watchdog bookkeeping ─────────────────────────────────────────────────
-    wdClear();
-    const myGen = ++wdGen;
 
     const qs = new URLSearchParams({ releaseId: watchState.releaseId, sourceId: watchState.sourceId, ep: String(ep), title: titleStr, sourceName: srcName });
     if (dubId) qs.set('dubberId', dubId);
@@ -723,148 +680,91 @@
 
     player.playUrl  = pUrl;
     player.useVideo = useVid;
-    if (!useVid) return;
-
-    if (stallCheckTimer) { clearInterval(stallCheckTimer); stallCheckTimer = null; }
-    const hlsInst = (videoEl as any)?._hls as Hls | undefined;
-    if (hlsInst) { hlsInst.destroy(); (videoEl as any)._hls = undefined; }
-
-    videoEl.hidden = false;
-    if (iframeEl) iframeEl.hidden = true;
-    videoEl.src = '';
-    if (player.volume !== undefined) videoEl.volume = player.volume / 100;
-
-    const doPlay = () => { if (!initialPaused) videoEl.play().catch(() => {}); };
-
-    if (seekTime != null && seekTime > 0) {
-      const restoreTime = () => {
-        videoEl.currentTime = Math.min(seekTime, videoEl.duration || Infinity);
-        if (initialPaused) videoEl.pause();
-        sendToLobby('seek');
-      };
-      videoEl.addEventListener('loadeddata', restoreTime, { once: true });
-      videoEl.addEventListener('canplay',    restoreTime, { once: true });
+    bindCoreEls();
+    if (!useVid) {
+      core.applySource({
+        url: pUrl, useVideo: false, ep, title: titleStr, sourceName: srcName, dubberId: dubId,
+        volume: player.volume, onFallback: () => {}, onReresolve: () => {},
+        onWatchdogReresolve: async () => null, syncPlaybackRate: syncVideoPlaybackRate,
+      });
+      player.switching = false;
+      return;
     }
 
-    const fallback = () => {
-      if (isLocal) {
-        player.loadState = 'error';
-        player.errorText = 'Не удалось воспроизвести скачанный файл.';
-        return;
-      }
-      if (origEpUrl) applyVideoAndUI(origEpUrl, false, ep, titleStr, srcName, dubId);
-    };
-
-    if (isHlsUrl(pUrl) && Hls.isSupported()) {
-      const hls = new Hls();
-      hls.loadSource(pUrl);
-      hls.attachMedia(videoEl);
-      (videoEl as any)._hls = hls;
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        doPlay();
-        syncVideoPlaybackRate();
-      });
-      videoEl.addEventListener('loadedmetadata', () => {
-        syncVideoPlaybackRate();
-      }, { once: true });
-      videoEl.addEventListener('playing', () => {
-        syncVideoPlaybackRate();
-      }, { once: true });
-      let attempts = 0;
-      let reResolveAttempts = 0;
-      hls.on(Hls.Events.ERROR, (_, data) => {
-        if (!data.fatal) {
-          if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+    core.applySource({
+      url: pUrl,
+      useVideo: useVid,
+      ep,
+      title: titleStr,
+      sourceName: srcName,
+      dubberId: dubId,
+      seekTime,
+      initialPaused,
+      volume: player.volume,
+      releaseId: watchState.releaseId,
+      sourceId: watchState.sourceId,
+      syncPlaybackRate: syncVideoPlaybackRate,
+      onFallback: () => {
+        player.switching = false;
+        if (core.origEpUrl && !pUrl.startsWith('anix-local:')) {
+          applyVideoAndUI(core.origEpUrl, false, ep, titleStr, srcName, dubId);
           return;
         }
-        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && attempts++ < 3) {
-          hls.recoverMediaError();
-        } else if (data.type === Hls.ErrorTypes.NETWORK_ERROR && attempts < 3) {
-          attempts++;
-          hls.startLoad(); // try resume current URL first
-        } else if (reResolveAttempts++ < 2) {
-          // URL may have expired — re-resolve fresh direct link and restart
-          const curEpUrl = origEpUrl;
-          if (!curEpUrl) { fallback(); return; }
-          const savedTime = videoEl && !isNaN(videoEl.currentTime) ? videoEl.currentTime : 0;
-          const wasPaused = videoEl?.paused ?? false;
-          resolveEpisodeUrlWithRetry(curEpUrl, false).then(res => {
-            if (!res.useVideo || !res.playUrl) { fallback(); return; }
-            const resolved = applyQualityMap(res.qualityMap, res.currentQuality, res.playUrl);
-            // Cleanly restart playback with new URL (applyVideoAndUI destroys existing HLS)
-            applyVideoAndUI(resolved.url, true, ep, titleStr, srcName, dubId, savedTime, wasPaused);
-          }).catch(fallback);
-        } else {
-          fallback();
-        }
-      });
-      let lastStall = -1;
-      stallCheckTimer = setInterval(() => {
-        if (videoEl.paused || videoEl.ended || videoEl.hidden) { lastStall = -1; return; }
-        const ct = videoEl.currentTime;
-        if (lastStall >= 0 && ct === lastStall) { try { hls.startLoad(ct); } catch {} }
-        lastStall = ct;
-      }, 5000);
-    } else {
-      videoEl.src = pUrl;
-      videoEl.addEventListener('loadedmetadata', () => {
-        syncVideoPlaybackRate();
-      }, { once: true });
-      videoEl.addEventListener('playing', () => {
-        syncVideoPlaybackRate();
-      }, { once: true });
-      syncVideoPlaybackRate();
-      doPlay();
-    }
-
-    videoEl.addEventListener('error', fallback, { once: true });
-
-    // On first `playing`: cancel watchdog, record history
-    videoEl.addEventListener('playing', () => {
-      if (myGen === wdGen) wdClear();
-      const rId = parseInt(watchState.releaseId, 10);
-      const sId = parseInt(watchState.sourceId, 10);
-      (window as any).anixApi?.history?.add?.(rId, sId, ep);
-      (window as any).anixApi?.history?.markWatched?.(rId, sId, ep).catch?.(() => {});
-      if (Number.isFinite(rId)) notifyHistoryChanged({ releaseId: rId });
-    }, { once: true });
-
-    // Watchdog: if video doesn't start within WD_DELAY_MS, keep re-resolving the URL
-    // indefinitely ("до талого") until it succeeds. Only stops when:
-    //   • video actually plays (playing event above clears wdTimer)
-    //   • user navigates away (myGen !== wdGen exits the callback)
-    if (!initialPaused && !isLocal) {
-      const scheduleWd = (delay: number) => {
-        wdTimer = setTimeout(async () => {
-          wdTimer = null;
-          if (myGen !== wdGen) return;                      // superseded by newer load
-          if (!videoEl || videoEl.currentTime > 0) return; // already playing fine
-          const embedUrl = origEpUrl;
-          if (!embedUrl) return;
-          try {
-            const res = await resolveEpisodeUrlWithRetry(embedUrl, false, 3);
-            if (myGen !== wdGen) return; // superseded while awaiting resolve
-            if (res.useVideo && res.playUrl) {
-              const resolved = applyQualityMap(res.qualityMap, res.currentQuality, res.playUrl);
-              // applyVideoAndUI increments wdGen and arms its own watchdog —
-              // the retry loop continues naturally until video actually plays.
-              applyVideoAndUI(resolved.url, true, ep, titleStr, srcName, dubId);
-            } else {
-              // URL resolve failed — schedule another attempt after short delay
-              if (myGen === wdGen) scheduleWd(WD_RETRY_DELAY_MS);
-            }
-          } catch {
-            // Network error — schedule another attempt after short delay
-            if (myGen === wdGen) scheduleWd(WD_RETRY_DELAY_MS);
+        player.loadState = 'error';
+        player.errorText = 'Не удалось воспроизвести скачанный файл.';
+      },
+      onReresolve: (savedTime, wasPaused) => {
+        const curEpUrl = core.origEpUrl;
+        if (!curEpUrl) return;
+        core.resolve(curEpUrl, false).then(res => {
+          if (!res.useVideo || !res.playUrl) {
+            applyVideoAndUI(curEpUrl, false, ep, titleStr, srcName, dubId);
+            return;
           }
-        }, delay);
-      };
-      scheduleWd(WD_DELAY_MS);
+          const resolved = applyQualityMap(res.qualityMap, res.currentQuality, res.playUrl);
+          applyVideoAndUI(resolved.url, true, ep, titleStr, srcName, dubId, savedTime, wasPaused);
+        }).catch(() => applyVideoAndUI(curEpUrl, false, ep, titleStr, srcName, dubId));
+      },
+      onWatchdogReresolve: async () => {
+        const embedUrl = core.origEpUrl;
+        if (!embedUrl) return null;
+        const res = await core.resolve(embedUrl, false, 3);
+        if (!res.useVideo || !res.playUrl) return null;
+        const resolved = applyQualityMap(res.qualityMap, res.currentQuality, res.playUrl);
+        return { url: resolved.url, useVideo: true };
+      },
+    });
+    if (seekTime != null && seekTime > 0) {
+      const onSeeked = () => sendToLobby('seek');
+      videoEl?.addEventListener('seeked', onSeeked, { once: true });
     }
+    const reveal = () => {
+      player.switching = false;
+      upscaleHoldForNewFrame = false;
+    };
+    videoEl?.addEventListener('loadeddata', reveal, { once: true });
+    videoEl?.addEventListener('canplay', reveal, { once: true });
+    videoEl?.addEventListener('playing', () => {
+      reveal();
+      player.paused = false;
+    }, { once: true });
+    if (useVid) bindVideoElementListeners();
+    void prefetchNearby();
   }
 
   function setOrigEpisodeUrl(rawUrl: string) {
-    origEpUrl = stripKodikQueryParams(rawUrl.startsWith('http') ? rawUrl : `https:${rawUrl}`);
+    core.setOrigEpisodeUrl(rawUrl);
+  }
+
+  function beginMediaCover(nextReleaseId?: string) {
+    player.switching = true;
+    try { videoEl?.pause(); } catch { /* ignore */ }
+    player.upscaleCanvasOn = false;
+    const nextId = nextReleaseId != null ? String(nextReleaseId) : '';
+    if (nextId && nextId !== posterReleaseId) {
+      posterUrl = '';
+      void loadReleasePoster(nextId);
+    }
   }
 
   function loadEpisode(rId: number, sId: number, ep: number, titleStr: string, srcName: string, dubId: string, seekTime?: number, initialPaused?: boolean): Promise<void> {
@@ -872,16 +772,44 @@
     const api = (window as any).anixApi?.release;
     if (!api?.getEpisode) return Promise.resolve();
     const myGen = ++episodeLoadGen;
+    player.switching = player.loadState === 'ready';
+    if (player.switching) {
+      try { videoEl?.pause(); } catch { /* ignore */ }
+    }
+    if (String(rId) !== posterReleaseId) {
+      posterUrl = '';
+      void loadReleasePoster(String(rId));
+    }
+    void fetchEpisodesSilently();
     return api.getEpisode(rId, sId, ep).then(async (res: any) => {
       if (myGen !== episodeLoadGen) return;
       const episode = res?.episode;
       if (!episode?.url) return;
       setOrigEpisodeUrl(episode.url);
-      const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq } = await resolveEpisodeUrlWithRetry(episode.url, episode.iframe);
+      const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq } = await core.resolve(episode.url, episode.iframe);
       if (myGen !== episodeLoadGen) return;
       const resolved = applyQualityMap(qualityMap, cq, pUrl, { resetManualLock: true });
       applyVideoAndUI(resolved.url, uv, ep, titleStr, srcName, dubId, seekTime, initialPaused);
-    }).catch(() => {});
+    }).catch(() => { player.switching = false; });
+  }
+
+  async function prefetchNearby() {
+    const api = (window as any).anixApi?.release;
+    if (!api?.getEpisode) return;
+    const rId = parseInt(watchState.releaseId, 10);
+    const sId = parseInt(watchState.sourceId, 10);
+    const nextEp = watchState.ep + 1;
+    try {
+      const res = await api.getEpisode(rId, sId, nextEp);
+      if (res?.episode?.url) core.prefetch(res.episode.url, !!res.episode.iframe);
+    } catch {}
+    const alt = nextEpAltDub;
+    if (alt) {
+      try {
+        const res = await api.getEpisode(rId, alt.sourceId, alt.targetEp);
+        if (res?.episode?.url) core.prefetch(res.episode.url, !!res.episode.iframe);
+      } catch {}
+    }
   }
 
   function goToEpisode(ep: number) {
@@ -892,21 +820,36 @@
       void selectDownloadedEpisode(dl);
       return;
     }
-    if (getCurrentRoomId()) {
+    const inLobby = inLobbyRoom();
+    if (inLobby) {
       lobbyCaptureStalePlaybackSnapshot();
-      const elE = (window as any).electron;
-      if (elE?.lobbyNotifyBufferingStart) elE.lobbyNotifyBufferingStart();
+      notifyLobbyBufferingFromUi();
+      isApplyingSync = true;
+      localMediaSwap = true;
     }
     watchState.ep = ep;
-    loadEpisode(parseInt(watchState.releaseId, 10), parseInt(watchState.sourceId, 10), ep, watchState.title, watchState.sourceName, watchState.dubberId);
-    sendToLobby('changeEpisode', 0);
+    loadEpisode(parseInt(watchState.releaseId, 10), parseInt(watchState.sourceId, 10), ep, watchState.title, watchState.sourceName, watchState.dubberId)
+      .then(() => {
+        if (inLobby) {
+          sendToLobby('changeEpisode', 0);
+          armLobbyPlayerSyncedOnce();
+        }
+      })
+      .catch(() => {
+        if (inLobby) {
+          localMediaSwap = false;
+          isApplyingSync = false;
+          notifyLobbyPlayerSyncedIfReady();
+        }
+      });
   }
 
   /** @param episodeOverride — если задан и отличается от текущей серии, воспроизведение с начала новой серии */
   function switchDubbing(newSourceId: number, newSourceName: string, newDubberId: number, newDubberName: string, episodeOverride?: number) {
     popoverType = null;
     localPlaybackPath = '';
-    if (getCurrentRoomId()) lobbyCaptureStalePlaybackSnapshot();
+    const inLobby = inLobbyRoom();
+    if (inLobby) lobbyCaptureStalePlaybackSnapshot();
     const targetEp = episodeOverride !== undefined ? episodeOverride : watchState.ep;
     const switchingEpisode = episodeOverride !== undefined && episodeOverride !== watchState.ep;
     const savedTime = switchingEpisode ? undefined : (videoEl && !isNaN(videoEl.currentTime) ? videoEl.currentTime : undefined);
@@ -915,15 +858,26 @@
     watchState.sourceName = newSourceName;
     watchState.dubberId = String(newDubberId);
     watchState.dubberName = newDubberName;
-    const elE = (window as any).electron;
-    if (elE?.lobbyNotifyBufferingStart) elE.lobbyNotifyBufferingStart();
-    sendToLobby('changeEpisode');
-    isApplyingSync = true;
+    if (inLobby) {
+      notifyLobbyBufferingFromUi();
+      isApplyingSync = true;
+      localMediaSwap = true;
+    }
     loadEpisode(parseInt(watchState.releaseId, 10), newSourceId, targetEp, watchState.title, newSourceName, String(newDubberId), savedTime, wasPaused)
-      .then(() => fetchEpisodesSilently())
-      .catch(() => {});
-    if (applySyncTimer) clearTimeout(applySyncTimer);
-    applySyncTimer = setTimeout(() => { isApplyingSync = false; applySyncTimer = null; }, 4000);
+      .then(() => {
+        fetchEpisodesSilently();
+        if (inLobby) {
+          sendToLobby('changeEpisode', savedTime ?? 0);
+          armLobbyPlayerSyncedOnce();
+        }
+      })
+      .catch(() => {
+        if (inLobby) {
+          localMediaSwap = false;
+          isApplyingSync = false;
+          notifyLobbyPlayerSyncedIfReady();
+        }
+      });
   }
 
   function goToNextEpisodeInAltDub(alt: NonNullable<typeof nextEpAltDub>) {
@@ -932,6 +886,20 @@
   }
 
   // ── Popover openers ────────────────────────────────────────────────────────
+  async function loadReleasePoster(rIdRaw: string) {
+    const rId = parseInt(rIdRaw, 10);
+    if (!rId) return;
+    const token = String(rId);
+    posterReleaseId = token;
+    try {
+      const infoRes = await (window as any).anixApi?.release?.info?.(rId);
+      const raw = (infoRes?.release ?? infoRes) as Record<string, unknown> | undefined;
+      if (!raw || posterReleaseId !== token) return;
+      const card = mapReleaseRawToCard(raw);
+      if (card.poster) posterUrl = toPosterDisplayUrl(card.poster, 'releaseHero');
+    } catch { /* ignore */ }
+  }
+
   async function fetchEpisodesSilently() {
     const dubIdNum = watchState.dubberId ? parseInt(watchState.dubberId, 10) : 0;
     if (!dubIdNum || !(window as any).anixApi?.release?.getEpisodes) return;
@@ -1063,7 +1031,25 @@
   // ── Player controls ────────────────────────────────────────────────────────
   function togglePlay() {
     if (!videoEl) return;
-    if (videoEl.paused) videoEl.play().catch(() => {});
+    const willPlay = videoEl.paused;
+    if (inLobbyRoom()) {
+      sendToLobby(willPlay ? 'play' : 'pause');
+      isApplyingSync = true;
+      preventAutoPause = true;
+      if (willPlay) {
+        void videoEl.play().then(() => { player.paused = false; }).catch(() => {});
+      } else {
+        videoEl.pause();
+        player.paused = true;
+      }
+      window.setTimeout(() => {
+        isApplyingSync = false;
+        preventAutoPause = false;
+      }, 500);
+      showAndSchedule();
+      return;
+    }
+    if (willPlay) videoEl.play().catch(() => {});
     else videoEl.pause();
     showAndSchedule();
   }
@@ -1072,7 +1058,18 @@
     const el = e.currentTarget as HTMLElement;
     const pct = (e.clientX - el.getBoundingClientRect().left) / el.offsetWidth;
     if (videoEl && !isNaN(videoEl.duration)) {
-      videoEl.currentTime = pct * videoEl.duration;
+      const targetTime = pct * videoEl.duration;
+      if (inLobbyRoom()) {
+        player.currentTime = targetTime;
+        videoEl.currentTime = targetTime;
+        isApplyingSync = true;
+        sendToLobby('seek', targetTime);
+        if (applySyncTimer) clearTimeout(applySyncTimer);
+        applySyncTimer = window.setTimeout(() => { isApplyingSync = false; applySyncTimer = null; }, 350);
+        showAndSchedule();
+        return;
+      }
+      videoEl.currentTime = targetTime;
       sendToLobby('seek');
     }
   }
@@ -1125,15 +1122,45 @@
     if (opts?.osd) showOsd(pinned ? 'Поверх всех окон' : 'Окно откреплено');
   }
 
-  function toggleUpscale() {
-    if (!gpuAvailable) return;
-    player.upscaleEnabled = !player.upscaleEnabled;
-    (window as any).electron?.saveSettings?.({ upscaleEnabled: player.upscaleEnabled, upscaleMode: player.upscaleMode });
-    if (player.upscaleEnabled) startUpscale(); else stopUpscale();
+  function applyAnime4kPreset(type: Anime4kType, intensity: Anime4kIntensity) {
+    if (!gpuAvailable && type !== 'off') return;
+    const mapped = mapAnime4kPreset({ type, intensity });
+    player.upscaleType = type;
+    player.upscaleIntensity = intensity;
+    player.upscaleEnabled = mapped.enabled;
+    player.upscaleMode = mapped.mode;
+    (window as any).electron?.saveSettings?.({
+      upscaleEnabled: mapped.enabled,
+      upscaleMode: mapped.mode,
+      upscaleType: type,
+      upscaleIntensity: intensity,
+    });
+    if (mapped.enabled) startUpscale(); else stopUpscale();
+  }
+
+  function applyAnime4kFromSettings(s: {
+    upscaleEnabled?: boolean;
+    upscaleMode?: number;
+    upscaleType?: unknown;
+    upscaleIntensity?: unknown;
+  }) {
+    const preset = normalizeAnime4kPreset(s);
+    const mapped = mapAnime4kPreset(preset);
+    const same =
+      player.upscaleType === preset.type &&
+      player.upscaleIntensity === preset.intensity &&
+      player.upscaleEnabled === mapped.enabled &&
+      player.upscaleMode === mapped.mode;
+    if (same) return;
+    player.upscaleType = preset.type;
+    player.upscaleIntensity = preset.intensity;
+    player.upscaleEnabled = mapped.enabled;
+    player.upscaleMode = mapped.mode;
+    if (mapped.enabled) startUpscale(); else stopUpscale();
   }
 
   function changePlaybackRate(rate: number, opts?: { osd?: boolean }) {
-    if (getCurrentRoomId()) {
+    if (inLobbyRoom()) {
       if (videoEl && videoEl.playbackRate !== 1) videoEl.playbackRate = 1;
       if (opts?.osd) showOsd('Скорость недоступна в совместном просмотре', { warn: true });
       return;
@@ -1148,7 +1175,7 @@
   /** Re-apply saved speed after src/HLS reload (browser resets rate to 1). */
   function syncVideoPlaybackRate() {
     if (!videoEl) return;
-    if (getCurrentRoomId()) {
+    if (inLobbyRoom()) {
       videoEl.playbackRate = 1;
       return;
     }
@@ -1158,12 +1185,12 @@
   }
 
   function enforceNormalRateInLobby() {
-    if (!getCurrentRoomId()) return;
+    if (!inLobbyRoom()) return;
     if (videoEl) videoEl.playbackRate = 1;
   }
 
   function restorePlaybackRateFromStore() {
-    if (getCurrentRoomId()) {
+    if (inLobbyRoom()) {
       enforceNormalRateInLobby();
       return;
     }
@@ -1173,6 +1200,11 @@
 
   function changeAspectRatio(aspect: string) {
     player.aspectRatio = aspect;
+    if (canvasEl && aspect !== 'auto') {
+      canvasEl.style.width = '';
+      canvasEl.style.height = '';
+    }
+    if (player.upscaleEnabled && gpuAvailable) startUpscale();
   }
 
   function pickQualityForMap(
@@ -1225,69 +1257,103 @@
     await changeQuality(picked, { fromAdaptive: true, osd: opts?.osd });
   }
 
-  /** Switch to a different quality URL (e.g. "720", "480") — recreates HLS */
+  /** Switch quality — reuse HLS instance, keep the current frame. */
   async function changeQuality(quality: string, opts?: { fromAdaptive?: boolean; osd?: boolean }) {
     const src = player.availableQualities[quality];
     if (!src || quality === player.currentQuality) return;
 
     if (!opts?.fromAdaptive) qualityManualLock = true;
 
-    const elE = (window as any).electron;
-    if (elE?.lobbyNotifyBufferingStart) elE.lobbyNotifyBufferingStart();
-
     const savedTime    = videoEl && !isNaN(videoEl.currentTime) ? videoEl.currentTime : 0;
     const wasPaused    = videoEl?.paused ?? true;
 
-    // Destroy existing HLS
-    const hlsInst = (videoEl as any)?._hls as Hls | undefined;
-    if (hlsInst) { hlsInst.destroy(); (videoEl as any)._hls = undefined; }
+    localMediaSwap = true;
+    isApplyingSync = true;
+    preventAutoPause = false;
+    if (inLobbyRoom()) {
+      logLobbyAction({
+        origin: 'local',
+        action: 'player.quality',
+        via: 'player',
+        detail: { quality },
+      });
+      notifyLobbyBufferingFromUi();
+    }
 
     player.currentQuality = quality;
     if (opts?.osd) showOsd(`${quality.replace(/p$/i, '')}p`);
+    if (!videoEl) {
+      localMediaSwap = false;
+      isApplyingSync = false;
+      return;
+    }
+    bindCoreEls();
+    if (player.upscaleEnabled && gpuAvailable) {
+      upscaleHoldForNewFrame = true;
+      stopUpscale();
+    }
 
-    if (!videoEl) return;
-    videoEl.src = '';
+    const finishSwap = () => {
+      preventAutoPause = false;
+      upscaleHoldForNewFrame = false;
+      syncVideoPlaybackRate();
+      restartUpscaleIfFrameSizeChanged();
+      if (inLobbyRoom()) {
+        armLobbyPlayerSyncedOnce();
+      } else {
+        localMediaSwap = false;
+        if (applySyncTimer) clearTimeout(applySyncTimer);
+        applySyncTimer = setTimeout(() => { isApplyingSync = false; applySyncTimer = null; }, 400);
+      }
+    };
 
     const doPlay = () => {
       if (!wasPaused) videoEl.play().catch(() => {});
     };
 
     const restoreTime = () => {
-      if (savedTime > 0) videoEl.currentTime = Math.min(savedTime, videoEl.duration || Infinity);
+      if (savedTime > 0 && isFinite(videoEl.duration) && videoEl.duration > 0) {
+        videoEl.currentTime = Math.min(savedTime, videoEl.duration);
+      } else if (savedTime > 0) {
+        videoEl.currentTime = savedTime;
+      }
       syncVideoPlaybackRate();
       if (wasPaused) videoEl.pause(); else doPlay();
+      seedPlayerTimeFromVideo();
     };
 
-    if (isHlsUrl(src) && Hls.isSupported()) {
-      const hls = new Hls();
-      hls.loadSource(src);
-      hls.attachMedia(videoEl);
-      (videoEl as any)._hls = hls;
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+    swapMediaSource(videoEl, src, {
+      onReady: () => {
         restoreTime();
-        syncVideoPlaybackRate();
-        notifyLobbyPlayerSyncedIfReady();
-      });
-      // Перезапускаем апскейл после загрузки нового потока — размеры кадра могли измениться
-      videoEl.addEventListener('loadedmetadata', () => {
-        syncVideoPlaybackRate();
-        if (player.upscaleEnabled && gpuAvailable) startUpscale();
-      }, { once: true });
-      videoEl.addEventListener('playing', () => {
-        syncVideoPlaybackRate();
-      }, { once: true });
-    } else {
-      videoEl.src = src;
+        finishSwap();
+      },
+    });
+    videoEl.addEventListener('loadedmetadata', () => {
+      syncVideoPlaybackRate();
+      seedPlayerTimeFromVideo();
+    }, { once: true });
+    videoEl.addEventListener('resize', () => {
+      restartUpscaleIfFrameSizeChanged();
+    }, { once: true });
+    videoEl.addEventListener('playing', () => {
+      player.paused = false;
+      player.switching = false;
+      syncVideoPlaybackRate();
+      restartUpscaleIfFrameSizeChanged();
+    }, { once: true });
+    window.setTimeout(() => {
+      if (localMediaSwap) {
+        restoreTime();
+        finishSwap();
+      } else if (player.upscaleEnabled && !core.upscale.active && videoEl.videoWidth >= 2) {
+        upscaleHoldForNewFrame = false;
+        startUpscale();
+      }
+    }, 1200);
+    if (!isHlsUrl(src)) {
       videoEl.addEventListener('loadeddata', () => {
         restoreTime();
-        if (player.upscaleEnabled && gpuAvailable) startUpscale();
-        notifyLobbyPlayerSyncedIfReady();
-      }, { once: true });
-      videoEl.addEventListener('loadedmetadata', () => {
-        syncVideoPlaybackRate();
-      }, { once: true });
-      videoEl.addEventListener('playing', () => {
-        syncVideoPlaybackRate();
+        finishSwap();
       }, { once: true });
       syncVideoPlaybackRate();
       doPlay();
@@ -1353,7 +1419,7 @@
     if (!player.useVideo || player.loadState !== 'ready') return;
     if (isTypingTarget(e.target)) return;
     e.preventDefault();
-    if (getCurrentRoomId()) {
+    if (inLobbyRoom()) {
       enforceNormalRateInLobby();
       showOsd('Скорость недоступна в совместном просмотре', { warn: true });
       showAndSchedule();
@@ -1365,17 +1431,52 @@
   }
 
   // ── Pending sync ───────────────────────────────────────────────────────────
+  function applyRemotePlaybackSync(p: Record<string, unknown>, opts?: { barrier?: boolean }) {
+    if (!videoEl || videoEl.hidden) {
+      pendingSync = p;
+      return;
+    }
+    isApplyingSync = true;
+    preventAutoPause = true;
+    const targetTime = typeof p.currentTime === 'number' ? p.currentTime : 0;
+    const dur = videoEl.duration;
+    const forceSeek = opts?.barrier === true;
+    if (Number.isFinite(dur) && dur > 0) {
+      const drift = Math.abs(videoEl.currentTime - targetTime);
+      if (forceSeek || drift > 0.85) {
+        videoEl.currentTime = Math.min(targetTime, dur);
+      }
+    } else if (targetTime > 0 && forceSeek) {
+      videoEl.currentTime = targetTime;
+    }
+    if (opts?.barrier || p.paused) {
+      videoEl.pause();
+      player.paused = true;
+    } else {
+      void videoEl.play().then(() => { player.paused = false; }).catch(() => {});
+    }
+    seedPlayerTimeFromVideo();
+    const guardMs = opts?.barrier ? 1200 : 700;
+    if (applySyncTimer) clearTimeout(applySyncTimer);
+    applySyncTimer = window.setTimeout(() => {
+      if (!lobbyBarrierPending) {
+        isApplyingSync = false;
+        preventAutoPause = false;
+      }
+      applySyncTimer = null;
+    }, guardMs);
+  }
+
   function applyPendingSync() {
     if (!pendingSync || !videoEl || videoEl.readyState < 2) return;
-    const p = pendingSync; pendingSync = null;
-    videoEl.currentTime = Math.min(typeof p.currentTime === 'number' ? p.currentTime : 0, videoEl.duration || Infinity);
-    if (p.paused && !videoEl.paused)     { videoEl.pause(); preventAutoPause = true; }
-    else if (!p.paused && videoEl.paused)  videoEl.play().catch(() => {});
-    if (applySyncTimer) clearTimeout(applySyncTimer);
-    applySyncTimer = setTimeout(() => { isApplyingSync = false; applySyncTimer = null; }, 2000);
+    if (localMediaSwap) return;
+    const p = pendingSync;
+    pendingSync = null;
+    applyRemotePlaybackSync(p);
   }
 
   function doAutoPlay() {
+    if (localMediaSwap) return;
     if (pendingSync) { applyPendingSync(); return; }
     if (preventAutoPause || isApplyingSync) return;
     videoEl?.play().catch(() => {});
@@ -1388,6 +1489,7 @@
 
   function scheduleUpscaleResize() {
     if (!player.upscaleEnabled || !gpuAvailable) return;
+    if (localMediaSwap || upscaleHoldForNewFrame) return;
     if (!videoEl || videoEl.readyState < 1) return;
     if (resizeTimer) clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
@@ -1405,7 +1507,8 @@
     if (typeof ResizeObserver === 'undefined') return;
     ro?.disconnect();
     ro = new ResizeObserver(() => onPlayerAreaResize());
-    const wrap = document.querySelector('.watch-page__player-wrap');
+    const wrap = document.querySelector('.watch-page__player-area')
+      ?? document.querySelector('.watch-page__player-wrap');
     const area = (wrap instanceof HTMLElement ? wrap : null) ?? canvasEl?.parentElement;
     if (area) ro.observe(area);
     winResizeHandler = () => onPlayerAreaResize();
@@ -1432,27 +1535,73 @@
     void loadDownloadedEpisodes();
   }
 
+  function seedPlayerTimeFromVideo() {
+    const v = videoEl;
+    if (!v) return;
+    if (isFinite(v.currentTime)) player.currentTime = v.currentTime;
+    if (isFinite(v.duration) && v.duration > 0) player.duration = v.duration;
+    player.paused = v.paused;
+    if (v.buffered.length) player.bufferedEnd = v.buffered.end(v.buffered.length - 1);
+  }
+
+  let videoListenersAbort: AbortController | null = null;
+
   function bindVideoElementListeners() {
-    if (!videoEl) return;
-    videoEl.addEventListener('timeupdate', () => {
-      player.currentTime = videoEl.currentTime;
-      player.duration    = videoEl.duration || 0;
-      player.bufferedEnd = videoEl.buffered.length ? videoEl.buffered.end(videoEl.buffered.length - 1) : 0;
-    });
-    videoEl.addEventListener('play',  () => { player.paused = false; sendToLobby('play'); });
-    videoEl.addEventListener('pause', () => { player.paused = true;  sendToLobby('pause'); });
-    videoEl.addEventListener('loadedmetadata', () => {
-      player.duration = videoEl.duration || 0;
+    const el = videoEl;
+    if (!el) return;
+
+    videoListenersAbort?.abort();
+    videoListenersAbort = new AbortController();
+    const { signal } = videoListenersAbort;
+
+    const fromEvent = (e: Event): HTMLVideoElement | null =>
+      (e.currentTarget instanceof HTMLVideoElement ? e.currentTarget : el);
+
+    el.addEventListener('timeupdate', (e) => {
+      const v = fromEvent(e);
+      if (!v) return;
+      player.currentTime = v.currentTime;
+      player.duration    = v.duration || 0;
+      player.bufferedEnd = v.buffered.length ? v.buffered.end(v.buffered.length - 1) : 0;
+    }, { signal });
+    el.addEventListener('play',  () => {
+      if (isApplyingSync || localMediaSwap || preventAutoPause) return;
+      player.paused = false;
+      sendToLobby('play');
+    }, { signal });
+    el.addEventListener('pause', () => {
+      if (isApplyingSync || localMediaSwap || preventAutoPause) return;
+      player.paused = true;
+      sendToLobby('pause');
+    }, { signal });
+    el.addEventListener('loadedmetadata', (e) => {
+      const v = fromEvent(e);
+      if (!v) return;
+      player.duration = v.duration || 0;
+      player.switching = false;
       try { (window as any).electron?.sendPlayerState?.(getPlaybackPayload()); } catch {}
       syncVideoPlaybackRate();
-      if (player.upscaleEnabled && gpuAvailable) startUpscale();
-      if (pendingSync) applyPendingSync();
-    });
-    videoEl.addEventListener('playing', () => {
+      if (player.upscaleEnabled && gpuAvailable && !upscaleHoldForNewFrame) startUpscale();
+      if (pendingSync && !localMediaSwap) applyPendingSync();
+      maybeArmLobbySyncAfterLoad(pendingBarrierPlayback);
+    }, { signal });
+    el.addEventListener('playing', () => {
+      player.paused = false;
+      player.switching = false;
+      if (!isApplyingSync) preventAutoPause = false;
       syncVideoPlaybackRate();
-    });
-    videoEl.addEventListener('canplay',    doAutoPlay, { once: true });
-    videoEl.addEventListener('loadeddata', doAutoPlay, { once: true });
+    }, { signal });
+    el.addEventListener('resize', () => {
+      restartUpscaleIfFrameSizeChanged();
+    }, { signal });
+    el.addEventListener('loadeddata', () => {
+      player.switching = false;
+      seedPlayerTimeFromVideo();
+      if (player.upscaleEnabled && gpuAvailable && !core.upscale.active && !upscaleHoldForNewFrame) startUpscale();
+    }, { signal });
+    el.addEventListener('canplay',    doAutoPlay, { once: true, signal });
+    el.addEventListener('loadeddata', doAutoPlay, { once: true, signal });
+    seedPlayerTimeFromVideo();
     setTimeout(doAutoPlay, 800);
     doAutoPlay();
     initResizeObserver();
@@ -1473,9 +1622,7 @@
         adaptiveQualityByWindow = s?.adaptiveQualityByWindow === true;
         hotkeys = normalizePlayerHotkeys(s?.playerHotkeys);
         if (gpuAvailable) {
-          player.upscaleEnabled = s?.upscaleEnabled ?? false;
-          player.upscaleMode    = s?.upscaleMode    ?? 15;
-          if (player.upscaleEnabled && videoEl?.readyState >= 1) startUpscale();
+          applyAnime4kFromSettings(s ?? {});
         }
         if (adaptiveQualityByWindow) scheduleAdaptiveQuality();
       }).catch(() => {});
@@ -1484,17 +1631,27 @@
     inLobby = !!getCurrentRoomId();
     enforceNormalRateInLobby();
 
-    if (releaseId) void loadDownloadedEpisodes();
+    if (initialLobbyCode && !getCurrentRoomId()) {
+      void joinLobbyRoomAndOpenPlayer(initialLobbyCode).catch(() => {
+        chooserOpen = true;
+      });
+    }
+
+    if (releaseId) {
+      void loadDownloadedEpisodes();
+      void loadReleasePoster(releaseId);
+    }
 
     if (initialLocalFile) {
       void loadDownloadedEpisodes();
       void startLocalFilePlayback(initialLocalFile, initialEp);
     } else if (playbackMode === 'local') {
       player.loadState = 'loading';
-    } else if (!releaseId || !watchState.sourceId || !Number.isFinite(watchState.ep) || !(window as any).anixApi?.release?.getEpisode) {
+    } else if (!releaseId) {
+      player.loadState = 'ready';
+    } else if (!watchState.sourceId || !Number.isFinite(watchState.ep) || !(window as any).anixApi?.release?.getEpisode) {
       player.loadState = 'error';
       player.errorText = 'Неверные параметры просмотра.';
-      return;
     } else {
     ;(window as any).anixApi.release.getEpisode(
       parseInt(releaseId, 10), parseInt(watchState.sourceId, 10), watchState.ep,
@@ -1502,7 +1659,7 @@
       const episode = res?.episode;
       if (!episode?.url) { player.loadState = 'error'; player.errorText = 'Серия недоступна.'; return; }
       setOrigEpisodeUrl(episode.url);
-      const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq } = await resolveEpisodeUrlWithRetry(episode.url, episode.iframe);
+      const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq } = await core.resolve(episode.url, episode.iframe);
       const resolved = applyQualityMap(qualityMap, cq, pUrl, { resetManualLock: true });
       player.loadState = 'ready';
       await tick();
@@ -1519,10 +1676,12 @@
 
     const handlers: [string, EventListener][] = [
       ['anix:upscaleChanged', ((e: CustomEvent) => {
-        const d = e.detail as any;
-        if (typeof d.upscaleEnabled === 'boolean') player.upscaleEnabled = d.upscaleEnabled;
-        if (typeof d.upscaleMode    === 'number')  player.upscaleMode    = d.upscaleMode;
-        if (player.upscaleEnabled) startUpscale(); else stopUpscale();
+        applyAnime4kFromSettings((e.detail ?? {}) as {
+          upscaleEnabled?: boolean;
+          upscaleMode?: number;
+          upscaleType?: unknown;
+          upscaleIntensity?: unknown;
+        });
       }) as EventListener],
 
       ['anix:playerDebugChanged', ((e: CustomEvent) => {
@@ -1546,22 +1705,31 @@
 
       ['lobby:wsJoined', (() => {
         inLobby = true;
+        sidebarOpen = true;
         enforceNormalRateInLobby();
       }) as EventListener],
 
       ['lobby:left', (() => {
         inLobby = !!getCurrentRoomId();
-        if (!inLobby) restorePlaybackRateFromStore();
+        if (!inLobby) {
+          sidebarOpen = false;
+          lobby.resetRoom();
+          restorePlaybackRateFromStore();
+        }
       }) as EventListener],
 
       ['lobby:roomGone', (() => {
         inLobby = false;
+        sidebarOpen = false;
+        lobby.resetRoom();
         restorePlaybackRateFromStore();
       }) as EventListener],
 
       ['player:changeContent', ((e: CustomEvent) => {
         const p = e.detail as any;
         if (p?.localFile) {
+          if (p.releaseId) beginMediaCover(String(p.releaseId));
+          else beginMediaCover();
           watchState.title = p.title || watchState.title;
           watchState.sourceName = p.sourceName || watchState.sourceName;
           if (p.releaseId) watchState.releaseId = p.releaseId;
@@ -1572,6 +1740,7 @@
           return;
         }
         if (!p?.releaseId || !p.sourceId || !p.ep) return;
+        beginMediaCover(String(p.releaseId));
         watchState.releaseId  = p.releaseId;
         watchState.sourceId   = p.sourceId;
         watchState.ep         = parseInt(p.ep, 10);
@@ -1584,23 +1753,42 @@
         if (p.local) sendToLobby('changeEpisode', typeof p.currentTime === 'number' ? p.currentTime : 0);
         isApplyingSync = true;
         loadEpisode(parseInt(p.releaseId, 10), parseInt(p.sourceId, 10), parseInt(p.ep, 10), p.title || watchState.title, p.sourceName || '', p.dubberId || '', typeof p.currentTime === 'number' ? p.currentTime : undefined, !!p.paused)
-          .then(() => fetchEpisodesSilently())
+          .then(() => {
+            fetchEpisodesSilently();
+            maybeArmLobbySyncAfterLoad(p);
+          })
           .catch(() => {});
         if (applySyncTimer) clearTimeout(applySyncTimer);
         applySyncTimer = setTimeout(() => { isApplyingSync = false; applySyncTimer = null; }, 4000);
-        armLobbyPlayerSyncedOnce();
       }) as EventListener],
 
       ['player:applySync', ((e: CustomEvent) => {
         const p = e.detail as any;
         if (!p?.releaseId || !p.sourceId || !p.ep) return;
-        isApplyingSync = true;
+        if (localMediaSwap) {
+          pendingSync = p;
+          logLobbyAction({
+            origin: 'server',
+            action: 'player.applySync.queued',
+            playback: snapshotPlayback(p),
+            via: 'player',
+            note: 'смена качества/источника',
+          });
+          return;
+        }
         const same = watchState.releaseId === p.releaseId && watchState.sourceId === p.sourceId && watchState.ep === Number(p.ep) && (watchState.dubberId || '') === (p.dubberId || '');
+        const remoteAction = p.action === 'play' || p.action === 'pause' || p.action === 'seek';
+        const inBarrier = needsLobbySyncReady();
+        if (same && remoteAction && videoEl && !videoEl.hidden) {
+          applyRemotePlaybackSync(p, { barrier: inBarrier });
+          if (inLobbyRoom() && inBarrier) {
+            armLobbyPlayerSyncedOnce(typeof p.currentTime === 'number' ? p.currentTime : undefined);
+          }
+          return;
+        }
+        isApplyingSync = true;
         if (same && videoEl && !videoEl.hidden && videoEl.readyState >= 2) {
-          lobbyStalePlaybackBeforeSwitch = null;
-          videoEl.currentTime = Math.min(typeof p.currentTime === 'number' ? p.currentTime : 0, videoEl.duration || Infinity);
-          if (p.paused && !videoEl.paused)     { videoEl.pause(); preventAutoPause = true; }
-          else if (!p.paused && videoEl.paused)  videoEl.play().catch(() => {});
+          applyRemotePlaybackSync(p);
         } else if (same && videoEl && videoEl.readyState < 2) {
           lobbyStalePlaybackBeforeSwitch = null;
           pendingSync = p;
@@ -1613,17 +1801,55 @@
             return;
           }
           lobbyStalePlaybackBeforeSwitch = null;
+          beginMediaCover(String(p.releaseId));
           watchState.releaseId = p.releaseId; watchState.sourceId = p.sourceId;
           watchState.dubberName = p.dubberName != null && p.dubberName !== '' ? String(p.dubberName) : '';
           invalidateDubbersPickerCache();
           if (!watchState.dubberName && (p.dubberId || '')) refreshDubberNameFromApi();
           loadEpisode(parseInt(p.releaseId, 10), parseInt(p.sourceId, 10), parseInt(p.ep, 10), p.title || watchState.title, p.sourceName || watchState.sourceName, p.dubberId || '', typeof p.currentTime === 'number' ? p.currentTime : undefined, !!p.paused)
-            .then(() => fetchEpisodesSilently())
+            .then(() => {
+              fetchEpisodesSilently();
+              maybeArmLobbySyncAfterLoad(p);
+            })
             .catch(() => {});
         }
         if (applySyncTimer) clearTimeout(applySyncTimer);
         applySyncTimer = setTimeout(() => { isApplyingSync = false; applySyncTimer = null; }, pendingSync ? 3000 : 1500);
-        armLobbyPlayerSyncedOnce();
+      }) as EventListener],
+
+      ['lobby:barrierSync', ((e: CustomEvent) => {
+        if (!inLobbyRoom()) return;
+        lobbyBarrierPending = true;
+        lobbySyncAwaiting = true;
+        isApplyingSync = true;
+        const pb = (e.detail as { playback?: Record<string, unknown> } | null)?.playback ?? null;
+        pendingBarrierPlayback = pb;
+        if (pb?.releaseId && pb.sourceId && pb.ep && videoEl && !videoEl.hidden) {
+          const same = watchState.releaseId === String(pb.releaseId)
+            && watchState.sourceId === String(pb.sourceId)
+            && watchState.ep === Number(pb.ep)
+            && (watchState.dubberId || '') === String(pb.dubberId || '');
+          if (same) {
+            applyRemotePlaybackSync(pb, { barrier: true });
+            armLobbyPlayerSyncedOnce(typeof pb.currentTime === 'number' ? pb.currentTime : undefined);
+          }
+        }
+      }) as EventListener],
+
+      ['lobby:syncState', ((e: CustomEvent) => {
+        const d = e.detail as { blocked?: boolean; awaiting?: boolean } | null;
+        lobbySyncAwaiting = !!d?.awaiting;
+        if (!d?.blocked && !d?.awaiting) {
+          lobbyBarrierPending = false;
+          pendingBarrierPlayback = null;
+        }
+      }) as EventListener],
+
+      ['lobby:syncResume', (() => {
+        lobbyBarrierPending = false;
+        lobbySyncAwaiting = false;
+        pendingBarrierPlayback = null;
+        preventAutoPause = false;
       }) as EventListener],
 
       ['lobby:proposal', ((e: CustomEvent) => {
@@ -1650,9 +1876,49 @@
         const d = e.detail as LobbyActivityEntry | null;
         if (!d?.type || !d.login) return;
         lobby.addLogEntry(d);
+        lobby.addChat({
+          id: `sys-${Date.now()}-${d.login}-${d.type}`,
+          text: `${d.login} ${lobbyActionText(d.type)}`,
+          login: d.login,
+          avatar: d.avatar ?? null,
+          ts: Date.now(),
+          system: true,
+        });
         if (d.type === 'left') {
-          lobby.participants = lobby.participants.filter(p => p.login !== d.login);
+          const pid = d.peerId != null ? String(d.peerId) : '';
+          lobby.participants = pid
+            ? lobby.participants.filter(p => String(p.peerId ?? p.id) !== pid)
+            : lobby.participants.filter(p => p.login !== d.login);
         }
+      }) as EventListener],
+
+      ['lobby:session', ((e: CustomEvent) => {
+        const session = e.detail as {
+          inLobby?: boolean;
+          roomCode?: string | null;
+          participants?: unknown[];
+        } | null;
+        const next = !!session?.inLobby;
+        inLobby = next;
+        if (next) {
+          sidebarOpen = true;
+          chooserOpen = false;
+          lobby.roomCode = String(session?.roomCode ?? '');
+          if (Array.isArray(session?.participants)) {
+            lobby.participants = session.participants as typeof lobby.participants;
+          }
+          enforceNormalRateInLobby();
+        } else {
+          sidebarOpen = false;
+          lobby.resetRoom();
+          restorePlaybackRateFromStore();
+        }
+      }) as EventListener],
+
+      ['lobby:chat', ((e: CustomEvent) => {
+        const msg = e.detail as LobbyChatMessage | null;
+        if (!msg?.id || !msg.text) return;
+        lobby.addChat(msg);
       }) as EventListener],
 
       ['lobby:playerWaitingOverlay', ((e: CustomEvent) => {
@@ -1662,213 +1928,251 @@
     ];
 
     handlers.forEach(([evt, fn]) => window.addEventListener(evt, fn));
+    window.electron?.lobbyRequestSession?.();
     window.addEventListener('keydown', onKeyDown);
     const wheelOpts: AddEventListenerOptions = { passive: false };
     window.addEventListener('wheel', onWheel, wheelOpts);
+    window.addEventListener('pointermove', onPointerActivity, true);
+    window.addEventListener('pointerdown', onPointerActivity, true);
+    document.addEventListener('mouseenter', showAndSchedule, true);
 
     return () => {
+      videoListenersAbort?.abort();
+      videoListenersAbort = null;
       handlers.forEach(([evt, fn]) => window.removeEventListener(evt, fn));
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('wheel', onWheel, wheelOpts);
+      window.removeEventListener('pointermove', onPointerActivity, true);
+      window.removeEventListener('pointerdown', onPointerActivity, true);
+      document.removeEventListener('mouseenter', showAndSchedule, true);
       stopUpscale();
+      core.destroy();
       ro?.disconnect();
       if (winResizeHandler) window.removeEventListener('resize', winResizeHandler);
       lobby.destroy();
-      if (stallCheckTimer) clearInterval(stallCheckTimer);
       if (applySyncTimer)  clearTimeout(applySyncTimer);
       if (idleTimer)       clearTimeout(idleTimer);
       if (osdTimer)        clearTimeout(osdTimer);
       if (adaptiveQualityTimer) clearTimeout(adaptiveQualityTimer);
-      const hlsInst = (videoEl as any)?._hls as Hls | undefined;
-      if (hlsInst) hlsInst.destroy();
     };
   });
+
+  const chromeProps = $derived({
+    overlayVisible: player.overlayVisible,
+    ep: watchState.ep,
+    title: watchState.title,
+    dubberName: watchState.dubberName,
+    sourceName: watchState.sourceName,
+    useVideo: player.useVideo,
+    hasPrevEp,
+    hasNextEp,
+    prevEp: prevEpisodePosition,
+    nextEp: nextEpisodePosition,
+    nextEpAltDub: isLocalPlaybackMode ? null : nextEpAltDub,
+    currentDubLabel,
+    paused: player.paused,
+    currentTime: player.currentTimeDisplay,
+    totalTime: player.totalTimeDisplay,
+    progressPct: player.progressPct,
+    bufferedPct: player.bufferedPct,
+    muted: player.muted,
+    volume: player.volume,
+    isFullscreen: player.isFullscreen,
+    episodes,
+    dubbers,
+    downloadedEpisodes,
+    downloadedPositions,
+    localMode: isLocalPlaybackMode,
+    currentDownloadedPath: localPlaybackPath,
+    currentDubberId: watchState.dubberId,
+    popoverType,
+    popoverLoading,
+    gpuAvailable,
+    upscaleEnabled: player.upscaleEnabled,
+    upscaleType: player.upscaleType,
+    upscaleIntensity: player.upscaleIntensity,
+    playbackRate: player.playbackRate,
+    aspectRatio: player.aspectRatio,
+    availableQualities: player.availableQualities,
+    currentQuality: player.currentQuality,
+    speedLocked: inLobby,
+    lastEpisodeTypeUpdateId,
+    onprevEp: () => { if (prevEpisodePosition != null) goToEpisode(prevEpisodePosition); },
+    onnextEp: () => { if (nextEpisodePosition != null) goToEpisode(nextEpisodePosition); },
+    onnextAltDub: goToNextEpisodeInAltDub,
+    ontogglePlay: togglePlay,
+    onplay: () => videoEl?.play().catch(() => {}),
+    onseek: onSeek,
+    ontoggleMute: toggleMute,
+    onvolumechange: onVolumeChange,
+    onchangeAnime4k: applyAnime4kPreset,
+    onskipOpening: skipOpening,
+    onopenSeries: openSeriesPopover,
+    onopenDubbing: openDubbingPopover,
+    onopenSettings: openSettingsPopover,
+    onselectEp: goToEpisode,
+    onselectDub: selectDubber,
+    onselectDownloadedMode: selectDownloadedMode,
+    ontogglePinDub: togglePinDubber,
+    onclosePopover: () => { popoverType = null; },
+    onfullscreen: toggleFullscreen,
+    onchangeRate: changePlaybackRate,
+    onchangeAspect: changeAspectRatio,
+    onchangeQuality: changeQuality,
+    inLobby,
+    onopenLobby: () => {
+      if (inLobby) sidebarOpen = !sidebarOpen;
+      else chooserOpen = true;
+    },
+  } satisfies PlayerChromeProps);
 </script>
 
 <div class="view view-watch">
   <div
     class="watch-page watch-page--anidesk {!player.useVideo ? 'watch-page--iframe-mode' : ''}"
     class:watch-page--chrome-hidden={player.loadState === 'ready' && !player.overlayVisible}
+    class:watch-page--lobby={inLobby}
+    class:watch-page--lobby-sidebar={inLobby && sidebarOpen}
+    class:watch-page--lobby-log={inLobby && sidebarOpen && actionLogOpen}
     bind:this={playerWrapEl}
-    onmousemove={showAndSchedule}
-    onmouseleave={hideNow}
+    onpointermove={onPointerActivity}
+    onpointerdown={onPointerActivity}
+    onmouseenter={showAndSchedule}
     role="presentation"
   >
     <div class="watch-page__player-wrap">
+      <div class="watch-page__player-area">
+        <!-- svelte-ignore a11y_missing_attribute -->
+        <iframe
+          bind:this={iframeEl}
+          class="watch-page__iframe"
+          src={!player.useVideo ? player.playUrl : ''}
+          allow="autoplay; fullscreen"
+          hidden={player.useVideo || player.loadState !== 'ready' || player.switching || !watchState.releaseId}
+          title="Видео плеер"
+        ></iframe>
+        <!-- svelte-ignore a11y_media_has_caption -->
+        <video
+          bind:this={videoEl}
+          class="watch-page__video {player.aspectRatio !== 'auto' ? `watch-page__video--ratio watch-page__video--ratio-${player.aspectRatio.replace('/', '-')}` : ''}"
+          playsinline
+          crossorigin="anonymous"
+          hidden={!player.useVideo || player.loadState === 'error' || player.switching || player.loadState === 'loading'}
+        ></video>
+        <canvas
+          bind:this={canvasEl}
+          class="watch-page__upscale-canvas {player.aspectRatio !== 'auto' ? `watch-page__upscale-canvas--ratio watch-page__upscale-canvas--ratio-${player.aspectRatio.replace('/', '-')}` : ''}"
+          class:watch-page__upscale-canvas--on={player.upscaleCanvasOn && !player.switching}
+        ></canvas>
 
-      {#if player.loadState === 'loading'}
-        <div class="watch-page__player-loading">Загрузка…</div>
-      {:else if player.loadState === 'error'}
-        <div class="watch-page__player-error">{player.errorText}</div>
-      {:else}
-
-        <div class="watch-page__player-area">
-          <!-- svelte-ignore a11y_missing_attribute -->
-          <iframe
-            bind:this={iframeEl}
-            class="watch-page__iframe"
-            src={!player.useVideo ? player.playUrl : ''}
-            allow="autoplay; fullscreen"
-            hidden={player.useVideo}
-            title="Видео плеер"
-          ></iframe>
-          <!-- svelte-ignore a11y_media_has_caption -->
-          <video
-            bind:this={videoEl}
-            class="watch-page__video {player.aspectRatio !== 'auto' ? `watch-page__video--ratio watch-page__video--ratio-${player.aspectRatio.replace('/', '-')}` : ''}"
-            playsinline
-            crossorigin="anonymous"
-            hidden={!player.useVideo}
-          ></video>
-          <canvas bind:this={canvasEl} class="watch-page__upscale-canvas" hidden></canvas>
-
-          {#if lobbyWaitOverlay}
-            <div class="watch-page__lobby-wait" role="status" aria-live="polite">
-              {#if lobbyWaitOverlay.mode === 'peer'}
-                <div class="watch-page__lobby-wait-row">
-                  {#if lobbyWaitOverlay.avatar}
-                    <img
-                      class="watch-page__lobby-wait-avatar"
-                      src={resolveCdnAssetUrl(lobbyWaitOverlay.avatar)}
-                      alt=""
-                      referrerpolicy="no-referrer"
-                    />
-                  {/if}
-                  <span class="watch-page__lobby-wait-text">
-                    Ожидаем пользователя <strong>{lobbyWaitOverlay.login ?? 'Участник'}</strong>
-                  </span>
-                </div>
-                <p class="watch-page__lobby-wait-hint">Загрузка потока…</p>
-              {:else if lobbyWaitOverlay.mode === 'localBuffering'}
-                <p class="watch-page__lobby-wait-title">Загружаем поток…</p>
-                <p class="watch-page__lobby-wait-hint">Синхронизация с комнатой</p>
-              {/if}
-            </div>
-          {/if}
-        </div>
-
-        <div class="watch-page__gui-overlay" class:watch-page__gui-overlay--hidden={!player.overlayVisible}>
-
-          <!-- ── Top bar: prev | title | next ──────────────────────────── -->
-          <TopBar
-            ep={watchState.ep}
-            title={watchState.title}
-            dubberName={watchState.dubberName}
-            sourceName={watchState.sourceName}
-            useVideo={player.useVideo}
-            {hasPrevEp}
-            {hasNextEp}
-            prevEp={prevEpisodePosition}
-            nextEp={nextEpisodePosition}
-            nextEpAltDub={isLocalPlaybackMode ? null : nextEpAltDub}
-            {currentDubLabel}
-            onprevEp={() => { if (prevEpisodePosition != null) goToEpisode(prevEpisodePosition); }}
-            onnextEp={() => { if (nextEpisodePosition != null) goToEpisode(nextEpisodePosition); }}
-            onnextAltDub={goToNextEpisodeInAltDub}
-          />
-
-          <!-- ── Tap layer (fills middle) ───────────────────────────────── -->
-          <div
-            class="watch-page__tap-layer"
-            role="button"
-            tabindex="0"
-            onclick={togglePlay}
-            onkeydown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                togglePlay();
-              }
-            }}
-          ></div>
-
-          <!-- ── Lobby panel (absolute) ─────────────────────────────────── -->
-          <LobbyPanel participants={lobby.participants} activityLog={lobby.activityLog} />
-
-          <!-- ── Center play button (absolute) ─────────────────────────── -->
-          <CenterPlay
-            paused={player.paused}
-            onplay={() => videoEl?.play().catch(() => {})}
-          />
-
-          <!-- ── Bottom controls ────────────────────────────────────────── -->
-          <div class="watch-page__bottom-controls">
-            <ControlsBar
-              currentTime={player.currentTimeDisplay}
-              totalTime={player.totalTimeDisplay}
-              progressPct={player.progressPct}
-              bufferedPct={player.bufferedPct}
-              onseek={onSeek}
-            />
-            <ActionsBar
-              paused={player.paused}
-              muted={player.muted}
-              volume={player.volume}
-              isFullscreen={player.isFullscreen}
-              {episodes}
-              {dubbers}
-              {downloadedEpisodes}
-              {downloadedPositions}
-              localMode={isLocalPlaybackMode}
-              currentDownloadedPath={localPlaybackPath}
-              currentEp={watchState.ep}
-              currentDubberId={watchState.dubberId}
-              {popoverType}
-              {popoverLoading}
-              useVideo={player.useVideo}
-              {gpuAvailable}
-              upscaleEnabled={player.upscaleEnabled}
-              playbackRate={player.playbackRate}
-              aspectRatio={player.aspectRatio}
-              availableQualities={player.availableQualities}
-              currentQuality={player.currentQuality}
-              speedLocked={inLobby}
-              {lastEpisodeTypeUpdateId}
-              ontogglePlay={togglePlay}
-              ontoggleMute={toggleMute}
-              onvolumechange={onVolumeChange}
-              ontoggleUpscale={toggleUpscale}
-              onskipOpening={skipOpening}
-              onopenSeries={openSeriesPopover}
-              onopenDubbing={openDubbingPopover}
-              onopenSettings={openSettingsPopover}
-              onselectEp={goToEpisode}
-              onselectDub={selectDubber}
-              onselectDownloadedMode={selectDownloadedMode}
-              ontogglePinDub={togglePinDubber}
-              onclosePopover={() => popoverType = null}
-              onfullscreen={toggleFullscreen}
-              onchangeRate={changePlaybackRate}
-              onchangeAspect={changeAspectRatio}
-              onchangeQuality={changeQuality}
-            />
+        {#if player.loadState === 'loading' || player.switching}
+          <div class="watch-page__poster-layer" aria-hidden="true">
+            {#if posterUrl}
+              <img class="watch-page__poster-img" src={posterUrl} alt="" />
+            {/if}
           </div>
-
-        </div>
-
-        {#if player.debugOverlay && player.useVideo}
-          <pre class="watch-page__debug-hud">{debugHudText}</pre>
+          <div class="watch-page__player-loading" role="status">Загрузка…</div>
+        {:else if player.loadState === 'error'}
+          <div class="watch-page__player-error">{player.errorText}</div>
+        {:else if !watchState.releaseId}
+          <div class="watch-page__lobby-idle" role="status">
+            <p class="watch-page__lobby-idle-title">Совместный просмотр</p>
+            <p class="watch-page__lobby-idle-hint">Выберите аниме в приложении — оно откроется у всех в комнате</p>
+          </div>
         {/if}
 
-        {#if osdText}
-          <div
-            class="watch-page__osd"
-            class:watch-page__osd--warn={osdWarn}
-            role="status"
-            aria-live="polite"
-          >{osdText}</div>
+        {#if inLobby && lobbyWaitOverlay}
+          <div class="watch-page__lobby-wait" role="status" aria-live="polite">
+            {#if lobbyWaitOverlay.mode === 'peer'}
+              <div class="watch-page__lobby-wait-row">
+                {#if lobbyWaitOverlay.avatar}
+                  <img
+                    class="watch-page__lobby-wait-avatar"
+                    src={resolveCdnAssetUrl(lobbyWaitOverlay.avatar)}
+                    alt=""
+                    referrerpolicy="no-referrer"
+                  />
+                {/if}
+                <span class="watch-page__lobby-wait-text">
+                  Ожидаем пользователя <strong>{lobbyWaitOverlay.login ?? 'Участник'}</strong>
+                </span>
+              </div>
+              <p class="watch-page__lobby-wait-hint">Загрузка потока…</p>
+            {:else if lobbyWaitOverlay.mode === 'localBuffering'}
+              <p class="watch-page__lobby-wait-title">Загружаем поток…</p>
+              <p class="watch-page__lobby-wait-hint">Синхронизация с комнатой</p>
+            {/if}
+          </div>
         {/if}
+      </div>
 
+      {#if player.loadState === 'ready'}
+        {#if inLobby}
+          <LobbyShell
+            {...chromeProps}
+            overlayVisible={player.overlayVisible}
+            participants={lobby.participants}
+            activityLog={lobby.activityLog}
+            voteState={lobby.voteState}
+            voteProposal={lobby.voteProposal}
+            waitingTitle={lobby.waitingTitle}
+            resultText={lobby.resultText}
+            resultType={lobby.resultType}
+            onvote={(id, accept) => lobby.handleVote(id, accept)}
+          />
+        {:else}
+          <SoloShell {...chromeProps} overlayVisible={player.overlayVisible} />
+        {/if}
       {/if}
+
+      {#if player.debugOverlay && player.useVideo}
+        <pre class="watch-page__debug-hud">{debugHudText}</pre>
+      {/if}
+
+      {#if osdText}
+        <div
+          class="watch-page__osd"
+          class:watch-page__osd--warn={osdWarn}
+          role="status"
+          aria-live="polite"
+        >{osdText}</div>
+      {/if}
+
+      <div
+        class="watch-page__chrome-hotspot"
+        aria-hidden="true"
+        onclick={() => { showAndSchedule(); togglePlay(); }}
+      ></div>
     </div>
 
-    <LobbyVote
-      status={lobby.voteState}
-      proposal={lobby.voteProposal}
-      waitingTitle={lobby.waitingTitle}
-      resultText={lobby.resultText}
-      resultType={lobby.resultType}
-      onvote={(id, accept) => lobby.handleVote(id, accept)}
-    />
-
+    {#if inLobby && sidebarOpen}
+      <LobbySidebar
+        roomCode={lobby.roomCode}
+        participants={lobby.participants}
+        messages={lobby.chatMessages}
+        actionLogOpen={actionLogOpen}
+        ontogglelog={() => { actionLogOpen = !actionLogOpen; }}
+        onhide={() => { sidebarOpen = false; actionLogOpen = false; }}
+        onleave={() => {
+          if (window.electron?.lobbyLeaveFromPlayer) window.electron.lobbyLeaveFromPlayer();
+          else void leaveLobbyRoomFromUi();
+        }}
+        onsend={(text) => {
+          if (window.electron?.lobbyChatFromPlayer) {
+            window.electron.lobbyChatFromPlayer(text);
+            return;
+          }
+          const profile = getLobbyProfile();
+          sendLobbyChat({ text, login: profile.login, avatar: profile.avatar });
+        }}
+      />
+      {#if actionLogOpen}
+        <LobbyActionLogPanel onclose={() => { actionLogOpen = false; }} />
+      {/if}
+    {/if}
   </div>
 </div>
+
+{#if chooserOpen}
+  <LobbyChooserOverlay onClose={() => { chooserOpen = false; }} />
+{/if}

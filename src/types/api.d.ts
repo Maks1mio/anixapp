@@ -166,7 +166,12 @@ export interface AnixApi {
       total_page_count?: number;
       current_page?: number;
     }>;
-    getDirectVideoLink: (embedUrl: string) => Promise<{ directUrl: string | null; quality: string | null }>;
+    getDirectVideoLink: (embedUrl: string) => Promise<{
+      directUrl: string | null;
+      quality: string | null;
+      qualityMap?: Record<string, string>;
+      downloadHeaders?: Record<string, string>;
+    }>;
     getVideos: (releaseId: number) => Promise<{
       blocks?: Array<{ category?: { id: number; name: string }; videos?: unknown[] }>;
       streaming_platforms?: Array<{ id: number; name: string; icon?: string; url: string }>;

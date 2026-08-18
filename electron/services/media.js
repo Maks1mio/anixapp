@@ -7,10 +7,9 @@ const { pipeline } = require('stream/promises');
 const { spawn, execFile } = require('child_process');
 const { promisify } = require('util');
 const { session, net, dialog, shell, app, ipcMain } = require('electron');
-const { SibnetParser } = require('anixapi');
 const { BROWSER_UA } = require('../cdn-proxy');
 const { ANIXART_UA } = require('../lib/constants');
-const { getDirectVideoLink: getKodikDirectVideoLink } = require('../kodik-direct');
+const { getDirectVideoLink, isHtmlPlayerPage } = require('../lib/direct-video-link');
 const config = require('../lib/config-store');
 const state = require('../lib/app-state');
 const { formatDownloadError, extractRawMessage } = require('../lib/download-errors');
@@ -29,49 +28,22 @@ const media = {
 function register(deps) {
   const { appendLog } = deps;
 
-async function getSibnetDirectLink(embedUrl) {
-  const SIBNET_HEADERS = {
-    'User-Agent':      BROWSER_UA,
-    'Referer':         'https://sibnet.ru/',
-    'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8',
-  };
-
-  // Этап 1 — SibnetParser с принудительным сбросом lastIndex (/g-флаг!)
-  try {
-    if (SibnetParser.srcMatch) SibnetParser.srcMatch.lastIndex = 0;
-    const direct = await SibnetParser.getDirectLink(embedUrl);
-    if (direct && !direct.includes('404')) {
-      return direct.startsWith('http') ? direct : `https:${direct}`;
-    }
-  } catch {}
-
-  // Этап 2 — собственный fetch с браузерными заголовками
-  // Повторяет логику SibnetParser, но с нормальным User-Agent
-  try {
-    const pageRes = await fetch(embedUrl, { headers: SIBNET_HEADERS });
-    const html    = await pageRes.text();
-
-    // Sibnet кладёт src-путь видео в строку: src: "/shell.php?video_pid=...&d=...&s=..."
-    const SRC_RE = /src:\s*("\/[^"]+?")/i;
-    const m = SRC_RE.exec(html);
-    if (m) {
-      const srcPath   = m[1].replace(/"/g, '');
-      const videoUrl  = `https://video.sibnet.ru${srcPath}`;
-
-      // Следуем редиректу — финальный URL и есть прямая ссылка на поток
-      const streamRes = await fetch(videoUrl, {
-        headers:  { 'Referer': embedUrl, 'User-Agent': BROWSER_UA },
-        redirect: 'follow',
-      });
-      // streamRes.url — URL после всех редиректов (реальный CDN)
-      if (streamRes.url && streamRes.url !== videoUrl) return streamRes.url;
-      return videoUrl; // если редиректов нет — сам signed-URL уже работает
-    }
-  } catch {}
-
-  return null;
+function downloadHeadersForUrl(url, extra = {}) {
+  const headers = extra && typeof extra === 'object' ? { ...extra } : {};
+  let host = '';
+  try { host = new URL(url).host; } catch { /* ignore */ }
+  if (!headers.Referer) {
+    if (/sibnet/i.test(host)) headers.Referer = 'https://video.sibnet.ru/';
+    else if (/kodik|solodcdn|kodik-storage/i.test(host)) headers.Referer = 'https://kodikplayer.com/';
+    else if (/libria|anilib/i.test(host)) headers.Referer = 'https://anilibria.top/';
+    else if (/^vkvd/i.test(host) || /vkuservideo|userapi/i.test(host)) headers.Referer = 'https://vk.com/';
+    else if (/okcdn|mycdn/i.test(host)) headers.Referer = 'https://ok.ru/';
+    else if (/rutube/i.test(host)) headers.Referer = 'https://rutube.ru/';
+  }
+  if (!headers['User-Agent']) headers['User-Agent'] = BROWSER_UA;
+  return headers;
 }
+
 
 /** Загрузка через session Chromium — те же Referer/UA, что и у плеера */
 function sessionFetchBuffer(url, headers = {}) {
@@ -160,36 +132,6 @@ function sessionFetchStreamToFile(url, outputPath, headers = {}, onProgress = nu
     req.end();
   });
 }
-
-/** Прямые MP4 с embed AniLibria (как fallback в Android AniLibriaParser) */
-async function scrapeAnilibriaDirectFiles(embedUrl, epNum) {
-  try {
-    const html = await sessionFetchText(embedUrl, {
-      Accept: 'text/html,application/xhtml+xml',
-      Referer: embedUrl.split('?')[0],
-    });
-    const blockRe = new RegExp(`"s${epNum}"[^]*?"file":"(.*?)"`, 's');
-    const blockMatch = blockRe.exec(html);
-    if (!blockMatch) return null;
-
-    const raw = blockMatch[1].replace(/\\\//g, '/');
-    const qualityMap = {};
-    const qualRe = /\[(\d+)p\]([^,\[]+)/g;
-    let m;
-    while ((m = qualRe.exec(raw)) !== null) {
-      const src = m[2].trim();
-      if (src) qualityMap[m[1]] = src.startsWith('http') ? src : `https:${src}`;
-    }
-    if (Object.keys(qualityMap).length) return qualityMap;
-
-    if (raw && !/^\[/.test(raw)) {
-      const single = raw.startsWith('http') ? raw : `https:${raw}`;
-      if (/\.(mp4|mkv|webm)(\?|$)/i.test(single)) return { '720': single };
-    }
-  } catch (_) {}
-  return null;
-}
-
 
 async function resolveFfmpegPath() {
   if (state.ffmpegPathCache !== undefined) return state.ffmpegPathCache;
@@ -444,85 +386,8 @@ async function downloadWithFfmpeg(inputUrl, outputPath, headers = {}, onProgress
   });
 }
 
-/** Прямые ссылки на видео (как в AniDesk): парсеры anixartjs, чтобы не грузить embed в iframe и не получать 500 от aniqit.com */
 ipcMain.handle('anix:getDirectVideoLink', async (_, embedUrl) => {
-  const EMPTY = { directUrl: null, quality: null, qualityMap: {} };
-  if (!embedUrl || typeof embedUrl !== 'string') return EMPTY;
-  const url = embedUrl.startsWith('http') ? embedUrl : `https:${embedUrl}`;
-  const host = (url.match(/https?:\/\/([^/]+)/) || [])[1] || '';
-  const toAbs = (src) => (!src ? null : src.startsWith('http') ? src : `https:${src}`);
-  const PRIO  = ['1080', '1080p', '720', '720p', '480', '480p', '360', '360p'];
-
-  try {
-    // ── Kodik: cookie-free node fetch (session cookies → pl*.solodcdn /s/m/ → 500)
-    if (host.includes('kodik') || host.includes('aniqit') || host.includes('anixis') || host.includes('aniqart')) {
-      return await getKodikDirectVideoLink(url);
-    }
-
-    // ── Sibnet — трёхэтапный парсер с браузерными заголовками ───────────
-    if (host.includes('sibnet')) {
-      const direct = await getSibnetDirectLink(url);
-      if (!direct) return EMPTY;
-      return { directUrl: direct, quality: '720', qualityMap: { '720': direct } };
-    }
-
-    // ── AniLibria / AniLiberty ──────────────────────────────────────────────
-    // Не используем AniLibriaParser.getDirectLinks() из anixartjs — там regex с
-    // флагом /g хранит lastIndex как статическое поле класса, из-за чего каждый
-    // второй вызов возвращает null (lastIndex не сбрасывается между вызовами).
-    if (host.includes('aniliberty') || host.includes('anilibria') || host.includes('libria')) {
-      // Парсим id и ep из URL без /g-regex, чтобы избежать stateful lastIndex
-      const parsed   = new URL(url);
-      const releaseId = parsed.searchParams.get('id');
-      const epOrdinal = parsed.searchParams.get('ep');
-      if (!releaseId || !epOrdinal) return EMPTY;
-
-      // Определяем домен API (aniliberty.top или api.anilibria.tv)
-      const apiBase = host.includes('aniliberty') || host.includes('libria.fun')
-        ? 'https://aniliberty.top/api/v1/anime/releases'
-        : 'https://aniliberty.top/api/v1/anime/releases';
-
-      const apiResp = await fetch(`${apiBase}/${releaseId}`);
-      if (!apiResp.ok) return EMPTY;
-      const body = await apiResp.json();
-      if (!body?.episodes) return EMPTY;
-
-      const ep = body.episodes.find(e => String(e.ordinal) === String(parseInt(epOrdinal, 10)));
-      if (!ep) return EMPTY;
-
-      // Прямые MP4 с embed-страницы (fallback как в Android AniLibriaParser)
-      const directMap = await scrapeAnilibriaDirectFiles(url, parseInt(epOrdinal, 10));
-      if (directMap && Object.keys(directMap).length) {
-        const bestDirect = PRIO.find(k => directMap[k]) || Object.keys(directMap)[0];
-        const directUrl = directMap[bestDirect] || null;
-        return {
-          directUrl,
-          quality: bestDirect || null,
-          qualityMap: directMap,
-          downloadHeaders: { Referer: url.split('?')[0], 'User-Agent': BROWSER_UA },
-        };
-      }
-
-      const qualityMap = {};
-      if (ep.hls_1080) qualityMap['1080'] = toAbs(ep.hls_1080);
-      if (ep.hls_720)  qualityMap['720']  = toAbs(ep.hls_720);
-      if (ep.hls_480)  qualityMap['480']  = toAbs(ep.hls_480);
-      if (!Object.keys(qualityMap).length) return EMPTY;
-
-      const best = PRIO.find(k => qualityMap[k]) || Object.keys(qualityMap)[0];
-      const directUrl = qualityMap[best] || null;
-      return {
-        directUrl,
-        quality: best || null,
-        qualityMap,
-        isHls: /\.m3u8(\?|$)/i.test(directUrl || ''),
-        downloadHeaders: { Referer: url.split('?')[0], 'User-Agent': BROWSER_UA },
-      };
-    }
-  } catch (e) {
-    console.error('getDirectVideoLink error:', e?.message || e);
-  }
-  return EMPTY;
+  return getDirectVideoLink(embedUrl);
 });
 
 function getDefaultDownloadDirectory() {
@@ -751,8 +616,7 @@ ipcMain.handle('downloads:checkFiles', (_, payload) => {
 
 /** Background download queue — sequential, one file at a time */
 function isEmbedDownloadUrl(url) {
-  return /\/(seria|video|movie|anime)\/\d+\/[0-9a-f]+\//i.test(url)
-    && /kodikplayer\.com|kodik\.info|aniqit\.com|anixis\.com|aniqart\.com/i.test(url);
+  return isHtmlPlayerPage(url);
 }
 
 function getDownloadQueueDeps() {
@@ -798,7 +662,7 @@ ipcMain.handle('episode-download:queue', async (_, payload) => {
       url,
       filePath,
       filename,
-      headers: item?.headers,
+      headers: downloadHeadersForUrl(url, item?.headers),
       folder: subFolder,
       releaseId: item?.releaseId,
       sourceId: item?.sourceId,
@@ -929,7 +793,7 @@ ipcMain.handle('episode-download:download', async (_, payload) => {
     }
 
     const filePath = uniqueDownloadPath(targetDir, item?.filename || path.basename(url.split('?')[0]) || 'episode.mp4');
-    const dlHeaders = item?.headers && typeof item.headers === 'object' ? item.headers : {};
+    const dlHeaders = downloadHeadersForUrl(url, item?.headers && typeof item.headers === 'object' ? item.headers : {});
     try {
       if (/\.m3u8(\?|$)/i.test(url)) {
         await downloadHlsToFile(url, filePath, dlHeaders);

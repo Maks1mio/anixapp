@@ -12,6 +12,8 @@ const VIDEO_HOSTS = [
   'anixis.com', 'aniqart.com', 'aniqit.com', 'video.sibnet.ru', 'sibnet.ru',
   'kodikplayer.com', 'kodik-cdn.com', 'kodik-storage.com', 'solodcdn.com', 'collaps.io',
   'aniliberty.top', 'anilibria.tv', 'anilibria.top', 'libria.fun', 'cache.libria.fun',
+  'vkuservideo.net', 'okcdn.ru', 'userapi.com', 'mycdn.me', 'rutubelist.ru', 'rutube.ru',
+  'studiomir.club',
 ];
 
 /** Не подменять CORS-заголовки — ломает YouTube/Rutube embed */

@@ -170,14 +170,16 @@ function handleMessage(e: MessageEvent): void {
       const joinerPeerId = raw.joinerPeerId != null ? String(raw.joinerPeerId) : null;
       const waitingLogin = raw.waitingLogin != null ? String(raw.waitingLogin) : null;
       const waitingAvatar = raw.waitingAvatar != null ? String(raw.waitingAvatar) : null;
-      if (msg.playback && typeof msg.playback.releaseId !== 'undefined') {
+      const reasonRaw = raw.reason != null ? String(raw.reason) : '';
+      const reason = reasonRaw === 'join' || reasonRaw === 'episode' || reasonRaw === 'buffer' ? reasonRaw : 'buffer';
+      if (reason !== 'join' && msg.playback && typeof msg.playback.releaseId !== 'undefined') {
         onRemotePlayback?.(msg.playback, null);
       }
       if (msg.participants) {
         onParticipantsChanged?.(msg.participants);
       }
       window.dispatchEvent(new CustomEvent('lobby:syncPause', {
-        detail: { joinerPeerId, waitingLogin, waitingAvatar },
+        detail: { joinerPeerId, waitingLogin, waitingAvatar, reason, playback: msg.playback ?? null },
       }));
       const isSelf = myPeerId && joinerPeerId === myPeerId;
       window.dispatchEvent(new CustomEvent('lobby:playerWaitingOverlay', {
@@ -443,10 +445,13 @@ export function sendPlayback(playback: LobbyPlayback): void {
 }
 
 /** Сообщает серверу, что новый участник синхронизировался и готов к воспроизведению. */
-export function sendSyncReady(): void {
+export function sendSyncReady(currentTime?: number): void {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   try {
-    ws.send(JSON.stringify({ type: 'sync_ready' }));
+    ws.send(JSON.stringify({
+      type: 'sync_ready',
+      ...(typeof currentTime === 'number' && Number.isFinite(currentTime) ? { currentTime } : {}),
+    }));
   } catch (e) {
     console.warn('[lobby-ws] sendSyncReady error', e);
   }

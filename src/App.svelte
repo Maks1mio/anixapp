@@ -354,8 +354,9 @@
         }
       }) as EventListener],
 
-      ['lobby:createFromPlayer', (() => {
-        void createLobbyRoomAndOpenPlayer().catch(() => {
+      ['lobby:createFromPlayer', ((e: CustomEvent) => {
+        const seed = e.detail && typeof e.detail === 'object' ? e.detail : null;
+        void createLobbyRoomAndOpenPlayer(seed).catch(() => {
           window.electron?.sendLobbyChooserErrorToPlayer?.('Не удалось создать комнату. Попробуйте ещё раз.');
         });
       }) as EventListener],
@@ -421,8 +422,8 @@
         notifyLobbyBufferingStart();
       }) as EventListener],
 
-      ['lobby:playerSyncedFromPlayer', (() => {
-        window.dispatchEvent(new CustomEvent('lobby:playerSynced'));
+      ['lobby:playerSyncedFromPlayer', ((e: CustomEvent) => {
+        window.dispatchEvent(new CustomEvent('lobby:playerSynced', { detail: e.detail ?? null }));
       }) as EventListener],
 
       ['lobby:playerWaitingOverlay', ((e: CustomEvent) => {

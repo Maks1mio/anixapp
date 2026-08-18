@@ -3,6 +3,7 @@ import { pipeline } from 'node:stream/promises';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
+const { proxyMediaRequest, corsHeaders } = require('../electron/lib/media-proxy.js');
 
 const ANIXART_REFERER = 'https://anixart.tv/';
 const ANIXART_ORIGIN = 'https://anixart.tv';
@@ -250,6 +251,31 @@ function attachBridgeMiddleware(server, bridge) {
 
     if (url.startsWith('/__anixback/') || url === '/__anixback') {
       await proxyAnixback(req, res, url);
+      return;
+    }
+
+    if (url.startsWith('/__anix/media')) {
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204, corsHeaders());
+        res.end();
+        return;
+      }
+      const parsed = new URL(url, 'http://localhost');
+      const target = parsed.searchParams.get('u');
+      const ref = parsed.searchParams.get('ref');
+      if (!target) {
+        sendJson(res, 400, { ok: false, error: 'Missing media url' });
+        return;
+      }
+      try {
+        await proxyMediaRequest(req, res, target, ref);
+      } catch (err) {
+        if (!res.headersSent && !res.writableEnded) {
+          sendJson(res, 502, { ok: false, error: String(err?.message || err) });
+        } else if (!res.writableEnded) {
+          res.destroy();
+        }
+      }
       return;
     }
 

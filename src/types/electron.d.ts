@@ -61,7 +61,7 @@ declare global {
         anixartjs: string;
       }>;
       window: ElectronWindowAPI;
-      openPlayerWindow: (params: { releaseId: string; sourceId: string; ep: string; title: string; sourceName: string; dubberId?: string; localFile?: string; lobbyIdle?: boolean }) => Promise<void>;
+      openPlayerWindow: (params: { releaseId: string; sourceId: string; ep: string; title: string; sourceName: string; dubberId?: string; localFile?: string; lobbyIdle?: boolean; currentTime?: number; paused?: boolean; applyRoomPlayback?: boolean }) => Promise<void>;
       closePlayerWindow: () => void;
       togglePlayerFullScreen: () => Promise<boolean>;
       togglePlayerAlwaysOnTop: () => Promise<boolean>;
@@ -194,7 +194,7 @@ declare global {
       }) => void;
       sendLobbyChatToPlayer?: (msg: Record<string, unknown>) => void;
       sendLobbyChooserErrorToPlayer?: (msg: string) => void;
-      lobbyCreateFromPlayer?: () => void;
+      lobbyCreateFromPlayer?: (playback?: Record<string, unknown> | null) => void;
       lobbyJoinFromPlayer?: (code: string) => void;
       lobbyLeaveFromPlayer?: () => void;
       lobbyChatFromPlayer?: (text: string) => void;
@@ -202,7 +202,7 @@ declare global {
       /** Окно плеера → главное: началась смена качества/озвучки в лобби */
       lobbyNotifyBufferingStart?: () => void;
       /** Окно плеера → главное: плеер готов после sync (sync_ready на сервер) */
-      lobbyPlayerSynced?: () => void;
+      lobbyPlayerSynced?: (currentTime?: number) => void;
       /** Главное → плеер: оверлей «ожидаем пользователя» */
       sendLobbyWaitingOverlayToPlayer?: (payload: LobbyWaitingOverlayPayload | null) => void;
       // Discord Rich Presence

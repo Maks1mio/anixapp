@@ -1,4 +1,4 @@
-import { createRoom, joinRoom, leaveRoom, type LobbyParticipant } from '../services/lobby-api';
+import { createRoom, joinRoom, leaveRoom, isUsablePlayback, type LobbyParticipant, type LobbyPlayback } from '../services/lobby-api';
 import {
   getCurrentParticipants,
   getCurrentRoomCode,
@@ -88,7 +88,7 @@ export function pushLobbySessionToPlayer(): void {
   window.dispatchEvent(new CustomEvent('lobby:session', { detail: session }));
 }
 
-export async function openLobbyPlayerWindow(): Promise<void> {
+export async function openLobbyPlayerWindow(opts?: { applyRoomPlayback?: boolean }): Promise<void> {
   const pb = getLastPlayback();
   const payload = pb?.releaseId
     ? {
@@ -98,6 +98,9 @@ export async function openLobbyPlayerWindow(): Promise<void> {
         title: pb.title || 'Совместный просмотр',
         sourceName: pb.sourceName || '',
         ...(pb.dubberId ? { dubberId: String(pb.dubberId) } : {}),
+        currentTime: typeof pb.currentTime === 'number' ? pb.currentTime : 0,
+        paused: pb.paused !== false,
+        applyRoomPlayback: opts?.applyRoomPlayback === true,
       }
     : {
         releaseId: '',
@@ -125,10 +128,26 @@ export async function openLobbyPlayerWindow(): Promise<void> {
   window.dispatchEvent(new CustomEvent('lobby:session', { detail: getLobbySession() }));
 }
 
-export async function createLobbyRoomAndOpenPlayer(): Promise<void> {
+export async function createLobbyRoomAndOpenPlayer(seed?: Partial<LobbyPlayback> | null): Promise<void> {
   const deviceId = await getLobbyDeviceId();
-  const { roomId, code, myPeerId } = await createRoom({ ...getLobbyProfile(), deviceId });
-  setLobbyRoom(roomId, { myPeerId, participants: [], roomCode: code });
+  const playback = isUsablePlayback(seed) ? {
+    releaseId: String(seed!.releaseId),
+    sourceId: String(seed!.sourceId ?? ''),
+    ep: String(seed!.ep),
+    dubberId: seed!.dubberId != null ? String(seed!.dubberId) : undefined,
+    title: String(seed!.title ?? ''),
+    sourceName: String(seed!.sourceName ?? ''),
+    paused: seed!.paused !== false,
+    currentTime: typeof seed!.currentTime === 'number' ? seed!.currentTime : 0,
+  } : undefined;
+  const { roomId, code, myPeerId } = await createRoom({ ...getLobbyProfile(), deviceId }, playback);
+  setLobbyRoom(roomId, {
+    myPeerId,
+    participants: [],
+    roomCode: code,
+    playback,
+    isCreator: true,
+  });
   window.dispatchEvent(new CustomEvent('lobby:participantsChanged', { detail: { participants: [] } }));
   await openLobbyPlayerWindow();
 }
@@ -142,7 +161,7 @@ export async function joinLobbyRoomAndOpenPlayer(code: string): Promise<void> {
     playback: room.playback ?? undefined,
     roomCode: room.code,
   });
-  await openLobbyPlayerWindow();
+  await openLobbyPlayerWindow({ applyRoomPlayback: true });
 }
 
 export async function leaveLobbyRoomFromUi(): Promise<void> {

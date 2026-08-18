@@ -3,12 +3,18 @@ import { resolveEpisodeUrlWithRetry, stripKodikQueryParams } from '../_utils';
 export type ResolvedEpisodeMedia = Awaited<ReturnType<typeof resolveEpisodeUrlWithRetry>>;
 
 const TTL_MS = 4 * 60 * 1000;
+const TTL_SIGNED_MS = 90 * 1000;
 const cache = new Map<string, { result: ResolvedEpisodeMedia; expires: number }>();
 const inflight = new Map<string, Promise<ResolvedEpisodeMedia>>();
 
 function cacheKey(embedUrl: string): string {
   const raw = embedUrl.startsWith('http') ? embedUrl : `https:${embedUrl}`;
   return stripKodikQueryParams(raw);
+}
+
+function ttlForKey(key: string): number {
+  if (/vk\.com|vkvideo|ok\.ru|odnoklassniki/i.test(key)) return TTL_SIGNED_MS;
+  return TTL_MS;
 }
 
 function isUsable(result: ResolvedEpisodeMedia): boolean {
@@ -36,7 +42,7 @@ export async function resolveEpisodeUrlCached(
   const task = resolveEpisodeUrlWithRetry(embedUrl, iframe, maxAttempts)
     .then((result) => {
       if (isUsable(result)) {
-        cache.set(key, { result, expires: Date.now() + TTL_MS });
+        cache.set(key, { result, expires: Date.now() + ttlForKey(key) });
       }
       return result;
     })

@@ -1,5 +1,6 @@
 import Hls from 'hls.js';
 import { isHlsUrl } from '../_utils';
+import { buildHlsConfig } from './hls-media-context';
 
 type VideoWithHls = HTMLVideoElement & {
   _hls?: Hls;
@@ -91,7 +92,7 @@ export function swapMediaSource(
       existing.startLoad();
       return { reused: true, isHls: true };
     }
-    const hls = new Hls();
+    const hls = new Hls(buildHlsConfig());
     bindHlsHandlers(hls, video, handlers);
     hls.loadSource(url);
     hls.attachMedia(video);

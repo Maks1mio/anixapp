@@ -8,12 +8,14 @@
     createLobbyRoomAndOpenPlayer,
     joinLobbyRoomAndOpenPlayer,
   } from '../../../utils/lobby-player';
+  import type { LobbyPlayback } from '../../../services/lobby-api';
 
   type Props = {
     onClose: () => void;
+    getPlayback?: () => Partial<LobbyPlayback> | null;
   };
 
-  let { onClose }: Props = $props();
+  let { onClose, getPlayback }: Props = $props();
 
   let createLoading = $state(false);
   let joinLoading = $state(false);
@@ -30,10 +32,10 @@
     joinHintError = false;
     try {
       if (canIpc()) {
-        window.electron?.lobbyCreateFromPlayer?.();
+        window.electron?.lobbyCreateFromPlayer?.(getPlayback?.() ?? null);
         return;
       }
-      await createLobbyRoomAndOpenPlayer();
+      await createLobbyRoomAndOpenPlayer(getPlayback?.() ?? null);
       onClose();
     } catch {
       joinHint = 'Не удалось создать комнату. Попробуйте ещё раз.';

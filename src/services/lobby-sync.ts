@@ -2,7 +2,7 @@
  * Лобби: WebSocket + P2P (WebRTC DataChannel), очередь команд, NTP-смещение по P2P.
  */
 
-import { getRoom, type LobbyPlayback, type LobbyParticipant, type LobbyRoom } from './lobby-api';
+import { getRoom, isUsablePlayback, type LobbyPlayback, type LobbyParticipant, type LobbyRoom } from './lobby-api';
 import { connect, disconnect, sendCommand, sendSyncReady, sendProposal, sendVote, sendBufferingStart, sendChat, type LobbyCommandAction } from './lobby-ws';
 import { logLobbyAction, snapshotPlayback } from './lobby-action-log';
 
@@ -32,12 +32,28 @@ let pendingProposalId: string | null = null;
 let awaitingPlayerSync = false;
 /** Локально инициировали buffering_start — не сбрасывать awaitingPlayerSync на чужой sync_resume. */
 let localBufferingPending = false;
+let lastAppliedSeq = 0;
 
 const SYNC_STALL_MS = 8_000;
+const PLAY_PAUSE_DEBOUNCE_MS = 70;
+
+function isPlayerRenderer(): boolean {
+  try {
+    const path = String(window.location?.pathname ?? '');
+    return /player\.html$/i.test(path) || path.endsWith('/player');
+  } catch {
+    return false;
+  }
+}
+
+function isLobbyHostWindow(): boolean {
+  return !!roomId && !isPlayerRenderer();
+}
 
 function pushSyncStateToPlayer(): void {
   const state = { blocked: isSyncBlocked, awaiting: awaitingPlayerSync };
   window.dispatchEvent(new CustomEvent('lobby:syncState', { detail: state }));
+  if (!isLobbyHostWindow()) return;
   try {
     (window as { electron?: { sendLobbySyncStateToPlayer?: (s: { blocked: boolean; awaiting: boolean }) => void } }).electron
       ?.sendLobbySyncStateToPlayer?.(state);
@@ -63,6 +79,7 @@ function scheduleSyncStallWatchdog(reason: string): void {
     isSyncBlocked = false;
     sendSyncReady();
     flushOutboundQueue();
+    flushPlayPauseNow();
     pushSyncStateToPlayer();
     window.dispatchEvent(new CustomEvent('lobby:playerWaitingOverlay', { detail: null }));
   }, SYNC_STALL_MS);
@@ -86,6 +103,8 @@ function dedupeParticipants(list: LobbyParticipant[]): LobbyParticipant[] {
 
 type QueuedCmd = { action: LobbyCommandAction; playback: LobbyPlayback };
 const pendingOutbound: QueuedCmd[] = [];
+let playPauseTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingPlayPause: QueuedCmd | null = null;
 
 function dedupePendingOutbound(): void {
   const latest = new Map<LobbyCommandAction, QueuedCmd>();
@@ -116,7 +135,7 @@ function flushOutboundQueue(): void {
     return;
   }
   const { action, playback } = next;
-  if (isSyncBlocked && action !== 'seek') {
+  if (isSyncBlocked && action !== 'seek' && action !== 'changeEpisode') {
     pendingOutbound.unshift(next);
     return;
   }
@@ -147,6 +166,41 @@ function sendCommandOrP2p(action: LobbyCommandAction, playback: LobbyPlayback): 
   const viaP2p = hasP2PSync() && participants.length <= 1;
   if (viaP2p) broadcastSyncCommand(action, playback);
   else sendCommand(action, payload);
+}
+
+function emitLocalCommand(action: LobbyCommandAction, playback: LobbyPlayback): void {
+  lastPlayback = playback;
+  pushLog({
+    ts: Date.now(),
+    type: 'local-playback',
+    playback,
+    note: `command=${action}`,
+  });
+  sendCommandOrP2p(action, playback);
+}
+
+function flushPlayPauseNow(): void {
+  if (playPauseTimer) {
+    clearTimeout(playPauseTimer);
+    playPauseTimer = null;
+  }
+  const cmd = pendingPlayPause;
+  pendingPlayPause = null;
+  if (!cmd || !roomId) return;
+  emitLocalCommand(cmd.action, cmd.playback);
+}
+
+function schedulePlayPause(action: LobbyCommandAction, playback: LobbyPlayback): void {
+  pendingPlayPause = { action, playback };
+  lastPlayback = playback;
+  if (playPauseTimer) clearTimeout(playPauseTimer);
+  playPauseTimer = setTimeout(() => {
+    playPauseTimer = null;
+    const cmd = pendingPlayPause;
+    pendingPlayPause = null;
+    if (!cmd || !roomId) return;
+    emitLocalCommand(cmd.action, cmd.playback);
+  }, PLAY_PAUSE_DEBOUNCE_MS);
 }
 
 function startP2pIfNeeded(): void {
@@ -210,6 +264,12 @@ window.addEventListener('lobby:authoritativeConfirmed', () => {
   }
 });
 
+window.addEventListener('lobby:wsJoined', () => {
+  if (!lastPlayback || !isUsablePlayback(lastPlayback)) return;
+  if (!hasAuthoritativePlayback) return;
+  sendCommandOrP2p(lastPlayback.paused ? 'pause' : 'play', lastPlayback);
+});
+
 window.addEventListener('lobby:syncNeeded', () => {
   isSyncBlocked = true;
   awaitingPlayerSync = true;
@@ -218,18 +278,20 @@ window.addEventListener('lobby:syncNeeded', () => {
   pushSyncStateToPlayer();
 });
 
-window.addEventListener('lobby:playerSynced', () => {
+window.addEventListener('lobby:playerSynced', ((e: Event) => {
   if (!awaitingPlayerSync && !isSyncBlocked) return;
   awaitingPlayerSync = false;
   localBufferingPending = false;
   clearSyncStallWatchdog();
   isSyncBlocked = false;
-  sendSyncReady();
+  const liveTime = (e as CustomEvent<{ currentTime?: number }>).detail?.currentTime;
+  sendSyncReady(typeof liveTime === 'number' ? liveTime : undefined);
   flushOutboundQueue();
+  flushPlayPauseNow();
   pushSyncStateToPlayer();
   window.dispatchEvent(new CustomEvent('lobby:playerWaitingOverlay', { detail: null }));
   console.log('[lobby] sync_ready after player seeked+canplay');
-});
+}) as EventListener);
 
 /** Вызывать из главного окна перед сменой качества/озвучки в лобби (или через IPC из окна плеера). */
 export function notifyLobbyBufferingStart(): void {
@@ -242,7 +304,7 @@ export function notifyLobbyBufferingStart(): void {
   window.dispatchEvent(new CustomEvent('lobby:playerWaitingOverlay', { detail: { mode: 'localBuffering' } }));
 }
 
-window.addEventListener('lobby:syncPause', () => {
+window.addEventListener('lobby:syncPause', ((e: Event) => {
   isSyncBlocked = true;
   awaitingPlayerSync = true;
   for (let i = pendingOutbound.length - 1; i >= 0; i--) {
@@ -252,31 +314,46 @@ window.addEventListener('lobby:syncPause', () => {
   clearSyncStallWatchdog();
   scheduleSyncStallWatchdog('sync_pause');
   pushSyncStateToPlayer();
-  window.dispatchEvent(new CustomEvent('lobby:syncNeeded'));
-  const playback = lastPlayback;
-  window.dispatchEvent(new CustomEvent('lobby:barrierSync', { detail: { playback } }));
-  console.log('[lobby] sync_pause: all wait for sync_ready');
+  const detail = (e as CustomEvent<{
+    playback?: LobbyPlayback | null;
+    reason?: 'join' | 'episode' | 'buffer';
+    joinerPeerId?: string | null;
+  }>).detail ?? {};
+  const playback = detail.playback ?? lastPlayback;
+  const barrierDetail = {
+    playback,
+    reason: detail.reason ?? 'buffer',
+    joinerPeerId: detail.joinerPeerId ?? null,
+  };
+  window.dispatchEvent(new CustomEvent('lobby:barrierSync', { detail: barrierDetail }));
+  if (!isLobbyHostWindow()) return;
   try {
-    (window as { electron?: { sendLobbyBarrierSyncToPlayer?: (pb: LobbyPlayback | null) => void } }).electron
-      ?.sendLobbyBarrierSyncToPlayer?.(playback ?? null);
+    (window as { electron?: { sendLobbyBarrierSyncToPlayer?: (pb: unknown) => void } }).electron
+      ?.sendLobbyBarrierSyncToPlayer?.(barrierDetail);
   } catch { /* ignore */ }
-});
+}) as EventListener);
 
 window.addEventListener('lobby:syncResume', () => {
+  if (isPlayerRenderer()) return;
+  const wasBlocked = isSyncBlocked || awaitingPlayerSync;
   isSyncBlocked = false;
   if (!localBufferingPending) {
     awaitingPlayerSync = false;
   }
   clearSyncStallWatchdog();
-  flushOutboundQueue();
+  if (wasBlocked) {
+    flushOutboundQueue();
+    flushPlayPauseNow();
+  }
   pushSyncStateToPlayer();
   if (!localBufferingPending) {
     window.dispatchEvent(new CustomEvent('lobby:playerWaitingOverlay', { detail: null }));
   }
-  try {
-    (window as { electron?: { sendLobbySyncResumeToPlayer?: () => void } }).electron?.sendLobbySyncResumeToPlayer?.();
-  } catch { /* ignore */ }
-  console.log('[lobby] sync_resume: unblocked commands');
+  if (isLobbyHostWindow()) {
+    try {
+      (window as { electron?: { sendLobbySyncResumeToPlayer?: () => void } }).electron?.sendLobbySyncResumeToPlayer?.();
+    } catch { /* ignore */ }
+  }
 });
 
 window.addEventListener('lobby:proposalNew', ((e: CustomEvent) => {
@@ -346,6 +423,33 @@ export function setLobbyParticipants(list: LobbyParticipant[]): void {
 }
 
 function dispatchRemotePlayback(playback: LobbyPlayback, fromPeerId?: string | null, action?: string | null): void {
+  const seq = typeof playback.seq === 'number' ? playback.seq : null;
+  const pausedChanged = lastPlayback != null && lastPlayback.paused !== playback.paused;
+  const timeChanged = lastPlayback != null
+    && Math.abs((lastPlayback.currentTime ?? 0) - (playback.currentTime ?? 0)) > 0.45;
+  if (seq != null && seq <= lastAppliedSeq && !pausedChanged && !timeChanged) {
+    logLobbyAction({
+      origin: 'server',
+      action: 'apply.remote.stale',
+      playback: snapshotPlayback(playback),
+      note: `seq ${seq} ≤ ${lastAppliedSeq}`,
+    });
+    return;
+  }
+  if (seq != null && seq > lastAppliedSeq) lastAppliedSeq = seq;
+
+  const sameContent = !!(lastPlayback
+    && String(lastPlayback.releaseId) === String(playback.releaseId)
+    && String(lastPlayback.sourceId ?? '') === String(playback.sourceId ?? '')
+    && String(lastPlayback.ep) === String(playback.ep)
+    && String(lastPlayback.dubberId ?? '') === String(playback.dubberId ?? ''));
+  const isEcho = hasAuthoritativePlayback && !fromPeerId && !action && sameContent && !pausedChanged && !timeChanged;
+  if (isEcho) {
+    lastPlayback = playback;
+    hasAuthoritativePlayback = true;
+    return;
+  }
+
   const isFirstAuthoritative = !hasAuthoritativePlayback && roomHasPlayback;
   lastPlayback = playback;
   hasAuthoritativePlayback = true;
@@ -426,20 +530,32 @@ export function getCurrentRoomCode(): string | null {
 
 export function setLobbyRoom(
   id: string | null,
-  options?: { myPeerId?: string; participants?: LobbyRoom['participants']; playback?: LobbyRoom['playback']; roomCode?: string }
+  options?: {
+    myPeerId?: string;
+    participants?: LobbyRoom['participants'];
+    playback?: LobbyRoom['playback'];
+    roomCode?: string;
+    isCreator?: boolean;
+  }
 ): void {
   if (roomId) {
     stopLobbyRtc();
     disconnect();
   }
   pendingOutbound.length = 0;
+  if (playPauseTimer) {
+    clearTimeout(playPauseTimer);
+    playPauseTimer = null;
+  }
+  pendingPlayPause = null;
+  lastAppliedSeq = 0;
   roomId = id;
   roomCode = options?.roomCode ?? null;
   myPeerId = options?.myPeerId ?? null;
   participants = options?.participants ? options.participants.slice() : [];
-  lastPlayback = null;
-  roomHasPlayback = !!options?.playback;
-  hasAuthoritativePlayback = false;
+  lastPlayback = options?.playback && isUsablePlayback(options.playback) ? options.playback : null;
+  roomHasPlayback = !!lastPlayback;
+  hasAuthoritativePlayback = !!options?.isCreator && !!lastPlayback;
   isSyncBlocked = false;
   pendingProposalId = null;
   awaitingPlayerSync = false;
@@ -464,7 +580,7 @@ export function setLobbyRoom(
   if (roomId) {
     connect(roomId, dispatchRemotePlayback, myPeerId ?? undefined, handleParticipantsUpdate);
     startP2pIfNeeded();
-    if (options?.playback) {
+    if (options?.playback && isUsablePlayback(options.playback) && !options.isCreator) {
       dispatchInitialPlayback(options.playback);
     }
   }
@@ -482,18 +598,28 @@ export function pushCommand(action: LobbyCommandAction, playback: LobbyPlayback)
     });
     return;
   }
-  if (isSyncBlocked && action !== 'seek') {
-    queueOutbound(action, playback);
-    logLobbyAction({
-      origin: 'local',
-      action: `sync.queued.${action}`,
-      playback: snapshotPlayback(playback),
-      note: 'синхронизация: команда в очереди',
-    });
-    return;
+  if (isSyncBlocked) {
+    if (action === 'play' || action === 'pause') {
+      pendingPlayPause = { action, playback };
+      lastPlayback = playback;
+      return;
+    }
+    if (action !== 'seek' && action !== 'changeEpisode') {
+      queueOutbound(action, playback);
+      logLobbyAction({
+        origin: 'local',
+        action: `sync.queued.${action}`,
+        playback: snapshotPlayback(playback),
+        note: 'синхронизация: команда в очереди',
+      });
+      return;
+    }
   }
 
-  const isAnimeChange = lastPlayback && playback.releaseId && lastPlayback.releaseId !== playback.releaseId;
+  const prevId = String(lastPlayback?.releaseId ?? '').trim();
+  const nextId = String(playback.releaseId ?? '').trim();
+  if (!isUsablePlayback(playback)) return;
+  const isAnimeChange = prevId.length > 0 && nextId.length > 0 && prevId !== nextId;
   if (isAnimeChange && participants.length > 1) {
     logLobbyAction({
       origin: 'local',
@@ -504,14 +630,13 @@ export function pushCommand(action: LobbyCommandAction, playback: LobbyPlayback)
     return;
   }
 
-  lastPlayback = playback;
-  pushLog({
-    ts: Date.now(),
-    type: 'local-playback',
-    playback,
-    note: `command=${action}`,
-  });
-  sendCommandOrP2p(action, playback);
+  if (action === 'play' || action === 'pause') {
+    schedulePlayPause(action, playback);
+    return;
+  }
+
+  flushPlayPauseNow();
+  emitLocalCommand(action, playback);
 }
 
 export function proposeAnimeChange(playback: Partial<LobbyPlayback>): void {
@@ -607,6 +732,12 @@ export function leaveLobby(): void {
   awaitingPlayerSync = false;
   localBufferingPending = false;
   pendingOutbound.length = 0;
+  if (playPauseTimer) {
+    clearTimeout(playPauseTimer);
+    playPauseTimer = null;
+  }
+  pendingPlayPause = null;
+  lastAppliedSeq = 0;
   if (syncReadyTimer) {
     clearTimeout(syncReadyTimer);
     syncReadyTimer = null;

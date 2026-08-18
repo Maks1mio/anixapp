@@ -22,6 +22,7 @@ export interface LobbyPlayback {
   sourceName: string;
   paused: boolean;
   currentTime: number;
+  seq?: number;
 }
 
 export interface LobbyRoom {
@@ -51,11 +52,37 @@ type LobbyProfilePayload = {
   deviceId?: string | null;
 };
 
+/** Есть ли у playback релиз и серия (не idle-заглушка). */
+export function isUsablePlayback(p: Partial<LobbyPlayback> | null | undefined): boolean {
+  if (!p) return false;
+  const rid = String(p.releaseId ?? '').trim();
+  const ep = String(p.ep ?? '').trim();
+  return rid.length > 0 && ep.length > 0 && ep !== '0';
+}
+
+function toSeedPlayback(p: Partial<LobbyPlayback>): LobbyPlayback {
+  return {
+    releaseId: String(p.releaseId ?? ''),
+    sourceId: String(p.sourceId ?? ''),
+    ep: String(p.ep ?? ''),
+    dubberId: p.dubberId != null ? String(p.dubberId) : undefined,
+    title: String(p.title ?? ''),
+    sourceName: String(p.sourceName ?? ''),
+    paused: p.paused !== false,
+    currentTime: typeof p.currentTime === 'number' ? p.currentTime : 0,
+  };
+}
+
 /** Создать комнату. Возвращает roomId, code и myPeerId (для WebRTC). */
-export async function createRoom(profile: LobbyProfilePayload): Promise<{ roomId: string; code: string; myPeerId?: string }> {
+export async function createRoom(
+  profile: LobbyProfilePayload,
+  playback?: Partial<LobbyPlayback> | null,
+): Promise<{ roomId: string; code: string; myPeerId?: string }> {
+  const body: Record<string, unknown> = { ...profile };
+  if (isUsablePlayback(playback)) body.playback = toSeedPlayback(playback!);
   const res = await fetchLobby('/create', {
     method: 'POST',
-    body: JSON.stringify(profile),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`Lobby create: ${res.status}`);
   const data = (await res.json()) as { roomId?: string; code?: string; myPeerId?: string };

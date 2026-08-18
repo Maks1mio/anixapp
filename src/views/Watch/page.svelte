@@ -478,6 +478,8 @@
   /** Зеркало main awaitingPlayerSync — приходит по IPC (модуль lobby-sync в player пустой). */
   let lobbySyncAwaiting = false;
   let pendingBarrierPlayback: Record<string, unknown> | null = null;
+  /** Последнее намерение play/pause в лобби — чтобы video-события не слали эхо. */
+  let lastLobbyPausedIntent: boolean | null = null;
 
   function needsLobbySyncReady(): boolean {
     return lobbyBarrierPending || lobbySyncAwaiting || isLobbyAwaitingPlayerSync();
@@ -567,15 +569,16 @@
 
   /** После seek/load: sync_ready на сервер (окно плеера без WS — через IPC в главное окно). */
   function notifyLobbyPlayerSyncedIfReady() {
+    const ct = videoEl && !isNaN(videoEl.currentTime) ? videoEl.currentTime : undefined;
     const el = (window as any).electron;
     if (el?.lobbyPlayerSynced) {
       logLobbyAction({ origin: 'local', action: 'player.sync_ready', via: 'player' });
-      el.lobbyPlayerSynced();
+      el.lobbyPlayerSynced(ct);
       return;
     }
     if (inLobbyRoom()) {
       logLobbyAction({ origin: 'local', action: 'player.sync_ready', via: 'player' });
-      window.dispatchEvent(new CustomEvent('lobby:playerSynced'));
+      window.dispatchEvent(new CustomEvent('lobby:playerSynced', { detail: { currentTime: ct } }));
     }
   }
 
@@ -641,8 +644,11 @@
   }
 
   function sendToLobby(action: 'play' | 'pause' | 'seek' | 'changeEpisode', ctOverride?: number) {
-    if (action !== 'seek' && (isApplyingSync || lobbyBarrierPending)) return;
-    const base = ctOverride !== undefined ? { ...getPlaybackPayload(), currentTime: ctOverride } : getPlaybackPayload();
+    const preview = ctOverride !== undefined ? { ...getPlaybackPayload(), currentTime: ctOverride } : getPlaybackPayload();
+    if (inLobbyRoom() && !String(preview.releaseId ?? '').trim()) return;
+    if (action === 'play') lastLobbyPausedIntent = false;
+    if (action === 'pause') lastLobbyPausedIntent = true;
+    const base = preview;
     const p = action === 'play'
       ? { ...base, paused: false }
       : action === 'pause'
@@ -716,6 +722,7 @@
       onReresolve: (savedTime, wasPaused) => {
         const curEpUrl = core.origEpUrl;
         if (!curEpUrl) return;
+        core.invalidateCache(curEpUrl);
         core.resolve(curEpUrl, false).then(res => {
           if (!res.useVideo || !res.playUrl) {
             applyVideoAndUI(curEpUrl, false, ep, titleStr, srcName, dubId);
@@ -728,6 +735,7 @@
       onWatchdogReresolve: async () => {
         const embedUrl = core.origEpUrl;
         if (!embedUrl) return null;
+        core.invalidateCache(embedUrl);
         const res = await core.resolve(embedUrl, false, 3);
         if (!res.useVideo || !res.playUrl) return null;
         const resolved = applyQualityMap(res.qualityMap, res.currentQuality, res.playUrl);
@@ -823,17 +831,14 @@
     const inLobby = inLobbyRoom();
     if (inLobby) {
       lobbyCaptureStalePlaybackSnapshot();
-      notifyLobbyBufferingFromUi();
       isApplyingSync = true;
       localMediaSwap = true;
     }
     watchState.ep = ep;
-    loadEpisode(parseInt(watchState.releaseId, 10), parseInt(watchState.sourceId, 10), ep, watchState.title, watchState.sourceName, watchState.dubberId)
+    if (inLobby) sendToLobby('changeEpisode', 0);
+    loadEpisode(parseInt(watchState.releaseId, 10), parseInt(watchState.sourceId, 10), ep, watchState.title, watchState.sourceName, watchState.dubberId, 0, true)
       .then(() => {
-        if (inLobby) {
-          sendToLobby('changeEpisode', 0);
-          armLobbyPlayerSyncedOnce();
-        }
+        if (inLobby) armLobbyPlayerSyncedOnce(0);
       })
       .catch(() => {
         if (inLobby) {
@@ -852,14 +857,13 @@
     if (inLobby) lobbyCaptureStalePlaybackSnapshot();
     const targetEp = episodeOverride !== undefined ? episodeOverride : watchState.ep;
     const switchingEpisode = episodeOverride !== undefined && episodeOverride !== watchState.ep;
-    const savedTime = switchingEpisode ? undefined : (videoEl && !isNaN(videoEl.currentTime) ? videoEl.currentTime : undefined);
-    const wasPaused = switchingEpisode ? false : !!(videoEl?.paused);
+    const savedTime = switchingEpisode ? 0 : (videoEl && !isNaN(videoEl.currentTime) ? videoEl.currentTime : undefined);
+    const wasPaused = switchingEpisode ? true : !!(videoEl?.paused);
     watchState.sourceId = String(newSourceId);
     watchState.sourceName = newSourceName;
     watchState.dubberId = String(newDubberId);
     watchState.dubberName = newDubberName;
     if (inLobby) {
-      notifyLobbyBufferingFromUi();
       isApplyingSync = true;
       localMediaSwap = true;
     }
@@ -867,8 +871,8 @@
       .then(() => {
         fetchEpisodesSilently();
         if (inLobby) {
-          sendToLobby('changeEpisode', savedTime ?? 0);
-          armLobbyPlayerSyncedOnce();
+          sendToLobby('changeEpisode', switchingEpisode ? 0 : (savedTime ?? 0));
+          armLobbyPlayerSyncedOnce(switchingEpisode ? 0 : savedTime);
         }
       })
       .catch(() => {
@@ -1045,7 +1049,7 @@
       window.setTimeout(() => {
         isApplyingSync = false;
         preventAutoPause = false;
-      }, 500);
+      }, 280);
       showAndSchedule();
       return;
     }
@@ -1450,9 +1454,11 @@
       videoEl.currentTime = targetTime;
     }
     if (opts?.barrier || p.paused) {
+      lastLobbyPausedIntent = true;
       videoEl.pause();
       player.paused = true;
     } else {
+      lastLobbyPausedIntent = false;
       void videoEl.play().then(() => { player.paused = false; }).catch(() => {});
     }
     seedPlayerTimeFromVideo();
@@ -1479,6 +1485,7 @@
     if (localMediaSwap) return;
     if (pendingSync) { applyPendingSync(); return; }
     if (preventAutoPause || isApplyingSync) return;
+    if (inLobbyRoom() && (player.paused || lastLobbyPausedIntent === true)) return;
     videoEl?.play().catch(() => {});
   }
 
@@ -1566,11 +1573,19 @@
     }, { signal });
     el.addEventListener('play',  () => {
       if (isApplyingSync || localMediaSwap || preventAutoPause) return;
+      if (inLobbyRoom() && lastLobbyPausedIntent === false) {
+        player.paused = false;
+        return;
+      }
       player.paused = false;
       sendToLobby('play');
     }, { signal });
     el.addEventListener('pause', () => {
       if (isApplyingSync || localMediaSwap || preventAutoPause) return;
+      if (inLobbyRoom() && lastLobbyPausedIntent === true) {
+        player.paused = true;
+        return;
+      }
       player.paused = true;
       sendToLobby('pause');
     }, { signal });
@@ -1586,6 +1601,7 @@
       maybeArmLobbySyncAfterLoad(pendingBarrierPlayback);
     }, { signal });
     el.addEventListener('playing', () => {
+      if (lastLobbyPausedIntent === true) return;
       player.paused = false;
       player.switching = false;
       if (!isApplyingSync) preventAutoPause = false;
@@ -1750,9 +1766,10 @@
         watchState.dubberName = p.dubberName != null && p.dubberName !== '' ? String(p.dubberName) : '';
         invalidateDubbersPickerCache();
         if (!watchState.dubberName && watchState.dubberId) refreshDubberNameFromApi();
-        if (p.local) sendToLobby('changeEpisode', typeof p.currentTime === 'number' ? p.currentTime : 0);
+        if (p.local && !p.applyRoomPlayback) sendToLobby('changeEpisode', 0);
         isApplyingSync = true;
-        loadEpisode(parseInt(p.releaseId, 10), parseInt(p.sourceId, 10), parseInt(p.ep, 10), p.title || watchState.title, p.sourceName || '', p.dubberId || '', typeof p.currentTime === 'number' ? p.currentTime : undefined, !!p.paused)
+        const joinSeek = typeof p.currentTime === 'number' ? p.currentTime : (p.applyRoomPlayback ? 0 : undefined);
+        loadEpisode(parseInt(p.releaseId, 10), parseInt(p.sourceId, 10), parseInt(p.ep, 10), p.title || watchState.title, p.sourceName || '', p.dubberId || '', p.applyRoomPlayback || p.local ? (joinSeek ?? 0) : joinSeek, p.applyRoomPlayback ? true : !!p.paused)
           .then(() => {
             fetchEpisodesSilently();
             maybeArmLobbySyncAfterLoad(p);
@@ -1822,8 +1839,48 @@
         lobbyBarrierPending = true;
         lobbySyncAwaiting = true;
         isApplyingSync = true;
-        const pb = (e.detail as { playback?: Record<string, unknown> } | null)?.playback ?? null;
+        const d = e.detail as {
+          playback?: Record<string, unknown> | null;
+          reason?: 'join' | 'episode' | 'buffer';
+          joinerPeerId?: string | null;
+        } | null;
+        const pb = d?.playback ?? null;
+        const reason = d?.reason ?? 'buffer';
         pendingBarrierPlayback = pb;
+
+        if (reason === 'join') {
+          const same = !!(pb?.releaseId && videoEl && !videoEl.hidden
+            && watchState.releaseId === String(pb.releaseId)
+            && watchState.sourceId === String(pb.sourceId)
+            && watchState.ep === Number(pb.ep)
+            && (watchState.dubberId || '') === String(pb.dubberId || ''));
+          if (same) {
+            lastLobbyPausedIntent = true;
+            preventAutoPause = true;
+            try { videoEl.pause(); } catch { /* ignore */ }
+            player.paused = true;
+            notifyLobbyPlayerSyncedIfReady();
+          } else if (pb?.releaseId && pb.sourceId && pb.ep) {
+            beginMediaCover(String(pb.releaseId));
+            watchState.releaseId = String(pb.releaseId);
+            watchState.sourceId = String(pb.sourceId);
+            watchState.dubberName = pb.dubberName != null && pb.dubberName !== '' ? String(pb.dubberName) : '';
+            invalidateDubbersPickerCache();
+            if (!watchState.dubberName && (pb.dubberId || '')) refreshDubberNameFromApi();
+            const seekTo = typeof pb.currentTime === 'number' ? pb.currentTime : 0;
+            loadEpisode(parseInt(String(pb.releaseId), 10), parseInt(String(pb.sourceId), 10), parseInt(String(pb.ep), 10), String(pb.title || watchState.title), String(pb.sourceName || watchState.sourceName), String(pb.dubberId || ''), seekTo, true)
+              .then(() => {
+                fetchEpisodesSilently();
+                maybeArmLobbySyncAfterLoad({ ...pb, currentTime: seekTo });
+              })
+              .catch(() => notifyLobbyPlayerSyncedIfReady());
+          } else {
+            try { videoEl?.pause(); } catch { /* ignore */ }
+            armLobbyPlayerSyncedOnce(videoEl && !isNaN(videoEl.currentTime) ? videoEl.currentTime : undefined);
+          }
+          return;
+        }
+
         if (pb?.releaseId && pb.sourceId && pb.ep && videoEl && !videoEl.hidden) {
           const same = watchState.releaseId === String(pb.releaseId)
             && watchState.sourceId === String(pb.sourceId)
@@ -1831,8 +1888,28 @@
             && (watchState.dubberId || '') === String(pb.dubberId || '');
           if (same) {
             applyRemotePlaybackSync(pb, { barrier: true });
-            armLobbyPlayerSyncedOnce(typeof pb.currentTime === 'number' ? pb.currentTime : undefined);
+            armLobbyPlayerSyncedOnce(typeof pb.currentTime === 'number' ? pb.currentTime : 0);
+          } else {
+            beginMediaCover(String(pb.releaseId));
+            watchState.releaseId = String(pb.releaseId);
+            watchState.sourceId = String(pb.sourceId);
+            watchState.dubberName = pb.dubberName != null && pb.dubberName !== '' ? String(pb.dubberName) : '';
+            invalidateDubbersPickerCache();
+            if (!watchState.dubberName && (pb.dubberId || '')) refreshDubberNameFromApi();
+            const seekTo = reason === 'episode' ? 0 : (typeof pb.currentTime === 'number' ? pb.currentTime : 0);
+            loadEpisode(parseInt(String(pb.releaseId), 10), parseInt(String(pb.sourceId), 10), parseInt(String(pb.ep), 10), String(pb.title || watchState.title), String(pb.sourceName || watchState.sourceName), String(pb.dubberId || ''), seekTo, true)
+              .then(() => {
+                fetchEpisodesSilently();
+                maybeArmLobbySyncAfterLoad({ ...pb, currentTime: seekTo });
+              })
+              .catch(() => {
+                localMediaSwap = false;
+                isApplyingSync = false;
+                notifyLobbyPlayerSyncedIfReady();
+              });
           }
+        } else {
+          armLobbyPlayerSyncedOnce();
         }
       }) as EventListener],
 
@@ -1850,6 +1927,7 @@
         lobbySyncAwaiting = false;
         pendingBarrierPlayback = null;
         preventAutoPause = false;
+        isApplyingSync = false;
       }) as EventListener],
 
       ['lobby:proposal', ((e: CustomEvent) => {
@@ -2047,7 +2125,8 @@
           bind:this={iframeEl}
           class="watch-page__iframe"
           src={!player.useVideo ? player.playUrl : ''}
-          allow="autoplay; fullscreen"
+          allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+          referrerpolicy="no-referrer-when-downgrade"
           hidden={player.useVideo || player.loadState !== 'ready' || player.switching || !watchState.releaseId}
           title="Видео плеер"
         ></iframe>
@@ -2174,5 +2253,5 @@
 </div>
 
 {#if chooserOpen}
-  <LobbyChooserOverlay onClose={() => { chooserOpen = false; }} />
+  <LobbyChooserOverlay onClose={() => { chooserOpen = false; }} getPlayback={getPlaybackPayload} />
 {/if}

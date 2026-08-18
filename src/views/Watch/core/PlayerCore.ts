@@ -2,7 +2,7 @@ import { notifyHistoryChanged } from '../../../utils/favorites-events';
 import { isLocalMediaUrl } from '../../../utils/local-media-url';
 import { isHlsUrl, stripKodikQueryParams } from '../_utils';
 import { detachHls, startHlsFromTime, swapMediaSource } from './hls-engine';
-import { prefetchEpisodeUrl, resolveEpisodeUrlCached, type ResolvedEpisodeMedia } from './url-cache';
+import { prefetchEpisodeUrl, resolveEpisodeUrlCached, invalidateEpisodeUrlCache, type ResolvedEpisodeMedia } from './url-cache';
 import { UpscaleController, gpuAvailable } from './upscale';
 
 export type PlayerCorePlayOpts = {
@@ -42,6 +42,10 @@ export class PlayerCore {
   setOrigEpisodeUrl(rawUrl: string): void {
     const abs = rawUrl.startsWith('http') ? rawUrl : `https:${rawUrl}`;
     this.origEpUrl = stripKodikQueryParams(abs);
+  }
+
+  invalidateCache(embedUrl?: string): void {
+    invalidateEpisodeUrlCache(embedUrl);
   }
 
   resolve(embedUrl: string, iframe: boolean, maxAttempts?: number): Promise<ResolvedEpisodeMedia> {
@@ -84,13 +88,19 @@ export class PlayerCore {
       if (!opts.initialPaused) video.play().catch(() => {});
     };
 
-    if (opts.seekTime != null && opts.seekTime > 0) {
+    if (opts.seekTime != null) {
       const restoreTime = () => {
-        video.currentTime = Math.min(opts.seekTime!, video.duration || Infinity);
+        const t = Math.max(0, opts.seekTime!);
+        video.currentTime = Number.isFinite(video.duration) && video.duration > 0
+          ? Math.min(t, video.duration)
+          : t;
         if (opts.initialPaused) video.pause();
       };
       video.addEventListener('loadeddata', restoreTime, { once: true });
       video.addEventListener('canplay', restoreTime, { once: true });
+      if (opts.seekTime === 0) {
+        try { video.currentTime = 0; } catch { /* ignore */ }
+      }
     }
 
     const fallback = () => {

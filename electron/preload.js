@@ -27,8 +27,8 @@ ipcRenderer.on('lobby:voteFromPlayer', (_, data) => {
   window.dispatchEvent(new CustomEvent('lobby:voteFromPlayer', { detail: data }));
 });
 
-ipcRenderer.on('lobby:createFromPlayer', () => {
-  window.dispatchEvent(new CustomEvent('lobby:createFromPlayer'));
+ipcRenderer.on('lobby:createFromPlayer', (_, playback) => {
+  window.dispatchEvent(new CustomEvent('lobby:createFromPlayer', { detail: playback ?? null }));
 });
 
 ipcRenderer.on('lobby:joinFromPlayer', (_, code) => {
@@ -72,8 +72,11 @@ ipcRenderer.on('lobby:chooserErrorToPlayer', (_, msg) => {
   window.dispatchEvent(new CustomEvent('lobby:chooserError', { detail: msg }));
 });
 
-ipcRenderer.on('lobby:barrierSyncToPlayer', (_, playback) => {
-  window.dispatchEvent(new CustomEvent('lobby:barrierSync', { detail: { playback: playback ?? null } }));
+ipcRenderer.on('lobby:barrierSyncToPlayer', (_, payload) => {
+  const detail = payload && typeof payload === 'object' && ('playback' in payload || 'reason' in payload)
+    ? payload
+    : { playback: payload ?? null };
+  window.dispatchEvent(new CustomEvent('lobby:barrierSync', { detail }));
 });
 ipcRenderer.on('lobby:syncResumeToPlayer', () => {
   window.dispatchEvent(new CustomEvent('lobby:syncResume'));
@@ -194,13 +197,13 @@ contextBridge.exposeInMainWorld('electron', {
   sendLobbySessionToPlayer: (session) => ipcRenderer.send('lobby:sessionToPlayer', session),
   sendLobbyChatToPlayer: (msg) => ipcRenderer.send('lobby:chatToPlayer', msg),
   sendLobbyChooserErrorToPlayer: (msg) => ipcRenderer.send('lobby:chooserErrorToPlayer', msg),
-  lobbyCreateFromPlayer: () => ipcRenderer.send('lobby:createFromPlayer'),
+  lobbyCreateFromPlayer: (playback) => ipcRenderer.send('lobby:createFromPlayer', playback ?? null),
   lobbyJoinFromPlayer: (code) => ipcRenderer.send('lobby:joinFromPlayer', code),
   lobbyLeaveFromPlayer: () => ipcRenderer.send('lobby:leaveFromPlayer'),
   lobbyChatFromPlayer: (text) => ipcRenderer.send('lobby:chatFromPlayer', text),
   lobbyRequestSession: () => ipcRenderer.send('lobby:requestSession'),
   lobbyNotifyBufferingStart: () => ipcRenderer.send('lobby:bufferingStartFromPlayer'),
-  lobbyPlayerSynced: () => ipcRenderer.send('lobby:playerSyncedFromPlayer'),
+  lobbyPlayerSynced: (currentTime) => ipcRenderer.send('lobby:playerSyncedFromPlayer', { currentTime }),
   sendLobbyWaitingOverlayToPlayer: (payload) => ipcRenderer.send('lobby:waitingOverlayToPlayer', payload),
   sendLobbyBarrierSyncToPlayer: (playback) => ipcRenderer.send('lobby:barrierSyncToPlayer', playback ?? null),
   sendLobbySyncResumeToPlayer: () => ipcRenderer.send('lobby:syncResumeToPlayer'),
@@ -249,8 +252,8 @@ ipcRenderer.on('episode-download:progress', (_, data) => {
 ipcRenderer.on('lobby:bufferingStartFromPlayer', () => {
   window.dispatchEvent(new CustomEvent('lobby:bufferingStartFromPlayer'));
 });
-ipcRenderer.on('lobby:playerSyncedFromPlayer', () => {
-  window.dispatchEvent(new CustomEvent('lobby:playerSyncedFromPlayer'));
+ipcRenderer.on('lobby:playerSyncedFromPlayer', (_, payload) => {
+  window.dispatchEvent(new CustomEvent('lobby:playerSyncedFromPlayer', { detail: payload ?? null }));
 });
 ipcRenderer.on('lobby:playerWaitingOverlay', (_, payload) => {
   window.dispatchEvent(new CustomEvent('lobby:playerWaitingOverlay', { detail: payload }));

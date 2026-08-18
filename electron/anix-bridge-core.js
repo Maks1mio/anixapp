@@ -8,7 +8,7 @@ const os = require('os');
 const { Anixart, DefaultResult, BookmarkType, BookmarkSortType } = require('anixapi');
 const { attachLegacyEndpoints } = require('./anix-legacy-endpoints');
 const homeCustomFilter = require('./home-custom-filter');
-const { getDirectVideoLink } = require('./kodik-direct');
+const { getDirectVideoLink } = require('./lib/direct-video-link');
 
 const DEFAULT_BASE_URL = 'https://api-s.anixsekai.com';
 

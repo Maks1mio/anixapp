@@ -13,7 +13,9 @@ const VIDEO_HOSTS = [
   'kodikplayer.com', 'kodik-cdn.com', 'kodik-storage.com', 'solodcdn.com', 'collaps.io',
   'aniliberty.top', 'anilibria.tv', 'anilibria.top', 'libria.fun', 'cache.libria.fun',
   'vkuservideo.net', 'okcdn.ru', 'userapi.com', 'mycdn.me', 'rutubelist.ru', 'rutube.ru',
-  'studiomir.club',
+  'studiomir.club', 'animedia.tv', 'zerocdn.com',
+  'mail.ru', 'imgsmail.ru', 'myvi.top', 'myvi.tv',
+  'secvideo1.online', 'csst.online', 'sstrge.online', 'sovetromantica.com',
 ];
 
 /** Не подменять CORS-заголовки — ломает YouTube/Rutube embed */

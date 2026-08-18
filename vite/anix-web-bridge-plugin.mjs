@@ -263,12 +263,13 @@ function attachBridgeMiddleware(server, bridge) {
       const parsed = new URL(url, 'http://localhost');
       const target = parsed.searchParams.get('u');
       const ref = parsed.searchParams.get('ref');
+      const ck = parsed.searchParams.get('ck');
       if (!target) {
         sendJson(res, 400, { ok: false, error: 'Missing media url' });
         return;
       }
       try {
-        await proxyMediaRequest(req, res, target, ref);
+        await proxyMediaRequest(req, res, target, ref, ck);
       } catch (err) {
         if (!res.headersSent && !res.writableEnded) {
           sendJson(res, 502, { ok: false, error: String(err?.message || err) });

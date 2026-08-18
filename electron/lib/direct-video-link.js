@@ -8,6 +8,7 @@
 const { RutubeParser, VKVideoParser, OKParser } = require('anixapi');
 const { getDirectVideoLink: getKodikDirectVideoLink } = require('../kodik-direct');
 const { skipFromLibriaEpisode } = require('./skip-marks');
+const { rememberCookies } = require('./playback-cookies');
 
 const BROWSER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
@@ -81,7 +82,7 @@ function isHtmlPlayerPage(url) {
   if (/ok\.ru\/videoembed/i.test(url)) return true;
   if (/my\.mail\.ru\/video\/embed/i.test(url)) return true;
   if (/myvi\.(tv|top)\/embed/i.test(url)) return true;
-  if (/secvideo1\.online\/embed/i.test(url)) return true;
+  if (/(?:secvideo1|csst|sstrge)\.online\/embed/i.test(url)) return true;
   if (/studiomir\.club/i.test(url) && /tsmplayer|\/embed/i.test(url)) return true;
   if (/sovetromantica\.com\/embed/i.test(url)) return true;
   return false;
@@ -376,6 +377,153 @@ async function getStudioMirDirectLink(url) {
   return resultFromMap(qualityMap, headers);
 }
 
+function cookieFromResponse(res) {
+  const list = typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [];
+  if (list && list.length) {
+    return list.map((c) => String(c).split(';')[0].trim()).filter(Boolean).join('; ');
+  }
+  const raw = res.headers.get('set-cookie');
+  if (!raw) return '';
+  return raw.split(/,(?=[^;]+=)/).map((c) => c.split(';')[0].trim()).filter(Boolean).join('; ');
+}
+
+function absFromEmbed(src, embedUrl) {
+  if (!src) return null;
+  const trimmed = String(src).trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('http')) return trimmed;
+  if (trimmed.startsWith('//')) return `https:${trimmed}`;
+  try { return new URL(trimmed, embedUrl).href; } catch { return toAbs(trimmed); }
+}
+
+async function fetchHtml(url, extraHeaders = {}) {
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': BROWSER_UA,
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      ...extraHeaders,
+    },
+    redirect: 'follow',
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.text();
+}
+
+async function getMailRuDirectLink(url) {
+  const id = (url.match(/embed\/(\d+)/i) || [])[1];
+  if (!id) return empty();
+  const metaUrl = `https://my.mail.ru/+/video/meta/${id}`;
+  const res = await fetch(metaUrl, {
+    headers: {
+      'User-Agent': BROWSER_UA,
+      Accept: 'application/json,text/plain,*/*',
+      Referer: url,
+    },
+    redirect: 'follow',
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) return empty();
+  const cookie = cookieFromResponse(res);
+  rememberCookies('https://my.mail.ru/', cookie);
+  const body = await res.json().catch(() => null);
+  const videos = Array.isArray(body?.videos) ? body.videos : [];
+  const qualityMap = {};
+  for (const video of videos) {
+    const key = String(video?.key || '');
+    const src = absFromEmbed(video?.url, url);
+    if (!src) continue;
+    if (/1080/i.test(key)) qualityMap['1080'] = src;
+    else if (/720/i.test(key)) qualityMap['720'] = src;
+    else if (/480/i.test(key)) qualityMap['480'] = src;
+    else if (/360/i.test(key)) qualityMap['360'] = src;
+  }
+  const headers = {
+    Referer: 'https://my.mail.ru/',
+    'User-Agent': BROWSER_UA,
+  };
+  if (cookie) headers.Cookie = cookie;
+  return resultFromMap(qualityMap, headers);
+}
+
+async function getMyviDirectLink(url) {
+  const html = await fetchHtml(url, { Referer: 'https://www.myvi.top/' });
+  const m = html.match(/CreatePlayer\("v=(.*?)(?:\\u0026|&)/i);
+  if (!m?.[1]) return empty();
+  let decoded = m[1];
+  try {
+    decoded = decodeURIComponent(decoded.replace(/\+/g, '%20'));
+  } catch { /* keep */ }
+  const direct = absFromEmbed(decoded, url);
+  if (!direct || isHtmlPlayerPage(direct)) return empty();
+  const key = /\.m3u8/i.test(direct) ? '720' : 'Default';
+  return resultFromMap({ [key]: direct }, {
+    Referer: url,
+    'User-Agent': BROWSER_UA,
+  });
+}
+
+async function getAllvideoDirectLink(url) {
+  const html = await fetchHtml(url, { Referer: url });
+  const file = html.match(/file:"(.*?)"/i)?.[1];
+  if (!file) return empty();
+  const qualityMap = {};
+  const re = /\[(\d+p)](.*?)(?:,|$)/gi;
+  let match;
+  while ((match = re.exec(file))) {
+    const q = String(match[1] || '').replace(/p$/i, '');
+    const src = absFromEmbed(match[2], url);
+    if (q && src) qualityMap[q] = src;
+  }
+  if (!Object.keys(qualityMap).length) {
+    const src = absFromEmbed(file, url);
+    if (src && !isHtmlPlayerPage(src)) qualityMap['720'] = src;
+  }
+  return resultFromMap(qualityMap, {
+    Referer: url,
+    'User-Agent': BROWSER_UA,
+  });
+}
+
+async function getSovetRomanticaDirectLink(url) {
+  const html = await fetchHtml(url, { Referer: 'https://sovetromantica.com/' });
+  const file = html.match(/"file"\s*:\s*"(.*?)"/i)?.[1]?.replace(/\\"/g, '"');
+  if (!file) return empty();
+  const master = absFromEmbed(file, url);
+  if (!master) return empty();
+  const headers = {
+    Referer: 'https://sovetromantica.com/',
+    'User-Agent': BROWSER_UA,
+  };
+  let playlist = '';
+  try {
+    const res = await fetch(master, {
+      headers: { ...headers, Accept: 'application/vnd.apple.mpegurl,*/*' },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (res.ok) playlist = await res.text();
+  } catch { /* play master */ }
+
+  const dirMatch = master.match(/(.+\/)[^/]*\.m3u8/i);
+  const dir = dirMatch ? dirMatch[1] : master.replace(/[^/]+$/, '');
+  const qualityMap = {};
+  const re = /RESOLUTION=.*x(\d+)\s*\n(?!#)(.*)/gi;
+  let match;
+  while ((match = re.exec(playlist))) {
+    const height = match[1];
+    const src = absFromEmbed(String(match[2] || '').trim(), dir);
+    if (!src) continue;
+    if (height === '2160') qualityMap['2160'] = src;
+    else if (height === '1440') qualityMap['1440'] = src;
+    else if (height === '1080') qualityMap['1080'] = src;
+    else if (height === '720') qualityMap['720'] = src;
+    else if (height === '480') qualityMap['480'] = src;
+    else if (height === '360') qualityMap['360'] = src;
+  }
+  if (!Object.keys(qualityMap).length) qualityMap['720'] = master;
+  return resultFromMap(qualityMap, headers);
+}
+
 async function getOkDirectLink(url) {
   const headers = { Referer: url, 'User-Agent': OK_UA };
   try {
@@ -431,6 +579,22 @@ async function getDirectVideoLink(embedUrl) {
 
     if (host.includes('studiomir')) {
       return await getStudioMirDirectLink(url);
+    }
+
+    if (host.includes('mail.ru')) {
+      return await getMailRuDirectLink(url);
+    }
+
+    if (host.includes('myvi.top') || host.includes('myvi.tv')) {
+      return await getMyviDirectLink(url);
+    }
+
+    if (host.includes('secvideo1.online') || host.includes('csst.online') || host.includes('sstrge.online')) {
+      return await getAllvideoDirectLink(url);
+    }
+
+    if (host.includes('sovetromantica')) {
+      return await getSovetRomanticaDirectLink(url);
     }
   } catch (e) {
     console.error('getDirectVideoLink error:', e?.message || e);

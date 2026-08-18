@@ -34,11 +34,15 @@ function downloadHeadersForUrl(url, extra = {}) {
   try { host = new URL(url).host; } catch { /* ignore */ }
   if (!headers.Referer) {
     if (/sibnet/i.test(host)) headers.Referer = 'https://video.sibnet.ru/';
-    else if (/kodik|solodcdn|kodik-storage/i.test(host)) headers.Referer = 'https://kodikplayer.com/';
+    else if (/kodik|solodcdn|kodik-storage|zerocdn|animedia/i.test(host)) headers.Referer = 'https://kodikplayer.com/';
     else if (/libria|anilib/i.test(host)) headers.Referer = 'https://anilibria.top/';
     else if (/^vkvd/i.test(host) || /vkuservideo|userapi/i.test(host)) headers.Referer = 'https://vk.com/';
     else if (/okcdn|mycdn/i.test(host)) headers.Referer = 'https://ok.ru/';
     else if (/rutube/i.test(host)) headers.Referer = 'https://rutube.ru/';
+    else if (/mail\.ru|imgsmail/i.test(host)) headers.Referer = 'https://my.mail.ru/';
+    else if (/myvi/i.test(host)) headers.Referer = 'https://www.myvi.top/';
+    else if (/secvideo1|csst\.online|sstrge/i.test(host)) headers.Referer = 'https://secvideo1.online/';
+    else if (/sovetromantica/i.test(host)) headers.Referer = 'https://sovetromantica.com/';
   }
   if (!headers['User-Agent']) headers['User-Agent'] = BROWSER_UA;
   return headers;

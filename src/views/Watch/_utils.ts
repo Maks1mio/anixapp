@@ -1,4 +1,4 @@
-import { setEmbedMediaContext } from './core/hls-media-context';
+import { setEmbedMediaContext, getEmbedCookie } from './core/hls-media-context';
 import { normalizeSkipMarks, type SkipMarks } from './_skipMarks';
 
 export function isVideoEmbedPageUrl(url: string): boolean {
@@ -13,7 +13,7 @@ export function isSocialEmbedUrl(url: string): boolean {
     || /ok\.ru\/videoembed/i.test(url)
     || /my\.mail\.ru\/video\/embed/i.test(url)
     || /myvi\.(tv|top)\/embed/i.test(url)
-    || /secvideo1\.online\/embed/i.test(url)
+    || /(?:secvideo1|csst|sstrge)\.online\/embed/i.test(url)
     || (/studiomir\.club/i.test(url) && /tsmplayer|\/embed/i.test(url))
     || /sovetromantica\.com\/embed/i.test(url);
 }
@@ -31,6 +31,9 @@ export function allowsIframeFallback(url: string): boolean {
 
 export function userPlaybackError(url: string): string {
   if (/sibnet\.ru/i.test(url)) return 'Видео на Sibnet недоступно';
+  if (/kodikplayer|kodik\.info|solodcdn|kodikcdn/i.test(url)) {
+    return 'CDN Kodik недоступен с вашей сети — попробуйте другую озвучку или VPN';
+  }
   return 'Не удалось загрузить видео';
 }
 
@@ -50,7 +53,9 @@ function canUseViteMediaProxy(): boolean {
   try {
     if (!import.meta.env.DEV) return false;
     const { hostname, port } = window.location;
-    return (hostname === '127.0.0.1' || hostname === 'localhost') && port === '5173';
+    if (port !== '5173') return false;
+    if (hostname === '127.0.0.1' || hostname === 'localhost') return true;
+    return /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(hostname);
   } catch {
     return false;
   }
@@ -58,7 +63,7 @@ function canUseViteMediaProxy(): boolean {
 
 function hostNeedsMediaProxy(host: string): boolean {
   const h = host.replace(/^www\./, '').toLowerCase();
-  return /okcdn|vkvd|vkuservideo|mycdn|userapi|sibnet|solodcdn|kodik|rutube|libria|anilib|collaps|studiomir/i.test(h);
+  return /okcdn|vkvd|vkuservideo|mycdn|userapi|sibnet|solodcdn|kodik|rutube|libria|anilib|collaps|studiomir|animedia|zerocdn|imgsmail|mail\.ru|myvi|secvideo1|csst\.online|sstrge|sovetromantica/i.test(h);
 }
 
 /** CDN/HLS через same-origin прокси (браузер LAN + Electron dev), иначе CORS / Referer. */
@@ -74,6 +79,8 @@ export function toCorsSafePlayUrl(url: string, referer?: string): string {
     let out = `/__anix/media?u=${encodeURIComponent(parsed.href)}`;
     const ref = referer?.trim();
     if (ref) out += `&ref=${encodeURIComponent(ref)}`;
+    const cookie = getEmbedCookie();
+    if (cookie) out += `&ck=${encodeURIComponent(cookie)}`;
     return out;
   } catch {
     return url;
@@ -124,10 +131,9 @@ export function lobbyActionText(type: string): string {
   }
 }
 
-/** Dubbers that are permanently closed and should never appear in any picker */
-const DUBBER_BLACKLIST = /sovet.?romantica|\bsr\b/i;
-export function isDubberBlacklisted(name: string): boolean {
-  return DUBBER_BLACKLIST.test(name);
+/** В APK показываются все озвучки, включая SovetRomantica. */
+export function isDubberBlacklisted(_name: string): boolean {
+  return false;
 }
 
 /** Quality label priorities when auto-selecting default */
@@ -148,9 +154,14 @@ export async function resolveEpisodeUrl(
   const isRutube   = /rutube\.ru/i.test(host);
   const isOk       = /ok\.ru|odnoklassniki/i.test(host);
   const isStudioMir = /studiomir\.club/i.test(host);
+  const isMailRu   = /my\.mail\.ru/i.test(host);
+  const isMyvi     = /myvi\.(tv|top)/i.test(host);
+  const isAllvideo = /(?:secvideo1|csst|sstrge)\.online/i.test(host);
+  const isSovetRomantica = /sovetromantica\.com/i.test(host);
   const isYoutube  = /youtube\.com|youtu\.be/i.test(host);
   const isEmbedPage = isAniqit || isKodik;
-  const needsDirectFetch = isSibnet || isLibria || isKodik || isAniqit || isVk || isRutube || isOk || isStudioMir;
+  const needsDirectFetch = isSibnet || isLibria || isKodik || isAniqit || isVk || isRutube || isOk || isStudioMir
+    || isMailRu || isMyvi || isAllvideo || isSovetRomantica;
 
   if (isAniqit) {
     try { const u = new URL(url); url = u.origin + u.pathname; } catch {}
@@ -177,11 +188,17 @@ export async function resolveEpisodeUrl(
 
       if (directUrl && !isUnplayableVideoSrc(directUrl)) {
         const toPlayable = (u: string) => {
-          if (/\/s\/m\//i.test(u)) {
-            if (!/:hls:/i.test(u) && /\.mp4$/i.test(u)) return `${u}:hls:manifest.m3u8`;
-            return u;
-          }
-          return u.replace(/:hls:manifest\.m3u8$/i, '').replace(/:hls:hls\.m3u8$/i, '');
+          const abs = u.startsWith('http') ? u : `https:${u}`;
+          if (/:hls:/i.test(abs)) return abs;
+          try {
+            const parsed = new URL(abs);
+            if (/solodcdn|kodik-storage|zerocdn|animedia|kodik-cdn/i.test(parsed.hostname)
+              && /\.mp4$/i.test(parsed.pathname)) {
+              parsed.pathname += ':hls:manifest.m3u8';
+              return parsed.href;
+            }
+          } catch { /* keep */ }
+          return abs;
         };
         const raw = directUrl.startsWith('http') ? directUrl : `https:${directUrl}`;
 
@@ -241,7 +258,7 @@ export async function resolveEpisodeUrlWithRetry(
 ): Promise<Awaited<ReturnType<typeof resolveEpisodeUrl>>> {
   const abs = episodeUrl.startsWith('http') ? episodeUrl : `https:${episodeUrl}`;
   const iframeOnly = /youtube\.com|youtu\.be/i.test(abs);
-  const retryableSocial = /vk\.com|vkvideo|rutube\.ru|ok\.ru|studiomir/i.test(abs);
+  const retryableSocial = /vk\.com|vkvideo|rutube\.ru|ok\.ru|studiomir|mail\.ru|myvi\.|secvideo1|csst\.online|sstrge|sovetromantica/i.test(abs);
   const attempts = iframeOnly ? 1 : maxAttempts;
   let lastResult = { playUrl: abs, useVideo: false, qualityMap: {} as Record<string, string>, currentQuality: '', skip: null as SkipMarks | null };
   for (let i = 0; i < attempts; i++) {

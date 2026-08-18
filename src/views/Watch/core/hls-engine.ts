@@ -62,8 +62,7 @@ function bindHlsHandlers(hls: Hls, video: HTMLVideoElement, handlers: SwapMediaH
     if (data.type === Hls.ErrorTypes.MEDIA_ERROR && attempts++ < 3) {
       hls.recoverMediaError();
       handlers.onFatal?.('recover');
-    } else if (data.type === Hls.ErrorTypes.NETWORK_ERROR && attempts < 3) {
-      attempts++;
+    } else if (data.type === Hls.ErrorTypes.NETWORK_ERROR && attempts++ < 2) {
       hls.startLoad();
       handlers.onFatal?.('recover');
     } else if (reResolveAttempts++ < 2) {

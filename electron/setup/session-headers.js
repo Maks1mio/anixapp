@@ -15,7 +15,7 @@ function hostMatchesList(host, list) {
 
 function isEmbedMediaReferer(ref) {
   if (!ref || typeof ref !== 'string') return false;
-  return /video_ext|videoembed|vkvideo\.ru|ok\.ru\/video|kodikplayer|shell\.php|studiomir|rutube\.ru\/play\/embed|anilib|myvi\.|secvideo1/i.test(ref);
+  return /video_ext|videoembed|vkvideo\.ru|ok\.ru\/video|kodikplayer|shell\.php|studiomir|rutube\.ru\/play\/embed|anilib|myvi\.|secvideo1|csst\.online|sstrge|mail\.ru|sovetromantica/i.test(ref);
 }
 
 function upsertHeader(headers, name, value) {
@@ -76,10 +76,18 @@ function setupSessionRequestHeaders() {
       upsertHeader(requestHeaders, 'Referer', 'https://api.studiomir.club/');
     } else if (host.includes('rutube')) {
       upsertHeader(requestHeaders, 'Referer', 'https://rutube.ru/');
-    } else if (host.endsWith('kodik-cdn.com') || host.includes('kodik-storage') || host.includes('solodcdn')) {
+    } else if (host.endsWith('kodik-cdn.com') || host.includes('kodik-storage') || host.includes('solodcdn') || host.includes('zerocdn') || host.includes('animedia')) {
       upsertHeader(requestHeaders, 'Referer', 'https://kodikplayer.com/');
       // Progressive /s/m/ edges на solodcdn стабильнее с браузерным UA (как SwiftPlayer).
       upsertHeader(requestHeaders, 'User-Agent', BROWSER_UA);
+    } else if (host.includes('mail.ru') || host.includes('imgsmail')) {
+      upsertHeader(requestHeaders, 'Referer', 'https://my.mail.ru/');
+    } else if (host.includes('myvi')) {
+      upsertHeader(requestHeaders, 'Referer', preservedReferer || 'https://www.myvi.top/');
+    } else if (/secvideo1|csst\.online|sstrge/.test(host)) {
+      upsertHeader(requestHeaders, 'Referer', preservedReferer || 'https://secvideo1.online/');
+    } else if (host.includes('sovetromantica')) {
+      upsertHeader(requestHeaders, 'Referer', preservedReferer || 'https://sovetromantica.com/');
     } else if (host.includes('libria') || host.includes('anilib')) {
       upsertHeader(requestHeaders, 'Referer', preservedReferer || details.referrer || 'https://anilibria.top/');
     } else if (preservedReferer) {
@@ -91,12 +99,19 @@ function setupSessionRequestHeaders() {
       || host.includes('solodcdn')
       || host.includes('kodik-storage')
       || host.endsWith('kodik-cdn.com')
+      || host.includes('zerocdn')
+      || host.includes('animedia')
       || host.includes('rutube')
       || host.includes('okcdn')
       || host.includes('vkuservideo')
       || host.includes('userapi')
       || host.includes('mycdn')
-      || host.includes('studiomir');
+      || host.includes('studiomir')
+      || host.includes('mail.ru')
+      || host.includes('imgsmail')
+      || host.includes('myvi')
+      || /secvideo1|csst\.online|sstrge/.test(host)
+      || host.includes('sovetromantica');
     if (useBrowserUa) {
       upsertHeader(requestHeaders, 'User-Agent', BROWSER_UA);
     } else {

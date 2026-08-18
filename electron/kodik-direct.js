@@ -62,17 +62,66 @@ function decryptKodikLinks(links) {
   return links;
 }
 
-/** /s/m/ на solodcdn часто отдаёт 500 как progressive MP4 — оставляем HLS. */
+/** Kodik CDN: progressive MP4 (в т.ч. /f/) 302 на shadow.*, который часто недоступен.
+ *  Оставляем/форсируем HLS для любого solodcdn / zerocdn / kodik-storage. */
 function preferPlayableKodikUrl(url) {
   if (!url) return url;
   const abs = url.startsWith('http') ? url : url.startsWith('//') ? `https:${url}` : url;
-  if (/\/s\/m\//i.test(abs) && !/:hls:/i.test(abs) && /\.mp4$/i.test(abs)) {
-    return `${abs}:hls:manifest.m3u8`;
+  if (/:hls:/i.test(abs)) return abs;
+  try {
+    const parsed = new URL(abs);
+    if (/solodcdn|kodik-storage|zerocdn|animedia|kodik-cdn/i.test(parsed.hostname)
+      && /\.mp4$/i.test(parsed.pathname)) {
+      parsed.pathname += ':hls:manifest.m3u8';
+      return parsed.href;
+    }
+  } catch { /* keep */ }
+  return abs;
+}
+
+function isKodikEdgeHost(host) {
+  const h = String(host || '').toLowerCase();
+  return /^(bingo|shadow)\.cloud\.solodcdn\.com$/i.test(h);
+}
+
+function isKodikManifest(url) {
+  return /:hls:(manifest|hls)\.m3u8/i.test(url) || /\.m3u8(\?|$)/i.test(url);
+}
+
+/** CDN Kodik часто 302 на bingo/shadow.* — с части сетей edge недоступен. */
+async function probeKodikManifest(manifestUrl, headers = {}) {
+  const baseHeaders = {
+    Referer: 'https://kodikplayer.com/',
+    'User-Agent': BROWSER_UA,
+    Accept: '*/*',
+    ...headers,
+  };
+  let current = manifestUrl;
+  for (let hop = 0; hop < 4; hop++) {
+    const timeoutMs = isKodikEdgeHost((() => {
+      try { return new URL(current).hostname; } catch { return ''; }
+    })()) ? 4_000 : 6_000;
+    let res;
+    try {
+      res = await fetch(current, {
+        method: 'GET',
+        redirect: 'manual',
+        headers: baseHeaders,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch {
+      return false;
+    }
+    if (res.status >= 200 && res.status < 300) {
+      try { await res.arrayBuffer(); } catch { /* ignore */ }
+      return isKodikManifest(current) || /mpegurl/i.test(res.headers.get('content-type') || '');
+    }
+    const loc = res.headers.get('location');
+    try { await res.arrayBuffer(); } catch { /* ignore */ }
+    if (!loc || ![301, 302, 303, 307, 308].includes(res.status)) return false;
+    try { current = new URL(loc, current).href; } catch { return false; }
   }
-  if (/\/s\/m\//i.test(abs)) return abs;
-  return abs
-    .replace(/:hls:manifest\.m3u8$/i, '')
-    .replace(/:hls:hls\.m3u8$/i, '');
+  return false;
 }
 
 async function fetchText(url, headers = {}) {
@@ -170,15 +219,26 @@ async function getDirectVideoLink(embedUrl) {
         if (src) qualityMap[key.replace('p', '')] = preferPlayableKodikUrl(src);
       }
       const best = PRIO.find((k) => qualityMap[k]) || Object.keys(qualityMap)[0];
-      const directUrl = qualityMap[best] || null;
+      let directUrl = best ? qualityMap[best] : null;
+      const dlHeaders = directUrl
+        ? { Referer: 'https://kodikplayer.com/', 'User-Agent': BROWSER_UA }
+        : {};
+
+      if (directUrl) {
+        const playable = await probeKodikManifest(directUrl, dlHeaders);
+        if (!playable) {
+          console.warn('[kodik-direct] CDN unreachable, fallback to embed iframe');
+          directUrl = null;
+          for (const k of Object.keys(qualityMap)) delete qualityMap[k];
+        }
+      }
+
       return {
         directUrl,
-        quality: best || null,
-        qualityMap,
+        quality: directUrl ? best : null,
+        qualityMap: directUrl ? qualityMap : {},
         skip: skip || null,
-        downloadHeaders: directUrl
-          ? { Referer: 'https://kodikplayer.com/', 'User-Agent': BROWSER_UA }
-          : {},
+        downloadHeaders: directUrl ? dlHeaders : {},
       };
     }
   } catch (e) {

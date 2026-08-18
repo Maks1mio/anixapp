@@ -118,6 +118,11 @@ function setupSessionRequestHeaders() {
         return;
       }
     }
+    // Sibnet iframe ходит на cvt*.sibnet.ru/sbcount с credentials — wildcard CORS ломает запрос.
+    if (/^cvt\d*\.sibnet\.ru$/i.test(host) || /\/sbcount(?:\?|$)/i.test(details.url)) {
+      callback({ responseHeaders: details.responseHeaders });
+      return;
+    }
     const responseHeaders = { ...details.responseHeaders };
     upsertHeader(responseHeaders, 'Access-Control-Allow-Origin', '*');
     upsertHeader(responseHeaders, 'Access-Control-Allow-Headers', '*');

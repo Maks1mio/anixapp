@@ -24,7 +24,6 @@ export type PlayerCorePlayOpts = {
 };
 
 const WD_DELAY_MS = 5_000;
-const WD_RETRY_DELAY_MS = 4_000;
 
 export class PlayerCore {
   video: HTMLVideoElement | null = null;
@@ -167,11 +166,11 @@ export class PlayerCore {
             if (myGen !== this.wdGen) return;
             if (next?.useVideo && next.url) {
               this.applySource({ ...opts, url: next.url, useVideo: true });
-            } else if (myGen === this.wdGen) {
-              scheduleWd(WD_RETRY_DELAY_MS);
+            } else {
+              opts.onFallback();
             }
           } catch {
-            if (myGen === this.wdGen) scheduleWd(WD_RETRY_DELAY_MS);
+            if (myGen === this.wdGen) opts.onFallback();
           }
         }, delay);
       };
@@ -202,14 +201,28 @@ export class PlayerCore {
     this.upscale.stop(this.video, this.canvas);
   }
 
-  destroy(): void {
+  hideMedia(): void {
     this.wdClear();
     if (this.stallCheckTimer) {
       clearInterval(this.stallCheckTimer);
       this.stallCheckTimer = null;
     }
     this.stopUpscale();
-    if (this.video) detachHls(this.video);
+    const video = this.video;
+    if (video) {
+      detachHls(video);
+      video.hidden = true;
+      try { video.removeAttribute('src'); video.load(); } catch { /* ignore */ }
+    }
+    const iframeEl = this.iframe;
+    if (iframeEl) {
+      iframeEl.hidden = true;
+      try { iframeEl.src = ''; } catch { /* ignore */ }
+    }
+  }
+
+  destroy(): void {
+    this.hideMedia();
   }
 
   isHls(url: string): boolean {

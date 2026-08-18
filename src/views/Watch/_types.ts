@@ -72,6 +72,15 @@ export interface NextEpAltDub {
   sourceName: string;
 }
 
+export interface PlaybackAlt {
+  sourceId:   number;
+  sourceName: string;
+  dubberId:   number;
+  dubberName: string;
+  ep:         number;
+  sameDubber: boolean;
+}
+
 export interface DownloadedEpisodeItem {
   episodePosition: number;
   filePath: string;

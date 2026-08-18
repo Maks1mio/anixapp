@@ -144,7 +144,13 @@ async function followSibnetLocation(videoUrl, embedUrl, hops = 0) {
   return null;
 }
 
+function isSibnetUnavailableHtml(html) {
+  if (!html) return true;
+  return /видео удалено|ролик удал[её]н|видео не найдено|видео не существует|удал[её]н пользователем|video (is )?deleted|video not found|access denied/i.test(html);
+}
+
 function extractSibnetSrcPath(html) {
+  if (isSibnetUnavailableHtml(html)) return null;
   const patterns = [
     /player\.src\(\[\s*\{\s*src:\s*"(\/[^"]+)"/i,
     /src:\s*"(\/v\/[^"]+\.mp4[^"]*)"/i,

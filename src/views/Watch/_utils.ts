@@ -21,6 +21,18 @@ export function isSibnetHtmlEmbed(url: string): boolean {
   return /sibnet\.ru/i.test(url) && /shell\.php/i.test(url) && /videoid=/i.test(url) && !/video_pid=/i.test(url);
 }
 
+/** Sibnet embed в iframe бесполезен: мёртвый ролик + CORS на счётчике. */
+export function allowsIframeFallback(url: string): boolean {
+  if (!url) return false;
+  if (/sibnet\.ru/i.test(url)) return false;
+  return true;
+}
+
+export function userPlaybackError(url: string): string {
+  if (/sibnet\.ru/i.test(url)) return 'Видео на Sibnet недоступно';
+  return 'Не удалось загрузить видео';
+}
+
 /** HTML-страница плеера — нельзя ставить в <video src>. */
 export function isUnplayableVideoSrc(url: string): boolean {
   if (!url) return true;

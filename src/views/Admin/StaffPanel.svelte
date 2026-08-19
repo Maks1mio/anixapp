@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Select from '../../components/Select.svelte';
+  import UiV2Select from '../../components/uikit-v2/UiV2Select.svelte';
+  import { uiv2CustomScroll } from '../../actions/uiv2CustomScroll';
   import {
     fetchStaffList,
     fetchPermissionDefs,
@@ -35,19 +36,16 @@
   let busy = $state(false);
   let profileCache = $state<Record<number, { login: string; avatar: string | null }>>({});
 
-  // Create / edit form
   let formRole = $state<'admin' | 'editor'>('editor');
   let formPermissions = $state<string[]>([]);
   let formPassword = $state('');
   let passwordCopied = $state(false);
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Self password change
   let selfCurrentPassword = $state('');
   let selfNewPassword = $state('');
   let selfConfirmPassword = $state('');
 
-  // User search (create)
   let searchQuery = $state('');
   let searchResults = $state<Array<{ id: number; login: string; avatar?: string | null }>>([]);
   let searchLoading = $state(false);
@@ -128,11 +126,8 @@
         fetchPermissionDefs(token),
       ]);
       await enrichProfiles(staff.map((s) => s.userId));
-      if (!canManageStaff) {
-        openSelf();
-      } else if (staff.length === 0) {
-        startCreate();
-      }
+      if (!canManageStaff) openSelf();
+      else if (staff.length === 0) startCreate();
     } catch (e) {
       loadError = e instanceof Error ? e.message : 'Ошибка загрузки';
     }
@@ -198,10 +193,7 @@
   function onSearchInput() {
     if (searchTimer) clearTimeout(searchTimer);
     const q = searchQuery.trim();
-    if (q.length < 2) {
-      searchResults = [];
-      return;
-    }
+    if (q.length < 2) { searchResults = []; return; }
     searchTimer = setTimeout(() => void runSearch(q), 300);
   }
 
@@ -238,14 +230,8 @@
 
   async function saveCreate() {
     const token = getAdminToken();
-    if (!token || !pickedUser) {
-      formError = 'Выберите пользователя из поиска';
-      return;
-    }
-    if (formPassword.length < 8) {
-      formError = 'Пароль — минимум 8 символов';
-      return;
-    }
+    if (!token || !pickedUser) { formError = 'Выберите пользователя из поиска'; return; }
+    if (formPassword.length < 8) { formError = 'Пароль — минимум 8 символов'; return; }
     busy = true;
     formError = '';
     try {
@@ -270,10 +256,7 @@
     busy = true;
     formError = '';
     try {
-      await updateStaffMember(token, selectedId, {
-        roleSlug: formRole,
-        permissions: formPermissions,
-      });
+      await updateStaffMember(token, selectedId, { roleSlug: formRole, permissions: formPermissions });
       if (formPassword.trim()) {
         if (formPassword.length < 8) throw new Error('Пароль — минимум 8 символов');
         await setStaffPassword(token, selectedId, formPassword);
@@ -316,14 +299,8 @@
   async function saveSelfPassword() {
     const token = getAdminToken();
     if (!token) return;
-    if (selfNewPassword.length < 8) {
-      formError = 'Новый пароль — минимум 8 символов';
-      return;
-    }
-    if (selfNewPassword !== selfConfirmPassword) {
-      formError = 'Пароли не совпадают';
-      return;
-    }
+    if (selfNewPassword.length < 8) { formError = 'Новый пароль — минимум 8 символов'; return; }
+    if (selfNewPassword !== selfConfirmPassword) { formError = 'Пароли не совпадают'; return; }
     busy = true;
     formError = '';
     try {
@@ -344,14 +321,8 @@
   async function saveFounderPassword() {
     const token = getAdminToken();
     if (!token) return;
-    if (!selfCurrentPassword.trim()) {
-      formError = 'Введите текущий пароль';
-      return;
-    }
-    if (formPassword.length < 8) {
-      formError = 'Новый пароль — минимум 8 символов';
-      return;
-    }
+    if (!selfCurrentPassword.trim()) { formError = 'Введите текущий пароль'; return; }
+    if (formPassword.length < 8) { formError = 'Новый пароль — минимум 8 символов'; return; }
     busy = true;
     formError = '';
     try {
@@ -373,577 +344,812 @@
   }
 </script>
 
-<div class="admin-staff-page">
-  {#if loadError}
-    <p class="admin-page__error" role="alert">{loadError}</p>
-  {/if}
-  {#if successMessage}
-    <p class="admin-page__success" role="status">{successMessage}</p>
-  {/if}
+<div class="adm-staff">
+  {#if canManageStaff}
+    <!-- Staff list sidebar column -->
+    <aside class="adm-staff__list">
+      <div class="adm-staff__list-head">
+        <span class="adm-staff__list-title">Участники</span>
+        <button type="button" class="uiv2-btn uiv2-btn--primary uiv2-btn--sm" onclick={startCreate}>+ Добавить</button>
+      </div>
 
-  <div class="admin-workspace">
-    {#if canManageStaff}
-      <aside class="admin-list" aria-label="Участники команды">
-        <div class="admin-list__toolbar">
-          <p class="admin-list__title">Участники</p>
-          <button type="button" class="btn btn-primary btn-sm" onclick={startCreate}>+ Добавить</button>
+      {#if loadError}
+        <p class="adm-msg adm-msg--error" role="alert">{loadError}</p>
+      {/if}
+
+      {#if staff.length === 0}
+        <div class="adm-staff__empty">
+          <p>Команда пуста</p>
+          <button type="button" class="uiv2-btn uiv2-btn--ghost uiv2-btn--sm" onclick={startCreate}>Добавить первого</button>
         </div>
-
-        {#if staff.length === 0}
-          <div class="admin-list__empty">
-            <p>Команда пуста</p>
-            <button type="button" class="btn btn-secondary btn-sm" onclick={startCreate}>Добавить первого</button>
-          </div>
-        {:else}
-          <ul class="admin-list__items">
+      {:else}
+        <div class="adm-staff__scroll uiv2-scroll-area uiv2-scroll-area--y" use:uiv2CustomScroll={{ axis: 'y' }}>
+          <ul class="adm-staff__items uiv2-scroll-area__viewport">
             {#each staff as s (s.userId)}
               <li>
                 <button
                   type="button"
-                  class="admin-list__item admin-list__item--staff"
-                  class:admin-list__item--active={selectedId === s.userId && panelOpen}
+                  class="adm-staff__item"
+                  class:adm-staff__item--active={selectedId === s.userId && panelOpen}
                   onclick={() => openMember(s)}
                 >
                   {#if profileCache[s.userId]?.avatar}
-                    <span
-                      class="admin-staff__avatar"
-                      style="background-image:url({profileCache[s.userId].avatar})"
-                    ></span>
+                    <span class="adm-avatar" style="background-image:url({profileCache[s.userId].avatar})"></span>
                   {:else}
-                    <span class="admin-staff__avatar admin-staff__avatar--ph">
-                      {displayLogin(s.userId).charAt(0).toUpperCase()}
-                    </span>
+                    <span class="adm-avatar adm-avatar--ph">{displayLogin(s.userId).charAt(0).toUpperCase()}</span>
                   {/if}
-                  <span class="admin-staff__item-body">
-                    <span class="admin-staff__item-name">{displayLogin(s.userId)}</span>
-                    <span class="admin-list__badge" style="--c: {s.color}">{s.roleName}</span>
-                    <span class="admin-list__meta">
-                      <span class="admin-list__chip">ID {s.userId}</span>
-                      {#if !s.hasPassword}<span class="admin-list__chip admin-list__chip--warn">Нет пароля</span>{/if}
-                    </span>
+                  <span class="adm-staff__item-body">
+                    <span class="adm-staff__item-name">{displayLogin(s.userId)}</span>
+                    <span class="adm-staff__item-role" style="color:{s.color}">{s.roleName}</span>
+                    {#if !s.hasPassword}
+                      <span class="adm-chip adm-chip--warn">Нет пароля</span>
+                    {/if}
                   </span>
                 </button>
               </li>
             {/each}
           </ul>
-        {/if}
-      </aside>
+          <div class="uiv2-scroll-area__v-track" aria-hidden="true"><div class="uiv2-scroll-area__v-thumb"></div></div>
+        </div>
+      {/if}
+    </aside>
+  {/if}
+
+  <!-- Editor panel -->
+  <section class="adm-staff__editor uiv2-scroll-area uiv2-scroll-area--y" use:uiv2CustomScroll={{ axis: 'y' }}>
+  <div class="uiv2-scroll-area__viewport adm-staff__editor-vp">
+    {#if successMessage}
+      <p class="adm-msg adm-msg--success" role="status">{successMessage}</p>
     {/if}
 
-    <section class="admin-editor admin-staff-editor" aria-label="Настройки участника">
-      {#if panelMode === 'create'}
-        <div class="admin-editor__head">
-          <div>
-            <h2 class="admin-editor__title">Новый участник</h2>
-            <p class="admin-editor__sub">Найдите пользователя по нику, задайте пароль и права доступа.</p>
-          </div>
-          <button type="button" class="btn btn-secondary btn-sm" onclick={closePanel}>Закрыть</button>
+    {#if panelMode === 'create'}
+      <header class="adm-editor__head">
+        <div>
+          <h2 class="adm-editor__title">Новый участник</h2>
+          <p class="adm-editor__sub">Найдите пользователя по нику, задайте пароль и права доступа.</p>
         </div>
+        <button type="button" class="uiv2-btn uiv2-btn--chrome uiv2-btn--sm" onclick={closePanel}>Закрыть</button>
+      </header>
 
-        {#if formError}<p class="admin-page__error admin-page__error--inline">{formError}</p>{/if}
+      {#if formError}<p class="adm-msg adm-msg--error adm-msg--inline">{formError}</p>{/if}
 
-        <div class="settings-section">
-          <p class="settings-section__label">Пользователь</p>
-          <div class="settings-section__body admin-staff__search-wrap">
-            <div class="admin-staff__search">
-              <input
-                type="search"
-                class="settings-input"
-                placeholder="Поиск по никнейму…"
-                bind:value={searchQuery}
-                oninput={onSearchInput}
-              />
-              {#if searchLoading}<span class="admin-staff__search-hint">Поиск…</span>{/if}
-              {#if searchResults.length > 0}
-                <ul class="admin-staff__search-results">
-                  {#each searchResults as u (u.id)}
-                    <li>
-                      <button type="button" class="admin-staff__search-item" onclick={() => pickUser(u)}>
-                        {#if u.avatar}
-                          <span class="admin-staff__avatar admin-staff__avatar--sm" style="background-image:url({resolveCdnAssetUrl(u.avatar)})"></span>
-                        {/if}
-                        <span>{u.login}</span>
-                        <span class="admin-staff__search-id">ID {u.id}</span>
-                      </button>
-                    </li>
-                  {/each}
-                </ul>
-              {/if}
-            </div>
-            {#if pickedUser}
-              <p class="admin-staff__picked">Выбран: <strong>{pickedUser.login}</strong> (ID {pickedUser.id})</p>
+      <div class="adm-section">
+        <p class="adm-section__label">Пользователь</p>
+        <div class="adm-section__body">
+          <div class="adm-search">
+            <input
+              type="search"
+              class="adm-field__input"
+              placeholder="Поиск по никнейму…"
+              bind:value={searchQuery}
+              oninput={onSearchInput}
+            />
+            {#if searchLoading}<span class="adm-search__hint">Поиск…</span>{/if}
+            {#if searchResults.length > 0}
+              <ul class="adm-search__results">
+                {#each searchResults as u (u.id)}
+                  <li>
+                    <button type="button" class="adm-search__item" onclick={() => pickUser(u)}>
+                      {#if u.avatar}
+                        <span class="adm-avatar adm-avatar--sm" style="background-image:url({resolveCdnAssetUrl(u.avatar)})"></span>
+                      {/if}
+                      <span>{u.login}</span>
+                      <span class="adm-search__id">ID {u.id}</span>
+                    </button>
+                  </li>
+                {/each}
+              </ul>
             {/if}
           </div>
+          {#if pickedUser}
+            <p class="adm-search__picked">Выбран: <strong>{pickedUser.login}</strong> (ID {pickedUser.id})</p>
+          {/if}
         </div>
+      </div>
 
-        <div class="settings-section">
-          <p class="settings-section__label">Пароль доступа</p>
-          <p class="settings-section__desc">
-            Скопируйте пароль и передайте участнику до сохранения — после добавления его нельзя посмотреть.
-          </p>
-          <div class="settings-section__body admin-staff__password-block">
-            <label class="admin-editor__label" for="new-staff-pass">Пароль для передачи</label>
-            <div class="admin-staff__password-row">
-              <input
-                id="new-staff-pass"
-                type="text"
-                class="settings-input admin-staff__password-visible"
-                bind:value={formPassword}
-                autocomplete="off"
-                spellcheck="false"
-              />
-              <button type="button" class="btn btn-secondary btn-sm" onclick={shufflePassword}>
-                Сгенерировать
-              </button>
-              <button
-                type="button"
-                class="btn btn-secondary btn-sm"
-                disabled={!formPassword.trim()}
-                onclick={copyPassword}
-              >
-                {passwordCopied ? 'Скопировано' : 'Копировать'}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="settings-section">
-          <div class="admin-staff__perm-head">
-            <p class="settings-section__label">Права доступа</p>
-            <Select
-              options={STAFF_ROLE_OPTIONS}
-              value={formRole}
-              onChange={(v) => applyRoleTemplate(v as 'admin' | 'editor')}
-              placeholder="Шаблон роли"
+      <div class="adm-section">
+        <p class="adm-section__label">Пароль доступа</p>
+        <p class="adm-section__desc">Скопируйте пароль и передайте участнику до сохранения.</p>
+        <div class="adm-section__body">
+          <div class="adm-pass-row">
+            <input
+              type="text"
+              class="adm-field__input adm-field__input--mono"
+              bind:value={formPassword}
+              autocomplete="off"
+              spellcheck="false"
             />
-          </div>
-          <div class="settings-section__body">
-            {#each permissionDefs as def (def.slug)}
-              <div class="settings-row">
-                <div class="settings-row__info">
-                  <div class="settings-row__label">{def.name}</div>
-                  <div class="settings-row__desc">{def.description}</div>
-                </div>
-                <div class="settings-row__control">
-                  <label class="settings-toggle-switch" aria-label={def.name}>
-                    <input
-                      type="checkbox"
-                      checked={formPermissions.includes(def.slug)}
-                      onchange={(e) => togglePermission(def.slug, (e.currentTarget as HTMLInputElement).checked)}
-                    />
-                    <span class="settings-toggle-switch__track"></span>
-                    <span class="settings-toggle-switch__thumb"></span>
-                  </label>
-                </div>
-              </div>
-            {/each}
+            <button type="button" class="uiv2-btn uiv2-btn--chrome uiv2-btn--sm" onclick={shufflePassword}>Сгенерировать</button>
+            <button type="button" class="uiv2-btn uiv2-btn--chrome uiv2-btn--sm" disabled={!formPassword.trim()} onclick={copyPassword}>
+              {passwordCopied ? 'Скопировано ✓' : 'Копировать'}
+            </button>
           </div>
         </div>
+      </div>
 
-        <footer class="admin-editor__foot">
-          <div class="admin-editor__foot-actions">
-            <button type="button" class="btn btn-secondary" disabled={busy} onclick={closePanel}>Отмена</button>
-            <button type="button" class="btn btn-primary" disabled={busy} onclick={saveCreate}>Добавить</button>
-          </div>
-        </footer>
-      {:else if panelMode === 'edit' && selectedMember}
-        <div class="admin-editor__head">
+      <div class="adm-section adm-section--grow">
+        <div class="adm-perm-head">
+          <p class="adm-section__label">Права доступа</p>
+          <UiV2Select
+            options={STAFF_ROLE_OPTIONS}
+            value={formRole}
+            onChange={(v) => { if (v) applyRoleTemplate(v as 'admin' | 'editor'); }}
+            placeholder="Шаблон роли"
+          />
+        </div>
+        <div class="adm-section__body adm-section__body--rows">
+          {#each permissionDefs as def (def.slug)}
+            <label class="adm-perm-row">
+              <span class="adm-toggle-row__info">
+                <span class="adm-toggle-row__name">{def.name}</span>
+                <span class="adm-toggle-row__desc">{def.description}</span>
+              </span>
+              <span class="uiv2-popup-menu__switch" class:uiv2-popup-menu__switch--on={formPermissions.includes(def.slug)} aria-hidden="true">
+                <span class="uiv2-popup-menu__switch-thumb"></span>
+              </span>
+              <input
+                type="checkbox"
+                class="adm-sr-only"
+                checked={formPermissions.includes(def.slug)}
+                onchange={(e) => togglePermission(def.slug, (e.currentTarget as HTMLInputElement).checked)}
+              />
+            </label>
+          {/each}
+        </div>
+      </div>
+
+      <footer class="adm-editor__foot">
+        <div class="adm-editor__foot-actions">
+          <button type="button" class="uiv2-btn uiv2-btn--chrome uiv2-btn--md" disabled={busy} onclick={closePanel}>Отмена</button>
+          <button type="button" class="uiv2-btn uiv2-btn--primary uiv2-btn--md" disabled={busy} onclick={saveCreate}>Добавить</button>
+        </div>
+      </footer>
+
+    {:else if panelMode === 'edit' && selectedMember}
+      <header class="adm-editor__head">
+        <div class="adm-editor__head-left">
+          {#if profileCache[selectedMember.userId]?.avatar}
+            <span class="adm-avatar adm-avatar--lg" style="background-image:url({profileCache[selectedMember.userId].avatar})"></span>
+          {:else}
+            <span class="adm-avatar adm-avatar--lg adm-avatar--ph">{displayLogin(selectedMember.userId).charAt(0).toUpperCase()}</span>
+          {/if}
           <div>
-            <h2 class="admin-editor__title">{displayLogin(selectedMember.userId)}</h2>
-            <p class="admin-editor__sub">
-              <span class="admin-list__badge" style="--c: {selectedMember.color}">{selectedMember.roleName}</span>
+            <h2 class="adm-editor__title">{displayLogin(selectedMember.userId)}</h2>
+            <p class="adm-editor__sub">
+              <span style="color:{selectedMember.color}">{selectedMember.roleName}</span>
               · ID {selectedMember.userId}
             </p>
           </div>
-          <button type="button" class="btn btn-secondary btn-sm" onclick={closePanel}>Закрыть</button>
+        </div>
+        <button type="button" class="uiv2-btn uiv2-btn--chrome uiv2-btn--sm" onclick={closePanel}>Закрыть</button>
+      </header>
+
+      {#if formError}<p class="adm-msg adm-msg--error adm-msg--inline">{formError}</p>{/if}
+
+      {#if isFounderSelected}
+        <div class="adm-section">
+          <p class="adm-section__label">Сменить пароль</p>
+          <p class="adm-section__desc">Укажите текущий и новый пароль. Сохраните новый у себя.</p>
+          <div class="adm-section__body">
+            <div class="adm-field">
+              <label class="adm-field__label" for="founder-cur-pass">Текущий пароль</label>
+              <input id="founder-cur-pass" type="password" class="adm-field__input" bind:value={selfCurrentPassword} autocomplete="current-password" />
+            </div>
+            <div class="adm-field">
+              <label class="adm-field__label" for="founder-new-pass">Новый пароль</label>
+              <div class="adm-pass-row">
+                <input id="founder-new-pass" type="text" class="adm-field__input adm-field__input--mono" bind:value={formPassword} autocomplete="new-password" spellcheck="false" />
+                <button type="button" class="uiv2-btn uiv2-btn--chrome uiv2-btn--sm" onclick={shufflePassword}>Сгенерировать</button>
+                <button type="button" class="uiv2-btn uiv2-btn--chrome uiv2-btn--sm" disabled={!formPassword.trim()} onclick={copyPassword}>
+                  {passwordCopied ? 'Скопировано ✓' : 'Копировать'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      {:else}
+        <div class="adm-section">
+          <p class="adm-section__label">Сменить пароль</p>
+          <p class="adm-section__desc">Текущий пароль скрыт. Сгенерируйте новый, скопируйте и передайте участнику.</p>
+          <div class="adm-section__body">
+            <div class="adm-pass-row">
+              <input type="text" class="adm-field__input adm-field__input--mono" bind:value={formPassword} placeholder="Пусто — не менять" autocomplete="off" spellcheck="false" />
+              <button type="button" class="uiv2-btn uiv2-btn--chrome uiv2-btn--sm" onclick={shufflePassword}>Сгенерировать</button>
+              <button type="button" class="uiv2-btn uiv2-btn--chrome uiv2-btn--sm" disabled={!formPassword.trim()} onclick={copyPassword}>
+                {passwordCopied ? 'Скопировано ✓' : 'Копировать'}
+              </button>
+            </div>
+          </div>
+        </div>
+      {/if}
+
+      <div class="adm-section adm-section--grow">
+        <div class="adm-perm-head">
+          <p class="adm-section__label">Права доступа</p>
+          {#if !isFounderSelected}
+            <button type="button" class="adm-link" disabled={busy} onclick={resetPermissions}>Сбросить права</button>
+          {/if}
+        </div>
+        <div class="adm-section__body adm-section__body--rows">
+          {#each permissionDefs as def (def.slug)}
+            <label class="adm-perm-row" class:adm-perm-row--readonly={isFounderSelected}>
+              <span class="adm-toggle-row__info">
+                <span class="adm-toggle-row__name">{def.name}</span>
+                <span class="adm-toggle-row__desc">{def.description}</span>
+              </span>
+              <span class="uiv2-popup-menu__switch" class:uiv2-popup-menu__switch--on={isFounderSelected ? true : formPermissions.includes(def.slug)} aria-hidden="true">
+                <span class="uiv2-popup-menu__switch-thumb"></span>
+              </span>
+              <input
+                type="checkbox"
+                class="adm-sr-only"
+                checked={isFounderSelected ? true : formPermissions.includes(def.slug)}
+                disabled={isFounderSelected}
+                onchange={(e) => togglePermission(def.slug, (e.currentTarget as HTMLInputElement).checked)}
+              />
+            </label>
+          {/each}
+        </div>
+      </div>
+
+      {#if !isFounderSelected}
+        <div class="adm-section">
+          <p class="adm-section__label">Роль (шаблон)</p>
+          <UiV2Select
+            options={STAFF_ROLE_OPTIONS}
+            value={formRole}
+            onChange={(v) => { if (v) applyRoleTemplate(v as 'admin' | 'editor'); }}
+          />
+        </div>
+      {/if}
+
+      <footer class="adm-editor__foot">
+        {#if !isFounderSelected}
+          <button type="button" class="uiv2-btn uiv2-btn--ghost uiv2-btn--md adm-editor__delete" disabled={busy} onclick={removeMember}>Удалить</button>
+        {/if}
+        <div class="adm-editor__foot-actions">
+          <button type="button" class="uiv2-btn uiv2-btn--chrome uiv2-btn--md" disabled={busy} onclick={closePanel}>Отмена</button>
+          {#if isFounderSelected}
+            <button type="button" class="uiv2-btn uiv2-btn--primary uiv2-btn--md" disabled={busy} onclick={saveFounderPassword}>
+              {busy ? 'Сохранение…' : 'Обновить пароль'}
+            </button>
+          {:else}
+            <button type="button" class="uiv2-btn uiv2-btn--primary uiv2-btn--md" disabled={busy} onclick={saveEdit}>Сохранить</button>
+          {/if}
+        </div>
+      </footer>
+
+    {:else if panelMode === 'self' || (!canManageStaff && staff.length > 0)}
+      {@const selfMember = staff.find((s) => s.userId === currentUserId)}
+      <header class="adm-editor__head">
+        <div>
+          <h2 class="adm-editor__title">Мой доступ</h2>
+          <p class="adm-editor__sub">Вы можете менять только свой пароль. Права назначает основатель.</p>
+        </div>
+      </header>
+
+      {#if formError}<p class="adm-msg adm-msg--error adm-msg--inline">{formError}</p>{/if}
+
+      {#if selfMember}
+        <div class="adm-section">
+          <p class="adm-section__label">Ваша роль</p>
+          <div class="adm-section__body">
+            <span class="adm-role-badge" style="color:{selfMember.color};border-color:color-mix(in srgb,{selfMember.color} 30%, transparent);background:color-mix(in srgb,{selfMember.color} 12%, transparent)">{selfMember.roleName}</span>
+          </div>
         </div>
 
-        {#if formError}<p class="admin-page__error admin-page__error--inline">{formError}</p>{/if}
-
-        {#if isFounderSelected}
-          <div class="settings-section">
-            <p class="settings-section__label">Сменить пароль</p>
-            <p class="settings-section__desc">
-              Укажите текущий пароль и новый. Сгенерированный пароль виден здесь — сохраните его у себя.
-            </p>
-            <div class="settings-section__body admin-staff__password-block">
-              <div class="admin-editor__field">
-                <label class="admin-editor__label" for="founder-cur-pass">Текущий пароль</label>
-                <input
-                  id="founder-cur-pass"
-                  type="password"
-                  class="settings-input"
-                  bind:value={selfCurrentPassword}
-                  autocomplete="current-password"
-                />
-              </div>
-              <label class="admin-editor__label" for="founder-new-pass">Новый пароль</label>
-              <div class="admin-staff__password-row">
-                <input
-                  id="founder-new-pass"
-                  type="text"
-                  class="settings-input admin-staff__password-visible"
-                  bind:value={formPassword}
-                  autocomplete="new-password"
-                  spellcheck="false"
-                />
-                <button type="button" class="btn btn-secondary btn-sm" onclick={shufflePassword}>
-                  Сгенерировать
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-secondary btn-sm"
-                  disabled={!formPassword.trim()}
-                  onclick={copyPassword}
-                >
-                  {passwordCopied ? 'Скопировано' : 'Копировать'}
-                </button>
-              </div>
-            </div>
-          </div>
-        {:else}
-          <div class="settings-section">
-            <p class="settings-section__label">Сменить пароль</p>
-            <p class="settings-section__desc">
-              Текущий пароль скрыт. Сгенерируйте новый, скопируйте и передайте участнику, затем сохраните.
-            </p>
-            <div class="settings-section__body admin-staff__password-block">
-              <label class="admin-editor__label" for="edit-pass">Новый пароль</label>
-              <div class="admin-staff__password-row">
-                <input
-                  id="edit-pass"
-                  type="text"
-                  class="settings-input admin-staff__password-visible"
-                  bind:value={formPassword}
-                  placeholder="Пусто — не менять"
-                  autocomplete="off"
-                  spellcheck="false"
-                />
-                <button type="button" class="btn btn-secondary btn-sm" onclick={shufflePassword}>
-                  Сгенерировать
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-secondary btn-sm"
-                  disabled={!formPassword.trim()}
-                  onclick={copyPassword}
-                >
-                  {passwordCopied ? 'Скопировано' : 'Копировать'}
-                </button>
-              </div>
-            </div>
-          </div>
-        {/if}
-
-        <div class="settings-section">
-          <div class="admin-staff__perm-head">
-            <p class="settings-section__label">Права доступа</p>
-            {#if !isFounderSelected}
-              <button type="button" class="admin-staff__reset-link" disabled={busy} onclick={resetPermissions}>
-                Сбросить права
-              </button>
-            {/if}
-          </div>
-          <div class="settings-section__body">
+        <div class="adm-section adm-section--grow">
+          <p class="adm-section__label">Выданные права</p>
+          <div class="adm-section__body adm-section__body--rows">
             {#each permissionDefs as def (def.slug)}
-              <div class="settings-row" class:settings-row--readonly={isFounderSelected}>
-                <div class="settings-row__info">
-                  <div class="settings-row__label">{def.name}</div>
-                  <div class="settings-row__desc">{def.description}</div>
-                </div>
-                <div class="settings-row__control">
-                  <label class="settings-toggle-switch" aria-label={def.name}>
-                    <input
-                      type="checkbox"
-                      checked={isFounderSelected ? true : formPermissions.includes(def.slug)}
-                      disabled={isFounderSelected}
-                      onchange={(e) => togglePermission(def.slug, (e.currentTarget as HTMLInputElement).checked)}
-                    />
-                    <span class="settings-toggle-switch__track"></span>
-                    <span class="settings-toggle-switch__thumb"></span>
-                  </label>
-                </div>
+              <div class="adm-perm-row adm-perm-row--readonly">
+                <span class="adm-toggle-row__info">
+                  <span class="adm-toggle-row__name">{def.name}</span>
+                  <span class="adm-toggle-row__desc">{def.description}</span>
+                </span>
+                <span class="uiv2-popup-menu__switch" class:uiv2-popup-menu__switch--on={selfMember.permissions.includes(def.slug)} aria-hidden="true">
+                  <span class="uiv2-popup-menu__switch-thumb"></span>
+                </span>
               </div>
             {/each}
           </div>
         </div>
-
-        {#if !isFounderSelected}
-          <div class="settings-section">
-            <p class="settings-section__label">Роль (шаблон)</p>
-            <Select
-              options={STAFF_ROLE_OPTIONS}
-              value={formRole}
-              onChange={(v) => applyRoleTemplate(v as 'admin' | 'editor')}
-            />
-          </div>
-        {/if}
-
-        <footer class="admin-editor__foot">
-          {#if !isFounderSelected}
-            <button type="button" class="btn btn-secondary" disabled={busy} onclick={removeMember}>Удалить</button>
-          {/if}
-          <div class="admin-editor__foot-actions">
-            <button type="button" class="btn btn-secondary" disabled={busy} onclick={closePanel}>Отмена</button>
-            {#if isFounderSelected}
-              <button type="button" class="btn btn-primary" disabled={busy} onclick={saveFounderPassword}>
-                {busy ? 'Сохранение…' : 'Обновить пароль'}
-              </button>
-            {:else}
-              <button type="button" class="btn btn-primary" disabled={busy} onclick={saveEdit}>Сохранить</button>
-            {/if}
-          </div>
-        </footer>
-      {:else if panelMode === 'self' || (!canManageStaff && staff.length > 0)}
-        {@const selfMember = staff.find((s) => s.userId === currentUserId)}
-        <div class="admin-editor__head">
-          <div>
-            <h2 class="admin-editor__title">Мой доступ</h2>
-            <p class="admin-editor__sub">Вы можете менять только свой пароль. Права назначает основатель.</p>
-          </div>
-        </div>
-
-        {#if formError}<p class="admin-page__error admin-page__error--inline">{formError}</p>{/if}
-
-        {#if selfMember}
-          <div class="settings-section">
-            <p class="settings-section__label">Ваша роль</p>
-            <div class="settings-section__body admin-staff__self-role">
-              <span class="admin-list__badge" style="--c: {selfMember.color}">{selfMember.roleName}</span>
-              <span>ID {selfMember.userId}</span>
-            </div>
-          </div>
-
-          <div class="settings-section">
-            <p class="settings-section__label">Выданные права</p>
-            <div class="settings-section__body">
-              {#each permissionDefs as def (def.slug)}
-                <div class="settings-row settings-row--readonly">
-                  <div class="settings-row__info">
-                    <div class="settings-row__label">{def.name}</div>
-                    <div class="settings-row__desc">{def.description}</div>
-                  </div>
-                  <div class="settings-row__control">
-                    <label class="settings-toggle-switch">
-                      <input type="checkbox" checked={selfMember.permissions.includes(def.slug)} disabled />
-                      <span class="settings-toggle-switch__track"></span>
-                      <span class="settings-toggle-switch__thumb"></span>
-                    </label>
-                  </div>
-                </div>
-              {/each}
-            </div>
-          </div>
-        {/if}
-
-        <div class="settings-section">
-          <p class="settings-section__label">Сменить пароль</p>
-          <div class="settings-section__body admin-staff__password-block">
-            <div class="admin-editor__field">
-              <label class="admin-editor__label" for="self-cur">Текущий пароль</label>
-              <input id="self-cur" type="password" class="settings-input" bind:value={selfCurrentPassword} autocomplete="current-password" />
-            </div>
-            <div class="admin-editor__field admin-editor__field--row">
-              <div class="admin-editor__field-grow">
-                <label class="admin-editor__label" for="self-new">Новый пароль</label>
-                <input id="self-new" type="password" class="settings-input" bind:value={selfNewPassword} autocomplete="new-password" />
-              </div>
-              <div class="admin-editor__field-grow">
-                <label class="admin-editor__label" for="self-new2">Подтверждение</label>
-                <input id="self-new2" type="password" class="settings-input" bind:value={selfConfirmPassword} autocomplete="new-password" />
-              </div>
-            </div>
-            <button type="button" class="btn btn-primary" disabled={busy} onclick={saveSelfPassword}>Обновить пароль</button>
-          </div>
-        </div>
-      {:else}
-        <div class="admin-editor__empty">
-          <h2 class="admin-editor__empty-title">Выберите участника</h2>
-          <p class="admin-editor__empty-text">Нажмите на пользователя слева или добавьте нового в команду.</p>
-          <button type="button" class="btn btn-primary" onclick={startCreate}>Добавить участника</button>
-        </div>
       {/if}
-    </section>
+
+      <div class="adm-section">
+        <p class="adm-section__label">Сменить пароль</p>
+        <div class="adm-section__body">
+          <div class="adm-field">
+            <label class="adm-field__label" for="self-cur">Текущий пароль</label>
+            <input id="self-cur" type="password" class="adm-field__input" bind:value={selfCurrentPassword} autocomplete="current-password" />
+          </div>
+          <div class="adm-field-row">
+            <div class="adm-field">
+              <label class="adm-field__label" for="self-new">Новый пароль</label>
+              <input id="self-new" type="password" class="adm-field__input" bind:value={selfNewPassword} autocomplete="new-password" />
+            </div>
+            <div class="adm-field">
+              <label class="adm-field__label" for="self-new2">Подтверждение</label>
+              <input id="self-new2" type="password" class="adm-field__input" bind:value={selfConfirmPassword} autocomplete="new-password" />
+            </div>
+          </div>
+          <button type="button" class="uiv2-btn uiv2-btn--primary uiv2-btn--md" disabled={busy} onclick={saveSelfPassword}>Обновить пароль</button>
+        </div>
+      </div>
+
+    {:else}
+      <div class="adm-empty">
+        <div class="adm-empty__icon" aria-hidden="true">👤</div>
+        <h2 class="adm-empty__title">Выберите участника</h2>
+        <p class="adm-empty__text">Нажмите на пользователя слева или добавьте нового в команду.</p>
+        <button type="button" class="uiv2-btn uiv2-btn--primary uiv2-btn--md" onclick={startCreate}>Добавить участника</button>
+      </div>
+    {/if}
   </div>
+  <div class="uiv2-scroll-area__v-track" aria-hidden="true"><div class="uiv2-scroll-area__v-thumb"></div></div>
+  </section>
 </div>
 
 <style lang="scss">
-.admin-page__success {
-  color: #4ade80;
-  font-size: 0.875rem;
-  margin: 0 0 1rem;
-  padding: 0.65rem 0.85rem;
-  border-radius: 8px;
-  background: rgba(74, 222, 128, 0.1);
-  border: 1px solid rgba(74, 222, 128, 0.25);
+.adm-staff {
+  display: grid;
+  grid-template-columns: 17rem minmax(0, 1fr);
+  grid-template-rows: 1fr;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
-  .admin-staff-editor {
-    min-height: 24rem;
-  }
+.adm-staff__list {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border-right: 1px solid var(--uiv2-border-subtle);
+}
 
-  .admin-list__item--staff {
-    flex-direction: row;
-    align-items: center;
-    gap: 0.65rem;
-  }
+.adm-staff__list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1rem;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--uiv2-border-subtle);
+}
 
-  .admin-staff__avatar {
-    width: 2rem;
-    height: 2rem;
-    border-radius: 50%;
-    flex-shrink: 0;
-    background-size: cover;
-    background-position: center;
-    background-color: rgba(255, 255, 255, 0.06);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.75rem;
-    font-weight: 700;
+.adm-staff__list-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--uiv2-fg-muted);
+}
 
-    &--sm {
-      width: 1.5rem;
-      height: 1.5rem;
-      font-size: 0.65rem;
-    }
+.adm-staff__empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--uiv2-fg-muted);
+}
 
-    &--ph {
-      color: rgba(255, 255, 255, 0.5);
-    }
-  }
+.adm-staff__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+}
 
-  .admin-staff__item-body {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.25rem;
-    min-width: 0;
-  }
+.adm-staff__items {
+  list-style: none;
+  margin: 0;
+  padding: 0.35rem;
+}
 
-  .admin-staff__item-name {
-    font-size: 0.875rem;
-    font-weight: 600;
-    white-space: nowrap;
+.adm-staff__item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease;
+
+  &:hover { background: var(--uiv2-hover-bg); }
+  &--active { background: var(--uiv2-selected-bg); }
+}
+
+.adm-staff__item-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.adm-staff__item-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.adm-staff__item-role {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.adm-staff__editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.adm-staff__editor :global(.uiv2-scroll-area__viewport) {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.adm-staff__editor-vp {
+  display: block;
+  height: auto;
+}
+
+.adm-staff__editor-vp > :global(*) {
+  flex-shrink: 0;
+}
+
+.adm-avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--uiv2-surface-raised);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+
+  &--sm { width: 1.5rem; height: 1.5rem; font-size: 0.65rem; }
+  &--lg { width: 2.5rem; height: 2.5rem; font-size: 1rem; }
+  &--ph { color: var(--uiv2-fg-muted); }
+}
+
+.adm-editor__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--uiv2-border-subtle);
+  flex-shrink: 0;
+}
+
+.adm-editor__head-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.adm-editor__title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.adm-editor__sub {
+  margin: 0.2rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--uiv2-fg-muted);
+}
+
+.adm-editor__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1.5rem;
+  border-top: 1px solid var(--uiv2-border-subtle);
+  flex-shrink: 0;
+}
+
+.adm-editor__delete {
+  color: color-mix(in srgb, var(--uikit-v2-danger) 80%, #fff);
+}
+
+.adm-editor__foot-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.adm-section {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--uiv2-border-subtle);
+  flex-shrink: 0;
+}
+
+.adm-section__label {
+  margin: 0 0 0.65rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--uiv2-fg-muted);
+}
+
+.adm-section__desc {
+  margin: -0.35rem 0 0.65rem;
+  font-size: 0.8rem;
+  color: var(--uiv2-fg-muted);
+  line-height: 1.45;
+}
+
+.adm-section__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+
+  &--rows {
+    gap: 0;
+    border: 1px solid var(--uiv2-border-subtle);
+    border-radius: 12px;
     overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
+  }
+}
+
+.adm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.adm-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.adm-field__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--uiv2-fg-muted);
+}
+
+.adm-field__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--uiv2-border-strong);
+  border-radius: 10px;
+  background: var(--uiv2-hover-subtle);
+  color: var(--uikit-v2-text);
+  font: inherit;
+  font-size: 0.9375rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+
+  &:focus { border-color: var(--uikit-v2-accent); background: transparent; }
+  &--mono { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; letter-spacing: 0.04em; }
+}
+
+.adm-pass-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+
+  .adm-field__input { flex: 1; min-width: 12rem; }
+}
+
+.adm-search {
+  position: relative;
+}
+
+.adm-search__hint {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.75rem;
+  color: var(--uiv2-fg-muted);
+}
+
+.adm-search__results {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  border: 1px solid var(--uiv2-border-subtle);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--uikit-v2-surface);
+}
+
+.adm-search__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover { background: var(--uiv2-hover-bg); }
+}
+
+.adm-search__id {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--uiv2-fg-muted);
+}
+
+.adm-search__picked {
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--uiv2-fg-muted);
+}
+
+.adm-perm-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.65rem;
+}
+
+.adm-perm-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  border-bottom: 1px solid var(--uiv2-border-subtle);
+
+  &:last-child { border-bottom: 0; }
+  &:hover { background: var(--uiv2-hover-subtle); }
+  &--readonly { pointer-events: none; }
+}
+
+.adm-toggle-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.adm-toggle-row__name {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--uikit-v2-text);
+}
+
+.adm-toggle-row__desc {
+  font-size: 0.75rem;
+  color: var(--uiv2-fg-muted);
+}
+
+.adm-role-badge {
+  display: inline-flex;
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.adm-link {
+  border: none;
+  background: none;
+  color: var(--uikit-v2-accent);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  padding: 0;
+
+  &:hover:not(:disabled) { text-decoration: underline; }
+  &:disabled { opacity: 0.5; cursor: default; }
+}
+
+.adm-chip {
+  font-size: 0.67rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: var(--uiv2-surface-raised);
+  color: var(--uiv2-fg-muted);
+
+  &--warn { color: #fbbf24; }
+}
+
+.adm-msg {
+  padding: 0.55rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  margin: 0;
+  flex-shrink: 0;
+
+  &--error {
+    color: var(--uikit-v2-danger);
+    background: color-mix(in srgb, var(--uikit-v2-danger) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--uikit-v2-danger) 25%, transparent);
   }
 
-  .admin-list__chip--warn {
-    color: #fbbf24;
-    border-color: rgba(251, 191, 36, 0.35);
+  &--success {
+    color: #4ade80;
+    background: rgba(74, 222, 128, 0.1);
+    border: 1px solid rgba(74, 222, 128, 0.25);
   }
 
-  .admin-staff__search-wrap {
-    padding: 1rem;
+  &--inline {
+    margin: 0.5rem 1.5rem;
   }
+}
 
-  .admin-staff__search {
-    position: relative;
-  }
+.adm-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  padding: 2rem;
+  gap: 0.75rem;
+}
 
-  .admin-staff__search-hint {
-    display: block;
-    margin-top: 0.35rem;
-    font-size: 0.75rem;
-    color: var(--color-text-muted, #888);
-  }
+.adm-empty__icon {
+  width: 3.5rem;
+  height: 3.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--uiv2-surface-raised);
+  font-size: 1.5rem;
+}
 
-  .admin-staff__search-results {
-    list-style: none;
-    margin: 0.35rem 0 0;
-    padding: 0;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
-    overflow: hidden;
-    background: rgba(0, 0, 0, 0.25);
-  }
+.adm-empty__title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
 
-  .admin-staff__search-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    width: 100%;
-    padding: 0.55rem 0.75rem;
-    border: none;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
+.adm-empty__text {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--uiv2-fg-muted);
+  max-width: 22rem;
+}
 
-    &:hover {
-      background: rgba(255, 255, 255, 0.05);
-    }
-  }
-
-  .admin-staff__search-id {
-    margin-left: auto;
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.4);
-  }
-
-  .admin-staff__picked {
-    margin: 0.75rem 0 0;
-    font-size: 0.8125rem;
-    color: rgba(255, 255, 255, 0.55);
-  }
-
-  .admin-staff__password-block {
-    padding: 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .admin-staff__password-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    align-items: center;
-  }
-
-  .admin-staff__password-visible {
-    flex: 1;
-    min-width: 12rem;
-    font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
-    font-size: 0.9375rem;
-    letter-spacing: 0.04em;
-  }
-
-  .admin-staff__perm-head {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 0.5rem;
-  }
-
-  .admin-staff__reset-link {
-    border: none;
-    background: none;
-    color: #7c9cff;
-    font: inherit;
-    font-size: 0.8125rem;
-    cursor: pointer;
-    padding: 0;
-
-    &:hover:not(:disabled) {
-      text-decoration: underline;
-    }
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: default;
-    }
-  }
-
-  .admin-staff__self-role {
-    padding: 1rem;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    font-size: 0.875rem;
-  }
+.adm-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+}
 </style>

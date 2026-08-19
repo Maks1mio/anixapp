@@ -83,7 +83,7 @@
   --uiv2-popup-danger-fg: color-mix(in srgb, var(--uikit-v2-danger) 70%, var(--uikit-v2-text));
   --uiv2-popup-danger-hover-bg: color-mix(in srgb, var(--uikit-v2-danger) 14%, transparent);
   --uiv2-popup-danger-hover-fg: color-mix(in srgb, var(--uikit-v2-danger) 88%, #fff);
-  --uiv2-popup-thumb-bg: var(--uikit-v2-elevated);
+  --uiv2-popup-thumb-bg: var(--uiv2-ghost-fg);
   --uiv2-popup-shadow:
     0 1px 0 var(--uiv2-hover-subtle) inset,
     0 0 0 0.5px color-mix(in srgb, #000 28%, transparent),
@@ -142,11 +142,9 @@
     0 1px 0 color-mix(in srgb, #fff 85%, transparent) inset,
     0 0 0 0.5px color-mix(in srgb, var(--uikit-v2-text) 10%, transparent),
     0 12px 36px color-mix(in srgb, #000 14%, transparent);
-  --uiv2-popup-thumb-bg: #fff;
 }
 
 :root[data-theme-mode='dark'] {
   --uiv2-overlay: color-mix(in srgb, #000 62%, transparent);
   --uiv2-popup-bg: color-mix(in srgb, var(--uikit-v2-surface) 78%, transparent);
-  --uiv2-popup-thumb-bg: #fff;
 }

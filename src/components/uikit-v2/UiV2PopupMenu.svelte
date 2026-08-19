@@ -118,11 +118,17 @@
   let subLeft = $state(0);
   let subTop = $state(0);
   let subOpenRight = $state(true);
-  let subHideTimer: ReturnType<typeof setTimeout> | null = null;
+  let leavePopupTimer: ReturnType<typeof setTimeout> | null = null;
   let lastSubHeight = 0;
   let lastSubPlaceId = '';
+  /** Курсор уже побывал на панели — после этого уход за пределы закрывает меню. */
+  let pointerEnteredPopup = false;
+  /** Не закрывать, пока тянут слайдер за пределы панели. */
+  let pointerDownInside = false;
 
   const SUBMENU_GAP = 12;
+  const POPUP_HIT_PAD = 8;
+  const POPUP_LEAVE_MS = 160;
   const labelId = `uiv2-popup-menu-${Math.random().toString(36).slice(2, 9)}`;
 
   let searchOpen = $state(false);
@@ -183,26 +189,80 @@
     searchInputEl?.select();
   }
 
-  function clearSubHideTimer() {
-    if (subHideTimer != null) {
-      clearTimeout(subHideTimer);
-      subHideTimer = null;
+  function clearLeavePopupTimer() {
+    if (leavePopupTimer != null) {
+      clearTimeout(leavePopupTimer);
+      leavePopupTimer = null;
     }
   }
 
   function closeSubmenu() {
-    clearSubHideTimer();
     openSubId = null;
     lastSubHeight = 0;
     lastSubPlaceId = '';
   }
 
-  function scheduleCloseSubmenu() {
-    clearSubHideTimer();
-    subHideTimer = setTimeout(() => {
-      openSubId = null;
-      subHideTimer = null;
-    }, 220);
+  type HitRect = { left: number; top: number; right: number; bottom: number };
+
+  function inflateRect(r: DOMRect, pad: number): HitRect {
+    return {
+      left: r.left - pad,
+      top: r.top - pad,
+      right: r.right + pad,
+      bottom: r.bottom + pad,
+    };
+  }
+
+  function pointInRect(x: number, y: number, r: HitRect): boolean {
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  }
+
+  function corridorBetween(a: DOMRect, b: DOMRect): HitRect | null {
+    const extra = 20;
+    const top = Math.min(a.top, b.top) - extra;
+    const bottom = Math.max(a.bottom, b.bottom) + extra;
+    if (b.left >= a.right - 1) {
+      return { left: a.right, right: b.left, top, bottom };
+    }
+    if (a.left >= b.right - 1) {
+      return { left: b.right, right: a.left, top, bottom };
+    }
+    return null;
+  }
+
+  /** Родитель + подменю + зазор между ними — переход в раскрытый блок не считается уходом. */
+  function popupContainsPoint(x: number, y: number): boolean {
+    const pad = POPUP_HIT_PAD;
+    const panelRect = panelEl?.getBoundingClientRect();
+    const subRect = openSubId && subPanelEl ? subPanelEl.getBoundingClientRect() : null;
+    if (panelRect && pointInRect(x, y, inflateRect(panelRect, pad))) return true;
+    if (subRect && pointInRect(x, y, inflateRect(subRect, pad))) return true;
+    if (panelRect && subRect) {
+      const corridor = corridorBetween(panelRect, subRect);
+      if (corridor && pointInRect(x, y, corridor)) return true;
+    } else if (panelRect && openSubId) {
+      const sidePad = SUBMENU_GAP + 16;
+      const extended = inflateRect(panelRect, pad);
+      if (subOpenRight) extended.right += sidePad;
+      else extended.left -= sidePad;
+      if (pointInRect(x, y, extended)) return true;
+    }
+    return false;
+  }
+
+  function resetHoverTracking() {
+    pointerEnteredPopup = false;
+    pointerDownInside = false;
+    clearLeavePopupTimer();
+  }
+
+  function scheduleClosePopup() {
+    if (pointerDownInside || leavePopupTimer != null) return;
+    leavePopupTimer = setTimeout(() => {
+      leavePopupTimer = null;
+      if (pointerDownInside) return;
+      onClose?.();
+    }, POPUP_LEAVE_MS);
   }
 
   async function place() {
@@ -305,7 +365,6 @@
       closeSubmenu();
       return;
     }
-    clearSubHideTimer();
     openSubId = item.id;
     void placeSubmenu(rowEl, item.id);
     window.setTimeout(() => {
@@ -317,6 +376,7 @@
     if (!open) {
       closeSubmenu();
       resetSearch();
+      resetHoverTracking();
       return;
     }
 
@@ -412,10 +472,36 @@
     if (!open) return;
     const t = e.target;
     if (t instanceof Node) {
-      if (panelEl?.contains(t) || subPanelEl?.contains(t)) return;
+      if (panelEl?.contains(t) || subPanelEl?.contains(t)) {
+        pointerDownInside = true;
+        pointerEnteredPopup = true;
+        clearLeavePopupTimer();
+        return;
+      }
       if (anchor?.contains(t)) return;
     }
     onClose?.();
+  }
+
+  function onWindowPointerMove(e: PointerEvent) {
+    if (!open) return;
+    if (popupContainsPoint(e.clientX, e.clientY)) {
+      pointerEnteredPopup = true;
+      clearLeavePopupTimer();
+      return;
+    }
+    if (!pointerEnteredPopup || pointerDownInside) return;
+    scheduleClosePopup();
+  }
+
+  function onWindowPointerUp(e: PointerEvent) {
+    pointerDownInside = false;
+    if (!open || !pointerEnteredPopup) return;
+    if (popupContainsPoint(e.clientX, e.clientY)) {
+      clearLeavePopupTimer();
+      return;
+    }
+    scheduleClosePopup();
   }
 
   function shouldKeepOpen(item: UiV2PopupMenuItem): boolean {
@@ -643,12 +729,8 @@
         disabled={item.disabled}
         onmouseenter={(e) => {
           if (!opts?.root) return;
-          clearSubHideTimer();
           if (itemHasSubmenu(item)) openSubmenu(item, e.currentTarget as HTMLElement);
           else closeSubmenu();
-        }}
-        onmouseleave={() => {
-          if (opts?.root && itemHasSubmenu(item)) scheduleCloseSubmenu();
         }}
         onclick={(e) => handleItemClick(item, e)}
       >
@@ -712,11 +794,17 @@
       class:uiv2-popup-menu__panel--up={!openDown}
       class:uiv2-popup-menu__panel--left={!openRight}
       class:uiv2-popup-menu__panel--wide={panelWide}
+      class:uiv2-popup-menu__panel--bridge-right={!!openSubId && subOpenRight}
+      class:uiv2-popup-menu__panel--bridge-left={!!openSubId && !subOpenRight}
       style={`left:${left}px;top:${top}px;transform-origin:${originX} ${originY};`}
       role="menu"
       aria-labelledby={labelId}
       tabindex="-1"
       transition:scale={{ duration: 180, start: 0.88, opacity: 0, easing: cubicOut }}
+      onpointerenter={() => {
+        pointerEnteredPopup = true;
+        clearLeavePopupTimer();
+      }}
     >
       <span id={labelId} class="uiv2-popup-menu__sr">{title || 'Меню'}</span>
       {#if title || searchable}
@@ -771,7 +859,6 @@
     </div>
 
     {#if openSubId && activeSubItem && subVisible}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         bind:this={subPanelEl}
         class="uiv2-popup-menu__panel uiv2-popup-menu__panel--sub"
@@ -781,8 +868,10 @@
         role="menu"
         tabindex="-1"
         transition:scale={{ duration: 150, start: 0.94, opacity: 0, easing: cubicOut }}
-        onmouseenter={clearSubHideTimer}
-        onmouseleave={scheduleCloseSubmenu}
+        onpointerenter={() => {
+          pointerEnteredPopup = true;
+          clearLeavePopupTimer();
+        }}
       >
         {#if subCustom && submenuContent}
           {@render submenuContent(activeSubItem)}
@@ -798,4 +887,10 @@
   </div>
 {/if}
 
-<svelte:window onkeydown={onWindowKeydown} onpointerdown={onWindowPointerDown} />
+<svelte:window
+  onkeydown={onWindowKeydown}
+  onpointerdown={onWindowPointerDown}
+  onpointermove={onWindowPointerMove}
+  onpointerup={onWindowPointerUp}
+  onpointercancel={onWindowPointerUp}
+/>

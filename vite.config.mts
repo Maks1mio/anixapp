@@ -17,6 +17,10 @@ export default defineConfig(({ command }) => ({
     outDir: 'dist',
     emptyOutDir: true,
     chunkSizeWarningLimit: 3600,
+    // Vite CSS minify always uses convertTargets(cssTarget) and OVERRIDES
+    // css.lightningcss.targets. Default is Baseline (Safari 16.4), which
+    // drops unprefixed backdrop-filter so Electron shows glass without blur.
+    cssTarget: 'chrome150',
     rollupOptions: {
       input: [
         resolve(__dirname, 'index.html'),
@@ -28,8 +32,7 @@ export default defineConfig(({ command }) => ({
     },
   },
   css: {
-    // Electron 43 = Chromium 150. Vite baseline also targets Safari, and
-    // lightningcss then emits only -webkit-backdrop-filter (or drops blur).
+    // Used by the lightningcss transformer path. Minify still follows cssTarget.
     lightningcss: {
       targets: { chrome: 150 << 16 },
     },

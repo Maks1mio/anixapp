@@ -157,6 +157,14 @@ declare global {
       adminGetSession?: () => Promise<{ token: string | null; userId: number | null }>;
       adminSaveSession?: (payload: { token: string; userId: number }) => Promise<boolean>;
       adminClearSession?: () => Promise<boolean>;
+      captureYoutubeCookies?: () => Promise<{
+        ok: boolean;
+        cancelled?: boolean;
+        cookies_txt?: string;
+        cookieCount?: number;
+        loggedIn?: boolean;
+        error?: string;
+      }>;
       getAnixbackEndpoint?: () => Promise<'local' | 'prod' | null>;
       setAnixbackEndpoint?: (mode: 'local' | 'prod') => Promise<boolean>;
       /** AnixBack proxy for geo-blocked release info (GET /api/anixart/release/:id). */

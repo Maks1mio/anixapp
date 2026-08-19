@@ -148,6 +148,7 @@ contextBridge.exposeInMainWorld('electron', {
   adminGetSession: () => ipcRenderer.invoke('admin:getSession'),
   adminSaveSession: (payload) => ipcRenderer.invoke('admin:saveSession', payload),
   adminClearSession: () => ipcRenderer.invoke('admin:clearSession'),
+  captureYoutubeCookies: () => ipcRenderer.invoke('admin:captureYoutubeCookies'),
   getAnixbackEndpoint: () => ipcRenderer.invoke('anix:getAnixbackEndpoint'),
   setAnixbackEndpoint: (mode) => ipcRenderer.invoke('anix:setAnixbackEndpoint', mode),
   fetchReleaseGeoBypass: (releaseId) => ipcRenderer.invoke('anix:releaseInfoGeoBypass', releaseId),
@@ -314,6 +315,11 @@ contextBridge.exposeInMainWorld('anixApi', {
     unbindOAuthService: (provider) => ipcRenderer.invoke('anix:unbindOAuthService', provider),
     logout: () => ipcRenderer.invoke('anix:logout'),
     getStatus: () => ipcRenderer.invoke('anix:getAuthStatus'),
+  },
+
+  kitsu: {
+    submitSuggestion: (payload) => ipcRenderer.invoke('anix:kitsuSubmitSuggestion', payload),
+    suggestionQuota: () => ipcRenderer.invoke('anix:kitsuSuggestionQuota'),
   },
 
   profile: {

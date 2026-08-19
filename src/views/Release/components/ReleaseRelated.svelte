@@ -30,18 +30,15 @@
   }
 
   function syncCurrentBg() {
-    const scroll = getScrollEl();
+    const section = sectionEl;
     const row = currentRowEl;
-    if (!scroll || !row || !hasCurrent) {
+    if (!section || !row || !hasCurrent) {
       bgVisible = false;
       return;
     }
 
-    const scrollRect = scroll.getBoundingClientRect();
-    const rowRect = row.getBoundingClientRect();
-
-    bgTop = rowRect.top - scrollRect.top + scroll.scrollTop;
-    bgWidth = scroll.offsetWidth;
+    bgTop = row.offsetTop;
+    bgWidth = section.offsetWidth;
     bgHeight = row.offsetHeight;
     bgVisible = true;
   }

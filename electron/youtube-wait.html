@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Вход в YouTube</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #141414;
+      color: #eee;
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 22px 24px;
+      box-sizing: border-box;
+    }
+    p { margin: 0 0 8px; line-height: 1.45; font-size: 14px; }
+    .m { opacity: .7; font-size: 12px; margin-bottom: 16px; }
+    .row { display: flex; gap: 8px; justify-content: flex-end; }
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font: 600 13px system-ui;
+      cursor: pointer;
+    }
+    .ok { background: #e11d48; color: #fff; }
+    .cancel { background: transparent; color: #eee; }
+  </style>
+</head>
+<body>
+  <p>Войдите в Google в открывшемся <span id="browser">браузере</span>.</p>
+  <p class="m">Google блокирует вход во встроенном окне AnixApp. Когда откроется YouTube, нажмите «Готово». Не закрывайте браузер до этого.</p>
+  <div class="row">
+    <button class="cancel" type="button" id="cancel">Отмена</button>
+    <button class="ok" type="button" id="done">Готово</button>
+  </div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const name = params.get('browser');
+    if (name) document.getElementById('browser').textContent = name;
+    document.getElementById('done').onclick = () => window.anixYtWait && window.anixYtWait.done();
+    document.getElementById('cancel').onclick = () => window.anixYtWait && window.anixYtWait.cancel();
+  </script>
+</body>
+</html>

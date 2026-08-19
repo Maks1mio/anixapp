@@ -58,6 +58,16 @@ function buildWebAnixApi(): AnixApi {
       getStatus: () => invoke('anix:getAuthStatus'),
     },
 
+    kitsu: {
+      submitSuggestion: (payload: {
+        anixartId: number;
+        bannerUrl?: string;
+        trailerUrl?: string;
+        anonymous: boolean;
+      }) => invoke('anix:kitsuSubmitSuggestion', payload),
+      suggestionQuota: () => invoke('anix:kitsuSuggestionQuota'),
+    },
+
     profile: {
       self: () => invoke('anix:selfProfile'),
       info: (id) => invoke('anix:profileById', id),

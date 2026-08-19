@@ -1171,6 +1171,23 @@
   }
 }
 
+.uiv2-choice-sheet__panel--form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  width: min(100%, 24.5rem);
+  max-height: min(90vh, 42rem);
+  overflow: auto;
+  padding: 1.15rem 1rem 1rem;
+  --uiv2-field-notch: var(--uiv2-panel-bg);
+
+  .uiv2-choice-sheet__title {
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+  }
+}
+
 .uiv2-choice-sheet__title {
   margin: 0 0 0.75rem;
   padding: 0 0.55rem;

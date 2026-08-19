@@ -94,6 +94,30 @@ export interface AnixApi {
     getStatus: () => Promise<{ hasToken: boolean }>;
   };
 
+  kitsu: {
+    submitSuggestion: (payload: {
+      anixartId: number;
+      bannerUrl?: string;
+      trailerUrl?: string;
+      anonymous: boolean;
+    }) => Promise<{
+      ok?: boolean;
+      error?: string;
+      remaining?: number;
+      banned?: boolean;
+      status?: number;
+    }>;
+    suggestionQuota: () => Promise<{
+      ok?: boolean;
+      remaining?: number;
+      used?: number;
+      limit?: number;
+      banned?: boolean;
+      error?: string;
+      status?: number;
+    }>;
+  };
+
   profile: {
     self: () => Promise<any>;
     info: (id: number) => Promise<{ profile?: unknown; is_my_profile?: boolean }>;

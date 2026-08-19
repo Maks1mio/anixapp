@@ -31,6 +31,7 @@ import {
   Globe,
   Heart,
   Home,
+  Image,
   Info,
   LayoutGrid,
   Lock,
@@ -38,6 +39,7 @@ import {
   MessageCircle,
   Mic,
   MoreHorizontal,
+  MoreVertical,
   Palette,
   Pencil,
   Pause,
@@ -141,6 +143,11 @@ export function iconFlag(size = 18, filled = false): string {
 /** Три точки по горизонтали (меню) */
 export function iconMoreHorizontal(size = 20): string {
   return toSvg(MoreHorizontal, size);
+}
+
+/** Три точки по вертикали (меню) */
+export function iconMoreVertical(size = 20): string {
+  return toSvg(MoreVertical, size);
 }
 
 /** Стрелка вниз (селект) */
@@ -346,6 +353,11 @@ export function iconSearch(size = 20): string {
 /** Загрузка / обновление */
 export function iconDownload(size = 20): string {
   return toSvg(Download, size);
+}
+
+/** Изображение / обложка */
+export function iconImage(size = 18): string {
+  return toSvg(Image, size);
 }
 
 /** Папка */

@@ -21,18 +21,15 @@
   }
 
   function syncPanelBg() {
-    const scroll = getScrollEl();
+    const section = sectionEl;
     const panel = panelEl;
-    if (!scroll || !panel) {
+    if (!section || !panel) {
       bgVisible = false;
       return;
     }
 
-    const scrollRect = scroll.getBoundingClientRect();
-    const panelRect = panel.getBoundingClientRect();
-
-    bgTop = panelRect.top - scrollRect.top + scroll.scrollTop;
-    bgWidth = scroll.offsetWidth;
+    bgTop = panel.offsetTop;
+    bgWidth = section.offsetWidth;
     bgHeight = panel.offsetHeight;
     bgVisible = true;
   }

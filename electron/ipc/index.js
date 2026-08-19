@@ -19,6 +19,7 @@ function registerAll(deps) {
   require('../windows/player').register(deps);
   require('./shell-logs').register();
   require('./cdn').register();
+  require('./youtube-cookies').register();
   require('../services/updater').register();
   require('../windows/tools').register(deps);
 }

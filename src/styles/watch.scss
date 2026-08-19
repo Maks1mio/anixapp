@@ -1121,12 +1121,13 @@ $p-skip-dark:   #66c94280;
   height: fit-content;
   border-radius: $p-radius;
   background: $p-ctrl-bg;
-  gap: 10px;
+  gap: 0px;
   overflow: hidden;
-  transition: background 0.2s;
+  transition: all 0.2s ease-in-out;
 
   &:hover {
     background: rgba(20, 20, 20, 0.62);
+    gap: 10px;
 
     .watch-page__vol-btn {
       margin-right: 12px;

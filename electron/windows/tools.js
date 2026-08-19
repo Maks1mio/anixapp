@@ -143,6 +143,58 @@ ipcMain.handle('overview-editor:open', (_, payload) => {
 
 ipcMain.handle('overview-editor:getPayload', () => state.overviewEditorPayload);
 
+// ——— Admin panel window ———
+
+function createAdminPanelWindow() {
+  if (state.adminPanelWindow && !state.adminPanelWindow.isDestroyed()) {
+    state.adminPanelWindow.focus();
+    return;
+  }
+  const iconPath = getIconPath();
+  state.adminPanelWindow = new BrowserWindow({
+    width: 1280,
+    height: 820,
+    minWidth: 960,
+    minHeight: 640,
+    frame: false,
+    titleBarStyle: 'hidden',
+    title: 'AnixApp — Панель управления',
+    backgroundColor: '#0d0d0d',
+    show: false,
+    resizable: true,
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(electronDir, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+    ...(iconPath && { icon: iconPath }),
+  });
+  state.adminPanelWindow.on('closed', () => { state.adminPanelWindow = null; });
+  state.adminPanelWindow.once('ready-to-show', () => {
+    applyUiZoom(config.getUiZoom());
+    state.adminPanelWindow.show();
+  });
+
+  if (isDev) {
+    state.adminPanelWindow.loadURL('http://127.0.0.1:5173/#/admin/panel?standalone=1');
+  } else {
+    state.adminPanelWindow.loadFile(path.join(electronDir, '../dist/index.html'), {
+      hash: '/admin/panel?standalone=1',
+    });
+  }
+}
+
+ipcMain.handle('admin:openWindow', () => {
+  createAdminPanelWindow();
+});
+
+ipcMain.handle('admin:isStandaloneWindow', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  return !!(state.adminPanelWindow && win && win.id === state.adminPanelWindow.id);
+});
+
 ipcMain.on('overview-editor:done', () => {
   if (state.mainWindow && !state.mainWindow.isDestroyed()) {
     state.mainWindow.webContents.send('overview-editor:done');

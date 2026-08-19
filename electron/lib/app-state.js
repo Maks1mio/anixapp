@@ -12,6 +12,7 @@ module.exports = {
   upscaleToolWindow: null,
   overviewEditorWindow: null,
   overviewEditorPayload: null,
+  adminPanelWindow: null,
   pendingInstallerPath: null,
   updateDownloadState: { state: 'idle', received: 0, total: 0 },
   ffmpegPathCache: undefined,

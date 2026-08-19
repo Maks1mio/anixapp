@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import Watch from './views/Watch.svelte';
   import { initTooltipSystem } from './utils/body-tooltip';
+  import UiV2Tooltip from './components/uikit-v2/UiV2Tooltip.svelte';
 
   let pinned = $state(false);
 
@@ -40,11 +41,11 @@
     <span class="player-titlebar__title">AnixApp</span>
   </div>
   <div class="player-titlebar__controls">
+    <UiV2Tooltip text={pinned ? 'Открепить окно (P)' : 'Поверх всех окон (P)'} placement="bottom" showDelay={80}>
     <button
       type="button"
       class="player-titlebar__btn player-titlebar__btn--pin"
       class:player-titlebar__btn--pin-active={pinned}
-      title={pinned ? 'Открепить окно (P)' : 'Поверх всех окон (P)'}
       onclick={togglePin}
     >
       {#if pinned}
@@ -63,6 +64,7 @@
         </svg>
       {/if}
     </button>
+    </UiV2Tooltip>
     <button
       type="button"
       class="player-titlebar__btn player-titlebar__btn--close"

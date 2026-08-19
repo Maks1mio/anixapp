@@ -223,6 +223,8 @@ declare global {
       openOverviewVideoEditor?: (payload: Record<string, unknown>) => Promise<void>;
       getOverviewEditorPayload?: () => Promise<Record<string, unknown> | null>;
       overviewEditorDone?: () => void;
+      openAdminPanelWindow?: () => Promise<void>;
+      isAdminPanelWindow?: () => Promise<boolean>;
       // Logging (diagnostics)
       logRenderer?: (entry: { level?: string; ch?: string; msg?: string; data?: unknown }) => Promise<void>;
       logGetSessions?: () => Promise<Array<{ id: string; ts: string }>>;

@@ -14,6 +14,7 @@
     type AnnouncementType,
   } from '../../services/announcements';
   import { getAdminToken, logoutAdminMode, adminMode, adminPermissions } from '../../stores/admin';
+  import { getSearchParams } from '../../router';
   import StaffPanel from './StaffPanel.svelte';
   import OverviewPanel from './OverviewPanel.svelte';
   import AniListPanel from './AniListPanel.svelte';
@@ -44,6 +45,7 @@
   let loadError = $state('');
   let formError = $state('');
   let busy = $state(false);
+  let standaloneWindow = $state(getSearchParams().get('standalone') === '1');
 
   let formType = $state<AnnouncementType>('DISCUSSION');
   let formMessage = $state('');
@@ -64,6 +66,7 @@
     { id: 'staff', label: canManageStaff ? 'Команда' : 'Мой доступ' },
     { id: 'anilist', label: "Anime API's" },
   ]);
+  const canPopOut = $derived(typeof window !== 'undefined' && !!window.electron?.openAdminPanelWindow);
   const panelOpen = $derived(panelMode !== 'idle');
   const panelTitle = $derived(panelMode === 'edit' ? 'Редактирование' : 'Новое объявление');
 
@@ -167,8 +170,16 @@
   }
 
   async function exitAdmin() {
+    if (standaloneWindow) {
+      window.electron?.closeToolWindow?.();
+      return;
+    }
     await logoutAdminMode();
     navigate('/');
+  }
+
+  function openInWindow() {
+    void window.electron?.openAdminPanelWindow?.();
   }
 
   const currentTypeMeta = $derived(typeMeta(formType));
@@ -195,6 +206,11 @@
       {/each}
     </nav>
     <div class="adm-topbar__right">
+      {#if !standaloneWindow && canPopOut}
+        <button type="button" class="uiv2-btn uiv2-btn--ghost uiv2-btn--sm" onclick={openInWindow}>
+          Открыть в отдельном окне
+        </button>
+      {/if}
       <button type="button" class="uiv2-btn uiv2-btn--ghost uiv2-btn--sm" onclick={exitAdmin}>Выйти</button>
     </div>
   </header>
@@ -522,6 +538,9 @@
 }
 
 .adm-topbar__right {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   flex-shrink: 0;
   margin-left: auto;
 }

@@ -5,6 +5,7 @@
   import { getAdminToken } from '../../services/admin-api';
   import UiV2Select from '../../components/uikit-v2/UiV2Select.svelte';
   import UiV2OutlinedField from '../../components/uikit-v2/UiV2OutlinedField.svelte';
+  import UiV2Tooltip from '../../components/uikit-v2/UiV2Tooltip.svelte';
 
   const ANILIST_URL = 'https://graphql.anilist.co';
   const JIKAN_URL = 'https://api.jikan.moe/v4';
@@ -1023,9 +1024,8 @@ query ($mediaId: Int, $page: Int) {
     return URL_RE.test(s);
   }
 
-  const PREVIEW_MAX_W = 320;
-  const PREVIEW_MAX_H = 400;
-  const PREVIEW_OFFSET = 18;
+  const PREVIEW_OFFSET = 16;
+  const PREVIEW_EDGE = 10;
   const PREVIEW_LABEL_H = 22;
 
   let previewUrl = $state<string | null>(null);
@@ -1033,26 +1033,40 @@ query ($mediaId: Int, $page: Int) {
   let previewY = $state(0);
   let previewNatW = $state(0);
   let previewNatH = $state(0);
+  let viewportW = $state(typeof window !== 'undefined' ? window.innerWidth : 1200);
+  let viewportH = $state(typeof window !== 'undefined' ? window.innerHeight : 800);
 
+  function syncViewport() {
+    viewportW = window.innerWidth;
+    viewportH = window.innerHeight;
+  }
+
+  const previewMaxW = $derived(Math.max(180, Math.min(760, viewportW - 48)));
+  const previewMaxH = $derived(Math.max(120, Math.min(680, viewportH - 72)));
   const previewScale = $derived(
     previewNatW > 0 && previewNatH > 0
-      ? Math.min(1, PREVIEW_MAX_W / previewNatW, PREVIEW_MAX_H / previewNatH)
+      ? Math.min(1, previewMaxW / previewNatW, previewMaxH / previewNatH)
       : 0
   );
   const previewDispW = $derived(Math.max(1, Math.round(previewNatW * previewScale)));
   const previewDispH = $derived(Math.max(1, Math.round(previewNatH * previewScale)));
   const previewReady = $derived(previewScale > 0);
+  const previewBoxH = $derived(previewDispH + PREVIEW_LABEL_H);
 
-  const previewLeft = $derived(
-    previewX + PREVIEW_OFFSET + previewDispW > (typeof window !== 'undefined' ? window.innerWidth : 1200) - 8
-      ? previewX - PREVIEW_OFFSET - previewDispW
-      : previewX + PREVIEW_OFFSET
-  );
-  const previewTop = $derived(
-    previewY + PREVIEW_OFFSET + previewDispH + PREVIEW_LABEL_H > (typeof window !== 'undefined' ? window.innerHeight : 800) - 8
-      ? previewY - PREVIEW_OFFSET - previewDispH - PREVIEW_LABEL_H
-      : previewY + PREVIEW_OFFSET
-  );
+  const previewLeft = $derived((() => {
+    const preferRight = previewX + PREVIEW_OFFSET + previewDispW <= viewportW - PREVIEW_EDGE;
+    let left = preferRight
+      ? previewX + PREVIEW_OFFSET
+      : previewX - PREVIEW_OFFSET - previewDispW;
+    return Math.max(PREVIEW_EDGE, Math.min(left, viewportW - PREVIEW_EDGE - previewDispW));
+  })());
+  const previewTop = $derived((() => {
+    const preferBelow = previewY + PREVIEW_OFFSET + previewBoxH <= viewportH - PREVIEW_EDGE;
+    let top = preferBelow
+      ? previewY + PREVIEW_OFFSET
+      : previewY - PREVIEW_OFFSET - previewBoxH;
+    return Math.max(PREVIEW_EDGE, Math.min(top, viewportH - PREVIEW_EDGE - previewBoxH));
+  })());
 
   function showPreview(e: MouseEvent, url: string) {
     previewX = e.clientX;
@@ -1142,6 +1156,8 @@ query ($mediaId: Int, $page: Int) {
   const resultTokens = $derived(result ? tokenizeJson(result) : []);
 </script>
 
+<svelte:window onresize={syncViewport} />
+
 <div class="al-root">
   <!-- Left: preset list -->
   <aside class="al-sidebar">
@@ -1218,7 +1234,9 @@ query ($mediaId: Int, $page: Int) {
             <span class="al-editor__api-badge al-editor__api-badge--gql">GraphQL</span>
             <span class="al-editor__label">Запрос</span>
           {/if}
-          <span class="al-editor__saved" title="Запрос и результат сохраняются автоматически">💾 автосохранение</span>
+          <UiV2Tooltip text="Запрос и результат сохраняются автоматически" placement="top" showDelay={80}>
+            <span class="al-editor__saved">💾 автосохранение</span>
+          </UiV2Tooltip>
         </div>
         <div class="al-editor__actions">
           <button
@@ -1279,7 +1297,8 @@ query ($mediaId: Int, $page: Int) {
         {/if}
 
         {#if rateLimit}
-          <div class="al-rl" title="Rate limit: {rateLimit.remaining}/{rateLimit.limit} запросов">
+          <UiV2Tooltip text="Rate limit: {rateLimit.remaining}/{rateLimit.limit} запросов" placement="top" showDelay={80}>
+            <div class="al-rl">
             <span class="al-rl__label">
               {#if rateLimit.rateLimited}
                 🚫 Rate limited
@@ -1295,6 +1314,7 @@ query ($mediaId: Int, $page: Int) {
               ></div>
             </div>
           </div>
+          </UiV2Tooltip>
         {/if}
       </div>
 
@@ -1324,26 +1344,33 @@ query ($mediaId: Int, $page: Int) {
                   <span class="al-json__null">null</span>
                 {:else if tok.kind === 'string'}
                   <span class="al-json__str-wrap">
-                    {#if tok.isUrl}
+                    {#if tok.isImage}
                       <button
                         type="button"
-                        class="al-json__link"
-                        class:al-json__link--img={tok.isImage}
-                        onmouseenter={(e) => tok.isImage && showPreview(e, tok.value)}
-                        onmousemove={(e) => tok.isImage && movePreview(e)}
+                        class="al-json__link al-json__link--img"
+                        onmouseenter={(e) => showPreview(e, tok.value)}
+                        onmousemove={(e) => movePreview(e)}
                         onmouseleave={hidePreview}
                         onclick={() => openExternal(tok.value)}
-                        title={tok.value}
                       >"{tok.value}"</button>
+                    {:else if tok.isUrl}
+                      <UiV2Tooltip text={tok.value} placement="top" showDelay={80}>
+                        <button
+                          type="button"
+                          class="al-json__link"
+                          onclick={() => openExternal(tok.value)}
+                        >"{tok.value}"</button>
+                      </UiV2Tooltip>
                     {:else}
                       <span class="al-json__str">"{tok.value}"</span>
                     {/if}
-                    <button
-                      type="button"
-                      class="al-json__copy"
-                      title="Копировать"
-                      onclick={() => copyText(tok.value)}
-                    >⎘</button>
+                    <UiV2Tooltip text="Копировать" placement="top" showDelay={80}>
+                      <button
+                        type="button"
+                        class="al-json__copy"
+                        onclick={() => copyText(tok.value)}
+                      >⎘</button>
+                    </UiV2Tooltip>
                   </span>
                 {/if}
               {/each}
@@ -1365,12 +1392,15 @@ query ($mediaId: Int, $page: Int) {
   <div
     class="al-img-preview"
     use:portal
-    style="left: {previewLeft}px; top: {previewTop}px;"
+    style:left="{previewLeft}px"
+    style:top="{previewTop}px"
   >
     <div class="al-img-preview__meta">{previewNatW} × {previewNatH} px</div>
     <div
       class="al-img-preview__shot"
-      style="width: {previewDispW}px; aspect-ratio: {previewNatW} / {previewNatH}; background-image: url({JSON.stringify(previewUrl)});"
+      style:width="{previewDispW}px"
+      style:height="{previewDispH}px"
+      style:background-image={`url("${previewUrl.replace(/"/g, '')}")`}
     ></div>
   </div>
 {/if}
@@ -1890,9 +1920,11 @@ query ($mediaId: Int, $page: Int) {
 
 .al-img-preview__shot {
   display: block;
+  width: auto;
   height: auto;
   padding: 0;
   margin: 0;
+  flex: none;
   background-repeat: no-repeat;
   background-position: center;
   background-size: 100% 100%;

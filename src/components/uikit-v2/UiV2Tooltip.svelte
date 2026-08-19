@@ -142,6 +142,7 @@
     let left = anchorCenterX - tw / 2;
     left = Math.max(EDGE, Math.min(left, window.innerWidth - EDGE - tw));
     tipLeft = left;
+    tipTop = Math.max(EDGE, Math.min(tipTop, window.innerHeight - EDGE - th));
   }
 
   async function updatePosition() {

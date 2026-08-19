@@ -229,6 +229,8 @@ contextBridge.exposeInMainWorld('electron', {
   openOverviewVideoEditor: (payload) => ipcRenderer.invoke('overview-editor:open', payload),
   getOverviewEditorPayload: () => ipcRenderer.invoke('overview-editor:getPayload'),
   overviewEditorDone: () => ipcRenderer.send('overview-editor:done'),
+  openAdminPanelWindow: () => ipcRenderer.invoke('admin:openWindow'),
+  isAdminPanelWindow: () => ipcRenderer.invoke('admin:isStandaloneWindow'),
   // Logging
   logRenderer:      (entry) => ipcRenderer.invoke('log:renderer', entry),
   logGetSessions:   ()      => ipcRenderer.invoke('log:getSessions'),

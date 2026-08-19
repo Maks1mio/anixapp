@@ -739,4 +739,3 @@
 {/if}
 
 <Toast />
-<div id="ui-tooltip-root" aria-hidden="true"></div>

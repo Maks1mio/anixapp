@@ -35,7 +35,8 @@ let localBufferingPending = false;
 let lastAppliedSeq = 0;
 
 const SYNC_STALL_MS = 8_000;
-const PLAY_PAUSE_DEBOUNCE_MS = 70;
+const PLAY_PAUSE_DEBOUNCE_MS = 90;
+const SEEK_DEBOUNCE_MS = 220;
 
 function isPlayerRenderer(): boolean {
   try {
@@ -80,6 +81,7 @@ function scheduleSyncStallWatchdog(reason: string): void {
     sendSyncReady();
     flushOutboundQueue();
     flushPlayPauseNow();
+    flushSeekNow();
     pushSyncStateToPlayer();
     window.dispatchEvent(new CustomEvent('lobby:playerWaitingOverlay', { detail: null }));
   }, SYNC_STALL_MS);
@@ -105,6 +107,30 @@ type QueuedCmd = { action: LobbyCommandAction; playback: LobbyPlayback };
 const pendingOutbound: QueuedCmd[] = [];
 let playPauseTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingPlayPause: QueuedCmd | null = null;
+let seekTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingSeek: QueuedCmd | null = null;
+
+function sameLobbyContent(a: LobbyPlayback | null, b: LobbyPlayback | null): boolean {
+  if (!a || !b) return false;
+  return String(a.releaseId) === String(b.releaseId)
+    && String(a.sourceId ?? '') === String(b.sourceId ?? '')
+    && String(a.ep) === String(b.ep)
+    && String(a.dubberId ?? '') === String(b.dubberId ?? '');
+}
+
+function preservePlaybackTime(prev: LobbyPlayback | null, next: LobbyPlayback, action?: string | null): LobbyPlayback {
+  if (!prev || !sameLobbyContent(prev, next)) return next;
+  if (action === 'seek' || action === 'changeEpisode') return next;
+  const prevT = typeof prev.currentTime === 'number' ? prev.currentTime : 0;
+  const nextT = typeof next.currentTime === 'number' ? next.currentTime : 0;
+  if (nextT < 1 && prevT > 2.5) {
+    return { ...next, currentTime: prevT };
+  }
+  if ((action === 'play' || action === 'pause') && prevT - nextT > 2.5) {
+    return { ...next, currentTime: prevT };
+  }
+  return next;
+}
 
 function dedupePendingOutbound(): void {
   const latest = new Map<LobbyCommandAction, QueuedCmd>();
@@ -203,6 +229,30 @@ function schedulePlayPause(action: LobbyCommandAction, playback: LobbyPlayback):
   }, PLAY_PAUSE_DEBOUNCE_MS);
 }
 
+function flushSeekNow(): void {
+  if (seekTimer) {
+    clearTimeout(seekTimer);
+    seekTimer = null;
+  }
+  const cmd = pendingSeek;
+  pendingSeek = null;
+  if (!cmd || !roomId) return;
+  emitLocalCommand(cmd.action, cmd.playback);
+}
+
+function scheduleSeek(playback: LobbyPlayback): void {
+  pendingSeek = { action: 'seek', playback };
+  lastPlayback = playback;
+  if (seekTimer) clearTimeout(seekTimer);
+  seekTimer = setTimeout(() => {
+    seekTimer = null;
+    const cmd = pendingSeek;
+    pendingSeek = null;
+    if (!cmd || !roomId) return;
+    emitLocalCommand(cmd.action, cmd.playback);
+  }, SEEK_DEBOUNCE_MS);
+}
+
 function startP2pIfNeeded(): void {
   if (!roomId || !myPeerId) return;
   startLobbyRtc(roomId, myPeerId, participants, onP2pRemoteSync);
@@ -288,6 +338,7 @@ window.addEventListener('lobby:playerSynced', ((e: Event) => {
   sendSyncReady(typeof liveTime === 'number' ? liveTime : undefined);
   flushOutboundQueue();
   flushPlayPauseNow();
+  flushSeekNow();
   pushSyncStateToPlayer();
   window.dispatchEvent(new CustomEvent('lobby:playerWaitingOverlay', { detail: null }));
   console.log('[lobby] sync_ready after player seeked+canplay');
@@ -344,6 +395,7 @@ window.addEventListener('lobby:syncResume', () => {
   if (wasBlocked) {
     flushOutboundQueue();
     flushPlayPauseNow();
+    flushSeekNow();
   }
   pushSyncStateToPlayer();
   if (!localBufferingPending) {
@@ -423,26 +475,17 @@ export function setLobbyParticipants(list: LobbyParticipant[]): void {
 }
 
 function dispatchRemotePlayback(playback: LobbyPlayback, fromPeerId?: string | null, action?: string | null): void {
+  playback = preservePlaybackTime(lastPlayback, playback, action);
   const seq = typeof playback.seq === 'number' ? playback.seq : null;
   const pausedChanged = lastPlayback != null && lastPlayback.paused !== playback.paused;
   const timeChanged = lastPlayback != null
     && Math.abs((lastPlayback.currentTime ?? 0) - (playback.currentTime ?? 0)) > 0.45;
   if (seq != null && seq <= lastAppliedSeq && !pausedChanged && !timeChanged) {
-    logLobbyAction({
-      origin: 'server',
-      action: 'apply.remote.stale',
-      playback: snapshotPlayback(playback),
-      note: `seq ${seq} ≤ ${lastAppliedSeq}`,
-    });
     return;
   }
   if (seq != null && seq > lastAppliedSeq) lastAppliedSeq = seq;
 
-  const sameContent = !!(lastPlayback
-    && String(lastPlayback.releaseId) === String(playback.releaseId)
-    && String(lastPlayback.sourceId ?? '') === String(playback.sourceId ?? '')
-    && String(lastPlayback.ep) === String(playback.ep)
-    && String(lastPlayback.dubberId ?? '') === String(playback.dubberId ?? ''));
+  const sameContent = sameLobbyContent(lastPlayback, playback);
   const isEcho = hasAuthoritativePlayback && !fromPeerId && !action && sameContent && !pausedChanged && !timeChanged;
   if (isEcho) {
     lastPlayback = playback;
@@ -548,6 +591,11 @@ export function setLobbyRoom(
     playPauseTimer = null;
   }
   pendingPlayPause = null;
+  if (seekTimer) {
+    clearTimeout(seekTimer);
+    seekTimer = null;
+  }
+  pendingSeek = null;
   lastAppliedSeq = 0;
   roomId = id;
   roomCode = options?.roomCode ?? null;
@@ -631,11 +679,17 @@ export function pushCommand(action: LobbyCommandAction, playback: LobbyPlayback)
   }
 
   if (action === 'play' || action === 'pause') {
-    schedulePlayPause(action, playback);
+    schedulePlayPause(action, preservePlaybackTime(lastPlayback, playback, action));
+    return;
+  }
+
+  if (action === 'seek') {
+    scheduleSeek(playback);
     return;
   }
 
   flushPlayPauseNow();
+  flushSeekNow();
   emitLocalCommand(action, playback);
 }
 
@@ -737,6 +791,11 @@ export function leaveLobby(): void {
     playPauseTimer = null;
   }
   pendingPlayPause = null;
+  if (seekTimer) {
+    clearTimeout(seekTimer);
+    seekTimer = null;
+  }
+  pendingSeek = null;
   lastAppliedSeq = 0;
   if (syncReadyTimer) {
     clearTimeout(syncReadyTimer);

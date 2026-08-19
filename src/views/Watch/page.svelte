@@ -738,7 +738,7 @@
       const tryFire = () => {
         if (fired || !seekedOk || !canplayOk) return;
         if (wantTime != null && Math.abs(el.currentTime - wantTime) > 0.65) return;
-        if (Date.now() - barrierStartedAt < 400) return;
+        if (Date.now() - barrierStartedAt < 200) return;
         fired = true;
         el.removeEventListener('seeked', onSeeked);
         el.removeEventListener('canplay', onCanplay);
@@ -752,11 +752,12 @@
       if (el.readyState >= 3) canplayOk = true;
       window.setTimeout(() => {
         if (!fired) {
-          seekedOk = true;
-          canplayOk = true;
-          tryFire();
+          fired = true;
+          el.removeEventListener('seeked', onSeeked);
+          el.removeEventListener('canplay', onCanplay);
+          markReady();
         }
-      }, 12000);
+      }, 2500);
     };
 
     const el = (window as any).electron;
@@ -1005,10 +1006,6 @@
         return { url: resolved.url, useVideo: true };
       },
     });
-    if (seekTime != null && seekTime > 0) {
-      const onSeeked = () => sendToLobby('seek');
-      videoEl?.addEventListener('seeked', onSeeked, { once: true });
-    }
     if (useVid) bindVideoElementListeners();
     scheduleUpscaleRestart();
     void prefetchNearby();
@@ -1932,13 +1929,20 @@
     const targetTime = typeof p.currentTime === 'number' ? p.currentTime : 0;
     const dur = videoEl.duration;
     const forceSeek = opts?.barrier === true;
+    const remoteAction = p.action === 'play' || p.action === 'pause' || p.action === 'seek' || p.action === 'changeEpisode'
+      ? String(p.action)
+      : null;
+    const localTime = Number.isFinite(videoEl.currentTime) ? videoEl.currentTime : 0;
+    const timeReset = remoteAction !== 'seek' && remoteAction !== 'changeEpisode'
+      && targetTime < 1 && localTime > 2.5;
+    const applyTime = timeReset ? localTime : targetTime;
     if (Number.isFinite(dur) && dur > 0) {
-      const drift = Math.abs(videoEl.currentTime - targetTime);
-      if (forceSeek || drift > 0.85) {
-        videoEl.currentTime = Math.min(targetTime, dur);
+      const drift = Math.abs(videoEl.currentTime - applyTime);
+      if (!timeReset && (forceSeek || drift > 0.85)) {
+        videoEl.currentTime = Math.min(applyTime, dur);
       }
-    } else if (targetTime > 0 && forceSeek) {
-      videoEl.currentTime = targetTime;
+    } else if (applyTime > 0 && forceSeek) {
+      videoEl.currentTime = applyTime;
     }
     if (opts?.barrier || p.paused) {
       lastLobbyPausedIntent = true;
@@ -1949,7 +1953,7 @@
       void videoEl.play().then(() => { player.paused = false; }).catch(() => {});
     }
     seedPlayerTimeFromVideo();
-    const guardMs = opts?.barrier ? 1200 : 700;
+    const guardMs = opts?.barrier ? 1600 : 1100;
     if (applySyncTimer) clearTimeout(applySyncTimer);
     applySyncTimer = window.setTimeout(() => {
       if (!lobbyBarrierPending) {
@@ -2077,7 +2081,11 @@
     }, { signal });
     el.addEventListener('play',  () => {
       if (isApplyingSync || localMediaSwap || preventAutoPause) return;
-      if (inLobbyRoom() && lastLobbyPausedIntent === false) {
+      if (inLobbyRoom()) {
+        if (lastLobbyPausedIntent === true) {
+          try { el.pause(); } catch { /* ignore */ }
+          return;
+        }
         player.paused = false;
         return;
       }
@@ -2085,8 +2093,11 @@
       sendToLobby('play');
     }, { signal });
     el.addEventListener('pause', () => {
-      if (isApplyingSync || localMediaSwap || preventAutoPause) return;
-      if (inLobbyRoom() && lastLobbyPausedIntent === true) {
+      if (isApplyingSync || localMediaSwap || preventAutoPause || el.seeking) return;
+      if (inLobbyRoom()) {
+        if (lastLobbyPausedIntent === false) {
+          return;
+        }
         player.paused = true;
         return;
       }
@@ -2622,7 +2633,7 @@
     onnextEp: () => { if (nextEpisodePosition != null) goToEpisode(nextEpisodePosition); },
     onnextAltDub: goToNextEpisodeInAltDub,
     ontogglePlay: togglePlay,
-    onplay: () => videoEl?.play().catch(() => {}),
+    onplay: () => togglePlay(),
     onseek: onSeek,
     ontoggleMute: toggleMute,
     onvolumechange: onVolumeChange,

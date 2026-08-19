@@ -260,9 +260,6 @@ function handleMessage(e: MessageEvent): void {
         via: 'ws',
         detail: { proposalId: msg.proposalId },
       });
-      if (msg.playback && typeof msg.playback.releaseId !== 'undefined') {
-        onRemotePlayback?.(msg.playback, null);
-      }
       window.dispatchEvent(new CustomEvent('lobby:proposalAccepted', {
         detail: { proposalId: msg.proposalId, playback: msg.playback ?? null },
       }));

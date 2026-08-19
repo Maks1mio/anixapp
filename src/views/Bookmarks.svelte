@@ -65,11 +65,12 @@
   }
 
   /** Активный «чей список»: prop, ?user= или переключение по navigate */
-  let listUserId = $state<number | undefined>(
-    typeof routeProfileId === 'number' && routeProfileId > 0
-      ? routeProfileId
-      : readUserFromRoute(),
-  );
+  let listUserId = $state<number | undefined>(readUserFromRoute());
+  $effect.pre(() => {
+    if (typeof routeProfileId === 'number' && routeProfileId > 0) {
+      listUserId = routeProfileId;
+    }
+  });
 
   interface BookmarksViewState {
     activeTab: TabId;

@@ -61,7 +61,7 @@
   let originY = $state('0%');
 
   const selected = $derived(options.find((o) => o.value === value) ?? null);
-  const listboxId = `${id}-listbox`;
+  const listboxId = $derived(`${id}-listbox`);
   const showLeading = $derived(options.some((o) => o.status || o.icon));
   const compactTitle = $derived(
     selected?.desc ? `${selected.label} · ${selected.desc}` : (selected?.label ?? placeholder),

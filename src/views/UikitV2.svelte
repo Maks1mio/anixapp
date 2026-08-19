@@ -1367,7 +1367,7 @@
             {#if cardsLoadState === 'error'}
               <p class="uikit-v2-demo-block__desc uikit-v2-api-error">{cardsError}</p>
             {:else if cardsApiJson}
-              <pre class="uikit-v2-api-json" tabindex="0">{cardsApiJson}</pre>
+              <pre class="uikit-v2-api-json">{cardsApiJson}</pre>
             {:else if cardsPending}
               <UiV2ApiPanelSkeleton />
             {/if}
@@ -1611,7 +1611,7 @@
             {#if commentsLoadState === 'error'}
               <p class="uikit-v2-demo-block__desc uikit-v2-api-error">{commentsError}</p>
             {:else if commentsApiJson}
-              <pre class="uikit-v2-api-json" tabindex="0">{commentsApiJson}</pre>
+              <pre class="uikit-v2-api-json">{commentsApiJson}</pre>
             {:else if commentsPending}
               <UiV2ApiPanelSkeleton />
             {/if}

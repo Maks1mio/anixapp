@@ -219,6 +219,7 @@
   bind:this={triggerEl}
   class="uiv2-tooltip__trigger {className}"
   class:uiv2-tooltip__trigger--block={block}
+  role="group"
   aria-describedby={visible && hasContent ? tipId : undefined}
   onmouseenter={onTriggerEnter}
   onmouseleave={onTriggerLeave}

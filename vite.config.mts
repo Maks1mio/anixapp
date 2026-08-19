@@ -16,6 +16,7 @@ export default defineConfig(({ command }) => ({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    chunkSizeWarningLimit: 3600,
     rollupOptions: {
       input: [
         resolve(__dirname, 'index.html'),
@@ -46,6 +47,9 @@ export default defineConfig(({ command }) => ({
     port: 5173,
     strictPort: true,
     allowedHosts: true,
+    watch: {
+      ignored: ['**/release/**', '**/dist/**'],
+    },
     proxy: {
       // Same-origin WS so phone/LAN can join lobby without hitting localhost:8787.
       '/anixapp/lobby/ws': {

@@ -89,7 +89,10 @@
     },
   ];
 
-  let screen = $state<EditScreen>(startScreen);
+  let screen = $state<EditScreen>('menu');
+  $effect(() => {
+    screen = startScreen;
+  });
   let loadState = $state<'loading' | 'ready' | 'error'>('loading');
 
   let statusValue = $state('');

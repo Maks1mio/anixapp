@@ -715,9 +715,9 @@
     window.addEventListener('episode-download:progress', onDownloadProgress);
 
     const api = window.anixApi;
-    if (!api?.release?.getDubbers) {
+    if (!Number.isFinite(releaseId) || releaseId <= 0 || !api?.release?.getDubbers) {
       sourcesLoading = false;
-      sourcesError = 'API недоступно';
+      sourcesError = !Number.isFinite(releaseId) || releaseId <= 0 ? 'Неверный релиз' : 'API недоступно';
     } else {
       api.release.getDubbers(releaseId)
         .then(async (res: { types?: Dubber[] }) => {

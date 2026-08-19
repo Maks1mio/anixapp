@@ -91,6 +91,7 @@ button {
   height: 1.15rem;
   padding: 0 0.42rem;
   border-radius: 74px;
+  appearance: none;
   background: var(--color-accent, #{$color-accent});
   color: #fff;
   font-size: 0.62rem;

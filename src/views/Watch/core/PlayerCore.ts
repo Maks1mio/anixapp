@@ -179,8 +179,9 @@ export class PlayerCore {
   }
 
   recordHistory(releaseId: string, sourceId: string, ep: number): void {
-    const rId = parseInt(releaseId, 10);
-    const sId = parseInt(sourceId, 10);
+    const rId = Number.parseInt(releaseId, 10);
+    const sId = Number.parseInt(sourceId, 10);
+    if (!Number.isFinite(rId) || rId <= 0 || !Number.isFinite(sId) || sId <= 0) return;
     const api = (window as unknown as { anixApi?: { history?: { add?: (a: number, b: number, c: number) => void; markWatched?: (a: number, b: number, c: number) => Promise<unknown> } } }).anixApi;
     api?.history?.add?.(rId, sId, ep);
     api?.history?.markWatched?.(rId, sId, ep)?.catch?.(() => {});

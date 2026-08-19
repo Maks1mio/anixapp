@@ -24,6 +24,7 @@ export function parseBannerReleaseId(banner: { type: number; action: string }): 
 export async function resolveHeroPlayback(releaseId: number): Promise<HeroPlayback | null> {
   const api = window.anixApi?.release;
   if (!api?.getDubbers || !api.getDubberSources || !api.getEpisode) return null;
+  if (!Number.isFinite(releaseId) || releaseId <= 0) return null;
 
   try {
     const dubRes = await api.getDubbers(releaseId);

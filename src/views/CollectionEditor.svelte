@@ -355,10 +355,12 @@
       <span class="collection-editor__releases-count">{releases.length} из {COLLECTION_RELEASES_MAX}</span>
     </div>
 
+    <div class="collection-editor__releases" role="list">
     {#each releaseCards as card, index (card.id ?? index)}
       {@const statusLabel = releaseListStatusLabel(card.listStatus)}
       <div
         class="collection-editor__release{dragIndex === index ? ' collection-editor__release--dragging' : ''}"
+        role="listitem"
         draggable="true"
         ondragstart={() => onDragStart(index)}
         ondragover={onDragOver}
@@ -390,5 +392,6 @@
         </button>
       </div>
     {/each}
+    </div>
   {/if}
 </div>

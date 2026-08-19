@@ -585,8 +585,8 @@ $schedule-duration: 0.34s;
   background: $color-surface-hover;
   transition: opacity $transition;
 
-  :global(img),
-  :global(.poster-image__fallback) {
+  img,
+  .poster-image__fallback {
     width: 100%;
     height: 100%;
     object-fit: cover;

@@ -626,7 +626,7 @@
     color: $color-accent;
   }
 
-  :global(svg) {
+  svg {
     width: 1rem;
     height: 1rem;
   }
@@ -688,7 +688,7 @@
     cursor: not-allowed;
   }
 
-  :global(svg) {
+  svg {
     width: 1.05rem;
     height: 1.05rem;
   }

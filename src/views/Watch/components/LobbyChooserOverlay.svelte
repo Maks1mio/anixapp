@@ -122,7 +122,7 @@
         </div>
         <h2 class="lobby-chooser-overlay__title">Совместный просмотр</h2>
         <UiV2Tooltip text="Может быть переделано в будущем" placement="bottom" showDelay={80}>
-          <span class="beta-badge" tabindex="0">beta</span>
+          <button type="button" class="beta-badge">beta</button>
         </UiV2Tooltip>
       </div>
       <button type="button" class="lobby-chooser-overlay__close" aria-label="Закрыть" onclick={onClose}></button>

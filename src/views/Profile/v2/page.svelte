@@ -23,7 +23,6 @@
   interface Props { id?: number; embedded?: boolean; discordLayout?: boolean; }
   let { id, embedded = false, discordLayout = false }: Props = $props();
 
-  const loadProfileId = id;
   const viewStateKey = buildViewStateKey(getPath());
 
   interface ProfileViewState {
@@ -69,7 +68,7 @@
       unregisterScrollKey = registerActiveScrollKey(() => viewStateKey);
     }
     const cached = embedded ? null : getViewState<ProfileViewState>(viewStateKey);
-    const result = await loadProfilePage(loadProfileId);
+    const result = await loadProfilePage(id);
     loadState = result.loadState;
     errorMsg = result.errorMsg;
     profile = result.profile;

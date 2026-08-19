@@ -179,6 +179,7 @@
             <div
               class="uiv2-comment-composer__rules-panel"
               role="dialog"
+              tabindex="-1"
               aria-label="Правила комментариев"
               onpointerdown={(e) => e.stopPropagation()}
             >

@@ -126,7 +126,7 @@
         </div>
         <h2 class="lobby-modal__title">Совместный просмотр</h2>
         <UiV2Tooltip text="Может быть переделано в будущем" placement="bottom" showDelay={80}>
-          <span class="beta-badge" tabindex="0">beta</span>
+          <button type="button" class="beta-badge">beta</button>
         </UiV2Tooltip>
       </div>
       <button type="button" class="lobby-modal__close" aria-label="Закрыть" onclick={close}></button>

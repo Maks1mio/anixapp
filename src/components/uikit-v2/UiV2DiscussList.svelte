@@ -289,18 +289,18 @@
 </script>
 
 {#if items.length}
-  <div class="uiv2-discuss {className}" role="list">
+  <div class="uiv2-discuss {className}">
     {#each items as item (item.id)}
       {@const rate = ratingText(item.rating)}
       {@const meta = metaLine(item)}
       {@const desc = item.description?.trim() ? withEllipsis(item.description.trim()) : null}
-      <!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_to_interactive_role a11y_no_static_element_interactions a11y_click_events_have_key_events -->
       <div
         class="uiv2-discuss__card"
         class:uiv2-discuss__card--menu-open={menuOpen && menuItemId === item.id}
-        role="listitem"
-        tabindex={onclick ? 0 : undefined}
-        aria-label={onclick ? item.title : undefined}
+        role="button"
+        tabindex="0"
+        aria-label={item.title}
         onclick={() => onActivate(item)}
         onkeydown={(e) => onCardKeydown(item, e)}
         oncontextmenu={(e) => onContextMenu(item, e)}

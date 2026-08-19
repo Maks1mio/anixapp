@@ -475,7 +475,13 @@
         <p class="search-page__subtitle">Тайтлы, коллекции и пользователи — в одном месте</p>
       </div>
 
-      <div class="search-page__form-wrap">
+      <div
+        class="search-page__form-wrap"
+        role="combobox"
+        aria-expanded={showSearchSuggest}
+        aria-controls="search-page-suggest"
+        aria-haspopup="listbox"
+      >
         <form class="search-page__form" role="search" onsubmit={submitSearch}>
           <span class="search-page__form-icon" aria-hidden="true">{@html iconSearch(20)}</span>
           <input
@@ -487,8 +493,7 @@
             autocomplete="off"
             spellcheck={false}
             aria-label="Поисковый запрос"
-            aria-expanded={showSearchSuggest}
-            aria-controls="search-page-suggest"
+            aria-autocomplete="list"
             onfocus={handleSearchFocus}
             onblur={handleSearchBlur}
             oninput={handleSearchInput}

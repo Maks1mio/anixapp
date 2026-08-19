@@ -202,7 +202,7 @@
     <div class="view-header__title-row">
       <h1 class="view-header__title">Загрузки</h1>
       <UiV2Tooltip text="Может быть переделано в будущем" placement="bottom" showDelay={80}>
-        <span class="beta-badge" tabindex="0">beta</span>
+        <button type="button" class="beta-badge">beta</button>
       </UiV2Tooltip>
     </div>
     <p class="view-header__subtitle">

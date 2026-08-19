@@ -186,7 +186,7 @@
     try {
       const json = await fetchCdnJson(url);
       if (!json || typeof json !== 'object') return;
-      const mod: { default?: unknown } = await import('lottie-web');
+      const mod: { default?: unknown } = await import('lottie-web/build/player/lottie_light');
       const lottie = (mod?.default ?? mod) as { loadAnimation?: (opts: object) => { destroy?: () => void } };
       if (!lottie?.loadAnimation) return;
       destroyBadgeAnim();

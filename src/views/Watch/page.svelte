@@ -81,10 +81,15 @@
     dubbersPickerCache    = [];
   }
 
+  function positiveId(value: string | number | null | undefined): number | null {
+    const n = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
   function refreshDubberNameFromApi() {
-    const rId = parseInt(watchState.releaseId, 10);
+    const rId = positiveId(watchState.releaseId);
     const did = watchState.dubberId;
-    if (!did || !(window as any).anixApi?.release?.getDubbers) return;
+    if (rId == null || !did || !(window as any).anixApi?.release?.getDubbers) return;
     (window as any).anixApi.release.getDubbers(rId).then((res: { types?: DubberItem[] }) => {
       const match = (res?.types ?? []).find(d => String(d.id) === did);
       if (match) watchState.dubberName = match.name;
@@ -98,10 +103,10 @@
   }
 
   function refreshSourceNameFromApi() {
-    const rId = parseInt(watchState.releaseId, 10);
-    const dubId = parseInt(watchState.dubberId, 10);
+    const rId = positiveId(watchState.releaseId);
+    const dubId = positiveId(watchState.dubberId);
     const api = (window as any).anixApi?.release;
-    if (!Number.isFinite(rId) || !Number.isFinite(dubId) || !api?.getDubberSources) return;
+    if (rId == null || dubId == null || !api?.getDubberSources) return;
     api.getDubberSources(rId, dubId).then((res: { sources?: SourceItem[] }) => {
       applySourceNameFromList(res?.sources ?? []);
     }).catch(() => {});
@@ -254,10 +259,10 @@
       return;
     }
     const nextEp = watchState.ep + 1;
-    const rId = parseInt(watchState.releaseId, 10);
+    const rId = positiveId(watchState.releaseId);
     const currentDubId = watchState.dubberId;
     const api = (window as any).anixApi?.release;
-    if (!rId || !currentDubId || !api?.getDubbers || !api?.getDubberSources || !api?.getEpisode) {
+    if (rId == null || !currentDubId || !api?.getDubbers || !api?.getDubberSources || !api?.getEpisode) {
       if (gen === nextEpAltGen) nextEpAltDub = null;
       return;
     }
@@ -816,11 +821,11 @@
 
   async function findPlaybackAlternative(ep: number): Promise<PlaybackAlt | null> {
     const api = (window as any).anixApi?.release;
-    const rId = parseInt(watchState.releaseId, 10);
-    const currentSourceId = parseInt(watchState.sourceId, 10);
-    const currentDubberId = watchState.dubberId ? parseInt(watchState.dubberId, 10) : 0;
+    const rId = positiveId(watchState.releaseId);
+    const currentSourceId = positiveId(watchState.sourceId) ?? 0;
+    const currentDubberId = positiveId(watchState.dubberId) ?? 0;
     const skipSibnet = isSibnetSourceName(watchState.sourceName);
-    if (!api?.getDubberSources || !api?.getEpisode || !rId || !ep) return null;
+    if (!api?.getDubberSources || !api?.getEpisode || rId == null || !ep) return null;
 
     const pickFromSources = async (
       sources: Array<{ id: number; name: string }>,
@@ -1028,7 +1033,9 @@
   function loadEpisode(rId: number, sId: number, ep: number, titleStr: string, srcName: string, dubId: string, seekTime?: number, initialPaused?: boolean): Promise<void> {
     localPlaybackPath = '';
     const api = (window as any).anixApi?.release;
-    if (!api?.getEpisode) return Promise.resolve();
+    if (!api?.getEpisode || positiveId(rId) == null || positiveId(sId) == null || positiveId(ep) == null) {
+      return Promise.resolve();
+    }
     const myGen = ++episodeLoadGen;
     playbackAlt = null;
     skipDismissedKind = null;
@@ -1071,9 +1078,9 @@
 
   async function prefetchNearby() {
     const api = (window as any).anixApi?.release;
-    if (!api?.getEpisode) return;
-    const rId = parseInt(watchState.releaseId, 10);
-    const sId = parseInt(watchState.sourceId, 10);
+    const rId = positiveId(watchState.releaseId);
+    const sId = positiveId(watchState.sourceId);
+    if (!api?.getEpisode || rId == null || sId == null) return;
     const nextEp = watchState.ep + 1;
     try {
       const res = await api.getEpisode(rId, sId, nextEp);
@@ -1155,8 +1162,8 @@
 
   // ── Popover openers ────────────────────────────────────────────────────────
   async function loadReleasePoster(rIdRaw: string) {
-    const rId = parseInt(rIdRaw, 10);
-    if (!rId) return;
+    const rId = positiveId(rIdRaw);
+    if (rId == null) return;
     const token = String(rId);
     posterReleaseId = token;
     try {
@@ -1169,19 +1176,19 @@
   }
 
   async function fetchEpisodesSilently() {
-    const dubIdNum = watchState.dubberId ? parseInt(watchState.dubberId, 10) : 0;
-    if (!dubIdNum || !(window as any).anixApi?.release?.getEpisodes) return;
+    const rId = positiveId(watchState.releaseId);
+    const dubIdNum = positiveId(watchState.dubberId);
+    const sId = positiveId(watchState.sourceId);
+    if (rId == null || dubIdNum == null || sId == null || !(window as any).anixApi?.release?.getEpisodes) return;
     try {
-      const res = await (window as any).anixApi.release.getEpisodes(
-        parseInt(watchState.releaseId, 10), dubIdNum, parseInt(watchState.sourceId, 10),
-      );
+      const res = await (window as any).anixApi.release.getEpisodes(rId, dubIdNum, sId);
       episodes = res?.episodes ?? [];
     } catch {}
   }
 
   async function loadDownloadedEpisodes() {
-    const rId = parseInt(watchState.releaseId, 10);
-    if (!rId) {
+    const rId = positiveId(watchState.releaseId);
+    if (rId == null) {
       downloadedEpisodes = [];
       return;
     }
@@ -1233,9 +1240,9 @@
       dubberSources = [];
       return;
     }
-    const rId = parseInt(watchState.releaseId, 10);
-    const dubId = parseInt(watchState.dubberId, 10);
-    if (!Number.isFinite(rId) || !Number.isFinite(dubId)) {
+    const rId = positiveId(watchState.releaseId);
+    const dubId = positiveId(watchState.dubberId);
+    if (rId == null || dubId == null) {
       dubberSources = [];
       return;
     }
@@ -1271,7 +1278,8 @@
     if (dubbersPickerCacheKey === key && dubbersPickerCache.length > 0) {
       dubbers = dubbersPickerCache;
       if (lastEpisodeTypeUpdateId == null) {
-        const rId = parseInt(watchState.releaseId, 10);
+        const rId = positiveId(watchState.releaseId);
+        if (rId == null) return;
         void (window as any).anixApi.release.info?.(rId).then((infoRes: { release?: unknown }) => {
           lastEpisodeTypeUpdateId = readLastEpisodeTypeUpdateId(infoRes?.release ?? infoRes);
         }).catch(() => {});
@@ -1280,7 +1288,11 @@
     }
     popoverLoading = true;
     try {
-      const rId = parseInt(watchState.releaseId, 10);
+      const rId = positiveId(watchState.releaseId);
+      if (rId == null) {
+        popoverLoading = false;
+        return;
+      }
       const [res, infoRes] = await Promise.all([
         (window as any).anixApi.release.getDubbers(rId),
         (window as any).anixApi.release.info?.(rId).catch(() => null),
@@ -1302,7 +1314,9 @@
     localPlaybackPath = '';
     if (String(dubber.id) === watchState.dubberId && !wasLocalPlayback) return;
     try {
-      const res = await (window as any).anixApi.release.getDubberSources(parseInt(watchState.releaseId, 10), dubber.id);
+      const rId = positiveId(watchState.releaseId);
+      if (rId == null) return;
+      const res = await (window as any).anixApi.release.getDubberSources(rId, dubber.id);
       const first = res?.sources?.[0];
       if (first) switchDubbing(first.id, first.name, dubber.id, dubber.name);
     } catch {}
@@ -1310,8 +1324,8 @@
 
   async function togglePinDubber(dubber: DubberItem) {
     const api = (window as any).anixApi?.type;
-    const rId = parseInt(watchState.releaseId, 10);
-    if (!api?.pin || !api?.unpin || !Number.isFinite(rId)) return;
+    const rId = positiveId(watchState.releaseId);
+    if (!api?.pin || !api?.unpin || rId == null) return;
     const nextPinned = !dubber.pinned;
     try {
       const res = nextPinned ? await api.pin(rId, dubber.id) : await api.unpin(rId, dubber.id);
@@ -2164,8 +2178,14 @@
       player.loadState = 'error';
       player.errorText = 'Неверные параметры просмотра.';
     } else {
+    const rId = positiveId(releaseId);
+    const sId = positiveId(watchState.sourceId);
+    if (rId == null || sId == null) {
+      player.loadState = 'error';
+      player.errorText = 'Неверные параметры просмотра.';
+    } else {
     ;(window as any).anixApi.release.getEpisode(
-      parseInt(releaseId, 10), parseInt(watchState.sourceId, 10), watchState.ep,
+      rId, sId, watchState.ep,
     ).then(async (res: any) => {
       const episode = res?.episode;
       if (!episode?.url) { player.loadState = 'error'; player.errorText = 'Серия недоступна.'; return; }
@@ -2193,6 +2213,7 @@
       player.loadState = 'error';
       player.errorText = 'Ошибка загрузки серии.';
     });
+    }
     }
 
     const handlers: [string, EventListener][] = [

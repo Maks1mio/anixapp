@@ -99,6 +99,11 @@ function createAnixBridgeCore(options = {}) {
 
   const h = (fn) => async (c, args) => fn(c, ...(args ?? []));
 
+  function toPositiveInt(value) {
+    const n = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
+    return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
+  }
+
   const HANDLERS = {
     'anix:getAuthStatus': async (c) => ({ hasToken: !!c.loadConfig().token }),
     'anix:checkConnection': async (c) => {
@@ -388,22 +393,65 @@ function createAnixBridgeCore(options = {}) {
       return null;
     },
 
-    'anix:releaseById': h((c, id, extended = true) => c.getClient().endpoints.release.info(id, extended)),
-    'anix:getVideos': h((c, releaseId) => c.getClient().endpoints.release.getVideos(releaseId)),
-    'anix:getVideoInCategory': h((c, releaseId, categoryId, page = 1) =>
-      c.getClient().endpoints.release.getVideoInCategory({ id: releaseId, categoryId, page })),
-    'anix:getDubbers': h((c, releaseId) => c.getClient().endpoints.release.getDubbers(releaseId)),
+    'anix:releaseById': h((c, id, extended = true) => {
+      const releaseId = toPositiveInt(id);
+      if (releaseId == null) return null;
+      return c.getClient().endpoints.release.info(releaseId, extended);
+    }),
+    'anix:getVideos': h((c, releaseId) => {
+      const id = toPositiveInt(releaseId);
+      if (id == null) return { types: [] };
+      return c.getClient().endpoints.release.getVideos(id);
+    }),
+    'anix:getVideoInCategory': h((c, releaseId, categoryId, page = 1) => {
+      const id = toPositiveInt(releaseId);
+      const cat = toPositiveInt(categoryId);
+      if (id == null || cat == null) return { videos: [] };
+      return c.getClient().endpoints.release.getVideoInCategory({ id, categoryId: cat, page });
+    }),
+    'anix:getDubbers': h((c, releaseId) => {
+      const id = toPositiveInt(releaseId);
+      if (id == null) return { types: [] };
+      return c.getClient().endpoints.release.getDubbers(id);
+    }),
     'anix:typeAll': h((c) => c.getClient().endpoints.type.types()),
-    'anix:typePin': h((c, releaseId, typeId) => c.getClient().endpoints.type.pin(releaseId, typeId)),
-    'anix:typeUnpin': h((c, releaseId, typeId) => c.getClient().endpoints.type.unpin(releaseId, typeId)),
-    'anix:getDubberSources': h((c, releaseId, dubberId) =>
-      c.getClient().endpoints.release.getDubberSources(releaseId, dubberId)),
-    'anix:getEpisodes': h((c, releaseId, dubberId, sourceId, sort = 1) =>
-      c.getClient().endpoints.release.getEpisodes(releaseId, dubberId, sourceId, sort)),
-    'anix:getEpisode': h((c, releaseId, sourceId, episodePosition) =>
-      c.getClient().endpoints.release.getEpisode(releaseId, sourceId, episodePosition)),
-    'anix:getEpisodeUpdates': h((c, releaseId, page = 0) =>
-      c.getClient().endpoints.episode.updates(releaseId, page)),
+    'anix:typePin': h((c, releaseId, typeId) => {
+      const id = toPositiveInt(releaseId);
+      const type = toPositiveInt(typeId);
+      if (id == null || type == null) return null;
+      return c.getClient().endpoints.type.pin(id, type);
+    }),
+    'anix:typeUnpin': h((c, releaseId, typeId) => {
+      const id = toPositiveInt(releaseId);
+      const type = toPositiveInt(typeId);
+      if (id == null || type == null) return null;
+      return c.getClient().endpoints.type.unpin(id, type);
+    }),
+    'anix:getDubberSources': h((c, releaseId, dubberId) => {
+      const id = toPositiveInt(releaseId);
+      const dubId = toPositiveInt(dubberId);
+      if (id == null || dubId == null) return { sources: [] };
+      return c.getClient().endpoints.release.getDubberSources(id, dubId);
+    }),
+    'anix:getEpisodes': h((c, releaseId, dubberId, sourceId, sort = 1) => {
+      const id = toPositiveInt(releaseId);
+      const dubId = toPositiveInt(dubberId);
+      const srcId = toPositiveInt(sourceId);
+      if (id == null || dubId == null || srcId == null) return { episodes: [] };
+      return c.getClient().endpoints.release.getEpisodes(id, dubId, srcId, sort);
+    }),
+    'anix:getEpisode': h((c, releaseId, sourceId, episodePosition) => {
+      const id = toPositiveInt(releaseId);
+      const srcId = toPositiveInt(sourceId);
+      const ep = toPositiveInt(episodePosition);
+      if (id == null || srcId == null || ep == null) return { episode: null };
+      return c.getClient().endpoints.release.getEpisode(id, srcId, ep);
+    }),
+    'anix:getEpisodeUpdates': h((c, releaseId, page = 0) => {
+      const id = toPositiveInt(releaseId);
+      if (id == null) return { content: [] };
+      return c.getClient().endpoints.episode.updates(id, page);
+    }),
     'anix:getDirectVideoLink': h((c, embedUrl) => c.getDirectVideoLink(embedUrl)),
     'anix:randomRelease': h((c, extended = true) => c.getClient().endpoints.release.getRandomRelease(extended)),
     'anix:latestFeed': h((c, page = 1) => c.getClient().endpoints.feed.latest(page)),

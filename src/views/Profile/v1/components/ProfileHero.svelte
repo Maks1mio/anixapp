@@ -26,7 +26,7 @@
     try {
       const json = await fetchCdnJson(url);
       if (!json || typeof json !== 'object') return;
-      const mod: any = await import('lottie-web');
+      const mod: any = await import('lottie-web/build/player/lottie_light');
       const lottie = mod?.default ?? mod;
       if (!lottie?.loadAnimation) return;
       destroyBadgeAnim();

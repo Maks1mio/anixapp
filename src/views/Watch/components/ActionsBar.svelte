@@ -94,6 +94,19 @@
     }
     enterSettings();
   }
+
+  /** Не даём клику по громкости всплыть до плеера (play/pause), без a11y-роли на обёртке. */
+  function stopPlayerToggle(node: HTMLElement) {
+    const stop = (e: Event) => e.stopPropagation();
+    node.addEventListener('click', stop);
+    node.addEventListener('pointerdown', stop);
+    return {
+      destroy() {
+        node.removeEventListener('click', stop);
+        node.removeEventListener('pointerdown', stop);
+      },
+    };
+  }
 </script>
 
 <div class="watch-page__btn-row">
@@ -108,8 +121,7 @@
       </UiV2RoundButton>
     </UiV2Tooltip>
 
-    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-    <div class="watch-page__vol-wrap" onclick={(e) => e.stopPropagation()}>
+    <div class="watch-page__vol-wrap" use:stopPlayerToggle>
       <UiV2Tooltip text={muted ? 'Включить звук' : 'Выключить звук'} placement="top" showDelay={80}>
         <UiV2RoundButton
           size="md"

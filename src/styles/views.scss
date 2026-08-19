@@ -717,7 +717,7 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   overflow: hidden;
   background: transparent;
 
-  :global(.oauth-brand-icon) {
+  .oauth-brand-icon {
     display: block;
     width: 100%;
     height: 100%;
@@ -736,7 +736,7 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   width: 2.55rem;
   height: 2.55rem;
 
-  :global(.oauth-brand-icon) {
+  .oauth-brand-icon {
     transform: scale(1.12);
   }
 }
@@ -1938,7 +1938,7 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   opacity: 0.85;
   line-height: 0;
 
-  :global(svg) {
+  svg {
     display: block;
   }
 }
@@ -1983,7 +1983,7 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
     color: $color-text;
   }
 
-  :global(svg) {
+  svg {
     display: block;
   }
 }
@@ -2098,7 +2098,7 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
     outline-offset: 2px;
   }
 
-  :global(svg) {
+  svg {
     display: block;
   }
 }
@@ -3566,7 +3566,7 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   color: $color-text-muted;
   opacity: 0.75;
 
-  :global(svg) {
+  svg {
     width: 100%;
     height: 100%;
     display: block;

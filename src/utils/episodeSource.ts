@@ -28,7 +28,7 @@ function isVoiceoverDub(d: { type?: number; name: string }): boolean {
 
 export async function listReleaseDubbers(releaseId: number): Promise<DubberOption[]> {
   const api = window.anixApi?.release;
-  if (!api?.getDubbers) return [];
+  if (!api?.getDubbers || !Number.isFinite(releaseId) || releaseId <= 0) return [];
   const dubRes = await api.getDubbers(releaseId);
   return (dubRes?.types ?? [])
     .filter((d) => isVoiceoverDub(d) && !isDubberBlacklisted(d.name))
@@ -54,7 +54,7 @@ export async function resolveEpisodePlayback(
   episode = 1
 ): Promise<EpisodePlayback | null> {
   const api = window.anixApi?.release;
-  if (!api?.getEpisode || !api.getDubbers) return null;
+  if (!api?.getEpisode || !api.getDubbers || !Number.isFinite(releaseId) || releaseId <= 0) return null;
 
   try {
     const dubRes = await api.getDubbers(releaseId);

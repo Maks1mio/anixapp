@@ -526,7 +526,7 @@ $p-skip-dark:   #66c94280;
   align-items: center;
   justify-content: center;
 
-  :global(svg) {
+  svg {
     display: block;
   }
 }
@@ -633,7 +633,7 @@ $p-skip-dark:   #66c94280;
   height: 5.5rem !important;
   color: var(--uiv2-media-control-fg);
 
-  :global(svg) {
+  svg {
     width: 2.1rem;
     height: 2.1rem;
     margin-left: 0.15rem;
@@ -2369,7 +2369,7 @@ $watch-float-panel-height: min(480px, 70vh);
   font-size: 0.72rem;
   font-weight: 600;
 
-  :global(svg) {
+  svg {
     display: block;
     opacity: 0.85;
   }
@@ -2565,7 +2565,7 @@ $watch-float-panel-height: min(480px, 70vh);
     outline-offset: 2px;
   }
 
-  :global(svg) {
+  svg {
     display: block;
   }
 }

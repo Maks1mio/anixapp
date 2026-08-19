@@ -31,7 +31,10 @@
 
   let friends = $state<any[]>([]);
   let recommendations = $state<any[]>([]);
-  let isMyProfilePage = $state(!id);
+  let isMyProfilePage = $state(false);
+  $effect.pre(() => {
+    isMyProfilePage = !id;
+  });
   let currentPage = $state(0);
   let isLoading = $state(false);
   let hasMore = $state(true);
@@ -44,15 +47,16 @@
   let scrollListener: (() => void) | null = null;
   let scrollAttached = false;
 
-  function setProfile(login: string, avatar?: string, isSelf = !id) {
+  function setProfile(login: string, avatar?: string, isSelf?: boolean) {
     if (titleSet) return;
     titleSet = true;
     profileLogin = login;
     if (avatar) profileAvatar = avatar;
+    const profileIsSelf = isSelf ?? !id;
     setDiscordContext({
       profileLogin: login,
       profileAvatar: avatar ? resolveCdnAssetUrl(avatar) : undefined,
-      profileIsSelf: isSelf,
+      profileIsSelf,
     });
     refreshDiscordPresence();
   }

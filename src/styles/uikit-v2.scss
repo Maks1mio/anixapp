@@ -479,7 +479,7 @@
   line-height: 0;
   overflow: hidden;
 
-  :global(svg) {
+  svg {
     display: block;
     width: var(--uiv2-btn-icon);
     height: var(--uiv2-btn-icon);
@@ -506,7 +506,7 @@
   opacity: 0.72;
   line-height: 0;
 
-  :global(svg) {
+  svg {
     display: block;
     width: 0.85em;
     height: 0.85em;
@@ -551,7 +551,7 @@
     cursor: default;
   }
 
-  :global(svg) {
+  svg {
     display: block;
   }
 
@@ -780,7 +780,7 @@
     outline-offset: 2px;
   }
 
-  :global(svg) {
+  svg {
     display: block;
   }
 }
@@ -989,7 +989,7 @@
     opacity: 0;
   }
 
-  :global(svg) {
+  svg {
     display: block;
   }
 }
@@ -1409,7 +1409,7 @@
     outline-offset: 1px;
   }
 
-  :global(svg) {
+  svg {
     display: block;
   }
 }
@@ -1590,7 +1590,7 @@
   flex-shrink: 0;
   color: var(--uiv2-fg-soft);
 
-  :global(svg) {
+  svg {
     display: block;
     width: 14px;
     height: 14px;
@@ -1854,7 +1854,7 @@
     background 0.18s ease,
     color 0.18s ease;
 
-  :global(svg) {
+  svg {
     display: block;
   }
 
@@ -1965,7 +1965,7 @@
   flex-shrink: 0;
   color: var(--uiv2-fg-muted);
 
-  :global(svg) {
+  svg {
     display: block;
     width: 14px;
     height: 14px;
@@ -2029,7 +2029,7 @@
   justify-content: center;
   color: var(--uikit-v2-accent);
 
-  :global(svg) {
+  svg {
     display: block;
     stroke-width: 1.75;
   }
@@ -2229,7 +2229,7 @@
   color: var(--uikit-v2-accent, #{$color-accent});
   line-height: 0;
 
-  :global(svg) {
+  svg {
     display: block;
     width: 0.75rem;
     height: 0.75rem;
@@ -2272,7 +2272,7 @@
   -webkit-backdrop-filter: blur(10px);
   color: var(--uiv2-media-control-fg) !important;
 
-  :global(svg) {
+  svg {
     stroke: currentColor;
   }
 
@@ -2393,7 +2393,7 @@
   color: var(--uiv2-anime-rating);
   line-height: 0;
 
-  :global(svg) {
+  svg {
     display: block;
     width: 0.6875rem;
     height: 0.6875rem;
@@ -2444,7 +2444,7 @@
     color: #fbbf24;
   }
 
-  :global(svg) {
+  svg {
     display: block;
   }
 }
@@ -2522,7 +2522,7 @@
   flex-shrink: 0;
   opacity: 0.9;
 
-  :global(svg) {
+  svg {
     display: block;
   }
 }
@@ -2561,7 +2561,7 @@
   margin-top: 0.1rem;
   color: color-mix(in srgb, var(--uikit-v2-text) 42%, transparent);
 
-  :global(svg) {
+  svg {
     display: block;
   }
 }
@@ -2751,7 +2751,7 @@
     color: var(--uiv2-popup-fg);
   }
 
-  :global(svg) {
+  svg {
     display: block;
     flex-shrink: 0;
   }
@@ -2897,12 +2897,12 @@
   color: inherit;
   opacity: 1;
 
-  :global(svg) {
+  svg {
     display: block;
     stroke-width: 1.75;
   }
 
-  :global(img) {
+  img {
     width: 1.35rem;
     height: 1.35rem;
     border-radius: 50%;
@@ -2940,7 +2940,7 @@
   opacity: 0.45;
   color: inherit;
 
-  :global(svg) {
+  svg {
     display: block;
   }
 }
@@ -2982,7 +2982,7 @@
     cursor: default;
   }
 
-  :global(svg) {
+  svg {
     display: block;
   }
 }
@@ -4068,11 +4068,11 @@ body.uiv2-scroll-dragging * {
 }
 
 .uiv2-carousel__nav {
-  :global(.release-page__carousel-fade) {
+  .release-page__carousel-fade {
     width: 3.5rem;
   }
 
-  :global(.release-page__carousel-arrow) {
+  .release-page__carousel-arrow {
     width: 2.4rem;
     height: 2.4rem;
     border-radius: 50%;
@@ -4239,7 +4239,7 @@ body.uiv2-scroll-dragging * {
   height: 0.75rem;
   line-height: 0;
 
-  :global(svg) {
+  svg {
     display: block;
     width: 0.75rem;
     height: 0.75rem;
@@ -4323,7 +4323,7 @@ body.uiv2-scroll-dragging * {
   opacity: 0.9;
   line-height: 0;
 
-  :global(svg) {
+  svg {
     display: block;
   }
 }
@@ -4493,7 +4493,7 @@ body.uiv2-scroll-dragging * {
   display: inline-flex;
   line-height: 0;
 
-  :global(svg) {
+  svg {
     display: block;
   }
 }
@@ -4648,7 +4648,7 @@ body.uiv2-scroll-dragging * {
   color: var(--uiv2-media-control-fg) !important;
   box-shadow: var(--uiv2-media-control-shadow) !important;
 
-  :global(svg) {
+  svg {
     stroke-width: 2.15;
     stroke: currentColor;
   }
@@ -4684,7 +4684,7 @@ body.uiv2-scroll-dragging * {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 
-  :global(svg) {
+  svg {
     stroke: currentColor;
   }
 
@@ -4775,7 +4775,7 @@ body.uiv2-scroll-dragging * {
     .uiv2-collection__meta-icon {
       color: #ff6b6b;
 
-      :global(svg) {
+      svg {
         filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
       }
     }
@@ -4791,7 +4791,7 @@ body.uiv2-scroll-dragging * {
   flex-shrink: 0;
   line-height: 0;
 
-  :global(svg) {
+  svg {
     display: block;
     width: 0.8125rem;
     height: 0.8125rem;
@@ -5352,7 +5352,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
     color: color-mix(in srgb, var(--uikit-v2-danger, #{$color-error}) 75%, #fff);
   }
 
-  :global(svg) {
+  svg {
     display: block;
   }
 }
@@ -5490,7 +5490,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
     color: var(--uikit-v2-accent, #{$color-accent});
   }
 
-  :global(svg) {
+  svg {
     display: block;
   }
 }
@@ -5550,7 +5550,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
     transform: rotate(-90deg);
   }
 
-  :global(svg) {
+  svg {
     display: block;
   }
 }
@@ -5775,7 +5775,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
     opacity: 0;
   }
 
-  :global(svg) {
+  svg {
     display: block;
     stroke-width: 1.75;
   }
@@ -5885,7 +5885,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
     color: color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 85%, #fff);
   }
 
-  :global(svg) {
+  svg {
     display: block;
   }
 }
@@ -5977,22 +5977,22 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
   width: 100%;
   display: block;
 
-  :global(.uiv2-outlined-wrap) {
+  .uiv2-outlined-wrap {
     width: 100%;
   }
 
-  :global(.uiv2-outlined-field) {
+  .uiv2-outlined-field {
     margin: 0;
     width: 100%;
     --uiv2-field-notch: var(--uikit-v2-bg, #{$color-bg});
   }
 
-  :global(.uiv2-outlined-field__input--area) {
+  .uiv2-outlined-field__input--area {
     min-height: 4.5rem;
     max-height: 12rem;
   }
 
-  :global(.uiv2-outlined-field__hint) {
+  .uiv2-outlined-field__hint {
     margin-top: 0.35rem;
   }
 }
@@ -6104,7 +6104,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
     0 1px 0 color-mix(in srgb, #fff 18%, transparent) inset,
     0 6px 16px color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 28%, transparent) !important;
 
-  :global(svg) {
+  svg {
     stroke: currentColor;
   }
 

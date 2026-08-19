@@ -4,6 +4,11 @@ const { ipcMain } = require('electron');
 const { BookmarkType, BookmarkSortType, DefaultResult } = require('anixapi');
 const { broadcastBookmarksChanged } = require('../lib/broadcast');
 
+function toPositiveInt(value) {
+  const n = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
+}
+
 function register(deps) {
   const {
     loggedHandle,
@@ -20,9 +25,11 @@ function register(deps) {
 // ——— Anixart API bridge (raw JSON responses for renderer) ———
 
 loggedHandle('anix:releaseById', async (_, id, extended = true) => {
+  const releaseId = toPositiveInt(id);
+  if (releaseId == null) return null;
   try {
     const client = getAnixart();
-    const data = await client.endpoints.release.info(id, extended);
+    const data = await client.endpoints.release.info(releaseId, extended);
     return data;
   } catch (err) {
     handleAnixError(err, 'releaseById');
@@ -30,27 +37,34 @@ loggedHandle('anix:releaseById', async (_, id, extended = true) => {
 });
 
 ipcMain.handle('anix:getVideos', async (_, releaseId) => {
+  const id = toPositiveInt(releaseId);
+  if (id == null) return { types: [] };
   try {
     const client = getAnixart();
-    return await client.endpoints.release.getVideos(releaseId);
+    return await client.endpoints.release.getVideos(id);
   } catch (err) {
     handleAnixError(err, 'getVideos');
   }
 });
 
 ipcMain.handle('anix:getVideoInCategory', async (_, releaseId, categoryId, page = 1) => {
+  const id = toPositiveInt(releaseId);
+  const cat = toPositiveInt(categoryId);
+  if (id == null || cat == null) return { videos: [] };
   try {
     const client = getAnixart();
-    return await client.endpoints.release.getVideoInCategory({ id: releaseId, categoryId, page });
+    return await client.endpoints.release.getVideoInCategory({ id, categoryId: cat, page });
   } catch (err) {
     handleAnixError(err, 'getVideoInCategory');
   }
 });
 
 ipcMain.handle('anix:getDubbers', async (_, releaseId) => {
+  const id = toPositiveInt(releaseId);
+  if (id == null) return { types: [] };
   try {
     const client = getAnixart();
-    return await client.endpoints.release.getDubbers(releaseId);
+    return await client.endpoints.release.getDubbers(id);
   } catch (err) {
     handleAnixError(err, 'getDubbers');
   }
@@ -66,54 +80,73 @@ ipcMain.handle('anix:typeAll', async () => {
 });
 
 ipcMain.handle('anix:typePin', async (_, releaseId, typeId) => {
+  const id = toPositiveInt(releaseId);
+  const type = toPositiveInt(typeId);
+  if (id == null || type == null) return null;
   try {
     const client = getAnixart();
-    return await client.endpoints.type.pin(releaseId, typeId);
+    return await client.endpoints.type.pin(id, type);
   } catch (err) {
     handleAnixError(err, 'typePin');
   }
 });
 
 ipcMain.handle('anix:typeUnpin', async (_, releaseId, typeId) => {
+  const id = toPositiveInt(releaseId);
+  const type = toPositiveInt(typeId);
+  if (id == null || type == null) return null;
   try {
     const client = getAnixart();
-    return await client.endpoints.type.unpin(releaseId, typeId);
+    return await client.endpoints.type.unpin(id, type);
   } catch (err) {
     handleAnixError(err, 'typeUnpin');
   }
 });
 
 ipcMain.handle('anix:getDubberSources', async (_, releaseId, dubberId) => {
+  const id = toPositiveInt(releaseId);
+  const dubId = toPositiveInt(dubberId);
+  if (id == null || dubId == null) return { sources: [] };
   try {
     const client = getAnixart();
-    return await client.endpoints.release.getDubberSources(releaseId, dubberId);
+    return await client.endpoints.release.getDubberSources(id, dubId);
   } catch (err) {
     handleAnixError(err, 'getDubberSources');
   }
 });
 
 ipcMain.handle('anix:getEpisodes', async (_, releaseId, dubberId, sourceId, sort = 1) => {
+  const id = toPositiveInt(releaseId);
+  const dubId = toPositiveInt(dubberId);
+  const srcId = toPositiveInt(sourceId);
+  if (id == null || dubId == null || srcId == null) return { episodes: [] };
   try {
     const client = getAnixart();
-    return await client.endpoints.release.getEpisodes(releaseId, dubberId, sourceId, sort);
+    return await client.endpoints.release.getEpisodes(id, dubId, srcId, sort);
   } catch (err) {
     handleAnixError(err, 'getEpisodes');
   }
 });
 
 ipcMain.handle('anix:getEpisode', async (_, releaseId, sourceId, episodePosition) => {
+  const id = toPositiveInt(releaseId);
+  const srcId = toPositiveInt(sourceId);
+  const ep = toPositiveInt(episodePosition);
+  if (id == null || srcId == null || ep == null) return { episode: null };
   try {
     const client = getAnixart();
-    return await client.endpoints.release.getEpisode(releaseId, sourceId, episodePosition);
+    return await client.endpoints.release.getEpisode(id, srcId, ep);
   } catch (err) {
     handleAnixError(err, 'getEpisode');
   }
 });
 
 ipcMain.handle('anix:getEpisodeUpdates', async (_, releaseId, page = 0) => {
+  const id = toPositiveInt(releaseId);
+  if (id == null) return { content: [] };
   try {
     const client = getAnixart();
-    return await client.endpoints.episode.updates(releaseId, page);
+    return await client.endpoints.episode.updates(id, page);
   } catch (err) {
     handleAnixError(err, 'getEpisodeUpdates');
   }

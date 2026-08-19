@@ -9,8 +9,6 @@
   interface Props { id?: number; embedded?: boolean; discordLayout?: boolean; }
   let { id, embedded = false, discordLayout = false }: Props = $props();
 
-  const loadProfileId = id;
-
   let loadState = $state<'loading' | 'error' | 'ready'>('loading');
   let errorMsg = $state('');
   let profile = $state<Record<string, unknown> | null>(null);
@@ -24,7 +22,7 @@
   }
 
   onMount(async () => {
-    const result = await loadProfilePage(loadProfileId);
+    const result = await loadProfilePage(id);
     loadState = result.loadState;
     errorMsg = result.errorMsg;
     profile = result.profile;

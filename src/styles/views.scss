@@ -2883,10 +2883,39 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  position: relative;
+  isolation: isolate;
 }
 
 .release-page__head-backdrop {
   display: none;
+}
+
+.release-page__head--with-video .release-page__head-backdrop {
+  display: block;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, $color-bg 14%, transparent) 0%,
+      color-mix(in srgb, $color-bg 42%, transparent) 55%,
+      $color-bg 100%
+    );
+  }
+}
+
+.release-page__head--with-video .release-page__head-top,
+.release-page__head--with-video .release-page__head-aside-play {
+  position: relative;
+  z-index: 2;
 }
 
 .release-page__head-top {
@@ -2946,6 +2975,13 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   pointer-events: none;
 
   img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: blur(5px) saturate(1.1) brightness(0.52);
+  }
+
+  .release-page__head-backdrop-video {
     width: 100%;
     height: 100%;
     object-fit: cover;

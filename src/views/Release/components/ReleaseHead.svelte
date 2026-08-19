@@ -36,6 +36,7 @@
     episodeAddedText: string | null;
     currentStatus:   ListStatusId | null;
     selectOptions:   SelectOption[];
+    kitsuVideoBgUrl: string;
     onToggleFavorite: () => void;
     onWatch:          () => void;
     onSetStatus:      (v: string) => void;
@@ -48,7 +49,7 @@
     isViewBlocked,
     noteHtml, descHtml, descClean, descNeedsTruncate, descCollapsed,
     metaInfoRows, playBtnText, playBtnDisabled, episodeAddedText,
-    currentStatus, selectOptions,
+    currentStatus, selectOptions, kitsuVideoBgUrl,
     onToggleFavorite, onWatch, onSetStatus, onToggleDesc,
   }: Props = $props();
 
@@ -228,10 +229,22 @@
   </div>
 {/snippet}
 
-<div class="release-page__head" class:release-page__head--narrow={!isWide}>
-  {#if posterUrl && !isWide}
+<div class="release-page__head" class:release-page__head--narrow={!isWide} class:release-page__head--with-video={!!kitsuVideoBgUrl}>
+  {#if (posterUrl || kitsuVideoBgUrl) && !isWide}
     <div class="release-page__head-backdrop" aria-hidden="true">
-      <img src={displayPosterUrl} alt="" loading="lazy" decoding="async" />
+      {#if kitsuVideoBgUrl}
+        <video
+          class="release-page__head-backdrop-video"
+          src={kitsuVideoBgUrl}
+          autoplay
+          muted
+          loop
+          playsinline
+          preload="metadata"
+        ></video>
+      {:else}
+        <img src={displayPosterUrl} alt="" loading="lazy" decoding="async" />
+      {/if}
     </div>
   {/if}
 

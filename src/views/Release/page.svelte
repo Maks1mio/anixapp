@@ -20,10 +20,12 @@
   } from './_utils';
   import { isReleaseAnnounce } from '../../utils/release-card';
   import { ReleaseHead, ReleaseVideos, ReleaseRating, ReleaseRelated, ReleaseRecommendations, ReleaseScreenshots, ReleaseComments } from './components';
+  import ReleaseKitsuEpisodes from './components/ReleaseKitsuEpisodes.svelte';
   import { notifyFavoritesChanged } from '../../utils/favorites-events';
   import { applyReleaseListStatus } from '../../utils/release-list-status';
   import { enrichBlockedRelease } from '../../services/release-geo-bypass';
   import { extractHistoryEpisodeInfo } from '../../utils/historyFormat';
+  import { getApiBase, getAnixbackUploadsOrigin } from '../../services/anixback-endpoint';
 
   interface Props { id: number; }
   let { id }: Props = $props();
@@ -37,6 +39,7 @@
   let currentStatus  = $state<ListStatusId | null>(null);
   let descCollapsed  = $state(true);
   let historyResume  = $state<{ episode: string; dubber: string } | null>(null);
+  let kitsuVideoBgUrl = $state('');
 
   function readResumeInfo(raw: Record<string, unknown> | null | undefined) {
     if (!raw) return { episode: '', dubber: '' };
@@ -306,6 +309,22 @@
     } catch { /* ignore */ }
   }
 
+  async function loadKitsuBackground(releaseId: number): Promise<void> {
+    try {
+      const res = await fetch(`${getApiBase()}/kitsu/${releaseId}`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return;
+      const data = await res.json() as { data?: { video_bg_url?: string | null } };
+      const rel = data.data?.video_bg_url ?? '';
+      kitsuVideoBgUrl = rel
+        ? `${getAnixbackUploadsOrigin()}${rel.startsWith('/') ? rel : `/${rel}`}`
+        : '';
+    } catch {
+      kitsuVideoBgUrl = '';
+    }
+  }
+
   function onBookmarksChanged(e: Event) {
     const detail = (e as CustomEvent<{ releaseId?: number }>).detail;
     if (detail?.releaseId != null && detail.releaseId !== id) return;
@@ -335,6 +354,7 @@
       favoritesCount = (raw.favorites_count ?? 0) as number;
       currentStatus  = numToStatusId(raw.profile_list_status as number | null | undefined);
       loadState      = 'ready';
+      void loadKitsuBackground(id);
 
       const posterVal = buildPosterUrl(
         typeof raw.poster === 'string' ? raw.poster :
@@ -377,7 +397,7 @@
         {isFavorite} {favoritesCount}
         {isViewBlocked} {noteHtml} {descHtml} {descClean} {descNeedsTruncate} {descCollapsed}
         {metaInfoRows} {playBtnText} {playBtnDisabled} {episodeAddedText}
-        {currentStatus} {selectOptions}
+        {currentStatus} {selectOptions} {kitsuVideoBgUrl}
         onToggleFavorite={toggleFavorite}
         onWatch={handleWatch}
         onSetStatus={setStatus}
@@ -386,6 +406,9 @@
 
       <!-- Videos -->
       <ReleaseVideos releaseId={id} releaseTitle={title} />
+
+      <!-- Kitsu episode list -->
+      <ReleaseKitsuEpisodes releaseId={id} titleEn={titleOriginal || titleAlt || ''} />
 
       <!-- Rating block -->
       <ReleaseRating

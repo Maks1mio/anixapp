@@ -18,8 +18,9 @@
   import StaffPanel from './StaffPanel.svelte';
   import OverviewPanel from './OverviewPanel.svelte';
   import AniListPanel from './AniListPanel.svelte';
+  import KitsuQueuePanel from './KitsuQueuePanel.svelte';
 
-  type Tab = 'announcements' | 'staff' | 'overview' | 'anilist';
+  type Tab = 'announcements' | 'staff' | 'overview' | 'anilist' | 'kitsu';
   type PanelMode = 'idle' | 'create' | 'edit';
 
   const TYPE_CONFIG: Record<AnnouncementType, { label: string; color: string }> = {
@@ -65,6 +66,7 @@
     ...(canManageOverview ? [{ id: 'overview', label: 'Обзоры' }] : []),
     { id: 'staff', label: canManageStaff ? 'Команда' : 'Мой доступ' },
     { id: 'anilist', label: "Anime API's" },
+    { id: 'kitsu', label: 'Очередь Kitsu' },
   ]);
   const canPopOut = $derived(typeof window !== 'undefined' && !!window.electron?.openAdminPanelWindow);
   const panelOpen = $derived(panelMode !== 'idle');
@@ -424,6 +426,10 @@
     {:else if tab === 'anilist'}
       <div class="adm-body__full">
         <AniListPanel />
+      </div>
+    {:else if tab === 'kitsu'}
+      <div class="adm-body__full">
+        <KitsuQueuePanel />
       </div>
     {/if}
 

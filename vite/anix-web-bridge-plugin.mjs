@@ -43,7 +43,8 @@ function shouldTryNextOrigin(res, path, originIndex, total) {
 
 /** ffmpeg download / render can take minutes — never apply the short proxy timeout. */
 function isLongRunningAnixbackPath(path) {
-  return /\/admin\/overview\/overrides\/[^/?#]+\/(source-url|source|render|bg)\b/.test(path);
+  return /\/admin\/overview\/overrides\/[^/?#]+\/(source-url|source|render|bg)\b/.test(path)
+    || /\/kitsu\/video\//.test(path);
 }
 
 function readBody(req, maxBytes = 4 * 1024 * 1024) {

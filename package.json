@@ -15,7 +15,7 @@
         "build:linux-appimage": "vite build && yarn build:icon && node scripts/inject-oauth-env.js && electron-builder --linux AppImage --publish=never",
         "build:vite": "vite build",
         "electron:build": "vite build && yarn build:icon && node scripts/inject-oauth-env.js && electron-builder --publish=never",
-        "rebuild:native": "electron-rebuild -f -w discord_bridge",
+        "rebuild:native": "electron-rebuild -f",
         "electron:dev": "concurrently \"vite\" \"wait-on http://127.0.0.1:5173 && cross-env NODE_ENV=development electron .\"",
         "preview": "vite preview"
     },

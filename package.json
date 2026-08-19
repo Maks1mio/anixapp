@@ -37,7 +37,7 @@
         "sass": "^1.102.0",
         "svelte": "^5.56.9",
         "svelte-check": "^4.7.6",
-        "typescript": "^7.0.2",
+        "typescript": "^6.0.3",
         "vite": "^8.2.1",
         "wait-on": "^9.1.0"
     },

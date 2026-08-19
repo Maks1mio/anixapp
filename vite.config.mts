@@ -28,10 +28,10 @@ export default defineConfig(({ command }) => ({
     },
   },
   css: {
-    // Electron 42 = Chromium 140. Vite baseline also targets Safari, and
+    // Electron 43 = Chromium 150. Vite baseline also targets Safari, and
     // lightningcss then emits only -webkit-backdrop-filter (or drops blur).
     lightningcss: {
-      targets: { chrome: 140 << 16 },
+      targets: { chrome: 150 << 16 },
     },
     preprocessorOptions: {
       scss: {

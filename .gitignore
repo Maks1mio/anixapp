@@ -30,6 +30,7 @@ yarn-error.log*
 .env.local
 .env.*.local
 auth.json
+electron/lib/oauth-env.generated.js
 
 # IDE
 .idea/

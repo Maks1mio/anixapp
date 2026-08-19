@@ -25,6 +25,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_GIPHY_API_KEY: ${{ secrets.VITE_GIPHY_API_KEY }}
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -51,6 +52,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_GIPHY_API_KEY: ${{ secrets.VITE_GIPHY_API_KEY }}
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -74,6 +76,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_GIPHY_API_KEY: ${{ secrets.VITE_GIPHY_API_KEY }}
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -103,11 +106,21 @@ jobs:
       - name: Install dependencies
         run: su builder -c 'yarn install --frozen-lockfile'
 
+      - name: Write secrets to .env
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          VITE_GIPHY_API_KEY: ${{ secrets.VITE_GIPHY_API_KEY }}
+        run: |
+          printf 'FIREBASE_API_KEY=%s\n' "$FIREBASE_API_KEY" > .env
+          printf 'VITE_GIPHY_API_KEY=%s\n' "$VITE_GIPHY_API_KEY" >> .env
+          chown builder:builder .env
+
       - name: Build Arch package
         run: su builder -c 'yarn build:linux-arch'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_GIPHY_API_KEY: ${{ secrets.VITE_GIPHY_API_KEY }}
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
 
       - uses: actions/upload-artifact@v4
         with:

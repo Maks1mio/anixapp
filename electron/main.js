@@ -10,6 +10,9 @@
  */
 'use strict';
 
+const { loadLocalEnv } = require('./lib/load-dotenv');
+loadLocalEnv();
+
 const { app, BrowserWindow } = require('electron');
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;

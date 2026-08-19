@@ -6,6 +6,9 @@ const path = require('path');
 const { app, BrowserWindow, shell } = require('electron');
 const state = require('./app-state');
 const logger = require('../logger');
+const { loadLocalEnv } = require('./load-dotenv');
+
+loadLocalEnv();
 
 /** Anixart VK ID (Android 9.0 BETA 21) — нельзя ходить через oauth.vk.com (Security Error). */
 const VK_CLIENT_ID = '54701760';
@@ -14,9 +17,19 @@ const VK_REDIRECT_BASE = `${VK_REDIRECT_SCHEME}://vk.ru/blank.html`;
 const VK_ID_SDK_VERSION = '2.7.2';
 const GOOGLE_CLIENT_ID =
   '983926366374-c3jvolf9t8e151mbgriuqi7uqnbt4c4p.apps.googleusercontent.com';
-const FIREBASE_API_KEY = 'AIzaSyBFPckWOsp0MEqb_1gwszvM1ILdUixM-uw';
 const FIREBASE_AUTH_HANDLER =
   'https://anime-ad-eb8b3.firebaseapp.com/__/auth/handler';
+
+function getFirebaseApiKey() {
+  const fromEnv = String(process.env.FIREBASE_API_KEY || '').trim();
+  if (fromEnv) return fromEnv;
+  try {
+    const generated = require('./oauth-env.generated');
+    return String(generated && generated.FIREBASE_API_KEY || '').trim();
+  } catch {
+    return '';
+  }
+}
 
 /** Telegram Login (из AuthActivity). */
 const TELEGRAM_CLIENT_ID = '8789559054';
@@ -875,6 +888,11 @@ async function getVkAccessToken() {
 }
 
 async function exchangeGoogleTokenForFirebase(googleIdToken) {
+  const firebaseApiKey = getFirebaseApiKey();
+  if (!firebaseApiKey) {
+    logger.error('oauth', 'FIREBASE_API_KEY is missing');
+    throw new Error('firebase_api_key_missing');
+  }
   const body = {
     postBody: `id_token=${googleIdToken}&providerId=google.com`,
     requestUri: 'http://localhost',
@@ -882,7 +900,7 @@ async function exchangeGoogleTokenForFirebase(googleIdToken) {
     returnSecureToken: true,
   };
   const res = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${FIREBASE_API_KEY}`,
+    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${firebaseApiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

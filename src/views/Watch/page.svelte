@@ -55,6 +55,7 @@
     pickLowestQuality,
   } from '../../utils/adaptive-quality';
   import { getLobbyProfile, leaveLobbyRoomFromUi, joinLobbyRoomAndOpenPlayer } from '../../utils/lobby-player';
+  import { resolveFirstAvailableEpisode } from '../../utils/episodeSource';
 
   // ── URL params ─────────────────────────────────────────────────────────────
   const params          = getWatchParams();
@@ -98,6 +99,11 @@
   function positiveId(value: string | number | null | undefined): number | null {
     const n = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
     return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  function episodeIndex(value: string | number | null | undefined): number | null {
+    const n = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
+    return Number.isFinite(n) && n >= 0 ? n : null;
   }
 
   function refreshDubberNameFromApi() {
@@ -275,9 +281,7 @@
     const exact = list.find((item) => item.episodePosition === preferredEp);
     if (exact) return exact;
     return [...list]
-      .filter((item) => item.episodePosition > 0)
       .sort((a, b) => a.episodePosition - b.episodePosition)[0]
-      ?? list[0]
       ?? null;
   }
 
@@ -294,7 +298,7 @@
   const prevEpisodePosition = $derived.by(() => {
     if (!isLocalPlaybackMode) {
       const target = watchState.ep - 1;
-      return target > 0 && (episodes.length === 0 || episodes.some((e) => e.position === target))
+      return target >= 0 && (episodes.length === 0 || episodes.some((e) => e.position === target))
         ? target
         : null;
     }
@@ -1077,7 +1081,7 @@
     const currentSourceId = positiveId(watchState.sourceId) ?? 0;
     const currentDubberId = positiveId(watchState.dubberId) ?? 0;
     const skipSibnet = isSibnetSourceName(watchState.sourceName);
-    if (!api?.getDubberSources || !api?.getEpisode || rId == null || !ep) return null;
+    if (!api?.getDubberSources || !api?.getEpisode || rId == null || episodeIndex(ep) == null) return null;
 
     const pickFromSources = async (
       sources: Array<{ id: number; name: string }>,
@@ -1281,7 +1285,7 @@
   function loadEpisode(rId: number, sId: number, ep: number, titleStr: string, srcName: string, dubId: string, seekTime?: number, initialPaused?: boolean): Promise<void> {
     localPlaybackPath = '';
     const api = (window as any).anixApi?.release;
-    if (!api?.getEpisode || positiveId(rId) == null || positiveId(sId) == null || positiveId(ep) == null) {
+    if (!api?.getEpisode || positiveId(rId) == null || positiveId(sId) == null || episodeIndex(ep) == null) {
       return Promise.resolve();
     }
     const myGen = ++episodeLoadGen;
@@ -2560,7 +2564,7 @@
     const filePath = localPlaybackPath;
     const rId = positiveId(watchState.releaseId);
     const ep = watchState.ep;
-    if (!filePath || rId == null || !(ep > 0)) {
+    if (!filePath || rId == null || episodeIndex(ep) == null) {
       setSkipMarks(null);
       return;
     }
@@ -2776,39 +2780,66 @@
     } else {
     const rId = positiveId(releaseId);
     const sId = positiveId(watchState.sourceId);
+    const dubId = positiveId(watchState.dubberId);
     if (rId == null || sId == null) {
       player.loadState = 'error';
       player.errorText = 'Неверные параметры просмотра.';
     } else {
-    ;(window as any).anixApi.release.getEpisode(
-      rId, sId, watchState.ep,
-    ).then(async (res: any) => {
-      const episode = res?.episode;
-      if (!episode?.url) { player.loadState = 'error'; player.errorText = 'Серия недоступна.'; return; }
-      setOrigEpisodeUrl(episode.url);
-      const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq, skip } = await core.resolve(episode.url, episode.iframe);
-      const resolved = applyQualityMap(qualityMap, cq, pUrl, { resetManualLock: true });
-      setSkipMarks(skip, { carry: true });
-      player.loadState = 'ready';
-      await tick();
-      applyVideoAndUI(resolved.url, uv, watchState.ep, watchState.title, watchState.sourceName, watchState.dubberId);
-      refreshDubberNameFromApi();
-      refreshSourceNameFromApi();
-      fetchEpisodesSilently();
+    void (async () => {
+      try {
+        let ep = episodeIndex(watchState.ep) ?? 1;
+        let episode: { url: string; iframe?: boolean } | null = null;
 
-      if (uv) {
-        bindVideoElementListeners();
+        const direct = await (window as any).anixApi.release.getEpisode(rId, sId, ep);
+        if (direct?.episode?.url) {
+          episode = direct.episode;
+        } else if (dubId != null) {
+          const resolved = await resolveFirstAvailableEpisode(rId, sId, dubId, ep);
+          if (resolved) {
+            ep = resolved.position;
+            episode = resolved.episode;
+            watchState.ep = ep;
+          }
+        } else if (ep !== 0) {
+          const zero = await (window as any).anixApi.release.getEpisode(rId, sId, 0);
+          if (zero?.episode?.url) {
+            ep = 0;
+            episode = zero.episode;
+            watchState.ep = 0;
+          }
+        }
+
+        if (!episode?.url) {
+          player.loadState = 'error';
+          player.errorText = 'Серия недоступна.';
+          return;
+        }
+
+        setOrigEpisodeUrl(episode.url);
+        const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq, skip } = await core.resolve(episode.url, episode.iframe);
+        const resolved = applyQualityMap(qualityMap, cq, pUrl, { resetManualLock: true });
+        setSkipMarks(skip, { carry: true });
+        player.loadState = 'ready';
+        await tick();
+        applyVideoAndUI(resolved.url, uv, ep, watchState.title, watchState.sourceName, watchState.dubberId);
+        refreshDubberNameFromApi();
+        refreshSourceNameFromApi();
+        fetchEpisodesSilently();
+
+        if (uv) {
+          bindVideoElementListeners();
+        }
+        showAndSchedule();
+      } catch {
+        if (mediaHasRenderableFrame(videoEl) || player.currentTime > 0.15 || (player.useVideo && !!player.playUrl)) {
+          revealPlayerMedia();
+          return;
+        }
+        player.switching = false;
+        player.loadState = 'error';
+        player.errorText = 'Ошибка загрузки серии.';
       }
-      showAndSchedule();
-    }).catch(() => {
-      if (mediaHasRenderableFrame(videoEl) || player.currentTime > 0.15 || (player.useVideo && !!player.playUrl)) {
-        revealPlayerMedia();
-        return;
-      }
-      player.switching = false;
-      player.loadState = 'error';
-      player.errorText = 'Ошибка загрузки серии.';
-    });
+    })();
     }
     }
 

@@ -9,6 +9,11 @@ function toPositiveInt(value) {
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
 }
 
+function toNonNegativeInt(value) {
+  const n = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
+  return Number.isFinite(n) && n >= 0 ? Math.trunc(n) : null;
+}
+
 function register(deps) {
   const {
     loggedHandle,
@@ -131,7 +136,7 @@ ipcMain.handle('anix:getEpisodes', async (_, releaseId, dubberId, sourceId, sort
 ipcMain.handle('anix:getEpisode', async (_, releaseId, sourceId, episodePosition) => {
   const id = toPositiveInt(releaseId);
   const srcId = toPositiveInt(sourceId);
-  const ep = toPositiveInt(episodePosition);
+  const ep = toNonNegativeInt(episodePosition);
   if (id == null || srcId == null || ep == null) return { episode: null };
   try {
     const client = getAnixart();

@@ -104,6 +104,11 @@ function createAnixBridgeCore(options = {}) {
     return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
   }
 
+  function toNonNegativeInt(value) {
+    const n = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
+    return Number.isFinite(n) && n >= 0 ? Math.trunc(n) : null;
+  }
+
   const HANDLERS = {
     'anix:getAuthStatus': async (c) => ({ hasToken: !!c.loadConfig().token }),
     'anix:checkConnection': async (c) => {
@@ -443,7 +448,7 @@ function createAnixBridgeCore(options = {}) {
     'anix:getEpisode': h((c, releaseId, sourceId, episodePosition) => {
       const id = toPositiveInt(releaseId);
       const srcId = toPositiveInt(sourceId);
-      const ep = toPositiveInt(episodePosition);
+      const ep = toNonNegativeInt(episodePosition);
       if (id == null || srcId == null || ep == null) return { episode: null };
       return c.getClient().endpoints.release.getEpisode(id, srcId, ep);
     }),

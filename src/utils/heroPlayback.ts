@@ -42,25 +42,27 @@ export async function resolveHeroPlayback(releaseId: number): Promise<HeroPlayba
       }
 
       for (const src of sources) {
-        try {
-          const epRes = await api.getEpisode(releaseId, src.id, 1);
-          const ep = epRes?.episode;
-          if (!ep?.url) continue;
+        for (const epNum of [1, 0]) {
+          try {
+            const epRes = await api.getEpisode(releaseId, src.id, epNum);
+            const ep = epRes?.episode;
+            if (!ep?.url) continue;
 
-          const resolved = await resolveEpisodeUrlWithRetry(ep.url, ep.iframe);
-          if (!resolved.useVideo || !resolved.playUrl) continue;
+            const resolved = await resolveEpisodeUrlWithRetry(ep.url, ep.iframe);
+            if (!resolved.useVideo || !resolved.playUrl) continue;
 
-          return {
-            releaseId,
-            sourceId: src.id,
-            dubberId: dub.id,
-            sourceName: src.name,
-            playUrl: resolved.playUrl,
-            episodeUrl: ep.url,
-            iframe: ep.iframe,
-          };
-        } catch {
-          continue;
+            return {
+              releaseId,
+              sourceId: src.id,
+              dubberId: dub.id,
+              sourceName: src.name,
+              playUrl: resolved.playUrl,
+              episodeUrl: ep.url,
+              iframe: ep.iframe,
+            };
+          } catch {
+            continue;
+          }
         }
       }
     }

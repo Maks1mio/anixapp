@@ -48,7 +48,34 @@ export function getAnixbackDirectOrigin(): string {
 export function getAnixbackUploadsOrigin(): string {
   const uploadsOverride = (import.meta.env.VITE_ANIXBACK_UPLOADS_ORIGIN as string | undefined)?.trim();
   if (uploadsOverride) return uploadsOverride.replace(/\/$/, '');
+
+  // Dev/Electron: same-origin Vite proxy for uploads (overview media, etc.).
+  if (import.meta.env.DEV && typeof window !== 'undefined' && !viteOriginOverride()) {
+    return `${window.location.origin}/__anixback`;
+  }
+
   return getAnixbackOrigin();
+}
+
+/** Resolve `/uploads/...` or absolute URL to a fetchable media URL. */
+export function resolveAnixbackUploadUrl(
+  url: string | null | undefined,
+  stamp?: string | null,
+): string {
+  const value = String(url ?? '').trim();
+  if (!value) return '';
+  const base = /^https?:\/\//i.test(value)
+    ? value
+    : `${getAnixbackUploadsOrigin()}${value.startsWith('/') ? value : `/${value}`}`;
+  if (!stamp) return base;
+  return `${base}${base.includes('?') ? '&' : '?'}t=${encodeURIComponent(stamp)}`;
+}
+
+/** CSS-safe url(...) value for background-image. */
+export function cssUploadUrl(url: string | null | undefined, stamp?: string | null): string {
+  const resolved = resolveAnixbackUploadUrl(url, stamp);
+  if (!resolved) return 'none';
+  return `url("${resolved.replace(/"/g, '%22')}")`;
 }
 
 export function getApiBase(): string {

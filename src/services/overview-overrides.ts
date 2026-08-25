@@ -1,4 +1,4 @@
-import { getAnixbackUploadsOrigin, getApiBase } from './anixback-endpoint';
+import { getApiBase, resolveAnixbackUploadUrl } from './anixback-endpoint';
 
 export interface VideoSegment {
   start: number;
@@ -18,21 +18,10 @@ export interface OverviewOverride {
   assetVersion?: string | null;
 }
 
-function withAssetVersion(url: string, version?: string | null): string {
-  if (!version) return url;
-  const v = encodeURIComponent(version);
-  return `${url}${url.includes('?') ? '&' : '?'}v=${v}`;
-}
-
 export function resolveUploadUrl(path: string | null, version?: string | null): string | null {
   if (!path) return null;
-  if (path.startsWith('http://') || path.startsWith('https://')) {
-    return withAssetVersion(path, version);
-  }
-  return withAssetVersion(
-    `${getAnixbackUploadsOrigin()}${path.startsWith('/') ? path : `/${path}`}`,
-    version
-  );
+  const resolved = resolveAnixbackUploadUrl(path, version);
+  return resolved || null;
 }
 
 export function resolveCustomVideoUrl(override: Pick<OverviewOverride, 'customVideoUrl' | 'assetVersion'> | null): string | null {

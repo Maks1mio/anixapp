@@ -22,6 +22,14 @@ export function isSibnetHtmlEmbed(url: string): boolean {
   return /sibnet\.ru/i.test(url) && /shell\.php/i.test(url) && /videoid=/i.test(url) && !/video_pid=/i.test(url);
 }
 
+/** HTML iframe AniLibria — нельзя ставить в <video> / качать как файл. */
+export function isLibriaHtmlEmbed(url: string): boolean {
+  if (!url) return false;
+  if (!/aniliberty|anilibria|libria\.fun/i.test(url)) return false;
+  if (/\.m3u8(\?|$)/i.test(url) || /cache\.libria\.fun/i.test(url)) return false;
+  return /iframe\.php/i.test(url) || /\/public\/iframe/i.test(url);
+}
+
 /** Sibnet embed в iframe бесполезен: мёртвый ролик + CORS на счётчике. */
 export function allowsIframeFallback(url: string): boolean {
   if (!url) return false;
@@ -34,6 +42,9 @@ export function userPlaybackError(url: string): string {
   if (/kodikplayer|kodik\.info|solodcdn|kodikcdn/i.test(url)) {
     return 'CDN Kodik недоступен с вашей сети — попробуйте другую озвучку или VPN';
   }
+  if (isLibriaHtmlEmbed(url) || /libria\.fun|anilibria/i.test(url)) {
+    return 'Релиз недоступен на AniLibria — попробуйте другой источник (например Kodik)';
+  }
   return 'Не удалось загрузить видео';
 }
 
@@ -41,7 +52,10 @@ export function userPlaybackError(url: string): string {
 export function isUnplayableVideoSrc(url: string): boolean {
   if (!url) return true;
   if (url.startsWith('/') || url.startsWith('anix-local:')) return false;
-  return isVideoEmbedPageUrl(url) || isSocialEmbedUrl(url) || isSibnetHtmlEmbed(url);
+  return isVideoEmbedPageUrl(url)
+    || isSocialEmbedUrl(url)
+    || isSibnetHtmlEmbed(url)
+    || isLibriaHtmlEmbed(url);
 }
 
 function inBrowserWithoutElectron(): boolean {
@@ -292,11 +306,14 @@ function unwrapMediaProxyUrl(url: string): string {
 export async function resolveDownloadUrl(
   episodeUrl: string,
   iframe: boolean,
-): Promise<{ url: string; headers: Record<string, string> } | null> {
+): Promise<{ url: string; headers: Record<string, string>; skip: SkipMarks | null } | null> {
   const embedUrl = episodeUrl.startsWith('http') ? episodeUrl : `https:${episodeUrl}`;
+  const isLibriaEmbed = isLibriaHtmlEmbed(embedUrl)
+    || /aniliberty|anilibria|libria\.fun/i.test(embedUrl);
 
   let url = '';
   let headers: Record<string, string> = {};
+  let skip: SkipMarks | null = null;
 
   try {
     const direct = await window.anixApi?.release?.getDirectVideoLink(embedUrl);
@@ -306,12 +323,17 @@ export async function resolveDownloadUrl(
         .replace(/:hls:hls\.m3u8$/, '');
       url = stripped.startsWith('http') ? stripped : `https:${stripped}`;
       headers = (direct.downloadHeaders as Record<string, string>) ?? {};
+      skip = normalizeSkipMarks(direct?.skip);
     }
   } catch {}
+
+  // AniLibria: никогда не качаем iframe.php — только HLS с cache.libria.fun
+  if (!url && isLibriaEmbed) return null;
 
   if (!url) {
     const resolved = await resolveEpisodeUrlWithRetry(embedUrl, iframe);
     url = unwrapMediaProxyUrl(resolved.playUrl);
+    skip = resolved.skip ?? skip;
     if (!url || isUnplayableVideoSrc(url)) return null;
   }
 
@@ -322,5 +344,5 @@ export async function resolveDownloadUrl(
     .replace(/:hls:manifest\.m3u8$/, '')
     .replace(/:hls:hls\.m3u8$/, '');
 
-  return { url, headers };
+  return { url, headers, skip };
 }

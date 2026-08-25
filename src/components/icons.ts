@@ -29,6 +29,7 @@ import {
   Film,
   Flag,
   Globe,
+  GripVertical,
   Heart,
   Home,
   Image,
@@ -214,6 +215,11 @@ export function iconPlay(size = 20): string {
 /** Пауза */
 export function iconPause(size = 20): string {
   return toSvg(Pause, size, { fill: 'currentColor', stroke: 'none' });
+}
+
+/** Ручка перетаскивания */
+export function iconGripVertical(size = 18): string {
+  return toSvg(GripVertical, size);
 }
 
 /** Плёнка */

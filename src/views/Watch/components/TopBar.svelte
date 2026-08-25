@@ -36,7 +36,7 @@
     onselectEp: (ep: number) => void;
     onselectDub: (dub: DubberItem) => void;
     onselectSource: (src: SourceItem) => void;
-    onselectDownloadedMode: () => void;
+    onselectDownloadedDub: (dubberName: string) => void;
     ontogglePinDub: (dub: DubberItem) => void | Promise<void>;
     onclosePopover: () => void;
   }
@@ -47,7 +47,7 @@
     downloadedEpisodes, downloadedPositions, localMode, currentDownloadedPath,
     currentDubberId, currentSourceId, popoverType, popoverLoading, lastEpisodeTypeUpdateId,
     inLobby, sidebarOpen = false, onopenSeries, onopenDubbing, onopenSource, onopenLobby,
-    onselectEp, onselectDub, onselectSource, onselectDownloadedMode,
+    onselectEp, onselectDub, onselectSource, onselectDownloadedDub,
     ontogglePinDub, onclosePopover,
   }: Props = $props();
 
@@ -109,7 +109,7 @@
   const episodeLabel = $derived(`${ep} серия`);
   const dubLabel = $derived(dubberName || 'Озвучка');
   const sourceLabel = $derived.by(() => {
-    if (localMode) return 'Скачано';
+    if (localMode) return sourceName || 'Источник';
     const fromList = sources.find((s) => String(s.id) === String(currentSourceId));
     if (fromList?.name) return fromList.name;
     if (sourceName && sourceName !== dubberName) return sourceName;
@@ -121,24 +121,6 @@
   <div class="watch-page__top-main">
     <h1 class="watch-page__title">{title}</h1>
     <div class="watch-page__selects">
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        bind:this={seriesAnchor}
-        class="watch-page__popover-anchor"
-        onmouseenter={() => enterTrigger('series')}
-      >
-        <UiV2Button
-          size="sm"
-          variant="chrome"
-          label={episodeLabel}
-          ariaHaspopup="menu"
-          ariaExpanded={popoverType === 'series'}
-          onclick={(e) => toggleTrigger('series', e)}
-        >
-          {#snippet trailing()}{@html iconChevronDown(14)}{/snippet}
-        </UiV2Button>
-      </div>
-
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         bind:this={dubbingAnchor}
@@ -174,13 +156,31 @@
           {#snippet trailing()}{@html iconChevronDown(14)}{/snippet}
         </UiV2Button>
       </div>
+
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        bind:this={seriesAnchor}
+        class="watch-page__popover-anchor"
+        onmouseenter={() => enterTrigger('series')}
+      >
+        <UiV2Button
+          size="sm"
+          variant="chrome"
+          label={episodeLabel}
+          ariaHaspopup="menu"
+          ariaExpanded={popoverType === 'series'}
+          onclick={(e) => toggleTrigger('series', e)}
+        >
+          {#snippet trailing()}{@html iconChevronDown(14)}{/snippet}
+        </UiV2Button>
+      </div>
     </div>
     {#if !useVideo}
       <p class="watch-page__dub-hint">Если не загружается — выберите другую озвучку или источник.</p>
     {/if}
   </div>
 
-  {#if onopenLobby}
+  {#if onopenLobby && (!localMode || inLobby)}
     <UiV2Tooltip text={lobbyTip} placement="bottom" showDelay={80}>
       <UiV2RoundButton
         size="md"
@@ -199,20 +199,6 @@
   {/if}
 </div>
 
-<EpisodesPopover
-  open={popoverType === 'series'}
-  x={seriesX}
-  y={seriesY}
-  anchor={seriesAnchor}
-  {episodes}
-  {downloadedPositions}
-  {localMode}
-  currentEp={ep}
-  loading={popoverLoading && popoverType === 'series'}
-  onselect={(next) => { onselectEp(next); onclosePopover(); }}
-  onclose={onclosePopover}
-/>
-
 <DubbingPopover
   open={popoverType === 'dubbing'}
   x={dubbingX}
@@ -221,11 +207,13 @@
   {dubbers}
   {downloadedEpisodes}
   {currentDownloadedPath}
+  hideDownloaded={inLobby}
   {currentDubberId}
+  currentDubberName={dubberName}
   {lastEpisodeTypeUpdateId}
   loading={popoverLoading && popoverType === 'dubbing'}
   onselect={(dub) => { onselectDub(dub); onclosePopover(); }}
-  onselectDownloadedMode={() => { onselectDownloadedMode(); onclosePopover(); }}
+  onselectDownloadedDub={(name) => { onselectDownloadedDub(name); onclosePopover(); }}
   ontogglePin={ontogglePinDub}
   onclose={onclosePopover}
 />
@@ -240,5 +228,19 @@
   {currentSourceId}
   loading={popoverLoading && popoverType === 'source'}
   onselect={(src) => { onselectSource(src); onclosePopover(); }}
+  onclose={onclosePopover}
+/>
+
+<EpisodesPopover
+  open={popoverType === 'series'}
+  x={seriesX}
+  y={seriesY}
+  anchor={seriesAnchor}
+  {episodes}
+  {downloadedPositions}
+  {localMode}
+  currentEp={ep}
+  loading={popoverLoading && popoverType === 'series'}
+  onselect={(next) => { onselectEp(next); onclosePopover(); }}
   onclose={onclosePopover}
 />

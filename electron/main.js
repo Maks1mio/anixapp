@@ -120,6 +120,16 @@ app.whenReady().then(() => {
   discord.initDiscordRpc();
   flushPendingDeepLink();
 
+  // Продолжить незавершённые загрузки после рестарта
+  setTimeout(() => {
+    try {
+      const n = media.restoreDownloads?.() || 0;
+      if (n > 0) logger.info('downloads', `restored ${n} incomplete download(s)`);
+    } catch (e) {
+      logger.warn('downloads', `restore failed: ${e?.message || e}`);
+    }
+  }, 2000);
+
   if (isDev) {
     void devApiBridge.start().catch((err) => {
       logger.error('dev-bridge', `startup failed: ${err?.message || err}`);
@@ -129,6 +139,7 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   logger.info('main', 'app before-quit');
+  try { media.persistDownloads?.(); } catch (_) {}
   if (discordRpc) discordRpc.destroy();
   if (isDev) void devApiBridge.stop();
 });

@@ -50,6 +50,9 @@ function createPlayerWindow(params) {
   playerWindow.on('closed', () => {
     state.playerWindowRef = null;
     state.currentPlayerPlayback = null;
+    try {
+      require('../lib/download-queue').setStreamingHold(false);
+    } catch (_) { /* ignore */ }
     // Revert Discord presence when player is closed
     if (discordRpc && config.getDiscordRpcEnabled()) {
       discordRpc.focusWindow('main');
@@ -79,6 +82,7 @@ function createPlayerWindow(params) {
     ep: params.ep ?? '',
     title: params.title ?? '',
     sourceName: params.sourceName ?? '',
+    ...(params.dubberName != null && params.dubberName !== '' ? { dubberName: params.dubberName } : {}),
     ...(params.dubberId != null && params.dubberId !== '' ? { dubberId: params.dubberId } : {}),
     ...(params.lobbyIdle ? { lobbyIdle: '1' } : {}),
   };
@@ -100,6 +104,7 @@ function createPlayerWindow(params) {
           ep: queryParams.ep,
           title: queryParams.title,
           sourceName: queryParams.sourceName,
+          dubberName: queryParams.dubberName || '',
           dubberId: queryParams.dubberId || '',
           localFile: String(params.localFile),
           local: true,
@@ -113,11 +118,22 @@ function createPlayerWindow(params) {
       }
     });
   }
+  syncDownloadHoldForPlayback(params);
 }
 
 function isSamePlaybackContent(a, b) {
   if (!a || !b) return false;
   return a.releaseId === b.releaseId && a.sourceId === b.sourceId && a.ep === b.ep && (a.dubberId || '') === (b.dubberId || '');
+}
+
+/** Онлайн-стрим → пауза загрузок; локальный файл → можно качать. */
+function syncDownloadHoldForPlayback(params) {
+  try {
+    const local = typeof params?.localFile === 'string' && params.localFile.trim() !== '';
+    require('../lib/download-queue').setStreamingHold(!local);
+  } catch (e) {
+    console.warn('syncDownloadHoldForPlayback:', e?.message || e);
+  }
 }
 
 function waitPlayerClosed() {
@@ -140,6 +156,7 @@ ipcMain.handle('player:openWindow', async (_, params) => {
     ep: String(params.ep ?? ''),
     title: String(params.title ?? ''),
     sourceName: String(params.sourceName ?? ''),
+    ...(params.dubberName != null && params.dubberName !== '' ? { dubberName: String(params.dubberName) } : {}),
     ...(params.dubberId != null && params.dubberId !== '' ? { dubberId: String(params.dubberId) } : {}),
     ...(params.localFile ? { localFile: String(params.localFile) } : {}),
     ...(params.lobbyIdle ? { lobbyIdle: true } : {}),
@@ -165,6 +182,7 @@ ipcMain.handle('player:openWindow', async (_, params) => {
         ...safe,
         local: !applyRoomPlayback,
       });
+      syncDownloadHoldForPlayback(safe);
     }
     state.playerWindowRef.focus();
     return;
@@ -195,6 +213,7 @@ ipcMain.on('player:syncState', async (_, playback) => {
       // Different content — change dynamically without closing/reopening
       state.currentPlayerPlayback = incomingContent;
       state.playerWindowRef.webContents.send('player:changeContent', params);
+      syncDownloadHoldForPlayback(params);
     }
     return;
   }

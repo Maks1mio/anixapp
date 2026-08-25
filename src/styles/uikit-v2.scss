@@ -1285,14 +1285,15 @@
   width: 100%;
   box-sizing: border-box;
   margin: 0;
-  padding: 1.05rem 0.9rem 0.7rem;
+  min-height: 2.7rem;
+  padding: 0.82rem 0.9rem;
   border: 0;
   border-radius: inherit;
   background: transparent;
   color: var(--uiv2-field-text);
   font: inherit;
   font-size: 0.95rem;
-  line-height: 1.35;
+  line-height: 1.25;
   outline: none;
   appearance: none;
 
@@ -1304,6 +1305,11 @@
     opacity: 0.55;
     cursor: default;
   }
+}
+
+.uiv2-outlined-field--floated .uiv2-outlined-field__input {
+  padding-top: 0.95rem;
+  padding-bottom: 0.72rem;
 }
 
 .uiv2-outlined-field--revealable .uiv2-outlined-field__input {
@@ -1765,14 +1771,15 @@
   justify-content: space-between;
   gap: 0.55rem;
   width: 100%;
-  min-height: 2.75rem;
-  padding: 0.62rem 0.5rem 0.62rem 0.9rem;
+  min-height: 2.7rem;
+  padding: 0.55rem 0.5rem 0.55rem 0.9rem;
   border: 0;
   border-radius: inherit;
   background: transparent;
   color: var(--uikit-v2-text);
   font: inherit;
   font-size: 0.9375rem;
+  line-height: 1.25;
   text-align: left;
   cursor: pointer;
 
@@ -1795,6 +1802,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 0.1rem;
   min-width: 0;
 }
@@ -1804,6 +1812,7 @@
   align-items: center;
   gap: 0.45rem;
   min-width: 0;
+  line-height: 1.25;
 }
 
 .uiv2-select__value-leading {
@@ -1818,6 +1827,7 @@
   min-width: 0;
   font-weight: 500;
   letter-spacing: -0.01em;
+  line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1886,7 +1896,8 @@
   position: fixed;
   inset: 0;
   z-index: 12055;
-  pointer-events: none;
+  pointer-events: auto;
+  background: transparent;
 }
 
 .uiv2-select__panel {
@@ -2683,6 +2694,24 @@
   backdrop-filter: blur(28px) saturate(1.35);
   color: var(--uiv2-popup-fg);
 
+  /* Невидимый мост к кнопке-триггеру — курсор не «теряется» в зазоре */
+  &:not(.uiv2-popup-menu__panel--sub)::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 14px;
+    pointer-events: auto;
+  }
+
+  &:not(.uiv2-popup-menu__panel--sub):not(.uiv2-popup-menu__panel--up)::before {
+    top: -14px;
+  }
+
+  &:not(.uiv2-popup-menu__panel--sub).uiv2-popup-menu__panel--up::before {
+    bottom: -14px;
+  }
+
   &.uiv2-popup-menu__panel--bridge-right::after,
   &.uiv2-popup-menu__panel--bridge-left::after {
     content: '';
@@ -2837,15 +2866,52 @@
   list-style: none;
 }
 
+.uiv2-popup-menu__scroll {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  --uiv2-scroll-offset: 3px;
+  --uiv2-scroll-track-size: 6px;
+}
+
 .uiv2-popup-menu__list {
   margin: 0;
   padding: 0.2rem 0.35rem;
   list-style: none;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  flex: 1 1 auto;
-  min-height: 0;
+}
+
+.uiv2-popup-menu__scroll > .uiv2-scroll-area__v-track {
+  z-index: 2;
+}
+
+.uiv2-popup-menu__skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.5rem;
+  padding: 0.45rem 0.65rem 0.45rem 0.6rem;
+  list-style: none;
+}
+
+.uiv2-popup-menu__skeleton-icon {
+  flex: 0 0 auto;
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.uiv2-popup-menu__skeleton-label-wrap {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.uiv2-popup-menu__skeleton-label {
+  width: 100%;
+  height: 0.85rem;
+}
+
+.uiv2-popup-menu__list--skeleton {
+  min-height: 11rem;
 }
 
 .uiv2-popup-menu__divider {

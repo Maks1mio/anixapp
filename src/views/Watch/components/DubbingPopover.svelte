@@ -12,28 +12,43 @@
     anchor?: HTMLElement | null;
     dubbers: DubberItem[];
     currentDubberId: string;
+    currentDubberName?: string;
     loading: boolean;
     lastEpisodeTypeUpdateId?: number | null;
     downloadedEpisodes?: DownloadedEpisodeItem[];
     currentDownloadedPath?: string;
+    /** Скрыть блок «Скаченные» (например в комнате совместного просмотра) */
+    hideDownloaded?: boolean;
     onselect: (dub: DubberItem) => void;
-    onselectDownloadedMode?: () => void;
+    onselectDownloadedDub?: (dubberName: string) => void;
     ontogglePin?: (dub: DubberItem) => void | Promise<void>;
     onclose: () => void;
   }
 
   let {
     open, x, y, anchor = null,
-    dubbers, currentDubberId, loading,
+    dubbers, currentDubberId, currentDubberName = '', loading,
     lastEpisodeTypeUpdateId = null,
     downloadedEpisodes = [],
     currentDownloadedPath = '',
-    onselect, onselectDownloadedMode, ontogglePin, onclose,
+    hideDownloaded = false,
+    onselect, onselectDownloadedDub, ontogglePin, onclose,
   }: Props = $props();
 
   const isSub = (d: DubberItem) => d.type === 1 || d.is_sub === true || /субтитр/i.test(d.name);
   const subtitles = $derived(sortDubbersPinnedFirst(dubbers.filter(isSub)));
   const voiceovers = $derived(sortDubbersPinnedFirst(dubbers.filter((d) => !isSub(d))));
+
+  const localDubbers = $derived.by(() => {
+    const map = new Map<string, number>();
+    for (const d of downloadedEpisodes) {
+      const name = (d.dubberName || 'Скаченное').trim() || 'Скаченное';
+      map.set(name, (map.get(name) || 0) + 1);
+    }
+    return [...map.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  });
 
   function escapeAttr(s: string): string {
     return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -54,6 +69,10 @@
     return parts.join(' · ');
   }
 
+  function epWord(n: number): string {
+    return n === 1 ? 'серия' : n < 5 ? 'серии' : 'серий';
+  }
+
   function dubItem(dub: DubberItem): UiV2PopupMenuItem {
     const pinned = dub.pinned === true;
     return {
@@ -70,23 +89,22 @@
   }
 
   const items = $derived.by((): UiV2PopupMenuItem[] => {
-    if (loading) {
-      return [{ id: 'loading', label: 'Загрузка…', disabled: true }];
-    }
+    if (loading) return [];
 
     const next: UiV2PopupMenuItem[] = [];
 
-    if (downloadedEpisodes.length > 0) {
-      const n = downloadedEpisodes.length;
+    if (!hideDownloaded && localDubbers.length > 0) {
       next.push({ id: 'sec-downloaded', label: 'Скаченные', type: 'label' });
-      next.push({
-        id: 'downloaded',
-        label: `Скаченное · ${n} ${n === 1 ? 'серия' : n < 5 ? 'серии' : 'серий'}`,
-        type: 'radio',
-        checked: !!currentDownloadedPath,
-        icon: iconDownload(18),
-        keepOpen: false,
-      });
+      for (const dub of localDubbers) {
+        next.push({
+          id: `local-dub:${dub.name}`,
+          label: `${dub.name} · ${dub.count} ${epWord(dub.count)}`,
+          type: 'radio',
+          checked: !!currentDownloadedPath && currentDubberName === dub.name,
+          icon: iconDownload(18),
+          keepOpen: false,
+        });
+      }
     }
 
     if (subtitles.length > 0) {
@@ -107,8 +125,8 @@
   });
 
   function onSelect(id: string) {
-    if (id === 'downloaded') {
-      onselectDownloadedMode?.();
+    if (id.startsWith('local-dub:')) {
+      onselectDownloadedDub?.(id.slice('local-dub:'.length));
       return;
     }
     if (!id.startsWith('dub:')) return;
@@ -129,8 +147,10 @@
   {y}
   {anchor}
   {items}
+  {loading}
+  loadingRows={8}
   title="Выбор"
-  searchable={dubbers.length > 8}
+  searchable={!loading && (dubbers.length > 8 || localDubbers.length > 6)}
   searchPlaceholder="Озвучка…"
   emptyLabel="Нет результатов"
   wide

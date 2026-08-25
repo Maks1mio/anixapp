@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte';
 
   type Props = {
-    title: string;
+    title?: string;
     /** Подпись для a11y (по умолчанию = title) */
     label?: string;
     /** Пилюля справа от заголовка */
@@ -14,8 +14,8 @@
   };
 
   let {
-    title,
-    label = title,
+    title = '',
+    label = title || 'Карточка',
     pill,
     spaced = false,
     class: className = '',
@@ -28,12 +28,16 @@
   class:uiv2-card--spaced={spaced}
   aria-label={label}
 >
-  <header class="uiv2-card__head">
-    <h3 class="uiv2-card__title">{title}</h3>
-    {#if pill}
-      <span class="uiv2-card__pill">{pill}</span>
-    {/if}
-  </header>
+  {#if title || pill}
+    <header class="uiv2-card__head">
+      {#if title}
+        <h3 class="uiv2-card__title">{title}</h3>
+      {/if}
+      {#if pill}
+        <span class="uiv2-card__pill">{pill}</span>
+      {/if}
+    </header>
+  {/if}
   {#if children}
     <div class="uiv2-card__body">
       {@render children()}

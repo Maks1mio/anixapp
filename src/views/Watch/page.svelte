@@ -50,6 +50,7 @@
   const initialEp       = parseInt(params.get('ep') || '1', 10);
   const initialTitle    = params.get('title') || 'Просмотр';
   const initialSrcName  = params.get('sourceName') || '';
+  const initialDubName  = params.get('dubberName') || '';
   const initialDubId    = params.get('dubberId') || '';
   const initialLocalFile = params.get('localFile') || '';
   const playbackMode = params.get('playbackMode') || '';
@@ -68,7 +69,7 @@
     ep:         initialEp,
     title:      initialTitle,
     sourceName: initialSrcName,
-    dubberName: '',
+    dubberName: initialDubName,
     dubberId:   initialDubId,
   });
 
@@ -217,11 +218,66 @@
 
   // ── Episode nav derived ────────────────────────────────────────────────────
   const currentDubLabel = $derived((watchState.dubberName || watchState.sourceName || '').trim());
-  const isLocalPlaybackMode = $derived(!!localPlaybackPath || watchState.sourceName === 'Скачано');
+  const isLocalPlaybackMode = $derived(!!localPlaybackPath);
+
+  /** Онлайн-стрим в плеере → пауза фоновых загрузок (в т.ч. при смене озвучки со скачанного). */
+  $effect(() => {
+    const streaming = !isLocalPlaybackMode;
+    void window.electron?.setDownloadStreamingHold?.(streaming);
+  });
+
+  const localScopeEpisodes = $derived.by(() => {
+    if (!isLocalPlaybackMode) return downloadedEpisodes;
+    return downloadedEpisodes.filter((d) => {
+      const dubOk = !watchState.dubberName || d.dubberName === watchState.dubberName
+        || (!d.dubberName && watchState.dubberName === 'Скаченное');
+      const srcOk = !watchState.sourceName || d.sourceName === watchState.sourceName
+        || (!d.sourceName && (watchState.sourceName === 'Скачано' || watchState.sourceName === 'Источник'));
+      return dubOk && srcOk;
+    });
+  });
   const downloadedPositions = $derived(
-    [...new Set(downloadedEpisodes.map((d) => d.episodePosition).filter((p) => p > 0))]
-      .sort((a, b) => a - b),
+    [...new Set(
+      (isLocalPlaybackMode ? localScopeEpisodes : downloadedEpisodes)
+        .map((d) => d.episodePosition)
+        .filter((p) => p > 0),
+    )].sort((a, b) => a - b),
   );
+
+  function stableLocalId(kind: string, name: string): number {
+    let h = 2166136261;
+    const s = `${kind}:${name}`;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return -Math.abs(h || 1);
+  }
+
+  function pickLocalEpisode(
+    list: DownloadedEpisodeItem[],
+    preferredEp = watchState.ep,
+  ): DownloadedEpisodeItem | null {
+    if (list.length === 0) return null;
+    const exact = list.find((item) => item.episodePosition === preferredEp);
+    if (exact) return exact;
+    return [...list]
+      .filter((item) => item.episodePosition > 0)
+      .sort((a, b) => a.episodePosition - b.episodePosition)[0]
+      ?? list[0]
+      ?? null;
+  }
+
+  function inferLocalNamesFromPath(filePath: string): { dub: string; src: string } {
+    const parts = filePath.replace(/\\/g, '/').split('/').filter(Boolean);
+    if (parts.length >= 4) {
+      return {
+        dub: parts[parts.length - 3] || '',
+        src: parts[parts.length - 2] || '',
+      };
+    }
+    return { dub: '', src: '' };
+  }
   const prevEpisodePosition = $derived.by(() => {
     if (!isLocalPlaybackMode) {
       const target = watchState.ep - 1;
@@ -1095,9 +1151,17 @@
   function goToEpisode(ep: number) {
     popoverType = null;
     invalidateDubbersPickerCache();
-    const dl = downloadedEpisodes.find((d) => d.episodePosition === ep);
-    if (isLocalPlaybackMode && dl) {
-      void selectDownloadedEpisode(dl);
+    if (isLocalPlaybackMode) {
+      const dl = localScopeEpisodes.find((d) => d.episodePosition === ep)
+        ?? downloadedEpisodes.find((d) =>
+          d.episodePosition === ep
+          && (!watchState.dubberName || d.dubberName === watchState.dubberName)
+          && (!watchState.sourceName || d.sourceName === watchState.sourceName),
+        );
+      if (dl) {
+        void selectDownloadedEpisode(dl);
+        return;
+      }
       return;
     }
     const inLobby = inLobbyRoom();
@@ -1197,12 +1261,18 @@
       }
       downloadedEpisodes = files.map((f) => {
         const ep = f.episodePosition ?? 0;
-        const label = f.dubberName || f.sourceName || f.folder || 'Скачано';
+        const dubberName = (f.dubberName || '').trim();
+        const sourceName = (f.sourceName || '').trim();
+        const label = [dubberName, sourceName].filter(Boolean).join(' · ') || f.folder || 'Скачано';
         return {
           episodePosition: ep,
           filePath: f.path,
           label,
           name: ep > 0 ? `Серия ${ep}` : f.name,
+          dubberName: dubberName || 'Скаченное',
+          sourceName: sourceName || 'Скачано',
+          dubberId: f.dubberId ?? null,
+          sourceId: f.sourceId ?? null,
         };
       });
     } catch {
@@ -1211,22 +1281,43 @@
   }
 
   async function selectDownloadedEpisode(item: DownloadedEpisodeItem) {
+    if (inLobby) {
+      showOsd('В комнате нельзя переключиться на скачанные файлы', { warn: true });
+      return;
+    }
     localPlaybackPath = item.filePath;
     popoverType = null;
     watchState.ep = item.episodePosition || watchState.ep;
-    watchState.dubberId = '';
-    watchState.dubberName = 'Скаченное';
-    watchState.sourceName = 'Скачано';
-    await startLocalFilePlayback(item.filePath, item.episodePosition || undefined);
+    const dubName = item.dubberName || 'Скаченное';
+    const srcName = item.sourceName || 'Скачано';
+    watchState.dubberName = dubName;
+    watchState.sourceName = srcName;
+    watchState.dubberId = item.dubberId != null && item.dubberId > 0
+      ? String(item.dubberId)
+      : String(stableLocalId('dub', dubName));
+    watchState.sourceId = item.sourceId != null && item.sourceId > 0
+      ? String(item.sourceId)
+      : String(stableLocalId('src', srcName));
+    await startLocalFilePlayback(item.filePath, item.episodePosition || undefined, dubName, srcName);
   }
 
-  async function selectDownloadedMode() {
+  async function selectDownloadedDub(dubberName: string) {
     if (downloadedEpisodes.length === 0) await loadDownloadedEpisodes();
-    const exact = downloadedEpisodes.find((item) => item.episodePosition === watchState.ep);
-    const first = [...downloadedEpisodes]
-      .filter((item) => item.episodePosition > 0)
-      .sort((a, b) => a.episodePosition - b.episodePosition)[0];
-    const target = exact || first;
+    const inDub = downloadedEpisodes.filter((d) => d.dubberName === dubberName);
+    const preferredSource = watchState.sourceName;
+    const sameSource = inDub.filter((d) => d.sourceName === preferredSource);
+    const pool = sameSource.length > 0 ? sameSource : inDub;
+    const target = pickLocalEpisode(pool);
+    if (target) await selectDownloadedEpisode(target);
+  }
+
+  async function selectDownloadedSource(sourceName: string) {
+    if (downloadedEpisodes.length === 0) await loadDownloadedEpisodes();
+    const inScope = downloadedEpisodes.filter((d) =>
+      d.sourceName === sourceName
+      && (!watchState.dubberName || d.dubberName === watchState.dubberName),
+    );
+    const target = pickLocalEpisode(inScope.length > 0 ? inScope : downloadedEpisodes.filter((d) => d.sourceName === sourceName));
     if (target) await selectDownloadedEpisode(target);
   }
 
@@ -1234,7 +1325,18 @@
     if (popoverType === 'source') return;
     popoverType = 'source';
     if (isLocalPlaybackMode) {
-      dubberSources = [];
+      if (downloadedEpisodes.length === 0) await loadDownloadedEpisodes();
+      const dub = watchState.dubberName;
+      const names = [...new Set(
+        downloadedEpisodes
+          .filter((d) => !dub || d.dubberName === dub)
+          .map((d) => d.sourceName)
+          .filter(Boolean),
+      )].sort((a, b) => a.localeCompare(b, 'ru'));
+      dubberSources = names.map((name) => ({
+        id: stableLocalId('src', name),
+        name,
+      }));
       return;
     }
     const rId = positiveId(watchState.releaseId);
@@ -1254,6 +1356,10 @@
   }
 
   function selectSource(src: SourceItem) {
+    if (isLocalPlaybackMode) {
+      void selectDownloadedSource(src.name);
+      return;
+    }
     const dubId = parseInt(watchState.dubberId, 10);
     if (!Number.isFinite(dubId)) return;
     switchDubbing(src.id, src.name, dubId, watchState.dubberName);
@@ -1678,6 +1784,9 @@
   }
 
   function skipCarryKey() {
+    if (localPlaybackPath) {
+      return `local:${watchState.releaseId}:${watchState.dubberName}:${watchState.sourceName}`;
+    }
     return `${watchState.releaseId}:${watchState.sourceId}`;
   }
 
@@ -1716,8 +1825,8 @@
     if (!skipMarks || !player.useVideo || player.loadState !== 'ready' || player.switching) return null;
     const t = player.currentTime;
     if (lobbyWaitOverlay) return null;
-    if (skipMarkActive(t, skipMarks.opening)) return 'opening';
-    if (skipMarkActive(t, skipMarks.ending)) return 'ending';
+    if (skipMarkActive(t, skipMarks.opening, 'opening')) return 'opening';
+    if (skipMarkActive(t, skipMarks.ending, 'ending')) return 'ending';
     return null;
   });
 
@@ -2013,7 +2122,12 @@
     window.addEventListener('resize', winResizeHandler);
   }
 
-  async function startLocalFilePlayback(filePath: string, epOverride?: number) {
+  async function startLocalFilePlayback(
+    filePath: string,
+    epOverride?: number,
+    dubName?: string,
+    srcName?: string,
+  ) {
     localPlaybackPath = filePath;
     const fileUrl = pathToLocalMediaUrl(filePath);
     if (!fileUrl) {
@@ -2022,16 +2136,155 @@
       return;
     }
     if (epOverride != null && epOverride > 0) watchState.ep = epOverride;
-    watchState.dubberId = '';
-    watchState.dubberName = 'Скаченное';
-    watchState.sourceName = 'Скачано';
+    const dub = (dubName || watchState.dubberName || 'Скаченное').trim();
+    const src = (srcName || watchState.sourceName || 'Скачано').trim();
+    watchState.dubberName = dub;
+    watchState.sourceName = src;
+    if (!watchState.dubberId) watchState.dubberId = String(stableLocalId('dub', dub));
+    if (!watchState.sourceId) watchState.sourceId = String(stableLocalId('src', src));
     player.loadState = 'ready';
     setSkipMarks(null);
+    skipDismissedKind = null;
     await tick();
-    applyVideoAndUI(fileUrl, true, watchState.ep, watchState.title, 'Скачано', watchState.dubberId);
+    applyVideoAndUI(fileUrl, true, watchState.ep, watchState.title, src, watchState.dubberId);
     bindVideoElementListeners();
     showAndSchedule();
     void loadDownloadedEpisodes();
+    void loadSkipMarksForLocalPlayback();
+  }
+
+  function namesLooselyEqual(a: string, b: string): boolean {
+    const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+    const x = norm(a);
+    const y = norm(b);
+    if (!x || !y) return false;
+    return x === y || x.includes(y) || y.includes(x);
+  }
+
+  function isSkipCapableSourceName(name: string): boolean {
+    return /kodik|anilibria|aniliberty|libria\.fun|aniqit/i.test(name);
+  }
+
+  async function resolveEpisodeEmbedForSkip(
+    releaseId: number,
+    episode: number,
+  ): Promise<{ url: string } | null> {
+    const api = (window as any).anixApi?.release;
+    if (!api?.getEpisode) return null;
+
+    const tryEpisode = async (sourceId: number): Promise<{ url: string } | null> => {
+      try {
+        const res = await api.getEpisode(releaseId, sourceId, episode);
+        const url = res?.episode?.url;
+        if (url) return { url: String(url) };
+      } catch { /* ignore */ }
+      return null;
+    };
+
+    const directSid = positiveId(watchState.sourceId);
+    if (directSid != null) {
+      const hit = await tryEpisode(directSid);
+      if (hit) return hit;
+    }
+
+    if (!api.getDubbers || !api.getDubberSources) return null;
+
+    let dubbers: DubberItem[] = [];
+    try {
+      const res = await api.getDubbers(releaseId);
+      dubbers = (res?.types ?? []) as DubberItem[];
+    } catch {
+      return null;
+    }
+    if (dubbers.length === 0) return null;
+
+    const wantDub = (watchState.dubberName || '').trim();
+    const wantSrc = (watchState.sourceName || '').trim();
+    const preferredDubId = positiveId(watchState.dubberId);
+
+    const matchedDub = dubbers.find((d) => preferredDubId != null && d.id === preferredDubId)
+      || dubbers.find((d) => wantDub && namesLooselyEqual(d.name, wantDub));
+
+    const dubsToTry = matchedDub
+      ? [matchedDub, ...dubbers.filter((d) => d.id !== matchedDub.id)]
+      : dubbers;
+
+    for (const dub of dubsToTry) {
+      let sources: SourceItem[] = [];
+      try {
+        const res = await api.getDubberSources(releaseId, dub.id);
+        sources = (res?.sources ?? []) as SourceItem[];
+      } catch {
+        continue;
+      }
+      if (sources.length === 0) continue;
+
+      const matchedSrc = sources.find((s) => wantSrc && namesLooselyEqual(s.name, wantSrc));
+      const skipCapable = sources.filter((s) => isSkipCapableSourceName(s.name));
+      const ordered: SourceItem[] = [];
+      const seen = new Set<number>();
+      for (const s of [...(matchedSrc ? [matchedSrc] : []), ...skipCapable, ...sources]) {
+        if (seen.has(s.id)) continue;
+        seen.add(s.id);
+        ordered.push(s);
+      }
+
+      for (const src of ordered) {
+        // Если озвучка совпала и источник задан — сначала только он;
+        // skip-capable пробуем как запасной вариант ниже по списку.
+        const hit = await tryEpisode(src.id);
+        if (hit) return hit;
+      }
+
+      // Нашли нужную озвучку — не размазываемся по всем остальным без нужды
+      if (matchedDub && dub.id === matchedDub.id) {
+        const anySkipHit = ordered.some((s) => isSkipCapableSourceName(s.name) || (matchedSrc && s.id === matchedSrc.id));
+        if (anySkipHit) {
+          // уже перепробовали все источники этой озвучки
+          continue;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  let localSkipFetchGen = 0;
+
+  async function loadSkipMarksForLocalPlayback() {
+    const gen = ++localSkipFetchGen;
+    const filePath = localPlaybackPath;
+    const rId = positiveId(watchState.releaseId);
+    const ep = watchState.ep;
+    if (!filePath || rId == null || !(ep > 0)) {
+      setSkipMarks(null);
+      return;
+    }
+
+    try {
+      const cached = await window.electron?.readDownloadSkipMarks?.(filePath);
+      if (gen !== localSkipFetchGen || localPlaybackPath !== filePath) return;
+      if (cached) setSkipMarks(cached, { carry: true });
+
+      const embed = await resolveEpisodeEmbedForSkip(rId, ep);
+      if (gen !== localSkipFetchGen || localPlaybackPath !== filePath) return;
+      if (!embed?.url) {
+        if (!cached) setSkipMarks(null);
+        return;
+      }
+      const res = await (window as any).anixApi?.release?.getDirectVideoLink?.(embed.url);
+      if (gen !== localSkipFetchGen || localPlaybackPath !== filePath) return;
+      const skip = normalizeSkipMarks(res?.skip);
+      if (skip) {
+        setSkipMarks(skip, { carry: true });
+        void window.electron?.saveDownloadSkipMarks?.({ filePath, skip });
+      } else if (!cached) {
+        setSkipMarks(null);
+      }
+    } catch {
+      if (gen !== localSkipFetchGen || localPlaybackPath !== filePath) return;
+      // оставляем кэш, если уже показали
+    }
   }
 
   function readVideoBuffer(v: HTMLVideoElement) {
@@ -2179,8 +2432,21 @@
     }
 
     if (initialLocalFile) {
-      void loadDownloadedEpisodes();
-      void startLocalFilePlayback(initialLocalFile, initialEp);
+      void (async () => {
+        await loadDownloadedEpisodes();
+        const match = downloadedEpisodes.find((d) => d.filePath === initialLocalFile);
+        if (match) {
+          await selectDownloadedEpisode(match);
+          return;
+        }
+        const inferred = inferLocalNamesFromPath(initialLocalFile);
+        await startLocalFilePlayback(
+          initialLocalFile,
+          initialEp,
+          initialDubName || inferred.dub || undefined,
+          initialSrcName || inferred.src || undefined,
+        );
+      })();
     } else if (playbackMode === 'local') {
       player.loadState = 'loading';
     } else if (!releaseId) {
@@ -2284,12 +2550,27 @@
           if (p.releaseId) beginMediaCover(String(p.releaseId));
           else beginMediaCover();
           watchState.title = p.title || watchState.title;
-          watchState.sourceName = p.sourceName || watchState.sourceName;
           if (p.releaseId) watchState.releaseId = p.releaseId;
           if (p.sourceId) watchState.sourceId = p.sourceId;
           if (p.ep) watchState.ep = parseInt(p.ep, 10);
           if (p.dubberId) watchState.dubberId = p.dubberId;
-          void startLocalFilePlayback(String(p.localFile), p.ep ? parseInt(p.ep, 10) : undefined);
+          if (p.dubberName) watchState.dubberName = String(p.dubberName);
+          if (p.sourceName) watchState.sourceName = String(p.sourceName);
+          void (async () => {
+            await loadDownloadedEpisodes();
+            const match = downloadedEpisodes.find((d) => d.filePath === String(p.localFile));
+            if (match) {
+              await selectDownloadedEpisode(match);
+              return;
+            }
+            const inferred = inferLocalNamesFromPath(String(p.localFile));
+            await startLocalFilePlayback(
+              String(p.localFile),
+              p.ep ? parseInt(p.ep, 10) : undefined,
+              (p.dubberName && String(p.dubberName)) || inferred.dub || undefined,
+              (p.sourceName && String(p.sourceName)) || inferred.src || undefined,
+            );
+          })();
           return;
         }
         if (!p?.releaseId || !p.sourceId || !p.ep) return;
@@ -2650,7 +2931,7 @@
     onselectEp: goToEpisode,
     onselectDub: selectDubber,
     onselectSource: selectSource,
-    onselectDownloadedMode: selectDownloadedMode,
+    onselectDownloadedDub: selectDownloadedDub,
     ontogglePinDub: togglePinDubber,
     onclosePopover: () => { popoverType = null; },
     onfullscreen: toggleFullscreen,
@@ -2665,7 +2946,13 @@
       if (inLobby) {
         sidebarOpen = !sidebarOpen;
         if (!sidebarOpen) actionLogOpen = false;
-      } else chooserOpen = true;
+        return;
+      }
+      if (isLocalPlaybackMode) {
+        showOsd('Совместный просмотр недоступен для скачанных файлов', { warn: true });
+        return;
+      }
+      chooserOpen = true;
     },
   } satisfies PlayerChromeProps);
 </script>

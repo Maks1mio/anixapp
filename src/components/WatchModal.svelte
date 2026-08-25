@@ -1,7 +1,12 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
   import { getCurrentRoomId, getCurrentParticipants, proposeAnimeChange, getLastPlayback } from '../services/lobby-state';
-  import { isDubberBlacklisted, resolveDownloadUrl } from '../views/Watch/_utils';
+  import { isDubberBlacklisted } from '../views/Watch/_utils';
+  import {
+    buildDownloadFolder,
+    buildEpisodeFilename,
+    resolveDownloadWithSiblingFallback,
+  } from '../utils/download-queue-client';
   import { navigate } from '../stores/navigation';
   import { openInAppPlayer } from '../utils/watch-nav';
   import Page from './Page.svelte';
@@ -89,6 +94,10 @@
     releaseTitle?: string;
     dubberName?: string;
     sourceName?: string;
+    skip?: {
+      opening?: { start: number; end: number } | null;
+      ending?: { start: number; end: number } | null;
+    } | null;
   }
 
   interface EpisodeUpdate {
@@ -234,16 +243,12 @@
     }
   }
 
-  function safeFilePart(value: string): string {
-    return value.replace(/[<>:"/\\|?*\x00-\x1F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) || 'episode';
-  }
-
-  function buildDownloadMeta(ep: Episode) {
-    const dub = selectedDubber?.name ?? selectedSource?.name ?? '';
-    const epNum = String(ep.position).padStart(2, '0');
+  function buildDownloadMeta(ep: Episode, sourceNameOverride = '') {
+    const dub = selectedDubber?.name ?? '';
+    const player = sourceNameOverride || selectedSource?.name || '';
     return {
-      folder: safeFilePart(releaseTitle),
-      filename: `${safeFilePart(releaseTitle)} ${safeFilePart(dub)} ${epNum}.mp4`,
+      folder: buildDownloadFolder(releaseTitle, dub, player),
+      filename: buildEpisodeFilename(releaseTitle, dub, ep.position, player),
     };
   }
 
@@ -558,7 +563,7 @@
   }
 
   async function resolveDownloadItem(ep: Episode): Promise<DownloadItem | null> {
-    if (!selectedSource) return null;
+    if (!selectedSource || selectedDubber?.id == null) return null;
     let episode = ep;
     if (!episode.url) {
       const res = await window.anixApi?.release?.getEpisode(releaseId, selectedSource.id, ep.position);
@@ -566,22 +571,31 @@
     }
     if (!episode.url) return null;
 
-    const resolved = await resolveDownloadUrl(episode.url, episode.iframe);
+    const resolved = await resolveDownloadWithSiblingFallback({
+      releaseId,
+      sourceId: selectedSource.id,
+      dubberId: selectedDubber.id,
+      position: ep.position,
+      episodeUrl: episode.url,
+      iframe: !!episode.iframe,
+    });
     if (!resolved?.url) return null;
 
-    const meta = buildDownloadMeta(ep);
+    const sourceName = resolved.sourceName || selectedSource?.name || '';
+    const meta = buildDownloadMeta(ep, sourceName);
     return {
       url: resolved.url,
       filename: meta.filename,
       folder: meta.folder,
       headers: resolved.headers,
       releaseId,
-      sourceId: selectedSource.id,
-      dubberId: selectedDubber?.id,
+      sourceId: resolved.sourceId,
+      dubberId: selectedDubber.id,
       episodePosition: ep.position,
       releaseTitle,
       dubberName: selectedDubber?.name ?? '',
-      sourceName: selectedSource?.name ?? '',
+      sourceName,
+      skip: resolved.skip ?? null,
     };
   }
 

@@ -28,15 +28,22 @@
   }
 
   async function handleCreate() {
+    const playback = getPlayback?.() ?? null;
+    if (playback && typeof (playback as { localFile?: unknown }).localFile === 'string'
+      && String((playback as { localFile?: string }).localFile).trim()) {
+      joinHint = 'Совместный просмотр недоступен для скачанных файлов';
+      joinHintError = true;
+      return;
+    }
     createLoading = true;
     joinHint = '';
     joinHintError = false;
     try {
       if (canIpc()) {
-        window.electron?.lobbyCreateFromPlayer?.(getPlayback?.() ?? null);
+        window.electron?.lobbyCreateFromPlayer?.(playback);
         return;
       }
-      await createLobbyRoomAndOpenPlayer(getPlayback?.() ?? null);
+      await createLobbyRoomAndOpenPlayer(playback);
       onClose();
     } catch {
       joinHint = 'Не удалось создать комнату. Попробуйте ещё раз.';

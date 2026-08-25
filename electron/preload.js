@@ -166,15 +166,32 @@ contextBridge.exposeInMainWorld('electron', {
   downloadEpisodes: (payload) => ipcRenderer.invoke('episode-download:download', payload),
   queueEpisodeDownloads: (payload) => ipcRenderer.invoke('episode-download:queue', payload),
   getDownloadSettings: () => ipcRenderer.invoke('downloads:getSettings'),
+  saveDownloadSettings: (payload) => ipcRenderer.invoke('downloads:saveSettings', payload),
+  resetDownloadDirectory: () => ipcRenderer.invoke('downloads:resetDirectory'),
+  getFfmpegStatus: () => ipcRenderer.invoke('downloads:getFfmpegStatus'),
+  installFfmpeg: () => ipcRenderer.invoke('downloads:installFfmpeg'),
+  openFfmpegPage: () => ipcRenderer.invoke('downloads:openFfmpegPage'),
   pickDownloadDirectory: () => ipcRenderer.invoke('downloads:pickDirectory'),
   openDownloadDirectory: (dir) => ipcRenderer.invoke('downloads:openDirectory', dir),
   showDownloadFile: (filePath) => ipcRenderer.invoke('downloads:showFile', filePath),
   openDownloadFile: (filePath) => ipcRenderer.invoke('downloads:openFile', filePath),
   listDownloadLibrary: () => ipcRenderer.invoke('downloads:listLibrary'),
   listDownloadsByRelease: (releaseId) => ipcRenderer.invoke('downloads:listByRelease', releaseId),
+  readDownloadSkipMarks: (filePath) => ipcRenderer.invoke('downloads:readSkipMarks', filePath),
+  saveDownloadSkipMarks: (payload) => ipcRenderer.invoke('downloads:saveSkipMarks', payload),
+  deleteDownloadFile: (filePath) => ipcRenderer.invoke('downloads:deleteFile', filePath),
+  deleteDownloadGroup: (groupName) => ipcRenderer.invoke('downloads:deleteGroup', groupName),
+  pauseDownload: (id) => ipcRenderer.invoke('downloads:pause', id),
+  pauseAllDownloads: () => ipcRenderer.invoke('downloads:pauseAll'),
+  resumeDownload: (id) => ipcRenderer.invoke('downloads:resume', id),
+  resumeAllDownloads: () => ipcRenderer.invoke('downloads:resumeAll'),
+  isDownloadResumeBlocked: () => ipcRenderer.invoke('downloads:isResumeBlocked'),
+  setDownloadStreamingHold: (blocked) => ipcRenderer.invoke('downloads:setStreamingHold', !!blocked),
+  reorderDownloads: (payload) => ipcRenderer.invoke('downloads:reorder', payload),
   checkDownloadFiles: (payload) => ipcRenderer.invoke('downloads:checkFiles', payload),
   cancelDownload: (id) => ipcRenderer.invoke('downloads:cancel', id),
   cancelAllDownloads: () => ipcRenderer.invoke('downloads:cancelAll'),
+  getActiveDownloadQueue: () => ipcRenderer.invoke('downloads:getActiveQueue'),
   removeDownloadEntry: (id) => ipcRenderer.invoke('downloads:removeEntry', id),
   playDownloadInApp: (payload) => ipcRenderer.invoke('downloads:playInApp', payload),
   syncPlayerState: (playback) => ipcRenderer.send('player:syncState', playback),
@@ -249,6 +266,14 @@ contextBridge.exposeInMainWorld('electron', {
 // Download progress events: main → renderer
 ipcRenderer.on('episode-download:progress', (_, data) => {
   window.dispatchEvent(new CustomEvent('episode-download:progress', { detail: data }));
+});
+
+ipcRenderer.on('downloads:streaming-hold', (_, data) => {
+  window.dispatchEvent(new CustomEvent('downloads:streaming-hold', { detail: data }));
+});
+
+ipcRenderer.on('downloads:ffmpeg-install-progress', (_, data) => {
+  window.dispatchEvent(new CustomEvent('downloads:ffmpeg-install-progress', { detail: data }));
 });
 
 ipcRenderer.on('lobby:bufferingStartFromPlayer', () => {

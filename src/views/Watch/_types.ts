@@ -86,6 +86,10 @@ export interface DownloadedEpisodeItem {
   filePath: string;
   label: string;
   name: string;
+  dubberName: string;
+  sourceName: string;
+  dubberId?: number | null;
+  sourceId?: number | null;
 }
 
 export type PopoverType      = 'series' | 'dubbing' | 'source' | 'settings' | null;

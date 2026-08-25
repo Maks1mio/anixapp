@@ -26,12 +26,20 @@ function writeMeta(rootDir, data) {
   }
 }
 
+function normalizeFolderKey(folderName) {
+  return String(folderName || '')
+    .replace(/\\/g, '/')
+    .replace(/\/+/g, '/')
+    .replace(/^\/|\/$/g, '');
+}
+
 function saveFolderMeta(rootDir, folderName, meta) {
-  if (!folderName || !meta?.releaseId) return;
+  const key = normalizeFolderKey(folderName);
+  if (!key || !meta?.releaseId) return;
   const data = readMeta(rootDir);
-  data.folders[folderName] = {
+  data.folders[key] = {
     releaseId: meta.releaseId,
-    releaseTitle: meta.releaseTitle || folderName,
+    releaseTitle: meta.releaseTitle || key.split('/').pop() || key,
     dubberId: meta.dubberId ?? null,
     sourceId: meta.sourceId ?? null,
     dubberName: meta.dubberName || '',
@@ -43,11 +51,14 @@ function saveFolderMeta(rootDir, folderName, meta) {
 
 function getFolderMeta(rootDir, folderName) {
   const data = readMeta(rootDir);
-  return data.folders[folderName] || null;
+  const key = normalizeFolderKey(folderName);
+  return data.folders[key] || data.folders[folderName] || null;
 }
 
 function parseEpisodeFromFilename(name) {
-  const m = name.match(/ (\d{2})\.mp4$/i);
+  const base = String(name || '');
+  const m = base.match(/(?:^|[ _-])(\d{2})\.(?:mp4|mkv|webm|m4v)$/i)
+    || base.match(/^(\d{1,3})\.(?:mp4|mkv|webm|m4v)$/i);
   return m ? parseInt(m[1], 10) : null;
 }
 

@@ -22,9 +22,7 @@
   }: Props = $props();
 
   const items = $derived.by((): UiV2PopupMenuItem[] => {
-    if (loading) {
-      return [{ id: 'loading', label: 'Загрузка…', disabled: true }];
-    }
+    if (loading) return [];
     if (sources.length === 0) {
       return [{ id: 'empty', label: 'Нет источников', disabled: true }];
     }
@@ -44,8 +42,10 @@
   {y}
   {anchor}
   {items}
+  {loading}
+  loadingRows={5}
   title="Источник"
-  wide={sources.some((s) => s.name.length > 18)}
+  wide={loading || sources.some((s) => s.name.length > 18)}
   placement="anchor"
   onClose={onclose}
   onSelect={(id) => {

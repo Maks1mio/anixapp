@@ -180,6 +180,100 @@ function getDownloadDirectoryFromConfig() {
   return typeof raw.downloadDirectory === 'string' ? raw.downloadDirectory.trim() : '';
 }
 
+const BUILTIN_HLS_MODES = new Set(['max', 'balanced', 'safe', 'custom']);
+const HLS_CONCURRENCY_MIN = 1;
+const HLS_CONCURRENCY_MAX = 10000;
+/** Сколько файлов качать одновременно. 1 = как Kodik-Download-Watch (быстрее всего). */
+const PARALLEL_FILES_MIN = 1;
+const PARALLEL_FILES_MAX = 50;
+
+function clampHlsConcurrency(n) {
+  const v = Math.round(Number(n));
+  if (!Number.isFinite(v)) return 32;
+  return Math.min(HLS_CONCURRENCY_MAX, Math.max(HLS_CONCURRENCY_MIN, v));
+}
+
+function clampParallelFiles(n) {
+  const v = Math.round(Number(n));
+  if (!Number.isFinite(v)) return 1;
+  return Math.min(PARALLEL_FILES_MAX, Math.max(PARALLEL_FILES_MIN, v));
+}
+
+function normalizeHlsPresets(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const id = typeof item.id === 'string' ? item.id.trim() : '';
+    const name = typeof item.name === 'string' ? item.name.trim().slice(0, 40) : '';
+    if (!id || !name || seen.has(id) || BUILTIN_HLS_MODES.has(id)) continue;
+    seen.add(id);
+    out.push({
+      id,
+      name,
+      concurrency: clampHlsConcurrency(item.concurrency),
+    });
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
+/** @returns {'max'|'balanced'|'safe'|'custom'|string} */
+function getDownloadHlsMode() {
+  const raw = _configCache ?? _readConfigFromDisk();
+  const mode = typeof raw.downloadHlsMode === 'string' ? raw.downloadHlsMode.trim() : '';
+  if (BUILTIN_HLS_MODES.has(mode)) return mode;
+  const presets = normalizeHlsPresets(raw.downloadHlsPresets);
+  if (presets.some((p) => p.id === mode)) return mode;
+  return 'max';
+}
+
+function getDownloadHlsConcurrency() {
+  const raw = _configCache ?? _readConfigFromDisk();
+  return clampHlsConcurrency(raw.downloadHlsConcurrency ?? 32);
+}
+
+function getDownloadHlsPresets() {
+  const raw = _configCache ?? _readConfigFromDisk();
+  return normalizeHlsPresets(raw.downloadHlsPresets);
+}
+
+/** Число параллельных сегментов — всегда max (все сегменты файла). */
+function resolveDownloadHlsConcurrency() {
+  return Number.POSITIVE_INFINITY;
+}
+
+/** true = качать все файлы сразу; false = по очереди (1 файл). */
+function getDownloadAllAtOnce() {
+  const raw = _configCache ?? _readConfigFromDisk();
+  return raw.downloadAllAtOnce === true;
+}
+
+/** Сколько файлов качать одновременно. */
+function getDownloadParallelFiles() {
+  return getDownloadAllAtOnce() ? PARALLEL_FILES_MAX : 1;
+}
+
+function getDownloadOrganizeByTitle() {
+  const raw = _configCache ?? _readConfigFromDisk();
+  return raw.downloadOrganizeByTitle !== false;
+}
+
+function getDownloadAutoClearFinished() {
+  const raw = _configCache ?? _readConfigFromDisk();
+  return raw.downloadAutoClearFinished !== false;
+}
+
+function buildDownloadSettingsPayload(data) {
+  const src = data && typeof data === 'object' ? data : (_configCache ?? _readConfigFromDisk());
+  return {
+    organizeByTitle: src.downloadOrganizeByTitle !== false,
+    allAtOnce: src.downloadAllAtOnce === true,
+    autoClearFinished: src.downloadAutoClearFinished !== false,
+  };
+}
+
 module.exports = {
   _configCache: {
     get value() { return _configCache; },
@@ -208,4 +302,21 @@ module.exports = {
   loadSavedToken,
   getRawConfig,
   getDownloadDirectoryFromConfig,
+  getDownloadHlsMode,
+  getDownloadHlsConcurrency,
+  getDownloadHlsPresets,
+  resolveDownloadHlsConcurrency,
+  clampHlsConcurrency,
+  clampParallelFiles,
+  normalizeHlsPresets,
+  getDownloadAllAtOnce,
+  getDownloadParallelFiles,
+  getDownloadOrganizeByTitle,
+  getDownloadAutoClearFinished,
+  buildDownloadSettingsPayload,
+  HLS_CONCURRENCY_MIN,
+  HLS_CONCURRENCY_MAX,
+  PARALLEL_FILES_MIN,
+  PARALLEL_FILES_MAX,
+  BUILTIN_HLS_MODES,
 };

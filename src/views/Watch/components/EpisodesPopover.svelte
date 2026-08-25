@@ -62,7 +62,8 @@
   }
 
   function episodeIcon(ep: EpisodeItem): string | undefined {
-    if (downloadedSet.has(ep.position)) return iconDownload(18);
+    // Иконка скачивания — только в режиме «Скачанные»
+    if (localMode && downloadedSet.has(ep.position)) return iconDownload(18);
     if (ep.is_watched) {
       return `<span style="color:#22c55e">${iconCircleCheck(18)}</span>`;
     }
@@ -70,9 +71,7 @@
   }
 
   const items = $derived.by((): UiV2PopupMenuItem[] => {
-    if (loading) {
-      return [{ id: 'loading', label: 'Загрузка…', disabled: true }];
-    }
+    if (loading) return [];
     if (localMode && downloadedPositions.length === 0) {
       return [{ id: 'empty-local', label: 'Нет скачанных серий', disabled: true }];
     }
@@ -93,8 +92,10 @@
   {y}
   {anchor}
   {items}
-  title={headerTitle}
-  searchable
+  {loading}
+  loadingRows={8}
+  title={loading ? 'Серии' : headerTitle}
+  searchable={!loading}
   searchPlaceholder="Номер серии…"
   searchInputMode="numeric"
   emptyLabel="Нет результатов"

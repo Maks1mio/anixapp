@@ -57,6 +57,7 @@
   let panelLeft = $state(0);
   let panelTop = $state(0);
   let panelWidth = $state(0);
+  let panelMaxHeight = $state(264);
   let openDown = $state(true);
   let originY = $state('0%');
 
@@ -82,14 +83,16 @@
     const rect = triggerEl.getBoundingClientRect();
     panelWidth = compact ? 0 : rect.width;
 
-    const panelHeight = panelEl.offsetHeight;
     const spaceBelow = window.innerHeight - rect.bottom - GAP;
     const spaceAbove = rect.top - GAP;
-    openDown = spaceBelow >= spaceAbove && spaceBelow >= Math.min(panelHeight, 180);
+    // Предпочитаем вниз, чтобы панель реже накрывала поля выше (поиск)
+    const need = Math.min(panelEl.scrollHeight || 180, 260);
+    openDown = spaceBelow >= Math.min(need, 140) || spaceBelow >= spaceAbove;
     originY = openDown ? '0%' : '100%';
+    panelMaxHeight = Math.max(120, openDown ? spaceBelow : spaceAbove);
 
     panelLeft = rect.left;
-    panelTop = openDown ? rect.bottom + GAP : rect.top - GAP - panelHeight;
+    panelTop = openDown ? rect.bottom + GAP : rect.top - GAP - Math.min(panelEl.offsetHeight, panelMaxHeight);
 
     const panelRect = panelEl.getBoundingClientRect();
     if (panelRect.right > window.innerWidth - EDGE) {
@@ -106,7 +109,7 @@
     if (nextRect.top < EDGE) {
       panelTop = EDGE;
     } else if (nextRect.bottom > window.innerHeight - EDGE) {
-      panelTop = window.innerHeight - EDGE - nextRect.height;
+      panelTop = Math.max(EDGE, window.innerHeight - EDGE - nextRect.height);
     }
   }
 
@@ -134,6 +137,10 @@
     value = opt.value;
     onChange?.(opt.value);
     closePanel();
+  }
+
+  function onOverlayClick(e: MouseEvent) {
+    if (e.target === e.currentTarget) closePanel();
   }
 
   function onDocumentClick(e: MouseEvent) {
@@ -239,7 +246,13 @@
 </div>
 
 {#if open}
-  <div class="uiv2-select__overlay" data-uiv2-select-portal use:portal>
+  <div
+    class="uiv2-select__overlay"
+    data-uiv2-select-portal
+    use:portal
+    role="presentation"
+    onclick={onOverlayClick}
+  >
     <div
       bind:this={panelEl}
       id={listboxId}
@@ -252,8 +265,10 @@
       style:top="{panelTop}px"
       style:width={compact ? undefined : `${panelWidth}px`}
       style:min-width={compact ? '15rem' : undefined}
+      style:max-height="{panelMaxHeight}px"
       style:transform-origin="50% {originY}"
       transition:scale={{ duration: 200, start: 0.97, easing: cubicOut }}
+      onclick={(e) => e.stopPropagation()}
     >
       <ul class="uiv2-select__list">
         {#each options as opt (opt.value)}

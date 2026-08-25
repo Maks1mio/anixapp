@@ -95,13 +95,58 @@ declare global {
           releaseTitle?: string;
           dubberName?: string;
           sourceName?: string;
+          skip?: {
+            opening?: { start: number; end: number } | null;
+            ending?: { start: number; end: number } | null;
+          } | null;
         }>;
       }) => Promise<{
         ok: boolean;
         error?: string;
         items: Array<{ id: string; filename: string }>;
       }>;
-      getDownloadSettings?: () => Promise<{ directory: string; defaultDirectory: string }>;
+      getDownloadSettings?: () => Promise<{
+        directory: string;
+        defaultDirectory: string;
+        organizeByTitle: boolean;
+        allAtOnce: boolean;
+        autoClearFinished: boolean;
+      }>;
+      saveDownloadSettings?: (payload: {
+        organizeByTitle?: boolean;
+        allAtOnce?: boolean;
+        autoClearFinished?: boolean;
+      }) => Promise<{
+        ok: boolean;
+        directory?: string;
+        defaultDirectory?: string;
+        organizeByTitle?: boolean;
+        allAtOnce?: boolean;
+        autoClearFinished?: boolean;
+      }>;
+      resetDownloadDirectory?: () => Promise<{
+        ok: boolean;
+        directory?: string;
+        defaultDirectory?: string;
+        organizeByTitle?: boolean;
+        allAtOnce?: boolean;
+        autoClearFinished?: boolean;
+      }>;
+      getFfmpegStatus?: () => Promise<{
+        available: boolean;
+        path: string | null;
+        source: string;
+        installDir?: string;
+        downloadPage?: string;
+      }>;
+      installFfmpeg?: () => Promise<{
+        ok: boolean;
+        path?: string;
+        source?: string;
+        openedPage?: boolean;
+        error?: string;
+      }>;
+      openFfmpegPage?: () => Promise<{ ok: boolean }>;
       pickDownloadDirectory?: () => Promise<{ ok: boolean; directory?: string }>;
       openDownloadDirectory?: (dir?: string) => Promise<void>;
       showDownloadFile?: (filePath: string) => void;
@@ -115,7 +160,17 @@ declare global {
         releaseTitle?: string;
         dubberName?: string;
         sourceName?: string;
-        files: Array<{ name: string; path: string; size: number; modifiedAt: number; episodePosition?: number | null }>;
+        files: Array<{
+          name: string;
+          path: string;
+          size: number;
+          modifiedAt: number;
+          episodePosition?: number | null;
+          dubberName?: string;
+          sourceName?: string;
+          dubberId?: number | null;
+          sourceId?: number | null;
+        }>;
       }>>;
       listDownloadsByRelease?: (releaseId: number) => Promise<Array<{
         episodePosition: number | null;
@@ -124,13 +179,52 @@ declare global {
         size: number;
         dubberName: string;
         sourceName: string;
+        dubberId?: number | null;
+        sourceId?: number | null;
         folder: string;
       }>>;
+      readDownloadSkipMarks?: (filePath: string) => Promise<{
+        opening?: { start: number; end: number } | null;
+        ending?: { start: number; end: number } | null;
+      } | null>;
+      saveDownloadSkipMarks?: (payload: {
+        filePath: string;
+        skip: {
+          opening?: { start: number; end: number } | null;
+          ending?: { start: number; end: number } | null;
+        } | null;
+      }) => Promise<{ ok: boolean }>;
+      deleteDownloadFile?: (filePath: string) => Promise<{ ok: boolean; error?: string }>;
+      deleteDownloadGroup?: (groupName: string) => Promise<{ ok: boolean; error?: string }>;
+      pauseDownload?: (id: string) => Promise<{ ok: boolean }>;
+      pauseAllDownloads?: () => Promise<{ ok: boolean; paused?: number }>;
+      resumeDownload?: (id: string) => Promise<{ ok: boolean; error?: string }>;
+      resumeAllDownloads?: () => Promise<{ ok: boolean; resumed?: number; error?: string }>;
+      isDownloadResumeBlocked?: () => Promise<{ blocked: boolean }>;
+      setDownloadStreamingHold?: (blocked: boolean) => Promise<{ ok: boolean; blocked: boolean }>;
+      reorderDownloads?: (payload: { orderedIds: string[] }) => Promise<{ ok: boolean }>;
       checkDownloadFiles?: (payload: {
         items: Array<{ folder?: string; filename: string }>;
       }) => Promise<Array<{ folder?: string; filename: string; exists: boolean; path: string | null }>>;
       cancelDownload?: (id: string) => Promise<{ ok: boolean }>;
       cancelAllDownloads?: () => Promise<{ ok: boolean; cancelled?: number }>;
+      getActiveDownloadQueue?: () => Promise<Array<{
+        id: string;
+        filename: string;
+        received: number;
+        total: number;
+        status: string;
+        error?: string;
+        filePath?: string;
+        releaseId?: number;
+        sourceId?: number;
+        dubberId?: number;
+        episodePosition?: number;
+        releaseTitle?: string;
+        folder?: string;
+        dubberName?: string;
+        sourceName?: string;
+      }>>;
       removeDownloadEntry?: (id: string) => Promise<{ ok: boolean }>;
       playDownloadInApp?: (payload: {
         filePath: string;
@@ -140,6 +234,7 @@ declare global {
         dubberId?: number;
         episodePosition?: number;
         sourceName?: string;
+        dubberName?: string;
         allowPartial?: boolean;
         status?: string;
       }) => Promise<{ ok: boolean; error?: string }>;

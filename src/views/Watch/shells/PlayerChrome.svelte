@@ -76,7 +76,7 @@
     onselectEp: (ep: number) => void;
     onselectDub: (dub: DubberItem) => void;
     onselectSource: (src: SourceItem) => void;
-    onselectDownloadedMode: () => void;
+    onselectDownloadedDub: (dubberName: string) => void;
     ontogglePinDub: (dub: DubberItem) => void | Promise<void>;
     onclosePopover: () => void;
     onfullscreen: () => void;
@@ -122,7 +122,7 @@
     onselectEp={props.onselectEp}
     onselectDub={props.onselectDub}
     onselectSource={props.onselectSource}
-    onselectDownloadedMode={props.onselectDownloadedMode}
+    onselectDownloadedDub={props.onselectDownloadedDub}
     ontogglePinDub={props.ontogglePinDub}
     onclosePopover={props.onclosePopover}
   />

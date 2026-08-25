@@ -12,10 +12,13 @@ const NET_ERROR_HINTS = [
   [/ERR_ACCESS_DENIED/i, 'Доступ запрещён'],
   [/ERR_INVALID_URL/i, 'Некорректный URL'],
   [/ERR_FAILED/i, 'Сетевая ошибка'],
+  [/cancelled/i, 'Загрузка отменена пользователем'],
+  [/FFmpeg не найден|нужен FFmpeg|нужен ffmpeg/i, 'FFmpeg не установлен — нужен для быстрой сборки HLS'],
 ];
 
 const CODE_HINTS = {
-  'embed-url-not-video': 'Не удалось получить прямую ссылку на видео — передан адрес страницы плеера, а не файла',
+  'embed-url-not-video': 'Не удалось получить прямую ссылку на видео — передан адрес страницы плеера, а не файла. Выберите другой источник или озвучку',
+  'libria-release-missing': 'Релиз удалён или недоступен на AniLibria — попробуйте источник Kodik у той же озвучки',
   'invalid-url': 'Некорректный или пустой URL для скачивания',
   empty: 'Список файлов для скачивания пуст',
 };
@@ -50,7 +53,7 @@ function splitRawAndUrl(raw) {
   };
 }
 
-function mapKnownError(raw) {
+function mapKnownError(raw, extra = {}) {
   const text = String(raw || '').trim();
   if (!text) return '';
 
@@ -59,10 +62,16 @@ function mapKnownError(raw) {
   const httpMatch = /HTTP\s+(\d{3})/i.exec(text);
   if (httpMatch) {
     const code = httpMatch[1];
-    if (code === '403') return 'Доступ запрещён (HTTP 403) — ссылка могла устареть';
-    if (code === '404') return 'Файл не найден (HTTP 404)';
-  if (code === '429') return 'Слишком много запросов (HTTP 429) — CDN ограничил скорость, попробуйте позже';
-    if (code === '500' || code === '502' || code === '503') return `Ошибка сервера (HTTP ${code})`;
+    if (code === '403') return 'Доступ запрещён (HTTP 403) — ссылка могла устареть, попробуйте снова из плеера';
+    if (code === '404') {
+      const hay = `${text} ${extra.url || ''} ${extra.host || ''}`;
+      if (/libria\.fun|anilibria|aniliberty|iframe\.php/i.test(hay)) {
+        return 'Релиз недоступен на AniLibria (HTTP 404) — попробуйте Kodik у той же озвучки';
+      }
+      return 'Файл не найден (HTTP 404) — попробуйте другое качество или источник';
+    }
+    if (code === '429') return 'Слишком много запросов (HTTP 429) — CDN ограничил скорость, подождите и повторите';
+    if (code === '500' || code === '502' || code === '503') return `Ошибка сервера источника (HTTP ${code})`;
     return `Ошибка HTTP ${code}`;
   }
 
@@ -71,10 +80,13 @@ function mapKnownError(raw) {
   }
 
   if (/ffmpeg/i.test(text) || /ffprobe/i.test(text)) {
+    if (/не найден|ENOENT|нужен/i.test(text)) {
+      return 'FFmpeg не найден. Установите его во вкладке «Загрузки»';
+    }
     return text.length > 240 ? `${text.slice(0, 240)}…` : text;
   }
 
-  if (/Не все сегменты|плейлисте нет|master-плейлисте/i.test(text)) return text;
+  if (/Не все сегменты|плейлисте нет|master-плейлисте|пустым|устареть|отменена/i.test(text)) return text;
 
   return '';
 }
@@ -96,8 +108,8 @@ function formatDownloadError(err, context = {}) {
   }
 
   const { message: raw, url: rawUrl } = splitRawAndUrl(rawFull);
-  const friendly = mapKnownError(raw || rawFull);
   const host = hostFromUrl(context.url || rawUrl);
+  const friendly = mapKnownError(raw || rawFull, { url: context.url || rawUrl, host });
   const parts = [];
 
   if (friendly) parts.push(friendly);

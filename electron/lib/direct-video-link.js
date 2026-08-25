@@ -69,9 +69,18 @@ function isSibnetHtmlEmbed(url) {
   return /shell\.php/i.test(url) && /videoid=/i.test(url);
 }
 
+/** HTML iframe AniLibria (anixart.libria.fun / *.libria.fun) — не прямой медиафайл. */
+function isLibriaHtmlEmbed(url) {
+  if (!url || typeof url !== 'string') return false;
+  if (!/aniliberty|anilibria|libria\.fun/i.test(url)) return false;
+  if (/\.m3u8(\?|$)/i.test(url) || /cache\.libria\.fun/i.test(url)) return false;
+  return /iframe\.php/i.test(url) || /\/public\/iframe/i.test(url);
+}
+
 function isHtmlPlayerPage(url) {
   if (!url) return true;
   if (isSibnetHtmlEmbed(url)) return true;
+  if (isLibriaHtmlEmbed(url)) return true;
   if (/\/(seria|video|movie|anime)\/\d+\/[0-9a-f]+\//i.test(url)
     && /kodikplayer\.com|kodik\.info|aniqit\.com|anixis\.com|aniqart\.com/i.test(url)) {
     return true;
@@ -185,6 +194,28 @@ async function getSibnetDirectLink(embedUrl) {
   return null;
 }
 
+function parseLibriaFileField(raw) {
+  if (!raw) return null;
+  const cleaned = String(raw).replace(/\\\//g, '/');
+  const qualityMap = {};
+  const qualRe = /\[(\d+)p\]([^,\[]+)/g;
+  let m;
+  while ((m = qualRe.exec(cleaned)) !== null) {
+    const src = m[2].trim();
+    if (src) qualityMap[m[1]] = src.startsWith('http') ? src : `https:${src}`;
+  }
+  if (Object.keys(qualityMap).length) return qualityMap;
+
+  if (cleaned && !/^\[/.test(cleaned)) {
+    const single = cleaned.startsWith('http') ? cleaned : `https:${cleaned}`;
+    if (/\.(mp4|mkv|webm|m3u8)(\?|$)/i.test(single)) {
+      const key = /\.m3u8/i.test(single) ? '720' : '720';
+      return { [key]: single };
+    }
+  }
+  return null;
+}
+
 async function scrapeAnilibriaDirectFiles(embedUrl, epNum) {
   try {
     const res = await fetch(embedUrl, {
@@ -193,28 +224,46 @@ async function scrapeAnilibriaDirectFiles(embedUrl, epNum) {
         Referer: embedUrl.split('?')[0],
         'User-Agent': BROWSER_UA,
       },
+      signal: AbortSignal.timeout(15_000),
     });
+    if (!res.ok) return null;
     const html = await res.text();
+    if (/v-theme--dark[\s\S]*404\.png|title>\s*Not Found/i.test(html) && !/"file"\s*:/.test(html)) {
+      return null;
+    }
     const blockRe = new RegExp(`"s${epNum}"[^]*?"file":"(.*?)"`, 's');
     const blockMatch = blockRe.exec(html);
-    if (!blockMatch) return null;
-
-    const raw = blockMatch[1].replace(/\\\//g, '/');
-    const qualityMap = {};
-    const qualRe = /\[(\d+)p\]([^,\[]+)/g;
-    let m;
-    while ((m = qualRe.exec(raw)) !== null) {
-      const src = m[2].trim();
-      if (src) qualityMap[m[1]] = src.startsWith('http') ? src : `https:${src}`;
+    if (blockMatch?.[1]) {
+      const parsed = parseLibriaFileField(blockMatch[1]);
+      if (parsed) return parsed;
     }
-    if (Object.keys(qualityMap).length) return qualityMap;
-
-    if (raw && !/^\[/.test(raw)) {
-      const single = raw.startsWith('http') ? raw : `https:${raw}`;
-      if (/\.(mp4|mkv|webm)(\?|$)/i.test(single)) return { '720': single };
+    // Современный iframe: несколько "file" подряд по сериям — берём epNum-й
+    const files = [...html.matchAll(/"file"\s*:\s*"((?:\\.|[^"\\])*)"/g)].map((x) => x[1]);
+    if (files.length) {
+      const pick = files[epNum - 1] || files[0];
+      return parseLibriaFileField(pick);
     }
   } catch { /* ignore */ }
   return null;
+}
+
+function libriaIframeCandidates(url, releaseId, epOrdinal) {
+  const qs = `id=${encodeURIComponent(releaseId)}&ep=${encodeURIComponent(epOrdinal)}`;
+  const hosts = [
+    'https://anixart.libria.fun/public/iframe.php',
+    'https://anilibria.top/public/iframe.php',
+    'https://aniliberty.top/public/iframe.php',
+  ];
+  const out = [];
+  const seen = new Set();
+  const push = (u) => {
+    if (!u || seen.has(u)) return;
+    seen.add(u);
+    out.push(u);
+  };
+  push(url);
+  for (const base of hosts) push(`${base}?${qs}`);
+  return out;
 }
 
 async function getLibriaDirectLink(url, host) {
@@ -223,23 +272,34 @@ async function getLibriaDirectLink(url, host) {
   const epOrdinal = parsed.searchParams.get('ep');
   if (!releaseId || !epOrdinal) return empty();
 
-  const headers = { Referer: url.split('?')[0], 'User-Agent': BROWSER_UA };
+  const headers = { Referer: 'https://anilibria.top/', 'User-Agent': BROWSER_UA };
   const epNum = parseInt(epOrdinal, 10);
   const apiBases = host.includes('aniliberty') || host.includes('libria.fun')
     ? ['https://aniliberty.top/api/v1/anime/releases', 'https://anilibria.top/api/v1/anime/releases']
     : ['https://anilibria.top/api/v1/anime/releases', 'https://aniliberty.top/api/v1/anime/releases'];
-  const [directMap, apiBody] = await Promise.all([
-    scrapeAnilibriaDirectFiles(url, epNum),
-    (async () => {
-      for (const base of apiBases) {
-        try {
-          const r = await fetch(`${base}/${releaseId}`);
-          if (r.ok) return await r.json();
-        } catch { /* next host */ }
-      }
-      return null;
-    })(),
-  ]);
+
+  const scrapePromise = (async () => {
+    for (const candidate of libriaIframeCandidates(url, releaseId, epOrdinal)) {
+      const map = await scrapeAnilibriaDirectFiles(candidate, epNum);
+      if (map && Object.keys(map).length) return map;
+    }
+    return null;
+  })();
+
+  const apiPromise = (async () => {
+    for (const base of apiBases) {
+      try {
+        const r = await fetch(`${base}/${releaseId}`, {
+          headers: { Accept: 'application/json', 'User-Agent': BROWSER_UA },
+          signal: AbortSignal.timeout(15_000),
+        });
+        if (r.ok) return await r.json();
+      } catch { /* next host */ }
+    }
+    return null;
+  })();
+
+  const [directMap, apiBody] = await Promise.all([scrapePromise, apiPromise]);
   const ep = (apiBody?.episodes || []).find((e) => String(e.ordinal) === String(epNum));
   const skip = skipFromLibriaEpisode(ep);
 
@@ -608,5 +668,6 @@ module.exports = {
   getSibnetDirectLink,
   isHtmlPlayerPage,
   isSibnetHtmlEmbed,
+  isLibriaHtmlEmbed,
   EMPTY,
 };

@@ -14,6 +14,7 @@ const NET_ERROR_HINTS: Array<[RegExp, string]> = [
 
 const CODE_HINTS: Record<string, string> = {
   'embed-url-not-video': 'Не удалось получить прямую ссылку на видео — передан адрес страницы плеера, а не файла',
+  'libria-release-missing': 'Релиз удалён или недоступен на AniLibria — попробуйте источник Kodik у той же озвучки',
   'invalid-url': 'Некорректный или пустой URL для скачивания',
   empty: 'Список файлов для скачивания пуст',
 };

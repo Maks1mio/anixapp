@@ -10,6 +10,9 @@ export interface SkipMarks {
 
 export type SkipMarkKind = 'opening' | 'ending';
 
+/** Короткий бампер озвучки в начале — не опенинг. */
+const INTRO_MAX_DURATION = 45;
+
 function usable(start: unknown, end: unknown): SkipRange | null {
   const a = Number(start);
   const b = Number(end);
@@ -17,10 +20,16 @@ function usable(start: unknown, end: unknown): SkipRange | null {
   return { start: a, end: b };
 }
 
+function isVoiceoverIntro(range: SkipRange | null | undefined): boolean {
+  if (!range) return false;
+  const dur = range.end - range.start;
+  return dur > 0 && dur < INTRO_MAX_DURATION && range.start < 90;
+}
+
 export function normalizeSkipMarks(raw: unknown): SkipMarks | null {
   if (!raw || typeof raw !== 'object') return null;
   const skip = raw as Record<string, unknown>;
-  const opening = usable(
+  let opening = usable(
     (skip.opening as SkipRange | undefined)?.start,
     (skip.opening as SkipRange | undefined)?.end,
   );
@@ -28,6 +37,7 @@ export function normalizeSkipMarks(raw: unknown): SkipMarks | null {
     (skip.ending as SkipRange | undefined)?.start,
     (skip.ending as SkipRange | undefined)?.end,
   );
+  if (isVoiceoverIntro(opening)) opening = null;
   if (!opening && !ending) return null;
   return { opening, ending };
 }
@@ -48,14 +58,23 @@ export function clampSkipMarksToDuration(marks: SkipMarks | null | undefined, du
     if (range.start >= duration - 1) return null;
     return usable(range.start, Math.min(range.end, duration));
   };
-  const opening = clampRange(marks.opening);
+  let opening = clampRange(marks.opening);
   const ending = clampRange(marks.ending);
+  if (isVoiceoverIntro(opening)) opening = null;
   if (!opening && !ending) return null;
   return { opening, ending };
 }
 
-/** Показать кнопку, пока таймлайн внутри интервала (чуть раньше старта, скрыть перед самым концом). */
-export function skipMarkActive(t: number, range: SkipRange | null | undefined): boolean {
+/**
+ * Показать кнопку скипа.
+ * Opening/Ending: только внутри отмеченного интервала.
+ * (Не с начала серии — иначе вырежем сцену до OP, если опенинг не с 0:00.)
+ */
+export function skipMarkActive(
+  t: number,
+  range: SkipRange | null | undefined,
+  kind: SkipMarkKind = 'ending',
+): boolean {
   if (!range || !Number.isFinite(t)) return false;
   return t >= range.start - 0.35 && t < range.end - 0.45;
 }

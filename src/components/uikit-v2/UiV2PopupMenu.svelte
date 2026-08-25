@@ -3,9 +3,11 @@
   import { scale, fly, fade } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { portal } from '../../actions/portal';
+  import { uiv2CustomScroll } from '../../actions/uiv2CustomScroll';
   import { tick } from 'svelte';
   import { iconCheck, iconChevronRight, iconSearch, iconX } from '../icons';
   import UiV2Tooltip from './UiV2Tooltip.svelte';
+  import UiV2Skeleton from './UiV2Skeleton.svelte';
 
   export type UiV2PopupMenuItemType = 'action' | 'toggle' | 'radio' | 'slider' | 'label';
 
@@ -82,6 +84,10 @@
     anchor?: HTMLElement | null;
     /** Клик по trailingIcon */
     onTrailingClick?: (id: string, item: UiV2PopupMenuItem) => void;
+    /** Скелетон вместо пунктов списка */
+    loading?: boolean;
+    /** Число строк скелетона */
+    loadingRows?: number;
   };
 
   let {
@@ -103,6 +109,8 @@
     wide = false,
     anchor = null,
     onTrailingClick,
+    loading = false,
+    loadingRows = 7,
   }: Props = $props();
 
   let panelEl = $state<HTMLDivElement | null>(null);
@@ -128,15 +136,20 @@
 
   const SUBMENU_GAP = 12;
   const POPUP_HIT_PAD = 8;
-  const POPUP_LEAVE_MS = 160;
+  const POPUP_LEAVE_MS = 200;
+  const ANCHOR_BRIDGE_EXTRA = 18;
   const labelId = `uiv2-popup-menu-${Math.random().toString(36).slice(2, 9)}`;
 
   let searchOpen = $state(false);
   let searchQuery = $state('');
   let searchInputEl = $state<HTMLInputElement | null>(null);
+  let lastPointerX = 0;
+  let lastPointerY = 0;
 
   const panelWide = $derived(wide || items.some((it) => it.type === 'slider'));
-  const visibleItems = $derived(filterMenuItems(items, searchQuery));
+  const visibleItems = $derived(loading ? [] : filterMenuItems(items, searchQuery));
+  const skeletonCount = $derived(Math.max(3, Math.min(12, Math.round(loadingRows) || 7)));
+  const skeletonWidths = ['72%', '58%', '84%', '64%', '76%', '52%', '68%', '80%', '60%', '70%', '55%', '78%'];
 
   const activeSubItem = $derived(
     openSubId ? items.find((it) => it.id === openSubId) ?? null : null,
@@ -230,15 +243,40 @@
     return null;
   }
 
-  /** Родитель + подменю + зазор между ними — переход в раскрытый блок не считается уходом. */
+  /** Вертикальный мост между триггером и панелью (зазор 6px при placement=anchor). */
+  function verticalCorridor(a: DOMRect, b: DOMRect): HitRect | null {
+    const extra = ANCHOR_BRIDGE_EXTRA;
+    const left = Math.min(a.left, b.left) - extra;
+    const right = Math.max(a.right, b.right) + extra;
+    if (b.top >= a.bottom - 2) {
+      return { left, right, top: a.bottom, bottom: b.top };
+    }
+    if (a.top >= b.bottom - 2) {
+      return { left, right, top: b.bottom, bottom: a.top };
+    }
+    return null;
+  }
+
+  /** Панель + подменю + якорь + зазоры — переход на кнопку не считается уходом. */
   function popupContainsPoint(x: number, y: number): boolean {
     const pad = POPUP_HIT_PAD;
     const panelRect = panelEl?.getBoundingClientRect();
     const subRect = openSubId && subPanelEl ? subPanelEl.getBoundingClientRect() : null;
+    const anchorRect = anchor?.getBoundingClientRect() ?? null;
+
     if (panelRect && pointInRect(x, y, inflateRect(panelRect, pad))) return true;
     if (subRect && pointInRect(x, y, inflateRect(subRect, pad))) return true;
+    if (anchorRect && pointInRect(x, y, inflateRect(anchorRect, pad))) return true;
+
+    if (panelRect && anchorRect) {
+      const bridge = verticalCorridor(panelRect, anchorRect)
+        || corridorBetween(panelRect, anchorRect);
+      if (bridge && pointInRect(x, y, bridge)) return true;
+    }
+
     if (panelRect && subRect) {
-      const corridor = corridorBetween(panelRect, subRect);
+      const corridor = corridorBetween(panelRect, subRect)
+        || verticalCorridor(panelRect, subRect);
       if (corridor && pointInRect(x, y, corridor)) return true;
     } else if (panelRect && openSubId) {
       const sidePad = SUBMENU_GAP + 16;
@@ -261,6 +299,8 @@
     leavePopupTimer = setTimeout(() => {
       leavePopupTimer = null;
       if (pointerDownInside) return;
+      // Курсор мог успеть вернуться на кнопку / в зазор
+      if (popupContainsPoint(lastPointerX, lastPointerY)) return;
       onClose?.();
     }, POPUP_LEAVE_MS);
   }
@@ -470,6 +510,8 @@
 
   function onWindowPointerDown(e: PointerEvent) {
     if (!open) return;
+    lastPointerX = e.clientX;
+    lastPointerY = e.clientY;
     const t = e.target;
     if (t instanceof Node) {
       if (panelEl?.contains(t) || subPanelEl?.contains(t)) {
@@ -478,13 +520,19 @@
         clearLeavePopupTimer();
         return;
       }
-      if (anchor?.contains(t)) return;
+      if (anchor?.contains(t)) {
+        pointerEnteredPopup = true;
+        clearLeavePopupTimer();
+        return;
+      }
     }
     onClose?.();
   }
 
   function onWindowPointerMove(e: PointerEvent) {
     if (!open) return;
+    lastPointerX = e.clientX;
+    lastPointerY = e.clientY;
     if (popupContainsPoint(e.clientX, e.clientY)) {
       pointerEnteredPopup = true;
       clearLeavePopupTimer();
@@ -496,6 +544,8 @@
 
   function onWindowPointerUp(e: PointerEvent) {
     pointerDownInside = false;
+    lastPointerX = e.clientX;
+    lastPointerY = e.clientY;
     if (!open || !pointerEnteredPopup) return;
     if (popupContainsPoint(e.clientX, e.clientY)) {
       clearLeavePopupTimer();
@@ -849,13 +899,41 @@
           {/if}
         </div>
       {/if}
-      <ul class="uiv2-popup-menu__list">
-        {#each visibleItems as item (item.id)}
-          {@render menuRow(item, { root: true })}
-        {:else}
-          <li class="uiv2-popup-menu__empty" role="presentation">{emptyLabel}</li>
-        {/each}
-      </ul>
+      <div
+        class="uiv2-popup-menu__scroll uiv2-scroll-area uiv2-scroll-area--y"
+        use:uiv2CustomScroll={{ axis: 'y', viewportSelector: '.uiv2-popup-menu__list' }}
+      >
+        <ul
+          class="uiv2-popup-menu__list uiv2-scroll-area__viewport"
+          class:uiv2-popup-menu__list--skeleton={loading}
+          data-uiv2-scroll
+          aria-busy={loading || undefined}
+          aria-label={loading ? 'Загрузка…' : undefined}
+        >
+          {#if loading}
+            {#each Array.from({ length: skeletonCount }, (_, i) => i) as i (i)}
+              <li class="uiv2-popup-menu__skeleton-row" role="presentation">
+                <UiV2Skeleton tag="div" class="uiv2-popup-menu__skeleton-icon" rounded="md" />
+                <div
+                  class="uiv2-popup-menu__skeleton-label-wrap"
+                  style={`width:${skeletonWidths[i % skeletonWidths.length]}`}
+                >
+                  <UiV2Skeleton tag="div" class="uiv2-popup-menu__skeleton-label" rounded="sm" />
+                </div>
+              </li>
+            {/each}
+          {:else}
+            {#each visibleItems as item (item.id)}
+              {@render menuRow(item, { root: true })}
+            {:else}
+              <li class="uiv2-popup-menu__empty" role="presentation">{emptyLabel}</li>
+            {/each}
+          {/if}
+        </ul>
+        <div class="uiv2-scroll-area__v-track" aria-hidden="true">
+          <div class="uiv2-scroll-area__v-thumb"></div>
+        </div>
+      </div>
     </div>
 
     {#if openSubId && activeSubItem && subVisible}
@@ -876,11 +954,19 @@
         {#if subCustom && submenuContent}
           {@render submenuContent(activeSubItem)}
         {:else}
-          <ul class="uiv2-popup-menu__list">
-            {#each subItems as item (item.id)}
-              {@render menuRow(item)}
-            {/each}
-          </ul>
+          <div
+            class="uiv2-popup-menu__scroll uiv2-scroll-area uiv2-scroll-area--y"
+            use:uiv2CustomScroll={{ axis: 'y', viewportSelector: '.uiv2-popup-menu__list' }}
+          >
+            <ul class="uiv2-popup-menu__list uiv2-scroll-area__viewport" data-uiv2-scroll>
+              {#each subItems as item (item.id)}
+                {@render menuRow(item)}
+              {/each}
+            </ul>
+            <div class="uiv2-scroll-area__v-track" aria-hidden="true">
+              <div class="uiv2-scroll-area__v-thumb"></div>
+            </div>
+          </div>
         {/if}
       </div>
     {/if}

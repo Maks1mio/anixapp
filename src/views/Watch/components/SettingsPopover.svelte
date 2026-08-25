@@ -1,6 +1,6 @@
 <script lang="ts">
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../../../components/uikit-v2/UiV2PopupMenu.svelte';
-  import { iconSettings, iconSparkles, iconTv } from '../../../components/icons';
+  import { iconAudioLines, iconSettings, iconSparkles, iconTv } from '../../../components/icons';
   import {
     DEFAULT_PLAYBACK_RATE,
     PLAYBACK_RATE_MAX,
@@ -16,6 +16,16 @@
     type Anime4kIntensity,
     type Anime4kType,
   } from '../core/anime4k-presets';
+  import {
+    SURROUND_GROUPS,
+    surroundModeDisplayLabel,
+    surroundModeMeta,
+    surroundModeShort,
+    type EqBandId,
+    type EqGains,
+    type SurroundMode,
+  } from '../core/surround-audio';
+  import EqualizerPanel from './EqualizerPanel.svelte';
 
   interface Props {
     open: boolean;
@@ -28,12 +38,19 @@
     upscaleIntensity: Anime4kIntensity;
     playbackRate: number;
     aspectRatio: string;
+    surroundMode: SurroundMode;
+    eqGains: EqGains;
+    eqLevel: number;
     availableQualities: Record<string, string>;
     currentQuality: string;
     speedLocked?: boolean;
     onchangeAnime4k: (type: Anime4kType, intensity: Anime4kIntensity) => void;
     onchangeRate: (r: number) => void;
     onchangeAspect: (a: string) => void;
+    onchangeSurround: (mode: SurroundMode) => void;
+    onchangeEq: (band: EqBandId, gainDb: number) => void;
+    onchangeEqLevel: (gainDb: number) => void;
+    onresetEq?: () => void;
     onchangeQuality: (q: string) => void;
     onclose: () => void;
   }
@@ -41,10 +58,11 @@
   let {
     open, x, y, anchor = null,
     gpuAvailable, upscaleType, upscaleIntensity,
-    playbackRate, aspectRatio,
+    playbackRate, aspectRatio, surroundMode, eqGains, eqLevel,
     availableQualities, currentQuality,
     speedLocked = false,
-    onchangeAnime4k, onchangeRate, onchangeAspect, onchangeQuality, onclose,
+    onchangeAnime4k, onchangeRate, onchangeAspect, onchangeSurround, onchangeEq, onchangeEqLevel, onresetEq,
+    onchangeQuality, onclose,
   }: Props = $props();
 
   const ASPECTS = [
@@ -125,6 +143,58 @@
       })),
     });
 
+    const surroundShort = surroundModeShort(surroundMode);
+    const eqOpt = surroundModeMeta('equalizer');
+    const surroundChildren: UiV2PopupMenuItem[] = [
+      {
+        id: 'surround:equalizer',
+        label: eqOpt
+          ? surroundModeDisplayLabel('equalizer', true)
+          : 'Эквалайзер · 2.0',
+        type: 'radio',
+        checked: surroundMode === 'equalizer',
+        keepOpen: true,
+        customSubmenu: true,
+        submenuWide: true,
+      },
+      {
+        id: 'surround:off',
+        label: surroundModeDisplayLabel('off'),
+        type: 'radio',
+        checked: surroundMode === 'off',
+        keepOpen: true,
+      },
+      ...SURROUND_GROUPS.flatMap((group, gi) => {
+        const rows: UiV2PopupMenuItem[] = [
+          {
+            id: `surround-group:${group.label}`,
+            label: group.label,
+            type: 'label',
+            dividerBefore: gi === 0,
+          },
+        ];
+        for (const id of group.modes) {
+          const opt = surroundModeMeta(id);
+          if (!opt) continue;
+          rows.push({
+            id: `surround:${opt.id}`,
+            label: surroundModeDisplayLabel(opt.id, true),
+            type: 'radio',
+            checked: surroundMode === opt.id,
+            keepOpen: true,
+          });
+        }
+        return rows;
+      }),
+    ];
+
+    next.push({
+      id: 'surround',
+      label: surroundShort ? `Объёмный звук · ${surroundShort}` : 'Объёмный звук',
+      icon: iconAudioLines(18),
+      children: surroundChildren,
+    });
+
     next.push({
       id: 'playback-rate',
       label: 'Скорость',
@@ -165,7 +235,15 @@
     }
     if (id.startsWith('aspect:')) {
       onchangeAspect(id.slice('aspect:'.length));
+      return;
     }
+    if (id.startsWith('surround:')) {
+      onchangeSurround(id.slice('surround:'.length) as SurroundMode);
+    }
+  }
+
+  function onMenuValueChange(id: string, value: number) {
+    if (id === 'playback-rate') onchangeRate(value);
   }
 </script>
 
@@ -179,5 +257,17 @@
   placement="anchor"
   onClose={onclose}
   onSelect={onSelect}
-  onValueChange={(_id, value) => onchangeRate(value)}
-/>
+  onValueChange={onMenuValueChange}
+>
+  {#snippet submenuContent(item)}
+    {#if item.id === 'surround:equalizer'}
+      <EqualizerPanel
+        gains={eqGains}
+        level={eqLevel}
+        onchange={onchangeEq}
+        onchangeLevel={onchangeEqLevel}
+        onreset={onresetEq}
+      />
+    {/if}
+  {/snippet}
+</UiV2PopupMenu>

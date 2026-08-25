@@ -19,6 +19,17 @@
     type Anime4kIntensity,
     type Anime4kType,
   } from './core/anime4k-presets';
+  import {
+    normalizeSurroundMode,
+    surroundModeLabel,
+    defaultEqGains,
+    normalizeEqGains,
+    normalizeEqLevel,
+    clampEqGain,
+    type SurroundMode,
+    type EqBandId,
+    type EqGains,
+  } from './core/surround-audio';
   import SoloShell from './shells/SoloShell.svelte';
   import LobbyShell from './shells/LobbyShell.svelte';
   import LobbySidebar from './components/LobbySidebar.svelte';
@@ -431,6 +442,13 @@
       ?? (playerWrapEl?.querySelector('.watch-page__upscale-canvas') as HTMLCanvasElement | null)
       ?? null;
     core.iframe = iframeEl ?? null;
+    if (videoEl && player.useVideo && (player.surroundMode !== 'off' || core.surround.attached)) {
+      void core.surround.setEqGains(player.eqGains).then(() =>
+        core.surround.setEqLevel(player.eqLevel).then(() =>
+          core.surround.setMode(player.surroundMode).then(() => core.surround.attach(videoEl)),
+        ),
+      );
+    }
   }
 
   /** Снять постер/«Загрузка…» и показать кадр. Плашку ошибки убираем только если серия реально идёт. */
@@ -1621,6 +1639,90 @@
     if (player.upscaleEnabled && gpuAvailable) startUpscale();
   }
 
+  function changeSurroundMode(mode: SurroundMode, opts?: { osd?: boolean }) {
+    const next = normalizeSurroundMode(mode);
+    player.surroundMode = next;
+    (window as any).electron?.saveSettings?.({ audioSurround: next });
+    if (videoEl && player.useVideo) {
+      void core.surround.setEqGains(player.eqGains).then(() =>
+        core.surround.setEqLevel(player.eqLevel).then(() =>
+          core.surround.setMode(next).then(() => core.surround.attach(videoEl)),
+        ),
+      );
+    } else {
+      void core.surround.setMode(next);
+    }
+    if (opts?.osd) {
+      showOsd(next === 'off' ? 'Объёмный звук выкл' : `Объёмный звук · ${surroundModeLabel(next)}`);
+    }
+  }
+
+  let eqSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Плоский объект для IPC — Svelte $state proxy через Electron часто теряется. */
+  function plainEqGains(): EqGains {
+    return normalizeEqGains({ ...player.eqGains });
+  }
+
+  function persistEqSettings(opts?: { immediate?: boolean }) {
+    const payload = {
+      audioEqGains: plainEqGains(),
+      audioEqLevel: normalizeEqLevel(player.eqLevel),
+    };
+    if (opts?.immediate) {
+      if (eqSaveTimer != null) {
+        clearTimeout(eqSaveTimer);
+        eqSaveTimer = null;
+      }
+      void (window as any).electron?.saveSettings?.(payload);
+      return;
+    }
+    if (eqSaveTimer != null) clearTimeout(eqSaveTimer);
+    eqSaveTimer = setTimeout(() => {
+      eqSaveTimer = null;
+      void (window as any).electron?.saveSettings?.({
+        audioEqGains: plainEqGains(),
+        audioEqLevel: normalizeEqLevel(player.eqLevel),
+      });
+    }, 200);
+  }
+
+  function ensureEqMode() {
+    if (player.surroundMode !== 'equalizer') {
+      changeSurroundMode('equalizer');
+    } else if (videoEl && player.useVideo && !core.surround.attached) {
+      void core.surround.setEqGains(player.eqGains).then(() =>
+        core.surround.setEqLevel(player.eqLevel).then(() =>
+          core.surround.setMode('equalizer').then(() => core.surround.attach(videoEl)),
+        ),
+      );
+    }
+  }
+
+  function changeEqBand(band: EqBandId, gainDb: number) {
+    const gain = clampEqGain(gainDb);
+    player.eqGains = { ...player.eqGains, [band]: gain };
+    void core.surround.setEqGains({ [band]: gain });
+    ensureEqMode();
+    persistEqSettings();
+  }
+
+  function changeEqLevel(gainDb: number) {
+    const gain = clampEqGain(gainDb);
+    player.eqLevel = gain;
+    void core.surround.setEqLevel(gain);
+    ensureEqMode();
+    persistEqSettings();
+  }
+
+  function resetEqBands() {
+    player.eqGains = defaultEqGains();
+    player.eqLevel = 0;
+    void core.surround.setEqGains(player.eqGains);
+    void core.surround.setEqLevel(0);
+    persistEqSettings({ immediate: true });
+  }
+
   function pickQualityForMap(
     qualityMap: Record<string, string>,
     fallbackQuality: string,
@@ -1975,7 +2077,9 @@
     if (e.ctrlKey || e.metaKey || e.altKey) return;
 
     if (e.code === hotkeys.playPauseCode) {
+      // Capture: один раз, без повторного срабатывания на focused button/tap-layer.
       e.preventDefault();
+      e.stopPropagation();
       togglePlay();
       return;
     }
@@ -2410,12 +2514,24 @@
         player.debugOverlay = s?.playerDebugOverlay === true;
         adaptiveQualityByWindow = s?.adaptiveQualityByWindow === true;
         hotkeys = normalizePlayerHotkeys(s?.playerHotkeys);
+        player.surroundMode = normalizeSurroundMode(s?.audioSurround);
+        player.eqGains = normalizeEqGains(s?.audioEqGains);
+        player.eqLevel = normalizeEqLevel(s?.audioEqLevel);
+        void core.surround.setEqGains(player.eqGains).then(() =>
+          core.surround.setEqLevel(player.eqLevel).then(() =>
+            core.surround.setMode(player.surroundMode),
+          ),
+        );
         if (gpuAvailable) {
           applyAnime4kFromSettings(s ?? {});
         }
         if (adaptiveQualityByWindow) scheduleAdaptiveQuality();
       }).catch(() => {});
     }
+
+    const flushEqOnLeave = () => persistEqSettings({ immediate: true });
+    window.addEventListener('pagehide', flushEqOnLeave);
+    window.addEventListener('beforeunload', flushEqOnLeave);
 
     inLobby = !!getCurrentRoomId();
     enforceNormalRateInLobby();
@@ -2501,6 +2617,11 @@
           upscaleType?: unknown;
           upscaleIntensity?: unknown;
         });
+      }) as EventListener],
+
+      ['anix:surroundChanged', ((e: CustomEvent) => {
+        const mode = normalizeSurroundMode((e.detail as { audioSurround?: unknown } | null)?.audioSurround);
+        changeSurroundMode(mode);
       }) as EventListener],
 
       ['anix:playerDebugChanged', ((e: CustomEvent) => {
@@ -2832,7 +2953,7 @@
 
     handlers.forEach(([evt, fn]) => window.addEventListener(evt, fn));
     window.electron?.lobbyRequestSession?.();
-    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keydown', onKeyDown, true);
     const wheelOpts: AddEventListenerOptions = { passive: false };
     window.addEventListener('wheel', onWheel, wheelOpts);
     window.addEventListener('pointermove', onPointerActivity, true);
@@ -2842,8 +2963,11 @@
     return () => {
       videoListenersAbort?.abort();
       videoListenersAbort = null;
+      persistEqSettings({ immediate: true });
+      window.removeEventListener('pagehide', flushEqOnLeave);
+      window.removeEventListener('beforeunload', flushEqOnLeave);
       handlers.forEach(([evt, fn]) => window.removeEventListener(evt, fn));
-      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('wheel', onWheel, wheelOpts);
       window.removeEventListener('pointermove', onPointerActivity, true);
       window.removeEventListener('pointerdown', onPointerActivity, true);
@@ -2905,6 +3029,9 @@
     upscaleIntensity: player.upscaleIntensity,
     playbackRate: player.playbackRate,
     aspectRatio: player.aspectRatio,
+    surroundMode: player.surroundMode,
+    eqGains: player.eqGains,
+    eqLevel: player.eqLevel,
     availableQualities: player.availableQualities,
     currentQuality: player.currentQuality,
     speedLocked: inLobby,
@@ -2937,6 +3064,10 @@
     onfullscreen: toggleFullscreen,
     onchangeRate: changePlaybackRate,
     onchangeAspect: changeAspectRatio,
+    onchangeSurround: (mode) => changeSurroundMode(mode, { osd: true }),
+    onchangeEq: changeEqBand,
+    onchangeEqLevel: changeEqLevel,
+    onresetEq: resetEqBands,
     onchangeQuality: changeQuality,
     onseekBack: () => seekBySeconds(-hotkeys.seekSeconds),
     onseekForward: () => seekBySeconds(hotkeys.seekSeconds),

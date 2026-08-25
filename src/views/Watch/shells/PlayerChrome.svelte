@@ -2,6 +2,7 @@
   import type { Snippet } from 'svelte';
   import type { EpisodeItem, DubberItem, DownloadedEpisodeItem, NextEpAltDub, PopoverType, SourceItem } from '../_types';
   import type { Anime4kIntensity, Anime4kType } from '../core/anime4k-presets';
+  import type { SurroundMode, EqGains, EqBandId } from '../core/surround-audio';
   import type { SkipMarkKind, TimelineSausage } from '../_skipMarks';
   import ControlsBar from '../components/ControlsBar.svelte';
   import ActionsBar from '../components/ActionsBar.svelte';
@@ -53,6 +54,9 @@
     upscaleIntensity: Anime4kIntensity;
     playbackRate: number;
     aspectRatio: string;
+    surroundMode: SurroundMode;
+    eqGains: EqGains;
+    eqLevel: number;
     availableQualities: Record<string, string>;
     currentQuality: string;
     speedLocked: boolean;
@@ -82,6 +86,10 @@
     onfullscreen: () => void;
     onchangeRate: (r: number) => void;
     onchangeAspect: (a: string) => void;
+    onchangeSurround: (mode: SurroundMode) => void;
+    onchangeEq: (band: EqBandId, gainDb: number) => void;
+    onchangeEqLevel: (gainDb: number) => void;
+    onresetEq: () => void;
     onchangeQuality: (q: string) => void;
     onseekBack: () => void;
     onseekForward: () => void;
@@ -129,13 +137,13 @@
 
   <div
     class="watch-page__tap-layer"
-    role="button"
-    tabindex="0"
-    onclick={props.ontogglePlay}
-    onkeydown={(e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        props.ontogglePlay();
+    role="presentation"
+    onclick={(e) => {
+      props.ontogglePlay();
+      // Не оставляем фокус на зоне клика — иначе Space срабатывает дважды.
+      const ae = document.activeElement;
+      if (ae instanceof HTMLElement && (ae === e.currentTarget || e.currentTarget.contains(ae))) {
+        ae.blur();
       }
     }}
   ></div>
@@ -174,6 +182,9 @@
       upscaleIntensity={props.upscaleIntensity}
       playbackRate={props.playbackRate}
       aspectRatio={props.aspectRatio}
+      surroundMode={props.surroundMode}
+      eqGains={props.eqGains}
+      eqLevel={props.eqLevel}
       availableQualities={props.availableQualities}
       currentQuality={props.currentQuality}
       speedLocked={props.speedLocked}
@@ -189,6 +200,10 @@
       onfullscreen={props.onfullscreen}
       onchangeRate={props.onchangeRate}
       onchangeAspect={props.onchangeAspect}
+      onchangeSurround={props.onchangeSurround}
+      onchangeEq={props.onchangeEq}
+      onchangeEqLevel={props.onchangeEqLevel}
+      onresetEq={props.onresetEq}
       onchangeQuality={props.onchangeQuality}
       onseekBack={props.onseekBack}
       onseekForward={props.onseekForward}

@@ -8,6 +8,7 @@ import {
   ArrowRight,
   ArrowUp,
   ArrowUpDown,
+  AudioLines,
   Bell,
   Bookmark,
   Calendar,
@@ -414,6 +415,10 @@ export function iconRotateCw(size = 16): string {
 /** Добавить человека (лобби) */
 export function iconUserPlus(size = 20): string {
   return toSvg(UserPlus, size);
+}
+
+export function iconAudioLines(size = 18): string {
+  return toSvg(AudioLines, size);
 }
 
 export function iconVolume2(size = 20): string {

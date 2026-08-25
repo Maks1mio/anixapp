@@ -115,6 +115,7 @@
 
   let panelEl = $state<HTMLDivElement | null>(null);
   let subPanelEl = $state<HTMLDivElement | null>(null);
+  let nestedPanelEl = $state<HTMLDivElement | null>(null);
   let left = $state(0);
   let top = $state(0);
   let originX = $state('50%');
@@ -126,9 +127,15 @@
   let subLeft = $state(0);
   let subTop = $state(0);
   let subOpenRight = $state(true);
+  let openNestedSubId = $state<string | null>(null);
+  let nestedLeft = $state(0);
+  let nestedTop = $state(0);
+  let nestedOpenRight = $state(true);
   let leavePopupTimer: ReturnType<typeof setTimeout> | null = null;
   let lastSubHeight = 0;
   let lastSubPlaceId = '';
+  let lastNestedHeight = 0;
+  let lastNestedPlaceId = '';
   /** Курсор уже побывал на панели — после этого уход за пределы закрывает меню. */
   let pointerEnteredPopup = false;
   /** Не закрывать, пока тянут слайдер за пределы панели. */
@@ -159,6 +166,16 @@
   const subWide = $derived(!!activeSubItem?.submenuWide || subHasSlider || !!activeSubItem?.customSubmenu);
   const subCustom = $derived(!!activeSubItem?.customSubmenu && !!submenuContent);
   const subVisible = $derived(!!activeSubItem && (subItems.length > 0 || subCustom));
+
+  const activeNestedItem = $derived(
+    openNestedSubId ? subItems.find((it) => it.id === openNestedSubId) ?? null : null,
+  );
+  const nestedItems = $derived(activeNestedItem?.children ?? []);
+  const nestedCustom = $derived(!!activeNestedItem?.customSubmenu && !!submenuContent);
+  const nestedWide = $derived(
+    !!activeNestedItem?.submenuWide || nestedItems.some((it) => it.type === 'slider') || nestedCustom,
+  );
+  const nestedVisible = $derived(!!activeNestedItem && (nestedItems.length > 0 || nestedCustom));
 
   function itemHasSubmenu(item: UiV2PopupMenuItem): boolean {
     return !!(item.children?.length || item.customSubmenu || item.hasSubmenu);
@@ -209,7 +226,14 @@
     }
   }
 
+  function closeNestedSubmenu() {
+    openNestedSubId = null;
+    lastNestedHeight = 0;
+    lastNestedPlaceId = '';
+  }
+
   function closeSubmenu() {
+    closeNestedSubmenu();
     openSubId = null;
     lastSubHeight = 0;
     lastSubPlaceId = '';
@@ -257,15 +281,17 @@
     return null;
   }
 
-  /** Панель + подменю + якорь + зазоры — переход на кнопку не считается уходом. */
+  /** Панель + подменю + вложенное подменю + якорь + зазоры — переход на кнопку не считается уходом. */
   function popupContainsPoint(x: number, y: number): boolean {
     const pad = POPUP_HIT_PAD;
     const panelRect = panelEl?.getBoundingClientRect();
     const subRect = openSubId && subPanelEl ? subPanelEl.getBoundingClientRect() : null;
+    const nestedRect = openNestedSubId && nestedPanelEl ? nestedPanelEl.getBoundingClientRect() : null;
     const anchorRect = anchor?.getBoundingClientRect() ?? null;
 
     if (panelRect && pointInRect(x, y, inflateRect(panelRect, pad))) return true;
     if (subRect && pointInRect(x, y, inflateRect(subRect, pad))) return true;
+    if (nestedRect && pointInRect(x, y, inflateRect(nestedRect, pad))) return true;
     if (anchorRect && pointInRect(x, y, inflateRect(anchorRect, pad))) return true;
 
     if (panelRect && anchorRect) {
@@ -282,6 +308,18 @@
       const sidePad = SUBMENU_GAP + 16;
       const extended = inflateRect(panelRect, pad);
       if (subOpenRight) extended.right += sidePad;
+      else extended.left -= sidePad;
+      if (pointInRect(x, y, extended)) return true;
+    }
+
+    if (subRect && nestedRect) {
+      const corridor = corridorBetween(subRect, nestedRect)
+        || verticalCorridor(subRect, nestedRect);
+      if (corridor && pointInRect(x, y, corridor)) return true;
+    } else if (subRect && openNestedSubId) {
+      const sidePad = SUBMENU_GAP + 16;
+      const extended = inflateRect(subRect, pad);
+      if (nestedOpenRight) extended.right += sidePad;
       else extended.left -= sidePad;
       if (pointInRect(x, y, extended)) return true;
     }
@@ -405,10 +443,70 @@
       closeSubmenu();
       return;
     }
+    closeNestedSubmenu();
     openSubId = item.id;
     void placeSubmenu(rowEl, item.id);
     window.setTimeout(() => {
       if (openSubId === item.id) void placeSubmenu(rowEl, item.id);
+    }, 200);
+  }
+
+  async function placeNestedSubmenu(anchorEl: HTMLElement, itemId?: string) {
+    await tick();
+    const nest = nestedPanelEl;
+    const parent = subPanelEl;
+    if (!nest || !parent) return;
+    const pad = 8;
+    const gap = SUBMENU_GAP;
+    const ar = anchorEl.getBoundingClientRect();
+    const parentRect = parent.getBoundingClientRect();
+    const mainRect = panelEl?.getBoundingClientRect();
+    const w = nest.offsetWidth || nest.getBoundingClientRect().width || 280;
+    const h = nest.offsetHeight || nest.getBoundingClientRect().height || 200;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    const edgeLeft = parentRect.left;
+    const edgeRight = parentRect.right;
+    const spaceRight = vw - pad - edgeRight;
+    const spaceLeft = edgeLeft - pad;
+
+    // Уводим третье меню в сторону от корневой панели (обычно влево у плеера).
+    const mainCenter = mainRect ? (mainRect.left + mainRect.right) / 2 : Infinity;
+    const parentCenter = (edgeLeft + edgeRight) / 2;
+    const awayFromMainIsLeft = parentCenter <= mainCenter;
+    let preferRight = awayFromMainIsLeft
+      ? spaceRight >= w + gap && spaceLeft < w + gap
+      : spaceRight >= w + gap && spaceRight >= spaceLeft;
+    if (awayFromMainIsLeft && spaceLeft >= w + gap) preferRight = false;
+    nestedOpenRight = preferRight;
+
+    let nextLeft = preferRight ? edgeRight + gap : edgeLeft - gap - w;
+    let nextTop = ar.top - 4;
+
+    const sameItem = !!itemId && lastNestedPlaceId === itemId;
+    if (sameItem && lastNestedHeight > 0 && h <= lastNestedHeight && nestedTop > 0) {
+      nextTop = nestedTop;
+    }
+
+    nextLeft = Math.max(pad, Math.min(nextLeft, vw - pad - w));
+    nextTop = Math.max(pad, Math.min(nextTop, vh - pad - h));
+
+    nestedLeft = nextLeft;
+    nestedTop = nextTop;
+    lastNestedHeight = h;
+    if (itemId) lastNestedPlaceId = itemId;
+  }
+
+  function openNestedSubmenu(item: UiV2PopupMenuItem, rowEl: HTMLElement) {
+    if (!itemHasSubmenu(item)) {
+      closeNestedSubmenu();
+      return;
+    }
+    openNestedSubId = item.id;
+    void placeNestedSubmenu(rowEl, item.id);
+    window.setTimeout(() => {
+      if (openNestedSubId === item.id) void placeNestedSubmenu(rowEl, item.id);
     }, 200);
   }
 
@@ -495,6 +593,32 @@
     return () => ro?.disconnect();
   });
 
+  $effect(() => {
+    if (!open || !openNestedSubId || !nestedVisible) return;
+    void subLeft;
+    void subTop;
+    void tick().then(() => {
+      const id = openNestedSubId;
+      if (!id) return;
+      const row = subPanelEl?.querySelector<HTMLElement>(`[data-menu-id="${CSS.escape(id)}"]`);
+      if (row) void placeNestedSubmenu(row, id);
+    });
+  });
+
+  $effect(() => {
+    if (!open || !openNestedSubId || !nestedPanelEl) return;
+    const id = openNestedSubId;
+    const row = () => subPanelEl?.querySelector<HTMLElement>(`[data-menu-id="${CSS.escape(id)}"]`);
+    const ro = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => {
+          const el = row();
+          if (el) void placeNestedSubmenu(el, id);
+        })
+      : null;
+    ro?.observe(nestedPanelEl);
+    return () => ro?.disconnect();
+  });
+
   function onWindowKeydown(e: KeyboardEvent) {
     if (!open) return;
     if (e.key === 'Escape') {
@@ -503,7 +627,8 @@
         resetSearch();
         return;
       }
-      if (openSubId) closeSubmenu();
+      if (openNestedSubId) closeNestedSubmenu();
+      else if (openSubId) closeSubmenu();
       else onClose?.();
     }
   }
@@ -514,7 +639,7 @@
     lastPointerY = e.clientY;
     const t = e.target;
     if (t instanceof Node) {
-      if (panelEl?.contains(t) || subPanelEl?.contains(t)) {
+      if (panelEl?.contains(t) || subPanelEl?.contains(t) || nestedPanelEl?.contains(t)) {
         pointerDownInside = true;
         pointerEnteredPopup = true;
         clearLeavePopupTimer();
@@ -561,8 +686,24 @@
 
   function handleItemClick(item: UiV2PopupMenuItem, e: MouseEvent) {
     if (item.disabled || item.type === 'label') return;
+    const row = e.currentTarget as HTMLElement;
     if (itemHasSubmenu(item)) {
-      openSubmenu(item, e.currentTarget as HTMLElement);
+      // Пункты внутри уже открытого подменю → третья панель; иначе корневое подменю.
+      if (subPanelEl?.contains(row)) {
+        openNestedSubmenu(item, row);
+      } else {
+        openSubmenu(item, row);
+      }
+      if (item.type === 'radio') {
+        onCheckedChange?.(item.id, true, item);
+        onSelect?.(item.id, item);
+        if (!shouldKeepOpen(item)) onClose?.();
+      } else if (item.type === 'toggle') {
+        const next = !item.checked;
+        onCheckedChange?.(item.id, next, item);
+        onSelect?.(item.id, item);
+        if (!shouldKeepOpen(item)) onClose?.();
+      }
       return;
     }
 
@@ -721,11 +862,19 @@
               stepSlider(item, -1);
             }}
           >−</button>
-          <div class="uiv2-popup-menu__slider-track">
+          <div
+            class="uiv2-popup-menu__slider-track"
+            style={`--slider-fill:${fill}%;${warnPct != null ? `--slider-warn:${warnPct}%;` : ''}`}
+          >
+            <span class="uiv2-popup-menu__slider-rail" aria-hidden="true">
+              <span
+                class="uiv2-popup-menu__slider-fill"
+                class:uiv2-popup-menu__slider-fill--warn={fast && warnPct != null}
+              ></span>
+            </span>
             <input
               type="range"
               class="uiv2-popup-menu__slider-input"
-              style={`--slider-fill:${fill}%;${warnPct != null ? `--slider-warn:${warnPct}%;` : ''}`}
               min={sliderMin(item)}
               max={sliderMax(item)}
               step={sliderStep(item)}
@@ -769,18 +918,28 @@
         type="button"
         class="uiv2-popup-menu__item"
         class:uiv2-popup-menu__item--danger={item.danger}
-        class:uiv2-popup-menu__item--active={opts?.root && openSubId === item.id}
+        class:uiv2-popup-menu__item--active={
+          (opts?.root && openSubId === item.id) || (!opts?.root && openNestedSubId === item.id)
+        }
         class:uiv2-popup-menu__item--checked={!!item.checked}
-        data-menu-id={opts?.root ? item.id : undefined}
+        data-menu-id={item.id}
         role={item.type === 'toggle' ? 'menuitemcheckbox' : item.type === 'radio' ? 'menuitemradio' : 'menuitem'}
         aria-checked={item.type === 'toggle' || item.type === 'radio' ? !!item.checked : undefined}
         aria-haspopup={itemHasSubmenu(item) ? 'menu' : undefined}
-        aria-expanded={itemHasSubmenu(item) ? openSubId === item.id : undefined}
+        aria-expanded={
+          itemHasSubmenu(item)
+            ? (opts?.root ? openSubId === item.id : openNestedSubId === item.id)
+            : undefined
+        }
         disabled={item.disabled}
         onmouseenter={(e) => {
-          if (!opts?.root) return;
-          if (itemHasSubmenu(item)) openSubmenu(item, e.currentTarget as HTMLElement);
-          else closeSubmenu();
+          if (opts?.root) {
+            if (itemHasSubmenu(item)) openSubmenu(item, e.currentTarget as HTMLElement);
+            else closeSubmenu();
+            return;
+          }
+          if (itemHasSubmenu(item)) openNestedSubmenu(item, e.currentTarget as HTMLElement);
+          else closeNestedSubmenu();
         }}
         onclick={(e) => handleItemClick(item, e)}
       >
@@ -942,6 +1101,8 @@
         class="uiv2-popup-menu__panel uiv2-popup-menu__panel--sub"
         class:uiv2-popup-menu__panel--sub-left={!subOpenRight}
         class:uiv2-popup-menu__panel--sub-wide={subWide}
+        class:uiv2-popup-menu__panel--bridge-right={!!openNestedSubId && nestedOpenRight}
+        class:uiv2-popup-menu__panel--bridge-left={!!openNestedSubId && !nestedOpenRight}
         style={`left:${subLeft}px;top:${subTop}px;`}
         role="menu"
         tabindex="-1"
@@ -960,6 +1121,42 @@
           >
             <ul class="uiv2-popup-menu__list uiv2-scroll-area__viewport" data-uiv2-scroll>
               {#each subItems as item (item.id)}
+                {@render menuRow(item)}
+              {/each}
+            </ul>
+            <div class="uiv2-scroll-area__v-track" aria-hidden="true">
+              <div class="uiv2-scroll-area__v-thumb"></div>
+            </div>
+          </div>
+        {/if}
+      </div>
+    {/if}
+
+    {#if openNestedSubId && activeNestedItem && nestedVisible}
+      <div
+        bind:this={nestedPanelEl}
+        class="uiv2-popup-menu__panel uiv2-popup-menu__panel--sub uiv2-popup-menu__panel--nested"
+        class:uiv2-popup-menu__panel--sub-left={!nestedOpenRight}
+        class:uiv2-popup-menu__panel--sub-wide={nestedWide}
+        class:uiv2-popup-menu__panel--sub-eq={activeNestedItem.id === 'surround:equalizer'}
+        style={`left:${nestedLeft}px;top:${nestedTop}px;`}
+        role="menu"
+        tabindex="-1"
+        transition:scale={{ duration: 150, start: 0.94, opacity: 0, easing: cubicOut }}
+        onpointerenter={() => {
+          pointerEnteredPopup = true;
+          clearLeavePopupTimer();
+        }}
+      >
+        {#if nestedCustom && submenuContent}
+          {@render submenuContent(activeNestedItem)}
+        {:else}
+          <div
+            class="uiv2-popup-menu__scroll uiv2-scroll-area uiv2-scroll-area--y"
+            use:uiv2CustomScroll={{ axis: 'y', viewportSelector: '.uiv2-popup-menu__list' }}
+          >
+            <ul class="uiv2-popup-menu__list uiv2-scroll-area__viewport" data-uiv2-scroll>
+              {#each nestedItems as item (item.id)}
                 {@render menuRow(item)}
               {/each}
             </ul>

@@ -4,6 +4,7 @@ import { isHlsUrl, stripKodikQueryParams } from '../_utils';
 import { detachHls, startHlsFromTime, swapMediaSource } from './hls-engine';
 import { prefetchEpisodeUrl, resolveEpisodeUrlCached, invalidateEpisodeUrlCache, type ResolvedEpisodeMedia } from './url-cache';
 import { UpscaleController, gpuAvailable } from './upscale';
+import { SurroundController } from './surround-audio';
 
 export type PlayerCorePlayOpts = {
   url: string;
@@ -32,6 +33,7 @@ export class PlayerCore {
 
   origEpUrl = '';
   readonly upscale = new UpscaleController();
+  readonly surround = new SurroundController();
 
   private wdTimer: ReturnType<typeof setTimeout> | null = null;
   private wdGen = 0;
@@ -224,6 +226,7 @@ export class PlayerCore {
 
   destroy(): void {
     this.hideMedia();
+    this.surround.dispose();
   }
 
   isHls(url: string): boolean {

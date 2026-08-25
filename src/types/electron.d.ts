@@ -356,6 +356,11 @@ export interface AppSettings {
   upscaleMode?: number;
   upscaleType?: string;
   upscaleIntensity?: string;
+  /** Виртуальный объёмный звук / EQ */
+  audioSurround?: string;
+  /** Полосы графического эквалайзера (дБ) */
+  audioEqGains?: Record<string, number>;
+  audioEqLevel?: number;
   playerDebugOverlay?: boolean;
   /** Cap stream quality by player window size (default off). */
   adaptiveQualityByWindow?: boolean;

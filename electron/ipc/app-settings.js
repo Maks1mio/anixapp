@@ -50,6 +50,11 @@ ipcMain.handle('app:getSettings', () => {
       upscaleMode: typeof data.upscaleMode === 'number' ? data.upscaleMode : 15,
       upscaleType: typeof data.upscaleType === 'string' ? data.upscaleType : undefined,
       upscaleIntensity: typeof data.upscaleIntensity === 'string' ? data.upscaleIntensity : undefined,
+      audioSurround: typeof data.audioSurround === 'string' ? data.audioSurround : 'off',
+      audioEqGains: data.audioEqGains && typeof data.audioEqGains === 'object' && !Array.isArray(data.audioEqGains)
+        ? { ...data.audioEqGains }
+        : undefined,
+      audioEqLevel: typeof data.audioEqLevel === 'number' ? data.audioEqLevel : 0,
       playerDebugOverlay: data.playerDebugOverlay === true,
       adaptiveQualityByWindow: data.adaptiveQualityByWindow === true,
       playerHotkeys: normalizePlayerHotkeys(data.playerHotkeys),
@@ -64,6 +69,9 @@ ipcMain.handle('app:getSettings', () => {
       upscaleMode: 15,
       upscaleType: undefined,
       upscaleIntensity: undefined,
+      audioSurround: 'off',
+      audioEqGains: undefined,
+      audioEqLevel: 0,
       playerDebugOverlay: false,
       adaptiveQualityByWindow: false,
       playerHotkeys: normalizePlayerHotkeys(null),

@@ -18,12 +18,20 @@
     type Anime4kIntensity,
     type Anime4kType,
   } from '../../Watch/core/anime4k-presets';
+  import {
+    SURROUND_GROUPS,
+    normalizeSurroundMode,
+    surroundModeDisplayLabel,
+    surroundModeMeta,
+    type SurroundMode,
+  } from '../../Watch/core/surround-audio';
 
   type BindField = PlayerHotkeyBindField;
 
   let gpuAvailable = $state(false);
   let upscaleType = $state<Anime4kType>('off');
   let upscaleIntensity = $state<Anime4kIntensity>('optimal');
+  let audioSurround = $state<SurroundMode>('off');
   let playerDebugOverlay = $state(false);
   let adaptiveQualityByWindow = $state(false);
   let hotkeys = $state<PlayerHotkeysSettings>({ ...DEFAULT_PLAYER_HOTKEYS });
@@ -39,6 +47,7 @@
     const preset = normalizeAnime4kPreset(settings);
     upscaleType = preset.type;
     upscaleIntensity = preset.intensity;
+    audioSurround = normalizeSurroundMode(settings.audioSurround);
     playerDebugOverlay = settings.playerDebugOverlay === true;
     adaptiveQualityByWindow = settings.adaptiveQualityByWindow === true;
     hotkeys = normalizePlayerHotkeys(settings.playerHotkeys);
@@ -66,6 +75,13 @@
         upscaleType,
         upscaleIntensity,
       },
+    }));
+  }
+
+  function saveSurround() {
+    window.electron?.saveSettings?.({ audioSurround });
+    window.dispatchEvent(new CustomEvent('anix:surroundChanged', {
+      detail: { audioSurround },
     }));
   }
 
@@ -345,6 +361,56 @@
           {#if mappedUpscale.enabled}
             <p class="settings-a4k__hint">{ANIME4K_TYPES.find((t) => t.id === upscaleType)?.hint}</p>
           {/if}
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <p class="settings-section__label">Объёмный звук</p>
+      <p class="settings-section__desc">
+        Кино HRTF, Imaging, Spatial, IRCAM и графический эквалайзер (±12 дБ). Тонкая настройка EQ — в плеере.
+      </p>
+      <div class="settings-section__body">
+        <div class="settings-a4k">
+          <div class="settings-a4k__row" role="radiogroup" aria-label="Эквалайзер">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={audioSurround === 'equalizer'}
+              class="settings-a4k__chip {audioSurround === 'equalizer' ? 'settings-a4k__chip--active' : ''}"
+              title="10 полос, ручная настройка ±12 дБ · в плеере"
+              onclick={() => { audioSurround = 'equalizer'; saveSurround(); }}
+            >{surroundModeDisplayLabel('equalizer', true)}</button>
+          </div>
+          <div class="settings-a4k__row" role="radiogroup" aria-label="Объёмный звук выкл">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={audioSurround === 'off'}
+              class="settings-a4k__chip {audioSurround === 'off' ? 'settings-a4k__chip--active' : ''}"
+              onclick={() => { audioSurround = 'off'; saveSurround(); }}
+            >{surroundModeDisplayLabel('off')}</button>
+          </div>
+          {#each SURROUND_GROUPS as group (group.label)}
+            <p class="settings-a4k__hint" style="margin: 10px 0 6px;">{group.label}</p>
+            <div class="settings-a4k__row" role="radiogroup" aria-label={group.label}>
+              {#each group.modes as modeId (modeId)}
+                {@const opt = surroundModeMeta(modeId)}
+                {#if opt}
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={audioSurround === opt.id}
+                    class="settings-a4k__chip {audioSurround === opt.id ? 'settings-a4k__chip--active' : ''}"
+                    title={(opt.hint ?? opt.label) + (opt.lib ? ` · ${opt.lib}` : '')}
+                    onclick={() => { audioSurround = opt.id; saveSurround(); }}
+                  >
+                    {surroundModeDisplayLabel(opt.id, true)}
+                  </button>
+                {/if}
+              {/each}
+            </div>
+          {/each}
         </div>
       </div>
     </div>

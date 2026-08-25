@@ -3,6 +3,7 @@
   import UiV2Tooltip from '../../../components/uikit-v2/UiV2Tooltip.svelte';
   import SettingsPopover from './SettingsPopover.svelte';
   import type { Anime4kIntensity, Anime4kType } from '../core/anime4k-presets';
+  import type { SurroundMode, EqGains, EqBandId } from '../core/surround-audio';
   import {
     iconPlay,
     iconPause,
@@ -30,6 +31,9 @@
     upscaleIntensity: Anime4kIntensity;
     playbackRate: number;
     aspectRatio: string;
+    surroundMode: SurroundMode;
+    eqGains: EqGains;
+    eqLevel: number;
     availableQualities: Record<string, string>;
     currentQuality: string;
     speedLocked?: boolean;
@@ -45,6 +49,10 @@
     onfullscreen: () => void;
     onchangeRate: (r: number) => void;
     onchangeAspect: (a: string) => void;
+    onchangeSurround: (mode: SurroundMode) => void;
+    onchangeEq: (band: EqBandId, gainDb: number) => void;
+    onchangeEqLevel: (gainDb: number) => void;
+    onresetEq: () => void;
     onchangeQuality: (q: string) => void;
     onseekBack: () => void;
     onseekForward: () => void;
@@ -53,11 +61,11 @@
   let {
     paused, muted, volume, isFullscreen, popoverType, useVideo,
     gpuAvailable, upscaleEnabled, upscaleType, upscaleIntensity,
-    playbackRate, aspectRatio, availableQualities, currentQuality,
+    playbackRate, aspectRatio, surroundMode, eqGains, eqLevel, availableQualities, currentQuality,
     speedLocked = false, currentTime, totalTime, seekSeconds,
     ontogglePlay, ontoggleMute, onvolumechange, onchangeAnime4k,
     onopenSettings, onclosePopover, onfullscreen,
-    onchangeRate, onchangeAspect, onchangeQuality,
+    onchangeRate, onchangeAspect, onchangeSurround, onchangeEq, onchangeEqLevel, onresetEq, onchangeQuality,
     onseekBack, onseekForward,
   }: Props = $props();
 
@@ -205,12 +213,19 @@
   {upscaleIntensity}
   {playbackRate}
   {aspectRatio}
+  {surroundMode}
+  {eqGains}
+  {eqLevel}
   {availableQualities}
   {currentQuality}
   {speedLocked}
   {onchangeAnime4k}
   {onchangeRate}
   {onchangeAspect}
+  {onchangeSurround}
+  {onchangeEq}
+  {onchangeEqLevel}
+  {onresetEq}
   {onchangeQuality}
   onclose={onclosePopover}
 />

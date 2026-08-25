@@ -1,6 +1,8 @@
 import { fmtTime } from './_utils';
 import type { PlayerLoadState } from './_types';
 import type { Anime4kIntensity, Anime4kType } from './core/anime4k-presets';
+import type { SurroundMode } from './core/surround-audio';
+import { defaultEqGains, type EqGains } from './core/surround-eq';
 
 export class PlayerState {
   loadState      = $state<PlayerLoadState>('loading');
@@ -31,6 +33,10 @@ export class PlayerState {
   playbackRate       = $state(1);
   /** 'auto' | '16/9' | '4/3' | '21/9' */
   aspectRatio        = $state('auto');
+  /** Виртуальный surround / EQ */
+  surroundMode       = $state<SurroundMode>('off');
+  eqGains            = $state<EqGains>(defaultEqGains());
+  eqLevel             = $state(0);
   /** Quality label → direct URL (e.g. { "720": "https://...720.m3u8" }) */
   availableQualities = $state<Record<string, string>>({});
   /** Currently selected quality label (e.g. "720") */

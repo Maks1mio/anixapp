@@ -11,7 +11,7 @@ export default defineConfig(({ command }) => ({
   appType: 'spa',
   plugins: [svelte({ preprocess: vitePreprocess() }), anixWebBridgePlugin()],
   optimizeDeps: {
-    include: ['anixapi'],
+    include: ['anixapi', 'binauralfir', 'binauralfir/dist/binaural-fir.js'],
   },
   build: {
     outDir: 'dist',

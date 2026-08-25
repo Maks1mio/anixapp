@@ -156,12 +156,6 @@
               продукт — такие разработчики действуют <strong>недобросовестно</strong>. Мы к ним не
               относимся и не несём ответственность за их действия.
             </p>
-            <p class="auth-terms-modal__contact">
-              Нужна помощь? Напишите специализированным социальным психологам в Discord:
-              <strong class="auth-terms-modal__discord">lolofost</strong>,
-              <strong class="auth-terms-modal__discord">kraza_z</strong>,
-              <strong class="auth-terms-modal__discord">maks1mio</strong>
-            </p>
           </div>
 
           <footer class="auth-terms-modal__foot auth-terms-modal__foot--split">

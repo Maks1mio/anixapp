@@ -806,21 +806,6 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   font-size: 0.82rem;
 }
 
-.auth-terms-modal__contact {
-  margin: 0.15rem 0 0;
-  padding-top: 0.75rem;
-  border-top: 1px solid color-mix(in srgb, #{$color-border} 70%, transparent);
-  color: $color-text-muted;
-  font-size: 0.82rem;
-  line-height: 1.45;
-}
-
-.auth-terms-modal__discord {
-  color: $color-text;
-  font-weight: 650;
-  user-select: all;
-}
-
 .auth-terms-modal__foot {
   display: flex;
   justify-content: flex-end;

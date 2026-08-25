@@ -44,7 +44,7 @@
       case 'related':
         return `<span class="notifications-modal__marker notifications-modal__marker--related">${iconBookmark(12)}</span>`;
       case 'friend':
-        return `<span class="notifications-modal__marker notifications-modal__marker--friend">${iconUser(11)}</span>`;
+        return `<span class="notifications-modal__marker notifications-modal__marker--friend">${iconUser(11, true)}</span>`;
       case 'friend-accept':
         return `<span class="notifications-modal__marker notifications-modal__marker--friend-accept">${iconCheck(11)}</span>`;
       case 'comment':

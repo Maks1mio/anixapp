@@ -289,8 +289,8 @@ export function iconBell(size = 20): string {
 }
 
 /** Пользователь (профиль) */
-export function iconUser(size = 20): string {
-  return toSvg(User, size);
+export function iconUser(size = 20, filled = false): string {
+  return toSvg(User, size, filled ? { fill: 'currentColor', stroke: 'none' } : {});
 }
 
 /** Люди / совместный просмотр (лобби) */

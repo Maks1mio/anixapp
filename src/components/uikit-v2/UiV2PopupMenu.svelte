@@ -864,13 +864,23 @@
           >−</button>
           <div
             class="uiv2-popup-menu__slider-track"
-            style={`--slider-fill:${fill}%;${warnPct != null ? `--slider-warn:${warnPct}%;` : ''}`}
           >
             <span class="uiv2-popup-menu__slider-rail" aria-hidden="true">
-              <span
-                class="uiv2-popup-menu__slider-fill"
-                class:uiv2-popup-menu__slider-fill--warn={fast && warnPct != null}
-              ></span>
+              {#if fast && warnPct != null}
+                <span
+                  class="uiv2-popup-menu__slider-fill"
+                  style={`width:${warnPct}%`}
+                ></span>
+                <span
+                  class="uiv2-popup-menu__slider-fill uiv2-popup-menu__slider-fill--warn"
+                  style={`left:${warnPct}%;width:${Math.max(0, fill - warnPct)}%`}
+                ></span>
+              {:else}
+                <span
+                  class="uiv2-popup-menu__slider-fill"
+                  style={`width:${fill}%`}
+                ></span>
+              {/if}
             </span>
             <input
               type="range"

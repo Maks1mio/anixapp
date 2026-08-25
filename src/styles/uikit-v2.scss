@@ -3231,22 +3231,18 @@
 }
 
 .uiv2-popup-menu__slider-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
   display: block;
   height: 100%;
-  width: var(--slider-fill, 50%);
   border-radius: 999px;
   background: #fff;
   opacity: 1;
 }
 
 .uiv2-popup-menu__slider-fill--warn {
-  background: linear-gradient(
-    to right,
-    #fff 0%,
-    #fff var(--slider-warn, 49%),
-    #ff6b5a var(--slider-warn, 49%),
-    #ff6b5a 100%
-  );
+  background: #ff6b5a;
 }
 
 .uiv2-popup-menu__slider-step {

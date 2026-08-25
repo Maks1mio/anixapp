@@ -57,6 +57,11 @@
       return () => cancelAnimationFrame(id);
     }
     skipRowIn = false;
+    // Мгновенно убираем, если промпт сняли (превью следующей серии) — без «хвоста» анимации позади
+    if (!skipPrompt) {
+      skipRowOn = false;
+      return;
+    }
     if (!skipRowOn) return;
     const t = window.setTimeout(() => { skipRowOn = false; }, SKIP_ROW_OUT_MS);
     return () => window.clearTimeout(t);

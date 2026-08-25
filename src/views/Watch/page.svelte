@@ -35,6 +35,7 @@
   import LobbySidebar from './components/LobbySidebar.svelte';
   import LobbyActionLogPanel from './components/LobbyActionLogPanel.svelte';
   import LobbyChooserOverlay from './components/LobbyChooserOverlay.svelte';
+  import NextEpisodePreview from './components/NextEpisodePreview.svelte';
   import type { PlayerChromeProps } from './shells/PlayerChrome.svelte';
   import { mapReleaseRawToCard } from '../../utils/release-card';
   import { resolveCdnAssetUrl, toPosterDisplayUrl } from '../../utils/posterUrl';
@@ -51,6 +52,7 @@
   import {
     getPlayerViewportWidth,
     pickAdaptiveQuality,
+    pickLowestQuality,
   } from '../../utils/adaptive-quality';
   import { getLobbyProfile, leaveLobbyRoomFromUi, joinLobbyRoomAndOpenPlayer } from '../../utils/lobby-player';
 
@@ -310,6 +312,181 @@
   });
   const hasPrevEp = $derived(prevEpisodePosition != null);
   const hasNextEp = $derived(nextEpisodePosition != null);
+
+  /** Превью следующей серии: прелоад заранее, показ за 20с до конца, с 6:20. */
+  const NEXT_PREVIEW_PRELOAD_REMAINING = 90;
+  const NEXT_PREVIEW_SHOW_REMAINING = 20;
+  const NEXT_PREVIEW_BUFFER_AT = 6 * 60;
+  const NEXT_PREVIEW_PLAY_AT = 6 * 60 + 20;
+
+  let nextPreviewUrl = $state('');
+  let nextPreviewReady = $state(false);
+  let nextPreviewDismissed = $state(false);
+  let nextPreviewGen = 0;
+  let nextPreviewForEp = 0;
+
+  const episodeRemaining = $derived.by(() => {
+    const dur = player.duration;
+    const t = player.currentTime;
+    if (!(dur > 30) || !Number.isFinite(t)) return Infinity;
+    return Math.max(0, dur - t);
+  });
+
+  const nextPreviewEp = $derived(nextEpisodePosition);
+
+  const nextPreviewCanRun = $derived(
+    !inLobby
+    && player.useVideo
+    && player.loadState === 'ready'
+    && nextPreviewEp != null
+    && episodeRemaining <= NEXT_PREVIEW_PRELOAD_REMAINING,
+  );
+
+  // Плашка по таймеру — не ждём HLS превью (иначе её часто нет до конца серии)
+  const nextPreviewVisible = $derived(
+    !inLobby
+    && player.useVideo
+    && player.loadState === 'ready'
+    && nextPreviewEp != null
+    && !nextPreviewDismissed
+    && episodeRemaining <= NEXT_PREVIEW_SHOW_REMAINING,
+  );
+
+  const nextPreviewCountdownPct = $derived.by(() => {
+    if (!nextPreviewVisible) return 0;
+    const span = NEXT_PREVIEW_SHOW_REMAINING;
+    const rem = episodeRemaining;
+    if (!(span > 0)) return 0;
+    return Math.min(100, Math.max(0, ((span - rem) / span) * 100));
+  });
+
+  let autoNextFired = false;
+  /** Серия, с которой уже ушли автопереходом — пока видео «на конце», не каскадить дальше */
+  let autoNextFromEp = 0;
+
+  function goToNextEpisodeAuto() {
+    if (inLobby || inLobbyRoom()) return;
+    if (player.switching || player.loadState !== 'ready') return;
+    if (autoNextFired) return;
+    const fromEp = watchState.ep;
+    if (autoNextFromEp === fromEp) return;
+    // Защита от каскада: только реально у конца текущего ролика
+    const dur = player.duration;
+    const t = player.currentTime;
+    if (!(dur > 30) || !Number.isFinite(t) || t < dur - 1.25) return;
+
+    const target = nextEpisodePosition;
+    if (target != null) {
+      autoNextFired = true;
+      autoNextFromEp = fromEp;
+      nextPreviewDismissed = true;
+      dismissSkipUiOnly();
+      try { videoEl?.pause(); } catch { /* ignore */ }
+      player.switching = true;
+      goToEpisode(target);
+      return;
+    }
+    if (nextEpAltDub) {
+      autoNextFired = true;
+      autoNextFromEp = fromEp;
+      nextPreviewDismissed = true;
+      dismissSkipUiOnly();
+      try { videoEl?.pause(); } catch { /* ignore */ }
+      player.switching = true;
+      goToNextEpisodeInAltDub(nextEpAltDub);
+    }
+  }
+
+  $effect(() => {
+    // Таймер превью / конец ролика — ровно +1 серия, без каскада
+    if (inLobby) return;
+    if (player.switching) return;
+    if (!player.useVideo || player.loadState !== 'ready') return;
+    if (player.paused) return;
+    if (episodeRemaining > 0.35) return;
+    if (nextEpisodePosition == null && !nextEpAltDub) return;
+    goToNextEpisodeAuto();
+  });
+
+  $effect(() => {
+    // Разрешаем следующий автопереход только когда новая серия уже точно не «на конце»
+    if (player.switching || player.loadState !== 'ready') return;
+    if (episodeRemaining > 8) {
+      autoNextFired = false;
+      autoNextFromEp = 0;
+    }
+  });
+
+  function resetNextPreview() {
+    nextPreviewGen++;
+    nextPreviewUrl = '';
+    nextPreviewReady = false;
+    nextPreviewDismissed = false;
+    nextPreviewForEp = 0;
+    // autoNextFired / autoNextFromEp специально НЕ сбрасываем здесь —
+    // иначе при goToEpisode(ep+1) старый currentTime≈duration снова триггерит 8, 9, 10…
+  }
+
+  async function ensureNextPreviewPreload() {
+    const ep = nextPreviewEp;
+    if (ep == null) return;
+    if (nextPreviewUrl && nextPreviewForEp === ep) return;
+    const rId = positiveId(watchState.releaseId);
+    const sId = positiveId(watchState.sourceId);
+    const api = (window as any).anixApi?.release;
+    const gen = ++nextPreviewGen;
+    nextPreviewReady = false;
+    nextPreviewUrl = '';
+    nextPreviewForEp = ep;
+
+    try {
+      if (isLocalPlaybackMode) {
+        const dl = localScopeEpisodes.find((d) => d.episodePosition === ep)
+          ?? downloadedEpisodes.find((d) =>
+            d.episodePosition === ep
+            && (!watchState.dubberName || d.dubberName === watchState.dubberName)
+            && (!watchState.sourceName || d.sourceName === watchState.sourceName),
+          );
+        if (!dl?.filePath || gen !== nextPreviewGen) return;
+        const url = pathToLocalMediaUrl(dl.filePath);
+        if (!url || gen !== nextPreviewGen) return;
+        nextPreviewUrl = url;
+        return;
+      }
+
+      if (!api?.getEpisode || rId == null || sId == null) return;
+      const res = await api.getEpisode(rId, sId, ep);
+      if (gen !== nextPreviewGen) return;
+      const episode = res?.episode;
+      if (!episode?.url) return;
+      // Как основной плеер: iframe тоже резолвим в прямой поток
+      const resolved = await core.resolve(episode.url, !!episode.iframe);
+      if (gen !== nextPreviewGen) return;
+      if (!resolved.useVideo || !resolved.playUrl) return;
+      const map = resolved.qualityMap ?? {};
+      const lowest = pickLowestQuality(map);
+      const url = (lowest && map[lowest]) || resolved.playUrl;
+      if (!url || gen !== nextPreviewGen) return;
+      nextPreviewUrl = url;
+    } catch {
+      if (gen === nextPreviewGen) {
+        nextPreviewUrl = '';
+        nextPreviewReady = false;
+      }
+    }
+  }
+
+  $effect(() => {
+    // Сброс при смене серии
+    const ep = watchState.ep;
+    void ep;
+    resetNextPreview();
+  });
+
+  $effect(() => {
+    if (!nextPreviewCanRun) return;
+    void ensureNextPreviewPreload();
+  });
 
   /** Следующая серия недоступна в текущей озвучке, но есть в другой — самая популярная по view_count */
   let nextEpAltDub = $state<NextEpAltDub | null>(null);
@@ -1937,7 +2114,14 @@
     else if (skipDismissedKind && skipPrompt !== skipDismissedKind) skipDismissedKind = null;
   });
 
-  const skipPromptVisible = $derived(skipPrompt && skipPrompt !== skipDismissedKind ? skipPrompt : null);
+  // Пока висит превью следующей серии — не показываем ending skip-row («Следующая серия N»),
+  // иначе он всплывает позади плашки при клике/показе хрома.
+  const skipPromptVisible = $derived.by(() => {
+    if (!skipPrompt || skipPrompt === skipDismissedKind) return null;
+    if (autoNextFired || player.switching) return null;
+    if (nextPreviewVisible && skipPrompt === 'ending') return null;
+    return skipPrompt;
+  });
 
   const skipAutoPref = $derived.by((): 'auto' | 'watch' | null => {
     void skipPrefTick;
@@ -1946,6 +2130,7 @@
   });
 
   const skipToNextEpisode = $derived.by(() => {
+    if (nextPreviewVisible || autoNextFired) return null;
     if (skipPrompt !== 'ending' || !endingIsAtEpisodeEnd(skipMarks?.ending, player.duration)) return null;
     if (nextEpisodePosition != null) return { ep: nextEpisodePosition, alt: false as const };
     if (nextEpAltDub) return { ep: nextEpAltDub.targetEp, alt: true as const };
@@ -1961,9 +2146,18 @@
   let skipCountdownKind = $state<SkipMarkKind | null>(null);
   let watchCountdownPct = $state(0);
 
-  function confirmWatchSkip(kind: SkipMarkKind) {
-    rememberSkipPref(kind, 'watch');
+  function confirmWatchSkip(kind: SkipMarkKind, remember = true) {
+    if (remember) rememberSkipPref(kind, 'watch');
     skipDismissedKind = kind;
+    skipCountdownPct = 0;
+    watchCountdownPct = 0;
+  }
+
+  /** Скрыть skip-UI без записи pref (следующая серия / автопереход). */
+  function dismissSkipUiOnly() {
+    if (skipPrompt) skipDismissedKind = skipPrompt;
+    skipCountdownPct = 0;
+    watchCountdownPct = 0;
   }
 
   $effect(() => {
@@ -1984,7 +2178,7 @@
     }
 
     const paused = player.paused;
-    const blocked = inLobby || player.switching || lobbyWaitOverlay != null;
+    const blocked = inLobby || player.switching || lobbyWaitOverlay != null || autoNextFired;
     if (paused || blocked || !player.useVideo || player.loadState !== 'ready') return;
 
     if (autoSkip) {
@@ -1998,11 +2192,13 @@
       let raf = 0;
 
       const tickFrame = (now: number) => {
+        if (autoNextFired || player.switching) return;
         const elapsed = now - startedAt;
         skipCountdownPct = Math.min(100, (elapsed / duration) * 100);
         if (elapsed >= duration) {
           skipCountdownPct = 100;
-          skipMediaMark(kind);
+          // Автотаймер только выполняет действие — pref не трогаем
+          skipMediaMark(kind, false);
           return;
         }
         raf = requestAnimationFrame(tickFrame);
@@ -2023,11 +2219,13 @@
       let raf = 0;
 
       const tickFrame = (now: number) => {
+        if (autoNextFired || player.switching) return;
         const elapsed = now - startedAt;
         watchCountdownPct = Math.min(100, (elapsed / duration) * 100);
         if (elapsed >= duration) {
           watchCountdownPct = 100;
-          confirmWatchSkip(kind);
+          // Автотаймер только прячет кнопки — pref не трогаем
+          confirmWatchSkip(kind, false);
           return;
         }
         raf = requestAnimationFrame(tickFrame);
@@ -2046,10 +2244,12 @@
     skipPrefTick += 1;
   }
 
-  function skipMediaMark(kind: SkipMarkKind) {
+  function skipMediaMark(kind: SkipMarkKind, remember = true) {
     const goNext = kind === 'ending' ? skipToNextEpisode : null;
     skipDismissedKind = kind;
-    rememberSkipPref(kind, 'auto');
+    skipCountdownPct = 0;
+    watchCountdownPct = 0;
+    if (remember) rememberSkipPref(kind, 'auto');
     if (goNext) {
       if (goNext.alt && nextEpAltDub) {
         goToNextEpisodeInAltDub(nextEpAltDub);
@@ -2460,6 +2660,9 @@
       }
       player.paused = true;
       sendToLobby('pause');
+    }, { signal });
+    el.addEventListener('ended', () => {
+      goToNextEpisodeAuto();
     }, { signal });
     el.addEventListener('progress', (e) => {
       const v = fromEvent(e);
@@ -3216,6 +3419,29 @@
         {:else}
           <SoloShell {...chromeProps} overlayVisible={player.overlayVisible} />
         {/if}
+      {/if}
+
+      {#if nextPreviewEp != null && !inLobby && (nextPreviewUrl || nextPreviewVisible)}
+        <NextEpisodePreview
+          url={nextPreviewUrl}
+          visible={nextPreviewVisible}
+          nextEp={nextPreviewEp}
+          countdownPct={nextPreviewCountdownPct}
+          mediaReady={nextPreviewReady}
+          chromeUp={player.overlayVisible}
+          bufferAt={NEXT_PREVIEW_BUFFER_AT}
+          playAt={NEXT_PREVIEW_PLAY_AT}
+          onready={() => { nextPreviewReady = true; }}
+          onselect={() => {
+            nextPreviewDismissed = true;
+            autoNextFired = true;
+            autoNextFromEp = watchState.ep;
+            dismissSkipUiOnly();
+            try { videoEl?.pause(); } catch { /* ignore */ }
+            player.switching = true;
+            if (nextEpisodePosition != null) goToEpisode(nextEpisodePosition);
+          }}
+        />
       {/if}
 
       {#if player.debugOverlay && player.useVideo}

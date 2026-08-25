@@ -47,10 +47,18 @@ export function pickAdaptiveQuality(
 
   const maxAllowed = maxQualityForViewportWidth(viewportWidth);
   const atOrBelow = list.filter((x) => x.height <= maxAllowed);
-  if (atOrBelow.length > 0) return atOrBelow[0].key;
+  if (atOrBelow.length > 0) return atOrBelow[0]!.key;
 
   // Only higher than cap (e.g. 720-only source in a tiny window) — lowest available.
-  return list[list.length - 1].key;
+  return list[list.length - 1]!.key;
+}
+
+/** Самое низкое доступное качество (для превью / прелоада). */
+export function pickLowestQuality(qualityMap: Record<string, string>): string | null {
+  const list = listSortedQualities(qualityMap);
+  if (list.length > 0) return list[list.length - 1]!.key;
+  const keys = Object.keys(qualityMap);
+  return keys.length > 0 ? keys[keys.length - 1]! : null;
 }
 
 export function getPlayerViewportWidth(): number {

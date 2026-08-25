@@ -13,8 +13,20 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { formatDownloadError, extractRawMessage } = require('./download-errors');
 
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
+function sleep(ms, signal) {
+  if (!signal) return new Promise((r) => setTimeout(r, ms));
+  if (signal.aborted) return Promise.reject(new Error('cancelled'));
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(t);
+      reject(new Error('cancelled'));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 function hostFromUrl(url) {
@@ -28,11 +40,13 @@ function hostFromUrl(url) {
 /**
  * Политика как у Kodik-Download-Watch: на «max» — по потоку на каждый сегмент
  * (thr = len(segments) в их fast_download.py).
+ * AniLibria (cache.libria.fun) режет соединения при высоком параллелизме —
+ * держим умеренный cap и больше ретраев.
  */
 function hlsFetchPolicy(segments, opts = {}) {
   const total = Math.max(1, segments.length);
   const host = hostFromUrl(segments[0] || '');
-  const isAnilibria = /libria\.fun|anilibria/i.test(host);
+  const isAnilibria = /libria\.fun|anilibria|aniliberty/i.test(host);
   const isKodik = /kodik|solodcdn|kodik-storage|zerocdn|cloudimgs\.net|animedia/i.test(host);
   const mode = typeof opts.mode === 'string' ? opts.mode : 'max';
 
@@ -50,7 +64,8 @@ function hlsFetchPolicy(segments, opts = {}) {
     cap = total;
   }
 
-  if (isAnilibria) cap = Math.min(cap, 24);
+  // cache.libria.fun: >16 часто даёт ERR_CONNECTION_RESET; 12 стабильнее и в итоге быстрее.
+  if (isAnilibria) cap = Math.min(cap, 12);
   // Kodik CDN рассчитан на «все сегменты сразу»
   if (isKodik && mode === 'max') {
     cap = total;
@@ -61,14 +76,19 @@ function hlsFetchPolicy(segments, opts = {}) {
   return {
     concurrency,
     delayMs: 0,
-    maxRetries: careful ? 6 : 4,
-    retryBaseMs: careful ? 1000 : 400,
+    maxRetries: isAnilibria ? 8 : (careful ? 6 : 4),
+    retryBaseMs: isAnilibria ? 1400 : (careful ? 1000 : 400),
   };
 }
 
 function isRetryableFetchError(err) {
   const raw = extractRawMessage(err);
-  return /HTTP\s+429|HTTP\s+503|HTTP\s+502|HTTP\s+404|ERR_FAILED|ECONNRESET|ETIMEDOUT|ECONNABORTED|aborted|SSL|socket hang up|timeout/i.test(raw);
+  if (!raw || /^cancelled$/i.test(raw)) return false;
+  return /HTTP\s+429|HTTP\s+503|HTTP\s+502|HTTP\s+500|HTTP\s+404|ERR_FAILED|ERR_CONNECTION_RESET|ERR_CONNECTION_CLOSED|ERR_CONNECTION_ABORTED|ERR_CONNECTION_REFUSED|ERR_NETWORK_CHANGED|ERR_INTERNET_DISCONNECTED|ERR_EMPTY_RESPONSE|ERR_TIMED_OUT|ECONNRESET|ETIMEDOUT|ECONNABORTED|ENETUNREACH|EAI_AGAIN|socket hang up|timeout|connection reset|connection closed|network changed/i.test(raw);
+}
+
+function isConnectionResetError(err) {
+  return /ERR_CONNECTION_RESET|ECONNRESET|connection reset|socket hang up/i.test(extractRawMessage(err));
 }
 
 async function fetchBufferWithRetry(fetchBuffer, url, headers, policy, signal) {
@@ -82,11 +102,55 @@ async function fetchBufferWithRetry(fetchBuffer, url, headers, policy, signal) {
       const raw = extractRawMessage(err);
       if (raw === 'cancelled' || signal?.aborted) throw new Error('cancelled');
       if (!isRetryableFetchError(err) || attempt === policy.maxRetries) throw err;
-      const delay = policy.retryBaseMs * Math.pow(1.45, attempt) + Math.random() * 250;
-      await sleep(delay);
+      const base = isConnectionResetError(err) ? policy.retryBaseMs * 1.75 : policy.retryBaseMs;
+      const delay = base * Math.pow(1.5, attempt) + Math.random() * 300;
+      await sleep(delay, signal);
     }
   }
   throw lastErr;
+}
+
+/**
+ * Параллельные воркеры с общим abort: первая фатальная ошибка останавливает остальных.
+ * Иначе Promise.all падает в UI, а соседние воркеры продолжают писать .ts на диск.
+ */
+async function runParallelSegmentWorkers(workerCount, parentSignal, worker) {
+  const jobAbort = new AbortController();
+  const onParentAbort = () => {
+    try { jobAbort.abort(); } catch (_) { /* ignore */ }
+  };
+  if (parentSignal) {
+    if (parentSignal.aborted) throw new Error('cancelled');
+    parentSignal.addEventListener('abort', onParentAbort, { once: true });
+  }
+
+  /** @type {Error | null} */
+  let fatalError = null;
+
+  const failJob = (err) => {
+    if (fatalError) return;
+    fatalError = err instanceof Error ? err : new Error(String(err));
+    try { jobAbort.abort(); } catch (_) { /* ignore */ }
+  };
+
+  async function wrapWorker() {
+    try {
+      await worker(jobAbort.signal, failJob);
+    } catch (err) {
+      const raw = extractRawMessage(err);
+      if (raw === 'cancelled' || jobAbort.signal.aborted) return;
+      failJob(err);
+    }
+  }
+
+  try {
+    await Promise.all(Array.from({ length: Math.max(1, workerCount) }, () => wrapWorker()));
+  } finally {
+    parentSignal?.removeEventListener('abort', onParentAbort);
+  }
+
+  if (parentSignal?.aborted) throw new Error('cancelled');
+  if (fatalError) throw fatalError;
 }
 
 function runFfmpeg(ffmpegPath, args) {
@@ -199,43 +263,43 @@ async function downloadSegmentsToFilesThenConcat(
     );
   } catch (_) { /* ignore */ }
 
-  async function worker() {
-    while (true) {
-      if (signal?.aborted) throw new Error('cancelled');
-      let i = -1;
-      while (nextFetch < total) {
-        const cand = nextFetch;
-        nextFetch += 1;
-        if (!done[cand]) {
-          i = cand;
-          break;
-        }
-      }
-      if (i < 0) return;
-      try {
-        const buf = await fetchBufferWithRetry(fetchBuffer, segments[i], headers, policy, signal);
-        const tmp = `${partPaths[i]}.tmp`;
-        await fs.promises.writeFile(tmp, buf);
-        await fs.promises.rename(tmp, partPaths[i]);
-        done[i] = true;
-        tracker.addSegment(buf);
-      } catch (err) {
-        if (extractRawMessage(err) === 'cancelled') throw err;
-        throw new Error(formatDownloadError(err, {
-          url: segments[i],
-          segment: i,
-          segmentTotal: total,
-        }));
-      }
-    }
-  }
-
   let success = false;
   try {
     const remaining = done.filter((d) => !d).length;
     const workers = Math.min(policy.concurrency, Math.max(1, remaining));
     if (remaining > 0) {
-      await Promise.all(Array.from({ length: workers }, () => worker()));
+      await runParallelSegmentWorkers(workers, signal, async (jobSignal, failJob) => {
+        while (true) {
+          if (jobSignal.aborted) return;
+          let i = -1;
+          while (nextFetch < total) {
+            const cand = nextFetch;
+            nextFetch += 1;
+            if (!done[cand]) {
+              i = cand;
+              break;
+            }
+          }
+          if (i < 0) return;
+          try {
+            const buf = await fetchBufferWithRetry(fetchBuffer, segments[i], headers, policy, jobSignal);
+            if (jobSignal.aborted) return;
+            const tmp = `${partPaths[i]}.tmp`;
+            await fs.promises.writeFile(tmp, buf);
+            await fs.promises.rename(tmp, partPaths[i]);
+            done[i] = true;
+            tracker.addSegment(buf);
+          } catch (err) {
+            if (extractRawMessage(err) === 'cancelled' || jobSignal.aborted) return;
+            failJob(new Error(formatDownloadError(err, {
+              url: segments[i],
+              segment: i,
+              segmentTotal: total,
+            })));
+            return;
+          }
+        }
+      });
     }
     if (signal?.aborted) throw new Error('cancelled');
 
@@ -294,28 +358,28 @@ async function downloadSegmentsToTs(segments, outputPath, headers, fetchBuffer, 
     }
   };
 
-  async function worker() {
-    while (nextFetch < total) {
-      if (signal?.aborted) throw new Error('cancelled');
-      const i = nextFetch;
-      nextFetch += 1;
-      try {
-        const buf = await fetchBufferWithRetry(fetchBuffer, segments[i], headers, policy, signal);
-        pending.set(i, buf);
-        flush();
-      } catch (err) {
-        if (extractRawMessage(err) === 'cancelled') throw err;
-        throw new Error(formatDownloadError(err, {
-          url: segments[i],
-          segment: i,
-          segmentTotal: total,
-        }));
-      }
-    }
-  }
-
   try {
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, total) }, () => worker()));
+    await runParallelSegmentWorkers(CONCURRENCY, signal, async (jobSignal, failJob) => {
+      while (nextFetch < total) {
+        if (jobSignal.aborted) return;
+        const i = nextFetch;
+        nextFetch += 1;
+        try {
+          const buf = await fetchBufferWithRetry(fetchBuffer, segments[i], headers, policy, jobSignal);
+          if (jobSignal.aborted) return;
+          pending.set(i, buf);
+          flush();
+        } catch (err) {
+          if (extractRawMessage(err) === 'cancelled' || jobSignal.aborted) return;
+          failJob(new Error(formatDownloadError(err, {
+            url: segments[i],
+            segment: i,
+            segmentTotal: total,
+          })));
+          return;
+        }
+      }
+    });
     flush();
     if (nextWrite !== total) {
       throw new Error('Не все сегменты загружены — возможно, CDN оборвал соединение');
@@ -399,6 +463,10 @@ async function fastDownloadHls(opts) {
 module.exports = {
   fastDownloadHls,
   hlsFetchPolicy,
+  isRetryableFetchError,
+  isConnectionResetError,
+  fetchBufferWithRetry,
+  runParallelSegmentWorkers,
   remuxTsToMp4,
   runFfmpeg,
 };

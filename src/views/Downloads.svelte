@@ -1564,6 +1564,10 @@
               {#if multi || isFinished}
                 <div
                   class="dl-v2-qgroup__head"
+                  role="button"
+                  tabindex={isFinished ? -1 : 0}
+                  aria-disabled={isFinished}
+                  aria-label={`Перетащить группу «${group.title}»`}
                   draggable={!isFinished}
                   ondragstart={(e) => onGroupDragStart(e, group.key)}
                   ondragend={onDragEnd}

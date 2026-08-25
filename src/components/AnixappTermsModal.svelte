@@ -32,7 +32,7 @@
   }
 
   let {
-    startStep = 'about',
+    startStep: initialStep = 'about',
     offerDontShowAgain = true,
     onClose,
   }: Props = $props();
@@ -41,7 +41,7 @@
   /** spring-ish ease ≈ cubic-bezier(0.22, 1, 0.36, 1) */
   const SMART_EASE = (t: number) => 1 - Math.pow(1 - t, 3.35);
 
-  let step = $state<AnixappLegalStep>(startStep);
+  let step = $state<AnixappLegalStep>(initialStep);
   let dontShowAgain = $state(false);
   let reduceMotion = $state(false);
 
@@ -167,6 +167,7 @@
                   class:auth-terms-modal__switch--on={dontShowAgain}
                   role="switch"
                   aria-checked={dontShowAgain}
+                  aria-label="Больше не показывать"
                   onclick={() => { dontShowAgain = !dontShowAgain; }}
                 >
                   <span class="auth-terms-modal__switch-thumb" aria-hidden="true"></span>

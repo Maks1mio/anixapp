@@ -260,6 +260,7 @@
       class:uiv2-select__panel--up={!openDown}
       class:uiv2-select__panel--with-leading={showLeading}
       role="listbox"
+      tabindex="-1"
       aria-labelledby="{id}-trigger"
       style:left="{panelLeft}px"
       style:top="{panelTop}px"
@@ -268,7 +269,7 @@
       style:max-height="{panelMaxHeight}px"
       style:transform-origin="50% {originY}"
       transition:scale={{ duration: 200, start: 0.97, easing: cubicOut }}
-      onclick={(e) => e.stopPropagation()}
+      onpointerdown={(e) => e.stopPropagation()}
     >
       <ul class="uiv2-select__list">
         {#each options as opt (opt.value)}

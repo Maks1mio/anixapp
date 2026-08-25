@@ -252,6 +252,76 @@
   pointer-events: none;
 }
 
+.titlebar__account {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 2px;
+  gap: 0;
+  border-radius: 999px;
+  background: transparent;
+  transition: background $transition;
+  -webkit-app-region: no-drag;
+
+  &:hover,
+  &--open {
+    background: $color-surface-hover;
+  }
+
+  :global(.uiv2-tooltip__trigger) {
+    display: inline-flex;
+  }
+}
+
+.titlebar__account-avatar,
+.titlebar__account-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: $color-text-muted;
+  cursor: pointer;
+  transition: color $transition, background $transition;
+
+  &:hover,
+  &:focus-visible {
+    color: $color-text;
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, $color-accent 70%, transparent);
+    outline-offset: 1px;
+  }
+}
+
+.titlebar__account-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+}
+
+.titlebar__account-chevron {
+  width: 20px;
+  height: 28px;
+  border-radius: 999px;
+  margin-right: 1px;
+}
+
+.titlebar__account-chevron-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.titlebar__account--open .titlebar__account-chevron-icon {
+  transform: rotate(180deg);
+  color: $color-text;
+}
+
 .titlebar__menu-item--avatar {
   padding: 0;
 }
@@ -396,6 +466,18 @@
 .titlebar__avatar--image {
   background-size: cover;
   background-position: center;
+}
+
+// Иконка-аватар в popup «Аккаунты» (HTML в UiV2PopupMenu item.icon, portal вне titlebar)
+.titlebar__account-menu-avatar {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background-size: cover;
+  background-position: center;
+  background-color: $color-surface-hover;
+  flex-shrink: 0;
 }
 
 .titlebar__controls {

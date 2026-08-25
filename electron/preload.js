@@ -339,6 +339,9 @@ contextBridge.exposeInMainWorld('anixApi', {
     unbindOAuthService: (provider) => ipcRenderer.invoke('anix:unbindOAuthService', provider),
     logout: () => ipcRenderer.invoke('anix:logout'),
     getStatus: () => ipcRenderer.invoke('anix:getAuthStatus'),
+    listAccounts: () => ipcRenderer.invoke('anix:listAccounts'),
+    switchAccount: (profileId) => ipcRenderer.invoke('anix:switchAccount', profileId),
+    removeAccount: (profileId) => ipcRenderer.invoke('anix:removeAccount', profileId),
   },
 
   profile: {

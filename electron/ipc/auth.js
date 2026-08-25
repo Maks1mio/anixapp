@@ -28,9 +28,9 @@ function register(deps) {
     isDev,
   } = deps;
 
+  const accountsStore = require('../lib/accounts-store');
 
-  function applyLoginSuccess(profile, profileToken, baseUrl) {
-    pendingOAuthSignup = null;
+  function applySessionFields(profile, profileToken) {
     config.saveConfig({
       token: profileToken.token,
       profileId: profile?.id ?? null,
@@ -38,6 +38,56 @@ function register(deps) {
       profileAvatar: profile?.avatar ?? null,
       profileRaw: profile || null,
     });
+  }
+
+  function activateSavedAccount(account, baseUrl) {
+    config.saveConfig({
+      token: account.token,
+      profileId: account.id,
+      profileLogin: account.login,
+      profileAvatar: account.avatar,
+      profileRaw: account.profileRaw || null,
+    });
+    accountsStore.upsertAccount(account);
+    state.anixart = createAnixClient({ baseUrl, token: account.token });
+  }
+
+  function clearActiveSession() {
+    config.saveConfig({
+      token: null,
+      profileId: null,
+      profileLogin: null,
+      profileAvatar: null,
+      profileRaw: null,
+    });
+    state.anixart = null;
+  }
+
+  function applyLoginSuccess(profile, profileToken, baseUrl) {
+    pendingOAuthSignup = null;
+    const prev = config.loadConfig();
+    const newId = Number(profile?.id) || 0;
+    const prevId = Number(prev.profileId) || 0;
+    // Старый аккаунт не затираем — кладём в список для быстрой смены
+    if (prev.token && prevId > 0 && prevId !== newId) {
+      accountsStore.upsertAccount({
+        id: prevId,
+        login: prev.profileLogin,
+        avatar: prev.profileAvatar,
+        token: prev.token,
+        profileRaw: prev.profileRaw,
+      });
+    }
+    applySessionFields(profile, profileToken);
+    if (newId > 0 && profileToken?.token) {
+      accountsStore.upsertAccount({
+        id: newId,
+        login: profile?.login,
+        avatar: profile?.avatar,
+        token: profileToken.token,
+        profileRaw: profile,
+      });
+    }
     state.anixart = createAnixClient({ baseUrl, token: profileToken.token });
   }
 
@@ -586,16 +636,63 @@ ipcMain.handle('anix:oauthCancel', () => {
   });
 
 loggedHandle('anix:logout', async () => {
-  config.saveConfig({
-    token: null,
-    profileId: null,
-    profileLogin: null,
-    profileAvatar: null,
-    profileRaw: null,
-  });
+  // То же, что «удалить из списка» для активного аккаунта
+  const activeId = Number(config.loadConfig().profileId) || 0;
+  if (!(activeId > 0)) {
+    clearActiveSession();
+    logger.info('auth', 'logout (no active)');
+    return { switched: false, loggedOut: true };
+  }
+  accountsStore.removeAccount(activeId);
+  const fallback = accountsStore.pickFallbackAccount(activeId);
+  const { baseUrl } = config.loadConfig();
+  if (fallback) {
+    activateSavedAccount(fallback, baseUrl);
+    logger.info('auth', 'logout → switched to other account', { profileId: fallback.id });
+    return { switched: true, profileId: fallback.id };
+  }
+  clearActiveSession();
   logger.info('auth', 'logout');
-  state.anixart = null;
-  return undefined;
+  return { switched: false, loggedOut: true };
+});
+
+ipcMain.handle('anix:listAccounts', () => {
+  return { accounts: accountsStore.listAccountsPublic() };
+});
+
+loggedHandle('anix:switchAccount', async (_, profileId) => {
+  const id = Number(profileId);
+  const account = accountsStore.findAccount(id);
+  if (!account) return { success: false, error: 'not_found' };
+  const activeId = Number(config.loadConfig().profileId) || 0;
+  if (account.id === activeId) return { success: true, alreadyActive: true };
+
+  // Сохраняем текущий перед сменой (на случай обновлённого токена)
+  accountsStore.preserveActiveSession();
+
+  const { baseUrl } = config.loadConfig();
+  activateSavedAccount(account, baseUrl);
+  logger.info('auth', 'switch account', { profileId: account.id, login: account.login });
+  return { success: true, profileId: account.id };
+});
+
+loggedHandle('anix:removeAccount', async (_, profileId) => {
+  const id = Number(profileId);
+  if (!(id > 0)) return { success: false, error: 'bad_id' };
+  const wasActive = accountsStore.removeAccount(id);
+  if (!wasActive) {
+    return { success: true, switched: false };
+  }
+  const fallback = accountsStore.pickFallbackAccount(id);
+  const { baseUrl } = config.loadConfig();
+  if (fallback) {
+    activateSavedAccount(fallback, baseUrl);
+    logger.info('auth', 'remove active account → switched', { profileId: fallback.id });
+    return { success: true, switched: true, profileId: fallback.id };
+  }
+  clearActiveSession();
+  logger.info('auth', 'remove active account → logged out');
+  return { success: true, switched: false, loggedOut: true };
 });
 
 ipcMain.handle('anix:getBaseUrl', () => {

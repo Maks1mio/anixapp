@@ -22,8 +22,8 @@ export async function syncAuthStatus(): Promise<boolean> {
     isAuthenticated.set(ok);
     return ok;
   } catch {
-    isAuthenticated.set(false);
-    return false;
+    // Плохое соединение / сбой IPC — не считаем «гость» и не триггерим окно входа
+    return get(isAuthenticated);
   }
 }
 
@@ -63,4 +63,18 @@ export function pathRequiresAuth(path: string): boolean {
 /** После входа/выхода — обновить профиль в UI */
 export function notifyAuthChanged(): void {
   window.dispatchEvent(new CustomEvent('anix:authChanged'));
+}
+
+/**
+ * Смена / выход из аккаунта: синхронизация + полная перезагрузка,
+ * чтобы все экраны подтянули данные нового профиля.
+ */
+export async function applyAccountSessionChange(): Promise<void> {
+  await syncAuthStatus();
+  notifyAuthChanged();
+  try {
+    window.location.reload();
+  } catch {
+    /* ignore */
+  }
 }

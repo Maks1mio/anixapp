@@ -90,8 +90,24 @@ export interface AnixApi {
     cancelOAuth: () => Promise<{ ok: boolean }>;
     bindOAuthService: (provider: 'vk' | 'google' | 'telegram' | 'yandex') => Promise<OAuthBindResult>;
     unbindOAuthService: (provider: 'vk' | 'google' | 'telegram' | 'yandex') => Promise<OAuthBindResult>;
-    logout: () => Promise<void>;
+    logout: () => Promise<void | { switched?: boolean; profileId?: number }>;
     getStatus: () => Promise<{ hasToken: boolean }>;
+    listAccounts: () => Promise<{
+      accounts: Array<{ id: number; login: string; avatar: string | null; active: boolean }>;
+    }>;
+    switchAccount: (profileId: number) => Promise<{
+      success: boolean;
+      alreadyActive?: boolean;
+      profileId?: number;
+      error?: string;
+    }>;
+    removeAccount: (profileId: number) => Promise<{
+      success: boolean;
+      switched?: boolean;
+      loggedOut?: boolean;
+      profileId?: number;
+      error?: string;
+    }>;
   };
 
   profile: {

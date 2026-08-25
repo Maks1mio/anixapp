@@ -1086,16 +1086,12 @@
 
   async function logout() {
     if (logoutBusy) return;
-    if (!confirm('Вы уверены, что хотите выйти из своей учетной записи?')) return;
+    if (!confirm('Выйти из аккаунта и убрать его из списка быстрой смены?')) return;
     logoutBusy = true;
     try {
       await window.anixApi?.auth?.logout?.();
-      const { syncAuthStatus, notifyAuthChanged } = await import('../stores/auth');
-      await syncAuthStatus();
-      notifyAuthChanged();
-      onBack();
-      const { navigate } = await import('../stores/navigation');
-      navigate('/');
+      const { applyAccountSessionChange } = await import('../stores/auth');
+      await applyAccountSessionChange();
     } catch {
       showToast('Не удалось выйти', 'err');
       logoutBusy = false;

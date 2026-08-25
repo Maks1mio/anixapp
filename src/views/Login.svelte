@@ -623,8 +623,7 @@
     if (panel === 'registerVerify') return 'Подтвердите email кодом из письма';
     if (panel === 'forgot') return 'Восстановление пароля';
     if (panel === 'forgotVerify') return 'Введите код подтверждения из письма';
-    if (overlay) return 'Войдите, чтобы открыть этот раздел. Можно войти по почте или никнейму Anixart.';
-    return 'Войдите по почте или никнейму Anixart';
+    return 'Нужно войти по почте или никнейму Anixart.';
   });
 
   const busy = $derived(isSubmitting || !!oauthBusy);

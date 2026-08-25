@@ -210,21 +210,41 @@
     setConnectionChecking();
     try {
       await window.anixApi.client.checkConnection();
-      const ok = await syncAuthStatus();
+      let hasToken = false;
+      let authKnown = false;
+      try {
+        const status = await window.anixApi.auth.getStatus();
+        hasToken = !!status?.hasToken;
+        isAuthenticated.set(hasToken);
+        authKnown = true;
+      } catch {
+        // Аккаунт не удалось определить — не открываем логин
+        authKnown = false;
+      }
       clearRetry();
       setConnectionOk();
       notifyAuthChanged();
       appScreen.set('main');
-      if (!ok) openLoginPrompt();
+      // Логин только если точно нет токена, не при сбое определения сессии
+      if (authKnown && !hasToken) openLoginPrompt();
     } catch {
       setConnectionProblem();
+      // Плохое соединение — без окна входа; сессию читаем локально
+      try {
+        const status = await window.anixApi.auth.getStatus();
+        isAuthenticated.set(!!status?.hasToken);
+        if (status?.hasToken) notifyAuthChanged();
+      } catch {
+        /* ignore */
+      }
     }
   }
 
   async function onLoginSuccess() {
     await syncAuthStatus();
     closeLoginPrompt();
-    notifyAuthChanged();
+    const { applyAccountSessionChange } = await import('./stores/auth');
+    await applyAccountSessionChange();
   }
 
   function dismissLoginPrompt() {
@@ -543,17 +563,34 @@
     setConnectionChecking();
     window.anixApi.client.checkConnection()
       .then(async () => {
-        const ok = await syncAuthStatus();
+        let hasToken = false;
+        let authKnown = false;
+        try {
+          const status = await window.anixApi!.auth.getStatus();
+          hasToken = !!status?.hasToken;
+          isAuthenticated.set(hasToken);
+          authKnown = true;
+        } catch {
+          authKnown = false;
+        }
         setConnectionOk();
         notifyAuthChanged();
         window.setTimeout(() => {
           appScreen.set('main');
-          if (!ok) openLoginPrompt();
+          if (authKnown && !hasToken) openLoginPrompt();
         }, 500);
       })
-      .catch(() => {
+      .catch(async () => {
         setConnectionProblem();
         appScreen.set('main');
+        // Плохое соединение — не показываем окно входа, сессию читаем локально
+        try {
+          const status = await window.anixApi!.auth.getStatus();
+          isAuthenticated.set(!!status?.hasToken);
+          if (status?.hasToken) notifyAuthChanged();
+        } catch {
+          /* ignore */
+        }
         if (offlineRetryTimer === null) {
           offlineRetryTimer = window.setInterval(checkAndShow, 7000);
         }

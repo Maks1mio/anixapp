@@ -122,15 +122,13 @@
 
   async function handleLogout() {
     if (!window.anixApi) return;
+    if (!confirm('Выйти из аккаунта и убрать его из списка быстрой смены?')) return;
     close();
     try {
       await window.anixApi.auth.logout();
     } catch { /* ignore */ }
-    const { syncAuthStatus, notifyAuthChanged } = await import('../stores/auth');
-    await syncAuthStatus();
-    notifyAuthChanged();
-    const { navigate } = await import('../stores/navigation');
-    navigate('/');
+    const { applyAccountSessionChange } = await import('../stores/auth');
+    await applyAccountSessionChange();
   }
 
   function handleGithubLink(e: Event) {

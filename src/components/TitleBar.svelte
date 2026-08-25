@@ -1,15 +1,18 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
-  import { iconArrowLeft, iconArrowRight, iconSearch, iconUsers, iconBell, iconCalendar, iconUser, iconSettings, iconDownload } from './icons';
+  import { iconArrowLeft, iconArrowRight, iconSearch, iconUsers, iconBell, iconCalendar, iconUser, iconSettings, iconDownload, iconChevronDown, iconPlus, iconX } from './icons';
   import { checkForUpdate, type UpdateInfo } from '../services/update-checker';
   import type { AppUpdateProgress } from '../types/electron';
-  import { isAuthenticated } from '../stores/auth';
+  import { isAuthenticated, openLoginPrompt, applyAccountSessionChange } from '../stores/auth';
   import { notificationUnreadCount, refreshNotificationUnreadCount } from '../stores/notifications';
   import ConnectionBanner from './ConnectionBanner.svelte';
   import UiV2Tooltip from './uikit-v2/UiV2Tooltip.svelte';
+  import UiV2PopupMenu, { type UiV2PopupMenuItem } from './uikit-v2/UiV2PopupMenu.svelte';
 
   const hasWindowApi = typeof (window as any).electron?.window !== 'undefined';
+
+  type SavedAccountRow = { id: number; login: string; avatar: string | null; active: boolean };
 
   interface Props {
     onLobby?: () => void;
@@ -41,13 +44,131 @@
   let updateState: 'idle' | 'downloading' | 'ready' | 'error' | 'installing' | 'install-error' = $state('idle');
   let installType: string | null = $state(null);
   let avatarUrl: string | null = $state(null);
-  let avatarInitials: string = $state('');
+  let profileLogin = $state('');
+  let profileId = $state(0);
   let hasUnreadNotifications = $state(false);
   let appVersion = $state('');
+  let authed = $state(false);
+  let savedAccounts = $state<SavedAccountRow[]>([]);
+
+  let accountsOpen = $state(false);
+  let accountsX = $state(0);
+  let accountsY = $state(0);
+  let accountsAnchor = $state<HTMLElement | null>(null);
+  let accountChipEl = $state<HTMLDivElement | null>(null);
 
   function syncAvatarFromGlobalProfile() {
     const profile = (window as any).__anixProfile;
     avatarUrl = profile?.avatar ? resolveCdnAssetUrl(profile.avatar) : null;
+    profileLogin = typeof profile?.login === 'string' ? profile.login : '';
+    profileId = Number(profile?.id ?? 0) || 0;
+  }
+
+  async function refreshSavedAccounts() {
+    try {
+      const res = await window.anixApi?.auth?.listAccounts?.();
+      savedAccounts = Array.isArray(res?.accounts) ? res.accounts : [];
+    } catch {
+      savedAccounts = [];
+    }
+  }
+
+  function accountAvatarIcon(avatar: string | null): string {
+    if (!avatar) return iconUser(18);
+    const url = resolveCdnAssetUrl(avatar);
+    return `<span class="titlebar__account-menu-avatar" style="background-image:url(${url})"></span>`;
+  }
+
+  const accountMenuItems = $derived.by((): UiV2PopupMenuItem[] => {
+    const items: UiV2PopupMenuItem[] = [];
+    const list = savedAccounts.length > 0
+      ? savedAccounts
+      : (authed && (profileLogin || profileId)
+          ? [{ id: profileId || 0, login: profileLogin || `ID ${profileId}`, avatar: null, active: true }]
+          : []);
+
+    for (const acc of list) {
+      items.push({
+        id: `account:${acc.id}`,
+        label: acc.login || `ID ${acc.id}`,
+        icon: accountAvatarIcon(acc.avatar),
+        type: 'radio',
+        checked: !!acc.active,
+        keepOpen: false,
+        trailingIcon: list.length > 1 ? iconX(14) : undefined,
+        trailingLabel: list.length > 1 ? 'Выйти / удалить из списка' : undefined,
+      });
+    }
+
+    items.push({
+      id: authed ? 'account:add' : 'account:login',
+      label: authed ? 'Добавить аккаунт' : 'Войти в аккаунт',
+      icon: iconPlus(18),
+      dividerBefore: items.length > 0,
+    });
+    return items;
+  });
+
+  async function toggleAccountsMenu(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (accountsOpen) {
+      accountsOpen = false;
+      return;
+    }
+    await refreshSavedAccounts();
+    const el = accountChipEl;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    accountsAnchor = el;
+    accountsX = r.left + r.width / 2;
+    accountsY = r.bottom;
+    accountsOpen = true;
+  }
+
+  function closeAccountsMenu() {
+    accountsOpen = false;
+  }
+
+  async function afterAccountSessionChange() {
+    closeAccountsMenu();
+    await applyAccountSessionChange();
+  }
+
+  async function onAccountMenuSelect(id: string) {
+    if (id === 'account:add' || id === 'account:login') {
+      closeAccountsMenu();
+      openLoginPrompt();
+      return;
+    }
+    const m = /^account:(\d+)$/.exec(id);
+    if (!m) return;
+    const targetId = Number(m[1]);
+    closeAccountsMenu();
+    if (targetId === profileId) return;
+    try {
+      const res = await window.anixApi?.auth?.switchAccount?.(targetId);
+      if (res?.success && !res.alreadyActive) await afterAccountSessionChange();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function onAccountTrailingClick(id: string) {
+    const m = /^account:(\d+)$/.exec(id);
+    if (!m) return;
+    const targetId = Number(m[1]);
+    try {
+      const res = await window.anixApi?.auth?.removeAccount?.(targetId);
+      if (!res?.success) return;
+      if (res.loggedOut || res.switched) {
+        await afterAccountSessionChange();
+      } else {
+        await refreshSavedAccounts();
+      }
+    } catch {
+      /* ignore */
+    }
   }
 
   async function loadAppVersion() {
@@ -128,10 +249,20 @@
       hasUnreadNotifications = n > 0;
     });
     const unsubAuth = isAuthenticated.subscribe((ok) => {
-      if (ok) void refreshNotificationUnreadCount();
-      else notificationUnreadCount.set(0);
+      authed = ok;
+      if (ok) {
+        void refreshNotificationUnreadCount();
+        void refreshSavedAccounts();
+      } else {
+        notificationUnreadCount.set(0);
+        profileLogin = '';
+        profileId = 0;
+        avatarUrl = null;
+        savedAccounts = [];
+      }
     });
     void refreshNotificationUnreadCount();
+    void refreshSavedAccounts();
     const unreadPoll = setInterval(() => {
       void refreshNotificationUnreadCount();
     }, 60_000);
@@ -316,22 +447,44 @@
       </button>
     </UiV2Tooltip>
 
-    <UiV2Tooltip text="Профиль">
-      <button
-        type="button"
-        class="titlebar__menu-item titlebar__menu-item--avatar"
-        id="titlebar-profile"
-        aria-label="Профиль"
-        onclick={onProfile}
-      >
-        <span
-          class="titlebar__avatar {avatarUrl ? 'titlebar__avatar--image' : 'titlebar__avatar--placeholder'}"
-          style={avatarUrl ? `background-image:url(${avatarUrl})` : ''}
+    <div
+      class="titlebar__account"
+      class:titlebar__account--open={accountsOpen}
+      bind:this={accountChipEl}
+    >
+      <UiV2Tooltip text="Профиль">
+        <button
+          type="button"
+          class="titlebar__account-avatar"
+          id="titlebar-profile"
+          aria-label="Профиль"
+          onclick={onProfile}
         >
-          {#if !avatarUrl}{@html iconUser(18)}{/if}
-        </span>
-      </button>
-    </UiV2Tooltip>
+          <span
+            class="titlebar__avatar {avatarUrl ? 'titlebar__avatar--image' : 'titlebar__avatar--placeholder'}"
+            style={avatarUrl ? `background-image:url(${avatarUrl})` : ''}
+          >
+            {#if !avatarUrl}{@html iconUser(16)}{/if}
+          </span>
+        </button>
+      </UiV2Tooltip>
+      <UiV2Tooltip text="Аккаунты">
+        <button
+          type="button"
+          class="titlebar__account-chevron"
+          id="titlebar-accounts"
+          aria-label="Выбор аккаунта"
+          aria-expanded={accountsOpen}
+          aria-haspopup="menu"
+          onclick={toggleAccountsMenu}
+          onpointerdown={(e) => e.stopPropagation()}
+        >
+          <span class="titlebar__account-chevron-icon" aria-hidden="true">
+            {@html iconChevronDown(12)}
+          </span>
+        </button>
+      </UiV2Tooltip>
+    </div>
 
     <UiV2Tooltip text="Настройки">
       <button
@@ -388,3 +541,18 @@
     </div>
   {/if}
 </div>
+
+{#if accountsOpen}
+  <UiV2PopupMenu
+    open={accountsOpen}
+    x={accountsX}
+    y={accountsY}
+    anchor={accountsAnchor}
+    items={accountMenuItems}
+    title="Аккаунты"
+    placement="anchor"
+    onClose={closeAccountsMenu}
+    onSelect={onAccountMenuSelect}
+    onTrailingClick={onAccountTrailingClick}
+  />
+{/if}

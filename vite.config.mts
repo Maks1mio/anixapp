@@ -10,8 +10,14 @@ export default defineConfig(({ command }) => ({
   base: command === 'serve' ? '/' : './',
   appType: 'spa',
   plugins: [svelte({ preprocess: vitePreprocess() }), anixWebBridgePlugin()],
+  resolve: {
+    alias: {
+      // binauralfir@0.1.2 has invalid `"exports": "BinauralFIR"` — bypass for Vite 8 / rolldown.
+      binauralfir: resolve(__dirname, 'node_modules/binauralfir/dist/binaural-fir.js'),
+    },
+  },
   optimizeDeps: {
-    include: ['anixapi', 'binauralfir', 'binauralfir/dist/binaural-fir.js'],
+    include: ['anixapi', 'binauralfir'],
   },
   build: {
     outDir: 'dist',

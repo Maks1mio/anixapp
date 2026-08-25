@@ -27,7 +27,7 @@ export async function connectIrcamMatrix(
   source: AudioNode,
   layout: '5.1' | '7.1',
 ): Promise<{ nodes: AudioNode[]; disposable: LibDisposable }> {
-  const BinauralMod = await import('binauralfir/dist/binaural-fir.js');
+  const BinauralMod = await import('binauralfir');
   const BinauralFIR = asDefault(BinauralMod) as new (o: {
     audioContext: AudioContext;
   }) => BinauralNode;

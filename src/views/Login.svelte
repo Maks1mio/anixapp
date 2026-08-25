@@ -9,6 +9,28 @@
   import type { AppUpdateProgress } from '../types/electron';
   import ConnectionBanner from '../components/ConnectionBanner.svelte';
   import UiV2Tooltip from '../components/uikit-v2/UiV2Tooltip.svelte';
+  import AnixappTermsModal, { isAnixappAboutHidden } from '../components/AnixappTermsModal.svelte';
+
+  const ANIXART_TERMS_URL = 'https://anixart-app.com/terms';
+  const ANIXART_PRIVACY_URL = 'https://anixart-app.com/privacy';
+
+  let anixappTermsOpen = $state(false);
+  let anixappLegalStart = $state<'about' | 'terms'>('about');
+  let anixappLegalOfferDontShow = $state(true);
+
+  function openAnixappLegal(opts?: { step?: 'about' | 'terms'; offerDontShow?: boolean }) {
+    anixappLegalStart = opts?.step ?? 'about';
+    anixappLegalOfferDontShow = opts?.offerDontShow ?? true;
+    anixappTermsOpen = true;
+  }
+
+  function openLegalUrl(url: string) {
+    if (window.electron?.openExternal) {
+      window.electron.openExternal(url);
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
 
   interface Props {
     onSuccess: () => void;
@@ -683,6 +705,14 @@
       if (t) installType = t;
     }).catch(() => {});
 
+    let aboutTimer: ReturnType<typeof setTimeout> | null = null;
+    // При открытии авторизации — сначала «О проекте» (если не скрыто)
+    if (!isAnixappAboutHidden()) {
+      aboutTimer = setTimeout(() => {
+        openAnixappLegal({ step: 'about', offerDontShow: true });
+      }, 420);
+    }
+
     const onProgress = (ev: Event) => {
       const data = (ev as CustomEvent<AppUpdateProgress>).detail;
       if (data.installType && !installType) installType = data.installType;
@@ -703,7 +733,10 @@
       }
     };
     window.addEventListener('app-update-progress', onProgress);
-    return () => window.removeEventListener('app-update-progress', onProgress);
+    return () => {
+      window.removeEventListener('app-update-progress', onProgress);
+      if (aboutTimer) clearTimeout(aboutTimer);
+    };
   });
 </script>
 
@@ -1185,4 +1218,33 @@
     </div>
     </div>
   </div>
+
+  <footer class="auth-legal auth-legal--screen">
+    <p class="auth-legal__text">
+      Регистрируясь или продолжая пользоваться приложением, вы принимаете условия
+      <button type="button" class="auth-link auth-legal__link" onclick={() => openLegalUrl(ANIXART_TERMS_URL)}>
+        Пользовательского соглашения Anixart
+      </button>
+      и подтверждаете, что ознакомлены с
+      <button type="button" class="auth-link auth-legal__link" onclick={() => openLegalUrl(ANIXART_PRIVACY_URL)}>
+        Политикой конфиденциальности Anixart
+      </button>.
+    </p>
+    <p class="auth-legal__text">
+      Используя клиент AnixApp, вы также принимаете
+      <button type="button" class="auth-link auth-legal__link" onclick={() => openAnixappLegal({ step: 'terms', offerDontShow: false })}>
+        условия использования AnixApp
+      </button>.
+    </p>
+  </footer>
 </div>
+
+{#if anixappTermsOpen}
+  {#key `${anixappLegalStart}:${anixappLegalOfferDontShow}`}
+    <AnixappTermsModal
+      startStep={anixappLegalStart}
+      offerDontShowAgain={anixappLegalOfferDontShow}
+      onClose={() => { anixappTermsOpen = false; }}
+    />
+  {/key}
+{/if}

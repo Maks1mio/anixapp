@@ -20,34 +20,29 @@ const MODE_MAP: Record<number, new (opts: {
 export const GPU_AVAILABLE =
   typeof navigator !== 'undefined' && typeof (navigator as Navigator & { gpu?: unknown }).gpu !== 'undefined';
 
+/** Мягкий потолок стороны буфера (фиксированные 4K/8K и т.п.). */
+const GPU_MAX_SIDE = 7680;
+
 export interface Anime4kSession {
   /** `detachOutput: false` — остановить GPU, не трогая общий canvas/video (смена пресета). */
   stop: (opts?: { detachOutput?: boolean }) => void;
 }
 
-interface CanvasLayout {
+export interface Anime4kCanvasLayout {
   cssW: number;
   cssH: number;
   bufferW: number;
   bufferH: number;
 }
 
-function computeCanvasLayout(
-  sourceW: number,
-  sourceH: number,
-  container: HTMLElement | null | undefined,
-  fit: 'contain' | 'cover' = 'contain',
-  pixelRatio?: number,
-): CanvasLayout {
-  const aspect = sourceW / sourceH;
-  const rect = container?.getBoundingClientRect();
-  const containerW = rect ? Math.round(rect.width) : 1280;
-  const containerH = rect ? Math.round(rect.height) : 720;
-  const dpr = Math.min(
-    pixelRatio ?? (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1),
-    2,
-  );
+export type Anime4kTargetHeight = number | null;
 
+function fitCssSize(
+  aspect: number,
+  containerW: number,
+  containerH: number,
+  fit: 'contain' | 'cover',
+): { cssW: number; cssH: number } {
   let cssW: number;
   let cssH: number;
   if (fit === 'cover') {
@@ -64,6 +59,48 @@ function computeCanvasLayout(
   } else {
     cssW = containerW;
     cssH = Math.round(cssW / aspect);
+  }
+  return { cssW, cssH };
+}
+
+function clampGpuBuffer(bufferW: number, bufferH: number, aspect: number): { bufferW: number; bufferH: number } {
+  if (bufferW <= GPU_MAX_SIDE && bufferH <= GPU_MAX_SIDE) return { bufferW, bufferH };
+  if (bufferW >= bufferH) {
+    const w = GPU_MAX_SIDE;
+    return { bufferW: w, bufferH: Math.max(1, Math.round(w / aspect)) };
+  }
+  const h = GPU_MAX_SIDE;
+  return { bufferW: Math.max(1, Math.round(h * aspect)), bufferH: h };
+}
+
+/** Размер буфера и CSS-fit для Anime4K (auto = под окно с cap 2× source). */
+export function computeAnime4kCanvasLayout(
+  sourceW: number,
+  sourceH: number,
+  container: HTMLElement | null | undefined,
+  fit: 'contain' | 'cover' = 'contain',
+  pixelRatio?: number,
+  /** null/undefined = авто; иначе целевая высота буфера (1080/1440/…) */
+  targetHeight?: Anime4kTargetHeight,
+): Anime4kCanvasLayout {
+  const aspect = sourceW / sourceH;
+  const rect = container?.getBoundingClientRect();
+  const containerW = rect ? Math.round(rect.width) : 1280;
+  const containerH = rect ? Math.round(rect.height) : 720;
+  const dpr = Math.min(
+    pixelRatio ?? (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1),
+    2,
+  );
+
+  const { cssW, cssH } = fitCssSize(aspect, containerW, containerH, fit);
+
+  if (targetHeight != null && targetHeight > 0) {
+    let bufferH = Math.max(sourceH, targetHeight);
+    let bufferW = Math.round(bufferH * aspect);
+    ({ bufferW, bufferH } = clampGpuBuffer(bufferW, bufferH, aspect));
+    bufferW = Math.max(sourceW, bufferW);
+    bufferH = Math.max(sourceH, bufferH);
+    return { cssW, cssH, bufferW, bufferH };
   }
 
   const maxBufferW = Math.min(sourceW * 2, Math.round(cssW * dpr));
@@ -213,6 +250,8 @@ export async function startAnime4kUpscale(opts: {
   pixelRatio?: number;
   /** ratio — размер/позиция canvas задаёт CSS (соотношение сторон плеера). */
   cssLayout?: 'contain' | 'ratio';
+  /** Целевая высота буфера; null/omit = авто под контейнер. */
+  targetHeight?: Anime4kTargetHeight;
 }): Promise<Anime4kSession | null> {
   if (!GPU_AVAILABLE) return null;
 
@@ -226,6 +265,7 @@ export async function startAnime4kUpscale(opts: {
     canvasVisibleClass = 'hero-media__canvas--visible',
     pixelRatio,
     cssLayout = 'contain',
+    targetHeight = null,
   } = opts;
   if (video.readyState < HTMLVideoElement.HAVE_FUTURE_DATA) {
     await new Promise<void>((resolve) => {
@@ -276,7 +316,7 @@ export async function startAnime4kUpscale(opts: {
 
   const videoW = capturedW;
   const videoH = capturedH;
-  const layout = computeCanvasLayout(videoW, videoH, container, fit, pixelRatio);
+  const layout = computeAnime4kCanvasLayout(videoW, videoH, container, fit, pixelRatio, targetHeight);
 
   canvas.width = layout.bufferW;
   canvas.height = layout.bufferH;

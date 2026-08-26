@@ -15,13 +15,23 @@ let pendingUrl = null;
 
 /**
  * @param {string} url
- * @returns {{ type: string, id: number, url: string } | null}
+ * @returns {{ type: string, id?: number, url: string, title?: string, referer?: string, pageUrl?: string, cookies?: string } | null}
  */
 function parseDeepLink(url) {
   if (!url || typeof url !== 'string' || !url.startsWith(`${PROTOCOL}://`)) return null;
   try {
     const u = new URL(url);
     const type = (u.hostname || u.pathname.replace(/^\//, '').split('/')[0] || '').toLowerCase();
+    if (type === 'play') {
+      const { parsePlayPayload } = require('./external-play');
+      return parsePlayPayload({
+        url: u.searchParams.get('url') || '',
+        title: u.searchParams.get('title') || '',
+        referer: u.searchParams.get('referer') || '',
+        pageUrl: u.searchParams.get('page') || u.searchParams.get('pageUrl') || '',
+        cookies: u.searchParams.get('cookies') || '',
+      });
+    }
     const idRaw = u.searchParams.get('id');
     const id = idRaw != null ? Number(idRaw) : NaN;
     if (!type || !Number.isFinite(id) || id <= 0) return null;
@@ -95,6 +105,22 @@ function deliverDeepLink(url) {
   const parsed = parseDeepLink(url);
   if (!parsed) {
     logger.warn('deep-link', 'ignored url', { url });
+    return;
+  }
+
+  if (parsed.type === 'play') {
+    try {
+      const { player } = require('../windows/player');
+      if (player.openExternalPlayback) {
+        const opened = player.openExternalPlayback(parsed);
+        logger.info('deep-link', 'play delivered', { ok: !!opened, title: parsed.title });
+        return;
+      }
+    } catch (err) {
+      logger.warn('deep-link', 'play handler error', { error: String(err?.message || err) });
+    }
+    pendingUrl = url;
+    logger.info('deep-link', 'play queued (player not ready)', { url: String(url).slice(0, 80) });
     return;
   }
 

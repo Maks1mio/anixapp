@@ -1,6 +1,6 @@
 import { fmtTime } from './_utils';
 import type { PlayerLoadState } from './_types';
-import type { Anime4kIntensity, Anime4kType } from './core/anime4k-presets';
+import type { Anime4kIntensity, Anime4kTargetRes, Anime4kType } from './core/anime4k-presets';
 import type { SurroundMode } from './core/surround-audio';
 import { defaultEqGains, type EqGains } from './core/surround-eq';
 
@@ -21,6 +21,7 @@ export class PlayerState {
   upscaleMode    = $state(15);
   upscaleType    = $state<Anime4kType>('off');
   upscaleIntensity = $state<Anime4kIntensity>('optimal');
+  upscaleTargetRes = $state<Anime4kTargetRes>('1080');
   /** Canvas Anime4K показан (Svelte не должен заново ставить hidden). */
   upscaleCanvasOn = $state(false);
   /** Оверлей отладки (настройки → воспроизведение) */

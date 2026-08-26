@@ -12,8 +12,11 @@
   } from '../../../utils/player-hotkeys';
   import {
     ANIME4K_INTENSITIES,
+    ANIME4K_TARGET_RES,
     ANIME4K_TYPES,
+    anime4kTargetResMenuLabel,
     type Anime4kIntensity,
+    type Anime4kTargetRes,
     type Anime4kType,
   } from '../core/anime4k-presets';
   import {
@@ -36,6 +39,7 @@
     upscaleEnabled: boolean;
     upscaleType: Anime4kType;
     upscaleIntensity: Anime4kIntensity;
+    upscaleTargetRes: Anime4kTargetRes;
     playbackRate: number;
     aspectRatio: string;
     surroundMode: SurroundMode;
@@ -45,6 +49,7 @@
     currentQuality: string;
     speedLocked?: boolean;
     onchangeAnime4k: (type: Anime4kType, intensity: Anime4kIntensity) => void;
+    onchangeAnime4kTargetRes: (res: Anime4kTargetRes) => void;
     onchangeRate: (r: number) => void;
     onchangeAspect: (a: string) => void;
     onchangeSurround: (mode: SurroundMode) => void;
@@ -57,11 +62,11 @@
 
   let {
     open, x, y, anchor = null,
-    gpuAvailable, upscaleType, upscaleIntensity,
+    gpuAvailable, upscaleType, upscaleIntensity, upscaleTargetRes,
     playbackRate, aspectRatio, surroundMode, eqGains, eqLevel,
     availableQualities, currentQuality,
     speedLocked = false,
-    onchangeAnime4k, onchangeRate, onchangeAspect, onchangeSurround, onchangeEq, onchangeEqLevel, onresetEq,
+    onchangeAnime4k, onchangeAnime4kTargetRes, onchangeRate, onchangeAspect, onchangeSurround, onchangeEq, onchangeEqLevel, onresetEq,
     onchangeQuality, onclose,
   }: Props = $props();
 
@@ -102,19 +107,33 @@
     }
 
     const a4kTypeLabel = ANIME4K_TYPES.find((t) => t.id === upscaleType)?.label;
+    const a4kResShort = ANIME4K_TARGET_RES.find((t) => t.id === upscaleTargetRes)?.label ?? '1080p';
     next.push({
       id: 'anime4k',
       label: gpuAvailable && upscaleType !== 'off' && a4kTypeLabel ? `Anime4K · ${a4kTypeLabel}` : 'Anime4K',
       icon: iconSparkles(18),
       children: gpuAvailable
         ? [
+            {
+              id: 'a4k-res',
+              label: `Разрешение · ${a4kResShort}`,
+              disabled: upscaleType === 'off',
+              children: ANIME4K_TARGET_RES.map((opt) => ({
+                id: `a4k-res:${opt.id}`,
+                label: anime4kTargetResMenuLabel(opt.id),
+                type: 'radio' as const,
+                checked: upscaleTargetRes === opt.id,
+                disabled: upscaleType === 'off',
+                keepOpen: true,
+              })),
+            },
             ...ANIME4K_TYPES.map((opt, i) => ({
               id: `a4k-type:${opt.id}`,
               label: opt.recommended ? `${opt.label} ★` : opt.label,
               type: 'radio' as const,
               checked: upscaleType === opt.id,
               keepOpen: true,
-              dividerBefore: i === 0 ? false : undefined,
+              dividerBefore: i === 0,
             })),
             ...ANIME4K_INTENSITIES.map((opt, i) => ({
               id: `a4k-intensity:${opt.id}`,
@@ -231,6 +250,10 @@
     }
     if (id.startsWith('a4k-intensity:')) {
       onchangeAnime4k(upscaleType, id.slice('a4k-intensity:'.length) as Anime4kIntensity);
+      return;
+    }
+    if (id.startsWith('a4k-res:')) {
+      onchangeAnime4kTargetRes(id.slice('a4k-res:'.length) as Anime4kTargetRes);
       return;
     }
     if (id.startsWith('aspect:')) {

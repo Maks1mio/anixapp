@@ -5,9 +5,11 @@
   import { logLobbyAction, snapshotPlayback } from '../../services/lobby-action-log';
   import type { WatchState, EpisodeItem, DubberItem, LobbyActivityEntry, LobbyChatMessage, PopoverType, NextEpAltDub, DownloadedEpisodeItem, PlaybackAlt, SourceItem } from './_types';
   import { isHlsUrl, isDubberBlacklisted, lobbyActionText, allowsIframeFallback, userPlaybackError } from './_utils';
+  import { setEmbedMediaContext } from './core/hls-media-context';
   import { normalizeSkipMarks, mergeSkipMarks, clampSkipMarksToDuration, skipMarkActive, endingIsAtEpisodeEnd, buildTimelineSausages, type SkipMarkKind, type SkipMarks } from './_skipMarks';
   import { getSkipAutoPref, setSkipAutoPref } from './_skipPrefs';
   import { pathToLocalMediaUrl } from '../../utils/local-media-url';
+  import { rememberVideoCdnFromUrl, syncExtraVideoHostsToMain } from '../../utils/extra-video-hosts';
   import { sortDubbersPinnedFirst, readLastEpisodeTypeUpdateId } from '../../utils/dubber-meta';
   import {
     getCachedDubbers,
@@ -25,9 +27,12 @@
   import { PlayerCore, gpuAvailable } from './core/PlayerCore';
   import { swapMediaSource } from './core/hls-engine';
   import {
+    anime4kTargetHeight,
     mapAnime4kPreset,
     normalizeAnime4kPreset,
+    normalizeAnime4kTargetRes,
     type Anime4kIntensity,
+    type Anime4kTargetRes,
     type Anime4kType,
   } from './core/anime4k-presets';
   import {
@@ -47,6 +52,7 @@
   import LobbyActionLogPanel from './components/LobbyActionLogPanel.svelte';
   import LobbyChooserOverlay from './components/LobbyChooserOverlay.svelte';
   import NextEpisodePreview from './components/NextEpisodePreview.svelte';
+  import { registerPlayerMuteToggle } from './core/player-mute';
   import type { PlayerChromeProps } from './shells/PlayerChrome.svelte';
   import { mapReleaseRawToCard } from '../../utils/release-card';
   import { episodeDisplayNumber, isUnnumberedEpisodeName, isZeroBasedEpisodeList } from '../../utils/episode-display';
@@ -238,6 +244,10 @@
   let dubberSources  = $state<SourceItem[]>([]);
   let downloadedEpisodes = $state<DownloadedEpisodeItem[]>([]);
   let localPlaybackPath = $state('');
+  let externalPlaybackUrl = $state('');
+  let lastExternalOpts: { title?: string; referer?: string; pageUrl?: string; cookies?: string } | undefined;
+  let externalCdnRetryCount = 0;
+  let externalCdnRetrying = false;
   let lastEpisodeTypeUpdateId = $state<number | null>(null);
   let playbackAlt = $state<PlaybackAlt | null>(null);
   let playbackAltGen = 0;
@@ -521,9 +531,8 @@
   const prevEpisodePosition = $derived.by(() => {
     if (!isLocalPlaybackMode) {
       const target = watchState.ep - 1;
-      return target >= 0 && (episodes.length === 0 || episodes.some((e) => e.position === target))
-        ? target
-        : null;
+      if (target < 0 || episodes.length === 0) return null;
+      return episodes.some((e) => e.position === target) ? target : null;
     }
     const available = downloadedPositions.filter((position) => position < watchState.ep);
     return available.length > 0 ? available[available.length - 1] : null;
@@ -531,9 +540,9 @@
   const nextEpisodePosition = $derived.by(() => {
     if (!isLocalPlaybackMode) {
       const target = watchState.ep + 1;
-      return episodes.length === 0 || episodes.some((e) => e.position === target)
-        ? target
-        : null;
+      // Пустой список ≠ «следующая точно есть» — иначе превью «Следующая N» на последней серии.
+      if (episodes.length === 0) return null;
+      return episodes.some((e) => e.position === target) ? target : null;
     }
     return downloadedPositions.find((position) => position > watchState.ep) ?? null;
   });
@@ -573,6 +582,7 @@
     !inLobby
     && player.useVideo
     && player.loadState === 'ready'
+    && hasNextEp
     && nextPreviewEp != null
     && episodeRemaining <= NEXT_PREVIEW_PRELOAD_REMAINING,
   );
@@ -582,6 +592,7 @@
     !inLobby
     && player.useVideo
     && player.loadState === 'ready'
+    && hasNextEp
     && nextPreviewEp != null
     && !nextPreviewDismissed
     && episodeRemaining <= NEXT_PREVIEW_SHOW_REMAINING,
@@ -854,10 +865,13 @@
       ?? (playerWrapEl?.querySelector('.watch-page__upscale-canvas') as HTMLCanvasElement | null)
       ?? null;
     core.iframe = iframeEl ?? null;
-    if (videoEl && player.useVideo && (player.surroundMode !== 'off' || core.surround.attached)) {
+    if (videoEl && player.useVideo) {
+      // Всегда цепляем Web Audio (хотя бы passthrough), иначе mute/volume на <video> ломаются.
       void core.surround.setEqGains(player.eqGains).then(() =>
         core.surround.setEqLevel(player.eqLevel).then(() =>
-          core.surround.setMode(player.surroundMode).then(() => core.surround.attach(videoEl)),
+          core.surround.setMode(player.surroundMode).then(() =>
+            core.surround.attach(videoEl).then(() => applyVolumeToMedia()),
+          ),
         ),
       );
     }
@@ -930,11 +944,20 @@
     const canvas = core.canvas;
     if (!video || video.videoWidth < 2 || video.videoHeight < 2 || video.readyState < 2) return;
     if (!canvas) return;
+    // Soft restart: держим canvas/cover на всё время пересборки WebGPU.
     player.upscaleCanvasOn = true;
     await tick();
     if (gen !== upscaleStartGen) return;
     bindCoreEls();
-    const ok = await core.startUpscale(player.upscaleEnabled, player.upscaleMode, player.aspectRatio);
+    if (core.upscale.active) {
+      videoEl?.classList.add('watch-page__video--hidden-for-upscale');
+    }
+    const ok = await core.startUpscale(
+      player.upscaleEnabled,
+      player.upscaleMode,
+      player.aspectRatio,
+      anime4kTargetHeight(player.upscaleTargetRes),
+    );
     if (gen !== upscaleStartGen) return;
     player.upscaleCanvasOn = ok;
     if (!ok) videoEl?.classList.remove('watch-page__video--hidden-for-upscale');
@@ -1436,7 +1459,7 @@
     if (!useVid) {
       core.applySource({
         url: pUrl, useVideo: false, ep, title: titleStr, sourceName: srcName, dubberId: dubId,
-        volume: player.volume, onFallback: () => {}, onReresolve: () => {},
+        volume: player.volume, muted: player.muted, onFallback: () => {}, onReresolve: () => {},
         onWatchdogReresolve: async () => null, syncPlaybackRate: syncVideoPlaybackRate,
       });
       upscaleHoldForNewFrame = false;
@@ -1454,6 +1477,7 @@
       seekTime,
       initialPaused,
       volume: player.volume,
+      muted: player.muted,
       releaseId: watchState.releaseId,
       sourceId: watchState.sourceId,
       syncPlaybackRate: syncVideoPlaybackRate,
@@ -1461,6 +1485,12 @@
         player.switching = false;
         if (pUrl.startsWith('anix-local:')) {
           showPlayerError('', 'Не удалось воспроизвести скачанный файл.');
+          return;
+        }
+        if (externalPlaybackUrl) {
+          void retryExternalPlayback(pUrl).then((ok) => {
+            if (!ok) showPlayerError(core.origEpUrl || pUrl);
+          });
           return;
         }
         if (core.origEpUrl && allowsIframeFallback(core.origEpUrl)) {
@@ -1989,6 +2019,33 @@
     }
   }
 
+  let volumeBeforeMute = 50;
+
+  function applyVolumeToMedia() {
+    const muted = player.muted || player.volume <= 0;
+    const linear = muted ? 0 : Math.max(0, Math.min(1, player.volume / 100));
+    // После createMediaElementSource video.muted/volume в Electron часто no-op — дублируем в GainNode.
+    core.surround.setOutputLevel(linear);
+    if (!videoEl) return;
+    videoEl.muted = muted;
+    videoEl.volume = linear;
+  }
+
+  /** После жеста — уровень + починить маршрут, если source был оборван. */
+  async function applyVolumeToMediaNow() {
+    applyVolumeToMedia();
+    if (!videoEl || !player.useVideo) return;
+    try {
+      if (!core.surround.attached) {
+        await core.surround.attach(videoEl);
+      } else {
+        await core.surround.ensureRouted();
+      }
+      applyVolumeToMedia();
+      await core.surround.resume();
+    } catch { /* ignore */ }
+  }
+
   function onVolumeChange(e: Event) {
     const v = Number((e.target as HTMLInputElement).value);
     setVolume(v);
@@ -1997,15 +2054,14 @@
   function setVolume(v: number, opts?: { osd?: boolean }) {
     const next = Math.max(0, Math.min(100, Math.round(v)));
     player.volume = next;
-    if (videoEl) {
-      videoEl.volume = next / 100;
-      if (next > 0 && player.muted) {
-        player.muted = false;
-        videoEl.muted = false;
-      }
+    if (next > 0) {
+      volumeBeforeMute = next;
+      if (player.muted) player.muted = false;
     }
+    if (next === 0) player.muted = true;
+    void applyVolumeToMediaNow();
     try { localStorage.setItem(VOLUME_KEY, String(next)); } catch {}
-    if (opts?.osd) showOsd(`${next}%`);
+    if (opts?.osd) showOsd(player.muted ? 'Звук выкл' : `${next}%`);
   }
 
   function adjustVolume(direction: 1 | -1) {
@@ -2014,9 +2070,24 @@
   }
 
   function toggleMute() {
-    player.muted = !player.muted;
-    if (videoEl) videoEl.muted = player.muted;
+    if (player.muted || player.volume <= 0) {
+      player.muted = false;
+      if (player.volume <= 0) player.volume = volumeBeforeMute > 0 ? volumeBeforeMute : 50;
+    } else {
+      if (player.volume > 0) volumeBeforeMute = player.volume;
+      player.muted = true;
+    }
+    // Сразу глушим/возвращаем — тот же путь, что у рабочего слайдера громкости.
+    applyVolumeToMedia();
+    void applyVolumeToMediaNow();
+    showOsd(player.muted ? 'Звук выкл' : `${player.volume}%`);
+    showAndSchedule();
   }
+
+  // Кнопка mute зовёт registry напрямую (обход SoloShell → PlayerChrome → ActionsBar).
+  $effect(() => {
+    return registerPlayerMuteToggle(toggleMute);
+  });
 
   function toggleFullscreen(opts?: { osd?: boolean }) {
     void (async () => {
@@ -2049,8 +2120,23 @@
       upscaleMode: mapped.mode,
       upscaleType: type,
       upscaleIntensity: intensity,
+      upscaleTargetRes: player.upscaleTargetRes,
     });
     if (mapped.enabled) startUpscale(); else stopUpscale();
+  }
+
+  function applyAnime4kTargetRes(res: Anime4kTargetRes) {
+    const next = normalizeAnime4kTargetRes(res);
+    if (player.upscaleTargetRes === next) return;
+    player.upscaleTargetRes = next;
+    (window as any).electron?.saveSettings?.({
+      upscaleEnabled: player.upscaleEnabled,
+      upscaleMode: player.upscaleMode,
+      upscaleType: player.upscaleType,
+      upscaleIntensity: player.upscaleIntensity,
+      upscaleTargetRes: next,
+    });
+    if (player.upscaleEnabled && gpuAvailable) startUpscale();
   }
 
   function applyAnime4kFromSettings(s: {
@@ -2058,19 +2144,23 @@
     upscaleMode?: number;
     upscaleType?: unknown;
     upscaleIntensity?: unknown;
+    upscaleTargetRes?: unknown;
   }) {
     const preset = normalizeAnime4kPreset(s);
     const mapped = mapAnime4kPreset(preset);
+    const targetRes = normalizeAnime4kTargetRes(s.upscaleTargetRes);
     const same =
       player.upscaleType === preset.type &&
       player.upscaleIntensity === preset.intensity &&
       player.upscaleEnabled === mapped.enabled &&
-      player.upscaleMode === mapped.mode;
+      player.upscaleMode === mapped.mode &&
+      player.upscaleTargetRes === targetRes;
     if (same) return;
     player.upscaleType = preset.type;
     player.upscaleIntensity = preset.intensity;
     player.upscaleEnabled = mapped.enabled;
     player.upscaleMode = mapped.mode;
+    player.upscaleTargetRes = targetRes;
     if (mapped.enabled) startUpscale(); else stopUpscale();
   }
 
@@ -2129,7 +2219,9 @@
     if (videoEl && player.useVideo) {
       void core.surround.setEqGains(player.eqGains).then(() =>
         core.surround.setEqLevel(player.eqLevel).then(() =>
-          core.surround.setMode(next).then(() => core.surround.attach(videoEl)),
+          core.surround.setMode(next).then(() =>
+            core.surround.attach(videoEl).then(() => applyVolumeToMedia()),
+          ),
         ),
       );
     } else {
@@ -2176,7 +2268,9 @@
     } else if (videoEl && player.useVideo && !core.surround.attached) {
       void core.surround.setEqGains(player.eqGains).then(() =>
         core.surround.setEqLevel(player.eqLevel).then(() =>
-          core.surround.setMode('equalizer').then(() => core.surround.attach(videoEl)),
+          core.surround.setMode('equalizer').then(() =>
+            core.surround.attach(videoEl).then(() => applyVolumeToMedia()),
+          ),
         ),
       );
     }
@@ -2713,7 +2807,27 @@
     if (resizeTimer) clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       resizeTimer = null;
-      if (player.upscaleEnabled && videoEl?.readyState >= 1) startUpscale();
+      if (!player.upscaleEnabled || !videoEl || videoEl.readyState < 1) return;
+      bindCoreEls();
+      const canvas = core.canvas;
+      if (core.upscale.active && canvas) {
+        const layout = core.upscale.desiredLayout({
+          video: videoEl,
+          canvas,
+          aspectRatio: player.aspectRatio,
+          targetHeight: anime4kTargetHeight(player.upscaleTargetRes),
+          pixelRatio: 1,
+        });
+        if (
+          layout &&
+          canvas.width === layout.bufferW &&
+          canvas.height === layout.bufferH
+        ) {
+          core.upscale.applyCssLayout(layout, canvas, player.aspectRatio);
+          return;
+        }
+      }
+      startUpscale();
     }, 380);
   }
 
@@ -2747,6 +2861,7 @@
     lobbyIdleMode = false;
     soloEmptyIdle = false;
     localPlaybackPath = filePath;
+    externalPlaybackUrl = '';
     const fileUrl = pathToLocalMediaUrl(filePath);
     if (!fileUrl) {
       player.loadState = 'error';
@@ -2769,6 +2884,97 @@
     showAndSchedule();
     await loadLocalContextForFile(filePath);
     void loadSkipMarksForLocalPlayback();
+  }
+
+  async function rememberCdnsAndSync(urls: Array<string | undefined | null>): Promise<boolean> {
+    let added = false;
+    for (const u of urls) {
+      if (u) added = rememberVideoCdnFromUrl(u) || added;
+    }
+    await syncExtraVideoHostsToMain();
+    return added;
+  }
+
+  async function retryExternalPlayback(failedUrl?: string): Promise<boolean> {
+    if (!externalPlaybackUrl) return false;
+    if (externalCdnRetrying) return true;
+    if (externalCdnRetryCount >= 2) return false;
+    externalCdnRetrying = true;
+    externalCdnRetryCount += 1;
+    try {
+      await rememberCdnsAndSync([externalPlaybackUrl, failedUrl, player.playUrl]);
+      showOsd('CDN добавлен, пробую воспроизвести снова');
+      await tick();
+      await new Promise((r) => setTimeout(r, 250));
+      const url = externalPlaybackUrl;
+      const opts = lastExternalOpts;
+      await startExternalUrlPlayback(url, opts, true);
+      return player.loadState !== 'error';
+    } finally {
+      externalCdnRetrying = false;
+    }
+  }
+
+  async function startExternalUrlPlayback(
+    mediaUrl: string,
+    opts?: { title?: string; referer?: string; pageUrl?: string; cookies?: string },
+    isRetry = false,
+  ) {
+    const raw = String(mediaUrl || '').trim();
+    if (!raw || !/^https?:\/\//i.test(raw)) {
+      player.loadState = 'error';
+      player.errorText = 'Некорректная ссылка на видео.';
+      return;
+    }
+    if (inLobbyRoom()) {
+      showOsd('В комнате нельзя открыть внешнее видео', { warn: true });
+      return;
+    }
+    lobbyIdleMode = false;
+    soloEmptyIdle = false;
+    localPlaybackPath = '';
+    externalPlaybackUrl = raw;
+    lastExternalOpts = opts;
+    if (!isRetry) externalCdnRetryCount = 0;
+    watchState.releaseId = '';
+    watchState.sourceId = '';
+    watchState.dubberId = '';
+    watchState.ep = 1;
+    watchState.title = (opts?.title || '').trim() || 'FetchAApp';
+    watchState.sourceName = 'FetchAApp';
+    watchState.dubberName = '';
+    dubbers = [];
+    episodes = [];
+    invalidateDubbersPickerCache();
+    beginMediaCover();
+
+    const referer = (opts?.referer || opts?.pageUrl || '').trim();
+    const headers: Record<string, string> = {};
+    if (referer) headers.Referer = referer;
+    if (opts?.cookies) headers.Cookie = opts.cookies;
+    setEmbedMediaContext(referer || raw, Object.keys(headers).length ? headers : undefined);
+
+    setOrigEpisodeUrl(raw);
+    player.loadState = 'loading';
+    await rememberCdnsAndSync([raw]);
+    try {
+      const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq, skip } = await core.resolve(raw, false);
+      await rememberCdnsAndSync([pUrl, ...Object.values(qualityMap || {})]);
+      const resolved = applyQualityMap(qualityMap, cq, pUrl, { resetManualLock: true });
+      setSkipMarks(skip, { carry: false });
+      player.loadState = 'ready';
+      await tick();
+      applyVideoAndUI(resolved.url, uv, 1, watchState.title, watchState.sourceName, '');
+      if (uv) bindVideoElementListeners();
+      showAndSchedule();
+    } catch {
+      if (!isRetry) {
+        const ok = await retryExternalPlayback(raw);
+        if (ok) return;
+      }
+      player.loadState = 'error';
+      player.errorText = userPlaybackError(raw);
+    }
   }
 
   function namesLooselyEqual(a: string, b: string): boolean {
@@ -2933,6 +3139,8 @@
     videoListenersAbort = new AbortController();
     const { signal } = videoListenersAbort;
 
+    applyVolumeToMedia();
+
     const fromEvent = (e: Event): HTMLVideoElement | null =>
       (e.currentTarget instanceof HTMLVideoElement ? e.currentTarget : el);
 
@@ -3022,7 +3230,10 @@
     try {
       const stored = localStorage.getItem(VOLUME_KEY);
       const v = stored != null ? Number(stored) : NaN;
-      if (!isNaN(v) && v >= 0 && v <= 100) player.volume = v;
+      if (!isNaN(v) && v >= 0 && v <= 100) {
+        player.volume = v;
+        if (v > 0) volumeBeforeMute = v;
+      }
     } catch {}
     player.playbackRate = readStoredPlaybackRate();
 
@@ -3036,7 +3247,11 @@
         player.eqLevel = normalizeEqLevel(s?.audioEqLevel);
         void core.surround.setEqGains(player.eqGains).then(() =>
           core.surround.setEqLevel(player.eqLevel).then(() =>
-            core.surround.setMode(player.surroundMode),
+            core.surround.setMode(player.surroundMode).then(() => {
+              if (videoEl && player.useVideo) {
+                return core.surround.attach(videoEl).then(() => applyVolumeToMedia());
+              }
+            }),
           ),
         );
         if (gpuAvailable) {
@@ -3052,6 +3267,7 @@
 
     inLobby = !!getCurrentRoomId();
     enforceNormalRateInLobby();
+    void syncExtraVideoHostsToMain();
 
     if (initialLobbyCode && !getCurrentRoomId()) {
       void joinLobbyRoomAndOpenPlayer(initialLobbyCode).catch(() => {
@@ -3080,7 +3296,7 @@
           initialSrcName || inferred.src || undefined,
         );
       })();
-    } else if (playbackMode === 'local') {
+    } else if (playbackMode === 'local' || playbackMode === 'external') {
       player.loadState = 'loading';
     } else if (!releaseId) {
       player.loadState = 'ready';
@@ -3160,6 +3376,7 @@
           upscaleMode?: number;
           upscaleType?: unknown;
           upscaleIntensity?: unknown;
+          upscaleTargetRes?: unknown;
         });
       }) as EventListener],
 
@@ -3228,6 +3445,22 @@
 
       ['player:changeContent', ((e: CustomEvent) => {
         const p = e.detail as any;
+        if (p?.externalUrl) {
+          if (inLobbyRoom()) {
+            showOsd('В комнате нельзя открыть внешнее видео', { warn: true });
+            return;
+          }
+          lobbyIdleMode = false;
+          soloEmptyIdle = false;
+          beginMediaCover();
+          void startExternalUrlPlayback(String(p.externalUrl), {
+            title: p.title != null ? String(p.title) : undefined,
+            referer: p.referer != null ? String(p.referer) : undefined,
+            pageUrl: p.pageUrl != null ? String(p.pageUrl) : undefined,
+            cookies: p.cookies != null ? String(p.cookies) : undefined,
+          });
+          return;
+        }
         if (p?.localFile) {
           // В комнате нельзя уходить на локальный файл — не трогаем watchState/топбар
           if (inLobbyRoom()) {
@@ -3279,6 +3512,7 @@
         if (!p?.releaseId || !p.sourceId || episodeIndex(p.ep) == null) return;
         lobbyIdleMode = false;
         soloEmptyIdle = false;
+        externalPlaybackUrl = '';
         beginMediaCover(String(p.releaseId));
         watchState.releaseId  = p.releaseId;
         watchState.sourceId   = p.sourceId;
@@ -3623,6 +3857,7 @@
     upscaleEnabled: player.upscaleEnabled,
     upscaleType: player.upscaleType,
     upscaleIntensity: player.upscaleIntensity,
+    upscaleTargetRes: player.upscaleTargetRes,
     playbackRate: player.playbackRate,
     aspectRatio: player.aspectRatio,
     surroundMode: player.surroundMode,
@@ -3642,6 +3877,7 @@
     ontoggleMute: toggleMute,
     onvolumechange: onVolumeChange,
     onchangeAnime4k: applyAnime4kPreset,
+    onchangeAnime4kTargetRes: applyAnime4kTargetRes,
     onskipMark: () => { if (skipPromptVisible) skipMediaMark(skipPromptVisible); },
     onwatchSkip: () => {
       if (!skipPromptVisible) return;
@@ -3819,7 +4055,7 @@
         {/if}
       {/if}
 
-      {#if nextPreviewEp != null && !inLobby && (nextPreviewUrl || nextPreviewVisible)}
+      {#if hasNextEp && nextPreviewEp != null && !inLobby && (nextPreviewUrl || nextPreviewVisible)}
         <NextEpisodePreview
           url={nextPreviewUrl}
           visible={nextPreviewVisible}

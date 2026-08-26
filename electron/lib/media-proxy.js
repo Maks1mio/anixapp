@@ -35,7 +35,12 @@ const FETCH_TIMEOUT_MS = 12_000;
 function hostAllowed(host) {
   const h = String(host || '').replace(/^www\./, '').toLowerCase();
   if (!h) return false;
-  return ALLOW_HOSTS.some((allowed) => h === allowed || h.endsWith('.' + allowed));
+  if (ALLOW_HOSTS.some((allowed) => h === allowed || h.endsWith('.' + allowed))) return true;
+  try {
+    const { hostIsExtraVideoHost } = require('./extra-video-hosts');
+    if (hostIsExtraVideoHost(h)) return true;
+  } catch { /* ignore */ }
+  return false;
 }
 
 function isAllowedMediaUrl(raw) {

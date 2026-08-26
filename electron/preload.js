@@ -162,6 +162,8 @@ contextBridge.exposeInMainWorld('electron', {
   togglePlayerAlwaysOnTop: () => ipcRenderer.invoke('player:toggleAlwaysOnTop'),
   isPlayerOpen: () => ipcRenderer.invoke('player:isOpen'),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+  setExtraVideoHosts: (hosts) => ipcRenderer.invoke('video:setExtraHosts', hosts),
+  addExtraVideoHosts: (hosts) => ipcRenderer.invoke('video:addExtraHosts', hosts),
   fetchCdnJson: (url) => ipcRenderer.invoke('cdn:fetchJson', url),
   downloadEpisodes: (payload) => ipcRenderer.invoke('episode-download:download', payload),
   queueEpisodeDownloads: (payload) => ipcRenderer.invoke('episode-download:queue', payload),

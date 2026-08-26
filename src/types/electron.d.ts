@@ -49,7 +49,7 @@ export interface DevBridgeStatus {
 declare global {
   interface Window {
     electron?: {
-      consumePendingDeepLink?: () => { type?: string; id?: number; url?: string } | null;
+      consumePendingDeepLink?: () => { type?: string; id?: number; url?: string; title?: string; referer?: string; pageUrl?: string; cookies?: string } | null;
       getAppVersion: () => Promise<string>;
       getVersions: () => Promise<{
         app: string;
@@ -61,12 +61,14 @@ declare global {
         anixartjs: string;
       }>;
       window: ElectronWindowAPI;
-      openPlayerWindow: (params: { releaseId: string; sourceId: string; ep: string; title: string; sourceName: string; dubberId?: string; localFile?: string; lobbyIdle?: boolean; currentTime?: number; paused?: boolean; applyRoomPlayback?: boolean }) => Promise<void>;
+      openPlayerWindow: (params: { releaseId: string; sourceId: string; ep: string; title: string; sourceName: string; dubberId?: string; localFile?: string; externalUrl?: string; referer?: string; pageUrl?: string; cookies?: string; lobbyIdle?: boolean; currentTime?: number; paused?: boolean; applyRoomPlayback?: boolean }) => Promise<void>;
       closePlayerWindow: () => void;
       togglePlayerFullScreen: () => Promise<boolean>;
       togglePlayerAlwaysOnTop: () => Promise<boolean>;
       isPlayerOpen: () => Promise<boolean>;
       openExternal: (url: string) => void;
+      setExtraVideoHosts?: (hosts: string[]) => Promise<string[]>;
+      addExtraVideoHosts?: (hosts: string[]) => Promise<string[]>;
       /** JSON с Anixart CDN (Lottie-бейджи) через main — без fetch(anix-cdn://) */
       fetchCdnJson?: (url: string) => Promise<unknown | null>;
       downloadEpisodes?: (payload: {
@@ -273,6 +275,7 @@ declare global {
         upscaleMode: number;
         upscaleType?: string;
         upscaleIntensity?: string;
+        upscaleTargetRes?: string;
       }) => void;
       sendPlayerHotkeys?: (hotkeys: PlayerHotkeysSettings) => void;
       // Lobby proposal IPC
@@ -356,6 +359,7 @@ export interface AppSettings {
   upscaleMode?: number;
   upscaleType?: string;
   upscaleIntensity?: string;
+  upscaleTargetRes?: string;
   /** Виртуальный объёмный звук / EQ */
   audioSurround?: string;
   /** Полосы графического эквалайзера (дБ) */

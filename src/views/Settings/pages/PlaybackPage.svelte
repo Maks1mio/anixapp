@@ -12,10 +12,13 @@
   } from '../../../utils/player-hotkeys';
   import {
     ANIME4K_INTENSITIES,
+    ANIME4K_TARGET_RES,
     ANIME4K_TYPES,
     mapAnime4kPreset,
     normalizeAnime4kPreset,
+    normalizeAnime4kTargetRes,
     type Anime4kIntensity,
+    type Anime4kTargetRes,
     type Anime4kType,
   } from '../../Watch/core/anime4k-presets';
   import {
@@ -31,6 +34,7 @@
   let gpuAvailable = $state(false);
   let upscaleType = $state<Anime4kType>('off');
   let upscaleIntensity = $state<Anime4kIntensity>('optimal');
+  let upscaleTargetRes = $state<Anime4kTargetRes>('1080');
   let audioSurround = $state<SurroundMode>('off');
   let playerDebugOverlay = $state(false);
   let adaptiveQualityByWindow = $state(false);
@@ -47,6 +51,7 @@
     const preset = normalizeAnime4kPreset(settings);
     upscaleType = preset.type;
     upscaleIntensity = preset.intensity;
+    upscaleTargetRes = normalizeAnime4kTargetRes(settings.upscaleTargetRes);
     audioSurround = normalizeSurroundMode(settings.audioSurround);
     playerDebugOverlay = settings.playerDebugOverlay === true;
     adaptiveQualityByWindow = settings.adaptiveQualityByWindow === true;
@@ -61,12 +66,14 @@
       upscaleMode: mapped.mode,
       upscaleType,
       upscaleIntensity,
+      upscaleTargetRes,
     });
     window.electron?.sendUpscaleSettings?.({
       upscaleEnabled: mapped.enabled,
       upscaleMode: mapped.mode,
       upscaleType,
       upscaleIntensity,
+      upscaleTargetRes,
     });
     window.dispatchEvent(new CustomEvent('anix:upscaleChanged', {
       detail: {
@@ -74,6 +81,7 @@
         upscaleMode: mapped.mode,
         upscaleType,
         upscaleIntensity,
+        upscaleTargetRes,
       },
     }));
   }
@@ -330,6 +338,19 @@
       <p class="settings-section__desc">Тип обработки и нагрузка — как в AnixPlayer. Без WebGPU пресеты недоступны.</p>
       <div class="settings-section__body">
         <div class="settings-a4k" class:settings-a4k--disabled={!gpuAvailable}>
+          <div class="settings-a4k__row" role="radiogroup" aria-label="Целевое разрешение">
+            {#each ANIME4K_TARGET_RES as opt (opt.id)}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={upscaleTargetRes === opt.id}
+                class="settings-a4k__chip {upscaleTargetRes === opt.id ? 'settings-a4k__chip--active' : ''}"
+                disabled={!gpuAvailable || upscaleType === 'off'}
+                title={opt.id === 'auto' ? 'Под размер окна · может вызывать моргание' : `Рендер ${opt.label}`}
+                onclick={() => { upscaleTargetRes = opt.id; saveUpscale(); }}
+              >{opt.id === 'auto' ? 'Авто · может моргать' : opt.label}</button>
+            {/each}
+          </div>
           <div class="settings-a4k__row" role="radiogroup" aria-label="Тип улучшения">
             {#each ANIME4K_TYPES as opt (opt.id)}
               <button

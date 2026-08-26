@@ -222,6 +222,11 @@ export class SurroundController {
   private eqLevelDb = 0;
   private eqFilters: BiquadFilterNode[] = [];
   private eqMaster: GainNode | null = null;
+  /** Громкость/mute плеера — MediaElement.volume после createMediaElementSource в Electron ненадёжен. */
+  private outputGain: GainNode | null = null;
+  private outputLevel = 1;
+  /** source подключён к графу/audioOut (false после disposeGraphOnly). */
+  private sourceRouted = false;
 
   get currentMode(): SurroundMode {
     return this.mode;
@@ -246,6 +251,9 @@ export class SurroundController {
   async attach(video: HTMLVideoElement | null): Promise<void> {
     if (!video) return;
     if (this.video === video && this.source) {
+      this.audioOut();
+      if (!this.sourceRouted) await this.rebuild();
+      this.setOutputLevel(this.outputLevel);
       await this.resume();
       return;
     }
@@ -262,8 +270,12 @@ export class SurroundController {
         return;
       }
     }
+    // Сразу создаём выходной gain, чтобы mute работал до конца rebuild.
+    this.audioOut();
+    this.setOutputLevel(this.outputLevel);
     this.bindPlayResume(video);
     await this.rebuild();
+    this.setOutputLevel(this.outputLevel);
     await this.resume();
   }
 
@@ -276,6 +288,7 @@ export class SurroundController {
     this.mode = next;
     if (!this.source || !this.ctx) return;
     await this.rebuild();
+    this.setOutputLevel(this.outputLevel);
     await this.resume();
   }
 
@@ -315,11 +328,39 @@ export class SurroundController {
     await this.resume();
   }
 
+  /**
+   * Восстановить маршрутизацию source → outputGain, если граф оборван.
+   */
+  async ensureRouted(): Promise<void> {
+    if (!this.video || !this.source) return;
+    this.audioOut();
+    if (!this.sourceRouted) await this.rebuild();
+    this.setOutputLevel(this.outputLevel);
+    await this.resume();
+  }
+
   async resume(): Promise<void> {
     if (!this.ctx) return;
     if (this.ctx.state === 'suspended') {
       try { await this.ctx.resume(); } catch { /* autoplay */ }
     }
+  }
+
+  /** 0…1 — громкость на выходе Web Audio (mute = 0). */
+  setOutputLevel(linear: number): void {
+    this.outputLevel = Math.max(0, Math.min(1, linear));
+    if (this.source && this.ctx) {
+      try { this.audioOut(); } catch { /* ignore */ }
+    }
+    if (!this.outputGain || !this.ctx) return;
+    const g = this.outputGain.gain;
+    const t = this.ctx.currentTime;
+    try {
+      g.cancelScheduledValues(t);
+      // setTargetAtTime(0) не даёт тишину — только мгновенное значение.
+      g.setValueAtTime(this.outputLevel, t);
+    } catch { /* ignore */ }
+    g.value = this.outputLevel;
   }
 
   dispose(): void {
@@ -328,6 +369,9 @@ export class SurroundController {
     try { this.source?.disconnect(); } catch { /* ignore */ }
     this.source = null;
     this.video = null;
+    this.sourceRouted = false;
+    try { this.outputGain?.disconnect(); } catch { /* ignore */ }
+    this.outputGain = null;
     if (this.ctx) {
       void this.ctx.close().catch(() => {});
       this.ctx = null;
@@ -336,7 +380,21 @@ export class SurroundController {
   }
 
   private ensureContext(): void {
-    if (!this.ctx || this.ctx.state === 'closed') this.ctx = new AudioContext();
+    if (!this.ctx || this.ctx.state === 'closed') {
+      this.ctx = new AudioContext();
+      this.outputGain = null;
+    }
+  }
+
+  /** Постоянный выходной GainNode — все графы подключаются сюда, не в ctx.destination. */
+  private audioOut(): AudioNode {
+    this.ensureContext();
+    if (!this.outputGain) {
+      this.outputGain = this.ctx!.createGain();
+      this.outputGain.gain.value = this.outputLevel;
+      this.outputGain.connect(this.ctx!.destination);
+    }
+    return this.outputGain;
   }
 
   private bindPlayResume(video: HTMLVideoElement): void {
@@ -367,6 +425,7 @@ export class SurroundController {
       this.graph = null;
     }
     try { this.source?.disconnect(); } catch { /* ignore */ }
+    this.sourceRouted = false;
   }
 
   private async rebuild(): Promise<void> {
@@ -376,8 +435,9 @@ export class SurroundController {
     if (gen !== this.rebuildGen) return;
 
     if (this.mode === 'off') {
-      this.source.connect(this.ctx.destination);
+      this.source.connect(this.audioOut());
       this.graph = { nodes: [] };
+      this.sourceRouted = true;
       return;
     }
 
@@ -397,6 +457,7 @@ export class SurroundController {
     };
     const build = builders[this.mode];
     this.graph = build ? build() : { nodes: [] };
+    this.sourceRouted = !!build;
   }
 
   private async rebuildLib(mode: SurroundMode): Promise<void> {
@@ -407,6 +468,7 @@ export class SurroundController {
         this.ctx,
         this.source,
         mode === 'ircam71' ? '7.1' : '5.1',
+        this.audioOut(),
       );
       if (gen !== this.rebuildGen) {
         disposable.dispose();
@@ -417,10 +479,12 @@ export class SurroundController {
       }
       this.libDisposable = disposable;
       this.graph = { nodes };
+      this.sourceRouted = true;
     } catch (err) {
       console.warn('[surround] IRCAM engine failed, falling back to cinema', err);
       if (gen !== this.rebuildGen) return;
       this.graph = this.buildCinemaHrtf({ rear: 0.65, dist: 1.2, master: 0.72, plus: false });
+      this.sourceRouted = true;
     }
   }
 
@@ -444,7 +508,7 @@ export class SurroundController {
     master.gain.value = eqLevelToLinear(this.eqLevelDb);
     this.eqMaster = master;
     prev.connect(master);
-    master.connect(ctx.destination);
+    master.connect(this.audioOut());
     return { nodes };
   }
 
@@ -636,7 +700,7 @@ export class SurroundController {
       panner.connect(master);
     }
 
-    master.connect(ctx.destination);
+    master.connect(this.audioOut());
     return { nodes };
   }
 
@@ -731,7 +795,7 @@ export class SurroundController {
     const master = t(ctx.createGain());
     master.gain.value = 1;
     merge.connect(master);
-    master.connect(ctx.destination);
+    master.connect(this.audioOut());
     return { nodes };
   }
 
@@ -751,7 +815,7 @@ export class SurroundController {
     const master = t(ctx.createGain());
     master.gain.value = 1;
     merge.connect(master);
-    master.connect(ctx.destination);
+    master.connect(this.audioOut());
     return { nodes };
   }
 
@@ -827,7 +891,7 @@ export class SurroundController {
     const master = t(ctx.createGain());
     master.gain.value = 0.85;
     outMerge.connect(master);
-    master.connect(ctx.destination);
+    master.connect(this.audioOut());
     return { nodes };
   }
 
@@ -883,7 +947,7 @@ export class SurroundController {
     master.gain.value = 0.9;
     dry.connect(master);
     wet.connect(master);
-    master.connect(ctx.destination);
+    master.connect(this.audioOut());
     return { nodes };
   }
 
@@ -964,7 +1028,7 @@ export class SurroundController {
     master.gain.value = 0.88;
     dry.connect(master);
     wet.connect(master);
-    master.connect(ctx.destination);
+    master.connect(this.audioOut());
     return { nodes: n2 };
   }
 
@@ -1073,7 +1137,7 @@ export class SurroundController {
     const master = t(ctx.createGain());
     master.gain.value = masterGain;
     merge.connect(master);
-    master.connect(ctx.destination);
+    master.connect(this.audioOut());
     return { nodes };
   }
 }

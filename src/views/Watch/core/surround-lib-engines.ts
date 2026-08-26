@@ -26,6 +26,7 @@ export async function connectIrcamMatrix(
   ctx: AudioContext,
   source: AudioNode,
   layout: '5.1' | '7.1',
+  destination: AudioNode = ctx.destination,
 ): Promise<{ nodes: AudioNode[]; disposable: LibDisposable }> {
   const BinauralMod = await import('binauralfir');
   const BinauralFIR = asDefault(BinauralMod) as new (o: {
@@ -113,7 +114,7 @@ export async function connectIrcamMatrix(
 
   const master = ctx.createGain();
   master.gain.value = 0.55;
-  master.connect(ctx.destination);
+  master.connect(destination);
 
   const firs: BinauralNode[] = [];
   const graphNodes: AudioNode[] = [split, L, R, c, sl, sr, lfeLp, lfe, master];

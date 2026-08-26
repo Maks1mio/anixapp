@@ -482,11 +482,15 @@
     nestedOpenRight = preferRight;
 
     let nextLeft = preferRight ? edgeRight + gap : edgeLeft - gap - w;
+    // Держим панель рядом со строкой-триггером (не «залипаем» на старый top после clamp).
     let nextTop = ar.top - 4;
-
-    const sameItem = !!itemId && lastNestedPlaceId === itemId;
-    if (sameItem && lastNestedHeight > 0 && h <= lastNestedHeight && nestedTop > 0) {
-      nextTop = nestedTop;
+    if (nextTop + h > vh - pad) {
+      nextTop = Math.max(pad, vh - pad - h);
+    }
+    if (nextTop < pad) nextTop = pad;
+    // Если clamp увёл панель вверх — хотя бы оставить триггер в зоне панели.
+    if (ar.bottom < nextTop + 8) {
+      nextTop = Math.max(pad, Math.min(ar.top - 4, vh - pad - h));
     }
 
     nextLeft = Math.max(pad, Math.min(nextLeft, vw - pad - w));
@@ -948,8 +952,9 @@
             else closeSubmenu();
             return;
           }
+          // Вложенная панель: не закрывать при наведении на обычные radio/action —
+          // иначе диагональный путь к третьему меню пересекает соседей и гасит его.
           if (itemHasSubmenu(item)) openNestedSubmenu(item, e.currentTarget as HTMLElement);
-          else closeNestedSubmenu();
         }}
         onclick={(e) => handleItemClick(item, e)}
       >

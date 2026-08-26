@@ -42,6 +42,9 @@ function hostUrlPatterns(hosts) {
 }
 
 function setupSessionRequestHeaders() {
+  const { loadExtraVideoHostsFromConfig } = require('../lib/extra-video-hosts');
+  loadExtraVideoHostsFromConfig();
+
   const ses = session.defaultSession;
   const cdnPatterns = hostUrlPatterns(ANIXART_CDN_HOSTS);
   const videoPatterns = hostUrlPatterns(VIDEO_HOSTS);
@@ -135,6 +138,55 @@ function setupSessionRequestHeaders() {
     }
     // Sibnet iframe ходит на cvt*.sibnet.ru/sbcount с credentials — wildcard CORS ломает запрос.
     if (/^cvt\d*\.sibnet\.ru$/i.test(host) || /\/sbcount(?:\?|$)/i.test(details.url)) {
+      callback({ responseHeaders: details.responseHeaders });
+      return;
+    }
+    const responseHeaders = { ...details.responseHeaders };
+    upsertHeader(responseHeaders, 'Access-Control-Allow-Origin', '*');
+    upsertHeader(responseHeaders, 'Access-Control-Allow-Headers', '*');
+    callback({ responseHeaders });
+  });
+
+  // FetchAApp / выученные CDN: Referer страницы + CORS, иначе HLS падает.
+  ses.webRequest.onBeforeSendHeaders({ urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
+    const { getExternalPlayContext } = require('../lib/external-play');
+    const { hostIsExtraVideoHost } = require('../lib/extra-video-hosts');
+    const ctx = getExternalPlayContext();
+    let host = '';
+    try { host = new URL(details.url).hostname.replace(/^www\./, '').toLowerCase(); } catch {
+      callback({ requestHeaders: details.requestHeaders });
+      return;
+    }
+    const current = !!(ctx?.host && (
+      host === ctx.host || host.endsWith('.' + ctx.host) || ctx.host.endsWith('.' + host)
+    ));
+    const extra = hostIsExtraVideoHost(host);
+    if (!ctx?.referer || (!current && !extra)) {
+      callback({ requestHeaders: details.requestHeaders });
+      return;
+    }
+    const requestHeaders = { ...details.requestHeaders };
+    upsertHeader(requestHeaders, 'Referer', ctx.referer);
+    callback({ requestHeaders });
+  });
+
+  ses.webRequest.onHeadersReceived({ urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
+    let host = '';
+    try { host = new URL(details.url).host.replace(/^www\./, '').toLowerCase(); } catch {
+      callback({ responseHeaders: details.responseHeaders });
+      return;
+    }
+    if (hostMatchesList(host, EMBED_MEDIA_HOSTS)) {
+      callback({ responseHeaders: details.responseHeaders });
+      return;
+    }
+    const { getExternalPlayContext } = require('../lib/external-play');
+    const { hostIsExtraVideoHost } = require('../lib/extra-video-hosts');
+    const ctx = getExternalPlayContext();
+    const current = !!(ctx?.host && (
+      host === ctx.host || host.endsWith('.' + ctx.host) || ctx.host.endsWith('.' + host)
+    ));
+    if (!current && !hostIsExtraVideoHost(host)) {
       callback({ responseHeaders: details.responseHeaders });
       return;
     }

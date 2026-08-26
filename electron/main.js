@@ -42,6 +42,7 @@ const { createDevApiBridge } = require('./dev-api-bridge');
 const { registerAll } = require('./ipc');
 const { media } = require('./services/media');
 const homeCustomFilter = require('./home-custom-filter');
+const { startFetchAAppBridge, stopFetchAAppBridge } = require('./lib/fetchaapp-bridge');
 
 registerCdnScheme();
 registerLocalMediaScheme();
@@ -119,6 +120,9 @@ app.whenReady().then(() => {
   createTray(deps);
   discord.initDiscordRpc();
   flushPendingDeepLink();
+  void startFetchAAppBridge(logger).catch((err) => {
+    logger.warn('fetchaapp', `bridge failed: ${err?.message || err}`);
+  });
 
   // Продолжить незавершённые загрузки после рестарта
   setTimeout(() => {
@@ -140,6 +144,7 @@ app.whenReady().then(() => {
 app.on('before-quit', () => {
   logger.info('main', 'app before-quit');
   try { media.persistDownloads?.(); } catch (_) {}
+  stopFetchAAppBridge();
   if (discordRpc) discordRpc.destroy();
   if (isDev) void devApiBridge.stop();
 });

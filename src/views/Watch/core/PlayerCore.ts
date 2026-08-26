@@ -16,6 +16,7 @@ export type PlayerCorePlayOpts = {
   seekTime?: number;
   initialPaused?: boolean;
   volume: number;
+  muted?: boolean;
   onFallback: () => void;
   onReresolve: (savedTime: number, wasPaused: boolean) => void;
   onWatchdogReresolve: () => Promise<{ url: string; useVideo: boolean } | null>;
@@ -85,7 +86,12 @@ export class PlayerCore {
 
     video.hidden = false;
     if (iframeEl) iframeEl.hidden = true;
-    if (opts.volume !== undefined) video.volume = opts.volume / 100;
+    if (opts.volume !== undefined) {
+      const muted = opts.muted === true || opts.volume <= 0;
+      video.muted = muted;
+      video.volume = muted ? 0 : opts.volume / 100;
+      this.surround.setOutputLevel(muted ? 0 : opts.volume / 100);
+    }
 
     const doPlay = () => {
       if (!opts.initialPaused) video.play().catch(() => {});
@@ -190,11 +196,17 @@ export class PlayerCore {
     if (Number.isFinite(rId)) notifyHistoryChanged({ releaseId: rId });
   }
 
-  async startUpscale(enabled: boolean, mode: number, aspectRatio = 'auto'): Promise<boolean> {
+  async startUpscale(
+    enabled: boolean,
+    mode: number,
+    aspectRatio = 'auto',
+    targetHeight: number | null = null,
+  ): Promise<boolean> {
     return this.upscale.start({
       enabled,
       mode,
       aspectRatio,
+      targetHeight,
       video: this.video,
       canvas: this.canvas,
     });

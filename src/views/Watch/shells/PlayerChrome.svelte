@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { EpisodeItem, DubberItem, DownloadedEpisodeItem, NextEpAltDub, PopoverType, SourceItem } from '../_types';
-  import type { Anime4kIntensity, Anime4kType } from '../core/anime4k-presets';
+  import type { Anime4kIntensity, Anime4kTargetRes, Anime4kType } from '../core/anime4k-presets';
   import type { SurroundMode, EqGains, EqBandId } from '../core/surround-audio';
   import type { SkipMarkKind, TimelineSausage } from '../_skipMarks';
   import ControlsBar from '../components/ControlsBar.svelte';
@@ -52,6 +52,7 @@
     upscaleEnabled: boolean;
     upscaleType: Anime4kType;
     upscaleIntensity: Anime4kIntensity;
+    upscaleTargetRes: Anime4kTargetRes;
     playbackRate: number;
     aspectRatio: string;
     surroundMode: SurroundMode;
@@ -68,9 +69,11 @@
     ontogglePlay: () => void;
     onplay: () => void;
     onseek: (e: MouseEvent) => void;
+    /** Mute — тот же on* паттерн, что ontogglePlay (spread через SoloShell). */
     ontoggleMute: () => void;
     onvolumechange: (e: Event) => void;
     onchangeAnime4k: (type: Anime4kType, intensity: Anime4kIntensity) => void;
+    onchangeAnime4kTargetRes: (res: Anime4kTargetRes) => void;
     onskipMark: () => void;
     onwatchSkip: () => void;
     onopenSeries: () => void;
@@ -180,6 +183,7 @@
       upscaleEnabled={props.upscaleEnabled}
       upscaleType={props.upscaleType}
       upscaleIntensity={props.upscaleIntensity}
+      upscaleTargetRes={props.upscaleTargetRes}
       playbackRate={props.playbackRate}
       aspectRatio={props.aspectRatio}
       surroundMode={props.surroundMode}
@@ -195,6 +199,7 @@
       ontoggleMute={props.ontoggleMute}
       onvolumechange={props.onvolumechange}
       onchangeAnime4k={props.onchangeAnime4k}
+      onchangeAnime4kTargetRes={props.onchangeAnime4kTargetRes}
       onopenSettings={props.onopenSettings}
       onclosePopover={props.onclosePopover}
       onfullscreen={props.onfullscreen}

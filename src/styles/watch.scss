@@ -1124,6 +1124,9 @@ $p-skip-dark:   #66c94280;
   gap: 0px;
   overflow: hidden;
   transition: all 0.2s ease-in-out;
+  -webkit-app-region: no-drag;
+  position: relative;
+  z-index: 2;
 
   &:hover {
     background: rgba(20, 20, 20, 0.62);
@@ -1139,6 +1142,7 @@ $p-skip-dark:   #66c94280;
       max-width: 100px;
       opacity: 1;
       padding-right: 24px;
+      pointer-events: auto;
     }
   }
 }
@@ -1148,7 +1152,7 @@ $p-skip-dark:   #66c94280;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
-  width: 60px;
+  width: 40px;
   height: 40px;
   padding: 0;
   background: transparent;
@@ -1156,12 +1160,19 @@ $p-skip-dark:   #66c94280;
   color: #fff;
   cursor: pointer;
   flex-shrink: 0;
-  border-radius: 0;
+  border-radius: 999px;
+  -webkit-app-region: no-drag;
+
+  svg {
+    display: block;
+    pointer-events: none;
+  }
 }
 
 .watch-page__vol-slider-wrap {
   max-width: 0;
   opacity: 0;
+  pointer-events: none;
   transition: max-width 0.25s ease, opacity 0.2s ease, padding 0.25s ease;
   display: flex;
   align-items: center;

@@ -8,6 +8,8 @@
 
 export type Anime4kType = 'off' | 'sharp' | 'balance' | 'clean' | 'sharpPlus' | 'balancePlus';
 export type Anime4kIntensity = 'easy' | 'optimal' | 'max';
+/** Целевая высота буфера апскейла; auto = под размер окна. */
+export type Anime4kTargetRes = 'auto' | '1080' | '1440' | '2160' | '4320';
 
 export interface Anime4kPreset {
   type: Anime4kType;
@@ -26,6 +28,13 @@ export interface Anime4kIntensityOption {
   label: string;
 }
 
+export interface Anime4kTargetResOption {
+  id: Anime4kTargetRes;
+  label: string;
+  /** Целевая высота в пикселях; null = авто под контейнер */
+  height: number | null;
+}
+
 export const ANIME4K_TYPES: Anime4kTypeOption[] = [
   { id: 'off', label: 'Выкл', hint: 'Без фильтра' },
   { id: 'sharp', label: 'Чёткость', hint: 'Restore' },
@@ -41,10 +50,26 @@ export const ANIME4K_INTENSITIES: Anime4kIntensityOption[] = [
   { id: 'max', label: 'Максимум' },
 ];
 
+export const ANIME4K_TARGET_RES: Anime4kTargetResOption[] = [
+  { id: 'auto', label: 'Авто', height: null },
+  { id: '1080', label: '1080p', height: 1080 },
+  { id: '1440', label: '2K', height: 1440 },
+  { id: '2160', label: '4K', height: 2160 },
+  { id: '4320', label: '8K', height: 4320 },
+];
+
+/** Подпись пункта в меню (у Авто — предупреждение о моргании). */
+export function anime4kTargetResMenuLabel(id: Anime4kTargetRes): string {
+  if (id === 'auto') return 'Авто · может моргать';
+  return ANIME4K_TARGET_RES.find((t) => t.id === id)?.label ?? '1080p';
+}
+
 export const DEFAULT_ANIME4K_PRESET: Anime4kPreset = {
   type: 'off',
   intensity: 'optimal',
 };
+
+export const DEFAULT_ANIME4K_TARGET_RES: Anime4kTargetRes = '1080';
 
 const BASE_MODE: Record<Exclude<Anime4kType, 'off'>, number> = {
   sharp: 14,       // ModeA
@@ -91,6 +116,18 @@ export function isAnime4kType(value: unknown): value is Anime4kType {
 
 export function isAnime4kIntensity(value: unknown): value is Anime4kIntensity {
   return ANIME4K_INTENSITIES.some((t) => t.id === value);
+}
+
+export function isAnime4kTargetRes(value: unknown): value is Anime4kTargetRes {
+  return ANIME4K_TARGET_RES.some((t) => t.id === value);
+}
+
+export function normalizeAnime4kTargetRes(value: unknown): Anime4kTargetRes {
+  return isAnime4kTargetRes(value) ? value : DEFAULT_ANIME4K_TARGET_RES;
+}
+
+export function anime4kTargetHeight(target: Anime4kTargetRes): number | null {
+  return ANIME4K_TARGET_RES.find((t) => t.id === target)?.height ?? null;
 }
 
 export function normalizeAnime4kPreset(

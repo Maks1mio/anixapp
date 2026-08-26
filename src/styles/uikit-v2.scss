@@ -3368,8 +3368,8 @@
     position: absolute;
     top: -28px;
     bottom: -28px;
-    left: -24px;
-    width: 24px;
+    left: -28px;
+    width: 28px;
   }
 
   &.uiv2-popup-menu__panel--sub-left {
@@ -3377,7 +3377,7 @@
 
     &::before {
       left: auto;
-      right: -24px;
+      right: -28px;
     }
   }
 

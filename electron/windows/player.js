@@ -46,6 +46,7 @@ function createPlayerWindow(params) {
     sourceId: String(params.sourceId ?? ''),
     ep: String(params.ep ?? ''),
     dubberId: String(params.dubberId ?? ''),
+    ...(params.externalUrl ? { externalUrl: String(params.externalUrl) } : {}),
   };
   playerWindow.on('closed', () => {
     state.playerWindowRef = null;
@@ -87,7 +88,9 @@ function createPlayerWindow(params) {
     ...(params.lobbyIdle ? { lobbyIdle: '1' } : {}),
   };
   const hasLocalFile = typeof params.localFile === 'string' && params.localFile.trim() !== '';
+  const hasExternalUrl = typeof params.externalUrl === 'string' && params.externalUrl.trim() !== '';
   if (hasLocalFile) queryParams.playbackMode = 'local';
+  if (hasExternalUrl) queryParams.playbackMode = 'external';
   if (isDev) {
     const q = new URLSearchParams(queryParams).toString();
     playerWindow.loadURL('http://127.0.0.1:5173/player.html?' + q);
@@ -111,6 +114,19 @@ function createPlayerWindow(params) {
         });
       }
     });
+  } else if (hasExternalUrl) {
+    playerWindow.webContents.once('did-finish-load', () => {
+      if (state.playerWindowRef === playerWindow && !playerWindow.isDestroyed()) {
+        playerWindow.webContents.send('player:changeContent', {
+          title: queryParams.title,
+          sourceName: queryParams.sourceName || 'FetchAApp',
+          externalUrl: String(params.externalUrl),
+          referer: String(params.referer || ''),
+          pageUrl: String(params.pageUrl || ''),
+          cookies: String(params.cookies || ''),
+        });
+      }
+    });
   } else if (params.paused != null || params.currentTime != null) {
     playerWindow.webContents.once('did-finish-load', () => {
       if (state.playerWindowRef === playerWindow && !playerWindow.isDestroyed()) {
@@ -123,6 +139,7 @@ function createPlayerWindow(params) {
 
 function isSamePlaybackContent(a, b) {
   if (!a || !b) return false;
+  if (a.externalUrl || b.externalUrl) return a.externalUrl === b.externalUrl;
   return a.releaseId === b.releaseId && a.sourceId === b.sourceId && a.ep === b.ep && (a.dubberId || '') === (b.dubberId || '');
 }
 
@@ -147,7 +164,15 @@ function waitPlayerClosed() {
   });
 }
 
-ipcMain.handle('player:openWindow', async (_, params) => {
+function focusPlayerWindow() {
+  const win = state.playerWindowRef;
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+
+function openPlayerWithParams(params) {
   if (!params || typeof params !== 'object') return;
   const applyRoomPlayback = !!params.applyRoomPlayback;
   const safe = {
@@ -159,13 +184,35 @@ ipcMain.handle('player:openWindow', async (_, params) => {
     ...(params.dubberName != null && params.dubberName !== '' ? { dubberName: String(params.dubberName) } : {}),
     ...(params.dubberId != null && params.dubberId !== '' ? { dubberId: String(params.dubberId) } : {}),
     ...(params.localFile ? { localFile: String(params.localFile) } : {}),
+    ...(params.externalUrl ? { externalUrl: String(params.externalUrl) } : {}),
+    ...(params.referer ? { referer: String(params.referer) } : {}),
+    ...(params.pageUrl ? { pageUrl: String(params.pageUrl) } : {}),
+    ...(params.cookies ? { cookies: String(params.cookies) } : {}),
     ...(params.lobbyIdle ? { lobbyIdle: true } : {}),
     ...(typeof params.currentTime === 'number' ? { currentTime: params.currentTime } : {}),
     ...(params.paused != null ? { paused: !!params.paused } : {}),
     ...(applyRoomPlayback ? { applyRoomPlayback: true } : {}),
   };
-  // If player window already exists — change content dynamically without closing/reopening
   if (state.playerWindowRef && !state.playerWindowRef.isDestroyed()) {
+    if (safe.externalUrl) {
+      const incomingContent = { releaseId: '', sourceId: '', ep: '', dubberId: '', externalUrl: safe.externalUrl };
+      if (isSamePlaybackContent(state.currentPlayerPlayback, incomingContent)) {
+        focusPlayerWindow();
+        return;
+      }
+      state.currentPlayerPlayback = incomingContent;
+      state.playerWindowRef.webContents.send('player:changeContent', {
+        title: safe.title,
+        sourceName: safe.sourceName || 'FetchAApp',
+        externalUrl: safe.externalUrl,
+        referer: safe.referer || '',
+        pageUrl: safe.pageUrl || '',
+        cookies: safe.cookies || '',
+      });
+      syncDownloadHoldForPlayback(safe);
+      focusPlayerWindow();
+      return;
+    }
     if (safe.releaseId) {
       const incomingContent = {
         releaseId: safe.releaseId,
@@ -174,7 +221,7 @@ ipcMain.handle('player:openWindow', async (_, params) => {
         dubberId: safe.dubberId || '',
       };
       if (!applyRoomPlayback && isSamePlaybackContent(state.currentPlayerPlayback, incomingContent)) {
-        state.playerWindowRef.focus();
+        focusPlayerWindow();
         return;
       }
       state.currentPlayerPlayback = incomingContent;
@@ -184,10 +231,42 @@ ipcMain.handle('player:openWindow', async (_, params) => {
       });
       syncDownloadHoldForPlayback(safe);
     }
-    state.playerWindowRef.focus();
+    focusPlayerWindow();
     return;
   }
   createPlayerWindow(safe);
+}
+
+function openExternalPlayback(payload) {
+  const { parsePlayPayload, setExternalPlayContext } = require('../lib/external-play');
+  const parsed = parsePlayPayload(payload);
+  if (!parsed) return false;
+  try {
+    const { addExtraVideoHosts, hostsFromUrl, persistExtraVideoHosts } = require('../lib/extra-video-hosts');
+    addExtraVideoHosts(hostsFromUrl(parsed.url));
+    persistExtraVideoHosts();
+  } catch { /* ignore */ }
+  setExternalPlayContext({
+    videoUrl: parsed.url,
+    referer: parsed.referer || parsed.pageUrl,
+    cookies: parsed.cookies,
+  });
+  openPlayerWithParams({
+    releaseId: '',
+    sourceId: '',
+    ep: '1',
+    title: parsed.title || 'FetchAApp',
+    sourceName: 'FetchAApp',
+    externalUrl: parsed.url,
+    referer: parsed.referer || parsed.pageUrl,
+    pageUrl: parsed.pageUrl,
+    cookies: parsed.cookies,
+  });
+  return true;
+}
+
+ipcMain.handle('player:openWindow', async (_, params) => {
+  openPlayerWithParams(params);
 });
 
 ipcMain.on('player:syncState', async (_, playback) => {
@@ -491,6 +570,7 @@ ipcMain.handle('player:isOpen', () => {
 });
 
   player.createPlayerWindow = createPlayerWindow;
+  player.openExternalPlayback = openExternalPlayback;
 }
 
 module.exports = { register, player };

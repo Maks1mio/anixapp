@@ -17,6 +17,7 @@ function registerAll(deps) {
   require('./anix-api').register(deps);
   require('../services/media').register(deps);
   require('../windows/player').register(deps);
+  require('./extra-video-hosts').register();
   require('./shell-logs').register();
   require('./cdn').register();
   require('../services/updater').register();

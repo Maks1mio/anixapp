@@ -50,6 +50,7 @@ ipcMain.handle('app:getSettings', () => {
       upscaleMode: typeof data.upscaleMode === 'number' ? data.upscaleMode : 15,
       upscaleType: typeof data.upscaleType === 'string' ? data.upscaleType : undefined,
       upscaleIntensity: typeof data.upscaleIntensity === 'string' ? data.upscaleIntensity : undefined,
+      upscaleTargetRes: typeof data.upscaleTargetRes === 'string' ? data.upscaleTargetRes : undefined,
       audioSurround: typeof data.audioSurround === 'string' ? data.audioSurround : 'off',
       audioEqGains: data.audioEqGains && typeof data.audioEqGains === 'object' && !Array.isArray(data.audioEqGains)
         ? { ...data.audioEqGains }
@@ -69,6 +70,7 @@ ipcMain.handle('app:getSettings', () => {
       upscaleMode: 15,
       upscaleType: undefined,
       upscaleIntensity: undefined,
+      upscaleTargetRes: undefined,
       audioSurround: 'off',
       audioEqGains: undefined,
       audioEqLevel: 0,

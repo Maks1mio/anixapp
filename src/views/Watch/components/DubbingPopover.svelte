@@ -19,6 +19,8 @@
     currentDownloadedPath?: string;
     /** Скрыть блок «Скаченные» (например в комнате совместного просмотра) */
     hideDownloaded?: boolean;
+    /** Только локальные варианты — без онлайн-озвучек тайтла */
+    localOnly?: boolean;
     onselect: (dub: DubberItem) => void;
     onselectDownloadedDub?: (dubberName: string) => void;
     ontogglePin?: (dub: DubberItem) => void | Promise<void>;
@@ -32,6 +34,7 @@
     downloadedEpisodes = [],
     currentDownloadedPath = '',
     hideDownloaded = false,
+    localOnly = false,
     onselect, onselectDownloadedDub, ontogglePin, onclose,
   }: Props = $props();
 
@@ -81,7 +84,8 @@
       type: 'radio',
       checked: String(dub.id) === currentDubberId && !currentDownloadedPath,
       icon: dubIcon(dub),
-      keepOpen: false,
+      // Не закрывать сразу: при недоступной озвучке остаёмся в меню + OSD
+      keepOpen: true,
       trailingIcon: ontogglePin ? iconPin(14) : (pinned ? iconPin(14) : undefined),
       trailingLabel: pinned ? 'Открепить озвучку' : 'Закрепить озвучку',
       trailingActive: pinned,
@@ -94,7 +98,7 @@
     const next: UiV2PopupMenuItem[] = [];
 
     if (!hideDownloaded && localDubbers.length > 0) {
-      next.push({ id: 'sec-downloaded', label: 'Скаченные', type: 'label' });
+      next.push({ id: 'sec-downloaded', label: localOnly ? 'Локальные' : 'Скаченные', type: 'label' });
       for (const dub of localDubbers) {
         next.push({
           id: `local-dub:${dub.name}`,
@@ -107,18 +111,24 @@
       }
     }
 
-    if (subtitles.length > 0) {
-      next.push({ id: 'sec-sub', label: 'Субтитры', type: 'label' });
-      for (const dub of subtitles) next.push(dubItem(dub));
-    }
+    if (!localOnly) {
+      if (subtitles.length > 0) {
+        next.push({ id: 'sec-sub', label: 'Субтитры', type: 'label' });
+        for (const dub of subtitles) next.push(dubItem(dub));
+      }
 
-    if (voiceovers.length > 0) {
-      next.push({ id: 'sec-voice', label: 'Озвучки', type: 'label' });
-      for (const dub of voiceovers) next.push(dubItem(dub));
+      if (voiceovers.length > 0) {
+        next.push({ id: 'sec-voice', label: 'Озвучки', type: 'label' });
+        for (const dub of voiceovers) next.push(dubItem(dub));
+      }
     }
 
     if (next.length === 0) {
-      return [{ id: 'empty', label: 'Озвучки не найдены', disabled: true }];
+      return [{
+        id: 'empty',
+        label: localOnly ? 'Нет локальных файлов' : 'Озвучки не найдены',
+        disabled: true,
+      }];
     }
 
     return next;

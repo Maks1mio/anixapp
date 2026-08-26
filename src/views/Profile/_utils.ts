@@ -1,4 +1,5 @@
 import { resolveCdnAssetUrl } from '../../utils/posterUrl';
+import { extractHistoryEpisodeInfo } from '../../utils/historyFormat';
 
 function ruPlural(n: number, one: string, few: string, many: string): string {
   const mod10 = n % 10;
@@ -77,12 +78,8 @@ export { isLottieBadgeUrl } from '../../utils/badge';
 /** «3 серия • 8 июн. в 17:31» для истории просмотра */
 export function fmtHistoryEpisodeMeta(item: Record<string, unknown>): string {
   const ep = item.last_view_episode as { name?: string; position?: number } | undefined;
-  let epLabel = '';
-  if (ep?.name) {
-    epLabel = ep.name;
-  } else if (ep?.position) {
-    epLabel = `${ep.position} серия`;
-  }
+  const { episodeLabel } = extractHistoryEpisodeInfo(ep as Record<string, unknown> | undefined);
+  const epLabel = episodeLabel ?? '';
   const ts = Number(item.last_view_timestamp ?? 0);
   if (!ts) return epLabel;
 

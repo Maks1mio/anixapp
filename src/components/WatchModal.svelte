@@ -29,7 +29,9 @@
     iconX,
     iconPin,
   } from './icons';
+  import { episodeDisplayNumber } from '../utils/episode-display';
   import { formatDubberQuality, isDubberNovelty, readLastEpisodeTypeUpdateId, sortDubbersPinnedFirst } from '../utils/dubber-meta';
+  import { listPlayableDubberSources, NO_EPISODE_PICK_OTHER_DUB } from '../utils/dubber-sources';
 
   interface Props {
     releaseId: number;
@@ -165,7 +167,15 @@
   const filteredEpisodes = $derived.by(() => {
     const q = searchInput.trim();
     if (!q) return episodes;
-    return episodes.filter((ep) => String(ep.position).includes(q) || ep.name?.toLowerCase().includes(q.toLowerCase()));
+    return episodes.filter((ep) => {
+      const display = episodeDisplayNumber(ep, episodes);
+      const displayStr = display == null ? '' : String(display);
+      return (
+        (displayStr && displayStr.includes(q))
+        || String(ep.position).includes(q)
+        || ep.name?.toLowerCase().includes(q.toLowerCase())
+      );
+    });
   });
   const watchedCount = $derived(episodes.filter(isEpisodeWatched).length);
   const remainingCount = $derived(Math.max(0, episodes.length - watchedCount));
@@ -214,9 +224,17 @@
     return d.is_sub === true || d.isSub === true || /субтитр/i.test(d.name);
   }
 
+  function epWord(n: number): string {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return 'эпизод';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'эпизода';
+    return 'эпизодов';
+  }
+
   function dubberEpisodeLabel(d: Dubber): string {
     const count = normalizeEpisodeCount(d as Record<string, unknown>);
-    return count != null ? `${count} эпизодов` : '';
+    return count != null ? `${count} ${epWord(count)}` : '';
   }
 
   let pinningId = $state<number | null>(null);
@@ -425,12 +443,11 @@
     }
 
     try {
-      const res = await api.release.getDubberSources(releaseId, dubber.id);
-      const srcs = res?.sources ?? [];
+      const srcs = await listPlayableDubberSources(releaseId, dubber.id);
       sources = srcs;
       if (srcs.length === 0) {
         episodesLoading = false;
-        episodesError = 'Нет источников';
+        episodesError = NO_EPISODE_PICK_OTHER_DUB;
         return;
       }
       await selectSource(srcs[0], false);
@@ -451,8 +468,12 @@
 
     try {
       const res = await window.anixApi?.release?.getEpisodes(releaseId, selectedDubber.id, source.id);
-      episodes = res?.episodes ?? [];
+      episodes = (res?.episodes ?? []).filter((ep) => !!ep?.url);
       episodesLoading = false;
+      if (episodes.length === 0) {
+        episodesError = NO_EPISODE_PICK_OTHER_DUB;
+        return;
+      }
       await refreshDownloadedState();
       await tick();
       if (lastWatchedEpisode) window.setTimeout(() => scrollToEpisode(lastWatchedEpisode!.position), 80);
@@ -958,15 +979,24 @@
                 {#each filteredEpisodes as ep (ep.position)}
                   {@const watched = isEpisodeWatched(ep)}
                   {@const downloaded = isEpisodeDownloaded(ep.position)}
+                  {@const displayNum = episodeDisplayNumber(ep, episodes)}
+                  {@const unnumbered = displayNum == null}
                   <article
                     class="watch-modal__episode-card"
                     class:watch-modal__episode-card--watched={watched}
                     class:watch-modal__episode-card--active={selectedEpisodePos === ep.position}
+                    class:watch-modal__episode-card--unnumbered={unnumbered}
                     data-position={ep.position}
                   >
                     <button type="button" class="watch-modal__episode-main" onclick={() => handleEpisodePlay(ep.position)}>
-                      <span class="watch-modal__episode-num">{ep.position}</span>
-                      <span class="watch-modal__episode-name">{ep.name || `Серия ${ep.position}`}</span>
+                      {#if unnumbered}
+                        <span class="watch-modal__episode-name watch-modal__episode-name--solo">
+                          {ep.name?.trim() || 'Смотреть онлайн'}
+                        </span>
+                      {:else}
+                        <span class="watch-modal__episode-num">{displayNum}</span>
+                        <span class="watch-modal__episode-name">{ep.name || `Серия ${displayNum}`}</span>
+                      {/if}
                     </button>
                     <span class="watch-modal__episode-actions">
                       <button

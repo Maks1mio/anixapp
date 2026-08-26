@@ -42,11 +42,26 @@
     if (!raw) return { episode: '', dubber: '' };
 
     const lastEpisode = raw.last_view_episode as Record<string, unknown> | undefined;
-    const nested = extractHistoryEpisodeInfo(lastEpisode);
-    const rawEpisode = String(raw.last_view_episode_name ?? nested.episodeLabel ?? '').trim();
-    const episode = /^\d+(?:[.,]\d+)?$/.test(rawEpisode)
-      ? `${rawEpisode} серия`
-      : rawEpisode;
+    const releaseRaw = (raw.release as Record<string, unknown> | undefined) ?? raw;
+    const categoryName = String(
+      (releaseRaw.category as { name?: string } | undefined)?.name ?? '',
+    );
+    const episodesTotal = typeof releaseRaw.episodes_total === 'number'
+      ? releaseRaw.episodes_total
+      : null;
+    const nested = extractHistoryEpisodeInfo(lastEpisode, {
+      isFilm: /фильм|movie|film/i.test(categoryName),
+      episodesTotal,
+    });
+    const fromNested = String(nested.episodeLabel ?? '').trim();
+    const rawEpisode = String(raw.last_view_episode_name ?? '').trim();
+    // Prefer episode object (name / corrected display). Raw name is often just "0".
+    let episode = fromNested;
+    if (!episode && rawEpisode) {
+      episode = /^\d+(?:[.,]\d+)?$/.test(rawEpisode)
+        ? `${rawEpisode} серия`
+        : rawEpisode;
+    }
 
     const source = lastEpisode?.source as Record<string, unknown> | undefined;
     const sourceDubber = source?.dubber as Record<string, unknown> | undefined;

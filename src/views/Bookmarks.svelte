@@ -214,7 +214,21 @@
 
   function mapHistoryToReleaseCard(raw: Record<string, unknown>): ReleaseCardData {
     const lastEp = raw.last_view_episode as Record<string, unknown> | undefined;
-    const { episodeLabel, dubberLabel } = extractHistoryEpisodeInfo(lastEp);
+    const releaseRaw = (raw.release as Record<string, unknown> | undefined) ?? raw;
+    const categoryName = String(
+      (releaseRaw.category as { name?: string } | undefined)?.name
+      ?? (raw.category as { name?: string } | undefined)?.name
+      ?? '',
+    ).toLowerCase();
+    const episodesTotal = typeof releaseRaw.episodes_total === 'number'
+      ? releaseRaw.episodes_total
+      : typeof raw.episodes_total === 'number'
+        ? raw.episodes_total
+        : null;
+    const { episodeLabel, dubberLabel } = extractHistoryEpisodeInfo(lastEp, {
+      isFilm: /фильм|movie|film/i.test(categoryName),
+      episodesTotal,
+    });
     const viewedAt = typeof raw.last_view_timestamp === 'number' ? raw.last_view_timestamp : undefined;
     return {
       ...mapReleaseToCardData(raw),

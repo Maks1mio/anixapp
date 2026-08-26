@@ -1,3 +1,5 @@
+import { episodeHistoryLabel } from './episode-display';
+
 export function formatHistoryViewTime(timestamp: number): string {
   if (!timestamp) return 'Недавно';
   const ms = timestamp > 1e12 ? timestamp : timestamp * 1000;
@@ -8,17 +10,31 @@ export function formatHistoryViewTime(timestamp: number): string {
   return `${day} ${month} в ${time}`;
 }
 
-export function extractHistoryEpisodeInfo(lastEp: Record<string, unknown> | undefined): {
+export function extractHistoryEpisodeInfo(
+  lastEp: Record<string, unknown> | undefined,
+  opts?: { isFilm?: boolean; episodesTotal?: number | null },
+): {
   episodeLabel?: string;
   dubberLabel?: string;
 } {
   if (!lastEp) return {};
 
-  const position = typeof lastEp.position === 'number' ? lastEp.position : null;
+  const positionRaw = lastEp.position;
+  const position = typeof positionRaw === 'number'
+    ? positionRaw
+    : Number.parseInt(String(positionRaw ?? ''), 10);
   const name = typeof lastEp.name === 'string' ? lastEp.name.trim() : '';
-  let episodeLabel = name || undefined;
-  if (position != null) {
-    episodeLabel = `${position} серия`;
+  const pos = Number.isFinite(position) ? position : 0;
+
+  let episodeLabel = episodeHistoryLabel({ position: pos, name: name || null });
+
+  // Film / single-title source: bare position 0 without a useful name
+  if (
+    (!name || /^0\s*серия$/i.test(episodeLabel))
+    && pos === 0
+    && (opts?.isFilm || opts?.episodesTotal === 1)
+  ) {
+    episodeLabel = 'Смотреть онлайн';
   }
 
   const source = lastEp.source as Record<string, unknown> | undefined;
@@ -28,5 +44,8 @@ export function extractHistoryEpisodeInfo(lastEp: Record<string, unknown> | unde
     || (typeof source?.name === 'string' && source.name)
     || undefined;
 
-  return { episodeLabel, dubberLabel };
+  return {
+    episodeLabel: episodeLabel || undefined,
+    dubberLabel,
+  };
 }

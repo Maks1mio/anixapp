@@ -8,6 +8,7 @@
   import EpisodesPopover from './EpisodesPopover.svelte';
   import DubbingPopover from './DubbingPopover.svelte';
   import SourcesPopover from './SourcesPopover.svelte';
+  import { episodeHistoryLabel } from '../../../utils/episode-display';
 
   interface Props {
     ep: number;
@@ -106,10 +107,23 @@
   const lobbyIcon = $derived(
     !inLobby ? iconLobbyCreate(18) : sidebarOpen ? iconLobbyCollapse(18) : iconLobbyExpand(18),
   );
-  const episodeLabel = $derived(`${ep} серия`);
-  const dubLabel = $derived(dubberName || 'Озвучка');
+  const episodeLabel = $derived.by(() => {
+    if (localMode) {
+      const dl = downloadedEpisodes.find((d) => d.filePath === currentDownloadedPath);
+      if (dl) {
+        return episodeHistoryLabel(
+          { position: dl.episodePosition, name: dl.name },
+          downloadedEpisodes.map((d) => ({ position: d.episodePosition, name: d.name })),
+        );
+      }
+      return 'Локальный файл';
+    }
+    const current = episodes.find((e) => e.position === ep);
+    return episodeHistoryLabel(current ?? { position: ep, name: null }, episodes);
+  });
+  const dubLabel = $derived(dubberName || (localMode ? 'Локальные' : 'Озвучка'));
   const sourceLabel = $derived.by(() => {
-    if (localMode) return sourceName || 'Источник';
+    if (localMode) return sourceName || 'Файл';
     const fromList = sources.find((s) => String(s.id) === String(currentSourceId));
     if (fromList?.name) return fromList.name;
     if (sourceName && sourceName !== dubberName) return sourceName;
@@ -208,6 +222,7 @@
   {downloadedEpisodes}
   {currentDownloadedPath}
   hideDownloaded={inLobby}
+  localOnly={localMode}
   {currentDubberId}
   currentDubberName={dubberName}
   {lastEpisodeTypeUpdateId}

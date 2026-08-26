@@ -1,4 +1,5 @@
 import { isDubberBlacklisted, resolveEpisodeUrlWithRetry } from '../views/Watch/_utils';
+import { listPlayableDubberSources } from './dubber-sources';
 
 export interface DubberOption {
   id: number;
@@ -93,10 +94,7 @@ export async function listReleaseDubbers(releaseId: number): Promise<DubberOptio
 }
 
 export async function listDubberSources(releaseId: number, dubberId: number): Promise<SourceOption[]> {
-  const api = window.anixApi?.release;
-  if (!api?.getDubberSources) return [];
-  const srcRes = await api.getDubberSources(releaseId, dubberId);
-  return (srcRes?.sources ?? []).map((s) => ({ id: s.id, name: s.name }));
+  return listPlayableDubberSources(releaseId, dubberId);
 }
 
 export async function resolveEpisodePlayback(
@@ -118,8 +116,8 @@ export async function resolveEpisodePlayback(
     const resolved = await resolveEpisodeUrlWithRetry(ep.url, ep.iframe);
     if (!resolved.useVideo || !resolved.playUrl) return null;
 
-    const srcRes = await api.getDubberSources(releaseId, dubberId);
-    const source = (srcRes?.sources ?? []).find((s) => s.id === sourceId);
+    const sources = await listPlayableDubberSources(releaseId, dubberId);
+    const source = sources.find((s) => s.id === sourceId);
 
     return {
       releaseId,

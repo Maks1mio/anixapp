@@ -15,6 +15,7 @@
   import { formatDownloadErrorMessage } from '../utils/download-errors';
   import { queueMissingEpisodes } from '../utils/download-queue-client';
   import { navigate } from '../stores/navigation';
+  import { getCurrentRoomId } from '../services/lobby-state';
   import {
     buildViewStateKey,
     getViewState,
@@ -130,6 +131,8 @@
   let pickingDir = $state(false);
   let resettingDir = $state(false);
   let seasonBusy = $state<string | null>(null);
+  let playBlockedMsg = $state('');
+  let playBlockedTimer: ReturnType<typeof setTimeout> | null = null;
   let unregisterScrollKey: (() => void) | null = null;
   let ffmpegAvailable = $state(true);
   let ffmpegPath = $state('');
@@ -210,6 +213,7 @@
   onDestroy(() => {
     unregisterScrollKey?.();
     unregisterScrollKey = null;
+    if (playBlockedTimer) clearTimeout(playBlockedTimer);
     persistDownloadsView();
   });
 
@@ -952,6 +956,15 @@
     window.electron?.showDownloadFile?.(file.path);
   }
 
+  function showPlayBlocked(msg: string) {
+    playBlockedMsg = msg;
+    if (playBlockedTimer) clearTimeout(playBlockedTimer);
+    playBlockedTimer = setTimeout(() => {
+      playBlockedMsg = '';
+      playBlockedTimer = null;
+    }, 3200);
+  }
+
   async function playInApp(payload: {
     filePath: string;
     title?: string;
@@ -962,6 +975,10 @@
     sourceName?: string;
     dubberName?: string;
   }) {
+    if (getCurrentRoomId()) {
+      showPlayBlocked('В комнате нельзя переключиться на скачанные файлы');
+      return;
+    }
     await window.electron?.playDownloadInApp?.({
       filePath: payload.filePath,
       title: payload.title,
@@ -1060,6 +1077,16 @@
         variant="primary"
         onclick={() => onTabChange('settings')}
       />
+    </div>
+  {/if}
+
+  {#if playBlockedMsg}
+    <div class="dl-v2-banner" role="status" aria-live="polite">
+      <div class="dl-v2-banner__icon" aria-hidden="true">{@html iconTriangleAlert(18)}</div>
+      <div class="dl-v2-banner__body">
+        <p class="dl-v2-banner__title">Совместный просмотр</p>
+        <p class="dl-v2-banner__text">{playBlockedMsg}</p>
+      </div>
     </div>
   {/if}
 

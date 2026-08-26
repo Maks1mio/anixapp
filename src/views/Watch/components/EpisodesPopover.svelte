@@ -2,6 +2,7 @@
   import type { EpisodeItem } from '../_types';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../../../components/uikit-v2/UiV2PopupMenu.svelte';
   import { iconCircleCheck, iconDownload } from '../../../components/icons';
+  import { episodeDisplayLabel } from '../../../utils/episode-display';
 
   interface Props {
     open: boolean;
@@ -28,13 +29,17 @@
   const downloadedSet = $derived(new Set(downloadedPositions));
 
   const baseEpisodes = $derived.by(() => {
-    if (!localMode || downloadedPositions.length === 0) return episodes;
-    const fromApi = episodes.filter((e) => downloadedSet.has(e.position));
-    const apiPositions = new Set(fromApi.map((e) => e.position));
-    const synthetic: EpisodeItem[] = downloadedPositions
-      .filter((p) => !apiPositions.has(p))
-      .map((position) => ({ position, name: `Серия ${position}` }));
-    return [...fromApi, ...synthetic].sort((a, b) => a.position - b.position);
+    if (localMode) {
+      // В локальном режиме не подмешиваем онлайн-серии тайтла
+      const fromApi = episodes.filter((e) => downloadedSet.has(e.position));
+      if (fromApi.length > 0) {
+        return [...fromApi].sort((a, b) => a.position - b.position);
+      }
+      return downloadedPositions
+        .map((position) => ({ position, name: position > 0 ? `Серия ${position}` : 'Локальный файл' }))
+        .sort((a, b) => a.position - b.position);
+    }
+    return episodes;
   });
 
   const headerTitle = $derived(
@@ -48,21 +53,7 @@
         : 'Серии',
   );
 
-  function isRedundantName(ep: EpisodeItem): boolean {
-    if (!ep.name) return true;
-    const n = ep.name.trim().toLowerCase();
-    return (
-      n === String(ep.position) ||
-      n === `${ep.position} серия` ||
-      n === `серия ${ep.position}` ||
-      n === `episode ${ep.position}` ||
-      n === `ep ${ep.position}` ||
-      n === `ep. ${ep.position}`
-    );
-  }
-
   function episodeIcon(ep: EpisodeItem): string | undefined {
-    // Иконка скачивания — только в режиме «Скачанные»
     if (localMode && downloadedSet.has(ep.position)) return iconDownload(18);
     if (ep.is_watched) {
       return `<span style="color:#22c55e">${iconCircleCheck(18)}</span>`;
@@ -77,7 +68,7 @@
     }
     return baseEpisodes.map((ep) => ({
       id: `ep:${ep.position}`,
-      label: isRedundantName(ep) ? `Серия ${ep.position}` : `Серия ${ep.position} — ${ep.name}`,
+      label: episodeDisplayLabel(ep, baseEpisodes),
       type: 'radio' as const,
       checked: ep.position === currentEp,
       icon: episodeIcon(ep),

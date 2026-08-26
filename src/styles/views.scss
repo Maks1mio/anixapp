@@ -3820,19 +3820,22 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   &--collapsed {
     max-height: 6.6em; // ~4 lines
-    position: relative;
     overflow: hidden;
-
-    &::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 2.5em;
-      background: linear-gradient(to bottom, transparent, $color-bg);
-      pointer-events: none;
-    }
+    // mask вместо overlay: нет «чёрной полосы» от transparent→bg
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      #000 0%,
+      #000 52%,
+      rgba(0, 0, 0, 0.55) 78%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      #000 0%,
+      #000 52%,
+      rgba(0, 0, 0, 0.55) 78%,
+      transparent 100%
+    );
   }
 }
 

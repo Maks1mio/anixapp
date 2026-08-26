@@ -105,7 +105,7 @@ export async function openLobbyPlayerWindow(opts?: { applyRoomPlayback?: boolean
     : {
         releaseId: '',
         sourceId: '',
-        ep: '0',
+        ep: '',
         title: 'Совместный просмотр',
         sourceName: '',
         lobbyIdle: true,

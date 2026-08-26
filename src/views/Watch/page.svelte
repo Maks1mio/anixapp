@@ -1305,7 +1305,20 @@
     void fetchEpisodesSilently();
     return api.getEpisode(rId, sId, ep).then(async (res: any) => {
       if (myGen !== episodeLoadGen) return;
-      const episode = res?.episode;
+      let episode = res?.episode;
+      // Films often use position 0; if target endpoint is empty, fall back to episodes list.
+      if (!episode?.url && api.getEpisodes) {
+        try {
+          const dubNum = positiveId(dubId) ?? positiveId(watchState.dubberId);
+          if (dubNum != null) {
+            const list = await api.getEpisodes(rId, dubNum, sId);
+            const hit = (list?.episodes ?? []).find((e: { position?: number; url?: string }) =>
+              Number(e?.position) === ep && !!e?.url,
+            );
+            if (hit) episode = hit;
+          }
+        } catch { /* ignore */ }
+      }
       if (!episode?.url) {
         showPlayerError('', 'Нет ссылки на видео');
         return;
@@ -1486,7 +1499,7 @@
     }
     localPlaybackPath = item.filePath;
     popoverType = null;
-    watchState.ep = item.episodePosition || watchState.ep;
+    watchState.ep = episodeIndex(item.episodePosition) ?? watchState.ep;
     const dubName = item.dubberName || 'Скаченное';
     const srcName = item.sourceName || 'Скачано';
     watchState.dubberName = dubName;
@@ -1497,7 +1510,7 @@
     watchState.sourceId = item.sourceId != null && item.sourceId > 0
       ? String(item.sourceId)
       : String(stableLocalId('src', srcName));
-    await startLocalFilePlayback(item.filePath, item.episodePosition || undefined, dubName, srcName);
+    await startLocalFilePlayback(item.filePath, episodeIndex(item.episodePosition) ?? undefined, dubName, srcName);
   }
 
   async function selectDownloadedDub(dubberName: string) {
@@ -2443,7 +2456,7 @@
       player.errorText = 'Файл не найден.';
       return;
     }
-    if (epOverride != null && epOverride > 0) watchState.ep = epOverride;
+    if (epOverride != null && episodeIndex(epOverride) != null) watchState.ep = epOverride;
     const dub = (dubName || watchState.dubberName || 'Скаченное').trim();
     const src = (srcName || watchState.sourceName || 'Скачано').trim();
     watchState.dubberName = dub;
@@ -2907,7 +2920,7 @@
           watchState.title = p.title || watchState.title;
           if (p.releaseId) watchState.releaseId = p.releaseId;
           if (p.sourceId) watchState.sourceId = p.sourceId;
-          if (p.ep) watchState.ep = parseInt(p.ep, 10);
+          if (p.ep != null && String(p.ep).trim() !== '') watchState.ep = parseInt(String(p.ep), 10);
           if (p.dubberId) watchState.dubberId = p.dubberId;
           if (p.dubberName) watchState.dubberName = String(p.dubberName);
           if (p.sourceName) watchState.sourceName = String(p.sourceName);
@@ -2921,18 +2934,18 @@
             const inferred = inferLocalNamesFromPath(String(p.localFile));
             await startLocalFilePlayback(
               String(p.localFile),
-              p.ep ? parseInt(p.ep, 10) : undefined,
+              p.ep != null && String(p.ep).trim() !== '' ? parseInt(String(p.ep), 10) : undefined,
               (p.dubberName && String(p.dubberName)) || inferred.dub || undefined,
               (p.sourceName && String(p.sourceName)) || inferred.src || undefined,
             );
           })();
           return;
         }
-        if (!p?.releaseId || !p.sourceId || !p.ep) return;
+        if (!p?.releaseId || !p.sourceId || episodeIndex(p.ep) == null) return;
         beginMediaCover(String(p.releaseId));
         watchState.releaseId  = p.releaseId;
         watchState.sourceId   = p.sourceId;
-        watchState.ep         = parseInt(p.ep, 10);
+        watchState.ep         = episodeIndex(p.ep) ?? 0;
         watchState.title      = p.title      || watchState.title;
         watchState.sourceName = p.sourceName || '';
         watchState.dubberId   = p.dubberId   || '';
@@ -2955,7 +2968,7 @@
 
       ['player:applySync', ((e: CustomEvent) => {
         const p = e.detail as any;
-        if (!p?.releaseId || !p.sourceId || !p.ep) return;
+        if (!p?.releaseId || !p.sourceId || episodeIndex(p.ep) == null) return;
         if (localMediaSwap) {
           pendingSync = p;
           logLobbyAction({
@@ -3041,7 +3054,7 @@
             notifyLobbyPlayerSyncedIfReady();
           } else if (sameIds && player.loadState === 'error') {
             notifyLobbyPlayerSyncedIfReady();
-          } else if (pb?.releaseId && pb.sourceId && pb.ep) {
+          } else if (pb?.releaseId && pb.sourceId && episodeIndex(pb.ep) != null) {
             beginMediaCover(String(pb.releaseId));
             watchState.releaseId = String(pb.releaseId);
             watchState.sourceId = String(pb.sourceId);
@@ -3062,7 +3075,7 @@
           return;
         }
 
-        const barrierSame = !!(pb?.releaseId && pb.sourceId && pb.ep
+        const barrierSame = !!(pb?.releaseId && pb.sourceId && episodeIndex(pb.ep) != null
           && watchState.releaseId === String(pb.releaseId)
           && watchState.sourceId === String(pb.sourceId)
           && watchState.ep === Number(pb.ep)
@@ -3070,7 +3083,7 @@
         if (barrierSame && videoEl && !videoEl.hidden) {
           applyRemotePlaybackSync(pb, { barrier: true });
           armLobbyPlayerSyncedOnce(typeof pb.currentTime === 'number' ? pb.currentTime : 0);
-        } else if (pb?.releaseId && pb.sourceId && pb.ep && !barrierSame) {
+        } else if (pb?.releaseId && pb.sourceId && episodeIndex(pb.ep) != null && !barrierSame) {
           beginMediaCover(String(pb.releaseId));
           watchState.releaseId = String(pb.releaseId);
           watchState.sourceId = String(pb.sourceId);

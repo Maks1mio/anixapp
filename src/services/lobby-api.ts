@@ -52,12 +52,14 @@ type LobbyProfilePayload = {
   deviceId?: string | null;
 };
 
-/** Есть ли у playback релиз и серия (не idle-заглушка). */
+/** Есть ли у playback релиз и серия (не idle-заглушка). Idle = пустой releaseId; серия 0 у фильмов валидна. */
 export function isUsablePlayback(p: Partial<LobbyPlayback> | null | undefined): boolean {
   if (!p) return false;
   const rid = String(p.releaseId ?? '').trim();
   const ep = String(p.ep ?? '').trim();
-  return rid.length > 0 && ep.length > 0 && ep !== '0';
+  if (!rid || ep === '') return false;
+  const n = Number(ep);
+  return Number.isFinite(n) && n >= 0;
 }
 
 function toSeedPlayback(p: Partial<LobbyPlayback>): LobbyPlayback {

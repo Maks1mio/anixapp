@@ -2,7 +2,7 @@ const POSTER_BASE = 'https://s.anixmirai.com/posters';
 const SCREENSHOT_BASE = 'https://s.anixmirai.com/screenshots';
 const COLLECTION_BASE = 'https://s.anixmirai.com/collections';
 
-const CDN_HOSTS = ['anixmirai.com', 'anixart.tv', 'anixsekai.com'];
+const CDN_HOSTS = ['anixmirai.com', 'anixart.tv', 'anixsekai.com', 'static.anixart.tv'];
 
 export function isAnixartCdnUrl(url: string): boolean {
   const canonical = unwrapCdnUrl(url);

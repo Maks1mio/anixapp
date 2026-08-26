@@ -419,7 +419,8 @@ contextBridge.exposeInMainWorld('anixApi', {
   },
 
   feed: {
-    latest: (page = 1) => ipcRenderer.invoke('anix:latestFeed', page),
+    my: (page = 0, opts = {}) => ipcRenderer.invoke('anix:myFeed', page, opts),
+    latest: (page = 0) => ipcRenderer.invoke('anix:latestFeed', page),
   },
 
   discover: {
@@ -466,6 +467,10 @@ contextBridge.exposeInMainWorld('anixApi', {
   channel: {
     info: (id) => ipcRenderer.invoke('anix:channelById', id),
     getBlog: (id) => ipcRenderer.invoke('anix:channelBlog', id),
+    articles: (channelId, page = 0) => ipcRenderer.invoke('anix:channelArticles', channelId, page),
+    subscribe: (channelId) => ipcRenderer.invoke('anix:channelSubscribe', channelId),
+    unsubscribe: (channelId) => ipcRenderer.invoke('anix:channelUnsubscribe', channelId),
+    editorAll: () => ipcRenderer.invoke('anix:channelEditorAll'),
     uploadCover: (channelId, imageBase64, fileName) =>
       ipcRenderer.invoke('anix:channelUploadCover', channelId, imageBase64, fileName),
     deleteCover: (channelId) => ipcRenderer.invoke('anix:channelDeleteCover', channelId),
@@ -493,6 +498,7 @@ contextBridge.exposeInMainWorld('anixApi', {
 
   article: {
     info: (id) => ipcRenderer.invoke('anix:articleById', id),
+    vote: (id, vote) => ipcRenderer.invoke('anix:articleVote', id, vote),
   },
 
   home: {

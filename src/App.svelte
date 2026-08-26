@@ -45,6 +45,9 @@
   import Login from './views/Login.svelte';
   import Home from './views/Home.svelte';
   import Overview from './views/Overview.svelte';
+  import Feed from './views/Feed.svelte';
+  import Article from './views/Article.svelte';
+  import Channel from './views/Channel.svelte';
   import Popular from './views/Popular.svelte';
   import CollectionsList from './views/CollectionsList.svelte';
   import MyCollections from './views/MyCollections.svelte';
@@ -185,6 +188,8 @@
   const profileCommentsId     = $derived(profileCommentsMatch?.[1] ? parseInt(profileCommentsMatch[1], 10) : null);
   const profileVideosId       = $derived(profileVideosMatch?.[1] ? parseInt(profileVideosMatch[1], 10) : null);
   const collectionMatch       = $derived(path.match(/^\/collection\/(\d+)$/));
+  const articleMatch          = $derived(path.match(/^\/article\/(\d+)$/));
+  const channelMatch          = $derived(path.match(/^\/channel\/(\d+)$/));
   const collectionEditMatch   = $derived(path.match(/^\/collections\/edit\/(\d+)$/));
   const collectionPickMatch   = $derived(path === '/collections/pick-release');
   const collectionPickReturn  = $derived(getSearchParams().get('return') || '/collections/create');
@@ -709,6 +714,16 @@
       <AdminLoginPage />
     {:else if path === '/overview'}
       <Overview />
+    {:else if path === '/feed'}
+      <Feed />
+    {:else if articleMatch}
+      {#key articleMatch[1]}
+        <Article id={parseInt(articleMatch[1], 10)} />
+      {/key}
+    {:else if channelMatch}
+      {#key channelMatch[1]}
+        <Channel id={parseInt(channelMatch[1], 10)} />
+      {/key}
     {:else if path === '/overview/popular'}
       <Popular />
     {:else if path === '/schedule'}

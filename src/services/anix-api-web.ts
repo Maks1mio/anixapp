@@ -135,7 +135,8 @@ function buildWebAnixApi(): AnixApi {
     },
 
     feed: {
-      latest: (page = 1) => invoke('anix:latestFeed', page),
+      my: (page = 0, opts = {}) => invoke('anix:myFeed', page, opts),
+      latest: (page = 0) => invoke('anix:latestFeed', page),
     },
 
     discover: {
@@ -181,6 +182,10 @@ function buildWebAnixApi(): AnixApi {
     channel: {
       info: (id) => invoke('anix:channelById', id),
       getBlog: (id) => invoke('anix:channelBlog', id),
+      articles: (channelId, page = 0) => invoke('anix:channelArticles', channelId, page),
+      subscribe: (channelId) => invoke('anix:channelSubscribe', channelId),
+      unsubscribe: (channelId) => invoke('anix:channelUnsubscribe', channelId),
+      editorAll: () => invoke('anix:channelEditorAll'),
       uploadCover: (channelId, imageBase64, fileName) =>
         invoke('anix:channelUploadCover', channelId, imageBase64, fileName),
       deleteCover: (channelId) => invoke('anix:channelDeleteCover', channelId),
@@ -211,6 +216,7 @@ function buildWebAnixApi(): AnixApi {
 
     article: {
       info: (id) => invoke('anix:articleById', id),
+      vote: (id, vote) => invoke('anix:articleVote', id, vote),
     },
 
     home: {

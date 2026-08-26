@@ -265,7 +265,13 @@ export interface AnixApi {
   };
 
   feed: {
-    latest: (page?: number) => Promise<{ content?: unknown[] }>;
+    /** Моя лента — GET feed/all/{page} */
+    my: (
+      page?: number,
+      opts?: { channelId?: number | null; date?: number },
+    ) => Promise<{ content?: unknown[]; total_count?: number; total_page_count?: number }>;
+    /** Свежее — GET feed/latest/all/{page} */
+    latest: (page?: number) => Promise<{ content?: unknown[]; total_count?: number; total_page_count?: number }>;
   };
 
   discover: {
@@ -320,6 +326,10 @@ export interface AnixApi {
   channel: {
     info: (id: number) => Promise<{ channel?: unknown }>;
     getBlog?: (id: number) => Promise<{ channel?: unknown; blogInfo?: unknown }>;
+    articles: (channelId: number, page?: number) => Promise<{ content?: unknown[]; total_page_count?: number }>;
+    subscribe: (channelId: number) => Promise<{ code?: number }>;
+    unsubscribe: (channelId: number) => Promise<{ code?: number }>;
+    editorAll: () => Promise<{ channels?: Array<{ id: number; title: string; avatar?: string | null; subscriber_count?: number; is_blog?: boolean }> }>;
     uploadCover: (
       channelId: number,
       imageBase64: string,
@@ -349,6 +359,7 @@ export interface AnixApi {
 
   article: {
     info: (id: number) => Promise<{ article?: unknown }>;
+    vote: (id: number, vote: number) => Promise<{ code?: number }>;
   };
 
   home: {

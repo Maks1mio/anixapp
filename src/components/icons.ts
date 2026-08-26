@@ -10,6 +10,7 @@ import {
   ArrowUpDown,
   AudioLines,
   Bell,
+  Newspaper,
   Bookmark,
   Calendar,
   Check,
@@ -286,6 +287,11 @@ export function iconBookmark(size = 20): string {
 /** Колокол (уведомления) */
 export function iconBell(size = 20): string {
   return toSvg(Bell, size);
+}
+
+/** Лента / статьи */
+export function iconNewspaper(size = 18): string {
+  return toSvg(Newspaper, size);
 }
 
 /** Пользователь (профиль) */

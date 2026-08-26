@@ -9,7 +9,7 @@
   import { ensureProfileId } from '../utils/profile';
   import { bindSearchHotkeys } from '../search-controller';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
-  import { iconHome, iconBookmark, iconCompass, iconFlame, iconLayoutGrid, iconDownload } from '../components/icons';
+  import { iconHome, iconBookmark, iconCompass, iconFlame, iconLayoutGrid, iconDownload, iconNewspaper } from '../components/icons';
   import { downloads, activeDownloadsCount, downloadsOverallProgress } from '../stores/downloads';
 
   import TitleBar from '../components/TitleBar.svelte';
@@ -38,6 +38,7 @@
   const SIDEBAR_NAV = [
     { href: '/', label: 'Главная', icon: iconHome(18) },
     { href: '/overview', label: 'Обзор', icon: iconCompass(18) },
+    { href: '/feed', label: 'Лента', icon: iconNewspaper(18) },
     { href: '/overview/popular', label: 'Популярное', icon: iconFlame(18) },
     { href: '/collections', label: 'Коллекции', icon: iconLayoutGrid(18) },
     { href: '/bookmarks', label: 'Закладки', icon: iconBookmark(18) },

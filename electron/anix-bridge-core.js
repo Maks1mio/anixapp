@@ -459,7 +459,18 @@ function createAnixBridgeCore(options = {}) {
     }),
     'anix:getDirectVideoLink': h((c, embedUrl) => c.getDirectVideoLink(embedUrl)),
     'anix:randomRelease': h((c, extended = true) => c.getClient().endpoints.release.getRandomRelease(extended)),
-    'anix:latestFeed': h((c, page = 1) => c.getClient().endpoints.feed.latest(page)),
+    'anix:latestFeed': h((c, page = 0) => c.getClient().endpoints.feed.latest(page)),
+    'anix:myFeed': h((c, page = 0, opts = {}) => {
+      const channelId = opts?.channelId != null && Number(opts.channelId) > 0
+        ? Number(opts.channelId)
+        : undefined;
+      const date = Number.isFinite(Number(opts?.date)) ? Number(opts.date) : 0;
+      const query = {
+        date,
+        ...(channelId != null ? { channel_id: channelId } : {}),
+      };
+      return c.getClient().endpoints.feed.feed(page, query);
+    }),
     'anix:discoverRecommendations': async (c, [page = -1, previousPage = -1]) => {
       try {
         return await c.getClient().endpoints.discover.recommendations(page, { previous_page: previousPage });
@@ -521,7 +532,14 @@ function createAnixBridgeCore(options = {}) {
       return { ok: true };
     },
     'anix:articleById': h((c, id) => c.getClient().endpoints.channel.getArticle(id)),
+    'anix:articleVote': h((c, id, vote) => c.getClient().endpoints.article.vote(id, vote)),
     'anix:channelById': h((c, id) => c.getClient().endpoints.channel.info(id)),
+    'anix:channelArticles': h((c, channelId, page = 0) =>
+      c.getClient().endpoints.channel.articles(channelId, page)),
+    'anix:channelSubscribe': h((c, channelId) => c.getClient().endpoints.channel.subscribe(channelId)),
+    'anix:channelUnsubscribe': h((c, channelId) =>
+      c.getClient().endpoints.channel.unsubscribe(channelId)),
+    'anix:channelEditorAll': h((c) => c.getClient().endpoints.channel.editorAvailableAll()),
     'anix:channelBlog': h((c, id) => c.getClient().endpoints.channel.getBlog(id)),
     'anix:profileById': h((c, id) => c.getClient().endpoints.profile.info(id)),
     'anix:collectionById': h((c, id) => c.getClient().endpoints.collection.info(id)),

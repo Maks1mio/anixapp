@@ -176,9 +176,27 @@ function setupCdnProtocol(logger) {
       const hasValidDimensions = Number.isFinite(width) && Number.isFinite(height)
         && width >= 16 && width <= 640
         && height >= 16 && height <= 960;
-      const output = hasValidDimensions
-        ? getThumbnail(target, asset.buffer, width, height)
-        : asset;
+      const mime = String(asset.mimeType || '').toLowerCase();
+      const canThumb = hasValidDimensions
+        && !mime.includes('webp')
+        && !mime.includes('gif')
+        && !mime.includes('svg')
+        && !mime.includes('video')
+        && !mime.includes('avif')
+        && !/\.(webp|gif|svg|mp4|webm|avif)(\?|$)/i.test(target);
+
+      let output = asset;
+      if (canThumb) {
+        try {
+          output = getThumbnail(target, asset.buffer, width, height);
+        } catch (thumbErr) {
+          // nativeImage часто не декодирует webp/avif — отдаём оригинал вместо 502
+          if (logger) {
+            logger.warn?.('cdn', `thumb skipped: ${thumbErr?.message ?? thumbErr}`);
+          }
+          output = asset;
+        }
+      }
       return new Response(output.buffer, {
         status: 200,
         headers: {

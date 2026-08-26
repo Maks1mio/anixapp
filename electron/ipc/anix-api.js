@@ -167,13 +167,30 @@ ipcMain.handle('anix:randomRelease', async (_, extended = true) => {
   }
 });
 
-ipcMain.handle('anix:latestFeed', async (_, page = 1) => {
+ipcMain.handle('anix:latestFeed', async (_, page = 0) => {
   try {
     const client = getAnixart();
     const data = await client.endpoints.feed.latest(page);
     return data;
   } catch (err) {
     handleAnixError(err, 'latestFeed');
+  }
+});
+
+ipcMain.handle('anix:myFeed', async (_, page = 0, opts = {}) => {
+  try {
+    const client = getAnixart();
+    const channelId = opts?.channelId != null && Number(opts.channelId) > 0
+      ? Number(opts.channelId)
+      : undefined;
+    const date = Number.isFinite(Number(opts?.date)) ? Number(opts.date) : 0;
+    const query = {
+      date,
+      ...(channelId != null ? { channel_id: channelId } : {}),
+    };
+    return await client.endpoints.feed.feed(page, query);
+  } catch (err) {
+    handleAnixError(err, 'myFeed');
   }
 });
 
@@ -278,6 +295,15 @@ ipcMain.handle('anix:articleById', async (_, id) => {
   }
 });
 
+ipcMain.handle('anix:articleVote', async (_, id, vote) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.article.vote(id, vote);
+  } catch (err) {
+    handleAnixError(err, 'articleVote');
+  }
+});
+
 ipcMain.handle('anix:channelById', async (_, id) => {
   try {
     const client = getAnixart();
@@ -285,6 +311,42 @@ ipcMain.handle('anix:channelById', async (_, id) => {
     return data;
   } catch (err) {
     handleAnixError(err, 'channelById');
+  }
+});
+
+ipcMain.handle('anix:channelArticles', async (_, channelId, page = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.channel.articles(channelId, page);
+  } catch (err) {
+    handleAnixError(err, 'channelArticles');
+  }
+});
+
+ipcMain.handle('anix:channelSubscribe', async (_, channelId) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.channel.subscribe(channelId);
+  } catch (err) {
+    handleAnixError(err, 'channelSubscribe');
+  }
+});
+
+ipcMain.handle('anix:channelUnsubscribe', async (_, channelId) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.channel.unsubscribe(channelId);
+  } catch (err) {
+    handleAnixError(err, 'channelUnsubscribe');
+  }
+});
+
+ipcMain.handle('anix:channelEditorAll', async () => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.channel.editorAvailableAll();
+  } catch (err) {
+    handleAnixError(err, 'channelEditorAll');
   }
 });
 

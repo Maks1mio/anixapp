@@ -2697,9 +2697,20 @@
   }
 
   function onKeyDown(e: KeyboardEvent) {
-    if (!player.useVideo || player.loadState !== 'ready') return;
     if (isTypingTarget(e.target)) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+    // Esc: сначала закрыть меню; в фуллскрине — выйти.
+    if (e.key === 'Escape' || e.code === 'Escape') {
+      if (popoverType != null) return; // UiV2PopupMenu сам закроет
+      if (!player.isFullscreen) return;
+      e.preventDefault();
+      e.stopPropagation();
+      toggleFullscreen({ osd: true });
+      return;
+    }
+
+    if (!player.useVideo || player.loadState !== 'ready') return;
 
     if (e.code === hotkeys.playPauseCode) {
       // Capture: один раз, без повторного срабатывания на focused button/tap-layer.

@@ -20,8 +20,8 @@ const MODE_MAP: Record<number, new (opts: {
 export const GPU_AVAILABLE =
   typeof navigator !== 'undefined' && typeof (navigator as Navigator & { gpu?: unknown }).gpu !== 'undefined';
 
-/** Мягкий потолок стороны буфера (фиксированные 4K/8K и т.п.). */
-const GPU_MAX_SIDE = 7680;
+/** Мягкий потолок стороны буфера для realtime-плеера (8K = thrash/мигание). */
+const GPU_MAX_SIDE = 3840;
 
 export interface Anime4kSession {
   /** `detachOutput: false` — остановить GPU, не трогая общий canvas/video (смена пресета). */
@@ -432,7 +432,11 @@ export async function startAnime4kUpscale(opts: {
     canvas.hidden = false;
     canvas.classList.add(canvasVisibleClass);
   }
-  video.classList.add(hideSourceClass);
+  // Пустой класс = скрытие источника управляет вызывающий код
+  // (плеер ждёт готовности canvas, иначе чёрный кадр / мигание).
+  if (hideSourceClass) {
+    video.classList.add(hideSourceClass);
+  }
 
   return { stop };
 }

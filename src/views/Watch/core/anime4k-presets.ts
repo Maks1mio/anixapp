@@ -9,7 +9,7 @@
 export type Anime4kType = 'off' | 'sharp' | 'balance' | 'clean' | 'sharpPlus' | 'balancePlus';
 export type Anime4kIntensity = 'easy' | 'optimal' | 'max';
 /** Целевая высота буфера апскейла; auto = под размер окна. */
-export type Anime4kTargetRes = 'auto' | '1080' | '1440' | '2160' | '4320';
+export type Anime4kTargetRes = 'auto' | '1080' | '1440' | '2160';
 
 export interface Anime4kPreset {
   type: Anime4kType;
@@ -55,7 +55,6 @@ export const ANIME4K_TARGET_RES: Anime4kTargetResOption[] = [
   { id: '1080', label: '1080p', height: 1080 },
   { id: '1440', label: '2K', height: 1440 },
   { id: '2160', label: '4K', height: 2160 },
-  { id: '4320', label: '8K', height: 4320 },
 ];
 
 /** Подпись пункта в меню (у Авто — предупреждение о моргании). */
@@ -123,6 +122,8 @@ export function isAnime4kTargetRes(value: unknown): value is Anime4kTargetRes {
 }
 
 export function normalizeAnime4kTargetRes(value: unknown): Anime4kTargetRes {
+  // Старый «8K» (4320) реально упирался в 4K-буфер — мигрируем.
+  if (value === '4320' || value === 4320) return '2160';
   return isAnime4kTargetRes(value) ? value : DEFAULT_ANIME4K_TARGET_RES;
 }
 

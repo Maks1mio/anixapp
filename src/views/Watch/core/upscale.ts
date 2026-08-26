@@ -21,9 +21,31 @@ export class UpscaleController {
   inputHeight = 0;
   bufferWidth = 0;
   bufferHeight = 0;
+  private appliedMode = -1;
+  private appliedTargetHeight: Anime4kTargetHeight = null;
+  private appliedAspect = '';
 
   get active(): boolean {
     return this.session != null;
+  }
+
+  /** Тот же вход + mode/target/aspect — можно не пересобирать WebGPU. */
+  matchesConfig(
+    inputW: number,
+    inputH: number,
+    mode: number,
+    targetHeight: Anime4kTargetHeight,
+    aspectRatio: string,
+  ): boolean {
+    if (!this.session) return false;
+    const th = targetHeight ?? null;
+    return (
+      this.inputWidth === inputW
+      && this.inputHeight === inputH
+      && this.appliedMode === mode
+      && (this.appliedTargetHeight ?? null) === th
+      && this.appliedAspect === aspectRatio
+    );
   }
 
   stop(video?: HTMLVideoElement | null, canvas?: HTMLCanvasElement | null): void {
@@ -82,6 +104,9 @@ export class UpscaleController {
     this.inputHeight = 0;
     this.bufferWidth = 0;
     this.bufferHeight = 0;
+    this.appliedMode = -1;
+    this.appliedTargetHeight = null;
+    this.appliedAspect = '';
     if (!hard) return;
     if (canvas) {
       canvas.width = 1;
@@ -127,30 +152,30 @@ export class UpscaleController {
     myRun: number,
   ): Promise<boolean> {
     const { enabled, mode, aspectRatio = 'auto', targetHeight = null, video, canvas } = opts;
-    const keepCover =
-      !!video &&
-      (video.classList.contains(HIDE_CLASS) || this.session != null);
 
     if (!gpuAvailable || !enabled || !video || !canvas) {
       this.teardown(video, canvas, { hard: true });
       return false;
     }
-    if (video.readyState < 1) {
-      this.teardown(video, canvas, { hard: !keepCover });
-      if (keepCover) video.classList.add(HIDE_CLASS);
+    // Ждём кадры: иначе WebGPU стартует вхолостую и плеер мигает.
+    if (video.readyState < HTMLVideoElement.HAVE_FUTURE_DATA) {
       return false;
+    }
+    if (video.videoWidth < 2 || video.videoHeight < 2) {
+      return false;
+    }
+
+    // Уже крутим тот же конфиг — не пересобираем (пауза/play не должен рестартить).
+    if (this.matchesConfig(video.videoWidth, video.videoHeight, mode, targetHeight, aspectRatio)) {
+      video.classList.add(HIDE_CLASS);
+      return true;
     }
 
     this.lastError = '';
-    if (video.videoWidth < 2 || video.videoHeight < 2) {
-      this.teardown(video, canvas, { hard: !keepCover });
-      if (keepCover) video.classList.add(HIDE_CLASS);
-      return false;
-    }
 
-    // Soft restart: остановить GPU, но не показывать сырое видео и не обнулять canvas.
+    // Soft restart: остановить GPU, но видео оставляем видимым до готовности новой сессии.
     this.teardown(video, canvas, { hard: false });
-    if (keepCover) video.classList.add(HIDE_CLASS);
+    video.classList.remove(HIDE_CLASS);
 
     try {
       const session = await startAnime4kUpscale({
@@ -159,7 +184,8 @@ export class UpscaleController {
         mode,
         container: canvas.parentElement,
         fit: 'contain',
-        hideSourceClass: HIDE_CLASS,
+        // Скрытие video — только после первого кадра (ниже), иначе мигание.
+        hideSourceClass: '',
         canvasVisibleClass: '',
         pixelRatio: 1,
         cssLayout: aspectRatio !== 'auto' ? 'ratio' : 'contain',
@@ -171,7 +197,7 @@ export class UpscaleController {
       }
       if (!session) {
         this.lastError = 'WebGPU недоступен';
-        if (!keepCover) video.classList.remove(HIDE_CLASS);
+        video.classList.remove(HIDE_CLASS);
         return false;
       }
       this.session = session;
@@ -179,12 +205,35 @@ export class UpscaleController {
       this.inputHeight = video.videoHeight;
       this.bufferWidth = canvas.width;
       this.bufferHeight = canvas.height;
-      video.classList.add(HIDE_CLASS);
+      this.appliedMode = mode;
+      this.appliedTargetHeight = targetHeight ?? null;
+      this.appliedAspect = aspectRatio;
+      // Прогрев: один кадр пайплайна, но video ещё видимо —
+      // page включит canvas (upscaleCanvasOn) и только потом скроет video.
+      await new Promise<void>((resolve) => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          resolve();
+        };
+        try {
+          video.requestVideoFrameCallback(() => finish());
+        } catch {
+          /* no RVFC */
+        }
+        requestAnimationFrame(() => requestAnimationFrame(() => finish()));
+        setTimeout(finish, 80);
+      });
+      if (myRun !== this.runId) {
+        session.stop({ detachOutput: false });
+        this.session = null;
+        return false;
+      }
       return true;
     } catch (err) {
       this.lastError = err instanceof Error ? err.message : String(err);
-      this.teardown(video, canvas, { hard: !keepCover });
-      if (keepCover) video.classList.add(HIDE_CLASS);
+      this.teardown(video, canvas, { hard: true });
       return false;
     }
   }

@@ -942,25 +942,46 @@
     bindCoreEls();
     const video = core.video;
     const canvas = core.canvas;
-    if (!video || video.videoWidth < 2 || video.videoHeight < 2 || video.readyState < 2) return;
-    if (!canvas) return;
-    // Soft restart: держим canvas/cover на всё время пересборки WebGPU.
-    player.upscaleCanvasOn = true;
-    await tick();
-    if (gen !== upscaleStartGen) return;
-    bindCoreEls();
-    if (core.upscale.active) {
-      videoEl?.classList.add('watch-page__video--hidden-for-upscale');
+    if (!video || !canvas) return;
+    // Пока нет стабильных кадров — не трогаем UI (иначе чёрный canvas мигает поверх видео).
+    if (video.videoWidth < 2 || video.videoHeight < 2) return;
+    if (video.readyState < HTMLVideoElement.HAVE_FUTURE_DATA) return;
+
+    // Уже активен с тем же mode/target/aspect — не рестартим (пауза/play).
+    const wantH = anime4kTargetHeight(player.upscaleTargetRes);
+    if (
+      core.upscale.active
+      && player.upscaleCanvasOn
+      && core.upscale.matchesConfig(
+        video.videoWidth,
+        video.videoHeight,
+        player.upscaleMode,
+        wantH,
+        player.aspectRatio,
+      )
+    ) {
+      video.classList.add('watch-page__video--hidden-for-upscale');
+      return;
     }
+
+    // Пока WebGPU поднимается — оставляем обычное видео, canvas не показываем.
     const ok = await core.startUpscale(
       player.upscaleEnabled,
       player.upscaleMode,
       player.aspectRatio,
-      anime4kTargetHeight(player.upscaleTargetRes),
+      wantH,
     );
     if (gen !== upscaleStartGen) return;
-    player.upscaleCanvasOn = ok;
-    if (!ok) videoEl?.classList.remove('watch-page__video--hidden-for-upscale');
+    if (ok) {
+      // Сначала включаем canvas в DOM, затем прячем video (уже скрыт в core после 1-го кадра).
+      player.upscaleCanvasOn = true;
+      await tick();
+      if (gen !== upscaleStartGen) return;
+      videoEl?.classList.add('watch-page__video--hidden-for-upscale');
+    } else {
+      player.upscaleCanvasOn = false;
+      videoEl?.classList.remove('watch-page__video--hidden-for-upscale');
+    }
   }
 
   /** После смены src всегда заново поднять Anime4K. Не блокируем start флагом hold. */
@@ -978,20 +999,22 @@
       upscaleRestartTimer = 0;
       if (!player.upscaleEnabled || !gpuAvailable || !player.useVideo) return;
       const v = videoEl;
-      if (!v || v.videoWidth < 2 || v.readyState < 2) {
-        if (upscaleRestartTries++ < 40) {
-          upscaleRestartTimer = window.setTimeout(attempt, 120);
+      // HAVE_FUTURE_DATA + чуть буфера — меньше стартовых потерь кадров.
+      if (!v || v.videoWidth < 2 || v.readyState < HTMLVideoElement.HAVE_FUTURE_DATA) {
+        if (upscaleRestartTries++ < 50) {
+          upscaleRestartTimer = window.setTimeout(attempt, 100);
         }
         return;
       }
       void startUpscale().then(() => {
-        if (core.upscale.active) return;
-        if (upscaleRestartTries++ < 8) {
-          upscaleRestartTimer = window.setTimeout(attempt, 250);
+        if (core.upscale.active && player.upscaleCanvasOn) return;
+        if (upscaleRestartTries++ < 12) {
+          upscaleRestartTimer = window.setTimeout(attempt, 300);
         }
       });
     };
-    upscaleRestartTimer = window.setTimeout(attempt, 280);
+    // Даем декодеру/HLS стабилизироваться перед тяжёлым WebGPU.
+    upscaleRestartTimer = window.setTimeout(attempt, 450);
   }
 
   function restartUpscaleIfFrameSizeChanged() {
@@ -2122,7 +2145,7 @@
       upscaleIntensity: intensity,
       upscaleTargetRes: player.upscaleTargetRes,
     });
-    if (mapped.enabled) startUpscale(); else stopUpscale();
+    if (mapped.enabled) void startUpscale(); else stopUpscale();
   }
 
   function applyAnime4kTargetRes(res: Anime4kTargetRes) {
@@ -2136,7 +2159,7 @@
       upscaleIntensity: player.upscaleIntensity,
       upscaleTargetRes: next,
     });
-    if (player.upscaleEnabled && gpuAvailable) startUpscale();
+    if (player.upscaleEnabled && gpuAvailable) void startUpscale();
   }
 
   function applyAnime4kFromSettings(s: {
@@ -2209,7 +2232,7 @@
       canvasEl.style.width = '';
       canvasEl.style.height = '';
     }
-    if (player.upscaleEnabled && gpuAvailable) startUpscale();
+    if (player.upscaleEnabled && gpuAvailable) void startUpscale();
   }
 
   function changeSurroundMode(mode: SurroundMode, opts?: { osd?: boolean }) {
@@ -3197,7 +3220,7 @@
       if (!upscaleHoldForNewFrame) revealPlayerMedia();
       try { (window as any).electron?.sendPlayerState?.(getPlaybackPayload()); } catch {}
       syncVideoPlaybackRate();
-      if (!upscaleHoldForNewFrame && player.upscaleEnabled && gpuAvailable) startUpscale();
+      if (!upscaleHoldForNewFrame && player.upscaleEnabled && gpuAvailable) scheduleUpscaleRestart();
       if (pendingSync && !localMediaSwap) applyPendingSync();
       maybeArmLobbySyncAfterLoad(pendingBarrierPlayback);
     }, { signal });
@@ -3207,7 +3230,9 @@
       if (!upscaleHoldForNewFrame) revealPlayerMedia();
       if (!isApplyingSync) preventAutoPause = false;
       syncVideoPlaybackRate();
-      if (!upscaleHoldForNewFrame && player.upscaleEnabled && gpuAvailable && !core.upscale.active) startUpscale();
+      if (!upscaleHoldForNewFrame && player.upscaleEnabled && gpuAvailable && !core.upscale.active) {
+        scheduleUpscaleRestart();
+      }
     }, { signal });
     el.addEventListener('resize', () => {
       restartUpscaleIfFrameSizeChanged();
@@ -3215,7 +3240,9 @@
     el.addEventListener('loadeddata', () => {
       if (!upscaleHoldForNewFrame) revealPlayerMedia();
       seedPlayerTimeFromVideo();
-      if (!upscaleHoldForNewFrame && player.upscaleEnabled && gpuAvailable && !core.upscale.active) startUpscale();
+      if (!upscaleHoldForNewFrame && player.upscaleEnabled && gpuAvailable && !core.upscale.active) {
+        scheduleUpscaleRestart();
+      }
     }, { signal });
     el.addEventListener('canplay',    doAutoPlay, { once: true, signal });
     el.addEventListener('loadeddata', doAutoPlay, { once: true, signal });

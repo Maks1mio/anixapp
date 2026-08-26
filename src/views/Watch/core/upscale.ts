@@ -29,23 +29,30 @@ export class UpscaleController {
     return this.session != null;
   }
 
-  /** Тот же вход + mode/target/aspect — можно не пересобирать WebGPU. */
+  /** Тот же вход + mode/target/aspect[/буфер] — можно не пересобирать WebGPU. */
   matchesConfig(
     inputW: number,
     inputH: number,
     mode: number,
     targetHeight: Anime4kTargetHeight,
     aspectRatio: string,
+    bufferW?: number,
+    bufferH?: number,
   ): boolean {
     if (!this.session) return false;
     const th = targetHeight ?? null;
-    return (
-      this.inputWidth === inputW
-      && this.inputHeight === inputH
-      && this.appliedMode === mode
-      && (this.appliedTargetHeight ?? null) === th
-      && this.appliedAspect === aspectRatio
-    );
+    if (
+      this.inputWidth !== inputW
+      || this.inputHeight !== inputH
+      || this.appliedMode !== mode
+      || (this.appliedTargetHeight ?? null) !== th
+      || this.appliedAspect !== aspectRatio
+    ) {
+      return false;
+    }
+    if (bufferW != null && this.bufferWidth !== bufferW) return false;
+    if (bufferH != null && this.bufferHeight !== bufferH) return false;
+    return true;
   }
 
   stop(video?: HTMLVideoElement | null, canvas?: HTMLCanvasElement | null): void {
@@ -165,8 +172,27 @@ export class UpscaleController {
       return false;
     }
 
-    // Уже крутим тот же конфиг — не пересобираем (пауза/play не должен рестартить).
-    if (this.matchesConfig(video.videoWidth, video.videoHeight, mode, targetHeight, aspectRatio)) {
+    // Уже крутим тот же конфиг (включая размер буфера) — не пересобираем.
+    const layout = computeAnime4kCanvasLayout(
+      video.videoWidth,
+      video.videoHeight,
+      canvas.parentElement,
+      'contain',
+      1,
+      targetHeight,
+    );
+    if (
+      this.matchesConfig(
+        video.videoWidth,
+        video.videoHeight,
+        mode,
+        targetHeight,
+        aspectRatio,
+        layout.bufferW,
+        layout.bufferH,
+      )
+    ) {
+      this.applyCssLayout(layout, canvas, aspectRatio);
       video.classList.add(HIDE_CLASS);
       return true;
     }

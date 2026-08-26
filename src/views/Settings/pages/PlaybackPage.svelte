@@ -348,7 +348,7 @@
                 disabled={!gpuAvailable || upscaleType === 'off'}
                 title={opt.id === 'auto' ? 'Под размер окна · может вызывать моргание' : `Рендер ${opt.label}`}
                 onclick={() => { upscaleTargetRes = opt.id; saveUpscale(); }}
-              >{opt.id === 'auto' ? 'Авто · может моргать' : opt.label}</button>
+              >{opt.id === 'auto' ? 'Авто · под окно' : opt.label}</button>
             {/each}
           </div>
           <div class="settings-a4k__row" role="radiogroup" aria-label="Тип улучшения">

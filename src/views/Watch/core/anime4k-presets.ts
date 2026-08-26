@@ -57,9 +57,9 @@ export const ANIME4K_TARGET_RES: Anime4kTargetResOption[] = [
   { id: '2160', label: '4K', height: 2160 },
 ];
 
-/** Подпись пункта в меню (у Авто — предупреждение о моргании). */
+/** Подпись пункта в меню. */
 export function anime4kTargetResMenuLabel(id: Anime4kTargetRes): string {
-  if (id === 'auto') return 'Авто · может моргать';
+  if (id === 'auto') return 'Авто · под окно';
   return ANIME4K_TARGET_RES.find((t) => t.id === id)?.label ?? '1080p';
 }
 

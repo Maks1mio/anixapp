@@ -947,19 +947,30 @@
     if (video.videoWidth < 2 || video.videoHeight < 2) return;
     if (video.readyState < HTMLVideoElement.HAVE_FUTURE_DATA) return;
 
-    // Уже активен с тем же mode/target/aspect — не рестартим (пауза/play).
+    // Уже активен с тем же mode/target/aspect/буфером — не рестартим (пауза/play).
     const wantH = anime4kTargetHeight(player.upscaleTargetRes);
+    const layout = core.upscale.desiredLayout({
+      video,
+      canvas,
+      aspectRatio: player.aspectRatio,
+      targetHeight: wantH,
+      pixelRatio: 1,
+    });
     if (
       core.upscale.active
       && player.upscaleCanvasOn
+      && layout
       && core.upscale.matchesConfig(
         video.videoWidth,
         video.videoHeight,
         player.upscaleMode,
         wantH,
         player.aspectRatio,
+        layout.bufferW,
+        layout.bufferH,
       )
     ) {
+      core.upscale.applyCssLayout(layout, canvas, player.aspectRatio);
       video.classList.add('watch-page__video--hidden-for-upscale');
       return;
     }

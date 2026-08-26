@@ -73,7 +73,7 @@ function clampGpuBuffer(bufferW: number, bufferH: number, aspect: number): { buf
   return { bufferW: Math.max(1, Math.round(h * aspect)), bufferH: h };
 }
 
-/** Размер буфера и CSS-fit для Anime4K (auto = под окно с cap 2× source). */
+/** Размер буфера и CSS-fit для Anime4K (auto = под размер окна/контейнера). */
 export function computeAnime4kCanvasLayout(
   sourceW: number,
   sourceH: number,
@@ -103,29 +103,17 @@ export function computeAnime4kCanvasLayout(
     return { cssW, cssH, bufferW, bufferH };
   }
 
-  const maxBufferW = Math.min(sourceW * 2, Math.round(cssW * dpr));
-  const maxBufferH = Math.min(sourceH * 2, Math.round(cssH * dpr));
-  let bufferW: number;
-  let bufferH: number;
-  if (maxBufferW / maxBufferH > aspect) {
-    bufferH = maxBufferH;
-    bufferW = Math.round(bufferH * aspect);
+  // Авто: буфер = видимая область видео в окне (contain), без лимита 2× source.
+  let bufferW = Math.max(1, Math.round(cssW * dpr));
+  let bufferH = Math.max(1, Math.round(cssH * dpr));
+  if (bufferW / bufferH > aspect) {
+    bufferH = Math.max(1, Math.round(bufferW / aspect));
   } else {
-    bufferW = maxBufferW;
-    bufferH = Math.round(bufferW / aspect);
+    bufferW = Math.max(1, Math.round(bufferH * aspect));
   }
+  ({ bufferW, bufferH } = clampGpuBuffer(bufferW, bufferH, aspect));
   bufferW = Math.max(sourceW, bufferW);
   bufferH = Math.max(sourceH, bufferH);
-
-  if (fit === 'cover') {
-    bufferW = Math.max(bufferW, Math.round(containerW * dpr));
-    bufferH = Math.max(bufferH, Math.round(containerH * dpr));
-    if (bufferW / bufferH > aspect) {
-      bufferH = Math.round(bufferW / aspect);
-    } else {
-      bufferW = Math.round(bufferH * aspect);
-    }
-  }
 
   return { cssW, cssH, bufferW, bufferH };
 }

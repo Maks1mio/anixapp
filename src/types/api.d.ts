@@ -329,6 +329,18 @@ export interface AnixApi {
     articles: (channelId: number, page?: number) => Promise<{ content?: unknown[]; total_page_count?: number }>;
     subscribe: (channelId: number) => Promise<{ code?: number }>;
     unsubscribe: (channelId: number) => Promise<{ code?: number }>;
+    subscriptions: (page?: number) => Promise<{
+      content?: Array<{
+        id: number;
+        title?: string;
+        avatar?: string | null;
+        is_blog?: boolean;
+        is_verified?: boolean;
+        is_subscribed?: boolean;
+        subscriber_count?: number;
+      }>;
+      total_page_count?: number;
+    }>;
     editorAll: () => Promise<{ channels?: Array<{ id: number; title: string; avatar?: string | null; subscriber_count?: number; is_blog?: boolean }> }>;
     uploadCover: (
       channelId: number,
@@ -360,6 +372,20 @@ export interface AnixApi {
   article: {
     info: (id: number) => Promise<{ article?: unknown }>;
     vote: (id: number, vote: number) => Promise<{ code?: number }>;
+    delete: (id: number) => Promise<{ code?: number }>;
+    mute: (id: number) => Promise<{ code?: number }>;
+    unmute: (id: number) => Promise<{ code?: number }>;
+    setPinned: (id: number, isPinned: boolean) => Promise<{ code?: number }>;
+  };
+
+  report: {
+    articleReasons: () => Promise<Array<{ id: number; title?: string; name?: string; text?: string }>>;
+    submitArticle: (body: {
+      entity_id?: number;
+      reason?: number;
+      reason_id?: number;
+      message?: string;
+    }) => Promise<{ code?: number }>;
   };
 
   home: {

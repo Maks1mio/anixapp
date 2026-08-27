@@ -428,26 +428,28 @@
         <div class="uiv2-comment__main">
           <div class="uiv2-comment__head">
             <div class="uiv2-comment__head-start">
-              <button
-                type="button"
-                class="uiv2-comment__author"
-                onclick={() => onAuthorClick?.(node)}
-              >
-                {node.profile.login}
-                <UserBadge
-                  url={node.profile.badgeUrl}
-                  name={node.profile.badgeName}
-                  size="sm"
-                  class="uiv2-comment__badge"
-                />
-              </button>
+              <div class="uiv2-comment__head-line">
+                <button
+                  type="button"
+                  class="uiv2-comment__author"
+                  onclick={() => onAuthorClick?.(node)}
+                >
+                  {node.profile.login}
+                  <UserBadge
+                    url={node.profile.badgeUrl}
+                    name={node.profile.badgeName}
+                    size="sm"
+                    class="uiv2-comment__badge"
+                  />
+                </button>
+                {#if node.isEdited}
+                  <span class="uiv2-comment__edited" title="Изменён">{@html iconPencil(13)}</span>
+                {/if}
+              </div>
               {#if node.timestamp}
                 <time class="uiv2-comment__time" datetime={String(node.timestamp)}>
                   {formatCommentTimestamp(node.timestamp)}
                 </time>
-              {/if}
-              {#if node.isEdited}
-                <span class="uiv2-comment__edited" title="Изменён">{@html iconPencil(13)}</span>
               {/if}
             </div>
             <span class="uiv2-comment__more-slot">

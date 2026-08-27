@@ -472,6 +472,7 @@ contextBridge.exposeInMainWorld('anixApi', {
     articles: (channelId, page = 0) => ipcRenderer.invoke('anix:channelArticles', channelId, page),
     subscribe: (channelId) => ipcRenderer.invoke('anix:channelSubscribe', channelId),
     unsubscribe: (channelId) => ipcRenderer.invoke('anix:channelUnsubscribe', channelId),
+    subscriptions: (page = 0) => ipcRenderer.invoke('anix:channelSubscriptions', page),
     editorAll: () => ipcRenderer.invoke('anix:channelEditorAll'),
     uploadCover: (channelId, imageBase64, fileName) =>
       ipcRenderer.invoke('anix:channelUploadCover', channelId, imageBase64, fileName),
@@ -501,6 +502,15 @@ contextBridge.exposeInMainWorld('anixApi', {
   article: {
     info: (id) => ipcRenderer.invoke('anix:articleById', id),
     vote: (id, vote) => ipcRenderer.invoke('anix:articleVote', id, vote),
+    delete: (id) => ipcRenderer.invoke('anix:articleDelete', id),
+    mute: (id) => ipcRenderer.invoke('anix:articleMute', id),
+    unmute: (id) => ipcRenderer.invoke('anix:articleUnmute', id),
+    setPinned: (id, isPinned) => ipcRenderer.invoke('anix:articlePin', id, isPinned),
+  },
+
+  report: {
+    articleReasons: () => ipcRenderer.invoke('anix:reportArticleReasons'),
+    submitArticle: (body) => ipcRenderer.invoke('anix:reportArticle', body),
   },
 
   home: {

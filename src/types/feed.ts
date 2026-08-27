@@ -26,8 +26,12 @@ export interface FeedChannel {
   is_blog?: boolean;
   is_verified?: boolean;
   is_subscribed?: boolean;
+  is_creator?: boolean;
+  is_administrator_or_higher?: boolean;
   subscriber_count?: number;
   article_count?: number;
+  /** Значок канала / блога (объект badge или URL). */
+  badge?: unknown;
 }
 
 export interface FeedProfile {
@@ -59,7 +63,12 @@ export interface FeedArticle {
   last_update_date?: number;
   is_deleted?: boolean;
   is_under_moderation?: boolean;
+  is_pinned?: boolean;
+  is_muted?: boolean;
+  has_delete_enforcement?: boolean;
   contains_repost_article?: boolean;
+  /** Вложенная статья при репосте. */
+  repost_article?: FeedArticle | null;
 }
 
 export interface FeedPageResponse {

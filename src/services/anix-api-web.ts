@@ -185,6 +185,7 @@ function buildWebAnixApi(): AnixApi {
       articles: (channelId, page = 0) => invoke('anix:channelArticles', channelId, page),
       subscribe: (channelId) => invoke('anix:channelSubscribe', channelId),
       unsubscribe: (channelId) => invoke('anix:channelUnsubscribe', channelId),
+      subscriptions: (page = 0) => invoke('anix:channelSubscriptions', page),
       editorAll: () => invoke('anix:channelEditorAll'),
       uploadCover: (channelId, imageBase64, fileName) =>
         invoke('anix:channelUploadCover', channelId, imageBase64, fileName),
@@ -217,6 +218,15 @@ function buildWebAnixApi(): AnixApi {
     article: {
       info: (id) => invoke('anix:articleById', id),
       vote: (id, vote) => invoke('anix:articleVote', id, vote),
+      delete: (id) => invoke('anix:articleDelete', id),
+      mute: (id) => invoke('anix:articleMute', id),
+      unmute: (id) => invoke('anix:articleUnmute', id),
+      setPinned: (id, isPinned) => invoke('anix:articlePin', id, isPinned),
+    },
+
+    report: {
+      articleReasons: () => invoke('anix:reportArticleReasons'),
+      submitArticle: (body) => invoke('anix:reportArticle', body),
     },
 
     home: {

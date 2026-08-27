@@ -16,6 +16,9 @@
     iconShare,
     iconTrash2,
     iconX,
+    iconFlame,
+    iconNewspaper,
+    iconUsers,
   } from '../components/icons';
   import UiV2RoundButton from '../components/uikit-v2/UiV2RoundButton.svelte';
   import UiV2Button from '../components/uikit-v2/UiV2Button.svelte';
@@ -49,6 +52,12 @@
   import UiV2Tooltip from '../components/uikit-v2/UiV2Tooltip.svelte';
   import UiV2Select from '../components/uikit-v2/UiV2Select.svelte';
   import UiV2EndpointSelect from '../components/uikit-v2/UiV2EndpointSelect.svelte';
+  import UiV2FeedPost from '../components/uikit-v2/UiV2FeedPost.svelte';
+  import UiV2FeedPostSkeleton from '../components/uikit-v2/UiV2FeedPostSkeleton.svelte';
+  import UiV2FeedSideNav from '../components/uikit-v2/UiV2FeedSideNav.svelte';
+  import { UIV2_FEED_POST_DEMO } from '../utils/uikit-v2-feed-post';
+  import { buildFeedArticleMenuItems } from '../utils/feed-article-menu';
+  import type { FeedArticle } from '../types/feed';
   import { showToast } from '../stores/toast';
   import { handleUserProfileClick } from '../stores/user-profile';
   import { normalizeCommentProfile, normalizeCommentsFromResponse } from '../utils/comment';
@@ -67,7 +76,7 @@
     formatPlaybackRate,
   } from '../utils/player-hotkeys';
 
-  type SectionId = 'tokens' | 'type' | 'controls' | 'surfaces' | 'cards' | 'comments' | 'menu';
+  type SectionId = 'tokens' | 'type' | 'controls' | 'surfaces' | 'cards' | 'posts' | 'comments' | 'menu';
 
   const sections: { id: SectionId; title: string; desc: string }[] = [
     { id: 'tokens', title: 'Токены', desc: 'Цвета, радиусы, тени — основа V2' },
@@ -75,11 +84,74 @@
     { id: 'controls', title: 'Контролы', desc: 'Кнопки, pill-навигация, вкладки, поля' },
     { id: 'surfaces', title: 'Поверхности', desc: 'Панели, модалки, карточки взаимодействия' },
     { id: 'cards', title: 'Карточки', desc: 'Аниме, карусель, обсуждения, коллекции, франшиза' },
+    { id: 'posts', title: 'Посты', desc: 'Карточки ленты, репосты, медиа, боковая навигация' },
     { id: 'comments', title: 'Комментарии', desc: 'Треды, спойлеры, голоса, глубокая вложенность' },
     { id: 'menu', title: 'Popup Menu', desc: 'Вложенные меню, тоглы, копирование без закрытия' },
   ];
+  let active: SectionId = $state('posts');
+  let feedDemoNavId = $state('latest');
+  let feedDemoTopicId = $state<number | null>(null);
+  let feedDemoPosts = $state(structuredClone(UIV2_FEED_POST_DEMO));
 
-  let active: SectionId = $state('comments');
+  const feedSideNavItems = [
+    { id: 'latest', label: 'Свежее', icon: iconFlame(16) },
+    { id: 'my', label: 'Моя лента', icon: iconNewspaper(16) },
+    { id: 'managed', label: 'Управляемые', icon: iconUsers(16) },
+  ];
+
+  const feedSideTopics = [
+    { id: null, label: 'Все подписки', avatar: null },
+    { id: 1, label: 'Nassc', avatar: UIV2_FEED_POST_DEMO[0].channel.avatar },
+    { id: 2, label: 'AnixBlog', avatar: UIV2_FEED_POST_DEMO[1].channel.avatar },
+    { id: 3, label: 'FrameLab', avatar: UIV2_FEED_POST_DEMO[2].channel.avatar },
+  ];
+
+  function toggleFeedDemoVote(postId: string | number) {
+    feedDemoPosts = feedDemoPosts.map((post) => {
+      if (post.id !== postId) return post;
+      const voted = !post.voted;
+      const delta = voted ? 1 : -1;
+      return {
+        ...post,
+        voted,
+        voteCount: Math.max(0, Number(post.voteCount ?? 0) + delta),
+      };
+    });
+  }
+
+  function toggleFeedDemoSubscribe(channelId: number | undefined, next: boolean) {
+    if (!channelId) return;
+    feedDemoPosts = feedDemoPosts.map((post) => {
+      if (post.channel.id !== channelId) return post;
+      return {
+        ...post,
+        channel: { ...post.channel, isSubscribed: next },
+      };
+    });
+  }
+
+  function demoFeedMenuItems(post: (typeof UIV2_FEED_POST_DEMO)[number]) {
+    const article: FeedArticle = {
+      id: typeof post.id === 'number' ? post.id : 9000,
+      channel: {
+        id: post.channel.id ?? 1,
+        title: post.channel.title,
+        is_administrator_or_higher: post.id === 'demo-headline',
+        is_creator: post.id === 'demo-text',
+      },
+      payload: { blocks: [] },
+      is_pinned: post.id === 'demo-image',
+    };
+    return buildFeedArticleMenuItems(article, {
+      pinAvailable: post.id === 'demo-image',
+      privilegeLevel: 3,
+      reportReasons: [
+        { id: 1, title: 'Спам' },
+        { id: 2, title: 'Оскорбления' },
+      ],
+    });
+  }
+
 
   const pillItems = [
     { id: '1', label: 'Maks1mio' },
@@ -995,7 +1067,7 @@
   });
 </script>
 
-<div class="view view-uikit-v2" class:view-uikit-v2--wide={active === 'cards' || active === 'comments'}>
+<div class="view view-uikit-v2" class:view-uikit-v2--wide={active === 'cards' || active === 'comments' || active === 'posts'}>
   <header class="uikit-v2-header">
     <div class="uikit-v2-header__top">
       <button type="button" class="uikit-v2-back" onclick={() => navigate('/')}>
@@ -1555,6 +1627,87 @@
               {/each}
             </div>
             {/if}
+          </div>
+        {:else if s.id === 'posts'}
+          <div class="uikit-v2-demo-block">
+            <h3 class="uikit-v2-demo-block__title">UiV2FeedPost</h3>
+            <p class="uikit-v2-demo-block__desc">
+              Карточка поста ленты: канал, заголовок, превью, медиа, репост, голоса и комментарии.
+              Стили — классы <code>.uiv2-feed-post*</code> в <code>uikit-v2.scss</code>.
+            </p>
+            <div class="uikit-v2-feed-list">
+              {#each feedDemoPosts as post (post.id)}
+                <UiV2FeedPost
+                  data={post}
+                  showSubscribe={post.id === 'demo-image'}
+                  menuItems={demoFeedMenuItems(post)}
+                  onVote={async (data, next) => {
+                    toggleFeedDemoVote(data.id);
+                    showToast(next ? 'Оценено' : 'Оценка снята');
+                  }}
+                  onSubscribe={async (_id, next) => {
+                    toggleFeedDemoSubscribe(post.channel.id, next);
+                    showToast(next ? 'Подписка оформлена' : 'Отписались');
+                  }}
+                  onMenuSelect={(id) => showToast(`Меню поста: ${id}`)}
+                  onclick={(data) => showToast(`Открыть пост: ${data.id}`)}
+                  onAuthor={(_data, _e) => showToast(`Автор: ${post.channel.title}`)}
+                  onChannel={(id) => showToast(`Канал: ${id}`)}
+                  onRepostClick={() => showToast('Открыть репост')}
+                  onRepostChannel={(id) => showToast(`Канал репоста: ${id}`)}
+                />
+              {/each}
+            </div>
+          </div>
+
+          <div class="uikit-v2-demo-block">
+            <h3 class="uikit-v2-demo-block__title">Skeleton</h3>
+            <p class="uikit-v2-demo-block__desc">
+              Состояние загрузки ленты — <code>UiV2FeedPostSkeleton</code>.
+            </p>
+            <UiV2FeedPostSkeleton count={2} />
+          </div>
+
+          <div class="uikit-v2-demo-block">
+            <h3 class="uikit-v2-demo-block__title">Layout: боковая навигация + лента</h3>
+            <p class="uikit-v2-demo-block__desc">
+              Двухколоночный макет как на странице ленты: <code>max-width: 56rem</code>,
+              слева <code>UiV2FeedSideNav</code>, справа посты.
+            </p>
+            <div class="uikit-v2-feed-layout">
+              <UiV2FeedSideNav
+                navItems={feedSideNavItems}
+                activeNavId={feedDemoNavId}
+                topics={feedSideTopics}
+                activeTopicId={feedDemoTopicId}
+                onNav={(id) => {
+                  feedDemoNavId = id;
+                  showToast(`Раздел: ${id}`);
+                }}
+                onTopic={(id) => {
+                  feedDemoTopicId = id;
+                  showToast(id == null ? 'Все подписки' : `Канал ${id}`);
+                }}
+              />
+              <div class="uikit-v2-feed-list">
+                <h3 class="uikit-v2-feed-layout__main-title">
+                  {feedDemoNavId === 'latest'
+                    ? 'Свежее'
+                    : feedDemoNavId === 'my'
+                      ? 'Моя лента'
+                      : 'Управляемые'}
+                </h3>
+                {#each feedDemoPosts.slice(0, 3) as post (post.id)}
+                  <UiV2FeedPost
+                    data={post}
+                    onclick={(data) => showToast(`Открыть: ${data.id}`)}
+                    onAuthor={(_data, _e) => showToast(`Автор: ${post.channel.title}`)}
+                    onChannel={(id) => showToast(`Канал: ${id}`)}
+                    onVote={async (data) => toggleFeedDemoVote(data.id)}
+                  />
+                {/each}
+              </div>
+            </div>
           </div>
         {:else if s.id === 'comments'}
           <div class="uikit-v2-demo-block">

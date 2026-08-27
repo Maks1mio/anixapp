@@ -48,7 +48,14 @@
   async function loadArticles(nextPage: number, append: boolean) {
     if (append) loadingMore = true;
     const res = await window.anixApi?.channel?.articles?.(id, nextPage);
-    const list = normalizeArticles(res?.content);
+    const list = normalizeArticles(res?.content).map((a) => ({
+      ...a,
+      channel: {
+        ...(a.channel ?? { id, title: channel?.title ?? '' }),
+        id: a.channel?.id ?? id,
+        is_subscribed: channel?.is_subscribed ?? a.channel?.is_subscribed,
+      },
+    }));
     articles = append ? [...articles, ...list] : list;
     page = nextPage;
     const totalPages = Number(res?.total_page_count ?? 0);
@@ -76,10 +83,15 @@
     const api = window.anixApi?.channel;
     if (!api?.subscribe || !api.unsubscribe) return;
     subBusy = true;
+    const next = !subscribed;
     try {
       if (subscribed) await api.unsubscribe(channel.id);
       else await api.subscribe(channel.id);
-      channel = { ...channel, is_subscribed: !subscribed };
+      channel = { ...channel, is_subscribed: next };
+      articles = articles.map((a) => ({
+        ...a,
+        channel: a.channel ? { ...a.channel, is_subscribed: next } : a.channel,
+      }));
     } catch (err) {
       errorMsg = String(err);
     } finally {
@@ -87,8 +99,43 @@
     }
   }
 
+  async function onVoteArticle(article: FeedArticle, nextVote: 0 | 1) {
+    if (!window.anixApi?.article?.vote) return;
+    const prevVote = Number(article.vote ?? 0) > 0 ? 1 : 0;
+    if (prevVote === nextVote) return;
+    articles = articles.map((a) => {
+      if (a.id !== article.id) return a;
+      return {
+        ...a,
+        vote: nextVote,
+        vote_count: Math.max(0, Number(a.vote_count ?? 0) + (nextVote ? 1 : -1)),
+      };
+    });
+    try {
+      await window.anixApi.article.vote(article.id, nextVote);
+    } catch (err) {
+      articles = articles.map((a) => {
+        if (a.id !== article.id) return a;
+        return {
+          ...a,
+          vote: prevVote,
+          vote_count: Math.max(0, Number(a.vote_count ?? 0) + (prevVote ? 1 : -1)),
+        };
+      });
+      errorMsg = String(err);
+    }
+  }
+
   function openArticle(article: FeedArticle) {
     navigate(`/article/${article.id}`);
+  }
+
+  function onArticleRemove(articleId: number) {
+    articles = articles.filter((a) => a.id !== articleId);
+  }
+
+  function onArticleChange(next: FeedArticle) {
+    articles = articles.map((a) => (a.id === next.id ? next : a));
   }
 
   onMount(() => {
@@ -170,7 +217,15 @@
     {:else}
       <div class="feed-page__list">
         {#each articles as article (article.id)}
-          <FeedArticleCard {article} onOpen={openArticle} onChannel={() => {}} />
+          <FeedArticleCard
+            {article}
+            onOpen={openArticle}
+            hideSubscribe
+            menuPinAvailable
+            onVote={onVoteArticle}
+            onArticleRemove={onArticleRemove}
+            onArticleChange={onArticleChange}
+          />
         {/each}
       </div>
       {#if hasMore}

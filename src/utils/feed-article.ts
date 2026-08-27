@@ -1,14 +1,34 @@
 import { resolveCdnAssetUrl } from './posterUrl';
 import type { FeedArticle, FeedArticleBlock } from '../types/feed';
 
-function stripHtml(raw: string): string {
+function decodeHtmlEntities(raw: string): string {
   return raw
-    .replace(/<[^>]+>/g, ' ')
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex: string) => {
+      const code = Number.parseInt(hex, 16);
+      try {
+        return Number.isFinite(code) ? String.fromCodePoint(code) : _;
+      } catch {
+        return _;
+      }
+    })
+    .replace(/&#(\d+);/g, (_, dec: string) => {
+      const code = Number.parseInt(dec, 10);
+      try {
+        return Number.isFinite(code) ? String.fromCodePoint(code) : _;
+      } catch {
+        return _;
+      }
+    })
     .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'")
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
+    .replace(/&amp;/gi, '&');
+}
+
+function stripHtml(raw: string): string {
+  return decodeHtmlEntities(raw.replace(/<[^>]+>/g, ' '))
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -33,13 +53,33 @@ function blockText(block: FeedArticleBlock): string {
   return '';
 }
 
-/** Короткий текст превью из блоков Editor.js / Anixart. */
+/** Первый header-блок как заголовок карточки (DTF-стиль). */
+export function articleHeadline(article: FeedArticle): string {
+  const blocks = article.payload?.blocks ?? [];
+  for (const block of blocks) {
+    if (blockKind(block) !== 'header') continue;
+    const text = blockText(block);
+    if (text) return text;
+  }
+  return '';
+}
+
+/** Короткий текст превью из блоков Editor.js / Anixart (без дубля headline). */
 export function articlePreviewText(article: FeedArticle, maxLen = 220): string {
   const blocks = article.payload?.blocks ?? [];
+  const headline = articleHeadline(article);
   const parts: string[] = [];
+  let skippedHeadline = !headline;
   for (const block of blocks) {
+    const kind = blockKind(block);
     const t = blockText(block);
-    if (t) parts.push(t);
+    if (!t) continue;
+    // Пропускаем первый header, если он уже показан как заголовок.
+    if (!skippedHeadline && kind === 'header' && t === headline) {
+      skippedHeadline = true;
+      continue;
+    }
+    parts.push(t);
     if (parts.join(' ').length >= maxLen) break;
   }
   const full = parts.join(' ').trim();
@@ -50,6 +90,10 @@ export function articlePreviewText(article: FeedArticle, maxLen = 220): string {
 
 function isVideoUrl(raw: string): boolean {
   return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(raw);
+}
+
+function isGifUrl(raw: string): boolean {
+  return /\.gif(\?|$)/i.test(raw);
 }
 
 /** Полный прокси URL без ресайза — article media почти всегда webp, nativeImage их ломает. */
@@ -83,7 +127,13 @@ function collectUrlsFromMediaData(data: Record<string, unknown>): string[] {
   return out;
 }
 
-export type FeedMediaItem = { url: string; kind: 'image' | 'video' };
+export type FeedMediaItem = { url: string; kind: 'image' | 'video' | 'gif' };
+
+function mediaKind(raw: string, url: string): FeedMediaItem['kind'] {
+  if (isVideoUrl(raw) || isVideoUrl(url)) return 'video';
+  if (isGifUrl(raw) || isGifUrl(url)) return 'gif';
+  return 'image';
+}
 
 /** Все картинки/видео из блоков статьи (Anixart type: media | image | gallery | embed). */
 export function articleMediaItems(article: FeedArticle, limit = 6): FeedMediaItem[] {
@@ -95,7 +145,7 @@ export function articleMediaItems(article: FeedArticle, limit = 6): FeedMediaIte
     const url = normalizeMediaUrl(raw);
     if (!url || seen.has(url)) return;
     seen.add(url);
-    out.push({ url, kind: isVideoUrl(raw) || isVideoUrl(url) ? 'video' : 'image' });
+    out.push({ url, kind: mediaKind(raw, url) });
   };
 
   for (const block of blocks) {
@@ -203,7 +253,7 @@ export function articleRenderBlocks(article: FeedArticle): RenderBlock[] {
           if (!url) return null;
           return {
             url,
-            kind: (isVideoUrl(raw) || isVideoUrl(url) ? 'video' : 'image') as 'image' | 'video',
+            kind: mediaKind(raw, url),
           };
         })
         .filter((x): x is FeedMediaItem => x != null);

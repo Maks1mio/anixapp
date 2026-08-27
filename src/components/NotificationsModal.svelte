@@ -55,15 +55,23 @@
   }
 
   function handleItemClick(n: ParsedNotification, event: MouseEvent) {
+    if (n.articleId) {
+      close();
+      navigate(`/article/${n.articleId}`);
+      return;
+    }
     if (n.releaseId) {
       close();
       navigate(`/release/${n.releaseId}`);
       return;
     }
-    // Channel pages are not routed yet; blog channel id matches profile id.
-    if (n.channelId || n.profileId) {
-      const profileId = n.profileId ?? n.channelId;
-      if (profileId) handleUserProfileClick(profileId, event);
+    if (n.channelId) {
+      close();
+      navigate(`/channel/${n.channelId}`);
+      return;
+    }
+    if (n.profileId) {
+      handleUserProfileClick(n.profileId, event);
     }
   }
 

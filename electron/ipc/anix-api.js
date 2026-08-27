@@ -304,6 +304,60 @@ ipcMain.handle('anix:articleVote', async (_, id, vote) => {
   }
 });
 
+ipcMain.handle('anix:articleDelete', async (_, id) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.article.delete(id);
+  } catch (err) {
+    handleAnixError(err, 'articleDelete');
+  }
+});
+
+ipcMain.handle('anix:articleMute', async (_, id) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.article.mute(id);
+  } catch (err) {
+    handleAnixError(err, 'articleMute');
+  }
+});
+
+ipcMain.handle('anix:articleUnmute', async (_, id) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.article.unmute(id);
+  } catch (err) {
+    handleAnixError(err, 'articleUnmute');
+  }
+});
+
+ipcMain.handle('anix:articlePin', async (_, id, isPinned) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.article.editIsPinned(id, { is_pinned: !!isPinned });
+  } catch (err) {
+    handleAnixError(err, 'articlePin');
+  }
+});
+
+ipcMain.handle('anix:reportArticleReasons', async () => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.report.articleReasons();
+  } catch (err) {
+    handleAnixError(err, 'reportArticleReasons');
+  }
+});
+
+ipcMain.handle('anix:reportArticle', async (_, body) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.report.article(body);
+  } catch (err) {
+    handleAnixError(err, 'reportArticle');
+  }
+});
+
 ipcMain.handle('anix:channelById', async (_, id) => {
   try {
     const client = getAnixart();
@@ -338,6 +392,15 @@ ipcMain.handle('anix:channelUnsubscribe', async (_, channelId) => {
     return await client.endpoints.channel.unsubscribe(channelId);
   } catch (err) {
     handleAnixError(err, 'channelUnsubscribe');
+  }
+});
+
+ipcMain.handle('anix:channelSubscriptions', async (_, page = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.channel.subscriptions(page);
+  } catch (err) {
+    handleAnixError(err, 'channelSubscriptions');
   }
 });
 

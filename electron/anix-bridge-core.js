@@ -539,6 +539,8 @@ function createAnixBridgeCore(options = {}) {
     'anix:channelSubscribe': h((c, channelId) => c.getClient().endpoints.channel.subscribe(channelId)),
     'anix:channelUnsubscribe': h((c, channelId) =>
       c.getClient().endpoints.channel.unsubscribe(channelId)),
+    'anix:channelSubscriptions': h((c, page = 0) =>
+      c.getClient().endpoints.channel.subscriptions(page)),
     'anix:channelEditorAll': h((c) => c.getClient().endpoints.channel.editorAvailableAll()),
     'anix:channelBlog': h((c, id) => c.getClient().endpoints.channel.getBlog(id)),
     'anix:profileById': h((c, id) => c.getClient().endpoints.profile.info(id)),

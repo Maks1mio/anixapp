@@ -1,17 +1,16 @@
 <script lang="ts">
-  import { onDestroy, onMount, tick } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import TvPage from '../components/tv/TvPage.svelte';
-  import TvHomeSpotlight from '../components/tv/TvHomeSpotlight.svelte';
   import TvHomeRow from '../components/tv/TvHomeRow.svelte';
   import AnnouncementBanner from '../components/AnnouncementBanner.svelte';
   import { fetchAnnouncements, type Announcement } from '../services/announcements';
-  import { clearTvHomeCatalog, syncTvHomeSpotlightFromDom } from '../tv/homeSpotlight';
   import {
     buildTvHomeRowDefs,
     createTvHomeRowStates,
     fetchTvHomeRowItems,
     type TvHomeRowState,
   } from '../tv/homeRows';
+  import { attachTvHomeRailTitleDim } from '../tv/railTitleDim';
 
   let rows = $state<TvHomeRowState[]>([]);
   let announcements = $state<Announcement[]>([]);
@@ -21,7 +20,7 @@
 
   function updateRowDim() {
     const root = stageEl;
-    const railsTop = railsEl?.getBoundingClientRect().top ?? window.innerHeight * 0.7;
+    const railsTop = railsEl?.getBoundingClientRect().top ?? 0;
     if (!root) return;
 
     root.querySelectorAll<HTMLElement>('[data-tv-home-row]').forEach((row) => {
@@ -50,6 +49,8 @@
   }
 
   onMount(() => {
+    const detachRailTitleDim = attachTvHomeRailTitleDim();
+
     void (async () => {
       const [ann, defs] = await Promise.all([
         fetchAnnouncements().catch(() => [] as Announcement[]),
@@ -62,9 +63,10 @@
 
       await Promise.all(defs.map((def) => loadRow(def.id, def.filterArgs)));
       await tick();
-      syncTvHomeSpotlightFromDom();
       updateRowDim();
     })();
+
+    return detachRailTitleDim;
   });
 
   $effect(() => {
@@ -92,17 +94,11 @@
     booting;
     void tick().then(updateRowDim);
   });
-
-  onDestroy(clearTvHomeCatalog);
 </script>
 
 <TvPage title="Главная" hideHead>
   <div class="tv-home">
     <section class="tv-home__stage" bind:this={stageEl} aria-label="Главная">
-      <div class="tv-home__info">
-        <TvHomeSpotlight />
-      </div>
-
       <div class="tv-home__rails" bind:this={railsEl} data-tv-home-rails>
         {#if announcements.length > 0}
           <div class="tv-home__announcements">

@@ -45,4 +45,8 @@ export interface ReleaseCardData {
     dubberLabel?: string;
     viewedAt?: number;
   };
+  /** age_rating из API: 2=6+, 3=12+, 4=16+, 5=18+ */
+  ageRating?: number;
+  /** is_adult из API */
+  isAdult?: boolean;
 }

@@ -187,6 +187,42 @@ function preferredTarget(list: HTMLElement[]): HTMLElement | null {
   return null;
 }
 
+function getRailRight(): number {
+  const rail = document.querySelector('.tv-layout__rail');
+  return rail?.getBoundingClientRect().right ?? 0;
+}
+
+function scrollCarouselItemIntoView(el: HTMLElement): void {
+  const scroll = el.closest(TV_ROW_SCROLL_SEL);
+  if (!(scroll instanceof HTMLElement)) return;
+
+  const item = el.closest('.uiv2-carousel__item');
+  const target = item instanceof HTMLElement ? item : el;
+  const scrollRect = scroll.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const padLeft = 16;
+  const padRight = 40;
+  const railRight = getRailRight();
+  const minLeft = railRight > 0 ? railRight + padLeft : scrollRect.left + padLeft;
+
+  let delta = 0;
+
+  if (targetRect.right > scrollRect.right - padRight) {
+    delta = targetRect.right - scrollRect.right + padRight;
+  } else if (targetRect.left < minLeft) {
+    delta = targetRect.left - minLeft;
+  } else if (targetRect.left < scrollRect.left + padLeft) {
+    delta = targetRect.left - (scrollRect.left + padLeft);
+  }
+
+  if (Math.abs(delta) > 1) {
+    scroll.scrollTo({
+      left: scroll.scrollLeft + delta,
+      behavior: 'smooth',
+    });
+  }
+}
+
 function scrollHomeRowIntoView(el: HTMLElement): boolean {
   const rails = el.closest(TV_HOME_RAILS_SEL);
   const homeRow = el.closest(TV_HOME_ROW_SEL);
@@ -204,7 +240,9 @@ function focusElement(el: HTMLElement, sticky = false): void {
   el.setAttribute(FOCUS_ATTR, 'true');
   el.focus({ preventScroll: true });
   if (!isInRail(el)) {
-    if (!scrollHomeRowIntoView(el)) {
+    const onHomeRails = scrollHomeRowIntoView(el);
+    scrollCarouselItemIntoView(el);
+    if (!onHomeRails) {
       el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
     }
   }

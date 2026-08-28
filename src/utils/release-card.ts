@@ -75,6 +75,8 @@ export function mapReleaseRawToCard(
     releaseDate: (raw.release_date as string) || undefined,
     isFavorite: !!(raw.is_favorite),
     listStatus,
+    ageRating: typeof raw.age_rating === 'number' ? raw.age_rating : undefined,
+    isAdult: !!raw.is_adult,
   };
 }
 

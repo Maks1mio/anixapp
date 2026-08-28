@@ -93,6 +93,8 @@ export const POSTER_THUMB_PRESETS = {
   releaseHero: { w: 400, h: 600 },
   /** Горизонтальный ряд на TV (~10rem карточка) */
   tvRow: { w: 400, h: 600 },
+  /** Крупный постер в TV spotlight на главной */
+  tvSpotlight: { w: 480, h: 720 },
   /** Обложка коллекции (~карточка 16:10) */
   collectionCover: { w: 420, h: 262 },
   /** «Просмотрено недавно» в профиле (~34–44 CSS px) */

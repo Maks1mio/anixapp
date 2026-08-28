@@ -5,6 +5,7 @@
   import UiV2ReleaseCarouselSkeleton from '../uikit-v2/UiV2ReleaseCarouselSkeleton.svelte';
   import type { ReleaseCardData } from '../../types/release';
   import type { TvHomeRowStatus } from '../../tv/homeRows';
+  import { registerTvHomeRelease } from '../../tv/homeSpotlight';
 
   interface Props {
     label: string;
@@ -21,6 +22,10 @@
     status = 'loading',
     skeletonCount = 10,
   }: Props = $props();
+
+  $effect(() => {
+    for (const item of items) registerTvHomeRelease(item);
+  });
 </script>
 
 <section class="tv-home-row" aria-label={label} data-tv-home-row>
@@ -40,8 +45,8 @@
         </div>
       {/if}
       {#each items as item (item.id)}
-        <div class="uiv2-carousel__item">
-          <ReleaseCardUiV2 data={item} variant="vertical" showMenu={false} />
+        <div class="uiv2-carousel__item" data-tv-release-id={item.id}>
+          <ReleaseCardUiV2 data={item} variant="vertical" showMenu={false} showTvOpenHint />
         </div>
       {/each}
     </UiV2ReleaseCarousel>

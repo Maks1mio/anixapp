@@ -20,6 +20,8 @@
     disableOpen?: boolean;
     /** ПКМ / кнопка «⋯» — на TV обычно выкл. */
     showMenu?: boolean;
+    /** Подсказка «Перейти к тайтлу» при фокусе (TV home) */
+    showTvOpenHint?: boolean;
   }
 
   let {
@@ -29,6 +31,7 @@
     onDeleteFromHistory,
     disableOpen = false,
     showMenu = true,
+    showTvOpenHint = false,
   }: Props = $props();
 
   const id = $derived(data.id);
@@ -109,6 +112,7 @@
   historyView={data.historyView ?? null}
   prependMenuItems={historyMenu}
   {showMenu}
+  {showTvOpenHint}
   onclick={openRelease}
   onFavoriteChange={handleFavoriteChange}
   onListStatusChange={handleListStatusChange}

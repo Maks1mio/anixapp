@@ -2,6 +2,7 @@
   import {
     iconBookOpen,
     iconCalendar,
+    iconChevronRight,
     iconFilm,
     iconFlag,
     iconMoreHorizontal,
@@ -94,6 +95,8 @@
     menuItems?: UiV2PopupMenuItem[];
     /** Доп. пункты перед стандартным меню (например «Удалить из истории») */
     prependMenuItems?: UiV2PopupMenuItem[];
+    /** Показывать подсказку «Перейти к тайтлу» на TV при фокусе */
+    showTvOpenHint?: boolean;
     class?: string;
     onclick?: (e: MouseEvent) => void;
     onMore?: (e: MouseEvent) => void;
@@ -137,6 +140,7 @@
     showMenu = true,
     menuItems,
     prependMenuItems,
+    showTvOpenHint = false,
     class: className = '',
     onclick,
     onMore,
@@ -507,6 +511,15 @@
         <div
           class="uiv2-anime-card__status-badge uiv2-anime-card__status-badge--{posterStatusBadge.tone}"
         >{posterStatusBadge.label}</div>
+      {/if}
+      {#if showTvOpenHint}
+        <span class="uiv2-anime-card__tv-open-hint" aria-hidden="true">
+          <span class="uiv2-anime-card__tv-open-hint-scrim"></span>
+          <span class="uiv2-anime-card__tv-open-hint-content">
+            <span class="uiv2-anime-card__tv-open-hint-icon">{@html iconChevronRight(28)}</span>
+            <span class="uiv2-anime-card__tv-open-hint-label">Перейти к тайтлу</span>
+          </span>
+        </span>
       {/if}
     </div>
     <div class="uiv2-anime-card__body">

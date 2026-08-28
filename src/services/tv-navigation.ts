@@ -5,6 +5,7 @@ const FOCUS_ATTR = 'data-tv-focus';
 const RAIL_SEL = '.tv-layout__rail';
 const MAIN_SEL = '.tv-layout__main';
 const TV_HOME_ROW_SEL = '[data-tv-home-row]';
+const TV_HOME_RAILS_SEL = '[data-tv-home-rails]';
 const TV_ROW_SCROLL_SEL = '.uiv2-carousel__scroll';
 
 const FOCUSABLE = [
@@ -186,12 +187,26 @@ function preferredTarget(list: HTMLElement[]): HTMLElement | null {
   return null;
 }
 
+function scrollHomeRowIntoView(el: HTMLElement): boolean {
+  const rails = el.closest(TV_HOME_RAILS_SEL);
+  const homeRow = el.closest(TV_HOME_ROW_SEL);
+  if (!(rails instanceof HTMLElement) || !(homeRow instanceof HTMLElement)) return false;
+
+  const railsRect = rails.getBoundingClientRect();
+  const rowRect = homeRow.getBoundingClientRect();
+  const targetTop = rails.scrollTop + (rowRect.top - railsRect.top);
+  rails.scrollTo({ top: targetTop, behavior: 'smooth' });
+  return true;
+}
+
 function focusElement(el: HTMLElement, sticky = false): void {
   document.querySelectorAll(`[${FOCUS_ATTR}]`).forEach((node) => node.removeAttribute(FOCUS_ATTR));
   el.setAttribute(FOCUS_ATTR, 'true');
   el.focus({ preventScroll: true });
   if (!isInRail(el)) {
-    el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+    if (!scrollHomeRowIntoView(el)) {
+      el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+    }
   }
   stickyFocus = sticky ? el : null;
   if (isInMain(el)) lastContentFocus = el;
@@ -436,12 +451,33 @@ export function isTvRailEngaged(): boolean {
   return railEngaged;
 }
 
+function onActivateKeydown(event: KeyboardEvent): void {
+  if (!isTvMode()) return;
+  if (event.key !== 'Enter' && event.key !== 'NumpadEnter') return;
+  if (event.altKey || event.ctrlKey || event.metaKey) return;
+  if (isTextInput(event.target as Element | null)) return;
+
+  const focused = document.querySelector<HTMLElement>(`[${FOCUS_ATTR}="true"]`);
+  if (!focused) return;
+  if (
+    !focused.matches('.uiv2-anime-card[role="button"]')
+    && !focused.matches('.tv-category-see-all[role="button"]')
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  focused.click();
+}
+
 export function initTvNavigation(): void {
   if (typeof window === 'undefined' || !isTvMode()) return;
   if ((window as Window & { __tvNavReady?: boolean }).__tvNavReady) return;
   (window as Window & { __tvNavReady?: boolean }).__tvNavReady = true;
 
   document.addEventListener('keydown', onArrowKeydown, true);
+  document.addEventListener('keydown', onActivateKeydown, true);
   bindBackKeys();
   observeDom();
   watchRouteChanges();

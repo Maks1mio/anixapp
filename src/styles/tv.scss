@@ -398,22 +398,227 @@ html.tv-mode .tv-layout__main:has(.tv-home) {
 }
 
 html.tv-mode .page.page--tv:has(.tv-home) {
-  overflow: visible !important;
+  overflow: hidden !important;
   padding: 0 !important;
+  height: 100%;
+  min-height: 0;
 }
 
 html.tv-mode .page.page--tv:has(.tv-home) > .page__scroll {
-  overflow-x: visible !important;
-  overflow-y: auto;
+  overflow: hidden !important;
   padding: 0;
+  height: 100%;
+  min-height: 0;
 }
 
 .tv-home {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tv-home__stage {
+  --tv-home-info-ratio: 54%;
+  --tv-home-rails-ratio: 46%;
   display: flex;
   flex-direction: column;
-  gap: 1.75rem;
+  height: 100%;
   min-height: 0;
-  overflow: visible;
+  overflow: hidden;
+}
+
+.tv-home__info {
+  flex: 0 0 var(--tv-home-info-ratio);
+  height: var(--tv-home-info-ratio);
+  min-height: 0;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+
+.tv-home-spotlight {
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: flex-end;
+  padding: 1.25rem 2.5rem 0.85rem calc(var(--tv-rail-collapsed-w) + 1.75rem);
+  opacity: 0;
+  transform: translateY(0.25rem);
+  transition:
+    opacity 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.tv-home__rails {
+  flex: 0 0 var(--tv-home-rails-ratio);
+  height: var(--tv-home-rails-ratio);
+  min-height: 0;
+  position: relative;
+  width: 100%;
+  overflow-x: visible;
+  overflow-y: auto;
+  padding-bottom: 5.5rem;
+  scroll-snap-type: y proximity;
+  scroll-padding-bottom: 5.5rem;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.tv-home-spotlight--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.tv-home-spotlight__content {
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(1.25rem, 2.2vw, 2rem);
+  width: 100%;
+  max-width: min(72rem, 94vw);
+  text-shadow:
+    0 1px 10px rgba(0, 0, 0, 0.55),
+    0 4px 24px rgba(0, 0, 0, 0.35);
+}
+
+.tv-home-spotlight__poster-wrap {
+  flex: 0 0 auto;
+  width: clamp(10.5rem, 15vw, 14.5rem);
+  aspect-ratio: 2 / 3;
+  border-radius: 0.85rem;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 8%, transparent);
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.42),
+    0 2px 0 color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 8%, transparent) inset;
+}
+
+.tv-home-spotlight__poster {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tv-home-spotlight__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-bottom: 0.1rem;
+}
+
+.tv-home-spotlight__head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.tv-home-spotlight__title {
+  margin: 0;
+  font-size: clamp(1.5rem, 2.4vw, 2.1rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--uikit-v2-text, #{$color-text});
+}
+
+.tv-home-spotlight__lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.85rem;
+}
+
+.tv-home-spotlight__subtitle {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--uiv2-fg-soft, color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 74%, transparent));
+}
+
+.tv-home-spotlight__rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #e8c35a;
+}
+
+.tv-home-spotlight__rating-star {
+  display: inline-flex;
+  line-height: 0;
+}
+
+.tv-home-spotlight__meta-row {
+  margin: 0.55rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  color: var(--uiv2-fg-soft, color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 80%, transparent));
+}
+
+.tv-home-spotlight__meta-row--soft {
+  margin-top: 0.3rem;
+  font-size: 0.84rem;
+  color: var(--uiv2-fg-muted, color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 66%, transparent));
+}
+
+.tv-home-spotlight__meta-part {
+  display: inline;
+}
+
+.tv-home-spotlight__meta-sep {
+  display: inline;
+  margin: 0 0.45rem;
+  opacity: 0.45;
+}
+
+.tv-home-spotlight__genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tv-home-spotlight__genre {
+  padding: 0.16rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 500;
+  line-height: 1.3;
+  color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 88%, transparent);
+  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 10%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.tv-home-spotlight__desc {
+  margin: 0.6rem 0 0;
+  max-width: 46rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--uiv2-fg-muted, color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 72%, transparent));
+  display: -webkit-box;
+  -webkit-line-clamp: 7;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tv-page--no-head .tv-page__body {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+html.tv-mode .page.page--tv:has(.tv-home) .tv-page {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .tv-home__announcements {
@@ -426,26 +631,43 @@ html.tv-mode .page.page--tv:has(.tv-home) > .page__scroll {
 .tv-home__rows {
   display: flex;
   flex-direction: column;
-  gap: 1.85rem;
+  gap: 1rem;
+  padding-bottom: 3rem;
   overflow: visible;
 }
 
 .tv-home-row {
   min-width: 0;
   overflow: visible;
+  padding-bottom: 0.5rem;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  opacity: var(--tv-row-opacity, 1);
+  filter: brightness(var(--tv-row-brightness, 1));
+  transition:
+    opacity 0.22s ease,
+    filter 0.22s ease;
 }
 
 .tv-home-row__title {
-  margin: 0 0 0.7rem;
-  padding-left: calc(var(--tv-rail-collapsed-w) + 1.25rem);
-  font-size: 1.2rem;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0 0 0.45rem;
+  padding:
+    0.3rem 2rem 0.45rem
+    calc(var(--tv-rail-collapsed-w) + 1.75rem);
+  font-size: 1.1rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--uikit-v2-text, #{$color-text});
+  text-shadow:
+    0 1px 10px rgba(0, 0, 0, 0.75),
+    0 2px 18px rgba(0, 0, 0, 0.45);
 }
 
 html.tv-mode .tv-home .tv-page__head {
-  padding-inline: calc(var(--tv-rail-collapsed-w) + 1.25rem) 2rem;
+  display: none;
 }
 
 html.tv-mode .tv-home .tv-release-carousel.uiv2-carousel {
@@ -462,9 +684,10 @@ html.tv-mode .tv-home .tv-release-carousel .uiv2-carousel__nav {
 html.tv-mode .tv-home .tv-release-carousel .uiv2-carousel__scroll {
   overflow-x: auto;
   overflow-y: visible;
-  padding-left: calc(var(--tv-rail-collapsed-w) + 1.25rem);
+  padding-left: calc(var(--tv-rail-collapsed-w) + 1.75rem);
   padding-right: 0;
-  scroll-padding-inline: calc(var(--tv-rail-collapsed-w) + 1.25rem) 1rem;
+  padding-bottom: 1.25rem;
+  scroll-padding-inline: calc(var(--tv-rail-collapsed-w) + 1.75rem) 1rem;
 }
 
 .tv-home-row__status {
@@ -536,6 +759,21 @@ html.tv-mode .uiv2-carousel {
   }
 }
 
+html.tv-mode .tv-home .tv-release-carousel .uiv2-carousel__item {
+  flex-basis: 8.75rem;
+  width: 8.75rem;
+}
+
+html.tv-mode .tv-home .uiv2-anime-card--vertical {
+  gap: 0.3rem;
+}
+
+html.tv-mode .tv-home .uiv2-anime-card__title {
+  font-size: 0.88rem;
+  line-height: 1.25;
+  -webkit-line-clamp: 2;
+}
+
 html.tv-mode .tv-release-carousel .uiv2-carousel__item {
   flex-basis: 10rem;
   width: 10rem;
@@ -550,10 +788,132 @@ html.tv-mode .tv-release-carousel .uiv2-anime-card--menu-open .uiv2-anime-card__
   transform: none;
 }
 
+html.tv-mode .tv-home .uiv2-anime-card--vertical:not(.tv-category-see-all)[data-tv-focus='true'] .uiv2-anime-card__poster-veil {
+  opacity: 0;
+}
+
+html.tv-mode .tv-home .uiv2-anime-card--vertical:not(.tv-category-see-all) .uiv2-anime-card__poster img {
+  transition:
+    filter 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+  transform: scale(1);
+  filter: blur(0) brightness(1);
+  will-change: filter, transform;
+}
+
+html.tv-mode .tv-home .uiv2-anime-card--vertical:not(.tv-category-see-all)[data-tv-focus='true'] .uiv2-anime-card__poster img {
+  transform: scale(1.07);
+  filter: blur(8px) brightness(0.82);
+}
+
+html.tv-mode .tv-home .uiv2-anime-card__tv-open-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html.tv-mode .tv-home .uiv2-anime-card--vertical:not(.tv-category-see-all)[data-tv-focus='true'] .uiv2-anime-card__tv-open-hint {
+  opacity: 1;
+}
+
+html.tv-mode .tv-home .uiv2-anime-card__tv-open-hint-scrim {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(0, 0, 0, 0.78);
+  opacity: 0;
+  transition: opacity 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html.tv-mode .tv-home .uiv2-anime-card--vertical:not(.tv-category-see-all)[data-tv-focus='true'] .uiv2-anime-card__tv-open-hint-scrim {
+  opacity: 1;
+}
+
+html.tv-mode .tv-home .uiv2-anime-card__tv-open-hint-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  max-width: 92%;
+  padding: 0.85rem 0.5rem;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(0.4rem) scale(0.94);
+  transition:
+    opacity 0.34s cubic-bezier(0.22, 1, 0.36, 1) 0.04s,
+    transform 0.34s cubic-bezier(0.22, 1, 0.36, 1) 0.04s;
+}
+
+html.tv-mode .tv-home .uiv2-anime-card--vertical:not(.tv-category-see-all)[data-tv-focus='true'] .uiv2-anime-card__tv-open-hint-content {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+html.tv-mode .tv-home .uiv2-anime-card__tv-open-hint-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  line-height: 0;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+  transition:
+    transform 0.34s cubic-bezier(0.22, 1, 0.36, 1) 0.06s,
+    background 0.28s ease,
+    border-color 0.28s ease;
+}
+
+html.tv-mode .tv-home .uiv2-anime-card--vertical:not(.tv-category-see-all)[data-tv-focus='true'] .uiv2-anime-card__tv-open-hint-icon {
+  transform: scale(1);
+}
+
+html.tv-mode .tv-home .uiv2-anime-card--vertical:not(.tv-category-see-all):not([data-tv-focus='true']) .uiv2-anime-card__tv-open-hint-icon {
+  transform: scale(0.88);
+}
+
+html.tv-mode .tv-home .uiv2-anime-card__tv-open-hint-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #fff;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.55);
+}
+
+html.tv-mode .uiv2-anime-card--vertical .uiv2-anime-card__poster::after,
+html.tv-mode .tv-category-see-all .uiv2-anime-card__poster::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  border: 4px solid #fff;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.28);
+  transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 html.tv-mode .uiv2-anime-card--vertical[data-tv-focus='true'] .uiv2-anime-card__poster,
 html.tv-mode .tv-category-see-all[data-tv-focus='true'] .uiv2-anime-card__poster {
-  outline: 2px solid color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 90%, transparent) !important;
-  outline-offset: -2px !important;
+  outline: none !important;
+}
+
+html.tv-mode .uiv2-anime-card--vertical[data-tv-focus='true'] .uiv2-anime-card__poster::after,
+html.tv-mode .tv-category-see-all[data-tv-focus='true'] .uiv2-anime-card__poster::after {
+  opacity: 1;
 }
 
 html.tv-mode [data-tv-focus='true']:not(.tv-layout__rail-item):not(.uiv2-anime-card):not(.tv-category-see-all),
@@ -574,6 +934,40 @@ html.tv-mode .tv-category-see-all[role='button'][data-tv-focus='true'] {
 }
 
 // ——— «Посмотреть всю категорию» (первая плитка в ряду) ———
+html.tv-mode .tv-home .tv-category-see-all__poster {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  padding: 0.85rem;
+  text-align: center;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.1),
+    rgba(255, 255, 255, 0.04)
+  );
+}
+
+html.tv-mode .tv-home .tv-category-see-all__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.42);
+}
+
+html.tv-mode .tv-home .tv-category-see-all__text {
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #fff;
+}
+
 .tv-category-see-all__poster {
   display: flex;
   flex-direction: column;

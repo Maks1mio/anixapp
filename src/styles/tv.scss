@@ -403,10 +403,10 @@ html.tv-mode .page.page--tv:has(.tv-home) > .uiv2-scroll-area__viewport {
 }
 
 .tv-home {
-  --tv-home-pad-top: clamp(0.75rem, 1.6vh, 1.1rem);
-  --tv-home-pad-x: clamp(1.5rem, 3vw, 2.5rem);
+  --tv-home-gutter: 0.85rem;
+  --tv-home-pad-top: #{$tv-rail-panel-pad-y};
   --tv-home-pad-bottom: clamp(1.5rem, 3vh, 2.5rem);
-  --tv-home-content-left: calc(var(--tv-rail-collapsed-w) + var(--tv-home-pad-x));
+  --tv-home-content-left: calc(var(--tv-rail-collapsed-w) + var(--tv-home-gutter));
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -460,7 +460,7 @@ html.tv-mode .page.page--tv:has(.tv-home) .tv-page {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
-  padding-inline: var(--tv-home-content-left) var(--tv-home-pad-x);
+  padding-inline: var(--tv-home-content-left) 0;
 }
 
 .tv-home__rows {
@@ -486,7 +486,7 @@ html.tv-mode .page.page--tv:has(.tv-home) .tv-page {
   z-index: 2;
   margin: 0 0 0.5rem;
   padding:
-    0.15rem var(--tv-home-pad-x) 0.5rem
+    0.15rem 0 0.5rem
     var(--tv-home-content-left);
   font-size: 1.1rem;
   font-weight: 700;
@@ -507,18 +507,6 @@ html.tv-mode .tv-home .tv-release-carousel.uiv2-carousel {
   max-width: 100%;
   margin: 0;
   box-sizing: border-box;
-  -webkit-mask-image: linear-gradient(
-    to right,
-    #000 0,
-    #000 calc(100% - var(--tv-home-pad-x)),
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to right,
-    #000 0,
-    #000 calc(100% - var(--tv-home-pad-x)),
-    transparent 100%
-  );
 }
 
 html.tv-mode .tv-home .tv-release-carousel.uiv2-scroll-area {
@@ -543,10 +531,10 @@ html.tv-mode .tv-home .tv-release-carousel .release-page__carousel-scroll {
   box-sizing: border-box;
   padding:
     4px
-    var(--tv-home-pad-x)
+    var(--tv-home-gutter)
     0.25rem
     var(--tv-home-content-left);
-  scroll-padding-inline: var(--tv-home-content-left) var(--tv-home-pad-x);
+  scroll-padding-inline: var(--tv-home-content-left) var(--tv-home-gutter);
   overscroll-behavior-x: contain;
 }
 
@@ -559,6 +547,7 @@ html.tv-mode .tv-home .tv-release-carousel .uiv2-carousel__item {
 
 .tv-home-row__status {
   margin: 0;
+  padding-left: var(--tv-home-content-left);
   font-size: 0.95rem;
   color: var(--uikit-v2-muted, #{$color-text-muted});
 }

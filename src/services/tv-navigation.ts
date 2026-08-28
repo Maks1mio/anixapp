@@ -201,7 +201,7 @@ function scrollCarouselItemIntoView(el: HTMLElement): void {
   const scrollRect = scroll.getBoundingClientRect();
   const targetRect = target.getBoundingClientRect();
   const padLeft = 16;
-  const padRight = 40;
+  const padRight = 16;
   const railRight = getRailRight();
   const minLeft = railRight > 0 ? railRight + padLeft : scrollRect.left + padLeft;
 

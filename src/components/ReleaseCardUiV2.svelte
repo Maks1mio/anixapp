@@ -18,6 +18,8 @@
     onDeleteFromHistory?: (id: number) => void;
     /** Не открывать релиз по клику (текущий в related-цепочке) */
     disableOpen?: boolean;
+    /** ПКМ / кнопка «⋯» — на TV обычно выкл. */
+    showMenu?: boolean;
   }
 
   let {
@@ -26,6 +28,7 @@
     cardVariant = 'default',
     onDeleteFromHistory,
     disableOpen = false,
+    showMenu = true,
   }: Props = $props();
 
   const id = $derived(data.id);
@@ -105,6 +108,7 @@
   myVote={data.myVote ?? null}
   historyView={data.historyView ?? null}
   prependMenuItems={historyMenu}
+  {showMenu}
   onclick={openRelease}
   onFavoriteChange={handleFavoriteChange}
   onListStatusChange={handleListStatusChange}

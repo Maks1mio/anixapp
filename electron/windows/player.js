@@ -3,6 +3,7 @@
 const path = require('path');
 const { BrowserWindow, ipcMain, shell, app } = require('electron');
 const state = require('../lib/app-state');
+const { getDevServerOrigin } = require('../lib/dev-server');
 
 const player = {
   createPlayerWindow: null,
@@ -93,7 +94,7 @@ function createPlayerWindow(params) {
   if (hasExternalUrl) queryParams.playbackMode = 'external';
   if (isDev) {
     const q = new URLSearchParams(queryParams).toString();
-    playerWindow.loadURL('http://127.0.0.1:5173/player.html?' + q);
+    playerWindow.loadURL(`${getDevServerOrigin()}/player.html?${q}`);
   } else {
     const playerPath = path.join(electronDir, '../dist/player.html');
     playerWindow.loadFile(playerPath, { query: queryParams });

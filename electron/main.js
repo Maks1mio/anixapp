@@ -10,10 +10,16 @@
  */
 'use strict';
 
+const path = require('path');
 const { loadLocalEnv } = require('./lib/load-dotenv');
 loadLocalEnv();
 
 const { app, BrowserWindow } = require('electron');
+
+// TV dev can run alongside desktop dev (separate userData → separate single-instance lock).
+if (process.env.ANIXAPP_TV === '1') {
+  app.setPath('userData', path.join(app.getPath('userData'), '-tv-dev'));
+}
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 const electronDir = __dirname;

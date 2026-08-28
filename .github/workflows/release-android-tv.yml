@@ -1,0 +1,20 @@
+# Android TV release — WIP (Capacitor + dist-android).
+# Triggers on tags like v1.0.0-tv. Job steps will be added on anixapp-tv branch.
+name: Release Android TV
+
+on:
+  push:
+    tags: ['v*-tv']
+
+permissions:
+  contents: write
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Not implemented yet
+        run: |
+          echo "Android TV CI is not wired yet."
+          echo "Use yarn electron:dev-tv locally until Capacitor android/ is added."
+          exit 1

@@ -42,6 +42,8 @@
   import { openProfilePanel } from './stores/profile-panel';
 
   import Layout from './layout/Layout.svelte';
+  import TvLayout from './layout/TvLayout.svelte';
+  import { isTvMode } from './platform/tv';
   import Login from './views/Login.svelte';
   import Home from './views/Home.svelte';
   import Overview from './views/Overview.svelte';
@@ -73,6 +75,14 @@
   import AdminLoginPage from './views/Admin/LoginPage.svelte';
   import AdminPanelPage from './views/Admin/PanelPage.svelte';
   import Downloads from './views/Downloads.svelte';
+  import HomeTv from './views/Home.tv.svelte';
+  import HomeCategoryTv from './views/HomeCategory.tv.svelte';
+  import OverviewTv from './views/Overview.tv.svelte';
+  import FeedTv from './views/Feed.tv.svelte';
+  import PopularTv from './views/Popular.tv.svelte';
+  import BookmarksTv from './views/Bookmarks.tv.svelte';
+  import SearchTv from './views/Search.tv.svelte';
+  import TvFallback from './views/TvFallback.svelte';
   import WebPlayerShell from './components/WebPlayerShell.svelte';
   import { isEmbeddedWebPlayer } from './utils/watch-nav';
 
@@ -90,6 +100,8 @@
   let searchTab = $state<'releases' | 'profiles' | 'collections'>('releases');
   let searchBy = $state(0);
   let collectionsWeek = $state(false);
+
+  const homeCategoryMatch = $derived(path.match(/^\/home\/([^/?#]+)/));
 
   // Local reactive mirror of isPlayerWindowOpen store (used in event handlers inside onMount)
   let _isPlayerOpen = false;
@@ -626,23 +638,29 @@
   });
 </script>
 
-{#if $appScreen === 'login'}
-  <!-- Нет anixApi (браузер без моста) -->
-  <Login
-    onSuccess={() => { void onLoginSuccess(); appScreen.set('main'); }}
-    allowGuest
-    onDismiss={() => appScreen.set('main')}
-    onConnectionRetry={checkAndShow}
-  />
-  {#if $settingsModalOpen}
-    <SettingsModal onClose={() => settingsModalOpen.set(false)} />
+{#snippet tvRoutes()}
+  {#if path === '/'}
+    <HomeTv />
+  {:else if homeCategoryMatch}
+    {#key homeCategoryMatch[1]}
+      <HomeCategoryTv tabId={homeCategoryMatch[1]} />
+    {/key}
+  {:else if path === '/overview' || path === '/schedule'}
+    <OverviewTv />
+  {:else if path === '/feed'}
+    <FeedTv />
+  {:else if path === '/overview/popular'}
+    <PopularTv />
+  {:else if path === '/bookmarks'}
+    <BookmarksTv />
+  {:else if path === '/search'}
+    <SearchTv />
+  {:else}
+    <TvFallback {path} />
   {/if}
+{/snippet}
 
-{:else if isWatchRoute}
-  <WebPlayerShell />
-
-{:else}
-  <Layout currentPath={path} onConnectionRetry={checkAndShow}>
+{#snippet appRoutes()}
     {#if announcementChatMatch}
       {#key announcementChatMatch[1]}
         <AnnouncementChat id={announcementChatMatch[1]} />
@@ -761,7 +779,33 @@
     {:else}
       <Home />
     {/if}
-  </Layout>
+{/snippet}
+
+{#if $appScreen === 'login'}
+  <!-- Нет anixApi (браузер без моста) -->
+  <Login
+    onSuccess={() => { void onLoginSuccess(); appScreen.set('main'); }}
+    allowGuest
+    onDismiss={() => appScreen.set('main')}
+    onConnectionRetry={checkAndShow}
+  />
+  {#if $settingsModalOpen}
+    <SettingsModal onClose={() => settingsModalOpen.set(false)} />
+  {/if}
+
+{:else if isWatchRoute}
+  <WebPlayerShell />
+
+{:else}
+  {#if isTvMode()}
+    <TvLayout currentPath={path}>
+      {@render tvRoutes()}
+    </TvLayout>
+  {:else}
+    <Layout currentPath={path} onConnectionRetry={checkAndShow}>
+      {@render appRoutes()}
+    </Layout>
+  {/if}
 
   {#if $settingsModalOpen}
     <SettingsModal onClose={() => settingsModalOpen.set(false)} />

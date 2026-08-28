@@ -17,6 +17,9 @@
         "electron:build": "vite build && yarn build:icon && node scripts/inject-oauth-env.js && electron-builder --publish=never",
         "rebuild:native": "electron-rebuild -f",
         "electron:dev": "concurrently \"vite\" \"wait-on http://127.0.0.1:5173 && cross-env NODE_ENV=development electron .\"",
+        "dev:tv": "cross-env VITE_TV_MODE=1 ANIXAPP_DEV_PORT=5174 vite",
+        "electron:dev-tv": "concurrently -k \"cross-env VITE_TV_MODE=1 ANIXAPP_DEV_PORT=5174 vite\" \"wait-on http://127.0.0.1:5174 && cross-env NODE_ENV=development ANIXAPP_TV=1 ANIXAPP_DEV_PORT=5174 electron .\"",
+        "build:tv:vite": "cross-env VITE_TV_MODE=1 vite build",
         "preview": "vite preview"
     },
     "keywords": [

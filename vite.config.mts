@@ -3,6 +3,9 @@ import { resolve } from 'path';
 import { svelte, vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { anixWebBridgePlugin } from './vite/anix-web-bridge-plugin.mjs';
 
+const devPort = Number(process.env.ANIXAPP_DEV_PORT)
+  || (process.env.VITE_TV_MODE === '1' || process.env.VITE_TV_MODE === 'true' ? 5174 : 5173);
+
 export default defineConfig(({ command }) => ({
   root: __dirname,
   // Dev: absolute `/` so SPA routes (/watch, /release/…) don't 404 Vite deps.
@@ -53,7 +56,7 @@ export default defineConfig(({ command }) => ({
     // LAN-IP — для телефона. Не использовать host: true на Windows: Vite тогда
     // может слушать только [::1], и electron:dev зависает с ECONNREFUSED.
     host: '0.0.0.0',
-    port: 5173,
+    port: devPort,
     strictPort: true,
     allowedHosts: true,
     watch: {

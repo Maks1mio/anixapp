@@ -39,7 +39,7 @@ html.tv-mode body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: var(--tv-rail-bg);
+  background: transparent;
 }
 
 // Full viewport — scale via root font-size (rem), not transform.
@@ -56,19 +56,91 @@ html.tv-mode #app {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  background: var(--tv-rail-bg);
+  background: transparent;
+  isolation: isolate;
 }
 
-// Градиент растёт вместе с меню — одна анимация width, без скачка background
+// Размытый постер сфокусированного / наведённого тайтла на весь экран
+.tv-layout__hero-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.85s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tv-layout__hero-bg--visible {
+  opacity: 1;
+}
+
+.tv-layout__hero-bg-img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 128%;
+  height: 128%;
+  object-fit: cover;
+  object-position: center;
+  filter: blur(56px) saturate(1.1) brightness(0.72);
+  transform: translate(-50%, -50%) scale(1.06);
+  will-change: transform, filter, opacity;
+  opacity: 0;
+  z-index: 0;
+  transition: opacity 1.1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tv-layout__hero-bg-img--active {
+  opacity: 1;
+  z-index: 1;
+}
+
+.tv-layout__hero-bg-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background:
+    linear-gradient(
+      105deg,
+      color-mix(in srgb, var(--tv-rail-bg) 88%, transparent) 0%,
+      color-mix(in srgb, var(--tv-rail-bg) 72%, transparent) 40%,
+      color-mix(in srgb, var(--tv-rail-bg) 56%, transparent) 100%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--tv-rail-bg) 38%, transparent) 0%,
+      color-mix(in srgb, var(--tv-rail-bg) 68%, transparent) 100%
+    ),
+    rgba(0, 0, 0, 0.32);
+}
+
+.tv-layout__main,
+.tv-layout__backdrop,
+.tv-layout__rail {
+  position: relative;
+  z-index: 1;
+}
+
+.tv-layout__rail {
+  z-index: 30;
+}
+
+.tv-layout__backdrop {
+  z-index: 25;
+}
+
+// Градиент растёт вместе с меню — виден только когда rail в фокусе
 .tv-layout__backdrop {
   position: absolute;
   top: 0;
   left: 0;
   bottom: 0;
   z-index: 25;
-  width: var(--tv-rail-collapsed-w);
+  width: 0;
+  opacity: 0;
   pointer-events: none;
-  will-change: width;
+  will-change: width, opacity;
   background: linear-gradient(
     90deg,
     var(--tv-rail-bg) 0%,
@@ -76,10 +148,13 @@ html.tv-mode #app {
     color-mix(in srgb, var(--tv-rail-bg) 48%, transparent) 78%,
     transparent 100%
   );
-  transition: width $tv-rail-duration $tv-rail-ease;
+  transition:
+    width $tv-rail-duration $tv-rail-ease,
+    opacity 0.28s ease;
 
   html.tv-mode[data-tv-rail-expanded] & {
     width: min(var(--tv-rail-backdrop-expanded-w), 78vw);
+    opacity: 1;
   }
 }
 
@@ -293,44 +368,103 @@ html.tv-mode:not([data-tv-rail-expanded]) .tv-layout__logo-wordmark {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding-left: var(--tv-rail-collapsed-w);
+  width: 100%;
+  padding-left: 0;
 }
 
 .page--tv {
   padding: 1.5rem 2rem 2rem;
+  background: transparent !important;
+}
+
+html.tv-mode .page.page--tv,
+html.tv-mode .page.page--tv > .page__scroll {
+  background: transparent !important;
+}
+
+html.tv-mode .tv-layout__main .page {
+  background: transparent !important;
 }
 
 // ——— TV home (leanback rows) ———
+html.tv-mode #app:has(.tv-home),
+html.tv-mode .tv-layout:has(.tv-home) {
+  overflow-x: visible;
+  overflow-y: hidden;
+}
+
+html.tv-mode .tv-layout__main:has(.tv-home) {
+  overflow: visible;
+}
+
+html.tv-mode .page.page--tv:has(.tv-home) {
+  overflow: visible !important;
+  padding: 0 !important;
+}
+
+html.tv-mode .page.page--tv:has(.tv-home) > .page__scroll {
+  overflow-x: visible !important;
+  overflow-y: auto;
+  padding: 0;
+}
+
 .tv-home {
   display: flex;
   flex-direction: column;
   gap: 1.75rem;
   min-height: 0;
+  overflow: visible;
 }
 
 .tv-home__announcements {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  padding-inline: calc(var(--tv-rail-collapsed-w) + 1.25rem) 2rem;
 }
 
 .tv-home__rows {
   display: flex;
   flex-direction: column;
   gap: 1.85rem;
+  overflow: visible;
 }
 
 .tv-home-row {
   min-width: 0;
+  overflow: visible;
 }
 
 .tv-home-row__title {
   margin: 0 0 0.7rem;
-  padding-left: 0.1rem;
+  padding-left: calc(var(--tv-rail-collapsed-w) + 1.25rem);
   font-size: 1.2rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--uikit-v2-text, #{$color-text});
+}
+
+html.tv-mode .tv-home .tv-page__head {
+  padding-inline: calc(var(--tv-rail-collapsed-w) + 1.25rem) 2rem;
+}
+
+html.tv-mode .tv-home .tv-release-carousel.uiv2-carousel {
+  overflow: visible;
+  width: 100vw;
+  max-width: 100vw;
+  margin-left: calc(50% - 50vw);
+}
+
+html.tv-mode .tv-home .tv-release-carousel .uiv2-carousel__nav {
+  overflow: visible;
+}
+
+html.tv-mode .tv-home .tv-release-carousel .uiv2-carousel__scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  padding-left: calc(var(--tv-rail-collapsed-w) + 1.25rem);
+  padding-right: 0;
+  scroll-padding-inline: calc(var(--tv-rail-collapsed-w) + 1.25rem) 1rem;
 }
 
 .tv-home-row__status {
@@ -393,9 +527,10 @@ html.tv-mode:not([data-tv-rail-expanded]) .tv-layout__logo-wordmark {
   margin-top: 0.15rem;
 }
 
-// D-pad скроллит ряд — только стрелки и кастомный скроллбар скрыты; боковые градиенты остаются.
+// D-pad скроллит ряд — стрелки, скроллбар и боковые градиенты скрыты.
 html.tv-mode .uiv2-carousel {
   .release-page__carousel-arrow,
+  .release-page__carousel-fade,
   > .uiv2-scroll-area__h-track {
     display: none !important;
   }

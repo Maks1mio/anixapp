@@ -7,6 +7,7 @@
   import { TV_NAV_ITEMS, tvNavHref, type TvNavItem } from '../tv/nav';
   import { returnTvFocusToContent } from '../services/tv-navigation';
   import Page from '../components/Page.svelte';
+  import TvPosterBackdrop from '../components/tv/TvPosterBackdrop.svelte';
 
   interface Props {
     children?: Snippet;
@@ -49,6 +50,7 @@
 </script>
 
 <div class="tv-layout">
+  <TvPosterBackdrop />
   <div class="tv-layout__backdrop" aria-hidden="true"></div>
 
   <aside class="tv-layout__rail" aria-label="Навигация">

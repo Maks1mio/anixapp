@@ -79,6 +79,7 @@
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <div
     class="release-page__poster{posterUrl ? ' release-page__poster--clickable' : ''}"
+    data-tv-release-poster
     role={posterUrl ? 'button' : undefined}
     tabindex={posterUrl ? 0 : undefined}
     onclick={() => posterUrl && openImageLightbox(posterUrl)}

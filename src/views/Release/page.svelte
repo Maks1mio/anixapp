@@ -1,10 +1,15 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { navigate } from '../../stores/navigation';
   import { requireAuth } from '../../stores/auth';
   import { openWatchModal } from '../../stores/modals';
-  import { buildPosterUrl, buildScreenshotUrl } from '../../utils/posterUrl';
+  import { buildPosterUrl, buildScreenshotUrl, toPosterDisplayUrl } from '../../utils/posterUrl';
   import { setDiscordContext, refreshDiscordPresence } from '../../services/discord-presence';
+  import { isTvMode } from '../../platform/tv';
+  import {
+    getTvReleaseOpenTarget,
+    runTvReleaseOpenAnimation,
+  } from '../../services/tv-release-transition';
   import type { SelectOption } from '../../components/select';
   import { LIST_STATUSES, type ListStatusId } from './_types';
   import type { ReleaseMetaInfoRow } from './_metaInfo';
@@ -27,6 +32,8 @@
 
   interface Props { id: number; }
   let { id }: Props = $props();
+
+  const tvOpenTarget = isTvMode() ? getTvReleaseOpenTarget(id) : null;
 
   // ── State ──────────────────────────────────────────────────────────────────
   let loadState   = $state<'loading' | 'error' | 'ready'>('loading');
@@ -329,6 +336,10 @@
 
   // ── Load ──────────────────────────────────────────────────────────────────
   onMount(async () => {
+    if (tvOpenTarget) {
+      void tick().then(() => runTvReleaseOpenAnimation(id));
+    }
+
     window.addEventListener('anix:bookmarksChanged', onBookmarksChanged);
     if (!window.anixApi) {
       errorMsg  = 'API недоступно (только в Electron).';
@@ -376,15 +387,31 @@
 </script>
 
 <div class="release-view-wrap">
-  <div class="view view-release">
-  {#if loadState === 'loading'}
+  <div class="view view-release" class:view-release--tv-open={!!tvOpenTarget}>
+  {#if loadState === 'loading' && tvOpenTarget}
+    <section class="release-page release-page--tv-enter">
+      <div class="release-page__head">
+        <div class="release-page__head-top" aria-hidden="true"></div>
+        <div class="release-page__head-aside-play">
+          <div class="release-page__poster" data-tv-release-poster>
+            <img
+              src={toPosterDisplayUrl(tvOpenTarget.posterUrl, 'releaseHero')}
+              alt={tvOpenTarget.title}
+              decoding="async"
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+
+  {:else if loadState === 'loading'}
     <div class="release-loading">Загрузка…</div>
 
   {:else if loadState === 'error'}
     <div class="release-loading">{errorMsg}</div>
 
   {:else if release}
-    <section class="release-page">
+    <section class="release-page" class:release-page--tv-enter={!!tvOpenTarget}>
 
       <!-- Head: poster + info -->
       <ReleaseHead

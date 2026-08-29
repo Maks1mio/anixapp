@@ -82,7 +82,10 @@
   import PopularTv from './views/Popular.tv.svelte';
   import BookmarksTv from './views/Bookmarks.tv.svelte';
   import SearchTv from './views/Search.tv.svelte';
+  import ReleaseTv from './views/Release.tv.svelte';
   import TvFallback from './views/TvFallback.svelte';
+  import TvKeepAlive from './components/tv/TvKeepAlive.svelte';
+  import { rememberTvKeepAlive, tvKeepAliveKey, tvKeptCategoryIds } from './tv/keepAlive';
   import WebPlayerShell from './components/WebPlayerShell.svelte';
   import { isEmbeddedWebPlayer } from './utils/watch-nav';
 
@@ -101,7 +104,14 @@
   let searchBy = $state(0);
   let collectionsWeek = $state(false);
 
-  const homeCategoryMatch = $derived(path.match(/^\/home\/([^/?#]+)/));
+  let tvKept = $state<string[]>(rememberTvKeepAlive([], getPath()));
+  const tvKeptCats = $derived(tvKeptCategoryIds(tvKept));
+  const tvKeepKey = $derived(tvKeepAliveKey(path));
+
+  $effect(() => {
+    const next = rememberTvKeepAlive(tvKept, path);
+    if (next !== tvKept) tvKept = next;
+  });
 
   // Local reactive mirror of isPlayerWindowOpen store (used in event handlers inside onMount)
   let _isPlayerOpen = false;
@@ -288,6 +298,7 @@
       currentPath.set(path);
       syncSearchParams();
       resetScrollAfterRouteChange();
+      window.dispatchEvent(new CustomEvent('anix:navigate', { detail: path }));
     };
     const onAnixNavigate = (e: Event) => {
       const detail = (e as CustomEvent).detail;
@@ -639,25 +650,61 @@
 </script>
 
 {#snippet tvRoutes()}
-  {#if path === '/'}
-    <HomeTv />
-  {:else if homeCategoryMatch}
-    {#key homeCategoryMatch[1]}
-      <HomeCategoryTv tabId={homeCategoryMatch[1]} />
-    {/key}
-  {:else if path === '/overview' || path === '/schedule'}
-    <OverviewTv />
-  {:else if path === '/feed'}
-    <FeedTv />
-  {:else if path === '/overview/popular'}
-    <PopularTv />
-  {:else if path === '/bookmarks'}
-    <BookmarksTv />
-  {:else if path === '/search'}
-    <SearchTv />
-  {:else}
-    <TvFallback {path} />
-  {/if}
+  <div class="tv-route-stack">
+    {#if tvKept.includes('home')}
+      <TvKeepAlive keepKey="home" active={path === '/'}>
+        <HomeTv />
+      </TvKeepAlive>
+    {/if}
+
+    {#each tvKeptCats as tabId (tabId)}
+      <TvKeepAlive keepKey={`home-cat:${tabId}`} active={path === `/home/${tabId}`}>
+        <HomeCategoryTv {tabId} />
+      </TvKeepAlive>
+    {/each}
+
+    {#if tvKept.includes('overview')}
+      <TvKeepAlive keepKey="overview" active={path === '/overview' || path === '/schedule'}>
+        <OverviewTv />
+      </TvKeepAlive>
+    {/if}
+
+    {#if tvKept.includes('feed')}
+      <TvKeepAlive keepKey="feed" active={path === '/feed'}>
+        <FeedTv />
+      </TvKeepAlive>
+    {/if}
+
+    {#if tvKept.includes('popular')}
+      <TvKeepAlive keepKey="popular" active={path === '/overview/popular'}>
+        <PopularTv />
+      </TvKeepAlive>
+    {/if}
+
+    {#if tvKept.includes('bookmarks')}
+      <TvKeepAlive keepKey="bookmarks" active={path === '/bookmarks'}>
+        <BookmarksTv />
+      </TvKeepAlive>
+    {/if}
+
+    {#if tvKept.includes('search')}
+      <TvKeepAlive keepKey="search" active={path === '/search'}>
+        <SearchTv />
+      </TvKeepAlive>
+    {/if}
+
+    {#if releaseMatch}
+      <TvKeepAlive active>
+        {#key releaseMatch[1]}
+          <ReleaseTv id={parseInt(releaseMatch[1], 10)} />
+        {/key}
+      </TvKeepAlive>
+    {:else if !tvKeepKey}
+      <TvKeepAlive active>
+        <TvFallback {path} />
+      </TvKeepAlive>
+    {/if}
+  </div>
 {/snippet}
 
 {#snippet appRoutes()}

@@ -151,6 +151,7 @@ app.on('before-quit', () => {
   logger.info('main', 'app before-quit');
   try { media.persistDownloads?.(); } catch (_) {}
   stopFetchAAppBridge();
+  try { require('./lib/tv-lan-login').stop(); } catch (_) {}
   if (discordRpc) discordRpc.destroy();
   if (isDev) void devApiBridge.stop();
 });

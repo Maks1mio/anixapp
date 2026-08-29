@@ -67,6 +67,9 @@ declare global {
       togglePlayerAlwaysOnTop: () => Promise<boolean>;
       isPlayerOpen: () => Promise<boolean>;
       openExternal: (url: string) => void;
+      startTvLanLogin?: () => Promise<{ url: string | null; error?: string }>;
+      stopTvLanLogin?: () => Promise<boolean>;
+      onTvLanCredentials?: (cb: (detail: { login: string; password: string }) => void) => () => void;
       setExtraVideoHosts?: (hosts: string[]) => Promise<string[]>;
       addExtraVideoHosts?: (hosts: string[]) => Promise<string[]>;
       /** JSON с Anixart CDN (Lottie-бейджи) через main — без fetch(anix-cdn://) */

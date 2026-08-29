@@ -24,6 +24,8 @@
   import { formatHistoryViewTime } from '../../utils/historyFormat';
   import { isReleaseAnnounce } from '../../utils/release-card';
   import { toPosterDisplayUrl } from '../../utils/posterUrl';
+  import { isTvMode } from '../../platform/tv';
+  import { tvLazyPoster } from '../../actions/tvLazyPoster';
 
   export type UiV2AnimeCardVariant = 'vertical' | 'horizontal';
 
@@ -284,6 +286,7 @@
         )
       : null,
   );
+  const deferPoster = isTvMode();
   const myVoteValue = $derived(
     typeof myVote === 'number' && myVote > 0 ? Math.min(5, Math.round(myVote)) : null,
   );
@@ -488,7 +491,11 @@
   >
     <div class="uiv2-anime-card__poster">
       {#if displayPosterUrl}
-        <img src={displayPosterUrl} alt="" loading="lazy" decoding="async" />
+        {#if deferPoster}
+          <img alt="" decoding="async" use:tvLazyPoster={displayPosterUrl} />
+        {:else}
+          <img src={displayPosterUrl} alt="" loading="lazy" decoding="async" />
+        {/if}
       {:else}
         <span class="uiv2-anime-card__poster-fallback" aria-hidden="true"></span>
       {/if}
@@ -583,7 +590,11 @@
     <div class="uiv2-anime-card__media">
       <div class="uiv2-anime-card__poster uiv2-anime-card__poster--h">
         {#if displayPosterUrl}
-          <img src={displayPosterUrl} alt="" loading="lazy" decoding="async" />
+          {#if deferPoster}
+            <img alt="" decoding="async" use:tvLazyPoster={displayPosterUrl} />
+          {:else}
+            <img src={displayPosterUrl} alt="" loading="lazy" decoding="async" />
+          {/if}
         {:else}
           <span class="uiv2-anime-card__poster-fallback" aria-hidden="true"></span>
         {/if}

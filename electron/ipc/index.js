@@ -14,6 +14,7 @@ function registerAll(deps) {
   require('./app-settings').register(deps);
   registerDevBridge(deps.isDev, deps.devApiBridge);
   require('./auth').register(deps);
+  require('./tv-lan-login').register();
   require('./anix-api').register(deps);
   require('../services/media').register(deps);
   require('../windows/player').register(deps);

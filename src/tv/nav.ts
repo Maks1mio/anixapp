@@ -4,6 +4,7 @@ import {
   iconFlame,
   iconHome,
   iconNewspaper,
+  iconUser,
 } from '../components/icons';
 
 /** 10-foot UI: крупнее и с более толстым штрихом, чем в десктопе. */
@@ -19,7 +20,7 @@ function tvNavIcon(svg: string): string {
 
 export type TvNavItem =
   | { id: string; href: string; label: string; icon: string }
-  | { id: string; action: 'settings'; label: string; icon: string };
+  | { id: string; action: 'settings' | 'profile'; label: string; icon: string };
 
 export const TV_NAV_ITEMS: TvNavItem[] = [
   { id: 'home', href: '/', label: 'Главная', icon: tvNavIcon(iconHome(TV_ICON_SIZE)) },
@@ -44,6 +45,13 @@ export const TV_NAV_ITEMS: TvNavItem[] = [
     ),
   },
 ];
+
+export const TV_PROFILE_NAV_ITEM: TvNavItem = {
+  id: 'profile',
+  action: 'profile',
+  label: 'Профиль',
+  icon: tvNavIcon(iconUser(TV_ICON_SIZE)),
+};
 
 /** Main TV shell routes — each has a matching `*.tv.svelte` view. */
 export const TV_SHELL_PATHS = new Set([

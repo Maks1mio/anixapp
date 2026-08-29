@@ -1,11 +1,11 @@
-// Hirro Sans — Android TV / leanback (VITE_TV_MODE=1 only, see main.ts)
+// Hirro Sans — подключается из tv.scss, чтобы @font-face был в основном CSS, а не в позднем чанке.
 
 @font-face {
   font-family: 'Hirro Sans';
   src: url('../assets/fonts/Hirro Sans Thin.ttf') format('truetype');
   font-weight: 100;
   font-style: normal;
-  font-display: swap;
+  font-display: block;
 }
 
 @font-face {
@@ -13,7 +13,7 @@
   src: url('../assets/fonts/Hirro Sans Light.ttf') format('truetype');
   font-weight: 300;
   font-style: normal;
-  font-display: swap;
+  font-display: block;
 }
 
 @font-face {
@@ -21,7 +21,7 @@
   src: url('../assets/fonts/Hirro Sans Regular.ttf') format('truetype');
   font-weight: 400;
   font-style: normal;
-  font-display: swap;
+  font-display: block;
 }
 
 @font-face {
@@ -29,7 +29,7 @@
   src: url('../assets/fonts/Hirro Sans Medium.ttf') format('truetype');
   font-weight: 500;
   font-style: normal;
-  font-display: swap;
+  font-display: block;
 }
 
 @font-face {
@@ -37,7 +37,7 @@
   src: url('../assets/fonts/Hirro Sans Semibold.ttf') format('truetype');
   font-weight: 600;
   font-style: normal;
-  font-display: swap;
+  font-display: block;
 }
 
 @font-face {
@@ -45,7 +45,7 @@
   src: url('../assets/fonts/Hirro Sans Bold.ttf') format('truetype');
   font-weight: 700;
   font-style: normal;
-  font-display: swap;
+  font-display: block;
 }
 
 @font-face {
@@ -53,5 +53,5 @@
   src: url('../assets/fonts/Hirro Sans Black.ttf') format('truetype');
   font-weight: 900;
   font-style: normal;
-  font-display: swap;
+  font-display: block;
 }

@@ -1,5 +1,8 @@
 import { isTvMode } from '../platform/tv';
-import { isTvShellPath } from '../tv/nav';
+import { isTvReleasePath, tvKeepAliveKey } from '../tv/keepAlive';
+import { getPath } from '../router';
+import { scrollTvCarouselItemIntoView } from '../tv/carouselScroll';
+import { cancelTvReleaseOpen } from './tv-release-transition';
 
 const FOCUS_ATTR = 'data-tv-focus';
 const RAIL_SEL = '.tv-layout__rail';
@@ -11,9 +14,9 @@ const TV_ROW_SCROLL_SEL = '.uiv2-carousel__scroll';
 const FOCUSABLE = [
   'a[href]',
   'button:not([disabled])',
-  'input:not([disabled]):not([type=hidden])',
+  'input:not([disabled]):not([type=hidden]):not([data-tv-ime-lock])',
   'select:not([disabled])',
-  'textarea:not([disabled])',
+  'textarea:not([disabled]):not([data-tv-ime-lock])',
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
@@ -43,6 +46,7 @@ const FOCUS_PRIORITY = [
   '.watch-page__ctrl-btn',
   '.watch-page__gui-overlay button',
   'button.zh__play',
+  '.tv-release-page__play',
   '.release-card-h__link',
   '.release-card-v__link',
   '.uiv2-anime-card[role="button"]',
@@ -66,6 +70,77 @@ const CLOSE_SELECTORS = [
 let stickyFocus: HTMLElement | null = null;
 let lastContentFocus: HTMLElement | null = null;
 let railEngaged = false;
+
+/** Фокус на keep-alive слоях — восстанавливается при возврате без перезагрузки. */
+const parkedFocusByLayer = new Map<string, HTMLElement>();
+
+/** Индекс фокуса внутри каждого ряда главной (по умолчанию 0). */
+const tvHomeRowFocusIndex = new Map<string, number>();
+
+const TV_HOME_CARD_SEL = '.uiv2-anime-card[role="button"], .tv-category-see-all[role="button"]';
+
+function tvHomeRow(el: Element | null | undefined): HTMLElement | null {
+  const row = el?.closest(TV_HOME_ROW_SEL);
+  return row instanceof HTMLElement ? row : null;
+}
+
+function tvHomeRows(): HTMLElement[] {
+  const rails = document.querySelector(TV_HOME_RAILS_SEL);
+  if (!rails) return [];
+  return Array.from(rails.querySelectorAll<HTMLElement>(TV_HOME_ROW_SEL));
+}
+
+function tvHomeRowKey(row: HTMLElement): string {
+  return row.dataset.tvHomeRowId || row.getAttribute('aria-label') || '';
+}
+
+function tvHomeRowCards(row: HTMLElement): HTMLElement[] {
+  return collectFocusables(row).filter((el) => el.matches(TV_HOME_CARD_SEL));
+}
+
+function saveTvHomeRowFocus(row: HTMLElement, active: HTMLElement): void {
+  const key = tvHomeRowKey(row);
+  if (!key) return;
+  const list = tvHomeRowCards(row);
+  const idx = list.indexOf(active);
+  if (idx >= 0) tvHomeRowFocusIndex.set(key, idx);
+}
+
+function focusTvHomeRowAtSaved(row: HTMLElement): boolean {
+  const list = tvHomeRowCards(row);
+  if (!list.length) return false;
+  const key = tvHomeRowKey(row);
+  const idx = Math.min(Math.max(0, tvHomeRowFocusIndex.get(key) ?? 0), list.length - 1);
+  focusElement(list[idx]);
+  return true;
+}
+
+function moveTvHomeRowVertical(active: HTMLElement, dir: 'up' | 'down'): boolean {
+  if (!active.closest(TV_HOME_RAILS_SEL)) return false;
+
+  const rows = tvHomeRows();
+  if (!rows.length) return false;
+
+  const currentRow = tvHomeRow(active);
+  if (currentRow) saveTvHomeRowFocus(currentRow, active);
+
+  if (!currentRow) {
+    if (dir === 'down') return focusTvHomeRowAtSaved(rows[0]);
+    return false;
+  }
+
+  const rowIdx = rows.indexOf(currentRow);
+  if (rowIdx < 0) return false;
+
+  const nextIdx = dir === 'down' ? rowIdx + 1 : rowIdx - 1;
+  if (nextIdx < 0 || nextIdx >= rows.length) return false;
+
+  return focusTvHomeRowAtSaved(rows[nextIdx]);
+}
+
+function isTvHomeCarouselCard(el: HTMLElement): boolean {
+  return el.matches(TV_HOME_CARD_SEL) && !!el.closest(TV_HOME_RAILS_SEL);
+}
 
 function setRailEngaged(engaged: boolean): void {
   if (railEngaged === engaged) return;
@@ -108,6 +183,14 @@ function contentFocusables(): HTMLElement[] {
   const main = document.querySelector(MAIN_SEL);
   if (main) return collectFocusables(main);
   return collectFocusables(document).filter((el) => !isInRail(el));
+}
+
+/** Только фокусируемые элементы активного TV-слоя (keep-alive). */
+function activeContentFocusables(): HTMLElement[] {
+  return contentFocusables().filter((el) => {
+    const layer = el.closest('.tv-route-layer');
+    return !(layer instanceof HTMLElement) || layer.classList.contains('tv-route-layer--active');
+  });
 }
 
 function railFocusables(): HTMLElement[] {
@@ -187,40 +270,8 @@ function preferredTarget(list: HTMLElement[]): HTMLElement | null {
   return null;
 }
 
-function getRailRight(): number {
-  const rail = document.querySelector('.tv-layout__rail');
-  return rail?.getBoundingClientRect().right ?? 0;
-}
-
 function scrollCarouselItemIntoView(el: HTMLElement): void {
-  const scroll = el.closest(TV_ROW_SCROLL_SEL);
-  if (!(scroll instanceof HTMLElement)) return;
-
-  const item = el.closest('.uiv2-carousel__item');
-  const target = item instanceof HTMLElement ? item : el;
-  const scrollRect = scroll.getBoundingClientRect();
-  const targetRect = target.getBoundingClientRect();
-  const padLeft = 16;
-  const padRight = 16;
-  const railRight = getRailRight();
-  const minLeft = railRight > 0 ? railRight + padLeft : scrollRect.left + padLeft;
-
-  let delta = 0;
-
-  if (targetRect.right > scrollRect.right - padRight) {
-    delta = targetRect.right - scrollRect.right + padRight;
-  } else if (targetRect.left < minLeft) {
-    delta = targetRect.left - minLeft;
-  } else if (targetRect.left < scrollRect.left + padLeft) {
-    delta = targetRect.left - (scrollRect.left + padLeft);
-  }
-
-  if (Math.abs(delta) > 1) {
-    scroll.scrollTo({
-      left: scroll.scrollLeft + delta,
-      behavior: 'smooth',
-    });
-  }
+  scrollTvCarouselItemIntoView(el);
 }
 
 function scrollHomeRowIntoView(el: HTMLElement): boolean {
@@ -235,15 +286,19 @@ function scrollHomeRowIntoView(el: HTMLElement): boolean {
   return true;
 }
 
-function focusElement(el: HTMLElement, sticky = false): void {
+function focusElement(el: HTMLElement, sticky = false, preserveScroll = false): void {
   document.querySelectorAll(`[${FOCUS_ATTR}]`).forEach((node) => node.removeAttribute(FOCUS_ATTR));
   el.setAttribute(FOCUS_ATTR, 'true');
   el.focus({ preventScroll: true });
-  if (!isInRail(el)) {
+  if (!isInRail(el) && !preserveScroll) {
     const onHomeRails = scrollHomeRowIntoView(el);
     scrollCarouselItemIntoView(el);
     if (!onHomeRails) {
       el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+    }
+    const homeRow = tvHomeRow(el);
+    if (homeRow && isTvHomeCarouselCard(el)) {
+      saveTvHomeRowFocus(homeRow, el);
     }
   }
   stickyFocus = sticky ? el : null;
@@ -259,7 +314,7 @@ function focusActiveRailItem(): boolean {
 }
 
 function focusDefaultContent(): boolean {
-  const list = contentFocusables();
+  const list = activeContentFocusables();
   if (!list.length) return false;
   const restore = lastContentFocus && list.includes(lastContentFocus) ? lastContentFocus : null;
   focusElement(restore ?? preferredTarget(list) ?? list[0]);
@@ -267,7 +322,9 @@ function focusDefaultContent(): boolean {
 }
 
 export function returnTvFocusToContent(): void {
-  window.setTimeout(() => focusDefaultContent(), 0);
+  window.setTimeout(() => {
+    if (!focusTvPageContent()) scheduleFocusTvPageContent(20);
+  }, 0);
 }
 
 function moveWithin(list: HTMLElement[], active: HTMLElement, dir: 'up' | 'down' | 'left' | 'right'): boolean {
@@ -289,19 +346,54 @@ function moveWithin(list: HTMLElement[], active: HTMLElement, dir: 'up' | 'down'
   return true;
 }
 
+function focusTvReleaseContent(): boolean {
+  const layer = document.querySelector('.tv-route-layer--active .tv-release-page');
+  if (!layer) return false;
+
+  const play = layer.querySelector<HTMLElement>('.tv-release-page__play:not([disabled])');
+  if (play) {
+    focusElement(play);
+    return true;
+  }
+
+  const chip = layer.querySelector<HTMLElement>('.tv-release-page__chip');
+  if (chip) {
+    focusElement(chip);
+    return true;
+  }
+
+  return false;
+}
+
+export function focusTvReleasePage(): void {
+  scheduleFocusTvPageContent(30);
+}
+
+function focusTvPageContent(): boolean {
+  setRailEngaged(false);
+
+  if (isTvReleasePath(getPath()) && focusTvReleaseContent()) {
+    return true;
+  }
+
+  return focusDefaultContent();
+}
+
+export function scheduleFocusTvPageContent(maxTries = 40): void {
+  if (!isTvMode()) return;
+
+  let tries = 0;
+  const attempt = () => {
+    if (focusTvPageContent()) return;
+    tries += 1;
+    if (tries < maxTries) window.requestAnimationFrame(attempt);
+  };
+
+  window.requestAnimationFrame(attempt);
+}
+
 function ensureInitialFocus(): void {
-  if (document.querySelector(MAIN_SEL) && isTvShellPath(location.pathname)) {
-    if (focusDefaultContent()) return;
-  }
-
-  const list = contentFocusables();
-  if (list.length) {
-    focusElement(preferredTarget(list) ?? list[0], true);
-    return;
-  }
-
-  const rail = railFocusables();
-  if (rail.length) focusActiveRailItem();
+  scheduleFocusTvPageContent(40);
 }
 
 function moveFocus(dir: 'up' | 'down' | 'left' | 'right'): boolean {
@@ -318,6 +410,9 @@ function moveFocus(dir: 'up' | 'down' | 'left' | 'right'): boolean {
       const rowMove = moveWithinRowOrEdge(list, active, dir);
       if (rowMove === 'moved' || rowMove === 'edge') return true;
     }
+    if (dir === 'up' || dir === 'down') {
+      if (moveTvHomeRowVertical(active, dir)) return true;
+    }
     return moveWithin(list, active, dir);
   }
 
@@ -332,7 +427,7 @@ function moveFocus(dir: 'up' | 'down' | 'left' | 'right'): boolean {
   }
 
   if (isInMain(active) || document.querySelector(MAIN_SEL)) {
-    const list = contentFocusables();
+    const list = activeContentFocusables();
     if (!list.length) {
       if (dir === 'left') return focusActiveRailItem();
       return false;
@@ -355,10 +450,14 @@ function moveFocus(dir: 'up' | 'down' | 'left' | 'right'): boolean {
       if (rowMove === 'moved' || rowMove === 'edge') return true;
     }
 
+    if (dir === 'up' || dir === 'down') {
+      if (moveTvHomeRowVertical(active, dir)) return true;
+    }
+
     return moveWithin(list, active, dir);
   }
 
-  const fallback = contentFocusables();
+  const fallback = activeContentFocusables();
   if (!fallback.length) return false;
   if (!active || active === document.body || !fallback.includes(active)) {
     ensureInitialFocus();
@@ -405,16 +504,14 @@ function observeDom(): void {
         return;
       }
 
-      if (railEngaged) return;
-
       const active = document.activeElement;
       if (isInMain(active)) return;
       if (isInRail(active)) {
-        focusDefaultContent();
+        if (!railEngaged) scheduleFocusTvPageContent(20);
         return;
       }
       if (!active || active === document.body) {
-        ensureInitialFocus();
+        scheduleFocusTvPageContent(20);
       }
     }, 150);
   }).observe(document.body, { childList: true, subtree: true });
@@ -456,18 +553,100 @@ function handleBack(): void {
     return;
   }
 
+  void exitTvApp();
+}
+
+async function exitTvApp(): Promise<void> {
+  try {
+    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    if (cap?.isNativePlatform?.()) {
+      const { App } = await import('@capacitor/app');
+      await App.exitApp();
+      return;
+    }
+  } catch {
+    /* ignore */
+  }
   window.electron?.window?.close?.();
 }
 
+async function bindCapacitorBackButton(): Promise<void> {
+  try {
+    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    if (!cap?.isNativePlatform?.()) return;
+    const { App } = await import('@capacitor/app');
+    await App.addListener('backButton', () => {
+      handleBack();
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
+function currentRoutePath(): string {
+  return getPath();
+}
+
+function parkActiveLayerFocus(): void {
+  const focused = document.querySelector<HTMLElement>(`[${FOCUS_ATTR}="true"]`);
+  if (!focused || isInRail(focused)) return;
+  const layer = focused.closest('[data-tv-keep]');
+  if (!(layer instanceof HTMLElement)) return;
+  const key = layer.dataset.tvKeep;
+  if (!key) return;
+  parkedFocusByLayer.set(key, focused);
+  lastContentFocus = focused;
+}
+
+function restoreParkedFocus(path: string): boolean {
+  const key = tvKeepAliveKey(path);
+  if (!key) return false;
+  const parked = parkedFocusByLayer.get(key);
+  if (!parked || !parked.isConnected) {
+    parkedFocusByLayer.delete(key);
+    return false;
+  }
+  const layer = parked.closest('[data-tv-keep]');
+  if (!(layer instanceof HTMLElement) || layer.dataset.tvKeep !== key) return false;
+  if (!layer.classList.contains('tv-route-layer--active')) return false;
+  focusElement(parked, false, true);
+  return true;
+}
+
+function onBeforeTvNavigate(): void {
+  parkActiveLayerFocus();
+}
+
+function destinationLayerReady(path: string): boolean {
+  const key = tvKeepAliveKey(path);
+  if (key) {
+    return !!document.querySelector(`.tv-route-layer--active[data-tv-keep="${key}"]`);
+  }
+  return !!document.querySelector(
+    '.tv-route-layer--active .tv-release-page, .tv-route-layer--active .tv-page',
+  );
+}
+
+function onTvNavigate(): void {
+  cancelTvReleaseOpen();
+  setRailEngaged(false);
+  const path = currentRoutePath();
+
+  const settle = (tries = 0) => {
+    if (!destinationLayerReady(path) && tries < 24) {
+      window.requestAnimationFrame(() => settle(tries + 1));
+      return;
+    }
+    if (restoreParkedFocus(path)) return;
+    scheduleFocusTvPageContent(40);
+  };
+
+  window.requestAnimationFrame(() => settle());
+}
+
 function watchRouteChanges(): void {
-  let last = location.pathname + location.search;
-  window.setInterval(() => {
-    const next = location.pathname + location.search;
-    if (next === last) return;
-    last = next;
-    setRailEngaged(false);
-    window.setTimeout(ensureInitialFocus, 600);
-  }, 400);
+  window.addEventListener('anix:beforeNavigate', onBeforeTvNavigate);
+  window.addEventListener('anix:navigate', onTvNavigate);
 }
 
 function bindBackKeys(): void {
@@ -519,6 +698,7 @@ export function initTvNavigation(): void {
   bindBackKeys();
   observeDom();
   watchRouteChanges();
+  void bindCapacitorBackButton();
 
   let attempts = 0;
   const boot = window.setInterval(() => {
@@ -529,7 +709,7 @@ export function initTvNavigation(): void {
       return;
     }
     if (contentFocusables().length) {
-      ensureInitialFocus();
+      scheduleFocusTvPageContent(40);
       window.clearInterval(boot);
       return;
     }

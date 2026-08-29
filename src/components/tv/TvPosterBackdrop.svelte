@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { isCapacitorNative } from '../../native/anix-api-native';
 
   const CARD_SEL = '.uiv2-anime-card:not(.tv-category-see-all)';
   const POSTER_IMG_SEL = '.uiv2-anime-card__poster img';
@@ -81,7 +82,11 @@
     if (fromCard && fromCard !== toCard) syncFromFocus();
   }
 
+  const skipBackdrop = isCapacitorNative();
+
   onMount(() => {
+    if (skipBackdrop) return;
+
     const observer = new MutationObserver(syncFromFocus);
     observer.observe(document.body, {
       subtree: true,
@@ -105,6 +110,7 @@
   });
 </script>
 
+{#if !skipBackdrop}
 <div
   class="tv-layout__hero-bg"
   class:tv-layout__hero-bg--visible={visible && !!activeUrl}
@@ -130,3 +136,4 @@
   {/if}
   <div class="tv-layout__hero-bg-scrim"></div>
 </div>
+{/if}

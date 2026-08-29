@@ -162,6 +162,13 @@ contextBridge.exposeInMainWorld('electron', {
   togglePlayerAlwaysOnTop: () => ipcRenderer.invoke('player:toggleAlwaysOnTop'),
   isPlayerOpen: () => ipcRenderer.invoke('player:isOpen'),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+  startTvLanLogin: () => ipcRenderer.invoke('tvLan:start'),
+  stopTvLanLogin: () => ipcRenderer.invoke('tvLan:stop'),
+  onTvLanCredentials: (cb) => {
+    const listener = (_event, detail) => cb(detail);
+    ipcRenderer.on('tvLan:credentials', listener);
+    return () => ipcRenderer.removeListener('tvLan:credentials', listener);
+  },
   setExtraVideoHosts: (hosts) => ipcRenderer.invoke('video:setExtraHosts', hosts),
   addExtraVideoHosts: (hosts) => ipcRenderer.invoke('video:addExtraHosts', hosts),
   fetchCdnJson: (url) => ipcRenderer.invoke('cdn:fetchJson', url),

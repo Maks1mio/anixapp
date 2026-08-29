@@ -1,5 +1,6 @@
 <script lang="ts">
   import { iconEye, iconEyeOff } from '../icons';
+  import { tick } from 'svelte';
 
   type HintTone = 'default' | 'error' | 'ok';
 
@@ -17,6 +18,8 @@
     revealable?: boolean;
     multiline?: boolean;
     rows?: number;
+    /** TV: клавиатура только по OK/клику, не при фокусе пульта */
+    tvImeLock?: boolean;
     hint?: string;
     hintTone?: HintTone;
     error?: boolean;
@@ -46,19 +49,59 @@
     id = `uiv2-field-${Math.random().toString(36).slice(2, 9)}`,
     class: className = '',
     oninput,
+    tvImeLock = false,
   }: Props = $props();
 
   let focused = $state(false);
   let revealed = $state(false);
+  let imeOpen = $state(false);
+  let inputEl = $state<HTMLInputElement | HTMLTextAreaElement | null>(null);
+
+  const locked = $derived(tvImeLock && !imeOpen && !disabled);
 
   const floated = $derived(focused || String(value ?? '').length > 0);
   const inputType = $derived(
     revealable ? (revealed ? 'text' : 'password') : type,
   );
   const hintId = $derived(hint ? `${id}-hint` : undefined);
+
+  async function openIme() {
+    if (disabled || !tvImeLock) return;
+    imeOpen = true;
+    focused = true;
+    await tick();
+    inputEl?.focus();
+  }
+
+  function onInputFocus() {
+    if (tvImeLock && !imeOpen) {
+      inputEl?.blur();
+      const hit = inputEl
+        ?.closest('.uiv2-outlined-field')
+        ?.querySelector('.uiv2-outlined-field__ime-hit');
+      if (hit instanceof HTMLElement) hit.focus();
+      return;
+    }
+    focused = true;
+  }
+
+  function onInputBlur() {
+    focused = false;
+    if (tvImeLock) imeOpen = false;
+  }
+
+  function onInvalid(e: Event) {
+    if (!tvImeLock) return;
+    e.preventDefault();
+    void openIme();
+  }
 </script>
 
-<div class="uiv2-outlined-wrap {className}">
+<div
+  class="uiv2-outlined-wrap {className}"
+  class:uiv2-outlined-wrap--tv-lock={tvImeLock}
+  class:uiv2-outlined-wrap--ime-closed={locked}
+>
   <div
     class="uiv2-outlined-field"
     class:uiv2-outlined-field--focused={focused}
@@ -67,9 +110,21 @@
     class:uiv2-outlined-field--revealable={revealable}
     class:uiv2-outlined-field--error={error}
     class:uiv2-outlined-field--multiline={multiline}
+    class:uiv2-outlined-field--tv-lock={locked}
   >
+    {#if locked}
+      <button
+        type="button"
+        class="uiv2-outlined-field__ime-hit"
+        aria-label={`${label}. Нажмите OK, чтобы ввести`}
+        onfocus={() => { focused = true; }}
+        onblur={() => { focused = false; }}
+        onclick={() => { void openIme(); }}
+      ></button>
+    {/if}
     {#if multiline}
       <textarea
+        bind:this={inputEl}
         {id}
         class="uiv2-outlined-field__input uiv2-outlined-field__input--area"
         {rows}
@@ -78,30 +133,39 @@
         {required}
         {disabled}
         {spellcheck}
+        readonly={locked || undefined}
+        tabindex={locked ? -1 : undefined}
+        data-tv-ime-lock={locked ? '' : undefined}
         aria-invalid={error || undefined}
         aria-describedby={hintId}
         bind:value
-        onfocus={() => { focused = true; }}
-        onblur={() => { focused = false; }}
+        onfocus={onInputFocus}
+        onblur={onInputBlur}
+        oninvalid={onInvalid}
         oninput={oninput}
       ></textarea>
     {:else}
       <input
+        bind:this={inputEl}
         {id}
         class="uiv2-outlined-field__input"
         type={inputType}
-        {autocomplete}
-        {inputmode}
+        autocomplete={autocomplete}
+        inputmode={locked ? 'none' : inputmode}
         {name}
         {maxlength}
         {required}
         {disabled}
         {spellcheck}
+        readonly={locked || undefined}
+        tabindex={locked ? -1 : undefined}
+        data-tv-ime-lock={locked ? '' : undefined}
         aria-invalid={error || undefined}
         aria-describedby={hintId}
         bind:value
-        onfocus={() => { focused = true; }}
-        onblur={() => { focused = false; }}
+        onfocus={onInputFocus}
+        onblur={onInputBlur}
+        oninvalid={onInvalid}
         oninput={oninput}
       />
     {/if}

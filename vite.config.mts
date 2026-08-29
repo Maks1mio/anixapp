@@ -6,10 +6,14 @@ import { anixWebBridgePlugin } from './vite/anix-web-bridge-plugin.mjs';
 const devPort = Number(process.env.ANIXAPP_DEV_PORT)
   || (process.env.VITE_TV_MODE === '1' || process.env.VITE_TV_MODE === 'true' ? 5174 : 5173);
 
-export default defineConfig(({ command }) => ({
+export default defineConfig(({ command }) => {
+  const tvMode = process.env.VITE_TV_MODE === '1' || process.env.VITE_TV_MODE === 'true';
+  const outDir = process.env.ANIXAPP_OUT_DIR || 'dist';
+
+  return {
   root: __dirname,
   // Dev: absolute `/` so SPA routes (/watch, /release/…) don't 404 Vite deps.
-  // Build: `./` so Electron file:// still resolves assets.
+  // Build: `./` so Electron file:// / Capacitor still resolves assets.
   base: command === 'serve' ? '/' : './',
   appType: 'spa',
   plugins: [svelte({ preprocess: vitePreprocess() }), anixWebBridgePlugin()],
@@ -17,31 +21,36 @@ export default defineConfig(({ command }) => ({
     alias: {
       // binauralfir@0.1.2 has invalid `"exports": "BinauralFIR"` — bypass for Vite 8 / rolldown.
       binauralfir: resolve(__dirname, 'node_modules/binauralfir/dist/binaural-fir.js'),
+      ...(tvMode
+        ? { 'form-data': resolve(__dirname, 'src/native/form-data-stub.ts') }
+        : {}),
     },
   },
   optimizeDeps: {
     include: ['anixapi', 'binauralfir'],
   },
   build: {
-    outDir: 'dist',
+    outDir,
     emptyOutDir: true,
     chunkSizeWarningLimit: 3600,
-    // Vite CSS minify always uses convertTargets(cssTarget) and OVERRIDES
-    // css.lightningcss.targets. Default is Baseline (Safari 16.4), which
-    // drops unprefixed backdrop-filter so Electron shows glass without blur.
+    // LightningCSS minify: drops `px` from `calc(18px * var(--tv-ui-scale))`
+    // (invalid font-size → 16px fallback, blurry rem layout) and mangles
+    // `:global()` in .scss. esbuild keeps units and selectors intact.
+    cssMinify: 'esbuild',
     cssTarget: 'chrome150',
     rollupOptions: {
-      input: [
-        resolve(__dirname, 'index.html'),
-        resolve(__dirname, 'player.html'),
-        resolve(__dirname, 'theme-editor.html'),
-        resolve(__dirname, 'upscale-tool.html'),
-        resolve(__dirname, 'overview-video-editor.html'),
-      ],
+      input: outDir === 'dist-android'
+        ? [resolve(__dirname, 'index.html')]
+        : [
+            resolve(__dirname, 'index.html'),
+            resolve(__dirname, 'player.html'),
+            resolve(__dirname, 'theme-editor.html'),
+            resolve(__dirname, 'upscale-tool.html'),
+            resolve(__dirname, 'overview-video-editor.html'),
+          ],
     },
   },
   css: {
-    // Used by the lightningcss transformer path. Minify still follows cssTarget.
     lightningcss: {
       targets: { chrome: 150 << 16 },
     },
@@ -60,7 +69,7 @@ export default defineConfig(({ command }) => ({
     strictPort: true,
     allowedHosts: true,
     watch: {
-      ignored: ['**/release/**', '**/dist/**'],
+      ignored: ['**/release/**', '**/dist/**', '**/dist-android/**'],
     },
     proxy: {
       // Same-origin WS so phone/LAN can join lobby without hitting localhost:8787.
@@ -71,4 +80,5 @@ export default defineConfig(({ command }) => ({
       },
     },
   },
-}));
+};
+});

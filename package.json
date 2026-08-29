@@ -20,6 +20,9 @@
         "dev:tv": "cross-env VITE_TV_MODE=1 ANIXAPP_DEV_PORT=5174 vite",
         "electron:dev-tv": "concurrently -k \"cross-env VITE_TV_MODE=1 ANIXAPP_DEV_PORT=5174 vite\" \"wait-on http://127.0.0.1:5174 && cross-env NODE_ENV=development ANIXAPP_TV=1 ANIXAPP_DEV_PORT=5174 electron .\"",
         "build:tv:vite": "cross-env VITE_TV_MODE=1 vite build",
+        "build:android-tv": "node scripts/build-android-tv.mjs",
+        "emu:tv:setup": "node scripts/setup-android-tv-emu.mjs",
+        "emu:tv": "node scripts/run-android-tv-emu.mjs",
         "preview": "vite preview"
     },
     "keywords": [
@@ -30,6 +33,8 @@
     "author": "",
     "license": "MIT",
     "devDependencies": {
+        "@capacitor/android": "^8.5.0",
+        "@capacitor/cli": "^8.5.0",
         "@electron/rebuild": "^4.2.0",
         "@sveltejs/vite-plugin-svelte": "^7.3.0",
         "concurrently": "^10.0.5",
@@ -45,6 +50,8 @@
         "wait-on": "^9.1.0"
     },
     "dependencies": {
+        "@capacitor/app": "^8.1.1",
+        "@capacitor/core": "^8.5.0",
         "@xhayper/discord-rpc": "^1.3.1",
         "anime4k-webgpu": "^1.0.0",
         "anixapi": "0.3.2",

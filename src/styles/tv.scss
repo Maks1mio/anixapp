@@ -1,4 +1,5 @@
 @use 'variables' as *;
+@use 'fonts-tv';
 
 $tv-rail-collapsed: 5.25rem;
 $tv-rail-expanded: 20rem;
@@ -15,9 +16,11 @@ $tv-rail-label-gap: 0.7rem;
 $tv-rail-ease: cubic-bezier(0.22, 1, 0.36, 1);
 $tv-rail-duration: 0.42s;
 $tv-base-font-px: 18;
+$tv-card-scale: 1.3;
 
 html.tv-mode {
-  font-size: calc(#{$tv-base-font-px} * var(--tv-ui-scale, 1));
+  /* Не calc(Npx * var) — LightningCSS в build съедает px и font-size становится невалидным. */
+  font-size: #{$tv-base-font-px}px;
   --tv-ui-scale: 1;
   --font-sans: 'Hirro Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --uikit-v2-font: 'Hirro Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -25,8 +28,18 @@ html.tv-mode {
   --tv-rail-expanded-w: #{$tv-rail-expanded};
   --tv-rail-backdrop-expanded-w: #{$tv-rail-backdrop-expanded};
   --tv-rail-bg: var(--uikit-v2-bg, #{$color-bg});
+  --tv-card-scale: #{$tv-card-scale};
+  --tv-home-gutter: 0.85rem;
+  --tv-home-pad-top: #{$tv-rail-panel-pad-y};
+  --tv-home-pad-bottom: clamp(1.5rem, 3vh, 2.5rem);
+  --tv-home-content-left: calc(var(--tv-rail-collapsed-w) + var(--tv-home-gutter));
+  --tv-home-card-w: 9.75rem;
+  --tv-home-card-gap: #{0.85 * $tv-card-scale}rem;
+  --tv-home-title-size: #{1.1 * $tv-card-scale}rem;
+  --tv-home-title-gap: #{0.5 * $tv-card-scale}rem;
   font-family: var(--font-sans);
-  text-rendering: optimizeLegibility;
+  font-synthesis: none;
+  text-rendering: geometricPrecision;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   width: 100%;
@@ -180,8 +193,24 @@ html.tv-mode #app {
   flex-direction: column;
   width: var(--tv-rail-expanded-w);
   min-height: 100%;
-  padding: $tv-rail-panel-pad-y $tv-rail-panel-pad-x 1.75rem;
-  gap: 1rem;
+  height: 100%;
+  padding: $tv-rail-panel-pad-y $tv-rail-panel-pad-x 1.5rem;
+  gap: 0;
+}
+
+.tv-layout__rail-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tv-layout__rail-footer {
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding-top: 0.75rem;
 }
 
 .tv-layout__brand {
@@ -234,8 +263,9 @@ html.tv-mode #app {
   display: flex;
   flex-direction: column;
   gap: 0.28rem;
-  flex: 1;
-  min-height: 0;
+  flex: 0 1 auto;
+  width: 100%;
+  max-height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: none;
@@ -243,6 +273,10 @@ html.tv-mode #app {
   &::-webkit-scrollbar {
     display: none;
   }
+}
+
+.tv-layout__profile-panel {
+  z-index: 40;
 }
 
 .tv-layout__rail-item {
@@ -386,16 +420,45 @@ html.tv-mode .tv-layout__main .page {
   background: transparent !important;
 }
 
+.tv-route-stack {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+}
+
+.tv-route-layer {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.tv-route-layer--active {
+  visibility: visible;
+  pointer-events: auto;
+  z-index: 1;
+}
+
+html.tv-mode .tv-route-layer--active:not(:has(.tv-home)):not(:has(.tv-release-page)) .tv-page {
+  padding:
+    calc(env(safe-area-inset-top, 0px) + #{$tv-rail-panel-pad-y})
+    var(--tv-home-gutter, 0.85rem)
+    clamp(1.5rem, 3vh, 2.5rem)
+    calc(var(--tv-rail-collapsed-w) + var(--tv-home-gutter, 0.85rem));
+}
+
 // ——— TV home (leanback rows) ———
-html.tv-mode .page.page--tv:has(.tv-home) {
+html.tv-mode .page.page--tv:has(.tv-route-stack) {
   overflow: hidden !important;
   padding: 0 !important;
   height: 100%;
   min-height: 0;
 }
 
-html.tv-mode .page.page--tv:has(.tv-home) > .page__scroll,
-html.tv-mode .page.page--tv:has(.tv-home) > .uiv2-scroll-area__viewport {
+html.tv-mode .page.page--tv:has(.tv-route-stack) > .page__scroll,
+html.tv-mode .page.page--tv:has(.tv-route-stack) > .uiv2-scroll-area__viewport {
   overflow: hidden !important;
   padding: 0;
   height: 100%;
@@ -403,6 +466,7 @@ html.tv-mode .page.page--tv:has(.tv-home) > .uiv2-scroll-area__viewport {
 }
 
 .tv-home {
+  --tv-card-scale: #{$tv-card-scale};
   --tv-home-gutter: 0.85rem;
   --tv-home-pad-top: #{$tv-rail-panel-pad-y};
   --tv-home-pad-bottom: clamp(1.5rem, 3vh, 2.5rem);
@@ -430,6 +494,8 @@ html.tv-mode .page.page--tv:has(.tv-home) > .uiv2-scroll-area__viewport {
   box-sizing: border-box;
   overflow-x: hidden;
   overflow-y: auto;
+  container-type: size;
+  container-name: tv-home-rails;
   padding-top: calc(env(safe-area-inset-top, 0px) + var(--tv-home-pad-top));
   padding-bottom: var(--tv-home-pad-bottom);
   scroll-snap-type: y proximity;
@@ -449,7 +515,7 @@ html.tv-mode .page.page--tv:has(.tv-home) > .uiv2-scroll-area__viewport {
   flex-direction: column;
 }
 
-html.tv-mode .page.page--tv:has(.tv-home) .tv-page {
+html.tv-mode .page.page--tv:has(.tv-route-layer--active .tv-home) .tv-page {
   height: 100%;
   min-height: 0;
   display: flex;
@@ -466,7 +532,7 @@ html.tv-mode .page.page--tv:has(.tv-home) .tv-page {
 .tv-home__rows {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: #{1.25 * $tv-card-scale}rem;
   overflow: visible;
 }
 
@@ -484,11 +550,11 @@ html.tv-mode .page.page--tv:has(.tv-home) .tv-page {
   position: sticky;
   top: 0;
   z-index: 2;
-  margin: 0 0 0.5rem;
+  margin: 0 0 #{0.5 * $tv-card-scale}rem;
   padding:
-    0.15rem 0 0.5rem
+    #{0.15 * $tv-card-scale}rem 0 #{0.5 * $tv-card-scale}rem
     var(--tv-home-content-left);
-  font-size: 1.1rem;
+  font-size: #{1.1 * $tv-card-scale}rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--uikit-v2-text, #{$color-text});
@@ -529,26 +595,20 @@ html.tv-mode .tv-home .tv-release-carousel .release-page__carousel-scroll {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  gap: #{0.85 * $tv-card-scale}rem;
   padding:
     4px
     var(--tv-home-gutter)
-    0.25rem
+    #{0.25 * $tv-card-scale}rem
     var(--tv-home-content-left);
   scroll-padding-inline: var(--tv-home-content-left) var(--tv-home-gutter);
   overscroll-behavior-x: contain;
 }
 
-html.tv-mode .tv-home .tv-release-carousel .uiv2-carousel__item {
-  flex: 0 0 8.75rem;
-  flex-shrink: 0;
-  width: 8.75rem;
-  min-width: 8.75rem;
-}
-
 .tv-home-row__status {
   margin: 0;
   padding-left: var(--tv-home-content-left);
-  font-size: 0.95rem;
+  font-size: #{0.95 * $tv-card-scale}rem;
   color: var(--uikit-v2-muted, #{$color-text-muted});
 }
 
@@ -616,7 +676,7 @@ html.tv-mode .uiv2-carousel {
 }
 
 html.tv-mode .tv-home .uiv2-anime-card--vertical {
-  gap: 0.3rem;
+  gap: #{0.3 * $tv-card-scale}rem;
 }
 
 @property --tv-rail-dim {
@@ -640,7 +700,7 @@ html.tv-mode .tv-home .uiv2-carousel__item .tv-category-see-all {
 }
 
 html.tv-mode .tv-home .uiv2-anime-card__title {
-  font-size: 0.88rem;
+  font-size: #{0.98 * $tv-card-scale}rem;
   line-height: 1.25;
   -webkit-line-clamp: 2;
   opacity: calc((1 - var(--tv-rail-dim) * 0.91) * var(--tv-peer-opacity, 1));
@@ -655,8 +715,63 @@ html.tv-mode .tv-home .uiv2-anime-card__title {
 }
 
 html.tv-mode .tv-home .uiv2-anime-card__meta {
+  font-size: #{0.75 * $tv-card-scale}rem;
+  column-gap: #{0.35 * $tv-card-scale}rem;
+  align-items: center;
+  line-height: 1.15;
   opacity: calc((1 - var(--tv-rail-dim) * 0.91) * var(--tv-peer-opacity, 1));
   transition: opacity 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html.tv-mode .tv-home .uiv2-anime-card__meta-sep {
+  height: 1em;
+  width: auto;
+  opacity: 0.45;
+}
+
+html.tv-mode .tv-home .uiv2-anime-card__meta-text {
+  line-height: 1.15;
+}
+
+html.tv-mode .tv-home .uiv2-anime-card__score {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.14em;
+  height: auto;
+  font-size: inherit;
+  font-weight: 600;
+  line-height: 1.15;
+  color: color-mix(in srgb, var(--uiv2-anime-rating, #e8b84a) 88%, var(--uikit-v2-muted, #{$color-text-muted}));
+}
+
+html.tv-mode .tv-home .uiv2-anime-card__score-star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1em;
+  height: 1em;
+  line-height: 0;
+
+  svg {
+    display: block;
+    width: 0.9em;
+    height: 0.9em;
+  }
+}
+
+html.tv-mode .tv-home .uiv2-anime-card__score-value {
+  line-height: 1.15;
+}
+
+html.tv-mode .tv-home .uiv2-carousel__item,
+html.tv-mode .tv-category-page__item {
+  content-visibility: visible;
+}
+
+html.tv-mode .tv-home .uiv2-carousel__item[data-tv-poster-offscreen],
+html.tv-mode .tv-category-page__item[data-tv-poster-offscreen] {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 22rem;
 }
 
 html.tv-mode .tv-home .uiv2-anime-card__poster img {
@@ -710,11 +825,23 @@ html.tv-mode .tv-home .tv-release-carousel:has(
   }
 }
 
-html.tv-mode .tv-release-carousel .uiv2-carousel__item {
-  flex: 0 0 10rem;
+html.tv-mode .tv-home .tv-release-carousel .uiv2-carousel__item {
+  --tv-card-w: #{14.75 * $tv-card-scale}rem;
+  flex: 0 0 var(--tv-card-w);
   flex-shrink: 0;
-  width: 10rem;
-  min-width: 10rem;
+  width: var(--tv-card-w);
+  min-width: var(--tv-card-w);
+}
+
+@supports (width: 1cqh) {
+  html.tv-mode .tv-home .tv-release-carousel .uiv2-carousel__item {
+    /* Два ряда в высоту rails: постер 2:3 минус заголовок ряда и подпись карточки. */
+    --tv-card-w: clamp(
+      #{12.75 * $tv-card-scale}rem,
+      calc((100cqh / 2 - #{7.15 * $tv-card-scale}rem) * 2 / 3),
+      #{17.5 * $tv-card-scale}rem
+    );
+  }
 }
 
 html.tv-mode .tv-release-carousel .uiv2-anime-card--vertical {
@@ -782,8 +909,8 @@ html.tv-mode .tv-home .tv-category-see-all__poster {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.65rem;
-  padding: 0.85rem;
+  gap: #{0.65 * $tv-card-scale}rem;
+  padding: #{0.85 * $tv-card-scale}rem;
   text-align: center;
   background: linear-gradient(
     145deg,
@@ -796,16 +923,21 @@ html.tv-mode .tv-home .tv-category-see-all__icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: #{2.75 * $tv-card-scale}rem;
+  height: #{2.75 * $tv-card-scale}rem;
   border-radius: 999px;
   color: #fff;
   background: rgba(255, 255, 255, 0.16);
   border: 1px solid rgba(255, 255, 255, 0.42);
 }
 
+html.tv-mode .tv-home .tv-category-see-all__icon svg {
+  width: #{28 * $tv-card-scale}px;
+  height: #{28 * $tv-card-scale}px;
+}
+
 html.tv-mode .tv-home .tv-category-see-all__text {
-  font-size: 0.78rem;
+  font-size: #{0.78 * $tv-card-scale}rem;
   font-weight: 600;
   line-height: 1.3;
   color: #fff;
@@ -846,17 +978,40 @@ html.tv-mode .tv-home .tv-category-see-all__text {
 
 .tv-category-page__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
-  gap: 1.15rem 0.85rem;
+  grid-template-columns: repeat(auto-fill, minmax(#{10 * $tv-card-scale}rem, 1fr));
+  gap: #{1.15 * $tv-card-scale}rem #{0.85 * $tv-card-scale}rem;
 }
 
 .tv-category-page__item {
   min-width: 0;
 }
 
+html.tv-mode .tv-category-page .uiv2-anime-card__title {
+  font-size: #{0.875 * $tv-card-scale}rem;
+}
+
+html.tv-mode .tv-category-page .uiv2-anime-card__meta {
+  font-size: #{0.75 * $tv-card-scale}rem;
+  line-height: 1.15;
+  align-items: center;
+}
+
+html.tv-mode .tv-category-page .uiv2-anime-card__score {
+  font-size: inherit;
+  font-weight: 600;
+  height: auto;
+  line-height: 1.15;
+  color: color-mix(in srgb, var(--uiv2-anime-rating, #e8b84a) 88%, var(--uikit-v2-muted, #{$color-text-muted}));
+}
+
+html.tv-mode .tv-category-page .uiv2-anime-card__score-star svg {
+  width: 0.9em;
+  height: 0.9em;
+}
+
 .tv-category-page__loading {
   margin: 1rem 0 0;
-  font-size: 0.95rem;
+  font-size: #{0.95 * $tv-card-scale}rem;
   color: var(--uikit-v2-muted, #{$color-text-muted});
   text-align: center;
 }
@@ -877,4 +1032,547 @@ html.tv-mode .titlebar {
 
 html.tv-mode .layout__body {
   margin-left: 0 !important;
+}
+
+/* Android TV WebView: CSS filters (blur/brightness) лагают на Mali/PowerVR. */
+html.tv-android .tv-layout__hero-bg,
+html.tv-android .tv-layout__hero-bg-img {
+  display: none !important;
+  filter: none !important;
+}
+
+html.tv-android .tv-home .uiv2-anime-card__poster img,
+html.tv-android .tv-home .tv-category-see-all__poster {
+  filter: none !important;
+}
+
+/* ——— TV login: QR / LAN + form, no poster mosaic ——— */
+html.tv-mode .view-auth--tv {
+  background: var(--uikit-v2-bg, #{$color-bg});
+}
+
+html.tv-mode .view-auth--tv .view-auth__body {
+  padding: 2.5rem 3rem 6.5rem;
+  align-items: center;
+}
+
+html.tv-mode .view-auth--tv .view-auth__panel {
+  max-width: min(56rem, 92vw);
+}
+
+html.tv-mode .view-auth--tv .auth--v2.auth--tv {
+  max-width: min(56rem, 92vw);
+  padding: 2rem 2.15rem 1.75rem;
+}
+
+html.tv-mode .view-auth--tv .auth--tv-pair {
+  display: grid;
+  grid-template-columns: minmax(15rem, 18rem) minmax(20rem, 1fr);
+  gap: 2rem 2.25rem;
+  align-items: center;
+}
+
+html.tv-mode .view-auth--tv .auth__stack {
+  min-width: 0;
+}
+
+html.tv-mode .view-auth--tv .auth__title {
+  font-size: 2rem;
+  text-align: left;
+  animation: none;
+}
+
+html.tv-mode .view-auth--tv .auth__subtitle {
+  text-align: left;
+  font-size: 1rem;
+  margin-bottom: 1.15rem;
+}
+
+html.tv-mode .tv-auth-pair {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  text-align: center;
+}
+
+html.tv-mode .tv-auth-pair__qr svg {
+  display: block;
+  width: 14.5rem;
+  height: 14.5rem;
+  border-radius: 12px;
+}
+
+html.tv-mode .tv-auth-pair__qr-ph {
+  width: 14.5rem;
+  height: 14.5rem;
+  border-radius: 12px;
+  background: var(--uikit-v2-surface, #{$color-surface});
+  border: 1px solid var(--uikit-v2-border, #{$color-border});
+}
+
+html.tv-mode .tv-auth-pair__kicker {
+  margin: 0;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
+}
+
+html.tv-mode .tv-auth-pair__url {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  word-break: break-all;
+  color: var(--uikit-v2-text, #{$color-text});
+}
+
+html.tv-mode .tv-auth-pair__hint,
+html.tv-mode .tv-auth-pair__warn {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.4;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
+}
+
+html.tv-mode .tv-auth-pair__warn {
+  color: #e57373;
+}
+
+html.tv-mode .view-auth--tv .auth-legal--screen {
+  padding: 0.85rem 2.5rem 1.1rem;
+}
+
+html.tv-mode .uiv2-outlined-wrap--ime-closed .uiv2-outlined-field__input {
+  pointer-events: none;
+  caret-color: transparent;
+}
+
+/* ——— TV release: card → page seamless open ——— */
+.tv-release-open {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  pointer-events: none;
+}
+
+.tv-release-open__scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--uikit-v2-bg, #{$color-bg});
+  opacity: 0;
+  transition: opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tv-release-open--visible .tv-release-open__scrim {
+  opacity: 1;
+}
+
+.tv-release-open__poster {
+  position: fixed;
+  z-index: 1;
+  overflow: hidden;
+  transform-origin: top left;
+  will-change: transform, border-radius;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.uiv2-anime-card[data-tv-release-source='true'] .uiv2-anime-card__poster img {
+  opacity: 0;
+}
+
+html[data-tv-release-opening] .tv-layout__hero-bg,
+html.tv-mode:has(.tv-route-layer--active .tv-release-page) .tv-layout__hero-bg {
+  opacity: 0 !important;
+  transition: none !important;
+}
+
+html[data-tv-release-opening] .tv-release-page__kicker,
+html[data-tv-release-opening] .tv-release-page__content {
+  opacity: 0;
+}
+
+html[data-tv-release-opened='true'] .tv-release-page__kicker,
+html[data-tv-release-opened='true'] .tv-release-page__content {
+  opacity: 1;
+  transition: opacity 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ——— TV release page — same grid as home ——— */
+html.tv-mode .tv-release-page {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+html.tv-mode .tv-release-page__shell {
+  position: relative;
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  padding-top: calc(env(safe-area-inset-top, 0px) + var(--tv-home-pad-top));
+  padding-bottom: var(--tv-home-pad-bottom);
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+html.tv-mode .tv-release-page__shell > .tv-page__status {
+  margin: 0;
+  padding-left: var(--tv-home-content-left);
+}
+
+html.tv-mode .tv-release-page__backdrop {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 28%;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center top;
+    filter: blur(28px) saturate(1.08) brightness(0.48);
+    transform: scale(1.08);
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      var(--uikit-v2-bg, #{$color-bg}) 0%,
+      color-mix(in srgb, var(--uikit-v2-bg, #{$color-bg}) 55%, transparent) 42%,
+      color-mix(in srgb, var(--uikit-v2-bg, #{$color-bg}) 18%, transparent) 100%
+    ),
+    linear-gradient(
+      180deg,
+      transparent 0%,
+      color-mix(in srgb, var(--uikit-v2-bg, #{$color-bg}) 42%, transparent) 70%,
+      var(--uikit-v2-bg, #{$color-bg}) 100%
+    );
+  }
+}
+
+html.tv-mode .tv-release-page__kicker {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 var(--tv-home-title-gap);
+  padding:
+    #{0.15 * $tv-card-scale}rem
+    var(--tv-home-gutter)
+    var(--tv-home-title-gap)
+    var(--tv-home-content-left);
+  font-size: var(--tv-home-title-size);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--uikit-v2-text, #{$color-text});
+  text-shadow:
+    0 1px 10px rgba(0, 0, 0, 0.75),
+    0 2px 18px rgba(0, 0, 0, 0.45);
+}
+
+html.tv-mode .tv-release-page__kicker-year {
+  font-weight: 600;
+  color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 72%, transparent);
+}
+
+html.tv-mode .tv-release-page__layout {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: var(--tv-home-card-w) minmax(0, 1fr);
+  gap: var(--tv-home-card-gap);
+  align-items: start;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px var(--tv-home-gutter) 0 var(--tv-home-content-left);
+}
+
+html.tv-mode .tv-release-page__aside {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  width: var(--tv-home-card-w);
+}
+
+html.tv-mode .tv-release-page__poster {
+  width: var(--tv-home-card-w);
+  aspect-ratio: 2 / 3;
+  border-radius: var(--uiv2-anime-radius, 12px);
+  overflow: hidden;
+  background: var(--uikit-v2-surface, #{$color-surface});
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+html.tv-mode .tv-release-page__poster-ph {
+  width: 100%;
+  height: 100%;
+  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 8%, transparent);
+}
+
+html.tv-mode .tv-release-page__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  padding-top: 0.15rem;
+}
+
+html.tv-mode .tv-release-page__hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1.25rem 1.5rem;
+  align-items: start;
+}
+
+html.tv-mode .tv-release-page__info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+html.tv-mode .tv-release-page__head {
+  min-width: 0;
+}
+
+html.tv-mode .tv-release-page__title {
+  margin: 0;
+  font-size: clamp(1.7rem, 2.4vw, 2.35rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--uikit-v2-text, #{$color-text});
+}
+
+html.tv-mode .tv-release-page__title-year {
+  font-weight: 600;
+  color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 72%, transparent);
+}
+
+html.tv-mode .tv-release-page__subtitle {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.7rem;
+  font-size: 1rem;
+  line-height: 1.35;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
+}
+
+html.tv-mode .tv-release-page__age {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.1rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
+  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 10%, transparent);
+}
+
+html.tv-mode .tv-release-page__age--restricted {
+  color: #ffb4b4;
+  background: color-mix(in srgb, #ff6b6b 18%, transparent);
+}
+
+html.tv-mode .tv-release-page__desc {
+  max-width: 46rem;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 88%, transparent);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+
+  p {
+    margin: 0;
+  }
+}
+
+html.tv-mode .tv-release-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.7rem 0.8rem;
+}
+
+html.tv-mode .tv-release-page__play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: 3.15rem;
+  padding: 0 1.5rem;
+  border: 0;
+  border-radius: 0.85rem;
+  background: var(--uikit-v2-accent, #{$color-accent});
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: transform 0.18s ease, filter 0.18s ease, opacity 0.18s ease;
+
+  &:hover:not(:disabled),
+  &[data-tv-focus='true'] {
+    filter: brightness(1.06);
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+html.tv-mode .tv-release-page__play-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+html.tv-mode .tv-release-page__chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 3.15rem;
+  min-width: 3.15rem;
+  padding: 0 1rem;
+  border: 0;
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--uikit-v2-surface, #{$color-surface}) 88%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 14%, transparent);
+  color: var(--uikit-v2-text, #{$color-text});
+  cursor: pointer;
+  transition: background 0.18s ease, box-shadow 0.18s ease;
+
+  &[data-tv-focus='true'],
+  &:hover {
+    background: color-mix(in srgb, var(--uikit-v2-surface, #{$color-surface}) 100%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 28%, transparent);
+  }
+}
+
+html.tv-mode .tv-release-page__chip--active {
+  color: var(--uikit-v2-accent, #{$color-accent});
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 45%, transparent);
+}
+
+html.tv-mode .tv-release-page__rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  padding: 0.55rem 0.85rem;
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--uikit-v2-surface, #{$color-surface}) 72%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 10%, transparent);
+}
+
+html.tv-mode .tv-release-page__rating-score {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.85rem;
+  min-height: 2.85rem;
+  border-radius: 0.65rem;
+  font-size: 1.35rem;
+  font-weight: 750;
+  line-height: 1;
+  background: var(--tv-release-rating-bg, rgba(255, 255, 255, 0.12));
+  color: var(--tv-release-rating-fg, #f5f5f5);
+}
+
+html.tv-mode .tv-release-page__rating-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.9rem;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
+}
+
+html.tv-mode .tv-release-page__about {
+  padding-top: 0.15rem;
+}
+
+html.tv-mode .tv-release-page__about-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.15rem;
+  font-weight: 650;
+  color: var(--uikit-v2-text, #{$color-text});
+}
+
+html.tv-mode .tv-release-page__meta {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 2.5rem;
+  row-gap: 0.45rem;
+}
+
+html.tv-mode .tv-release-page__meta-row {
+  display: grid;
+  grid-template-columns: 9.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: baseline;
+  min-width: 0;
+
+  dt {
+    margin: 0;
+    font-size: 0.92rem;
+    color: var(--uikit-v2-muted, #{$color-text-muted});
+  }
+
+  dd {
+    margin: 0;
+    font-size: 0.98rem;
+    line-height: 1.35;
+    color: var(--uikit-v2-text, #{$color-text});
+    min-width: 0;
+  }
+}
+
+html.tv-mode .tv-release-page__shell--skeleton .tv-release-page__main {
+  min-height: 18rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tv-release-open__scrim,
+  html[data-tv-release-opened='true'] .tv-release-page__content {
+    transition: none !important;
+  }
 }

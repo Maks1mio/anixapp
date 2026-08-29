@@ -1,6 +1,8 @@
 <script lang="ts">
   import { navigate } from '../stores/navigation';
   import { requireAuth } from '../stores/auth';
+  import { isTvMode } from '../platform/tv';
+  import { openTvReleaseFromCard } from '../services/tv-release-transition';
   import { toCdnProxyUrl } from '../utils/posterUrl';
   import { iconTrash2 } from './icons';
   import UiV2AnimeCard, {
@@ -59,7 +61,15 @@
   function openRelease(e: MouseEvent) {
     if (disableOpen || !id) return;
     e.preventDefault();
-    navigate(`/release/${id}`);
+    const path = `/release/${id}`;
+    if (isTvMode()) {
+      const card = (e.currentTarget as HTMLElement).closest('.uiv2-anime-card');
+      if (card instanceof HTMLElement) {
+        openTvReleaseFromCard(card, id, toCdnProxyUrl(data.poster || ''), title);
+        return;
+      }
+    }
+    navigate(path);
   }
 
   function handleFavoriteChange(next: boolean) {

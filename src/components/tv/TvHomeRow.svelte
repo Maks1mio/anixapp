@@ -12,6 +12,8 @@
     items?: ReleaseCardData[];
     status?: TvHomeRowStatus;
     skeletonCount?: number;
+    cardVariant?: 'default' | 'history';
+    showSeeAll?: boolean;
   }
 
   let {
@@ -19,11 +21,13 @@
     tabId,
     items = [],
     status = 'loading',
-    skeletonCount = 10,
+    skeletonCount = 7,
+    cardVariant = 'default',
+    showSeeAll = true,
   }: Props = $props();
 </script>
 
-<section class="tv-home-row" aria-label={label} data-tv-home-row>
+<section class="tv-home-row" aria-label={label} data-tv-home-row data-tv-home-row-id={tabId ?? label}>
   <h2 class="tv-home-row__title">{label}</h2>
 
   {#if status === 'loading'}
@@ -34,14 +38,14 @@
     <p class="tv-home-row__status">Пока пусто</p>
   {:else}
     <UiV2ReleaseCarousel measureKey={`${tabId}-${items.length}`} class="tv-release-carousel">
-      {#if tabId}
+      {#if tabId && showSeeAll}
         <div class="uiv2-carousel__item">
           <TvCategorySeeAllTile {label} {tabId} />
         </div>
       {/if}
       {#each items as item (item.id)}
         <div class="uiv2-carousel__item" data-tv-release-id={item.id}>
-          <ReleaseCardUiV2 data={item} variant="vertical" showMenu={false} />
+          <ReleaseCardUiV2 data={item} variant="vertical" showMenu={false} {cardVariant} />
         </div>
       {/each}
     </UiV2ReleaseCarousel>

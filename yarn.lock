@@ -587,9 +587,9 @@
     ws "^8.19.0"
 
 "@xmldom/xmldom@^0.8.13", "@xmldom/xmldom@^0.8.8":
-  version "0.8.14"
-  resolved "https://registry.yarnpkg.com/@xmldom/xmldom/-/xmldom-0.8.14.tgz#96c3cbb30cb305f8f81d1d5965bf03e9ab5d6af6"
-  integrity sha512-T4EDRUBVZYRldYApjEJiU0e1stYWaRAX7CuSnKzrpwdZKo53zGV8/pqfzV6FfwNl9YThD2OumQYvqtvjvgG7aQ==
+  version "0.8.15"
+  resolved "https://registry.yarnpkg.com/@xmldom/xmldom/-/xmldom-0.8.15.tgz#71ebf80729e4e95221d519ac9b1e1eaea7784907"
+  integrity sha512-/5NV/vDALVFDXgLmfsy9TRCBlKwO2LNBFzpzvb9iIj+jR+eSc6DLYYvVOdivT/jm7MtU6TebYuRmzEOI7w40UA==
 
 abbrev@^4.0.0:
   version "4.0.0"

@@ -111,7 +111,6 @@
     title={props.title}
     dubberName={props.dubberName}
     sourceName={props.sourceName}
-    useVideo={props.useVideo}
     episodes={props.episodes}
     dubbers={props.dubbers}
     sources={props.sources}

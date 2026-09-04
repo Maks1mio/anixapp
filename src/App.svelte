@@ -24,7 +24,7 @@
   import { initTabNavigation, recordTabNavigation } from './stores/tab-navigation';
   import { initTheme, applyThemeById } from './services/themes';
   import { initAnixbackEndpoint } from './services/anixback-endpoint';
-  import { getCurrentRoomId, getCurrentRoomCode, getCurrentParticipants, pushCommand, voteOnProposal, notifyLobbyBufferingStart, sendLobbyChat } from './services/lobby-state';
+  import { getCurrentRoomId, getCurrentRoomCode, getCurrentParticipants, pushCommand, voteOnProposal, notifyLobbyBufferingStart, notifyLobbyBufferingEnd, catchUpLobbyPlayback, sendLobbyChat, notifyFluoPlayerSynced, kickLobbyParticipant, transferLobbyHost } from './services/lobby-state';
   import {
     createLobbyRoomAndOpenPlayer,
     joinLobbyRoomAndOpenPlayer,
@@ -327,6 +327,40 @@
       (window.electron as any)?.discordUpdate?.(d);
     }
 
+    /** Последний proposal для плеера — повторно шлём, если окно открылось после события. */
+    let lastProposalPlayerPayload: Record<string, unknown> | null = null;
+    /** История чата для плеера при join mid-room */
+    let lastChatHistoryForPlayer: unknown[] | null = null;
+
+    function forwardProposalToPlayer(payload: Record<string, unknown>) {
+      const t = String(payload.type ?? '');
+      if (t === 'vote' || t === 'waiting') {
+        lastProposalPlayerPayload = payload;
+      } else if (t === 'accepted' || t === 'rejected') {
+        lastProposalPlayerPayload = null;
+      }
+      window.electron?.sendProposalToPlayer?.(payload);
+      if (!window.electron) window.dispatchEvent(new CustomEvent('lobby:proposal', { detail: payload }));
+    }
+
+    function flushPendingProposalToPlayer() {
+      if (!lastProposalPlayerPayload) return;
+      window.electron?.sendProposalToPlayer?.(lastProposalPlayerPayload);
+      if (!window.electron) {
+        window.dispatchEvent(new CustomEvent('lobby:proposal', { detail: lastProposalPlayerPayload }));
+      }
+    }
+
+    function flushChatHistoryToPlayer() {
+      if (!lastChatHistoryForPlayer?.length) return;
+      window.electron?.sendLobbyChatHistoryToPlayer?.(lastChatHistoryForPlayer);
+      if (!window.electron) {
+        window.dispatchEvent(new CustomEvent('lobby:chatHistory', {
+          detail: { messages: lastChatHistoryForPlayer },
+        }));
+      }
+    }
+
     const handlers: [string, EventListener][] = [
       ['anix:offline', (() => {
         setConnectionProblem();
@@ -337,27 +371,33 @@
       }) as EventListener],
 
       ['lobby:proposalSentLocal', ((e: CustomEvent) => {
-        const payload = { type: 'waiting', newPlayback: e.detail?.newPlayback ?? null };
-        window.electron?.sendProposalToPlayer?.(payload);
-        if (!window.electron) window.dispatchEvent(new CustomEvent('lobby:proposal', { detail: payload }));
+        forwardProposalToPlayer({ type: 'waiting', newPlayback: e.detail?.newPlayback ?? null });
       }) as EventListener],
 
       ['lobby:proposalNew', ((e: CustomEvent) => {
-        const payload = { type: 'vote', proposalId: e.detail?.proposalId, proposerLogin: e.detail?.proposerLogin ?? 'Участник', playback: e.detail?.playback ?? null };
-        window.electron?.sendProposalToPlayer?.(payload);
-        if (!window.electron) window.dispatchEvent(new CustomEvent('lobby:proposal', { detail: payload }));
+        forwardProposalToPlayer({
+          type: 'vote',
+          proposalId: e.detail?.proposalId,
+          proposerLogin: e.detail?.proposerLogin ?? 'Участник',
+          playback: e.detail?.playback ?? null,
+          expiresAt: typeof e.detail?.expiresAt === 'number' ? e.detail.expiresAt : undefined,
+        });
       }) as EventListener],
 
       ['lobby:proposalAccepted', ((e: CustomEvent) => {
-        const payload = { type: 'accepted', proposalId: e.detail?.proposalId, playback: e.detail?.playback ?? null };
-        window.electron?.sendProposalToPlayer?.(payload);
-        if (!window.electron) window.dispatchEvent(new CustomEvent('lobby:proposal', { detail: payload }));
+        forwardProposalToPlayer({
+          type: 'accepted',
+          proposalId: e.detail?.proposalId,
+          playback: e.detail?.playback ?? null,
+        });
       }) as EventListener],
 
       ['lobby:proposalRejected', ((e: CustomEvent) => {
-        const payload = { type: 'rejected', proposalId: e.detail?.proposalId, reason: e.detail?.reason ?? '' };
-        window.electron?.sendProposalToPlayer?.(payload);
-        if (!window.electron) window.dispatchEvent(new CustomEvent('lobby:proposal', { detail: payload }));
+        forwardProposalToPlayer({
+          type: 'rejected',
+          proposalId: e.detail?.proposalId,
+          reason: e.detail?.reason ?? '',
+        });
       }) as EventListener],
 
       ['lobby:voteFromPlayer', ((e: CustomEvent) => {
@@ -384,14 +424,14 @@
         } else if (isEmbeddedWebPlayer()) {
           window.dispatchEvent(new CustomEvent('player:applySync', { detail: pb }));
         }
-        const parts = getCurrentParticipants();
-        discordUpdate({ type: 'partyInfo', partyId: getCurrentRoomId() ?? undefined, partySize: parts.length, partyMax: Math.max(parts.length, 10), joinSecret: getCurrentRoomCode() ?? undefined });
+        // partyInfo — только при смене участников, не на каждый snapshot
       }) as EventListener],
 
       ['lobby:participantsChanged', ((e: CustomEvent) => {
-        window.electron?.sendParticipantsToPlayer?.(e.detail?.participants ?? []);
+        const detail = e.detail as { participants?: unknown[]; hostPeerId?: string | null } | null;
+        window.electron?.sendParticipantsToPlayer?.(detail?.participants ?? []);
         if (!window.electron) {
-          window.dispatchEvent(new CustomEvent('lobby:participantsList', { detail: e.detail?.participants ?? [] }));
+          window.dispatchEvent(new CustomEvent('lobby:participantsList', { detail }));
         }
         pushLobbySessionToPlayer();
         const parts = getCurrentParticipants();
@@ -402,6 +442,14 @@
         const msg = e.detail;
         if (msg && window.electron?.sendLobbyChatToPlayer) {
           window.electron.sendLobbyChatToPlayer(msg);
+        }
+      }) as EventListener],
+
+      ['lobby:chatHistory', ((e: CustomEvent) => {
+        const messages = Array.isArray(e.detail?.messages) ? e.detail.messages : [];
+        lastChatHistoryForPlayer = messages;
+        if (window.electron?.sendLobbyChatHistoryToPlayer) {
+          window.electron.sendLobbyChatHistoryToPlayer(messages);
         }
       }) as EventListener],
 
@@ -418,8 +466,13 @@
           window.electron?.sendLobbyChooserErrorToPlayer?.('Введите код комнаты');
           return;
         }
-        void joinLobbyRoomAndOpenPlayer(code).catch(() => {
-          window.electron?.sendLobbyChooserErrorToPlayer?.('Неверный код или комната не найдена');
+  void joinLobbyRoomAndOpenPlayer(code).catch((err: unknown) => {
+          const banned = err && typeof err === 'object' && (err as { code?: string }).code === 'banned';
+          window.electron?.sendLobbyChooserErrorToPlayer?.(
+            banned
+              ? 'Вас выгнали из этой комнаты — повторный вход недоступен'
+              : 'Неверный код или комната не найдена',
+          );
         });
       }) as EventListener],
 
@@ -433,8 +486,25 @@
         sendLobbyChat({ text, login: profile.login, avatar: profile.avatar });
       }) as EventListener],
 
+      ['lobby:kickFromPlayer', ((e: CustomEvent) => {
+        const peerId = String((e.detail as { peerId?: string } | null)?.peerId ?? '');
+        if (peerId) kickLobbyParticipant(peerId);
+      }) as EventListener],
+
+      ['lobby:transferHostFromPlayer', ((e: CustomEvent) => {
+        const peerId = String((e.detail as { peerId?: string } | null)?.peerId ?? '');
+        if (peerId) transferLobbyHost(peerId);
+      }) as EventListener],
+
+      ['lobby:kicked', (() => {
+        pushLobbySessionToPlayer();
+        window.electron?.sendLobbyChooserErrorToPlayer?.('Вас выгнали из комнаты');
+      }) as EventListener],
+
       ['lobby:requestSession', (() => {
         pushLobbySessionToPlayer();
+        flushPendingProposalToPlayer();
+        flushChatHistoryToPlayer();
       }) as EventListener],
 
       ['lobby:activityEvent', ((e: CustomEvent) => {
@@ -447,16 +517,31 @@
       ['lobby:playerStateChanged', ((e: CustomEvent) => {
         if (!getCurrentRoomId()) return;
         const d = e.detail as any;
-        let action: 'play' | 'pause' | 'seek' | 'changeEpisode' = 'play';
-        let rp: any = d;
-        if (d?.playback) { rp = d.playback; if (typeof d.action === 'string') action = d.action; }
-        if (!rp || typeof rp !== 'object' || !('releaseId' in rp)) return;
-        if (action === 'play') rp = { ...rp, paused: false };
-        else if (action === 'pause') rp = { ...rp, paused: true };
-        pushCommand(action, { releaseId: String(rp.releaseId ?? ''), sourceId: String(rp.sourceId ?? ''), ep: String(rp.ep ?? ''), dubberId: rp.dubberId != null ? String(rp.dubberId) : undefined, title: String(rp.title ?? ''), sourceName: String(rp.sourceName ?? ''), paused: Boolean(rp.paused), currentTime: Number(rp.currentTime) || 0 });
+        // Presence-only (loadedmetadata и т.п.) приходит без action — нельзя трогать часы комнаты,
+        // иначе rejoiner с currentTime≈0 откатывает серию в начало у всех.
+        if (!d || typeof d !== 'object' || typeof d.action !== 'string') return;
+        const action = d.action as 'play' | 'pause' | 'seek' | 'changeEpisode';
+        if (!['play', 'pause', 'seek', 'changeEpisode'].includes(action)) return;
+        const rp = d.playback && typeof d.playback === 'object' ? d.playback : null;
+        if (!rp || !('releaseId' in rp)) return;
+        const playback = {
+          releaseId: String(rp.releaseId ?? ''),
+          sourceId: String(rp.sourceId ?? ''),
+          ep: String(rp.ep ?? ''),
+          dubberId: rp.dubberId != null ? String(rp.dubberId) : undefined,
+          title: String(rp.title ?? ''),
+          sourceName: String(rp.sourceName ?? ''),
+          paused: action === 'pause' ? true : action === 'play' ? false : Boolean(rp.paused),
+          currentTime: typeof rp.currentTime === 'number' && Number.isFinite(rp.currentTime)
+            ? rp.currentTime
+            : 0,
+        };
+        pushCommand(action, playback);
       }) as EventListener],
 
       ['lobby:left', (() => {
+        lastProposalPlayerPayload = null;
+        lastChatHistoryForPlayer = null;
         window.electron?.sendParticipantsToPlayer?.([]);
         pushLobbySessionToPlayer();
         discordUpdate({ type: 'partyInfo', partyId: null });
@@ -473,8 +558,42 @@
         notifyLobbyBufferingStart();
       }) as EventListener],
 
+      ['lobby:requestCatchUpFromPlayer', (() => {
+        // После смены качества клиент на savedTime — догоняем живые часы комнаты.
+        notifyLobbyBufferingEnd();
+        catchUpLobbyPlayback();
+        window.setTimeout(() => catchUpLobbyPlayback(), 450);
+        window.setTimeout(() => catchUpLobbyPlayback(), 1100);
+      }) as EventListener],
+
       ['lobby:playerSyncedFromPlayer', ((e: CustomEvent) => {
-        window.dispatchEvent(new CustomEvent('lobby:playerSynced', { detail: e.detail ?? null }));
+        const ct = (e.detail as { currentTime?: number } | null)?.currentTime;
+        notifyFluoPlayerSynced(typeof ct === 'number' ? ct : undefined);
+      }) as EventListener],
+
+      ['lobby:barrierSync', ((e: CustomEvent) => {
+        // fluo.sync на main → окно плеера (иначе смена серии не доходит)
+        window.electron?.sendLobbyBarrierSyncToPlayer?.(e.detail ?? null);
+      }) as EventListener],
+
+      ['lobby:syncPause', ((e: CustomEvent) => {
+        const detail = (e.detail ?? {}) as {
+          waitingLogin?: string;
+          waitingAvatar?: string | null;
+          reason?: string;
+        };
+        if (window.electron?.sendLobbyWaitingOverlayToPlayer) {
+          window.electron.sendLobbyWaitingOverlayToPlayer(
+            detail.waitingLogin
+              ? { mode: 'peer', login: detail.waitingLogin, avatar: detail.waitingAvatar ?? null }
+              : { mode: 'localBuffering', label: 'Синхронизация…' },
+          );
+        }
+      }) as EventListener],
+
+      ['lobby:syncResume', (() => {
+        window.electron?.sendLobbySyncResumeToPlayer?.();
+        window.electron?.sendLobbyWaitingOverlayToPlayer?.(null);
       }) as EventListener],
 
       ['lobby:playerWaitingOverlay', ((e: CustomEvent) => {
@@ -558,10 +677,23 @@
     const unsubPlayerView = isPlayerWindowOpen.subscribe((open) => {
       if (!getCurrentRoomId()) return;
       sendPlayerViewActive(open);
+      if (open) {
+        flushPendingProposalToPlayer();
+        flushChatHistoryToPlayer();
+      }
     });
     const onWsJoined = () => {
       if (!getCurrentRoomId()) return;
       sendPlayerViewActive(get(isPlayerWindowOpen));
+      // Плеер мог открыться чуть позже WS joined — докинем активное голосование / чат
+      window.setTimeout(() => {
+        flushPendingProposalToPlayer();
+        flushChatHistoryToPlayer();
+      }, 400);
+      window.setTimeout(() => {
+        flushPendingProposalToPlayer();
+        flushChatHistoryToPlayer();
+      }, 1200);
     };
     window.addEventListener('lobby:wsJoined', onWsJoined);
 

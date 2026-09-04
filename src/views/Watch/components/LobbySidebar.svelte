@@ -2,14 +2,17 @@
   import type { LobbyChatMessage, LobbyParticipant } from '../_types';
   import {
     iconArrowUp,
+    iconBan,
     iconClipboardList,
     iconCopy,
     iconLogOut,
+    iconStar,
     iconUsers,
   } from '../../../components/icons';
   import { resolveCdnAssetUrl } from '../../../utils/posterUrl';
   import UiV2RoundButton from '../../../components/uikit-v2/UiV2RoundButton.svelte';
   import UiV2Tooltip from '../../../components/uikit-v2/UiV2Tooltip.svelte';
+  import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../../../components/uikit-v2/UiV2PopupMenu.svelte';
   import { slide } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { uiv2CustomScroll } from '../../../actions/uiv2CustomScroll';
@@ -24,22 +27,30 @@
     roomCode: string;
     participants: LobbyParticipant[];
     messages: LobbyChatMessage[];
+    myPeerId?: string | null;
+    iAmHost?: boolean;
     actionLogOpen?: boolean;
     ontogglelog?: () => void;
     collapsed?: boolean;
     onleave: () => void;
     onsend: (text: string) => void;
+    onkick?: (peerId: string) => void;
+    ontransferHost?: (peerId: string) => void;
   };
 
   let {
     roomCode,
     participants,
     messages,
+    myPeerId = null,
+    iAmHost = false,
     actionLogOpen = false,
     ontogglelog,
     collapsed = false,
     onleave,
     onsend,
+    onkick,
+    ontransferHost,
   }: Props = $props();
 
   let draft = $state('');
@@ -47,8 +58,32 @@
   let peopleOpen = $state(false);
   let chatViewport: HTMLDivElement | null = $state(null);
 
+  let menuOpen = $state(false);
+  let menuX = $state(0);
+  let menuY = $state(0);
+  let menuPeerId = $state<string | null>(null);
+  let menuLogin = $state('');
+
   const participantCount = $derived(participants.length);
   const canSend = $derived(draft.trim().length > 0);
+
+  const menuItems = $derived.by((): UiV2PopupMenuItem[] => {
+    if (!iAmHost || !menuPeerId) return [];
+    return [
+      {
+        id: 'transfer-host',
+        label: 'Передать хост',
+        icon: iconStar(16, false),
+      },
+      {
+        id: 'kick',
+        label: 'Выгнать',
+        icon: iconBan(16),
+        danger: true,
+        dividerBefore: true,
+      },
+    ];
+  });
 
   $effect(() => {
     messages.length;
@@ -106,6 +141,36 @@
     if (e.key !== 'Enter' || e.shiftKey) return;
     e.preventDefault();
     send();
+  }
+
+  function canModerate(p: LobbyParticipant): boolean {
+    if (!iAmHost) return false;
+    const pid = p.peerId != null ? String(p.peerId) : '';
+    if (!pid) return false;
+    if (myPeerId && pid === myPeerId) return false;
+    if (p.isHost) return false;
+    return true;
+  }
+
+  function openParticipantMenu(p: LobbyParticipant, e: MouseEvent) {
+    if (!canModerate(p)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    menuPeerId = String(p.peerId);
+    menuLogin = participantLabel(p);
+    const el = e.currentTarget instanceof HTMLElement ? e.currentTarget : null;
+    const rect = el?.getBoundingClientRect();
+    menuX = e.clientX || (rect ? rect.left + rect.width / 2 : 0);
+    menuY = e.clientY || (rect ? rect.bottom : 0);
+    menuOpen = true;
+  }
+
+  function onMenuSelect(id: string) {
+    const peerId = menuPeerId;
+    menuOpen = false;
+    if (!peerId) return;
+    if (id === 'kick') onkick?.(peerId);
+    if (id === 'transfer-host') ontransferHost?.(peerId);
   }
 </script>
 
@@ -188,7 +253,19 @@
         <p class="watch-lobby-sidebar__empty">Ожидание участников…</p>
       {:else}
         {#each participants as p (String(p.peerId ?? p.login))}
-          <div class="watch-lobby-sidebar__person">
+          <div
+            class="watch-lobby-sidebar__person"
+            class:watch-lobby-sidebar__person--actionable={canModerate(p)}
+            role={canModerate(p) ? 'button' : undefined}
+            tabindex={canModerate(p) ? 0 : undefined}
+            oncontextmenu={(e) => openParticipantMenu(p, e)}
+            onkeydown={(e) => {
+              if (!canModerate(p)) return;
+              if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+                openParticipantMenu(p, e as unknown as MouseEvent);
+              }
+            }}
+          >
             <span
               class="watch-lobby-sidebar__avatar"
               class:watch-lobby-sidebar__avatar--img={!!p.avatar}
@@ -200,6 +277,9 @@
             </span>
             <span class="watch-lobby-sidebar__name" style={`color:${nameColor(p.login || '')}`}>
               {participantLabel(p)}
+              {#if p.isHost}
+                <span class="watch-lobby-sidebar__host-badge">хост</span>
+              {/if}
             </span>
           </div>
         {/each}
@@ -266,3 +346,14 @@
   </section>
   </div>
 </aside>
+
+<UiV2PopupMenu
+  open={menuOpen}
+  x={menuX}
+  y={menuY}
+  placement="point"
+  title={menuLogin || 'Участник'}
+  items={menuItems}
+  onClose={() => { menuOpen = false; menuPeerId = null; }}
+  onSelect={onMenuSelect}
+/>

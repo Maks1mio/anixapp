@@ -58,8 +58,11 @@
     try {
       await joinLobbyRoomAndOpenPlayer(code);
       close();
-    } catch {
-      joinHint = 'Неверный код или комната не найдена';
+    } catch (err: unknown) {
+      const banned = err && typeof err === 'object' && (err as { code?: string }).code === 'banned';
+      joinHint = banned
+        ? 'Вас выгнали из этой комнаты — повторный вход недоступен'
+        : 'Неверный код или комната не найдена';
       joinHintError = true;
     } finally {
       joinLoading = false;
@@ -72,9 +75,12 @@
     try {
       await joinLobbyRoomAndOpenPlayer(code);
       close();
-    } catch {
+    } catch (err: unknown) {
       view = 'initial';
-      joinHint = 'Не удалось войти по коду из Discord';
+      const banned = err && typeof err === 'object' && (err as { code?: string }).code === 'banned';
+      joinHint = banned
+        ? 'Вас выгнали из этой комнаты — повторный вход недоступен'
+        : 'Не удалось войти по коду из Discord';
       joinHintError = true;
     }
   }

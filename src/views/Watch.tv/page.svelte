@@ -3,6 +3,7 @@
   import { getWatchParams } from '../../router';
   import { navigate } from '../../stores/navigation';
   import { PlayerCore } from '../Watch/core/PlayerCore';
+  import { getFluoPlayer, installWindowFluo } from '../../fluo';
   import {
     webGpu,
     initWebGpuAvailability,
@@ -62,6 +63,8 @@
   const dubberName = params.get('dubberName') || '';
 
   const core = new PlayerCore();
+  const fluo = getFluoPlayer();
+  installWindowFluo();
   const a4kOk = $derived(webGpu.status === 'available');
 
   let loadState = $state<LoadState>('loading');
@@ -222,6 +225,7 @@
     core.video = videoEl;
     core.canvas = canvasEl;
     core.iframe = iframeEl;
+    fluo.bind({ video: videoEl, core });
   }
 
   function savePlayerSettings(partial: Record<string, unknown>) {
@@ -814,11 +818,8 @@
 
   function togglePlay() {
     if (!useVideo || !videoEl) return;
-    if (videoEl.paused) {
-      void videoEl.play().catch(() => {});
-    } else {
-      videoEl.pause();
-    }
+    if (videoEl.paused) fluo.play({ origin: 'user' });
+    else fluo.pause({ origin: 'user' });
     syncPlaybackState();
     showOverlay();
   }
@@ -826,7 +827,7 @@
   function seekBy(seconds: number, showUi = true) {
     if (!useVideo || !videoEl || !Number.isFinite(videoEl.duration)) return;
     const next = Math.max(0, Math.min(videoEl.duration, videoEl.currentTime + seconds));
-    videoEl.currentTime = next;
+    fluo.setProgress(next, { origin: 'user' });
     syncPlaybackState();
     if (showUi) showOverlay();
   }

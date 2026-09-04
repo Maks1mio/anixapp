@@ -1,12 +1,23 @@
-import { createRoom, joinRoom, leaveRoom, isUsablePlayback, type LobbyParticipant, type LobbyPlayback } from '../services/lobby-api';
+import {
+  createFluoRoom,
+  joinFluoRoom,
+  leaveFluoRoomHttp,
+  catchUpFluoPlayback,
+  computeFluoPosition,
+  type FluoProfilePayload,
+} from '../fluo/sync';
+import { isUsableFluoContent, type FluoContent, type FluoParticipant } from '../fluo/types';
 import {
   getCurrentParticipants,
   getCurrentRoomCode,
   getCurrentRoomId,
   getLastPlayback,
+  getLobbyHostPeerId,
+  getLobbyMyPeerId,
   leaveLobby,
   pushLobbySyncStateToPlayer,
   setLobbyRoom,
+  type LobbyPlayback,
 } from '../services/lobby-state';
 import { isPlayerWindowOpen } from '../stores/modals';
 import { openInAppPlayer, isEmbeddedWebPlayer } from './watch-nav';
@@ -16,14 +27,12 @@ export type LobbySession = {
   inLobby: boolean;
   roomId: string | null;
   roomCode: string | null;
-  participants: LobbyParticipant[];
+  participants: FluoParticipant[];
+  hostPeerId: string | null;
+  myPeerId: string | null;
 };
 
-export function getLobbyProfile(): {
-  profileId?: number;
-  login?: string;
-  avatar?: string | null;
-} {
+export function getLobbyProfile(): FluoProfilePayload {
   try {
     const raw = (window as unknown as { __anixProfile?: { id?: number; login?: string; avatar?: string | null } }).__anixProfile;
     if (raw && (raw.id || raw.login)) {
@@ -62,7 +71,7 @@ export async function getLobbyDeviceId(): Promise<string | null> {
       const id = await getDeviceId();
       if (id) return id;
     } catch {
-      // fall through to web id
+      // fall through
     }
   }
   return getOrCreateWebDeviceId();
@@ -75,6 +84,8 @@ export function getLobbySession(): LobbySession {
     roomId,
     roomCode: getCurrentRoomCode(),
     participants: getCurrentParticipants(),
+    hostPeerId: getLobbyHostPeerId(),
+    myPeerId: getLobbyMyPeerId(),
   };
 }
 
@@ -130,23 +141,29 @@ export async function openLobbyPlayerWindow(opts?: { applyRoomPlayback?: boolean
 
 export async function createLobbyRoomAndOpenPlayer(seed?: Partial<LobbyPlayback> | null): Promise<void> {
   const deviceId = await getLobbyDeviceId();
-  const playback = isUsablePlayback(seed) ? {
-    releaseId: String(seed!.releaseId),
-    sourceId: String(seed!.sourceId ?? ''),
-    ep: String(seed!.ep),
-    dubberId: seed!.dubberId != null ? String(seed!.dubberId) : undefined,
-    title: String(seed!.title ?? ''),
-    sourceName: String(seed!.sourceName ?? ''),
-    paused: seed!.paused !== false,
-    currentTime: typeof seed!.currentTime === 'number' ? seed!.currentTime : 0,
-  } : undefined;
-  const { roomId, code, myPeerId } = await createRoom({ ...getLobbyProfile(), deviceId }, playback);
+  const playback = isUsableFluoContent(seed)
+    ? {
+        releaseId: String(seed!.releaseId),
+        sourceId: String(seed!.sourceId ?? ''),
+        ep: String(seed!.ep),
+        dubberId: seed!.dubberId != null ? String(seed!.dubberId) : undefined,
+        title: String(seed!.title ?? ''),
+        sourceName: String(seed!.sourceName ?? ''),
+        paused: seed!.paused !== false,
+        currentTime: typeof seed!.currentTime === 'number' ? seed!.currentTime : 0,
+      }
+    : undefined;
+  const { roomId, code, myPeerId } = await createFluoRoom(
+    { ...getLobbyProfile(), deviceId },
+    playback,
+  );
   setLobbyRoom(roomId, {
     myPeerId,
     participants: [],
     roomCode: code,
-    playback,
+    playback: playback as LobbyPlayback | undefined,
     isCreator: true,
+    hostPeerId: myPeerId,
   });
   window.dispatchEvent(new CustomEvent('lobby:participantsChanged', { detail: { participants: [] } }));
   await openLobbyPlayerWindow();
@@ -154,20 +171,37 @@ export async function createLobbyRoomAndOpenPlayer(seed?: Partial<LobbyPlayback>
 
 export async function joinLobbyRoomAndOpenPlayer(code: string): Promise<void> {
   const deviceId = await getLobbyDeviceId();
-  const room = await joinRoom(code, { ...getLobbyProfile(), deviceId });
+  const room = await joinFluoRoom(code, { ...getLobbyProfile(), deviceId });
+  const serverClock = room.clock ?? null;
+  // Живая позиция: mediaOrigin + (now - t0), а не сырой mediaOrigin.
+  const liveT = serverClock ? computeFluoPosition(serverClock) : 0;
+  const pb = serverClock?.content
+    ? {
+        ...serverClock.content,
+        paused: serverClock.paused,
+        currentTime: liveT,
+      }
+    : null;
   setLobbyRoom(room.roomId, {
     myPeerId: room.myPeerId,
     participants: room.participants ?? [],
-    playback: room.playback ?? undefined,
+    playback: pb,
+    clock: serverClock,
     roomCode: room.code,
+    hostPeerId: room.hostPeerId,
   });
   await openLobbyPlayerWindow({ applyRoomPlayback: true });
+  // Догон после открытия окна плеера (IPC мог уйти в пустоту).
+  window.setTimeout(() => catchUpFluoPlayback(true), 400);
+  window.setTimeout(() => catchUpFluoPlayback(true), 1200);
 }
 
 export async function leaveLobbyRoomFromUi(): Promise<void> {
   const id = getCurrentRoomId();
   const deviceId = await getLobbyDeviceId();
-  if (id && deviceId) await leaveRoom(id, deviceId).catch(() => undefined);
+  if (id && deviceId) await leaveFluoRoomHttp(id, deviceId).catch(() => undefined);
   leaveLobby();
   pushLobbySessionToPlayer();
 }
+
+export type { FluoContent, LobbyPlayback };

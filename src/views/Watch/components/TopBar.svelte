@@ -15,7 +15,6 @@
     title: string;
     dubberName: string;
     sourceName: string;
-    useVideo: boolean;
     episodes: EpisodeItem[];
     dubbers: DubberItem[];
     sources: SourceItem[];
@@ -43,7 +42,7 @@
   }
 
   let {
-    ep, title, dubberName, sourceName, useVideo,
+    ep, title, dubberName, sourceName,
     episodes, dubbers, sources,
     downloadedEpisodes, downloadedPositions, localMode, currentDownloadedPath,
     currentDubberId, currentSourceId, popoverType, popoverLoading, lastEpisodeTypeUpdateId,
@@ -189,9 +188,6 @@
         </UiV2Button>
       </div>
     </div>
-    {#if !useVideo}
-      <p class="watch-page__dub-hint">Если не загружается — выберите другую озвучку или источник.</p>
-    {/if}
   </div>
 
   {#if onopenLobby && (!localMode || inLobby)}

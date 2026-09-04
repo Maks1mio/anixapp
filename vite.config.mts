@@ -94,7 +94,16 @@ export default defineConfig(({ command }) => {
       ignored: ['**/release/**', '**/dist/**', '**/dist-android/**', '**/dist-tv-web/**'],
     },
     proxy: {
-      // Same-origin WS so phone/LAN can join lobby without hitting localhost:8787.
+      '/fluo/ws': {
+        target: 'http://127.0.0.1:8787',
+        ws: true,
+        changeOrigin: true,
+      },
+      '/fluo': {
+        target: 'http://127.0.0.1:8787',
+        changeOrigin: true,
+      },
+      // legacy lobby WS (unused after Fluo cutover)
       '/anixapp/lobby/ws': {
         target: 'http://127.0.0.1:8787',
         ws: true,

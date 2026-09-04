@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount, tick, untrack } from 'svelte';
   import { getWatchParams } from '../../router';
-  import { getCurrentRoomId, sendLobbyChat, isLobbyAwaitingPlayerSync } from '../../services/lobby-state';
+  import { getCurrentRoomId, sendLobbyChat, isLobbyAwaitingPlayerSync, notifyFluoPlayerSynced } from '../../services/lobby-state';
   import { logLobbyAction, snapshotPlayback } from '../../services/lobby-action-log';
+  import { getFluoPlayer, installWindowFluo } from '../../fluo';
   import type { WatchState, EpisodeItem, DubberItem, LobbyActivityEntry, LobbyChatMessage, PopoverType, NextEpAltDub, DownloadedEpisodeItem, PlaybackAlt, SourceItem } from './_types';
   import { isHlsUrl, isDubberBlacklisted, lobbyActionText, allowsIframeFallback, userPlaybackError } from './_utils';
   import { setEmbedMediaContext } from './core/hls-media-context';
@@ -94,6 +95,8 @@
   const player = new PlayerState();
   const lobby  = new LobbyState();
   const core   = new PlayerCore();
+  const fluo   = getFluoPlayer();
+  installWindowFluo();
   let posterUrl = $state('');
   let posterReleaseId = '';
   /** Пустой плеер, открытый специально под комнату (без контента). Не путать с локальным файлом без releaseId. */
@@ -866,6 +869,15 @@
       ?? (playerWrapEl?.querySelector('.watch-page__upscale-canvas') as HTMLCanvasElement | null)
       ?? null;
     core.iframe = iframeEl ?? null;
+    fluo.bind({ video: videoEl ?? null, core });
+    fluo.setContent({
+      releaseId: String(watchState.releaseId ?? ''),
+      sourceId: String(watchState.sourceId ?? ''),
+      ep: String(watchState.ep ?? ''),
+      dubberId: watchState.dubberId || undefined,
+      title: watchState.title || '',
+      sourceName: watchState.sourceName || '',
+    }, { origin: 'system' });
     if (videoEl && player.useVideo) {
       // Всегда цепляем Web Audio (хотя бы passthrough), иначе mute/volume на <video> ломаются.
       void core.surround.setEqGains(player.eqGains).then(() =>
@@ -1135,7 +1147,7 @@
   let localMediaSwap = false;
   /** Barrier-sync в окне плеера (WS в main — локальный флаг для sync_ready). */
   let lobbyBarrierPending = false;
-  /** Зеркало main awaitingPlayerSync — приходит по IPC (модуль lobby-sync в player пустой). */
+  /** Зеркало main barrier — приходит по IPC (fluo.sync живёт в main). */
   let lobbySyncAwaiting = false;
   let pendingBarrierPlayback: Record<string, unknown> | null = null;
   /** Последнее намерение play/pause в лобби — чтобы video-события не слали эхо. */
@@ -1242,7 +1254,7 @@
     notifyLobbyPlayerSyncedIfReady();
   }
 
-  /** После seek/load: sync_ready на сервер (окно плеера без WS — через IPC в главное окно). */
+  /** После seek/load: sync_ready на сервер Fluo (окно плеера без WS — через IPC в главное окно). */
   function notifyLobbyPlayerSyncedIfReady() {
     const ct = videoEl && !isNaN(videoEl.currentTime) ? videoEl.currentTime : undefined;
     const el = (window as any).electron;
@@ -1253,7 +1265,7 @@
     }
     if (inLobbyRoom()) {
       logLobbyAction({ origin: 'local', action: 'player.sync_ready', via: 'player' });
-      window.dispatchEvent(new CustomEvent('lobby:playerSynced', { detail: { currentTime: ct } }));
+      notifyFluoPlayerSynced(ct);
     }
   }
 
@@ -1272,6 +1284,8 @@
       }
       if (applySyncTimer) clearTimeout(applySyncTimer);
       applySyncTimer = window.setTimeout(() => { isApplyingSync = false; applySyncTimer = null; }, 400);
+      // Catch-up / remote sync, пришедший во время смены качества
+      if (pendingSync) applyPendingSync();
       notifyLobbyPlayerSyncedIfReady();
     };
 
@@ -1321,6 +1335,17 @@
       return;
     }
     window.dispatchEvent(new CustomEvent('lobby:bufferingStartFromPlayer'));
+  }
+
+  /** После смены качества/источника — догнать живые часы Fluo (не оставаться на savedTime). */
+  function requestLobbyCatchUpFromUi() {
+    if (!inLobbyRoom()) return;
+    const elE = (window as any).electron;
+    if (elE?.lobbyRequestCatchUp) {
+      elE.lobbyRequestCatchUp();
+      return;
+    }
+    window.dispatchEvent(new CustomEvent('lobby:requestCatchUpFromPlayer'));
   }
 
   function sendToLobby(action: 'play' | 'pause' | 'seek' | 'changeEpisode', ctOverride?: number) {
@@ -1465,6 +1490,49 @@
     if (text !== 'Не удалось воспроизвести скачанный файл.') {
       void loadPlaybackAlternative(gen, watchState.ep);
     }
+  }
+
+  function retryCurrentPlayback() {
+    if (player.loadState === 'loading') return;
+    const seek =
+      Number.isFinite(player.currentTime) && player.currentTime > 0.5
+        ? player.currentTime
+        : undefined;
+
+    if (localPlaybackPath) {
+      void startLocalFilePlayback(
+        localPlaybackPath,
+        episodeIndex(watchState.ep) ?? undefined,
+        watchState.dubberName || undefined,
+        watchState.sourceName || undefined,
+      );
+      return;
+    }
+
+    if (externalPlaybackUrl) {
+      externalCdnRetryCount = 0;
+      void startExternalUrlPlayback(externalPlaybackUrl, lastExternalOpts ?? undefined, true);
+      return;
+    }
+
+    const rId = positiveId(watchState.releaseId);
+    const sId = positiveId(watchState.sourceId);
+    if (rId == null || sId == null || episodeIndex(watchState.ep) == null) {
+      showOsd('Нечего перезагружать — выберите серию', { warn: true });
+      return;
+    }
+
+    player.errorText = '';
+    void loadEpisode(
+      rId,
+      sId,
+      watchState.ep,
+      watchState.title,
+      watchState.sourceName,
+      watchState.dubberId,
+      seek,
+      true,
+    );
   }
 
   function applyVideoAndUI(
@@ -2013,15 +2081,13 @@
     if (!videoEl) return;
     const willPlay = videoEl.paused;
     if (inLobbyRoom()) {
-      sendToLobby(willPlay ? 'play' : 'pause');
       isApplyingSync = true;
       preventAutoPause = true;
-      if (willPlay) {
-        void videoEl.play().then(() => { player.paused = false; }).catch(() => {});
-      } else {
-        videoEl.pause();
-        player.paused = true;
-      }
+      if (willPlay) fluo.play({ origin: 'user' });
+      else fluo.pause({ origin: 'user' });
+      player.paused = !willPlay;
+      // Electron: fluo.sync на main без <video> — команды в комнату только через IPC.
+      sendToLobby(willPlay ? 'play' : 'pause');
       window.setTimeout(() => {
         isApplyingSync = false;
         preventAutoPause = false;
@@ -2029,8 +2095,9 @@
       showAndSchedule();
       return;
     }
-    if (willPlay) videoEl.play().catch(() => {});
-    else videoEl.pause();
+    if (willPlay) fluo.play({ origin: 'user' });
+    else fluo.pause({ origin: 'user' });
+    player.paused = !willPlay;
     showAndSchedule();
   }
 
@@ -2039,18 +2106,17 @@
     const pct = (e.clientX - el.getBoundingClientRect().left) / el.offsetWidth;
     if (videoEl && !isNaN(videoEl.duration)) {
       const targetTime = pct * videoEl.duration;
+      player.currentTime = targetTime;
       if (inLobbyRoom()) {
-        player.currentTime = targetTime;
-        videoEl.currentTime = targetTime;
         isApplyingSync = true;
+        fluo.setProgress(targetTime, { origin: 'user' });
         sendToLobby('seek', targetTime);
         if (applySyncTimer) clearTimeout(applySyncTimer);
         applySyncTimer = window.setTimeout(() => { isApplyingSync = false; applySyncTimer = null; }, 350);
         showAndSchedule();
         return;
       }
-      videoEl.currentTime = targetTime;
-      sendToLobby('seek');
+      fluo.setProgress(targetTime, { origin: 'user' });
     }
   }
 
@@ -2424,6 +2490,12 @@
       syncVideoPlaybackRate();
       if (player.upscaleEnabled && isGpuAvailable()) startUpscale();
       if (inLobbyRoom()) {
+        // Снимаем блок до catch-up, иначе remotePlayback уйдёт в pending и забудется.
+        localMediaSwap = false;
+        if (applySyncTimer) clearTimeout(applySyncTimer);
+        applySyncTimer = setTimeout(() => { isApplyingSync = false; applySyncTimer = null; }, 400);
+        requestLobbyCatchUpFromUi();
+        if (pendingSync) applyPendingSync();
         armLobbyPlayerSyncedOnce();
       } else {
         localMediaSwap = false;
@@ -2447,9 +2519,23 @@
       seedPlayerTimeFromVideo();
     };
 
+    /** В лобби: только якорь для буфера; финальная позиция — catch-up к часам комнаты. */
+    const restoreTimeLobbyAnchor = () => {
+      if (savedTime > 0 && isFinite(videoEl.duration) && videoEl.duration > 0) {
+        videoEl.currentTime = Math.min(savedTime, videoEl.duration);
+      } else if (savedTime > 0) {
+        videoEl.currentTime = savedTime;
+      }
+      syncVideoPlaybackRate();
+      videoEl.pause();
+      player.paused = true;
+      seedPlayerTimeFromVideo();
+    };
+
     swapMediaSource(videoEl, src, {
       onReady: () => {
-        restoreTime();
+        if (inLobbyRoom()) restoreTimeLobbyAnchor();
+        else restoreTime();
         finishSwap();
       },
     });
@@ -2468,7 +2554,8 @@
     }, { once: true });
     window.setTimeout(() => {
       if (localMediaSwap) {
-        restoreTime();
+        if (inLobbyRoom()) restoreTimeLobbyAnchor();
+        else restoreTime();
         finishSwap();
       } else if (player.upscaleEnabled && !core.upscale.active && videoEl.videoWidth >= 2) {
         upscaleHoldForNewFrame = false;
@@ -2477,11 +2564,12 @@
     }, 1200);
     if (!isHlsUrl(src)) {
       videoEl.addEventListener('loadeddata', () => {
-        restoreTime();
+        if (inLobbyRoom()) restoreTimeLobbyAnchor();
+        else restoreTime();
         finishSwap();
       }, { once: true });
       syncVideoPlaybackRate();
-      doPlay();
+      if (!inLobbyRoom()) doPlay();
     }
   }
 
@@ -2800,18 +2888,19 @@
     if (Number.isFinite(dur) && dur > 0) {
       const drift = Math.abs(videoEl.currentTime - applyTime);
       if (!timeReset && (forceSeek || drift > 0.85)) {
-        videoEl.currentTime = Math.min(applyTime, dur);
+        fluo.setProgress(Math.min(applyTime, dur), { origin: 'sync' });
       }
     } else if (applyTime > 0 && forceSeek) {
-      videoEl.currentTime = applyTime;
+      fluo.setProgress(applyTime, { origin: 'sync' });
     }
     if (opts?.barrier || p.paused) {
       lastLobbyPausedIntent = true;
-      videoEl.pause();
+      fluo.pause({ origin: 'sync' });
       player.paused = true;
     } else {
       lastLobbyPausedIntent = false;
-      void videoEl.play().then(() => { player.paused = false; }).catch(() => {});
+      fluo.play({ origin: 'sync' });
+      player.paused = false;
     }
     seedPlayerTimeFromVideo();
     const guardMs = opts?.barrier ? 1600 : 1100;
@@ -3748,7 +3837,12 @@
         const d = e.detail as any;
         if (!d) return;
         if (d.type === 'vote' && d.proposalId) {
-          lobby.voteProposal = { proposalId: d.proposalId, proposerLogin: d.proposerLogin ?? 'Участник', playback: d.playback ?? {} };
+          lobby.voteProposal = {
+            proposalId: d.proposalId,
+            proposerLogin: d.proposerLogin ?? 'Участник',
+            playback: d.playback ?? {},
+            expiresAt: typeof d.expiresAt === 'number' ? d.expiresAt : undefined,
+          };
           lobby.voteState    = 'vote';
         } else if (d.type === 'waiting') {
           lobby.waitingTitle = d.newPlayback?.title || 'новое аниме';
@@ -3761,7 +3855,22 @@
       }) as EventListener],
 
       ['lobby:participantsList', ((e: CustomEvent) => {
-        lobby.participants = Array.isArray(e.detail) ? e.detail : [];
+        const detail = e.detail as { participants?: unknown[]; hostPeerId?: string | null } | unknown[] | null;
+        const list = Array.isArray(detail)
+          ? detail
+          : Array.isArray((detail as { participants?: unknown[] } | null)?.participants)
+            ? (detail as { participants: unknown[] }).participants
+            : [];
+        const hostId = !Array.isArray(detail) && detail && typeof detail === 'object'
+          ? ((detail as { hostPeerId?: string | null }).hostPeerId != null
+            ? String((detail as { hostPeerId?: string | null }).hostPeerId)
+            : lobby.hostPeerId)
+          : lobby.hostPeerId;
+        if (hostId != null) lobby.hostPeerId = hostId;
+        lobby.participants = (list as typeof lobby.participants).map((p) => ({
+          ...p,
+          isHost: !!(lobby.hostPeerId && String(p.peerId ?? '') === lobby.hostPeerId),
+        }));
       }) as EventListener],
 
       ['lobby:activityFeed', ((e: CustomEvent) => {
@@ -3789,6 +3898,8 @@
           inLobby?: boolean;
           roomCode?: string | null;
           participants?: unknown[];
+          hostPeerId?: string | null;
+          myPeerId?: string | null;
         } | null;
         const next = !!session?.inLobby;
         inLobby = next;
@@ -3797,8 +3908,14 @@
           chooserOpen = false;
           soloEmptyIdle = false;
           lobby.roomCode = String(session?.roomCode ?? '');
+          lobby.hostPeerId = session?.hostPeerId != null ? String(session.hostPeerId) : null;
+          lobby.myPeerId = session?.myPeerId != null ? String(session.myPeerId) : null;
           if (Array.isArray(session?.participants)) {
-            lobby.participants = session.participants as typeof lobby.participants;
+            const hostId = lobby.hostPeerId;
+            lobby.participants = (session.participants as typeof lobby.participants).map((p) => ({
+              ...p,
+              isHost: !!(hostId && String(p.peerId ?? '') === hostId),
+            }));
           }
           if (!watchState.releaseId && !isLocalPlaybackMode) {
             lobbyIdleMode = true;
@@ -3823,6 +3940,32 @@
         const msg = e.detail as LobbyChatMessage | null;
         if (!msg?.id || !msg.text) return;
         lobby.addChat(msg);
+      }) as EventListener],
+
+      ['lobby:chatHistory', ((e: CustomEvent) => {
+        const messages = (e.detail as { messages?: LobbyChatMessage[] } | null)?.messages;
+        if (!Array.isArray(messages) || !messages.length) return;
+        lobby.setChatHistory(messages);
+      }) as EventListener],
+
+      ['lobby:kicked', (() => {
+        inLobby = false;
+        sidebarOpen = false;
+        lobby.resetRoom();
+        showOsd('Вас выгнали из комнаты', { warn: true });
+      }) as EventListener],
+
+      ['lobby:participantKicked', ((e: CustomEvent) => {
+        const login = String((e.detail as { login?: string | null } | null)?.login ?? '').trim();
+        if (login) {
+          lobby.addChat({
+            id: `kick-${Date.now()}`,
+            text: `${login} выгнали из комнаты`,
+            login: 'Система',
+            ts: Date.now(),
+            system: true,
+          });
+        }
       }) as EventListener],
 
       ['lobby:playerWaitingOverlay', ((e: CustomEvent) => {
@@ -4058,9 +4201,11 @@
 
       {#if player.loadState === 'error'}
         <div class="watch-page__player-error" role="alert">
-          <p class="watch-page__player-error-title">{player.errorText}</p>
-          {#if playbackAlt}
-            <p class="watch-page__player-error-hint">
+          <p class="watch-page__player-error-title">
+            {player.errorText || 'Не удалось загрузить видео'}
+          </p>
+          <p class="watch-page__player-error-hint">
+            {#if playbackAlt}
               {#if inLobby}
                 {playbackAlt.sameDubber
                   ? `Есть та же серия на ${playbackAlt.sourceName} — переключит у всех в комнате`
@@ -4070,19 +4215,30 @@
                   ? `Есть та же серия на ${playbackAlt.sourceName}`
                   : `Есть та же серия в озвучке ${playbackAlt.dubberName}`}
               {/if}
-            </p>
+            {:else}
+              {inLobby
+                ? 'Попробуйте снова или выберите другую озвучку / источник — смена будет у всех в комнате'
+                : 'Попробуйте снова или выберите другую озвучку / источник'}
+            {/if}
+          </p>
+          <div class="watch-page__player-error-actions">
             <button
               type="button"
               class="watch-page__player-error-btn"
-              onclick={acceptPlaybackAlt}
+              onclick={retryCurrentPlayback}
             >
-              {playbackAltLabel(playbackAlt)}
+              Попробовать снова
             </button>
-          {:else}
-            <p class="watch-page__player-error-hint">
-              {inLobby ? 'Выберите другую озвучку — смена будет у всех в комнате' : 'Выберите другую озвучку'}
-            </p>
-          {/if}
+            {#if playbackAlt}
+              <button
+                type="button"
+                class="watch-page__player-error-btn watch-page__player-error-btn--secondary"
+                onclick={acceptPlaybackAlt}
+              >
+                {playbackAltLabel(playbackAlt)}
+              </button>
+            {/if}
+          </div>
         </div>
       {/if}
 
@@ -4153,6 +4309,8 @@
         roomCode={lobby.roomCode}
         participants={lobby.participants}
         messages={lobby.chatMessages}
+        myPeerId={lobby.myPeerId}
+        iAmHost={!!(lobby.myPeerId && lobby.hostPeerId && lobby.myPeerId === lobby.hostPeerId)}
         actionLogOpen={actionLogOpen}
         collapsed={!sidebarOpen}
         ontogglelog={() => { actionLogOpen = !actionLogOpen; }}
@@ -4167,6 +4325,20 @@
           }
           const profile = getLobbyProfile();
           sendLobbyChat({ text, login: profile.login, avatar: profile.avatar });
+        }}
+        onkick={(peerId) => {
+          if (window.electron?.lobbyKickFromPlayer) {
+            window.electron.lobbyKickFromPlayer(peerId);
+            return;
+          }
+          window.dispatchEvent(new CustomEvent('lobby:kickFromPlayer', { detail: { peerId } }));
+        }}
+        ontransferHost={(peerId) => {
+          if (window.electron?.lobbyTransferHostFromPlayer) {
+            window.electron.lobbyTransferHostFromPlayer(peerId);
+            return;
+          }
+          window.dispatchEvent(new CustomEvent('lobby:transferHostFromPlayer', { detail: { peerId } }));
         }}
       />
       {#if actionLogOpen && sidebarOpen}

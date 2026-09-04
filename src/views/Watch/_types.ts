@@ -41,12 +41,15 @@ export interface LobbyParticipant {
   login:   string;
   avatar?: string | null;
   peerId?: string | null;
+  isHost?: boolean;
 }
 
 export interface ProposalData {
   proposalId:     string;
   proposerLogin:  string;
   playback: { title?: string; ep?: string; sourceName?: string };
+  /** unix ms — оставшееся время голосования (для join mid-vote) */
+  expiresAt?:     number;
 }
 
 export interface LobbyActivityEntry {
@@ -61,6 +64,7 @@ export interface LobbyChatMessage {
   login: string;
   avatar?: string | null;
   ts: number;
+  peerId?: string | null;
   self?: boolean;
   system?: boolean;
 }

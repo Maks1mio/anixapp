@@ -348,6 +348,12 @@ ipcMain.on('lobby:chatToPlayer', (_, msg) => {
   }
 });
 
+ipcMain.on('lobby:chatHistoryToPlayer', (_, messages) => {
+  if (state.playerWindowRef && !state.playerWindowRef.isDestroyed()) {
+    state.playerWindowRef.webContents.send('lobby:chatHistoryToPlayer', messages ?? []);
+  }
+});
+
 ipcMain.on('lobby:chooserErrorToPlayer', (_, msg) => {
   if (state.playerWindowRef && !state.playerWindowRef.isDestroyed()) {
     state.playerWindowRef.webContents.send('lobby:chooserErrorToPlayer', msg);
@@ -378,6 +384,18 @@ ipcMain.on('lobby:chatFromPlayer', (_, text) => {
   }
 });
 
+ipcMain.on('lobby:kickFromPlayer', (_, payload) => {
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    state.mainWindow.webContents.send('lobby:kickFromPlayer', payload ?? null);
+  }
+});
+
+ipcMain.on('lobby:transferHostFromPlayer', (_, payload) => {
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    state.mainWindow.webContents.send('lobby:transferHostFromPlayer', payload ?? null);
+  }
+});
+
 ipcMain.on('lobby:requestSession', () => {
   if (state.mainWindow && !state.mainWindow.isDestroyed()) {
     state.mainWindow.webContents.send('lobby:requestSession');
@@ -387,6 +405,12 @@ ipcMain.on('lobby:requestSession', () => {
 ipcMain.on('lobby:bufferingStartFromPlayer', () => {
   if (state.mainWindow && !state.mainWindow.isDestroyed()) {
     state.mainWindow.webContents.send('lobby:bufferingStartFromPlayer');
+  }
+});
+
+ipcMain.on('lobby:requestCatchUpFromPlayer', () => {
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    state.mainWindow.webContents.send('lobby:requestCatchUpFromPlayer');
   }
 });
 

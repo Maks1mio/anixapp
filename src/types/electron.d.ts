@@ -292,16 +292,23 @@ declare global {
         roomId: string | null;
         roomCode: string | null;
         participants: unknown[];
+        hostPeerId?: string | null;
+        myPeerId?: string | null;
       }) => void;
       sendLobbyChatToPlayer?: (msg: Record<string, unknown>) => void;
+      sendLobbyChatHistoryToPlayer?: (messages: unknown[]) => void;
       sendLobbyChooserErrorToPlayer?: (msg: string) => void;
       lobbyCreateFromPlayer?: (playback?: Record<string, unknown> | null) => void;
       lobbyJoinFromPlayer?: (code: string) => void;
       lobbyLeaveFromPlayer?: () => void;
       lobbyChatFromPlayer?: (text: string) => void;
+      lobbyKickFromPlayer?: (peerId: string) => void;
+      lobbyTransferHostFromPlayer?: (peerId: string) => void;
       lobbyRequestSession?: () => void;
       /** Окно плеера → главное: началась смена качества/озвучки в лобби */
       lobbyNotifyBufferingStart?: () => void;
+      /** Окно плеера → главное: догнать живые часы комнаты (после смены качества) */
+      lobbyRequestCatchUp?: () => void;
       /** Окно плеера → главное: плеер готов после sync (sync_ready на сервер) */
       lobbyPlayerSynced?: (currentTime?: number) => void;
       /** Главное → плеер: оверлей «ожидаем пользователя» */

@@ -21,9 +21,11 @@
   interface Props {
     children?: Snippet;
     currentPath?: string;
+    /** Полноэкранный плеер — скрывает боковую панель. */
+    immersive?: boolean;
   }
 
-  let { children, currentPath = '/' }: Props = $props();
+  let { children, currentPath = '/', immersive = false }: Props = $props();
 
   let profileVisible = $state(false);
   let profileActive = $state(false);
@@ -111,7 +113,7 @@
   });
 </script>
 
-<div class="tv-layout">
+<div class="tv-layout" class:tv-layout--immersive={immersive}>
   <TvPosterBackdrop />
   <div class="tv-layout__backdrop" aria-hidden="true"></div>
 

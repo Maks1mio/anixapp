@@ -4800,7 +4800,7 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
 .release-lightbox {
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  z-index: 25000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4832,6 +4832,39 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
     border-radius: $radius-md;
     box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
     cursor: default;
+  }
+}
+
+.release-lightbox__close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-size: 1.75rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+
+  span {
+    display: block;
+    margin-top: -0.08em;
+  }
+
+  &:hover,
+  &:focus-visible {
+    background: rgba(0, 0, 0, 0.88);
+    outline: 2px solid rgba(255, 255, 255, 0.85);
+    outline-offset: 2px;
   }
 }
 

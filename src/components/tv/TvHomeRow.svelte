@@ -14,6 +14,7 @@
     skeletonCount?: number;
     cardVariant?: 'default' | 'history';
     showSeeAll?: boolean;
+    hydrate?: boolean;
   }
 
   let {
@@ -21,16 +22,19 @@
     tabId,
     items = [],
     status = 'loading',
-    skeletonCount = 7,
+    skeletonCount = 5,
     cardVariant = 'default',
     showSeeAll = true,
+    hydrate = true,
   }: Props = $props();
 </script>
 
-<section class="tv-home-row" aria-label={label} data-tv-home-row data-tv-home-row-id={tabId ?? label}>
+<section class="tv-home-row" class:tv-home-row--shell={!hydrate} aria-label={label} data-tv-home-row data-tv-home-row-id={tabId ?? label}>
   <h2 class="tv-home-row__title">{label}</h2>
 
-  {#if status === 'loading'}
+  {#if !hydrate}
+    <div class="tv-home-row__slot" aria-hidden="true"></div>
+  {:else if status === 'loading'}
     <UiV2ReleaseCarouselSkeleton count={skeletonCount} class="tv-release-carousel" />
   {:else if status === 'error'}
     <p class="tv-home-row__status">Не удалось загрузить</p>

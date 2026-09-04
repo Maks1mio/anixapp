@@ -14,7 +14,7 @@ function isAndroidTv(): boolean {
 }
 
 function maxParallel(): number {
-  return isAndroidTv() ? 3 : 5;
+  return isAndroidTv() ? 4 : 6;
 }
 
 function rootMargin(): string {

@@ -13,6 +13,7 @@
         android:required="false" />
 
     <application
+        android:name=".AnixAppApplication"
         android:allowBackup="true"
         android:banner="@drawable/tv_banner"
         android:hardwareAccelerated="true"
@@ -39,6 +40,12 @@
             </intent-filter>
 
         </activity>
+
+        <provider
+            android:name=".WebViewGpuInitProvider"
+            android:authorities="${applicationId}.webview-gpu-init"
+            android:exported="false"
+            android:initOrder="100" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

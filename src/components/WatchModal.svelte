@@ -32,6 +32,8 @@
   import { episodeDisplayNumber } from '../utils/episode-display';
   import { formatDubberQuality, isDubberNovelty, readLastEpisodeTypeUpdateId, sortDubbersPinnedFirst } from '../utils/dubber-meta';
   import { listPlayableDubberSources, NO_EPISODE_PICK_OTHER_DUB } from '../utils/dubber-sources';
+  import { isTvMode } from '../platform/tv';
+  import { scheduleFocusTvOverlayContent } from '../services/tv-navigation';
 
   interface Props {
     releaseId: number;
@@ -390,13 +392,22 @@
     loadUpdatesPage(updatesPage + 1, true);
   }
 
+  function focusTvModalContent() {
+    if (!isTvMode()) return;
+    scheduleFocusTvOverlayContent(24);
+  }
+
   function backFromNestedView() {
     if (modalView === 'episodes') {
       modalView = 'variants';
       optionsOpen = false;
+      focusTvModalContent();
       return;
     }
-    if (modalView === 'updates') modalView = 'variants';
+    if (modalView === 'updates') {
+      modalView = 'variants';
+      focusTvModalContent();
+    }
   }
 
   function sourceLabel(source: Source): string {
@@ -451,6 +462,8 @@
         return;
       }
       await selectSource(srcs[0], false);
+      await tick();
+      focusTvModalContent();
     } catch {
       episodesLoading = false;
       episodesError = 'Ошибка загрузки источников';
@@ -476,6 +489,7 @@
       }
       await refreshDownloadedState();
       await tick();
+      focusTvModalContent();
       if (lastWatchedEpisode) window.setTimeout(() => scrollToEpisode(lastWatchedEpisode!.position), 80);
     } catch {
       episodesLoading = false;
@@ -503,6 +517,7 @@
         title: releaseTitle,
         sourceName: selectedSource.name,
         dubberId: selectedDubber?.id,
+        dubberName: selectedDubber?.name,
       }).then(() => {
         void markEpisodeWatched(epPosition);
         close();
@@ -740,6 +755,7 @@
   onMount(() => {
     document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', handleKeydown);
+    focusTvModalContent();
 
     const cached = getWatchModalState(releaseId);
 
@@ -763,6 +779,8 @@
             return;
           }
           dubbers = sortDubbersPinnedFirst(types);
+          await tick();
+          focusTvModalContent();
 
           void api.release.info?.(releaseId).then((infoRes: { release?: unknown }) => {
             lastEpisodeTypeUpdateId = readLastEpisodeTypeUpdateId(infoRes?.release ?? infoRes);

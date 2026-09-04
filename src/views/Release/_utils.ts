@@ -1,4 +1,3 @@
-import { toCdnProxyUrl } from '../../utils/posterUrl';
 import type { ReleaseCardData } from '../../types/release';
 import { mapReleaseRawToCard } from '../../utils/release-card';
 import type { ListStatusId } from './_types';
@@ -77,30 +76,7 @@ export function ratingHue(grade: number): number {
 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
 
-export function openImageLightbox(imageUrl: string) {
-  const displayUrl = toCdnProxyUrl(imageUrl);
-  const overlay = document.createElement('div');
-  overlay.className = 'release-lightbox';
-  overlay.setAttribute('role', 'dialog');
-  overlay.setAttribute('aria-modal', 'true');
-  const div = document.createElement('div');
-  div.textContent = displayUrl;
-  const safeUrl = div.innerHTML;
-  overlay.innerHTML = `<div class="release-lightbox__backdrop"></div><div class="release-lightbox__content"><img src="${safeUrl}" alt="" /></div>`;
-  const backdrop = overlay.querySelector('.release-lightbox__backdrop');
-  const close = () => {
-    overlay.remove();
-    document.removeEventListener('keydown', onKey);
-    document.body.style.overflow = '';
-  };
-  const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
-  overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target === backdrop) close(); });
-  document.addEventListener('keydown', onKey);
-  document.body.style.overflow = 'hidden';
-  document.body.appendChild(overlay);
-  const img = overlay.querySelector('img');
-  if (img) img.addEventListener('click', (e) => e.stopPropagation());
-}
+export { closeImageLightbox, isImageLightboxOpen, openImageLightbox } from '../../utils/image-lightbox';
 
 // ── Card mapper ───────────────────────────────────────────────────────────────
 

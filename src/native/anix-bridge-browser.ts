@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Anixart, BookmarkSortType, BookmarkType, DefaultResult } from 'anixapi';
 import { attachLegacyEndpoints } from './legacy-endpoints';
+import { isTvMode } from '../platform/tv';
+import { tvBridgeInvokeUrl } from '../constants/tv-bridge';
 
 const CONFIG_KEY = 'anixapp.native.config';
 const CUSTOM_TAB_KEY = 'anixapp.homeCustomFilters';
@@ -234,13 +236,24 @@ export function createBrowserAnixBridge() {
       c.getClient().endpoints.release.getEpisode(toPositiveInt(releaseId), toPositiveInt(sourceId), episodePosition)),
     'anix:getEpisodeUpdates': h((c, releaseId, page = 0) =>
       c.getClient().endpoints.release.episodeUpdates?.(toPositiveInt(releaseId), page)),
-    'anix:getDirectVideoLink': async () => ({
-      directUrl: null,
-      quality: null,
-      qualityMap: {},
-      downloadHeaders: {},
-      skip: null,
-    }),
+    'anix:getDirectVideoLink': async (_c, args) => {
+      const embedUrl = String(args?.[0] || '');
+      // TV web prod: Kodik resolve on api.anixapp.com (tv.anixapp.com static nginx → 405 on POST).
+      if (import.meta.env.PROD && isTvMode()) {
+        const res = await fetch(tvBridgeInvokeUrl(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channel: 'anix:getDirectVideoLink', args: [embedUrl] }),
+        });
+        const json = await res.json() as { ok?: boolean; data?: unknown; error?: string };
+        if (!res.ok || json.ok === false) {
+          throw new Error(json.error || `Не удалось получить ссылку (${res.status})`);
+        }
+        return json.data;
+      }
+      const { getDirectVideoLink } = await import('./kodik-direct');
+      return getDirectVideoLink(embedUrl);
+    },
     'anix:randomRelease': h((c, extended = true) => c.getClient().endpoints.release.getRandomRelease(extended)),
     'anix:latestFeed': h((c, page = 0) => c.getClient().endpoints.feed.latest(page)),
     'anix:myFeed': h((c, page = 0, opts = {}) => c.getClient().endpoints.feed.my?.(page, opts) ?? c.getClient().endpoints.feed.latest(page)),

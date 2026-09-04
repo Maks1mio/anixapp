@@ -30,6 +30,15 @@ function applyGpuFlags() {
 
   if (process.platform === 'win32') {
     app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+    app.commandLine.appendSwitch('enable-unsafe-webgpu');
+    app.commandLine.appendSwitch('ignore-gpu-blocklist');
+    app.commandLine.appendSwitch('enable-features', 'WebGPUService');
+  }
+
+  if (process.platform === 'darwin') {
+    app.commandLine.appendSwitch('enable-unsafe-webgpu');
+    app.commandLine.appendSwitch('ignore-gpu-blocklist');
+    app.commandLine.appendSwitch('enable-features', 'WebGPUService');
   }
 
   if (process.platform === 'linux') {

@@ -5,9 +5,10 @@
 
   interface Props {
     items: ReleaseCardData[];
+    tvMode?: boolean;
   }
 
-  let { items }: Props = $props();
+  let { items, tvMode = false }: Props = $props();
 
   let sectionEl = $state<HTMLElement | undefined>();
   let panelEl = $state<HTMLElement | undefined>();
@@ -35,6 +36,11 @@
   }
 
   $effect(() => {
+    if (tvMode) {
+      bgVisible = false;
+      return;
+    }
+
     items.length;
     const panel = panelEl;
     const scroll = getScrollEl();
@@ -62,27 +68,45 @@
 </script>
 
 {#if items.length > 0}
-  <div class="release-page__recommended" bind:this={sectionEl}>
-    {#if bgVisible}
-      <div
-        class="release-page__section-bg"
-        aria-hidden="true"
-        style:top="{bgTop}px"
-        style:width="{bgWidth}px"
-        style:height="{bgHeight}px"
-      ></div>
-    {/if}
+  {#if tvMode}
+    <section
+      class="tv-home-row tv-release-page__recommended-row"
+      aria-label="Рекомендуем также"
+      data-tv-release-section="recommended"
+    >
+      <h2 class="tv-home-row__title">Рекомендуем также</h2>
 
-    <div class="release-page__recommended-panel" bind:this={panelEl}>
-      <h2 class="release-page__block-title">Рекомендуем также</h2>
-
-      <UiV2ReleaseCarousel measureKey={items.length}>
+      <UiV2ReleaseCarousel measureKey={items.length} class="tv-release-carousel">
         {#each items as item (item.id)}
-          <div class="uiv2-carousel__item">
-            <ReleaseCardUiV2 data={item} variant="vertical" />
+          <div class="uiv2-carousel__item" data-tv-release-id={item.id}>
+            <ReleaseCardUiV2 data={item} variant="vertical" showMenu={false} />
           </div>
         {/each}
       </UiV2ReleaseCarousel>
+    </section>
+  {:else}
+    <div class="release-page__recommended" bind:this={sectionEl}>
+      {#if bgVisible}
+        <div
+          class="release-page__section-bg"
+          aria-hidden="true"
+          style:top="{bgTop}px"
+          style:width="{bgWidth}px"
+          style:height="{bgHeight}px"
+        ></div>
+      {/if}
+
+      <div class="release-page__recommended-panel" bind:this={panelEl}>
+        <h2 class="release-page__block-title">Рекомендуем также</h2>
+
+        <UiV2ReleaseCarousel measureKey={items.length}>
+          {#each items as item (item.id)}
+            <div class="uiv2-carousel__item">
+              <ReleaseCardUiV2 data={item} variant="vertical" />
+            </div>
+          {/each}
+        </UiV2ReleaseCarousel>
+      </div>
     </div>
-  </div>
+  {/if}
 {/if}

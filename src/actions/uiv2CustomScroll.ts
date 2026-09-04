@@ -26,6 +26,10 @@ export function uiv2CustomScroll(
   root: HTMLElement,
   options: Uiv2CustomScrollOptions = {},
 ): { destroy(): void; update(next: Uiv2CustomScrollOptions): void } {
+  if (typeof document !== 'undefined' && document.documentElement.classList.contains('tv-mode')) {
+    return { destroy() {}, update() {} };
+  }
+
   let axis: Uiv2ScrollAxis = options.axis ?? 'y';
   let viewportSelector = options.viewportSelector ?? DEFAULT_VIEWPORT;
 

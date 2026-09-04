@@ -112,7 +112,8 @@ function isShadowHost(url) {
 }
 
 function proxyPath(targetUrl, ref, cookie) {
-  let p = `/__anix/media?u=${encodeURIComponent(targetUrl)}`;
+  const prefix = process.env.ANIX_MEDIA_PROXY_PREFIX || '/__anix/media';
+  let p = `${prefix}?u=${encodeURIComponent(targetUrl)}`;
   if (ref && typeof ref === 'string' && ref.startsWith('http')) {
     p += `&ref=${encodeURIComponent(ref)}`;
   }

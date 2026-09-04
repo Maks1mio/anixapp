@@ -12,7 +12,7 @@
   <div class="release-page__screenshots">
     {#each screenshots.slice(0, 8) as url}
       {@const fullUrl = buildScreenshotUrl(url)}
-      <button type="button" class="release-page__screenshot-btn" onclick={() => openImageLightbox(fullUrl)}>
+      <button type="button" class="release-page__screenshot-btn" onclick={(e) => openImageLightbox(fullUrl, e.currentTarget as HTMLElement)}>
         <PosterImage src={fullUrl} alt="" />
       </button>
     {/each}

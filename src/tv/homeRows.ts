@@ -13,8 +13,28 @@ import {
   toFilterRequest,
 } from '../utils/homeCustomTab';
 
-export const TV_HOME_ROW_LIMIT = 16;
+export const TV_HOME_ROW_LIMIT = 8;
+export const TV_HOME_EAGER_FILTER_ROWS = 2;
 export const TV_CONTINUE_WATCHING_ROW_ID = 'continue-watching';
+
+const ROW_CACHE_TTL_MS = 120_000;
+
+type RowCacheEntry = { items: ReleaseCardData[]; status: 'ready' | 'empty'; at: number };
+
+const rowCache = new Map<string, RowCacheEntry>();
+
+function rowCacheKey(row: Pick<TvHomeRowDef, 'id' | 'kind' | 'filterArgs'>): string {
+  if (row.kind === 'history') return 'history';
+  return `filter:${JSON.stringify(row.filterArgs ?? {})}`;
+}
+
+export function invalidateTvHomeRowCache(kind?: 'history'): void {
+  if (kind === 'history') {
+    rowCache.delete('history');
+    return;
+  }
+  rowCache.clear();
+}
 
 export type TvHomeRowStatus = 'loading' | 'ready' | 'empty' | 'error';
 export type TvHomeRowKind = 'filter' | 'history';
@@ -75,14 +95,14 @@ export async function fetchTvHomeRowItems(
   const api = window.anixApi?.release?.filter;
   if (!api) throw new Error('release.filter unavailable');
 
-  const res = (await api(0, filterArgs, true)) as { content?: unknown } | undefined;
+  const res = (await api(0, filterArgs, false)) as { content?: unknown } | undefined;
   const content = Array.isArray(res?.content) ? res.content : [];
   const items: ReleaseCardData[] = [];
 
   for (const raw of content.slice(0, limit)) {
     if (!raw || typeof raw !== 'object') continue;
     try {
-      items.push(mapReleaseRawToCard(raw as Record<string, unknown>, { preferLargePoster: true }));
+      items.push(mapReleaseRawToCard(raw as Record<string, unknown>));
     } catch (err) {
       if (import.meta.env.DEV) {
         console.warn('[tv-home] skip release card mapping', err);
@@ -113,11 +133,12 @@ export async function fetchTvContinueWatchingItems(
     .map((raw) => mapHistoryRawToReleaseCard(raw as Record<string, unknown>));
 }
 
-async function waitForAnixApi(timeoutMs = 12_000): Promise<void> {
+async function waitForAnixApi(timeoutMs = 8_000): Promise<void> {
+  if (window.anixApi?.release?.filter && window.anixApi?.history?.all) return;
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
+    await new Promise((resolve) => setTimeout(resolve, 16));
     if (window.anixApi?.release?.filter && window.anixApi?.history?.all) return;
-    await new Promise((resolve) => setTimeout(resolve, 40));
   }
   throw new Error('Anix API not ready');
 }
@@ -133,17 +154,25 @@ export function createTvHomeRowStates(defs: TvHomeRowDef[]): TvHomeRowState[] {
 export async function loadTvHomeRowData(
   row: Pick<TvHomeRowDef, 'id' | 'kind' | 'filterArgs'>,
 ): Promise<Pick<TvHomeRowState, 'items' | 'status'>> {
-  const maxAttempts = row.kind === 'history' ? 1 : 3;
+  const cacheKey = rowCacheKey(row);
+  const cached = rowCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < ROW_CACHE_TTL_MS) {
+    return { items: cached.items, status: cached.status };
+  }
+
+  const maxAttempts = row.kind === 'history' ? 1 : 2;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       const items = row.kind === 'history'
         ? await fetchTvContinueWatchingItems()
         : await fetchTvHomeRowItems(row.filterArgs ?? {});
-      return {
+      const result = {
         items,
-        status: items.length > 0 ? 'ready' : 'empty',
+        status: (items.length > 0 ? 'ready' : 'empty') as TvHomeRowState['status'],
       };
+      rowCache.set(cacheKey, { ...result, at: Date.now() });
+      return result;
     } catch (err) {
       if (import.meta.env.DEV) {
         console.error(`[tv-home] row "${row.id}" attempt ${attempt}/${maxAttempts} failed`, err);

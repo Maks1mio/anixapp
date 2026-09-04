@@ -43,6 +43,10 @@ function updateAll(scrolls: Set<HTMLElement>): void {
 }
 
 export function attachTvHomeRailTitleDim(root: ParentNode = document): () => void {
+  if (typeof document !== 'undefined' && document.documentElement.classList.contains('tv-android')) {
+    return () => {};
+  }
+
   const scrolls = new Set<HTMLElement>();
   let raf = 0;
 

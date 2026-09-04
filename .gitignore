@@ -5,6 +5,7 @@ package-lock.json
 # Build
 dist/
 dist-android/
+dist-tv-web/
 /release/
 out/
 

@@ -1,5 +1,7 @@
 import { setEmbedMediaContext, getEmbedCookie } from './core/hls-media-context';
 import { normalizeSkipMarks, type SkipMarks } from './_skipMarks';
+import { isTvMode } from '../../platform/tv';
+import { tvBridgeMediaUrl } from '../../constants/tv-bridge';
 
 export function isVideoEmbedPageUrl(url: string): boolean {
   return /kodikplayer\.com|kodik\.info|aniqit\.com|anixis\.com|aniqart\.com/i.test(url)
@@ -62,6 +64,11 @@ function inBrowserWithoutElectron(): boolean {
   return typeof window !== 'undefined' && !(window as any).electron;
 }
 
+function isCapacitorNative(): boolean {
+  return typeof window !== 'undefined'
+    && !!(window as any).Capacitor?.isNativePlatform?.();
+}
+
 function canUseViteMediaProxy(): boolean {
   if (typeof window === 'undefined') return false;
   try {
@@ -80,20 +87,30 @@ function hostNeedsMediaProxy(host: string): boolean {
   return /okcdn|vkvd|vkuservideo|mycdn|userapi|sibnet|solodcdn|kodik|rutube|libria|anilib|collaps|studiomir|animedia|zerocdn|imgsmail|mail\.ru|myvi|secvideo1|csst\.online|sstrge|sovetromantica/i.test(h);
 }
 
-/** CDN/HLS через same-origin прокси (браузер LAN + Electron dev), иначе CORS / Referer. */
+function shouldUseTvMediaProxy(): boolean {
+  return import.meta.env.PROD && isTvMode();
+}
+
+/** CDN/HLS через same-origin прокси (браузер LAN + Electron dev). Prod TV (browser + APK) → api.anixapp.com/tv/media. */
 export function toCorsSafePlayUrl(url: string, referer?: string): string {
-  const useProxy = inBrowserWithoutElectron() || canUseViteMediaProxy();
+  const tvProxy = shouldUseTvMediaProxy();
+  // Live dev APK on LAN: native WebView intercept. Prod TV: server-side media proxy (как в браузере).
+  if (isCapacitorNative() && !tvProxy) return url;
+  const useProxy = inBrowserWithoutElectron() || canUseViteMediaProxy() || (isCapacitorNative() && tvProxy);
   if (!url || !useProxy) return url;
-  if (url.startsWith('/') || url.startsWith('anix-local:') || url.includes('/__anix/media')) return url;
+  if (url.startsWith('/') || url.startsWith('anix-local:') || url.includes('/__anix/media') || url.includes('/tv/media')) return url;
   if (isUnplayableVideoSrc(url)) return url;
   try {
     const parsed = new URL(url.startsWith('http') ? url : `https:${url}`);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return url;
     if (!hostNeedsMediaProxy(parsed.hostname)) return url;
-    let out = `/__anix/media?u=${encodeURIComponent(parsed.href)}`;
     const ref = referer?.trim();
-    if (ref) out += `&ref=${encodeURIComponent(ref)}`;
     const cookie = getEmbedCookie();
+    if (import.meta.env.PROD && isTvMode()) {
+      return tvBridgeMediaUrl(parsed.href, ref, cookie || undefined);
+    }
+    let out = `/__anix/media?u=${encodeURIComponent(parsed.href)}`;
+    if (ref) out += `&ref=${encodeURIComponent(ref)}`;
     if (cookie) out += `&ck=${encodeURIComponent(cookie)}`;
     return out;
   } catch {
@@ -294,7 +311,8 @@ export async function resolveEpisodeUrlWithRetry(
 function unwrapMediaProxyUrl(url: string): string {
   try {
     const u = url.startsWith('/') ? new URL(url, 'http://local.invalid') : new URL(url);
-    if (u.pathname === '/__anix/media' || u.pathname.endsWith('/__anix/media')) {
+    if (u.pathname === '/__anix/media' || u.pathname.endsWith('/__anix/media')
+      || u.pathname === '/tv/media' || u.pathname.endsWith('/tv/media')) {
       const target = u.searchParams.get('u');
       if (target) return target;
     }
@@ -338,7 +356,7 @@ export async function resolveDownloadUrl(
   }
 
   url = unwrapMediaProxyUrl(url);
-  if (isUnplayableVideoSrc(url) || url.includes('/__anix/media')) return null;
+  if (isUnplayableVideoSrc(url) || url.includes('/__anix/media') || url.includes('/tv/media')) return null;
 
   url = url
     .replace(/:hls:manifest\.m3u8$/, '')

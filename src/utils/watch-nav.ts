@@ -1,6 +1,7 @@
 /** Открыть плеер: Electron-окно или встроенная страница /watch в браузере. */
 import { navigate } from '../stores/navigation';
 import { isPlayerWindowOpen } from '../stores/modals';
+import { isTvMode } from '../platform/tv';
 
 export interface WatchLaunchParams {
   releaseId: string | number;
@@ -9,6 +10,7 @@ export interface WatchLaunchParams {
   title: string;
   sourceName: string;
   dubberId?: string | number;
+  dubberName?: string;
   lobbyIdle?: boolean;
 }
 
@@ -24,9 +26,10 @@ export function openInAppPlayer(params: WatchLaunchParams): Promise<void> {
     title: params.title,
     sourceName: params.sourceName,
     ...(params.dubberId != null && params.dubberId !== '' ? { dubberId: String(params.dubberId) } : {}),
+    ...(params.dubberName != null && params.dubberName !== '' ? { dubberName: String(params.dubberName) } : {}),
   };
 
-  if (window.electron?.openPlayerWindow) {
+  if (window.electron?.openPlayerWindow && !isTvMode()) {
     return window.electron.openPlayerWindow({
       ...payload,
       ...(params.lobbyIdle ? { lobbyIdle: true } : {}),

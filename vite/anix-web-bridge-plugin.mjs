@@ -8,7 +8,7 @@ const { proxyMediaRequest, corsHeaders } = require('../electron/lib/media-proxy.
 const ANIXART_REFERER = 'https://anixart.tv/';
 const ANIXART_ORIGIN = 'https://anixart.tv';
 
-const ANIXBACK_PROD_ORIGIN = 'https://anix.maks1mio.su';
+const ANIXBACK_PROD_ORIGIN = 'https://api.anixapp.com';
 const ANIXBACK_LOCAL_ORIGIN = 'http://localhost:8787';
 
 function anixbackTargetOrigins() {
@@ -208,7 +208,17 @@ function attachBridgeMiddleware(server, bridge) {
     console.warn('[anix-web-bridge] middleware error:', err?.message || err);
   });
 
-  server.middlewares.use(async (req, res, next) => {
+  server.middlewares.use(createBridgeRequestHandler(bridge));
+}
+
+export function createAnixBridgeInstance(options = {}) {
+  const { createAnixBridgeCore } = require('../electron/anix-bridge-core.js');
+  return createAnixBridgeCore(options);
+}
+
+/** HTTP handler for /__anix/*, /__anix/media, /__cdn, /__anixback (Node http or Vite middleware). */
+export function createBridgeRequestHandler(bridge) {
+  return async (req, res, next) => {
     const url = req.url ?? '';
 
     if (url.startsWith('/__cdn/?')) {
@@ -319,7 +329,7 @@ function attachBridgeMiddleware(server, bridge) {
     } catch (err) {
       sendJson(res, 500, { ok: false, error: String(err?.message || err) });
     }
-  });
+  };
 }
 
 /** Vite plugin: Anixart API + CDN proxy для браузерного dev-режима */
@@ -328,8 +338,7 @@ export function anixWebBridgePlugin() {
 
   function getBridge() {
     if (!bridge) {
-      const { createAnixBridgeCore } = require('../electron/anix-bridge-core.js');
-      bridge = createAnixBridgeCore();
+      bridge = createAnixBridgeInstance();
     }
     return bridge;
   }

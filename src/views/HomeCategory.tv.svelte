@@ -90,7 +90,7 @@
 
       items = [
         ...items,
-        ...content.map((raw) => mapReleaseRawToCard(raw, { preferLargePoster: true })),
+        ...content.map((raw) => mapReleaseRawToCard(raw)),
       ];
       page = nextPage + 1;
       loadState = 'ready';

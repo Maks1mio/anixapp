@@ -17,7 +17,7 @@ function mapHistoryReleaseBase(raw: Record<string, unknown>): ReleaseCardData {
           : undefined;
   const myVote = typeof voteRaw === 'number' && voteRaw > 0 ? voteRaw : undefined;
   return {
-    ...mapReleaseRawToCard(releaseRaw, { preferLargePoster: true }),
+    ...mapReleaseRawToCard(releaseRaw),
     myVote,
   };
 }

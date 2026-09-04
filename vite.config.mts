@@ -9,12 +9,13 @@ const devPort = Number(process.env.ANIXAPP_DEV_PORT)
 export default defineConfig(({ command }) => {
   const tvMode = process.env.VITE_TV_MODE === '1' || process.env.VITE_TV_MODE === 'true';
   const outDir = process.env.ANIXAPP_OUT_DIR || 'dist';
+  const webBase = process.env.ANIXAPP_WEB_BASE === '/' || process.env.ANIXAPP_TV_WEB === '1';
 
   return {
   root: __dirname,
   // Dev: absolute `/` so SPA routes (/watch, /release/…) don't 404 Vite deps.
   // Build: `./` so Electron file:// / Capacitor still resolves assets.
-  base: command === 'serve' ? '/' : './',
+  base: command === 'serve' || webBase ? '/' : './',
   appType: 'spa',
   plugins: [svelte({ preprocess: vitePreprocess() }), anixWebBridgePlugin()],
   resolve: {
@@ -39,7 +40,7 @@ export default defineConfig(({ command }) => {
     cssMinify: 'esbuild',
     cssTarget: 'chrome150',
     rollupOptions: {
-      input: outDir === 'dist-android'
+      input: outDir === 'dist-android' || webBase
         ? [resolve(__dirname, 'index.html')]
         : [
             resolve(__dirname, 'index.html'),
@@ -48,6 +49,15 @@ export default defineConfig(({ command }) => {
             resolve(__dirname, 'upscale-tool.html'),
             resolve(__dirname, 'overview-video-editor.html'),
           ],
+      output: {
+        manualChunks(id) {
+          if (id.includes('anime4k-webgpu')) return 'anime4k';
+          if (id.includes('hls.js')) return 'hls';
+          if (id.includes('lottie')) return 'lottie';
+          if (id.includes('binauralfir') || id.includes('surround-audio')) return 'audio';
+          if (id.includes('flag-icons')) return 'flags';
+        },
+      },
     },
   },
   css: {
@@ -68,8 +78,20 @@ export default defineConfig(({ command }) => {
     port: devPort,
     strictPort: true,
     allowedHosts: true,
+    warmup: tvMode
+      ? {
+          clientFiles: [
+            './src/main.ts',
+            './src/App.svelte',
+            './src/views/Home.tv.svelte',
+            './src/components/tv/TvHomeRow.svelte',
+            './src/layout/TvLayout.svelte',
+            './src/components/uikit-v2/UiV2AnimeCard.svelte',
+          ],
+        }
+      : undefined,
     watch: {
-      ignored: ['**/release/**', '**/dist/**', '**/dist-android/**'],
+      ignored: ['**/release/**', '**/dist/**', '**/dist-android/**', '**/dist-tv-web/**'],
     },
     proxy: {
       // Same-origin WS so phone/LAN can join lobby without hitting localhost:8787.

@@ -1,5 +1,5 @@
 import { isTvMode } from '../platform/tv';
-import { isTvReleasePath, tvKeepAliveKey } from '../tv/keepAlive';
+import { isTvReleasePath, isTvWatchPath, tvKeepAliveKey } from '../tv/keepAlive';
 import { getPath } from '../router';
 import { scrollTvCarouselItemIntoView } from '../tv/carouselScroll';
 import { cancelTvReleaseOpen } from './tv-release-transition';
@@ -9,7 +9,9 @@ const RAIL_SEL = '.tv-layout__rail';
 const MAIN_SEL = '.tv-layout__main';
 const TV_HOME_ROW_SEL = '[data-tv-home-row]';
 const TV_HOME_RAILS_SEL = '[data-tv-home-rails]';
-const TV_ROW_SCROLL_SEL = '.uiv2-carousel__scroll';
+const TV_RELEASE_PAGE_SEL = '.tv-route-layer--active .tv-release-page';
+const TV_RELEASE_SECTION_SEL = '[data-tv-release-section]';
+const TV_ROW_SCROLL_SEL = '.uiv2-carousel__scroll, .release-page__carousel-scroll, .release-page__carousel-scroll--video-thumbs';
 
 const FOCUSABLE = [
   'a[href]',
@@ -28,11 +30,15 @@ const FOCUS_SKIP = [
   '.watch-modal__episode-actions *',
   '.watch-modal__episode-mini',
   '.watch-modal__backdrop',
+  '.watch-modal__variant-pin',
   '.watch-page__tap-layer',
   '.watch-page__vol-slider',
+  '.tv-dbg',
+  '.tv-dbg *',
 ].join(',');
 
 const OVERLAY_ROOT = [
+  '.release-lightbox',
   '[role=dialog]',
   '.watch-panel',
   '.custom-select__menu',
@@ -40,13 +46,31 @@ const OVERLAY_ROOT = [
 ].join(',');
 
 const FOCUS_PRIORITY = [
+  '.release-lightbox__close',
+  '.tv-release-page__shot-nav',
+  '.tv-release-page__dialog-close',
   '.watch-panel__ep-row--active',
-  '.watch-modal__episode-card',
+  '.watch-modal__filter--active',
+  '.watch-modal__filter',
   '.watch-modal__variant-row',
+  '.watch-modal__episode-main',
+  '.watch-modal__episode-card',
+  '.tv-watch__ep-item--active',
+  '.tv-watch__ep-item',
+  '.tv-watch__skip-btn',
+  '.tv-watch__play',
+  '.tv-watch__timeline',
+  '.tv-watch__settings-item',
+  '.tv-watch__dock-btn',
+  '.watch-page__center-play-btn',
   '.watch-page__ctrl-btn',
   '.watch-page__gui-overlay button',
   'button.zh__play',
+  '.release-page__btn--play',
+  '.release-page__actions-chip',
   '.tv-release-page__play',
+  '.tv-release-page__dialog-item--on',
+  '.tv-release-page__dialog-item',
   '.release-card-h__link',
   '.release-card-v__link',
   '.uiv2-anime-card[role="button"]',
@@ -77,7 +101,15 @@ const parkedFocusByLayer = new Map<string, HTMLElement>();
 /** Индекс фокуса внутри каждого ряда главной (по умолчанию 0). */
 const tvHomeRowFocusIndex = new Map<string, number>();
 
-const TV_HOME_CARD_SEL = '.uiv2-anime-card[role="button"], .tv-category-see-all[role="button"]';
+const TV_HOME_CARD_SEL = [
+  '.uiv2-anime-card[role="button"]',
+  '.tv-category-see-all[role="button"]',
+  '.tv-release-page__video-card',
+  '.tv-release-page__shot',
+  '.release-page__video-thumb',
+  '.release-page__video-category-card',
+  '.release-page__screenshot-btn',
+].join(', ');
 
 function tvHomeRow(el: Element | null | undefined): HTMLElement | null {
   const row = el?.closest(TV_HOME_ROW_SEL);
@@ -95,7 +127,9 @@ function tvHomeRowKey(row: HTMLElement): string {
 }
 
 function tvHomeRowCards(row: HTMLElement): HTMLElement[] {
-  return collectFocusables(row).filter((el) => el.matches(TV_HOME_CARD_SEL));
+  const cards = Array.from(row.querySelectorAll<HTMLElement>(TV_HOME_CARD_SEL));
+  if (cards.length) return cards;
+  return collectFocusables(row);
 }
 
 function saveTvHomeRowFocus(row: HTMLElement, active: HTMLElement): void {
@@ -115,7 +149,76 @@ function focusTvHomeRowAtSaved(row: HTMLElement): boolean {
   return true;
 }
 
+function isTvReleasePage(el: Element | null | undefined): boolean {
+  return !!el?.closest(TV_RELEASE_PAGE_SEL);
+}
+
+function tvReleaseSections(): HTMLElement[] {
+  const page = document.querySelector(TV_RELEASE_PAGE_SEL);
+  if (!page) return [];
+  return Array.from(page.querySelectorAll<HTMLElement>(TV_RELEASE_SECTION_SEL));
+}
+
+function focusTvReleaseHero(): boolean {
+  const page = document.querySelector(TV_RELEASE_PAGE_SEL);
+  if (!page) return false;
+  const play = page.querySelector<HTMLElement>(
+    '.release-page__btn--play:not([disabled]), .tv-release-page__play:not([disabled])',
+  );
+  if (play) {
+    focusElement(play);
+    return true;
+  }
+  const actions = page.querySelector<HTMLElement>('[data-tv-release-section="hero"]');
+  if (!actions) return false;
+  const list = collectFocusables(actions);
+  if (!list.length) return false;
+  focusElement(preferredTarget(list) ?? list[0]);
+  return true;
+}
+
+function moveTvReleaseSectionVertical(active: HTMLElement, dir: 'up' | 'down'): boolean {
+  if (!isTvReleasePage(active)) return false;
+
+  const sections = tvReleaseSections();
+  if (!sections.length) return false;
+
+  const currentSection = sections.find((section) => section.contains(active));
+  if (currentSection) {
+    const sectionFocusables = collectFocusables(currentSection);
+    if (sectionFocusables.length > 1 && moveWithin(sectionFocusables, active, dir)) {
+      return true;
+    }
+  }
+
+  const currentIdx = currentSection ? sections.indexOf(currentSection) : -1;
+  const nextIdx = dir === 'down' ? currentIdx + 1 : currentIdx - 1;
+
+  if (nextIdx < 0) {
+    if (currentIdx <= 0) return focusTvReleaseHero();
+    return false;
+  }
+
+  if (nextIdx >= sections.length) return false;
+
+  const nextSection = sections[nextIdx];
+  const nextFocusables = collectFocusables(nextSection);
+  if (!nextFocusables.length) return false;
+  focusElement(preferredTarget(nextFocusables) ?? nextFocusables[0]);
+  return true;
+}
+
+function isTvHomeCarouselCard(el: HTMLElement): boolean {
+  if (!el.matches(TV_HOME_CARD_SEL)) return false;
+  if (el.closest(TV_HOME_RAILS_SEL)) return true;
+  return !!el.closest('.release-page__carousel-scroll, .release-page__carousel-scroll--video-thumbs, .tv-release-page');
+}
+
 function moveTvHomeRowVertical(active: HTMLElement, dir: 'up' | 'down'): boolean {
+  if (isTvReleasePage(active)) {
+    return moveTvReleaseSectionVertical(active, dir);
+  }
+
   if (!active.closest(TV_HOME_RAILS_SEL)) return false;
 
   const rows = tvHomeRows();
@@ -135,11 +238,53 @@ function moveTvHomeRowVertical(active: HTMLElement, dir: 'up' | 'down'): boolean
   const nextIdx = dir === 'down' ? rowIdx + 1 : rowIdx - 1;
   if (nextIdx < 0 || nextIdx >= rows.length) return false;
 
-  return focusTvHomeRowAtSaved(rows[nextIdx]);
+  const nextRow = rows[nextIdx];
+  const nextId = tvHomeRowKey(nextRow);
+  if (nextId) {
+    window.dispatchEvent(new CustomEvent('tv-home:focus-row', { detail: { id: nextId } }));
+  }
+  if (focusTvHomeRowAtSaved(nextRow)) return true;
+  window.requestAnimationFrame(() => focusTvHomeRowAtSaved(nextRow));
+  return true;
 }
 
-function isTvHomeCarouselCard(el: HTMLElement): boolean {
-  return el.matches(TV_HOME_CARD_SEL) && !!el.closest(TV_HOME_RAILS_SEL);
+function carouselCardsForActive(active: HTMLElement): HTMLElement[] {
+  const row = tvHomeRow(active);
+  if (row) return tvHomeRowCards(row);
+
+  const scroll = active.closest(TV_ROW_SCROLL_SEL);
+  if (scroll instanceof HTMLElement) {
+    const cards = Array.from(scroll.querySelectorAll<HTMLElement>(TV_HOME_CARD_SEL));
+    if (cards.length) return cards;
+  }
+
+  const section = active.closest(TV_RELEASE_SECTION_SEL);
+  if (section instanceof HTMLElement) {
+    const cards = Array.from(section.querySelectorAll<HTMLElement>(TV_HOME_CARD_SEL));
+    if (cards.length) return cards;
+  }
+
+  return [active];
+}
+
+function moveTvHomeCarouselHorizontal(active: HTMLElement, dir: 'left' | 'right'): boolean {
+  const cards = carouselCardsForActive(active);
+  const idx = cards.indexOf(active);
+  if (idx < 0) return false;
+
+  if (dir === 'left') {
+    if (idx > 0) {
+      focusElement(cards[idx - 1]);
+      return true;
+    }
+    return isTvReleasePage(active) ? false : focusActiveRailItem();
+  }
+
+  if (idx < cards.length - 1) {
+    focusElement(cards[idx + 1]);
+    return true;
+  }
+  return true;
 }
 
 function setRailEngaged(engaged: boolean): void {
@@ -168,10 +313,17 @@ function overlayRoot(): Element | null {
   return overlays.length ? overlays[overlays.length - 1] : null;
 }
 
+function isFocusSkipped(el: Element): boolean {
+  if (isTvReleasePage(el) && el.closest('.release-page__screenshot-btn, .release-page__screenshots')) {
+    return false;
+  }
+  return !!el.closest(FOCUS_SKIP);
+}
+
 function collectFocusables(root: Element | Document): HTMLElement[] {
   return Array.from(root.querySelectorAll(FOCUSABLE))
     .filter((el): el is HTMLElement => el instanceof HTMLElement)
-    .filter((el) => !el.closest(FOCUS_SKIP))
+    .filter((el) => !isFocusSkipped(el))
     .filter(isVisible);
 }
 
@@ -262,9 +414,18 @@ function spatialScore(
   return primary + secondary * (horizontal ? 3 : 0.25) + bias;
 }
 
+function resolvePreferredTarget(list: HTMLElement[], selector: string): HTMLElement | null {
+  const direct = list.find((el) => el.matches(selector));
+  if (direct) return direct;
+  const nested = list.find((el) => !!el.closest(selector));
+  if (!nested) return null;
+  const ancestor = nested.closest(selector);
+  return ancestor instanceof HTMLElement && list.includes(ancestor) ? ancestor : nested;
+}
+
 function preferredTarget(list: HTMLElement[]): HTMLElement | null {
   for (const selector of FOCUS_PRIORITY) {
-    const hit = list.find((el) => el.matches(selector) || !!el.closest(selector));
+    const hit = resolvePreferredTarget(list, selector);
     if (hit) return hit;
   }
   return null;
@@ -274,7 +435,30 @@ function scrollCarouselItemIntoView(el: HTMLElement): void {
   scrollTvCarouselItemIntoView(el);
 }
 
+function scrollReleaseShellIntoView(el: HTMLElement): boolean {
+  const shell = el.closest('.tv-release-page__shell');
+  if (!(shell instanceof HTMLElement)) return false;
+
+  const shellRect = shell.getBoundingClientRect();
+  const elRect = el.getBoundingClientRect();
+  const padding = 28;
+
+  if (elRect.top < shellRect.top + padding) {
+    shell.scrollTop += elRect.top - shellRect.top - padding;
+    return true;
+  }
+  if (elRect.bottom > shellRect.bottom - padding) {
+    shell.scrollTop += elRect.bottom - shellRect.bottom + padding;
+    return true;
+  }
+  return true;
+}
+
 function scrollHomeRowIntoView(el: HTMLElement): boolean {
+  if (isTvReleasePage(el)) {
+    return scrollReleaseShellIntoView(el);
+  }
+
   const rails = el.closest(TV_HOME_RAILS_SEL);
   const homeRow = el.closest(TV_HOME_ROW_SEL);
   if (!(rails instanceof HTMLElement) || !(homeRow instanceof HTMLElement)) return false;
@@ -302,7 +486,9 @@ function focusElement(el: HTMLElement, sticky = false, preserveScroll = false): 
     }
   }
   stickyFocus = sticky ? el : null;
-  if (isInMain(el)) lastContentFocus = el;
+  if (isInMain(el) && !el.closest('.release-lightbox, .tv-release-page__dialog')) {
+    lastContentFocus = el;
+  }
   setRailEngaged(isInRail(el));
 }
 
@@ -327,6 +513,33 @@ export function returnTvFocusToContent(): void {
   }, 0);
 }
 
+/** Вернуть фокус на конкретный элемент (лайтбокс, диалоги и т.д.). */
+export function restoreTvFocus(target?: HTMLElement | null): void {
+  const el = target ?? null;
+  window.requestAnimationFrame(() => {
+    if (!isTvMode()) {
+      el?.focus();
+      return;
+    }
+
+    if (el?.isConnected) {
+      const list = activeContentFocusables();
+      if (list.includes(el)) {
+        focusElement(el);
+        return;
+      }
+
+      const nested = list.find((node) => el.contains(node) || node.contains(el));
+      if (nested) {
+        focusElement(nested);
+        return;
+      }
+    }
+
+    if (!focusTvPageContent()) scheduleFocusTvPageContent(20);
+  });
+}
+
 function moveWithin(list: HTMLElement[], active: HTMLElement, dir: 'up' | 'down' | 'left' | 'right'): boolean {
   const from = active.getBoundingClientRect();
   let best: HTMLElement | null = null;
@@ -346,23 +559,68 @@ function moveWithin(list: HTMLElement[], active: HTMLElement, dir: 'up' | 'down'
   return true;
 }
 
+function overlayFocusables(): HTMLElement[] {
+  const overlay = overlayRoot();
+  if (!overlay) return [];
+  return collectFocusables(overlay).filter((el) => !isInRail(el));
+}
+
+function focusTvOverlayContent(): boolean {
+  const tvWatch = document.querySelector('.tv-watch');
+  if (tvWatch && isVisible(tvWatch)) {
+    if (tvWatch.classList.contains('tv-watch--chrome-hidden')) {
+      const play = tvWatch.querySelector<HTMLElement>('.tv-watch__play');
+      if (play) {
+        focusElement(play);
+        return true;
+      }
+    }
+
+    const settings = tvWatch.querySelector('.tv-watch__settings[role="dialog"]');
+    if (settings && isVisible(settings)) {
+      const settingsList = collectFocusables(settings);
+      if (settingsList.length) {
+        focusElement(preferredTarget(settingsList) ?? settingsList[0]);
+        return true;
+      }
+    }
+
+    const panel = tvWatch.querySelector('.tv-watch__panel[role="dialog"]');
+    if (panel && isVisible(panel)) {
+      const panelList = collectFocusables(panel);
+      if (panelList.length) {
+        focusElement(preferredTarget(panelList) ?? panelList[0]);
+        return true;
+      }
+    }
+
+    const watchList = collectFocusables(tvWatch).filter((el) => !el.closest('.tv-watch__stage'));
+    if (watchList.length) {
+      const play = tvWatch.querySelector<HTMLElement>('.tv-watch__play');
+      if (play && watchList.includes(play)) {
+        focusElement(play);
+        return true;
+      }
+      focusElement(preferredTarget(watchList) ?? watchList[0]);
+      return true;
+    }
+  }
+
+  const list = overlayFocusables();
+  if (!list.length) return false;
+  focusElement(preferredTarget(list) ?? list[0]);
+  return true;
+}
+
 function focusTvReleaseContent(): boolean {
-  const layer = document.querySelector('.tv-route-layer--active .tv-release-page');
-  if (!layer) return false;
+  return focusTvReleaseHero();
+}
 
-  const play = layer.querySelector<HTMLElement>('.tv-release-page__play:not([disabled])');
-  if (play) {
-    focusElement(play);
-    return true;
-  }
-
-  const chip = layer.querySelector<HTMLElement>('.tv-release-page__chip');
-  if (chip) {
-    focusElement(chip);
-    return true;
-  }
-
-  return false;
+export function focusTvWatchPlay(): boolean {
+  const play = document.querySelector<HTMLElement>('.tv-watch .tv-watch__play');
+  if (!play) return false;
+  focusElement(play);
+  return true;
 }
 
 export function focusTvReleasePage(): void {
@@ -372,11 +630,32 @@ export function focusTvReleasePage(): void {
 function focusTvPageContent(): boolean {
   setRailEngaged(false);
 
+  if (overlayRoot()) {
+    return focusTvOverlayContent();
+  }
+
+  if (isTvWatchPath(getPath())) {
+    return focusTvOverlayContent();
+  }
+
   if (isTvReleasePath(getPath()) && focusTvReleaseContent()) {
     return true;
   }
 
   return focusDefaultContent();
+}
+
+export function scheduleFocusTvOverlayContent(maxTries = 40): void {
+  if (!isTvMode()) return;
+
+  let tries = 0;
+  const attempt = () => {
+    if (focusTvOverlayContent()) return;
+    tries += 1;
+    if (tries < maxTries) window.requestAnimationFrame(attempt);
+  };
+
+  window.requestAnimationFrame(attempt);
 }
 
 export function scheduleFocusTvPageContent(maxTries = 40): void {
@@ -393,18 +672,76 @@ export function scheduleFocusTvPageContent(maxTries = 40): void {
 }
 
 function ensureInitialFocus(): void {
+  if (overlayRoot()) {
+    scheduleFocusTvOverlayContent(40);
+    return;
+  }
   scheduleFocusTvPageContent(40);
+}
+
+function dispatchTvWatchSeek(seconds: number, showUi = false): void {
+  window.dispatchEvent(new CustomEvent('tv-watch:seek', { detail: { seconds, showUi } }));
 }
 
 function moveFocus(dir: 'up' | 'down' | 'left' | 'right'): boolean {
   const active = document.activeElement as HTMLElement | null;
+  const tvWatch = document.querySelector('.tv-watch');
+
+  if (tvWatch && isVisible(tvWatch)) {
+    const panelOpen = !!tvWatch.querySelector('.tv-watch__panel[role="dialog"]');
+    const settingsOpen = !!tvWatch.querySelector('.tv-watch__settings[role="dialog"]');
+    const overlayDialogOpen = panelOpen || settingsOpen;
+    const chromeHidden = tvWatch.classList.contains('tv-watch--chrome-hidden');
+
+    if (active?.matches('.tv-watch__play') && (dir === 'left' || dir === 'right')) {
+      dispatchTvWatchSeek(dir === 'left' ? -10 : 10, !chromeHidden);
+      return true;
+    }
+
+    if (chromeHidden && !overlayDialogOpen) {
+      if (dir === 'left' || dir === 'right') {
+        dispatchTvWatchSeek(dir === 'left' ? -10 : 10, false);
+        return true;
+      }
+      window.dispatchEvent(new CustomEvent('tv-watch:show-chrome'));
+      return true;
+    }
+    const dialogRoot = panelOpen
+      ? tvWatch.querySelector('.tv-watch__panel')
+      : settingsOpen
+        ? tvWatch.querySelector('.tv-watch__settings')
+        : null;
+    const list = dialogRoot
+      ? collectFocusables(dialogRoot ?? tvWatch)
+      : collectFocusables(tvWatch);
+    const scoped = list.filter((el) => !el.closest('.tv-watch__stage'));
+    if (scoped.length) {
+      if (!active || active === document.body || !scoped.includes(active)) {
+        return focusTvOverlayContent();
+      }
+      if (dir === 'up' || dir === 'down') {
+        return moveWithin(scoped, active, dir);
+      }
+      if (dir === 'left' || dir === 'right') {
+        if (moveWithin(scoped, active, dir)) return true;
+      }
+    }
+  }
+
+  if (active && isTvHomeCarouselCard(active) && !overlayRoot()) {
+    if (dir === 'left' || dir === 'right') {
+      if (moveTvHomeCarouselHorizontal(active, dir)) return true;
+    }
+    if ((dir === 'up' || dir === 'down') && moveTvHomeRowVertical(active, dir)) {
+      return true;
+    }
+  }
 
   if (overlayRoot()) {
-    const list = contentFocusables();
+    const list = overlayFocusables();
     if (!list.length) return false;
     if (!active || active === document.body || !list.includes(active)) {
-      ensureInitialFocus();
-      return true;
+      return focusTvOverlayContent();
     }
     if (dir === 'left' || dir === 'right') {
       const rowMove = moveWithinRowOrEdge(list, active, dir);
@@ -416,7 +753,7 @@ function moveFocus(dir: 'up' | 'down' | 'left' | 'right'): boolean {
     return moveWithin(list, active, dir);
   }
 
-  if (isInRail(active)) {
+  if (active && isInRail(active)) {
     if (dir === 'right') {
       return focusDefaultContent();
     }
@@ -451,6 +788,7 @@ function moveFocus(dir: 'up' | 'down' | 'left' | 'right'): boolean {
     }
 
     if (dir === 'up' || dir === 'down') {
+      if (isTvReleasePage(active) && moveTvReleaseSectionVertical(active, dir)) return true;
       if (moveTvHomeRowVertical(active, dir)) return true;
     }
 
@@ -480,8 +818,31 @@ function onArrowKeydown(event: KeyboardEvent): void {
   if (!dir) return;
   if (event.altKey || event.ctrlKey || event.metaKey) return;
 
-  const active = document.activeElement;
-  if (isTextInput(active) && (dir === 'left' || dir === 'right')) return;
+  const active = document.activeElement as HTMLElement | null;
+  if (active?.matches('.tv-watch__timeline') && (dir === 'left' || dir === 'right')) {
+    return;
+  }
+
+  const tvWatch = document.querySelector('.tv-watch');
+  if (tvWatch && isVisible(tvWatch)) {
+    const chromeHidden = tvWatch.classList.contains('tv-watch--chrome-hidden');
+
+    if (active?.matches('.tv-watch__play') && (dir === 'left' || dir === 'right')) {
+      event.preventDefault();
+      event.stopPropagation();
+      dispatchTvWatchSeek(dir === 'left' ? -10 : 10, !chromeHidden);
+      return;
+    }
+
+    if (chromeHidden && (dir === 'left' || dir === 'right')) {
+      event.preventDefault();
+      event.stopPropagation();
+      dispatchTvWatchSeek(dir === 'left' ? -10 : 10, false);
+      return;
+    }
+  }
+
+  if (isTextInput(event.target as Element | null) && (dir === 'left' || dir === 'right')) return;
 
   if (moveFocus(dir)) {
     event.preventDefault();
@@ -495,11 +856,12 @@ function observeDom(): void {
     if (timer) return;
     timer = window.setTimeout(() => {
       timer = 0;
+      if (document.querySelector('.tv-watch')) return;
       const overlay = overlayRoot();
       if (overlay) {
         const active = document.activeElement;
         if (!active || active === document.body || !overlay.contains(active)) {
-          ensureInitialFocus();
+          scheduleFocusTvOverlayContent(20);
         }
         return;
       }
@@ -523,11 +885,51 @@ function handleBack(): void {
     return;
   }
 
+  const lightbox = document.querySelector('.release-lightbox');
+  if (lightbox && isVisible(lightbox)) {
+    const closeBtn = lightbox.querySelector<HTMLElement>('.release-lightbox__close');
+    if (closeBtn) {
+      closeBtn.click();
+      return;
+    }
+  }
+
   const searchDropdown = document.querySelector('.search-dropdown');
   if (searchDropdown && isVisible(searchDropdown)) {
     document.getElementById('titlebar-search-input')?.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
     );
+    return;
+  }
+
+  const watchModal = document.querySelector('.watch-modal');
+  if (watchModal) {
+    const backBtn = watchModal.querySelector<HTMLElement>('.watch-modal__head-back');
+    if (backBtn && isVisible(backBtn)) {
+      backBtn.click();
+      return;
+    }
+  }
+
+  const tvWatchPanel = document.querySelector('.tv-watch__panel[role="dialog"], .tv-watch__settings[role="dialog"]');
+  if (tvWatchPanel && isVisible(tvWatchPanel)) {
+    const closeBtn = tvWatchPanel.querySelector<HTMLElement>('.tv-watch__panel-close');
+    if (closeBtn) {
+      closeBtn.click();
+      return;
+    }
+    window.dispatchEvent(new CustomEvent('tv-watch:close-settings'));
+    return;
+  }
+
+  const tvWatch = document.querySelector('.tv-watch');
+  if (tvWatch && isVisible(tvWatch) && !tvWatch.classList.contains('tv-watch--chrome-hidden')) {
+    window.dispatchEvent(new CustomEvent('tv-watch:hide-chrome'));
+    return;
+  }
+
+  if (tvWatch && isVisible(tvWatch)) {
+    window.dispatchEvent(new CustomEvent('tv-watch:exit'));
     return;
   }
 
@@ -619,6 +1021,11 @@ function onBeforeTvNavigate(): void {
 
 function destinationLayerReady(path: string): boolean {
   const key = tvKeepAliveKey(path);
+  if (key === 'watch') {
+    return !!document.querySelector(
+      '.tv-route-layer--active .tv-watch, .tv-route-layer--active .tv-player-shell',
+    );
+  }
   if (key) {
     return !!document.querySelector(`.tv-route-layer--active[data-tv-keep="${key}"]`);
   }
@@ -676,12 +1083,50 @@ function onActivateKeydown(event: KeyboardEvent): void {
 
   const focused = document.querySelector<HTMLElement>(`[${FOCUS_ATTR}="true"]`);
   if (!focused) return;
-  if (
-    !focused.matches('.uiv2-anime-card[role="button"]')
-    && !focused.matches('.tv-category-see-all[role="button"]')
-  ) {
+
+  // Собственная обработка Enter (перемотка, слайдер и т.д.)
+  if (focused.matches('.tv-watch__timeline')) {
     return;
   }
+
+  const activatesOnEnter = [
+    '.release-lightbox__close',
+    '.uiv2-anime-card[role="button"]',
+    '.tv-category-see-all[role="button"]',
+    '.watch-modal__variant-row[role="button"]',
+    '.watch-modal__filter',
+    '.watch-modal__episode-main',
+    '.tv-watch__dock-btn',
+    '.tv-watch__play',
+    '.tv-watch__settings-item',
+    '.tv-watch__ep-item',
+    '.tv-release-page__play',
+    '.tv-release-page__chip',
+    '.tv-release-page__more',
+    '.tv-release-page__star',
+    '.tv-release-page__shot',
+    '.tv-release-page__video-card',
+    '.tv-release-page__dialog-item',
+    '.tv-release-page__dialog-close',
+    '.release-page__btn--play',
+    '.release-page__actions-chip',
+    '.release-page__actions-status .uiv2-select__trigger',
+    '.release-page__desc-toggle',
+    '.release-page__meta-info-link',
+    '.release-page__block-link',
+    '.release-page__video-thumb',
+    '.release-page__video-category-card',
+    '.release-page__video-platform',
+    '.release-page__video-row',
+    '.release-page__video-back',
+    '.release-page__video-player-close',
+    '.release-page__screenshot-btn',
+    '.release-page__poster--clickable[role="button"]',
+    '.release-page__rating-star',
+    '.release-page__rating-vote-change',
+  ].some((selector) => focused.matches(selector));
+
+  if (!activatesOnEnter) return;
 
   event.preventDefault();
   event.stopPropagation();

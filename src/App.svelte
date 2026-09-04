@@ -85,7 +85,8 @@
   import ReleaseTv from './views/Release.tv.svelte';
   import TvFallback from './views/TvFallback.svelte';
   import TvKeepAlive from './components/tv/TvKeepAlive.svelte';
-  import { rememberTvKeepAlive, tvKeepAliveKey, tvKeptCategoryIds } from './tv/keepAlive';
+  import TvPlayerShell from './components/tv/TvPlayerShell.svelte';
+  import { rememberTvKeepAlive, tvKeepAliveKey, tvKeptCategoryIds, tvKeptReleaseIds } from './tv/keepAlive';
   import WebPlayerShell from './components/WebPlayerShell.svelte';
   import { isEmbeddedWebPlayer } from './utils/watch-nav';
 
@@ -94,6 +95,7 @@
   import NotificationsModal from './components/NotificationsModal.svelte';
   import WatchModal from './components/WatchModal.svelte';
   import Toast from './components/Toast.svelte';
+  import TvDebugMetrics from './components/tv/TvDebugMetrics.svelte';
 
   initTheme();
 
@@ -106,6 +108,7 @@
 
   let tvKept = $state<string[]>(rememberTvKeepAlive([], getPath()));
   const tvKeptCats = $derived(tvKeptCategoryIds(tvKept));
+  const tvKeptReleases = $derived(tvKeptReleaseIds(tvKept));
   const tvKeepKey = $derived(tvKeepAliveKey(path));
 
   $effect(() => {
@@ -693,13 +696,25 @@
       </TvKeepAlive>
     {/if}
 
-    {#if releaseMatch}
-      <TvKeepAlive active>
+    {#if isWatchRoute}
+      <TvKeepAlive keepKey="watch" active>
+        <TvPlayerShell />
+      </TvKeepAlive>
+    {/if}
+
+    {#each tvKeptReleases as rid (rid)}
+      <TvKeepAlive keepKey={`release:${rid}`} active={releaseMatch?.[1] === rid && !isWatchRoute}>
+        <ReleaseTv id={parseInt(rid, 10)} />
+      </TvKeepAlive>
+    {/each}
+
+    {#if releaseMatch && !tvKeptReleases.includes(releaseMatch[1])}
+      <TvKeepAlive keepKey={`release:${releaseMatch[1]}`} active={!isWatchRoute}>
         {#key releaseMatch[1]}
           <ReleaseTv id={parseInt(releaseMatch[1], 10)} />
         {/key}
       </TvKeepAlive>
-    {:else if !tvKeepKey}
+    {:else if !tvKeepKey && !isWatchRoute && !releaseMatch}
       <TvKeepAlive active>
         <TvFallback {path} />
       </TvKeepAlive>
@@ -840,12 +855,12 @@
     <SettingsModal onClose={() => settingsModalOpen.set(false)} />
   {/if}
 
-{:else if isWatchRoute}
+{:else if isWatchRoute && !isTvMode()}
   <WebPlayerShell />
 
 {:else}
   {#if isTvMode()}
-    <TvLayout currentPath={path}>
+    <TvLayout currentPath={path} immersive={isWatchRoute}>
       {@render tvRoutes()}
     </TvLayout>
   {:else}
@@ -882,3 +897,6 @@
 {/if}
 
 <Toast />
+{#if isTvMode()}
+  <TvDebugMetrics />
+{/if}

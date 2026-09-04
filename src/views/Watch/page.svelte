@@ -24,7 +24,8 @@
   } from '../../utils/dubber-sources';
   import { PlayerState } from './_usePlayer.svelte';
   import { LobbyState }  from './_useLobby.svelte';
-  import { PlayerCore, gpuAvailable } from './core/PlayerCore';
+  import { PlayerCore } from './core/PlayerCore';
+  import { isGpuAvailable } from '../../utils/webgpu-availability.svelte';
   import { swapMediaSource } from './core/hls-engine';
   import {
     anime4kTargetHeight,
@@ -914,7 +915,7 @@
   }
 
   function holdUpscaleForNewSource(_expectTime = 0) {
-    if (!player.upscaleEnabled || !gpuAvailable) return;
+    if (!player.upscaleEnabled || !isGpuAvailable()) return;
     upscaleHoldForNewFrame = true;
     clearUpscaleRestartTimer();
     stopUpscale();
@@ -932,7 +933,7 @@
   async function startUpscale() {
     bindCoreEls();
     const gen = ++upscaleStartGen;
-    if (!player.upscaleEnabled || !gpuAvailable) {
+    if (!player.upscaleEnabled || !isGpuAvailable()) {
       if (gen === upscaleStartGen) stopUpscale();
       return;
     }
@@ -997,7 +998,7 @@
 
   /** После смены src всегда заново поднять Anime4K. Не блокируем start флагом hold. */
   function scheduleUpscaleRestart() {
-    if (!player.upscaleEnabled || !gpuAvailable || !player.useVideo) {
+    if (!player.upscaleEnabled || !isGpuAvailable() || !player.useVideo) {
       upscaleHoldForNewFrame = false;
       revealPlayerMedia();
       return;
@@ -1008,7 +1009,7 @@
     upscaleRestartTries = 0;
     const attempt = () => {
       upscaleRestartTimer = 0;
-      if (!player.upscaleEnabled || !gpuAvailable || !player.useVideo) return;
+      if (!player.upscaleEnabled || !isGpuAvailable() || !player.useVideo) return;
       const v = videoEl;
       // HAVE_FUTURE_DATA + чуть буфера — меньше стартовых потерь кадров.
       if (!v || v.videoWidth < 2 || v.readyState < HTMLVideoElement.HAVE_FUTURE_DATA) {
@@ -1029,7 +1030,7 @@
   }
 
   function restartUpscaleIfFrameSizeChanged() {
-    if (!player.upscaleEnabled || !gpuAvailable || !videoEl) return;
+    if (!player.upscaleEnabled || !isGpuAvailable() || !videoEl) return;
     const w = videoEl.videoWidth;
     const h = videoEl.videoHeight;
     if (w < 2 || h < 2) return;
@@ -1081,9 +1082,9 @@
     const bufPct = dur > 0 ? Math.round((buf / dur) * 100) : 0;
     lines.push(`Буфер: ~${bufPct}% · ${v.paused ? 'пауза' : 'воспроизведение'} · ×${v.playbackRate.toFixed(2)}`);
     lines.push(`Состояние: readyState ${v.readyState} · network ${v.networkState}`);
-    if (player.upscaleEnabled && gpuAvailable && canvasEl && player.upscaleCanvasOn && core.upscale.active) {
+    if (player.upscaleEnabled && isGpuAvailable() && canvasEl && player.upscaleCanvasOn && core.upscale.active) {
       lines.push(`Anime4K: активен · ${player.upscaleType} · canvas ${canvasEl.width}×${canvasEl.height}`);
-    } else if (player.upscaleEnabled && gpuAvailable) {
+    } else if (player.upscaleEnabled && isGpuAvailable()) {
       const err = core.upscale.lastError.trim();
       lines.push(
         err
@@ -1091,9 +1092,9 @@
           : `Anime4K: запуск… · ${player.upscaleType}`,
       );
     } else {
-      lines.push(`Anime4K: ${gpuAvailable ? 'выкл' : 'нет WebGPU'} · ${player.upscaleType}`);
+      lines.push(`Anime4K: ${isGpuAvailable() ? 'выкл' : 'нет WebGPU'} · ${player.upscaleType}`);
     }
-    lines.push(`WebGPU: ${gpuAvailable ? 'да' : 'нет'} · DPR ${typeof window !== 'undefined' ? window.devicePixelRatio : 1}`);
+    lines.push(`WebGPU: ${isGpuAvailable() ? 'да' : 'нет'} · DPR ${typeof window !== 'undefined' ? window.devicePixelRatio : 1}`);
     return lines.join('\n');
   }
 
@@ -2143,7 +2144,7 @@
   }
 
   function applyAnime4kPreset(type: Anime4kType, intensity: Anime4kIntensity) {
-    if (!gpuAvailable && type !== 'off') return;
+    if (!isGpuAvailable() && type !== 'off') return;
     const mapped = mapAnime4kPreset({ type, intensity });
     player.upscaleType = type;
     player.upscaleIntensity = intensity;
@@ -2170,7 +2171,7 @@
       upscaleIntensity: player.upscaleIntensity,
       upscaleTargetRes: next,
     });
-    if (player.upscaleEnabled && gpuAvailable) void startUpscale();
+    if (player.upscaleEnabled && isGpuAvailable()) void startUpscale();
   }
 
   function applyAnime4kFromSettings(s: {
@@ -2243,7 +2244,7 @@
       canvasEl.style.width = '';
       canvasEl.style.height = '';
     }
-    if (player.upscaleEnabled && gpuAvailable) void startUpscale();
+    if (player.upscaleEnabled && isGpuAvailable()) void startUpscale();
   }
 
   function changeSurroundMode(mode: SurroundMode, opts?: { osd?: boolean }) {
@@ -2421,7 +2422,7 @@
       preventAutoPause = false;
       upscaleHoldForNewFrame = false;
       syncVideoPlaybackRate();
-      if (player.upscaleEnabled && gpuAvailable) startUpscale();
+      if (player.upscaleEnabled && isGpuAvailable()) startUpscale();
       if (inLobbyRoom()) {
         armLobbyPlayerSyncedOnce();
       } else {
@@ -2846,7 +2847,7 @@
   let winResizeHandler: (() => void) | null = null;
 
   function scheduleUpscaleResize() {
-    if (!player.upscaleEnabled || !gpuAvailable) return;
+    if (!player.upscaleEnabled || !isGpuAvailable()) return;
     if (localMediaSwap || upscaleHoldForNewFrame) return;
     if (!videoEl || videoEl.readyState < 1) return;
     if (resizeTimer) clearTimeout(resizeTimer);
@@ -3195,7 +3196,7 @@
       player.currentTime = v.currentTime;
       player.duration    = v.duration || 0;
       readVideoBuffer(v);
-      if (player.upscaleEnabled && gpuAvailable && player.useVideo && !core.upscale.active
+      if (player.upscaleEnabled && isGpuAvailable() && player.useVideo && !core.upscale.active
         && v.readyState >= 2 && v.videoWidth >= 2 && player.loadState === 'ready' && !player.switching) {
         scheduleUpscaleRestart();
       }
@@ -3242,7 +3243,7 @@
       if (!upscaleHoldForNewFrame) revealPlayerMedia();
       try { (window as any).electron?.sendPlayerState?.(getPlaybackPayload()); } catch {}
       syncVideoPlaybackRate();
-      if (!upscaleHoldForNewFrame && player.upscaleEnabled && gpuAvailable) scheduleUpscaleRestart();
+      if (!upscaleHoldForNewFrame && player.upscaleEnabled && isGpuAvailable()) scheduleUpscaleRestart();
       if (pendingSync && !localMediaSwap) applyPendingSync();
       maybeArmLobbySyncAfterLoad(pendingBarrierPlayback);
     }, { signal });
@@ -3252,7 +3253,7 @@
       if (!upscaleHoldForNewFrame) revealPlayerMedia();
       if (!isApplyingSync) preventAutoPause = false;
       syncVideoPlaybackRate();
-      if (!upscaleHoldForNewFrame && player.upscaleEnabled && gpuAvailable && !core.upscale.active) {
+      if (!upscaleHoldForNewFrame && player.upscaleEnabled && isGpuAvailable() && !core.upscale.active) {
         scheduleUpscaleRestart();
       }
     }, { signal });
@@ -3262,7 +3263,7 @@
     el.addEventListener('loadeddata', () => {
       if (!upscaleHoldForNewFrame) revealPlayerMedia();
       seedPlayerTimeFromVideo();
-      if (!upscaleHoldForNewFrame && player.upscaleEnabled && gpuAvailable && !core.upscale.active) {
+      if (!upscaleHoldForNewFrame && player.upscaleEnabled && isGpuAvailable() && !core.upscale.active) {
         scheduleUpscaleRestart();
       }
     }, { signal });
@@ -3303,7 +3304,7 @@
             }),
           ),
         );
-        if (gpuAvailable) {
+        if (isGpuAvailable()) {
           applyAnime4kFromSettings(s ?? {});
         }
         if (adaptiveQualityByWindow) scheduleAdaptiveQuality();
@@ -3902,7 +3903,7 @@
     currentSourceId: watchState.sourceId,
     popoverType,
     popoverLoading,
-    gpuAvailable,
+    gpuAvailable: isGpuAvailable(),
     upscaleEnabled: player.upscaleEnabled,
     upscaleType: player.upscaleType,
     upscaleIntensity: player.upscaleIntensity,

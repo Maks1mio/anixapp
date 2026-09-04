@@ -1,6 +1,7 @@
 import { navigate } from '../stores/navigation';
 import { isTvMode } from '../platform/tv';
 import { toPosterDisplayUrl } from '../utils/posterUrl';
+import { isCapacitorNative } from '../native/anix-api-native';
 
 export const TV_RELEASE_POSTER_SELECTOR = '[data-tv-release-poster]';
 
@@ -177,6 +178,8 @@ function startOpen(cardEl: HTMLElement, releaseId: number, posterUrl: string, ti
     borderRadius: geometry.borderRadius,
   };
 
+  if (isCapacitorNative()) return true;
+
   sourceCard = cardEl;
   sourceCard.setAttribute('data-tv-release-source', 'true');
   document.documentElement.setAttribute('data-tv-release-opening', String(releaseId));
@@ -209,6 +212,11 @@ export function openTvReleaseFromCard(
 
 export async function runTvReleaseOpenAnimation(releaseId: number): Promise<void> {
   if (!pending || pending.releaseId !== releaseId) return;
+
+  if (isCapacitorNative()) {
+    finishTransition();
+    return;
+  }
 
   await new Promise<void>((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));

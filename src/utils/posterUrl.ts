@@ -85,13 +85,14 @@ export function toCdnProxyUrl(url: string): string {
   if (trimmed.startsWith('anix-cdn://')) return trimmed;
   if (trimmed.startsWith('/__cdn/')) return trimmed;
   if (!isAnixartCdnUrl(trimmed)) return trimmed;
+  // Live APK / Capacitor: прямо на CDN. /__cdn через Vite на ПК душит обложки по LAN.
   if (typeof window !== 'undefined' && window.electron) {
     return `anix-cdn://asset/?u=${encodeURIComponent(trimmed)}`;
   }
+  if (isCapacitorWebView() || isTvBuild()) return toHotlinkSafeCdnUrl(trimmed);
   if (import.meta.env.DEV && typeof window !== 'undefined') {
     return `/__cdn/?u=${encodeURIComponent(trimmed)}`;
   }
-  if (isCapacitorWebView()) return toHotlinkSafeCdnUrl(trimmed);
   return trimmed;
 }
 

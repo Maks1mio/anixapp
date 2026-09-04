@@ -29,6 +29,7 @@
     messages: LobbyChatMessage[];
     myPeerId?: string | null;
     iAmHost?: boolean;
+    chatEnabled?: boolean;
     actionLogOpen?: boolean;
     ontogglelog?: () => void;
     collapsed?: boolean;
@@ -44,6 +45,7 @@
     messages,
     myPeerId = null,
     iAmHost = false,
+    chatEnabled = true,
     actionLogOpen = false,
     ontogglelog,
     collapsed = false,
@@ -65,7 +67,7 @@
   let menuLogin = $state('');
 
   const participantCount = $derived(participants.length);
-  const canSend = $derived(draft.trim().length > 0);
+  const canSend = $derived(chatEnabled && draft.trim().length > 0);
 
   const menuItems = $derived.by((): UiV2PopupMenuItem[] => {
     if (!iAmHost || !menuPeerId) return [];
@@ -105,6 +107,7 @@
   }
 
   function send() {
+    if (!chatEnabled) return;
     const text = draft.trim();
     if (!text) return;
     onsend(text);
@@ -294,7 +297,13 @@
     >
       <div class="uiv2-scroll-area__viewport" data-uiv2-scroll bind:this={chatViewport}>
         {#if messages.length === 0}
-          <p class="watch-lobby-sidebar__empty">Добро пожаловать в чат комнаты. Напишите первое сообщение.</p>
+          <p class="watch-lobby-sidebar__empty">
+            {#if chatEnabled}
+              Добро пожаловать в чат комнаты. Напишите первое сообщение.
+            {:else}
+              Чат в этой комнате выключен.
+            {/if}
+          </p>
         {:else}
           {#each messages as msg (msg.id)}
             {#if msg.system}
@@ -319,30 +328,32 @@
       </div>
     </div>
 
-    <form
-      class="watch-lobby-sidebar__composer"
-      onsubmit={(e) => { e.preventDefault(); send(); }}
-    >
-      <label class="watch-lobby-sidebar__sr" for="lobby-chat-input">Сообщение</label>
-      <input
-        id="lobby-chat-input"
-        class="watch-lobby-sidebar__input"
-        type="text"
-        maxlength={500}
-        placeholder="Написать в чат…"
-        autocomplete="off"
-        bind:value={draft}
-        onkeydown={onComposerKey}
-      />
-      <button
-        type="submit"
-        class="watch-lobby-sidebar__send"
-        disabled={!canSend}
-        aria-label="Отправить"
+    {#if chatEnabled}
+      <form
+        class="watch-lobby-sidebar__composer"
+        onsubmit={(e) => { e.preventDefault(); send(); }}
       >
-        {@html iconArrowUp(16)}
-      </button>
-    </form>
+        <label class="watch-lobby-sidebar__sr" for="lobby-chat-input">Сообщение</label>
+        <input
+          id="lobby-chat-input"
+          class="watch-lobby-sidebar__input"
+          type="text"
+          maxlength={500}
+          placeholder="Написать в чат…"
+          autocomplete="off"
+          bind:value={draft}
+          onkeydown={onComposerKey}
+        />
+        <button
+          type="submit"
+          class="watch-lobby-sidebar__send"
+          disabled={!canSend}
+          aria-label="Отправить"
+        >
+          {@html iconArrowUp(16)}
+        </button>
+      </form>
+    {/if}
   </section>
   </div>
 </aside>

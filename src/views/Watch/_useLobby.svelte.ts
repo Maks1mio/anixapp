@@ -10,6 +10,9 @@ export class LobbyState {
   roomCode     = $state('');
   hostPeerId   = $state<string | null>(null);
   myPeerId     = $state<string | null>(null);
+  chatEnabled  = $state(true);
+  controlMode  = $state<'host' | 'everyone'>('everyone');
+  animeSelectMode = $state<'host' | 'everyone' | 'vote'>('everyone');
   voteState    = $state<VoteState>('hidden');
   voteProposal = $state<ProposalData | null>(null);
   waitingTitle = $state('');
@@ -71,6 +74,9 @@ export class LobbyState {
     this.roomCode = '';
     this.hostPeerId = null;
     this.myPeerId = null;
+    this.chatEnabled = true;
+    this.controlMode = 'everyone';
+    this.animeSelectMode = 'everyone';
     this.voteState = 'hidden';
     this.voteProposal = null;
   }

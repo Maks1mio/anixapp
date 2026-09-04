@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
-  import { getCurrentRoomId, getCurrentParticipants, proposeAnimeChange, getLastPlayback } from '../services/lobby-state';
+  import { getCurrentRoomId, getCurrentParticipants, proposeAnimeChange, getLastPlayback, getLobbyHostPeerId, getLobbyMyPeerId } from '../services/lobby-state';
+  import { getFluoRoomSettings } from '../fluo/sync';
+  import { fluoAnimeSelectModeOf, fluoPlaybackControlMode, isFluoAnimeVoteEnabled } from '../fluo/types';
   import { isDubberBlacklisted } from '../views/Watch/_utils';
   import {
     buildDownloadFolder,
@@ -151,6 +153,7 @@
   let showConfirm = $state(false);
   let confirmCallback = $state<(() => void) | null>(null);
   let confirmSkipCallback = $state<(() => void) | null>(null);
+  let confirmHideCancel = $state(false);
 
   let episodesListEl = $state<HTMLElement | null>(null);
 
@@ -301,6 +304,7 @@
     onYes: () => void;
     skipLabel?: string;
     onSkip?: () => void;
+    hideCancel?: boolean;
   }) {
     confirmTitle = opts.title;
     confirmText = opts.text;
@@ -308,6 +312,7 @@
     confirmCallback = opts.onYes;
     confirmSkipLabel = opts.skipLabel ?? '';
     confirmSkipCallback = opts.onSkip ?? null;
+    confirmHideCancel = opts.hideCancel === true;
     showConfirm = true;
   }
 
@@ -526,10 +531,14 @@
 
     if (isInLobbyWithOthers()) {
       const currentPlayback = getLastPlayback();
-      const isDifferentAnime = currentPlayback != null && String(currentPlayback.releaseId) !== String(releaseId);
+      const prevRid = String(currentPlayback?.releaseId ?? '').trim();
+      const isDifferentAnime = !prevRid || prevRid !== String(releaseId);
+      const settings = getFluoRoomSettings();
+      const iAmHost = !!getLobbyMyPeerId() && getLobbyMyPeerId() === getLobbyHostPeerId();
       if (isDifferentAnime) {
+        if (isFluoAnimeVoteEnabled(settings, getCurrentParticipants().length)) {
         openConfirm({
-          title: `Предложить серию ${params.ep}?`,
+          title: `Предложить «${releaseTitle}»?`,
           text: 'Все участники увидят предложение сменить аниме. Продолжить?',
           yesLabel: 'Предложить',
           onYes: () => {
@@ -542,9 +551,32 @@
             close();
           },
         });
-      } else {
+        return;
+        }
+        if (fluoAnimeSelectModeOf(settings) === 'host' && !iAmHost) {
+          openConfirm({
+            title: 'Выбор аниме',
+            text: 'В этой комнате тайтл выбирает только хост.',
+            yesLabel: 'Понятно',
+            hideCancel: true,
+            onYes: () => {},
+          });
+          return;
+        }
         doOpenPlayer();
+        return;
       }
+      if (fluoPlaybackControlMode(settings) === 'host' && !iAmHost) {
+        openConfirm({
+          title: 'Управление плеером',
+          text: 'Серии, озвучку и перемотку в этой комнате меняет только хост.',
+          yesLabel: 'Понятно',
+          hideCancel: true,
+          onYes: () => {},
+        });
+        return;
+      }
+      doOpenPlayer();
       return;
     }
     doOpenPlayer();
@@ -1158,9 +1190,11 @@
           <div class="watch-modal__confirm-title">{confirmTitle}</div>
           <div class="watch-modal__confirm-text">{confirmText}</div>
           <div class="watch-modal__confirm-actions">
-            <button type="button" class="watch-modal__confirm-btn watch-modal__confirm-btn--secondary" onclick={handleConfirmNo}>
-              Отмена
-            </button>
+            {#if !confirmHideCancel}
+              <button type="button" class="watch-modal__confirm-btn watch-modal__confirm-btn--secondary" onclick={handleConfirmNo}>
+                Отмена
+              </button>
+            {/if}
             {#if confirmSkipLabel && confirmSkipCallback}
               <button type="button" class="watch-modal__confirm-btn watch-modal__confirm-btn--secondary" onclick={handleConfirmSkip}>
                 {confirmSkipLabel}

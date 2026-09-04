@@ -26,6 +26,8 @@ import {
 export * from './types';
 export * from './player';
 export * from './sync';
+export * from './rooms-api';
+export { subscribeFluoCatalog } from './catalog-ws';
 export { getFluoHttpBase, getFluoWsBase } from './endpoints';
 export { logFluoAction, getFluoActionLog } from './action-log';
 

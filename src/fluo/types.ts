@@ -9,8 +9,106 @@ export interface FluoContent {
   sourceId: string;
   ep: string;
   dubberId?: string;
+  /** Имя озвучки (команда) */
+  dubberName?: string;
   title: string;
   sourceName: string;
+  /** Постер для каталога комнат */
+  posterUrl?: string;
+}
+
+export type FluoRoomVisibility = 'public' | 'private' | 'closed';
+/** Play / pause / seek / серии текущего тайтла */
+export type FluoControlMode = 'host' | 'everyone';
+/** Смена тайтла (другое аниме) */
+export type FluoAnimeSelectMode = 'host' | 'everyone' | 'vote';
+
+export interface FluoRoomSettings {
+  controlMode: FluoControlMode;
+  animeSelectMode: FluoAnimeSelectMode;
+  chatEnabled: boolean;
+}
+
+export interface FluoCatalogActivity {
+  peerId: string;
+  profileId: number | null;
+  login: string;
+  avatar: string | null;
+  action: 'play' | 'pause' | 'seek';
+  ts: number;
+  t: number;
+}
+
+export function fluoPlaybackControlMode(
+  s: Partial<FluoRoomSettings> | null | undefined,
+): FluoControlMode {
+  return s?.controlMode === 'host' ? 'host' : 'everyone';
+}
+
+export function fluoAnimeSelectModeOf(
+  s: (Partial<FluoRoomSettings> & { episodeVoteEnabled?: boolean; controlMode?: string }) | null | undefined,
+): FluoAnimeSelectMode {
+  const raw = s?.animeSelectMode;
+  if (raw === 'host' || raw === 'everyone' || raw === 'vote') return raw;
+  if (s?.controlMode === 'vote' || s?.episodeVoteEnabled === true) return 'vote';
+  return 'everyone';
+}
+
+export function isFluoTitleChange(
+  prev: { releaseId?: string } | null | undefined,
+  next: { releaseId?: string } | null | undefined,
+): boolean {
+  const b = String(next?.releaseId ?? '').trim();
+  if (!b) return false;
+  const a = String(prev?.releaseId ?? '').trim();
+  return !a || a !== b;
+}
+
+/** Голосование только при смене тайтла и если в комнате больше одного */
+export function isFluoAnimeVoteEnabled(
+  s: Partial<FluoRoomSettings> | null | undefined,
+  participantCount = 0,
+): boolean {
+  return fluoAnimeSelectModeOf(s) === 'vote' && participantCount > 1;
+}
+
+export interface FluoCreateRoomOptions {
+  name?: string;
+  visibility?: FluoRoomVisibility;
+  password?: string;
+  settings?: Partial<FluoRoomSettings>;
+}
+
+/** Карточка комнаты в каталоге (без секретов). */
+export interface FluoRoomListItem {
+  roomId: string;
+  code: string;
+  name: string;
+  visibility: FluoRoomVisibility;
+  settings: FluoRoomSettings;
+  participantCount: number;
+  participants: Array<{
+    login: string;
+    avatar?: string | null;
+    peerId?: string;
+    profileId?: number | null;
+  }>;
+  hostPeerId: string | null;
+  hostLogin: string | null;
+  content: {
+    releaseId?: string;
+    title?: string;
+    ep?: string;
+    sourceName?: string;
+    dubberName?: string;
+    posterUrl?: string;
+    previewUrl?: string | null;
+    paused?: boolean;
+    currentTime?: number;
+    duration?: number;
+  } | null;
+  activity?: FluoCatalogActivity[];
+  createdAt: number;
 }
 
 export interface FluoEpisodeItem {
@@ -83,6 +181,9 @@ export interface FluoParticipant {
 export interface FluoRoomPublic {
   roomId: string;
   code: string;
+  name?: string;
+  visibility?: FluoRoomVisibility;
+  settings?: FluoRoomSettings;
   myPeerId?: string;
   participants: FluoParticipant[];
   clock: FluoClockState | null;

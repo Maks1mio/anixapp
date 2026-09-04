@@ -166,7 +166,13 @@ async function proxyAnixback(req, res, url) {
       }
     }
     if (!outHeaders['cache-control']) {
-      outHeaders['Cache-Control'] = path.includes('/uploads/') ? 'public, max-age=31536000, immutable' : 'public, max-age=300';
+      if (path.startsWith('/fluo')) {
+        outHeaders['Cache-Control'] = 'no-store, no-cache, must-revalidate';
+      } else {
+        outHeaders['Cache-Control'] = path.includes('/uploads/')
+          ? 'public, max-age=31536000, immutable'
+          : 'public, max-age=300';
+      }
     }
     if (usedOrigin !== origins[0]) {
       outHeaders['X-Anixback-Proxy-Origin'] = usedOrigin;

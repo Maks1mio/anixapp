@@ -214,6 +214,7 @@ contextBridge.exposeInMainWorld('electron', {
   playDownloadInApp: (payload) => ipcRenderer.invoke('downloads:playInApp', payload),
   syncPlayerState: (playback) => ipcRenderer.send('player:syncState', playback),
   sendPlayerState: (playback) => ipcRenderer.send('player:stateChanged', playback),
+  sendFluoPreview: (payload) => ipcRenderer.send('fluo:previewFromPlayer', payload),
   startUpdateDownload: () => ipcRenderer.invoke('app:startUpdateDownload'),
   checkForUpdate: (currentVersion) => ipcRenderer.invoke('app:checkForUpdate', currentVersion),
   installUpdate: () => ipcRenderer.invoke('app:installUpdate'),
@@ -306,6 +307,9 @@ ipcRenderer.on('lobby:requestCatchUpFromPlayer', () => {
 });
 ipcRenderer.on('lobby:playerSyncedFromPlayer', (_, payload) => {
   window.dispatchEvent(new CustomEvent('lobby:playerSyncedFromPlayer', { detail: payload ?? null }));
+});
+ipcRenderer.on('fluo:previewFromPlayer', (_, payload) => {
+  window.dispatchEvent(new CustomEvent('fluo:previewFromPlayer', { detail: payload ?? null }));
 });
 ipcRenderer.on('lobby:playerWaitingOverlay', (_, payload) => {
   window.dispatchEvent(new CustomEvent('lobby:playerWaitingOverlay', { detail: payload }));

@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount, tick, untrack } from 'svelte';
   import { getWatchParams } from '../../router';
-  import { getCurrentRoomId, sendLobbyChat, isLobbyAwaitingPlayerSync, notifyFluoPlayerSynced } from '../../services/lobby-state';
+  import { getCurrentRoomId, sendLobbyChat, isLobbyAwaitingPlayerSync, notifyFluoPlayerSynced, canLobbyLocalCommand } from '../../services/lobby-state';
   import { logLobbyAction, snapshotPlayback } from '../../services/lobby-action-log';
-  import { getFluoPlayer, installWindowFluo } from '../../fluo';
+  import { getFluoPlayer, installWindowFluo, sendFluoPreviewFrame } from '../../fluo';
   import type { WatchState, EpisodeItem, DubberItem, LobbyActivityEntry, LobbyChatMessage, PopoverType, NextEpAltDub, DownloadedEpisodeItem, PlaybackAlt, SourceItem } from './_types';
   import { isHlsUrl, isDubberBlacklisted, lobbyActionText, allowsIframeFallback, userPlaybackError } from './_utils';
   import { setEmbedMediaContext } from './core/hls-media-context';
@@ -90,6 +90,10 @@
   const playbackMode = params.get('playbackMode') || '';
   const initialLobbyCode = (params.get('lobby') || params.get('lobbyCode') || '').trim().toUpperCase();
   const initialLobbyIdle = params.get('lobbyIdle') === '1' || params.get('lobbyIdle') === 'true';
+  const initialSeekRaw = Number(params.get('t') || params.get('currentTime') || '');
+  const initialSeek = Number.isFinite(initialSeekRaw) && initialSeekRaw > 0.5 ? initialSeekRaw : undefined;
+  const initialPausedParam = params.get('paused');
+  const initialJoinPaused = initialPausedParam == null ? undefined : initialPausedParam === '1' || initialPausedParam === 'true';
 
   // ── Reactive state ─────────────────────────────────────────────────────────
   const player = new PlayerState();
@@ -906,6 +910,7 @@
       return;
     }
     if (player.loadState === 'loading') player.loadState = 'ready';
+    applyLobbyJoinSeekIfNeeded();
   }
 
   function mediaHasRenderableFrame(el: HTMLVideoElement | null | undefined): boolean {
@@ -1150,6 +1155,8 @@
   /** Зеркало main barrier — приходит по IPC (fluo.sync живёт в main). */
   let lobbySyncAwaiting = false;
   let pendingBarrierPlayback: Record<string, unknown> | null = null;
+  /** Позиция комнаты, которую нужно догнать после join (пока видео грузится). */
+  let lobbyJoinSeek: number | null = null;
   /** Последнее намерение play/pause в лобби — чтобы video-события не слали эхо. */
   let lastLobbyPausedIntent: boolean | null = null;
 
@@ -1176,6 +1183,34 @@
 
   function inLobbyRoom(): boolean {
     return inLobby || !!getCurrentRoomId();
+  }
+
+  function rememberLobbyJoinSeek(t: unknown): void {
+    if (typeof t !== 'number' || !Number.isFinite(t) || t < 1) return;
+    lobbyJoinSeek = t;
+  }
+
+  function applyLobbyJoinSeekIfNeeded(): boolean {
+    const t = lobbyJoinSeek;
+    const v = videoEl;
+    if (t == null || !v || v.readyState < 1) return false;
+    const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : null;
+    const target = dur != null ? Math.min(t, Math.max(0, dur - 0.25)) : t;
+    if (Math.abs(v.currentTime - target) <= 1.15) {
+      lobbyJoinSeek = null;
+      return true;
+    }
+    isApplyingSync = true;
+    preventAutoPause = true;
+    fluo.setProgress(target, { origin: 'sync' });
+    try { v.currentTime = target; } catch { /* ignore */ }
+    if (applySyncTimer) clearTimeout(applySyncTimer);
+    applySyncTimer = window.setTimeout(() => {
+      isApplyingSync = false;
+      preventAutoPause = false;
+      applySyncTimer = null;
+    }, 900);
+    return true;
   }
 
   /** Снимок комнатного playback до смены озвучки/серии — чтобы игнорировать sync_resume с устаревшим состоянием сервера (до changeEpisode). */
@@ -1237,6 +1272,7 @@
       dubberName:  watchState.dubberName || undefined,
       title:       watchState.title,
       sourceName:  watchState.sourceName,
+      posterUrl:   posterUrl || undefined,
       paused:      videoEl ? videoEl.paused : true,
       currentTime: videoEl && !isNaN(videoEl.currentTime) ? videoEl.currentTime : 0,
       duration:    videoEl && isFinite(videoEl.duration) && videoEl.duration > 0 ? videoEl.duration : undefined,
@@ -1350,7 +1386,7 @@
 
   function sendToLobby(action: 'play' | 'pause' | 'seek' | 'changeEpisode', ctOverride?: number) {
     const preview = ctOverride !== undefined ? { ...getPlaybackPayload(), currentTime: ctOverride } : getPlaybackPayload();
-    if (inLobbyRoom() && !String(preview.releaseId ?? '').trim()) return;
+    if (!String(preview.releaseId ?? '').trim()) return;
     if (action === 'play') lastLobbyPausedIntent = false;
     if (action === 'pause') lastLobbyPausedIntent = true;
     const base = preview;
@@ -1359,7 +1395,17 @@
       : action === 'pause'
         ? { ...base, paused: true }
         : base;
-    if (inLobbyRoom()) {
+
+    // Окно плеера Electron не держит Fluo roomId — права проверяет главное окно + сервер.
+    const viaElectron = !!(window as any).electron?.sendPlayerState;
+    if (!viaElectron && inLobbyRoom()) {
+      const allowVotePropose = action === 'changeEpisode'
+        && lobby.animeSelectMode === 'vote'
+        && lobby.participants.length > 1;
+      if (!allowVotePropose && !canLobbyLocalCommand(action, preview)) return;
+    }
+
+    if (inLobbyRoom() || viaElectron) {
       logLobbyAction({
         origin: 'local',
         action: `player.${action}`,
@@ -1367,11 +1413,82 @@
         via: 'player',
       });
     }
-    if ((window as any).electron?.sendPlayerState) {
+    if (viaElectron) {
       (window as any).electron.sendPlayerState({ action, playback: p });
+      if (action === 'play' || action === 'pause' || action === 'seek' || action === 'changeEpisode') {
+        void publishLobbyPreview(true);
+      }
       return;
     }
+    if (!inLobbyRoom()) return;
     window.dispatchEvent(new CustomEvent('lobby:playerStateChanged', { detail: { action, playback: p } }));
+    if (action === 'play' || action === 'pause' || action === 'seek' || action === 'changeEpisode') {
+      void publishLobbyPreview(true);
+    }
+  }
+
+  let lastLobbyPreviewAt = 0;
+  let lobbyPreviewTimer: ReturnType<typeof setInterval> | null = null;
+
+  function captureVideoJpeg(): string | null {
+    const v = videoEl;
+    if (!v || v.readyState < 2 || v.videoWidth < 16 || v.videoHeight < 16) return null;
+    const maxChars = 160_000;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const encode = (width: number, quality: number): string => {
+      const height = Math.max(1, Math.round((v.videoHeight / v.videoWidth) * width));
+      canvas.width = width;
+      canvas.height = height;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(v, 0, 0, width, height);
+      return canvas.toDataURL('image/jpeg', quality);
+    };
+
+    try {
+      let w = Math.min(800, v.videoWidth);
+      let url = encode(w, 0.78);
+      if (url.length > maxChars) url = encode(w, 0.64);
+      if (url.length > maxChars) url = encode(Math.round(w * 0.8), 0.7);
+      if (url.length > maxChars) return null;
+      return url;
+    } catch {
+      return null;
+    }
+  }
+
+  async function publishLobbyPreview(force = false): Promise<void> {
+    if (!inLobbyRoom()) return;
+    const now = Date.now();
+    if (!force && now - lastLobbyPreviewAt < 4000) return;
+    const dataUrl = captureVideoJpeg();
+    if (!dataUrl) return;
+    lastLobbyPreviewAt = now;
+    const duration = videoEl && isFinite(videoEl.duration) && videoEl.duration > 0 ? videoEl.duration : undefined;
+    const el = (window as any).electron;
+    if (el?.sendFluoPreview) {
+      el.sendFluoPreview({ dataUrl, duration });
+      return;
+    }
+    sendFluoPreviewFrame(dataUrl, duration);
+  }
+
+  function startLobbyPreviewLoop(): void {
+    stopLobbyPreviewLoop();
+    lobbyPreviewTimer = setInterval(() => {
+      if (!inLobbyRoom()) return;
+      if (videoEl && !videoEl.paused) void publishLobbyPreview(false);
+    }, 5000);
+    void publishLobbyPreview(true);
+  }
+
+  function stopLobbyPreviewLoop(): void {
+    if (lobbyPreviewTimer) {
+      clearInterval(lobbyPreviewTimer);
+      lobbyPreviewTimer = null;
+    }
   }
 
   function isSibnetSourceName(name: string): boolean {
@@ -1694,6 +1811,7 @@
       const resolved = applyQualityMap(qualityMap, cq, pUrl, { resetManualLock: true });
       applyVideoAndUI(resolved.url, uv, ep, titleStr, srcName, dubId, seekTime, initialPaused);
       refreshSourceNameFromApi();
+      applyLobbyJoinSeekIfNeeded();
     }).catch(() => {
       if (myGen !== episodeLoadGen) return;
       if (mediaHasRenderableFrame(videoEl) || player.currentTime > 0.15 || (player.useVideo && !!player.playUrl)) {
@@ -2920,6 +3038,7 @@
     const p = pendingSync;
     pendingSync = null;
     applyRemotePlaybackSync(p);
+    applyLobbyJoinSeekIfNeeded();
   }
 
   function doAutoPlay() {
@@ -3301,6 +3420,7 @@
           return;
         }
         player.paused = false;
+        sendToLobby('play');
         return;
       }
       player.paused = false;
@@ -3313,6 +3433,7 @@
           return;
         }
         player.paused = true;
+        sendToLobby('pause');
         return;
       }
       player.paused = true;
@@ -3334,6 +3455,7 @@
       syncVideoPlaybackRate();
       if (!upscaleHoldForNewFrame && player.upscaleEnabled && isGpuAvailable()) scheduleUpscaleRestart();
       if (pendingSync && !localMediaSwap) applyPendingSync();
+      applyLobbyJoinSeekIfNeeded();
       maybeArmLobbySyncAfterLoad(pendingBarrierPlayback);
     }, { signal });
     el.addEventListener('playing', () => {
@@ -3486,7 +3608,8 @@
         setSkipMarks(skip, { carry: true });
         player.loadState = 'ready';
         await tick();
-        applyVideoAndUI(resolved.url, uv, ep, watchState.title, watchState.sourceName, watchState.dubberId);
+        applyVideoAndUI(resolved.url, uv, ep, watchState.title, watchState.sourceName, watchState.dubberId, initialSeek, initialJoinPaused);
+        if (initialSeek != null) rememberLobbyJoinSeek(initialSeek);
         refreshDubberNameFromApi();
         refreshSourceNameFromApi();
         fetchEpisodesSilently();
@@ -3666,9 +3789,11 @@
         if (p.local && !p.applyRoomPlayback) sendToLobby('changeEpisode', 0);
         isApplyingSync = true;
         const joinSeek = typeof p.currentTime === 'number' ? p.currentTime : (p.applyRoomPlayback ? 0 : undefined);
-        loadEpisode(parseInt(p.releaseId, 10), parseInt(p.sourceId, 10), parseInt(p.ep, 10), p.title || watchState.title, p.sourceName || '', p.dubberId || '', p.applyRoomPlayback || p.local ? (joinSeek ?? 0) : joinSeek, p.applyRoomPlayback ? true : !!p.paused)
+        rememberLobbyJoinSeek(joinSeek);
+        loadEpisode(parseInt(p.releaseId, 10), parseInt(p.sourceId, 10), parseInt(p.ep, 10), p.title || watchState.title, p.sourceName || '', p.dubberId || '', p.applyRoomPlayback || p.local ? (joinSeek ?? 0) : joinSeek, p.applyRoomPlayback ? p.paused !== false : !!p.paused)
           .then(() => {
             fetchEpisodesSilently();
+            applyLobbyJoinSeekIfNeeded();
             maybeArmLobbySyncAfterLoad(p);
           })
           .catch(() => {});
@@ -3693,12 +3818,19 @@
         const same = watchState.releaseId === p.releaseId && watchState.sourceId === p.sourceId && watchState.ep === Number(p.ep) && (watchState.dubberId || '') === (p.dubberId || '');
         const remoteAction = p.action === 'play' || p.action === 'pause' || p.action === 'seek';
         const inBarrier = needsLobbySyncReady();
-        if (same && (player.loadState === 'error' || videoEl?.hidden)) {
+        rememberLobbyJoinSeek(p.currentTime);
+        if (same && player.loadState === 'error') {
           releaseLobbySyncAfterPlaybackError();
+          return;
+        }
+        if (same && (videoEl?.hidden || !videoEl || videoEl.readyState < 2)) {
+          pendingSync = p;
+          applyLobbyJoinSeekIfNeeded();
           return;
         }
         if (same && remoteAction && videoEl && !videoEl.hidden) {
           applyRemotePlaybackSync(p, { barrier: inBarrier });
+          applyLobbyJoinSeekIfNeeded();
           if (inLobbyRoom() && inBarrier) {
             armLobbyPlayerSyncedOnce(typeof p.currentTime === 'number' ? p.currentTime : undefined);
           }
@@ -3900,7 +4032,9 @@
           participants?: unknown[];
           hostPeerId?: string | null;
           myPeerId?: string | null;
+          settings?: { controlMode?: string; chatEnabled?: boolean; animeSelectMode?: string; episodeVoteEnabled?: boolean } | null;
         } | null;
+        const wasInLobby = inLobby;
         const next = !!session?.inLobby;
         inLobby = next;
         if (next) {
@@ -3910,6 +4044,13 @@
           lobby.roomCode = String(session?.roomCode ?? '');
           lobby.hostPeerId = session?.hostPeerId != null ? String(session.hostPeerId) : null;
           lobby.myPeerId = session?.myPeerId != null ? String(session.myPeerId) : null;
+          const mode = session?.settings?.controlMode;
+          lobby.controlMode = mode === 'host' ? 'host' : 'everyone';
+          const anime = session?.settings?.animeSelectMode;
+          lobby.animeSelectMode = anime === 'host' || anime === 'vote' || anime === 'everyone'
+            ? anime
+            : (session?.settings?.episodeVoteEnabled === true || mode === 'vote' ? 'vote' : 'everyone');
+          lobby.chatEnabled = session?.settings?.chatEnabled !== false;
           if (Array.isArray(session?.participants)) {
             const hostId = lobby.hostPeerId;
             lobby.participants = (session.participants as typeof lobby.participants).map((p) => ({
@@ -3924,7 +4065,15 @@
             }
           }
           enforceNormalRateInLobby();
+          // Хост, уже смотрящий тайтл, публикует часы. Гость при join этого делать не должен:
+          // плеер ещё на 0:00 и иначе откатит комнату в начало.
+          if (!wasInLobby && String(watchState.releaseId ?? '').trim()) {
+            const iAmHost = !!lobby.myPeerId && !!lobby.hostPeerId && lobby.myPeerId === lobby.hostPeerId;
+            if (iAmHost) sendToLobby('changeEpisode');
+          }
+          startLobbyPreviewLoop();
         } else {
+          stopLobbyPreviewLoop();
           sidebarOpen = false;
           lobby.resetRoom();
           restorePlaybackRateFromStore();
@@ -3990,6 +4139,7 @@
       window.removeEventListener('pagehide', flushEqOnLeave);
       window.removeEventListener('beforeunload', flushEqOnLeave);
       handlers.forEach(([evt, fn]) => window.removeEventListener(evt, fn));
+      stopLobbyPreviewLoop();
       window.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('wheel', onWheel, wheelOpts);
       window.removeEventListener('pointermove', onPointerActivity, true);
@@ -4311,6 +4461,7 @@
         messages={lobby.chatMessages}
         myPeerId={lobby.myPeerId}
         iAmHost={!!(lobby.myPeerId && lobby.hostPeerId && lobby.myPeerId === lobby.hostPeerId)}
+        chatEnabled={lobby.chatEnabled}
         actionLogOpen={actionLogOpen}
         collapsed={!sidebarOpen}
         ontogglelog={() => { actionLogOpen = !actionLogOpen; }}
@@ -4319,6 +4470,7 @@
           else void leaveLobbyRoomFromUi();
         }}
         onsend={(text) => {
+          if (!lobby.chatEnabled) return;
           if (window.electron?.lobbyChatFromPlayer) {
             window.electron.lobbyChatFromPlayer(text);
             return;

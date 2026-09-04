@@ -6,12 +6,19 @@ import { getFluoHttpBase, getFluoWsBase } from '../endpoints';
 import { getFluoPlayer } from '../player';
 import {
   isUsableFluoContent,
+  isFluoAnimeVoteEnabled,
+  isFluoTitleChange,
+  fluoPlaybackControlMode,
+  fluoAnimeSelectModeOf,
   type FluoClockState,
   type FluoContent,
+  type FluoCreateRoomOptions,
   type FluoParticipant,
   type FluoRoomPublic,
+  type FluoRoomSettings,
 } from '../types';
 import { logFluoAction } from '../action-log';
+import { createFluoRoomWithOptions, joinFluoRoomWithPassword, FluoJoinError } from '../rooms-api';
 
 export type FluoProfilePayload = {
   profileId?: number;
@@ -20,8 +27,10 @@ export type FluoProfilePayload = {
   deviceId?: string | null;
 };
 
+export { FluoJoinError };
+
 type QueuedCmd =
-  | { type: 'play' | 'pause' | 'seek' | 'changeEpisode'; content: FluoContent; currentTime: number; paused: boolean }
+  | { type: 'play' | 'pause' | 'seek' | 'changeEpisode'; content: FluoContent; currentTime: number; paused: boolean; duration?: number }
   | { type: 'chat'; text: string; login: string; avatar?: string | null }
   | { type: 'propose'; content: Partial<FluoContent> }
   | { type: 'vote'; proposalId: string; accept: boolean };
@@ -32,6 +41,7 @@ let myPeerId: string | null = null;
 let hostPeerId: string | null = null;
 let participants: FluoParticipant[] = [];
 let clock: FluoClockState | null = null;
+let roomSettings: FluoRoomSettings = { controlMode: 'everyone', animeSelectMode: 'everyone', chatEnabled: true };
 let ws: WebSocket | null = null;
 let activeWs: WebSocket | null = null;
 let intentionalClose = false;
@@ -64,6 +74,7 @@ export function markFluoLocalControl(ms = LOCAL_CONTROL_GRACE_MS): void {
 async function fetchFluo(path: string, options: RequestInit = {}): Promise<Response> {
   return fetch(`${getFluoHttpBase()}${path}`, {
     ...options,
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
       ...(options.headers as Record<string, string>),
@@ -97,9 +108,52 @@ function emitSession(): void {
     participants: participants.slice(),
     hostPeerId,
     myPeerId,
+    settings: { ...roomSettings },
   };
   window.dispatchEvent(new CustomEvent('fluo:session', { detail: session }));
   window.dispatchEvent(new CustomEvent('lobby:session', { detail: session }));
+}
+
+function applyRoomSettings(raw: unknown): void {
+  if (!raw || typeof raw !== 'object') return;
+  const s = raw as Partial<FluoRoomSettings> & { episodeVoteEnabled?: boolean; controlMode?: string };
+  const mode = String(s.controlMode ?? '');
+  const voteLegacy = mode === 'vote' || s.episodeVoteEnabled === true;
+  let anime = fluoAnimeSelectModeOf(s);
+  if (s.animeSelectMode == null && voteLegacy) anime = 'vote';
+  roomSettings = {
+    controlMode: mode === 'host' ? 'host' : 'everyone',
+    animeSelectMode: anime,
+    chatEnabled: s.chatEnabled !== false,
+  };
+}
+
+function iAmHost(): boolean {
+  return !!myPeerId && !!hostPeerId && myPeerId === hostPeerId;
+}
+
+/** Может ли локальный клиент слать команду (дублирует серверный canApplyCommand). */
+export function canLocalFluoCommand(
+  action: 'play' | 'pause' | 'seek' | 'changeEpisode',
+  playback?: { releaseId?: string } | null,
+): boolean {
+  if (!roomId) return false;
+  if (action === 'changeEpisode' && isFluoTitleChange(clock?.content, playback ?? null)) {
+    const anime = fluoAnimeSelectModeOf(roomSettings);
+    if (anime === 'vote' && participants.length > 1) return false;
+    if (anime === 'host') return iAmHost();
+    return true;
+  }
+  if (fluoPlaybackControlMode(roomSettings) === 'host') return iAmHost();
+  return true;
+}
+
+export function getFluoRoomSettings(): FluoRoomSettings {
+  return { ...roomSettings };
+}
+
+export function isFluoChatEnabled(): boolean {
+  return roomSettings.chatEnabled;
 }
 
 export function computeFluoPosition(c: FluoClockState, now = Date.now()): number {
@@ -257,6 +311,14 @@ function wirePlayerEcho(): void {
     }),
     player.on('content', ({ origin }) => {
       if (origin !== 'user' || !roomId) return;
+      if (isFluoTitleChange(clock?.content, contentFromState()) && isFluoAnimeVoteEnabled(roomSettings, participants.length)) {
+        const content = contentFromState();
+        if (content && isUsableFluoContent(content)) {
+          proposeFluoAnimeChange(content);
+        }
+        return;
+      }
+      if (!canLocalFluoCommand('changeEpisode', contentFromState())) return;
       pushTransport('changeEpisode');
     }),
   ];
@@ -265,6 +327,7 @@ function wirePlayerEcho(): void {
 
 function pushTransport(action: 'play' | 'pause' | 'seek' | 'changeEpisode'): void {
   const content = contentFromState();
+  if (!canLocalFluoCommand(action, content)) return;
   if (!content || !isUsableFluoContent(content)) return;
   const player = getFluoPlayer();
   pushFluoCommand(action, {
@@ -283,6 +346,19 @@ function sendWs(msg: Record<string, unknown>): void {
   }
 }
 
+function shouldSuppressJoinRewind(
+  action: 'play' | 'pause' | 'seek' | 'changeEpisode',
+  currentTime: number,
+  content: FluoContent,
+): boolean {
+  if (Date.now() >= joinGraceUntil || !clock?.content) return false;
+  const sameEpisode = String(clock.content.releaseId) === String(content.releaseId)
+    && String(clock.content.ep) === String(content.ep);
+  if (!sameEpisode) return false;
+  const live = computePosition(clock);
+  return live > 4 && currentTime < live - 2.5;
+}
+
 function flushOutbound(): void {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   const q = pendingOutbound.splice(0);
@@ -294,6 +370,15 @@ function flushOutbound(): void {
     } else if (cmd.type === 'vote') {
       sendWs({ type: 'vote_change', proposalId: cmd.proposalId, accept: cmd.accept });
     } else {
+      if (shouldSuppressJoinRewind(cmd.type, cmd.currentTime, cmd.content)) {
+        logFluoAction({
+          origin: 'local',
+          action: 'command.suppressed.join_grace',
+          detail: { action: cmd.type, t: Math.round(cmd.currentTime * 10) / 10, via: 'flush' },
+          via: 'ws',
+        });
+        continue;
+      }
       sendWs({
         type: 'command',
         action: cmd.type,
@@ -301,6 +386,7 @@ function flushOutbound(): void {
           ...cmd.content,
           currentTime: cmd.currentTime,
           paused: cmd.paused,
+          duration: cmd.duration,
         },
       });
     }
@@ -407,7 +493,8 @@ function handleMessage(raw: string): void {
       participants = msg.participants as FluoParticipant[];
     }
     hostPeerId = msg.hostPeerId != null ? String(msg.hostPeerId) : null;
-    joinGraceUntil = Date.now() + 2800;
+    applyRoomSettings(msg.settings);
+    joinGraceUntil = Date.now() + 8000;
     emitParticipants();
     emitSession();
     const c = msg.clock as FluoClockState | null | undefined;
@@ -692,47 +779,56 @@ function connectWs(rId: string): void {
 export async function createFluoRoom(
   profile: FluoProfilePayload,
   seed?: Partial<FluoContent> & { currentTime?: number; paused?: boolean } | null,
-): Promise<{ roomId: string; code: string; myPeerId?: string }> {
-  const body: Record<string, unknown> = { ...profile };
-  if (seed && isUsableFluoContent(seed)) {
-    body.clock = {
-      content: {
-        releaseId: String(seed.releaseId),
-        sourceId: String(seed.sourceId ?? ''),
-        ep: String(seed.ep),
-        dubberId: seed.dubberId != null ? String(seed.dubberId) : undefined,
-        title: String(seed.title ?? ''),
-        sourceName: String(seed.sourceName ?? ''),
-      },
-      paused: seed.paused !== false,
-      mediaOrigin: typeof seed.currentTime === 'number' ? seed.currentTime : 0,
-    };
-  }
-  const res = await fetchFluo('/create', { method: 'POST', body: JSON.stringify(body) });
-  if (!res.ok) throw new Error(`Fluo create: ${res.status}`);
-  return (await res.json()) as { roomId: string; code: string; myPeerId?: string };
+  options: FluoCreateRoomOptions = {},
+): Promise<{ roomId: string; code: string; myPeerId?: string; settings?: FluoRoomSettings }> {
+  const created = await createFluoRoomWithOptions(profile, options, seed);
+  if (created.settings) applyRoomSettings(created.settings);
+  else if (options.settings) applyRoomSettings(normalizeCreateSettings(options.settings));
+  return created;
 }
 
-export async function joinFluoRoom(code: string, profile: FluoProfilePayload): Promise<FluoRoomPublic> {
-  const res = await fetchFluo('/join', {
-    method: 'POST',
-    body: JSON.stringify({ code: code.trim(), ...profile }),
-  });
-  if (res.status === 403) {
-    const err = new Error('banned') as Error & { code?: string };
-    err.code = 'banned';
-    throw err;
-  }
-  if (!res.ok) throw new Error(`Fluo join: ${res.status}`);
-  return (await res.json()) as FluoRoomPublic;
+function normalizeCreateSettings(partial: Partial<FluoRoomSettings>): FluoRoomSettings {
+  const voteLegacy = (partial as { episodeVoteEnabled?: boolean }).episodeVoteEnabled === true
+    || (partial.controlMode as string) === 'vote';
+  const anime = fluoAnimeSelectModeOf(partial);
+  return {
+    controlMode: partial.controlMode === 'host' ? 'host' : 'everyone',
+    animeSelectMode: partial.animeSelectMode ? anime : (voteLegacy ? 'vote' : anime),
+    chatEnabled: partial.chatEnabled !== false,
+  };
 }
 
-export async function leaveFluoRoomHttp(roomIdValue: string, deviceId: string): Promise<void> {
-  if (!roomIdValue || !deviceId) return;
-  await fetchFluo(`/room/${encodeURIComponent(roomIdValue)}/leave`, {
-    method: 'POST',
-    body: JSON.stringify({ deviceId }),
-  }).catch(() => undefined);
+export async function joinFluoRoom(
+  code: string,
+  profile: FluoProfilePayload,
+  password?: string | null,
+): Promise<FluoRoomPublic> {
+  const room = await joinFluoRoomWithPassword(code, profile, password);
+  if (room.settings) applyRoomSettings(room.settings);
+  return room;
+}
+
+export async function leaveFluoRoomHttp(
+  roomIdValue: string,
+  deviceId: string | null,
+  peerIdValue?: string | null,
+): Promise<boolean> {
+  if (!roomIdValue) return false;
+  if (!deviceId && !peerIdValue) return false;
+  try {
+    const res = await fetchFluo(`/room/${encodeURIComponent(roomIdValue)}/leave`, {
+      method: 'POST',
+      body: JSON.stringify({
+        ...(deviceId ? { deviceId } : {}),
+        ...(peerIdValue ? { peerId: peerIdValue } : {}),
+      }),
+    });
+    if (!res.ok) return false;
+    const data = (await res.json().catch(() => null)) as { left?: boolean } | null;
+    return data?.left !== false;
+  } catch {
+    return false;
+  }
 }
 
 export function setFluoRoom(
@@ -744,6 +840,7 @@ export function setFluoRoom(
     clock?: FluoClockState | null;
     hostPeerId?: string | null;
     isCreator?: boolean;
+    settings?: FluoRoomSettings | null;
   },
 ): void {
   leaveFluoLocal(false);
@@ -753,6 +850,7 @@ export function setFluoRoom(
   hostPeerId = options?.hostPeerId ?? null;
   participants = options?.participants ? options.participants.slice() : [];
   clock = options?.clock ?? null;
+  if (options?.settings) applyRoomSettings(options.settings);
   roomBarrier = false;
   pendingOutbound = [];
   lastAppliedSeq = clock?.seq ?? 0;
@@ -809,6 +907,7 @@ function leaveFluoLocal(emitLeft: boolean): void {
   hostPeerId = null;
   participants = [];
   clock = null;
+  roomSettings = { controlMode: 'everyone', animeSelectMode: 'everyone', chatEnabled: true };
   roomBarrier = false;
   pendingOutbound = [];
   lastAppliedSeq = 0;
@@ -880,7 +979,7 @@ export function getLastFluoPlayback(): (FluoContent & { paused: boolean; current
 }
 
 export function sendFluoChat(payload: { text: string; login?: string; avatar?: string | null }): void {
-  if (!roomId) return;
+  if (!roomId || !roomSettings.chatEnabled) return;
   const text = String(payload.text ?? '').trim().slice(0, 500);
   if (!text) return;
   const login = payload.login?.trim() || 'Участник';
@@ -938,9 +1037,26 @@ export function isFluoBarrier(): boolean {
 
 export function pushFluoCommand(
   action: 'play' | 'pause' | 'seek' | 'changeEpisode',
-  playback: FluoContent & { paused?: boolean; currentTime?: number },
+  playback: FluoContent & { paused?: boolean; currentTime?: number; duration?: number },
 ): void {
   if (!roomId) return;
+
+  if (action === 'changeEpisode' && isFluoTitleChange(clock?.content, playback) && isFluoAnimeVoteEnabled(roomSettings, participants.length)) {
+    proposeFluoAnimeChange({
+      releaseId: String(playback.releaseId ?? ''),
+      sourceId: String(playback.sourceId ?? ''),
+      ep: String(playback.ep ?? ''),
+      dubberId: playback.dubberId != null ? String(playback.dubberId) : undefined,
+      title: String(playback.title ?? ''),
+      sourceName: String(playback.sourceName ?? ''),
+      dubberName: playback.dubberName,
+      posterUrl: playback.posterUrl,
+    });
+    return;
+  }
+
+  if (!canLocalFluoCommand(action, playback)) return;
+
   markFluoLocalControl();
   // Не трогаем local video здесь: в Electron уже применил окно плеера, main только шлёт WS.
   const cmd: QueuedCmd = {
@@ -952,31 +1068,23 @@ export function pushFluoCommand(
       dubberId: playback.dubberId != null ? String(playback.dubberId) : undefined,
       title: String(playback.title ?? ''),
       sourceName: String(playback.sourceName ?? ''),
+      dubberName: playback.dubberName,
+      posterUrl: playback.posterUrl,
     },
     currentTime: typeof playback.currentTime === 'number' ? playback.currentTime : getFluoPlayer().getProgress(),
     paused: action === 'pause' ? true : action === 'play' ? false : !!playback.paused,
+    duration: typeof playback.duration === 'number' ? playback.duration : undefined,
   };
   if (!isUsableFluoContent(cmd.content)) return;
 
-  // После join: не откатываем живую комнату play/seek с «почти нуля».
-  if (
-    Date.now() < joinGraceUntil
-    && clock?.content
-    && (action === 'play' || action === 'seek')
-    && clock.content.releaseId === cmd.content.releaseId
-    && clock.content.ep === cmd.content.ep
-    && clock.content.sourceId === cmd.content.sourceId
-  ) {
-    const live = computePosition(clock);
-    if (live > 5 && cmd.currentTime < live - 3) {
-      logFluoAction({
-        origin: 'local',
-        action: 'command.suppressed.join_grace',
-        detail: { action, t: Math.round(cmd.currentTime * 10) / 10, liveT: Math.round(live * 10) / 10 },
-        via: 'ws',
-      });
-      return;
-    }
+  if (shouldSuppressJoinRewind(action, cmd.currentTime, cmd.content)) {
+    logFluoAction({
+      origin: 'local',
+      action: 'command.suppressed.join_grace',
+      detail: { action, t: Math.round(cmd.currentTime * 10) / 10, liveT: Math.round(computePosition(clock!) * 10) / 10 },
+      via: 'ws',
+    });
+    return;
   }
 
   // Оптимистично обновляем локальные часы, чтобы snapshot не откатил.
@@ -1009,6 +1117,18 @@ export function pushFluoCommand(
       ...cmd.content,
       currentTime: cmd.currentTime,
       paused: cmd.paused,
+      duration: cmd.duration,
     },
+  });
+}
+
+export function sendFluoPreviewFrame(dataUrl: string, duration?: number): void {
+  if (!roomId) return;
+  const raw = String(dataUrl ?? '').trim();
+  if (!raw.startsWith('data:image/jpeg') || raw.length < 80 || raw.length > 160_000) return;
+  sendWs({
+    type: 'preview',
+    dataUrl: raw,
+    ...(typeof duration === 'number' && Number.isFinite(duration) && duration > 0 ? { duration } : {}),
   });
 }

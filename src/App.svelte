@@ -24,7 +24,7 @@
   import { initTabNavigation, recordTabNavigation } from './stores/tab-navigation';
   import { initTheme, applyThemeById } from './services/themes';
   import { initAnixbackEndpoint } from './services/anixback-endpoint';
-  import { getCurrentRoomId, getCurrentRoomCode, getCurrentParticipants, pushCommand, voteOnProposal, notifyLobbyBufferingStart, notifyLobbyBufferingEnd, catchUpLobbyPlayback, sendLobbyChat, notifyFluoPlayerSynced, kickLobbyParticipant, transferLobbyHost } from './services/lobby-state';
+  import { getCurrentRoomId, getCurrentRoomCode, getCurrentParticipants, pushCommand, voteOnProposal, notifyLobbyBufferingStart, notifyLobbyBufferingEnd, catchUpLobbyPlayback, sendLobbyChat, notifyFluoPlayerSynced, kickLobbyParticipant, transferLobbyHost, pushLobbyPreview } from './services/lobby-state';
   import {
     createLobbyRoomAndOpenPlayer,
     joinLobbyRoomAndOpenPlayer,
@@ -47,6 +47,7 @@
   import Login from './views/Login.svelte';
   import Home from './views/Home.svelte';
   import Overview from './views/Overview.svelte';
+  import FluoPage from './views/Fluo/page.svelte';
   import Feed from './views/Feed.svelte';
   import Article from './views/Article.svelte';
   import Channel from './views/Channel.svelte';
@@ -531,10 +532,15 @@
           dubberId: rp.dubberId != null ? String(rp.dubberId) : undefined,
           title: String(rp.title ?? ''),
           sourceName: String(rp.sourceName ?? ''),
+          dubberName: typeof rp.dubberName === 'string' ? rp.dubberName : undefined,
+          posterUrl: typeof rp.posterUrl === 'string' ? rp.posterUrl : undefined,
           paused: action === 'pause' ? true : action === 'play' ? false : Boolean(rp.paused),
           currentTime: typeof rp.currentTime === 'number' && Number.isFinite(rp.currentTime)
             ? rp.currentTime
             : 0,
+          duration: typeof rp.duration === 'number' && Number.isFinite(rp.duration) && rp.duration > 0
+            ? rp.duration
+            : undefined,
         };
         pushCommand(action, playback);
       }) as EventListener],
@@ -569,6 +575,13 @@
       ['lobby:playerSyncedFromPlayer', ((e: CustomEvent) => {
         const ct = (e.detail as { currentTime?: number } | null)?.currentTime;
         notifyFluoPlayerSynced(typeof ct === 'number' ? ct : undefined);
+      }) as EventListener],
+
+      ['fluo:previewFromPlayer', ((e: CustomEvent) => {
+        if (!getCurrentRoomId()) return;
+        const d = e.detail as { dataUrl?: string; duration?: number } | null;
+        if (!d?.dataUrl) return;
+        pushLobbyPreview(d.dataUrl, d.duration);
       }) as EventListener],
 
       ['lobby:barrierSync', ((e: CustomEvent) => {
@@ -926,6 +939,8 @@
       <AdminLoginPage />
     {:else if path === '/overview'}
       <Overview />
+    {:else if path === '/fluo'}
+      <FluoPage />
     {:else if path === '/feed'}
       <Feed />
     {:else if articleMatch}

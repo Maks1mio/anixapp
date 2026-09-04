@@ -18,19 +18,24 @@ import {
   notifyFluoLocalBuffering,
   isFluoBarrier,
   pushFluoCommand,
+  sendFluoPreviewFrame,
   catchUpFluoPlayback,
   computeFluoPosition,
   kickFluoParticipant,
   transferFluoHost,
+  getFluoRoomSettings,
+  isFluoChatEnabled,
+  canLocalFluoCommand,
   type FluoProfilePayload,
 } from '../fluo/sync';
-import type { FluoContent, FluoParticipant, FluoClockState } from '../fluo/types';
+import type { FluoContent, FluoParticipant, FluoClockState, FluoRoomSettings } from '../fluo/types';
 
 export type LobbyCommandAction = 'play' | 'pause' | 'seek' | 'changeEpisode';
 
 export type LobbyPlayback = FluoContent & {
   paused: boolean;
   currentTime: number;
+  duration?: number;
   seq?: number;
 };
 
@@ -84,6 +89,7 @@ export function setLobbyRoom(
     roomCode?: string;
     isCreator?: boolean;
     hostPeerId?: string | null;
+    settings?: import('../fluo/types').FluoRoomSettings | null;
   },
 ): void {
   let clock: FluoClockState | null = options?.clock ?? null;
@@ -97,6 +103,7 @@ export function setLobbyRoom(
         dubberId: options.playback.dubberId != null ? String(options.playback.dubberId) : undefined,
         title: String(options.playback.title ?? ''),
         sourceName: String(options.playback.sourceName ?? ''),
+        posterUrl: options.playback.posterUrl,
       },
       paused: options.playback.paused !== false,
       mediaOrigin: typeof options.playback.currentTime === 'number' ? options.playback.currentTime : 0,
@@ -112,6 +119,7 @@ export function setLobbyRoom(
     clock,
     hostPeerId: options?.hostPeerId ?? (options?.isCreator ? options?.myPeerId : null),
     isCreator: options?.isCreator,
+    settings: options?.settings ?? undefined,
   });
 }
 
@@ -121,6 +129,10 @@ export function leaveLobby(): void {
 
 export function pushCommand(action: LobbyCommandAction, playback: LobbyPlayback): void {
   pushFluoCommand(action, playback);
+}
+
+export function pushLobbyPreview(dataUrl: string, duration?: number): void {
+  sendFluoPreviewFrame(dataUrl, duration);
 }
 
 export function proposeAnimeChange(playback: Partial<LobbyPlayback>): void {
@@ -181,4 +193,19 @@ export function getLobbyLog(): unknown[] {
   return [];
 }
 
-export type { FluoProfilePayload, FluoClockState };
+export type { FluoProfilePayload, FluoClockState, FluoRoomSettings };
+
+export function getLobbyRoomSettings(): FluoRoomSettings {
+  return getFluoRoomSettings();
+}
+
+export function isLobbyChatEnabled(): boolean {
+  return isFluoChatEnabled();
+}
+
+export function canLobbyLocalCommand(
+  action: 'play' | 'pause' | 'seek' | 'changeEpisode',
+  playback?: { releaseId?: string } | null,
+): boolean {
+  return canLocalFluoCommand(action, playback);
+}

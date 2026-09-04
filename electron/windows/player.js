@@ -87,6 +87,11 @@ function createPlayerWindow(params) {
     ...(params.dubberName != null && params.dubberName !== '' ? { dubberName: params.dubberName } : {}),
     ...(params.dubberId != null && params.dubberId !== '' ? { dubberId: params.dubberId } : {}),
     ...(params.lobbyIdle ? { lobbyIdle: '1' } : {}),
+    ...(typeof params.currentTime === 'number' && Number.isFinite(params.currentTime) && params.currentTime > 0
+      ? { t: String(params.currentTime) }
+      : {}),
+    ...(params.paused != null ? { paused: params.paused ? '1' : '0' } : {}),
+    ...(params.applyRoomPlayback ? { applyRoomPlayback: '1' } : {}),
   };
   const hasLocalFile = typeof params.localFile === 'string' && params.localFile.trim() !== '';
   const hasExternalUrl = typeof params.externalUrl === 'string' && params.externalUrl.trim() !== '';
@@ -128,10 +133,13 @@ function createPlayerWindow(params) {
         });
       }
     });
-  } else if (params.paused != null || params.currentTime != null) {
+  } else if (params.applyRoomPlayback || params.paused != null || params.currentTime != null) {
     playerWindow.webContents.once('did-finish-load', () => {
       if (state.playerWindowRef === playerWindow && !playerWindow.isDestroyed()) {
-        playerWindow.webContents.send('player:applySync', params);
+        playerWindow.webContents.send('player:applySync', {
+          ...params,
+          action: 'seek',
+        });
       }
     });
   }
@@ -292,7 +300,10 @@ ipcMain.on('player:syncState', async (_, playback) => {
     } else {
       // Different content — change dynamically without closing/reopening
       state.currentPlayerPlayback = incomingContent;
-      state.playerWindowRef.webContents.send('player:changeContent', params);
+      state.playerWindowRef.webContents.send('player:changeContent', {
+        ...params,
+        local: false,
+      });
       syncDownloadHoldForPlayback(params);
     }
     return;
@@ -417,6 +428,12 @@ ipcMain.on('lobby:requestCatchUpFromPlayer', () => {
 ipcMain.on('lobby:playerSyncedFromPlayer', (_, payload) => {
   if (state.mainWindow && !state.mainWindow.isDestroyed()) {
     state.mainWindow.webContents.send('lobby:playerSyncedFromPlayer', payload ?? null);
+  }
+});
+
+ipcMain.on('fluo:previewFromPlayer', (_, payload) => {
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    state.mainWindow.webContents.send('fluo:previewFromPlayer', payload ?? null);
   }
 });
 

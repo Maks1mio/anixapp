@@ -50,6 +50,7 @@ import {
   Play,
   Plus,
   BookOpen,
+  Radio,
   RefreshCw,
   Reply,
   Tags,
@@ -71,6 +72,7 @@ import {
   User,
   UserPlus,
   Users,
+  Vote,
   Volume2,
   Volume1,
   Volume,
@@ -292,6 +294,14 @@ export function iconBell(size = 20): string {
 /** Лента / статьи */
 export function iconNewspaper(size = 18): string {
   return toSvg(Newspaper, size);
+}
+
+export function iconSignal(size = 18): string {
+  return toSvg(Radio, size);
+}
+
+export function iconVote(size = 16): string {
+  return toSvg(Vote, size);
 }
 
 /** Пользователь (профиль) */

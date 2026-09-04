@@ -99,9 +99,16 @@ export default defineConfig(({ command }) => {
         ws: true,
         changeOrigin: true,
       },
+      // API under /fluo/* — but NOT the SPA page route GET /fluo (sidebar href).
       '/fluo': {
         target: 'http://127.0.0.1:8787',
         changeOrigin: true,
+        bypass(req) {
+          const path = (req.url ?? '').split('?')[0] || '';
+          if (req.method === 'GET' && (path === '/fluo' || path === '/fluo/')) {
+            return '/index.html';
+          }
+        },
       },
       // legacy lobby WS (unused after Fluo cutover)
       '/anixapp/lobby/ws': {

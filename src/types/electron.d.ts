@@ -245,6 +245,7 @@ declare global {
       }) => Promise<{ ok: boolean; error?: string }>;
       syncPlayerState: (playback: LobbyPlaybackPayload) => void;
       sendPlayerState: (playback: LobbyPlaybackPayload) => void;
+      sendFluoPreview?: (payload: { dataUrl: string; duration?: number }) => void;
       startUpdateDownload?: () => Promise<void>;
       checkForUpdate?: (currentVersion: string) => Promise<{
         version: string;

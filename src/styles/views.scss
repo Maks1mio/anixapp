@@ -4660,6 +4660,177 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   background: $color-error;
 }
 
+.release-page__friends {
+  min-width: 0;
+}
+
+.release-page__friends--hidden {
+  display: block;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: none;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.release-page__friends-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.85rem;
+
+  .release-page__block-title {
+    margin-bottom: 0;
+  }
+}
+
+.release-page__friends-count {
+  font-size: 0.9rem;
+  color: $color-text-muted;
+  font-weight: 500;
+
+  &--muted {
+    font-weight: 400;
+    opacity: 0.85;
+  }
+}
+
+.release-page__friends-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.release-page__friends-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: $color-text-muted;
+
+  i {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  &--watching i { background: $color-success; }
+  &--planned i { background: #a855f7; }
+  &--completed i { background: #3b82f6; }
+  &--on_hold i { background: #f97316; }
+  &--dropped i { background: $color-error; }
+}
+
+.release-page__friends-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.5rem;
+}
+
+.release-page__friends-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: none;
+  border-radius: $radius-md;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background $transition;
+
+  &:hover {
+    background: $color-surface-hover;
+  }
+}
+
+.release-page__friends-av {
+  position: relative;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: $color-surface-hover center / cover no-repeat;
+
+  &--img {
+    background-color: transparent;
+  }
+}
+
+.release-page__friends-online {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: $color-success;
+  border: 2px solid var(--color-bg, #0b0b0b);
+  box-sizing: border-box;
+}
+
+.release-page__friends-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.release-page__friends-login {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: $color-text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.release-page__friends-status {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: $color-text-muted;
+
+  &--watching { color: $color-success; }
+  &--planned { color: #c084fc; }
+  &--completed { color: #60a5fa; }
+  &--on_hold { color: #fb923c; }
+  &--dropped { color: $color-error; }
+}
+
+.release-page__friends-more {
+  margin-top: 0.75rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  background: transparent;
+  color: $color-text-muted;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background $transition, color $transition;
+
+  &:hover {
+    background: $color-surface-hover;
+    color: $color-text;
+  }
+}
+
+.release-page__friends-hint {
+  margin: 0;
+  font-size: 0.88rem;
+  color: $color-text-muted;
+}
+
 .release-page__screenshots {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));

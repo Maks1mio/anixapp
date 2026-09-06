@@ -16,7 +16,7 @@
     setConnectionOk,
     setConnectionProblem,
   } from './stores/connection';
-  import { currentPath, navigate } from './stores/navigation';
+  import { currentPath, navigate, replacePath } from './stores/navigation';
   import { openLobbyModal, settingsModalOpen, lobbyModalOpen, lobbyModalInitialCode, notificationsModalOpen, watchModalOpen, watchModalReleaseId, watchModalReleaseTitle, lobbyCurrentPlayback, isPlayerWindowOpen, lobbyWatchingPeerIds } from './stores/modals';
   import { sendPlayerViewActive } from './services/lobby-ws';
   import { getPath, getSearchParams } from './router';
@@ -40,6 +40,7 @@
     scheduleDiscordPresenceSync,
   } from './services/discord-presence';
   import { openProfilePanel } from './stores/profile-panel';
+  import { openProfileFromPath } from './stores/user-profile';
 
   import Layout from './layout/Layout.svelte';
   import TvLayout from './layout/TvLayout.svelte';
@@ -62,7 +63,6 @@
   import Release from './views/Release/page.svelte';
   import Related from './views/Related.svelte';
   import Bookmarks from './views/Bookmarks.svelte';
-  import Profile from './views/Profile/page.svelte';
   import ProfileFriends from './views/ProfileFriends.svelte';
   import ProfileCollections from './views/ProfileCollections.svelte';
   import ProfileComments from './views/ProfileComments.svelte';
@@ -162,6 +162,13 @@
     }
   });
 
+  // Старый полноэкранный профиль: открыть панель и уйти с маршрута
+  $effect(() => {
+    const route = path;
+    if (!openProfileFromPath(route)) return;
+    queueMicrotask(() => replacePath('/'));
+  });
+
   $effect(() => {
     if ($appScreen !== 'main') return;
     const routePath = path;
@@ -198,9 +205,6 @@
   const releaseCommentsMatch = $derived(path.match(/^\/release\/(\d+)\/comments$/));
   const releaseMatch          = $derived(path.match(/^\/release\/(\d+)$/));
   const relatedMatch          = $derived(path.match(/^\/release\/(\d+)\/related$/));
-  const profileMatch          = $derived(path.match(/^\/profile\/(\d+)$/));
-  const profilePageId         = $derived(profileMatch?.[1] ? parseInt(profileMatch[1], 10) : undefined);
-  const isProfileMainRoute    = $derived(path === '/profile' || profilePageId != null);
   const profileVotesMatch     = $derived(path.match(/^\/profile\/(\d+)\/votes$/));
   const profileFriendsMatch   = $derived(path.match(/^\/profile\/(\d+)\/friends$/));
   const profileCollectionsMatch = $derived(path.match(/^\/profile\/(\d+)\/collections$/));
@@ -914,10 +918,6 @@
     {:else if profileCollectionsId != null}
       {#key profileCollectionsId}
         <ProfileCollections id={profileCollectionsId} />
-      {/key}
-    {:else if isProfileMainRoute}
-      {#key path}
-        <Profile id={profilePageId} />
       {/key}
     {:else if collectionEditMatch}
       {#key collectionEditMatch[1]}

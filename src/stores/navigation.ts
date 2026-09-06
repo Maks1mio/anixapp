@@ -8,10 +8,13 @@ import {
   prepareIndependentTabSwitch,
   type IndependentTabId,
 } from './tab-navigation';
+import { openProfileFromPath } from './user-profile';
 
 export const currentPath = writable<string>(getPath());
 
 export function navigate(path: string, _state?: unknown): void {
+  if (openProfileFromPath(path)) return;
+
   window.dispatchEvent(new CustomEvent('anix:beforeNavigate', { detail: { to: path } }));
   captureActiveScroll();
 
@@ -30,6 +33,29 @@ export function navigate(path: string, _state?: unknown): void {
     return;
   }
   window.history.pushState(_state ?? null, '', path);
+  recordTabNavigation(path);
+  window.dispatchEvent(new CustomEvent('anix:navigate', { detail: path }));
+  currentPath.set(getPath());
+  resetScrollAfterRouteChange();
+}
+
+/** Заменить текущий URL без новой записи в истории. */
+export function replacePath(path: string): void {
+  window.dispatchEvent(new CustomEvent('anix:beforeNavigate', { detail: { to: path } }));
+  captureActiveScroll();
+
+  if (window.location.protocol === 'file:') {
+    const hash = path && path !== '/' ? (path.startsWith('#') ? path : '#' + path) : '#/';
+    const next = `${window.location.pathname}${window.location.search}${hash}`;
+    recordTabNavigation(path);
+    window.history.replaceState(null, '', next);
+    currentPath.set(getPath());
+    resetScrollAfterRouteChange();
+    window.dispatchEvent(new CustomEvent('anix:navigate', { detail: path }));
+    return;
+  }
+
+  window.history.replaceState(null, '', path);
   recordTabNavigation(path);
   window.dispatchEvent(new CustomEvent('anix:navigate', { detail: path }));
   currentPath.set(getPath());

@@ -8,6 +8,8 @@
  * - TTL и персистом в localStorage
  */
 import { ensureProfileId } from '../utils/profile';
+import { resolveBadgeName, resolveProfileBadgeUrl } from '../utils/badge';
+import { resolveJacksonEntity } from '../utils/jackson-refs';
 import type { ReleaseListStatusId } from '../utils/release-list-status';
 
 export const LIST_TYPE_TO_STATUS: Record<number, ReleaseListStatusId> = {
@@ -33,13 +35,15 @@ const FRIENDS_TTL_MS = 30 * 60 * 1000;
 const FRIEND_INDEX_TTL_MS = 6 * 60 * 60 * 1000;
 const CONCURRENCY = 3;
 const BOOKMARK_PAGE_HINT = 20;
-const STORAGE_PREFIX = 'anix:friend-release-index:v1:';
+const STORAGE_PREFIX = 'anix:friend-release-index:v3:';
 
 export interface FriendBrief {
   id: number;
   login: string;
   avatar: string;
   isOnline: boolean;
+  badgeUrl: string | null;
+  badgeName: string;
 }
 
 export interface FriendReleaseMatch extends FriendBrief {
@@ -80,6 +84,8 @@ interface PersistedStore {
 let selfId: number | null = null;
 let friendsCache: FriendBrief[] | null = null;
 let friendsCachedAt = 0;
+/** Кэш друзей собран с Jackson-корнем ответа (бейджи). */
+let friendsFromApiWithBadges = false;
 const indexes = new Map<number, FriendIndexEntry>();
 const friendScanInflight = new Map<number, Promise<void>>();
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -128,8 +134,15 @@ function loadPersisted(uid: number) {
     const data = JSON.parse(raw) as PersistedStore;
     if (!data || typeof data !== 'object') return;
     if (Array.isArray(data.friends) && isFresh(data.friendsAt, FRIENDS_TTL_MS)) {
-      friendsCache = data.friends.filter((f) => typeof f?.id === 'number');
+      friendsCache = data.friends
+        .filter((f) => typeof f?.id === 'number')
+        .map((f) => ({
+          ...f,
+          badgeUrl: f.badgeUrl ?? null,
+          badgeName: f.badgeName ?? '',
+        }));
       friendsCachedAt = data.friendsAt;
+      friendsFromApiWithBadges = true;
     }
     for (const [idStr, idx] of Object.entries(data.indexes ?? {})) {
       const id = Number(idStr);
@@ -212,14 +225,41 @@ async function ensureSelf(): Promise<number | null> {
     selfId = id;
     friendsCache = null;
     friendsCachedAt = 0;
+    friendsFromApiWithBadges = false;
     indexes.clear();
     loadPersisted(id);
   }
   return id;
 }
 
+function mapFriend(raw: Record<string, unknown>, root: unknown): FriendBrief | null {
+  const profile = resolveJacksonEntity(raw, root) ?? raw;
+  const id = Number(profile.id ?? raw.id);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  const badgeRaw = profile.badge ?? raw.badge;
+  const badgeEntity = resolveJacksonEntity(badgeRaw, root) ?? badgeRaw;
+  return {
+    id,
+    login: String(profile.login ?? raw.login ?? ''),
+    avatar: String(profile.avatar ?? raw.avatar ?? ''),
+    isOnline: !!(profile.is_online ?? raw.is_online),
+    badgeUrl: resolveProfileBadgeUrl(profile, root) ?? resolveProfileBadgeUrl(raw, root),
+    badgeName: resolveBadgeName(badgeEntity),
+  };
+}
+
+function friendsCacheUsable(friends: FriendBrief[] | null): friends is FriendBrief[] {
+  return !!friends && friends.every((f) => 'badgeUrl' in f);
+}
+
 async function loadAllFriends(uid: number): Promise<FriendBrief[]> {
-  if (friendsCache && isFresh(friendsCachedAt, FRIENDS_TTL_MS)) return friendsCache;
+  if (
+    friendsFromApiWithBadges
+    && friendsCacheUsable(friendsCache)
+    && isFresh(friendsCachedAt, FRIENDS_TTL_MS)
+  ) {
+    return friendsCache;
+  }
   const api = window.anixApi?.profile;
   if (!api?.getFriends) return [];
 
@@ -233,21 +273,17 @@ async function loadAllFriends(uid: number): Promise<FriendBrief[]> {
     const content = data?.content ?? [];
     if (!content.length) break;
     for (const raw of content) {
-      const id = Number(raw.id);
-      if (!Number.isFinite(id) || seen.has(id)) continue;
-      seen.add(id);
-      out.push({
-        id,
-        login: String(raw.login ?? ''),
-        avatar: String(raw.avatar ?? ''),
-        isOnline: !!raw.is_online,
-      });
+      const friend = mapFriend(raw, data);
+      if (!friend || seen.has(friend.id)) continue;
+      seen.add(friend.id);
+      out.push(friend);
     }
     if (data?.last === true || content.length < 20) break;
   }
 
   friendsCache = out;
   friendsCachedAt = now();
+  friendsFromApiWithBadges = true;
   schedulePersist();
   return out;
 }

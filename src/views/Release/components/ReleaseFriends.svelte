@@ -3,6 +3,7 @@
   import { get } from 'svelte/store';
   import { isAuthenticated } from '../../../stores/auth';
   import { handleUserProfileClick } from '../../../stores/user-profile';
+  import UserBadge from '../../../components/UserBadge.svelte';
   import { resolveCdnAssetUrl } from '../../../utils/posterUrl';
   import { LIST_STATUSES } from '../_types';
   import {
@@ -200,7 +201,15 @@
                   {/if}
                 </span>
                 <span class="release-page__friends-meta">
-                  <span class="release-page__friends-login">{friend.login || `id ${friend.id}`}</span>
+                  <span class="release-page__friends-login-row">
+                    <span class="release-page__friends-login">{friend.login || `id ${friend.id}`}</span>
+                    <UserBadge
+                      class="release-page__friends-badge"
+                      url={friend.badgeUrl}
+                      name={friend.badgeName}
+                      size="sm"
+                    />
+                  </span>
                   <span class="release-page__friends-status release-page__friends-status--{friend.status}">
                     {statusLabel(friend.status)}
                   </span>

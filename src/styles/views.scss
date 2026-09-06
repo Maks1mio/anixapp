@@ -4787,6 +4787,19 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   min-width: 0;
 }
 
+.release-page__friends-login-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+}
+
+.release-page__friends-badge {
+  flex-shrink: 0;
+}
+
 .release-page__friends-login {
   font-size: 0.92rem;
   font-weight: 600;

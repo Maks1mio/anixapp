@@ -1,5 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { flip } from 'svelte/animate';
+  import { cubicOut } from 'svelte/easing';
   import { fade } from 'svelte/transition';
   import UserBadge from '../UserBadge.svelte';
   import UiV2Skeleton from './UiV2Skeleton.svelte';
@@ -66,8 +68,6 @@
     class: className = '',
   }: Props = $props();
 
-  const vtNs = `uiv2rf${Math.floor(Math.random() * 1e6).toString(36)}`;
-
   let appeared = $state(new Set<number>());
   let sort = $state<UiV2ReleaseFriendsSort>(getReleaseFriendsSort());
   let layout = $state<UiV2ReleaseFriendsLayout>(getReleaseFriendsLayout());
@@ -119,9 +119,7 @@
       const id = (event as CustomEvent<{ sort?: UiV2ReleaseFriendsSort }>).detail?.sort;
       if (id !== 'status' && id !== 'nickname') return;
       if (id === sort) return;
-      withMotion(() => {
-        sort = id;
-      });
+      sort = id;
     };
     const onLayout = (event: Event) => {
       const id = (event as CustomEvent<{ layout?: UiV2ReleaseFriendsLayout }>).detail?.layout;
@@ -181,30 +179,11 @@
       && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
-  function withMotion(update: () => void) {
-    const start = document.startViewTransition?.bind(document);
-    if (!start || prefersReducedMotion()) {
-      update();
-      return;
-    }
-    const run = async () => {
-      update();
-      await tick();
-    };
-    try {
-      (start as (cb: unknown) => unknown)({ update: run, types: ['uiv2-rf'] });
-    } catch {
-      start(run);
-    }
-  }
-
   function requestSort(id: UiV2ReleaseFriendsSort) {
     if (id === sort) return;
-    withMotion(() => {
-      sort = id;
-      setReleaseFriendsSort(id);
-      onSortChange?.(id);
-    });
+    sort = id;
+    setReleaseFriendsSort(id);
+    onSortChange?.(id);
   }
 
   function requestLayout(id: UiV2ReleaseFriendsLayout) {
@@ -225,8 +204,7 @@
   }
 
   function slotStyle(friend: UiV2ReleaseFriend): string {
-    const mini = displayedLayout === 'mini' ? `--mini-status:${statusColor(friend.status)};` : '';
-    return `${mini}view-transition-name:${vtNs}-f${friend.id};view-transition-class:uiv2-rf-friend`;
+    return displayedLayout === 'mini' ? `--mini-status:${statusColor(friend.status)}` : '';
   }
 </script>
 
@@ -295,7 +273,7 @@
   </header>
 
   {#if showStats}
-    <div class="uiv2-release-friends__stats" style="view-transition-name:{vtNs}-bar">
+    <div class="uiv2-release-friends__stats">
       <div
         class="uiv2-release-friends__bar"
         class:uiv2-release-friends__bar--empty={friends.length === 0}
@@ -333,6 +311,7 @@
           class="uiv2-release-friends__slot"
           class:uiv2-release-friends__slot--in={!appeared.has(friend.id)}
           style={`--enter-i:${index};${slotStyle(friend)}`}
+          animate:flip={{ duration: listFading || prefersReducedMotion() ? 0 : 280, easing: cubicOut }}
           onanimationend={(event) => onSlotAnimEnd(friend.id, event)}
         >
           <button
@@ -588,6 +567,8 @@
     padding: 0;
     display: grid;
     gap: 0.35rem;
+    overflow: clip;
+    isolation: isolate;
     transition: opacity 0.16s ease;
   }
 
@@ -835,18 +816,6 @@
   @keyframes uiv2-rf-shimmer {
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
-  }
-
-  :global(html:active-view-transition-type(uiv2-rf)::view-transition-old(root)),
-  :global(html:active-view-transition-type(uiv2-rf)::view-transition-new(root)) {
-    animation: none;
-    mix-blend-mode: normal;
-  }
-
-  :global(html:active-view-transition-type(uiv2-rf)::view-transition-group(.uiv2-rf-friend)) {
-    animation-duration: 0.42s;
-    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-    z-index: 1;
   }
 
   @media (prefers-reduced-motion: reduce) {

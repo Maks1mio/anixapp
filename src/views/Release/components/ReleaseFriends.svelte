@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { get } from 'svelte/store';
-  import { navigate } from '../../../stores/navigation';
   import { isAuthenticated } from '../../../stores/auth';
+  import { handleUserProfileClick } from '../../../stores/user-profile';
   import { resolveCdnAssetUrl } from '../../../utils/posterUrl';
   import { LIST_STATUSES } from '../_types';
   import {
@@ -188,7 +188,7 @@
               <button
                 type="button"
                 class="release-page__friends-item"
-                onclick={() => navigate(`/profile/${friend.id}`)}
+                onclick={(event) => handleUserProfileClick(friend.id, event)}
               >
                 <span
                   class="release-page__friends-av"

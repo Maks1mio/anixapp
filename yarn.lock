@@ -2281,10 +2281,10 @@ lru-cache@^6.0.0:
   dependencies:
     yallist "^4.0.0"
 
-lucide@^1.31.0:
-  version "1.31.0"
-  resolved "https://registry.yarnpkg.com/lucide/-/lucide-1.31.0.tgz#5bf038147e66e6810d93ad733307c675b7348cf7"
-  integrity sha512-iPJC7py8o990ZSmvFZlS+4+bNasP+ANDkD0IeDOGgQZjTm3p85F2Ldut7leM1yhYavr1pmoPfigm9MDHyyCOrw==
+lucide@^1.35.0:
+  version "1.35.0"
+  resolved "https://registry.yarnpkg.com/lucide/-/lucide-1.35.0.tgz#23c8549576c4ae02e9b281cbc52fb8de27f552af"
+  integrity sha512-wsO/gl+aXKQ5SHuQB2t0O2b5t8Qw6q8I2qltdSh40UzGYrnG+5tDp+sHYbtN76ZCYHnus5q3xaAFjP9QLmj/1Q==
 
 magic-bytes.js@^1.10.0:
   version "1.13.0"

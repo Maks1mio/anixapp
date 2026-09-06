@@ -57,8 +57,6 @@
   import UiV2FeedSideNav from '../components/uikit-v2/UiV2FeedSideNav.svelte';
   import UiV2ReleaseFriends, {
     type UiV2ReleaseFriend,
-    type UiV2ReleaseFriendsLayout,
-    type UiV2ReleaseFriendsSort,
   } from '../components/uikit-v2/UiV2ReleaseFriends.svelte';
   import { UIV2_FEED_POST_DEMO } from '../utils/uikit-v2-feed-post';
   import { buildFeedArticleMenuItems } from '../utils/feed-article-menu';
@@ -156,8 +154,6 @@
   let releaseFriendsScanning = $state(true);
   let releaseFriendsChecked = $state(8);
   let releaseFriendsTotal = $state(24);
-  let releaseFriendsSort = $state<UiV2ReleaseFriendsSort>('status');
-  let releaseFriendsLayout = $state<UiV2ReleaseFriendsLayout>('grid');
   let releaseFriendsScanTimer: ReturnType<typeof setInterval> | null = null;
 
   function stopReleaseFriendsDemoScan() {
@@ -184,7 +180,7 @@
         releaseFriendsScanning = false;
         stopReleaseFriendsDemoScan();
       }
-    }, 420);
+    }, 520);
   }
 
   function demoFeedMenuItems(post: (typeof UIV2_FEED_POST_DEMO)[number]) {
@@ -1962,7 +1958,7 @@
           <div class="uikit-v2-demo-block">
             <h3 class="uikit-v2-demo-block__title">Идёт поиск</h3>
             <p class="uikit-v2-demo-block__desc">
-              Совпадения уже есть, но скан списков ещё не закончен — «ищем…» остаётся рядом со счётчиком.
+              Совпадения уже есть, но скан ещё идёт — прогресс «ищем…» в скелетоне следующего слота.
             </p>
             <UiV2Button
               variant="chrome"
@@ -1976,10 +1972,6 @@
                 scanning={releaseFriendsScanning}
                 checkedCount={releaseFriendsChecked}
                 friendsTotal={releaseFriendsTotal}
-                sort={releaseFriendsSort}
-                layout={releaseFriendsLayout}
-                onSortChange={(id) => { releaseFriendsSort = id; }}
-                onLayoutChange={(id) => { releaseFriendsLayout = id; }}
               />
             </div>
           </div>
@@ -1989,10 +1981,6 @@
             <p class="uikit-v2-demo-block__desc">Скан закончен, индикатор поиска скрыт.</p>
             <UiV2ReleaseFriends
               friends={UIV2_RELEASE_FRIENDS_DEMO}
-              sort={releaseFriendsSort}
-              layout={releaseFriendsLayout}
-              onSortChange={(id) => { releaseFriendsSort = id; }}
-              onLayoutChange={(id) => { releaseFriendsLayout = id; }}
             />
           </div>
 

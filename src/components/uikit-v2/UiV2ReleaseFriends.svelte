@@ -1,7 +1,16 @@
 <script lang="ts">
+  import { tick } from 'svelte';
+  import { fade } from 'svelte/transition';
   import UserBadge from '../UserBadge.svelte';
+  import UiV2Skeleton from './UiV2Skeleton.svelte';
   import { iconBookmark, iconLayoutGrid, iconTags, iconType } from '../icons';
   import { resolveCdnAssetUrl } from '../../utils/posterUrl';
+  import {
+    getReleaseFriendsLayout,
+    getReleaseFriendsSort,
+    setReleaseFriendsLayout,
+    setReleaseFriendsSort,
+  } from '../../prefs';
 
   export type UiV2ReleaseFriendStatus =
     | 'watching'
@@ -40,8 +49,6 @@
     scanning?: boolean;
     checkedCount?: number;
     friendsTotal?: number;
-    sort?: UiV2ReleaseFriendsSort;
-    layout?: UiV2ReleaseFriendsLayout;
     onSortChange?: (id: UiV2ReleaseFriendsSort) => void;
     onLayoutChange?: (id: UiV2ReleaseFriendsLayout) => void;
     onFriendClick?: (id: number, event: MouseEvent) => void;
@@ -53,22 +60,26 @@
     scanning = false,
     checkedCount = 0,
     friendsTotal = 0,
-    sort = 'status',
-    layout = 'grid',
     onSortChange,
     onLayoutChange,
     onFriendClick,
     class: className = '',
   }: Props = $props();
 
+  const vtNs = `uiv2rf${Math.floor(Math.random() * 1e6).toString(36)}`;
+
+  let appeared = $state(new Set<number>());
+  let sort = $state<UiV2ReleaseFriendsSort>(getReleaseFriendsSort());
+  let layout = $state<UiV2ReleaseFriendsLayout>(getReleaseFriendsLayout());
+
   const statusCounts = $derived(
-    UIV2_RELEASE_FRIEND_STATUSES
-      .map((row) => ({
-        ...row,
-        count: friends.filter((f) => f.status === row.id).length,
-      }))
-      .filter((row) => row.count > 0),
+    UIV2_RELEASE_FRIEND_STATUSES.map((row) => ({
+      ...row,
+      count: friends.filter((f) => f.status === row.id).length,
+    })),
   );
+
+  const visibleStatusCounts = $derived(statusCounts.filter((row) => row.count > 0));
 
   const statusOrder = $derived(
     Object.fromEntries(UIV2_RELEASE_FRIEND_STATUSES.map((row, i) => [row.id, i])),
@@ -86,6 +97,63 @@
       });
     }
     return list;
+  });
+
+  let listFading = $state(false);
+  let displayedLayout = $state(getReleaseFriendsLayout());
+
+  const skeletonCount = $derived(
+    scanning ? (friends.length === 0 ? (displayedLayout === 'mini' ? 5 : 3) : 1) : 0,
+  );
+
+  const scanLabel = $derived(`ищем… ${checkedCount}/${friendsTotal || '…'}`);
+
+  const showStats = $derived(scanning || friends.length > 0);
+
+  $effect(() => {
+    if (friends.length === 0) appeared = new Set();
+  });
+
+  $effect(() => {
+    const onSort = (event: Event) => {
+      const id = (event as CustomEvent<{ sort?: UiV2ReleaseFriendsSort }>).detail?.sort;
+      if (id !== 'status' && id !== 'nickname') return;
+      if (id === sort) return;
+      withMotion(() => {
+        sort = id;
+      });
+    };
+    const onLayout = (event: Event) => {
+      const id = (event as CustomEvent<{ layout?: UiV2ReleaseFriendsLayout }>).detail?.layout;
+      if (id !== 'grid' && id !== 'mini') return;
+      if (id === layout) return;
+      layout = id;
+    };
+    window.addEventListener('anix:releaseFriendsSortChanged', onSort);
+    window.addEventListener('anix:releaseFriendsLayoutChanged', onLayout);
+    return () => {
+      window.removeEventListener('anix:releaseFriendsSortChanged', onSort);
+      window.removeEventListener('anix:releaseFriendsLayoutChanged', onLayout);
+    };
+  });
+
+  $effect(() => {
+    const next = layout;
+    if (next === displayedLayout) return;
+    if (prefersReducedMotion()) {
+      displayedLayout = next;
+      return;
+    }
+    listFading = true;
+    const timer = window.setTimeout(() => {
+      displayedLayout = next;
+      void tick().then(() => {
+        requestAnimationFrame(() => {
+          listFading = false;
+        });
+      });
+    }, 160);
+    return () => window.clearTimeout(timer);
   });
 
   function friendWord(n: number): string {
@@ -107,6 +175,59 @@
   function avatarUrl(avatar: string | undefined): string {
     return avatar ? resolveCdnAssetUrl(avatar.trim()) : '';
   }
+
+  function prefersReducedMotion(): boolean {
+    return typeof window !== 'undefined'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function withMotion(update: () => void) {
+    const start = document.startViewTransition?.bind(document);
+    if (!start || prefersReducedMotion()) {
+      update();
+      return;
+    }
+    const run = async () => {
+      update();
+      await tick();
+    };
+    try {
+      (start as (cb: unknown) => unknown)({ update: run, types: ['uiv2-rf'] });
+    } catch {
+      start(run);
+    }
+  }
+
+  function requestSort(id: UiV2ReleaseFriendsSort) {
+    if (id === sort) return;
+    withMotion(() => {
+      sort = id;
+      setReleaseFriendsSort(id);
+      onSortChange?.(id);
+    });
+  }
+
+  function requestLayout(id: UiV2ReleaseFriendsLayout) {
+    if (id === layout || listFading) return;
+    layout = id;
+    setReleaseFriendsLayout(id);
+    onLayoutChange?.(id);
+  }
+
+  function markAppeared(id: number) {
+    if (appeared.has(id)) return;
+    appeared = new Set(appeared).add(id);
+  }
+
+  function onSlotAnimEnd(id: number, event: AnimationEvent) {
+    if (event.target !== event.currentTarget) return;
+    markAppeared(id);
+  }
+
+  function slotStyle(friend: UiV2ReleaseFriend): string {
+    const mini = displayedLayout === 'mini' ? `--mini-status:${statusColor(friend.status)};` : '';
+    return `${mini}view-transition-name:${vtNs}-f${friend.id};view-transition-class:uiv2-rf-friend`;
+  }
 </script>
 
 <section class="uiv2-release-friends {className}" aria-label="Друзья">
@@ -116,11 +237,6 @@
       {#if friends.length > 0}
         <span class="uiv2-release-friends__count">
           {friends.length} {friendWord(friends.length)}
-        </span>
-      {/if}
-      {#if scanning}
-        <span class="uiv2-release-friends__scan" aria-live="polite">
-          ищем… {checkedCount}/{friendsTotal || '…'}
         </span>
       {/if}
     </div>
@@ -134,7 +250,7 @@
             class="uiv2-release-friends__icon-btn uiv2-release-friends__icon-btn--label"
             class:uiv2-release-friends__icon-btn--on={sort === 'status'}
             aria-pressed={sort === 'status'}
-            onclick={() => onSortChange?.('status')}
+            onclick={() => requestSort('status')}
           >
             {@html iconBookmark(16)}
             Статусу
@@ -144,7 +260,7 @@
             class="uiv2-release-friends__icon-btn uiv2-release-friends__icon-btn--label"
             class:uiv2-release-friends__icon-btn--on={sort === 'nickname'}
             aria-pressed={sort === 'nickname'}
-            onclick={() => onSortChange?.('nickname')}
+            onclick={() => requestSort('nickname')}
           >
             {@html iconType(16)}
             Никнейму
@@ -159,7 +275,7 @@
           aria-label="Сетка"
           aria-pressed={layout === 'grid'}
           title="Сетка"
-          onclick={() => onLayoutChange?.('grid')}
+          onclick={() => requestLayout('grid')}
         >
           {@html iconLayoutGrid(16)}
         </button>
@@ -170,7 +286,7 @@
           aria-label="Мини"
           aria-pressed={layout === 'mini'}
           title="Мини"
-          onclick={() => onLayoutChange?.('mini')}
+          onclick={() => requestLayout('mini')}
         >
           {@html iconTags(16)}
         </button>
@@ -178,44 +294,55 @@
     </div>
   </header>
 
-  {#if statusCounts.length > 0}
-    <div class="uiv2-release-friends__stats">
-      <div class="uiv2-release-friends__bar" aria-hidden="true">
-        {#each statusCounts as row}
+  {#if showStats}
+    <div class="uiv2-release-friends__stats" style="view-transition-name:{vtNs}-bar">
+      <div
+        class="uiv2-release-friends__bar"
+        class:uiv2-release-friends__bar--empty={friends.length === 0}
+        aria-hidden="true"
+      >
+        {#each statusCounts as row (row.id)}
           <span
             class="uiv2-release-friends__bar-seg"
-            style={`flex:${row.count};background:${row.color}`}
+            style={`width:${friends.length ? (row.count / friends.length) * 100 : 0}%;background:${row.color}`}
           ></span>
         {/each}
       </div>
-      <ul class="uiv2-release-friends__legend">
-        {#each statusCounts as row}
-          <li class="uiv2-release-friends__legend-item">
-            <i class="uiv2-release-friends__dot" style={`background:${row.color}`}></i>
-            {row.label} — {row.count}
-          </li>
-        {/each}
-      </ul>
+      {#if visibleStatusCounts.length > 0}
+        <ul class="uiv2-release-friends__legend">
+          {#each visibleStatusCounts as row (row.id)}
+            <li class="uiv2-release-friends__legend-item" transition:fade={{ duration: 180 }}>
+              <i class="uiv2-release-friends__dot" style={`background:${row.color}`}></i>
+              {row.label} — {row.count}
+            </li>
+          {/each}
+        </ul>
+      {/if}
     </div>
   {/if}
 
-  {#if shownFriends.length > 0}
+  {#if shownFriends.length > 0 || scanning}
     <ul
       class="uiv2-release-friends__list"
-      class:uiv2-release-friends__list--grid={layout === 'grid'}
-      class:uiv2-release-friends__list--mini={layout === 'mini'}
+      class:uiv2-release-friends__list--grid={displayedLayout === 'grid'}
+      class:uiv2-release-friends__list--mini={displayedLayout === 'mini'}
+      class:uiv2-release-friends__list--fading={listFading}
     >
-      {#each shownFriends as friend (friend.id)}
-        <li>
+      {#each shownFriends as friend, index (friend.id)}
+        <li
+          class="uiv2-release-friends__slot"
+          class:uiv2-release-friends__slot--in={!appeared.has(friend.id)}
+          style={`--enter-i:${index};${slotStyle(friend)}`}
+          onanimationend={(event) => onSlotAnimEnd(friend.id, event)}
+        >
           <button
             type="button"
             class="uiv2-release-friends__item"
-            class:uiv2-release-friends__item--mini={layout === 'mini'}
-            style={layout === 'mini' ? `--mini-status:${statusColor(friend.status)}` : ''}
+            class:uiv2-release-friends__item--mini={displayedLayout === 'mini'}
             aria-label={`${friend.login || `id ${friend.id}`}, ${statusLabel(friend.status)}${friend.isOnline ? ', онлайн' : ''}`}
             onclick={(event) => onFriendClick?.(friend.id, event)}
           >
-            {#if layout === 'mini'}
+            {#if displayedLayout === 'mini'}
               {#if friend.isOnline}
                 <span class="uiv2-release-friends__mini-online" aria-hidden="true"></span>
               {/if}
@@ -237,7 +364,7 @@
                   size="sm"
                 />
               </span>
-              {#if layout !== 'mini'}
+              {#if displayedLayout !== 'mini'}
                 <span class="uiv2-release-friends__status uiv2-release-friends__status--{friend.status}">
                   {statusLabel(friend.status)}
                 </span>
@@ -246,9 +373,43 @@
           </button>
         </li>
       {/each}
+
+      {#each Array.from({ length: skeletonCount }, (_, i) => i) as i (`skel-${displayedLayout}-${i}`)}
+        <li
+          class="uiv2-release-friends__slot uiv2-release-friends__slot--skel"
+          class:uiv2-release-friends__slot--skel-mini={displayedLayout === 'mini'}
+          class:uiv2-release-friends__slot--skel-scan={i === 0}
+          aria-hidden={i !== 0}
+          style={`--enter-i:${shownFriends.length + i}`}
+        >
+          {#if displayedLayout === 'mini'}
+            {#if i === 0}
+              <span class="uiv2-release-friends__skel-chip uiv2-release-friends__skel-chip--label">
+                <span class="uiv2-release-friends__scan" aria-live="polite">{scanLabel}</span>
+              </span>
+            {:else}
+              <UiV2Skeleton rounded="sm" class="uiv2-release-friends__skel-chip" />
+            {/if}
+          {:else if i === 0}
+            <div class="uiv2-release-friends__skel-row">
+              <UiV2Skeleton rounded="full" class="uiv2-release-friends__skel-av" />
+              <span class="uiv2-release-friends__skel-lines">
+                <span class="uiv2-release-friends__scan" aria-live="polite">{scanLabel}</span>
+                <UiV2Skeleton rounded="sm" class="uiv2-release-friends__skel-line uiv2-release-friends__skel-line--sm" />
+              </span>
+            </div>
+          {:else}
+            <div class="uiv2-release-friends__skel-row">
+              <UiV2Skeleton rounded="full" class="uiv2-release-friends__skel-av" />
+              <span class="uiv2-release-friends__skel-lines">
+                <UiV2Skeleton rounded="sm" class="uiv2-release-friends__skel-line" />
+                <UiV2Skeleton rounded="sm" class="uiv2-release-friends__skel-line uiv2-release-friends__skel-line--sm" />
+              </span>
+            </div>
+          {/if}
+        </li>
+      {/each}
     </ul>
-  {:else if scanning}
-    <p class="uiv2-release-friends__hint">Проверяем списки друзей…</p>
   {:else}
     <p class="uiv2-release-friends__hint">Ваши друзья еще не смотрели это тайтл</p>
   {/if}
@@ -287,12 +448,15 @@
     font-size: 0.92rem;
     font-weight: 600;
     color: var(--uikit-v2-muted);
+    font-variant-numeric: tabular-nums;
   }
 
   .uiv2-release-friends__scan {
     font-size: 0.82rem;
     font-weight: 500;
     color: var(--uikit-v2-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
 
   .uiv2-release-friends__toolbar {
@@ -335,6 +499,7 @@
     color: var(--uikit-v2-muted);
     font: inherit;
     cursor: pointer;
+    transition: background 0.22s ease, color 0.22s ease;
   }
 
   .uiv2-release-friends__icon-btn--label {
@@ -373,8 +538,23 @@
     background: var(--uiv2-surface-raised);
   }
 
+  .uiv2-release-friends__bar--empty {
+    background: linear-gradient(
+      90deg,
+      var(--uiv2-skeleton-base) 0%,
+      var(--uiv2-skeleton-highlight) 50%,
+      var(--uiv2-skeleton-base) 100%
+    );
+    background-size: 200% 100%;
+    animation: uiv2-rf-shimmer 1.35s ease-in-out infinite;
+  }
+
   .uiv2-release-friends__bar-seg {
-    min-width: 2px;
+    display: block;
+    height: 100%;
+    min-width: 0;
+    flex: 0 0 auto;
+    transition: width 0.48s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .uiv2-release-friends__legend {
@@ -392,6 +572,7 @@
     gap: 0.35rem;
     font-size: 0.78rem;
     color: var(--uikit-v2-muted);
+    font-variant-numeric: tabular-nums;
   }
 
   .uiv2-release-friends__dot {
@@ -407,6 +588,12 @@
     padding: 0;
     display: grid;
     gap: 0.35rem;
+    transition: opacity 0.16s ease;
+  }
+
+  .uiv2-release-friends__list--fading {
+    opacity: 0;
+    pointer-events: none;
   }
 
   .uiv2-release-friends__list--grid {
@@ -417,6 +604,20 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
+  }
+
+  .uiv2-release-friends__slot {
+    min-width: 0;
+  }
+
+  .uiv2-release-friends__slot--in {
+    animation: uiv2-rf-enter 0.46s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(var(--enter-i, 0) * 42ms);
+  }
+
+  .uiv2-release-friends__slot--skel {
+    animation: uiv2-rf-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(var(--enter-i, 0) * 42ms);
   }
 
   .uiv2-release-friends__item {
@@ -431,6 +632,7 @@
     color: inherit;
     text-align: left;
     cursor: pointer;
+    transition: background 0.2s ease;
   }
 
   .uiv2-release-friends__item:hover {
@@ -552,5 +754,114 @@
     margin: 0;
     font-size: 0.88rem;
     color: var(--uikit-v2-muted);
+  }
+
+  .uiv2-release-friends__skel-row {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.45rem 0.5rem;
+  }
+
+  .uiv2-release-friends__slot--skel-mini {
+    display: flex;
+  }
+
+  :global(.uiv2-release-friends__skel-av) {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+  }
+
+  .uiv2-release-friends__skel-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+    flex: 1;
+  }
+
+  :global(.uiv2-release-friends__skel-line) {
+    width: 72%;
+    height: 0.72rem;
+  }
+
+  :global(.uiv2-release-friends__skel-line--sm) {
+    width: 44%;
+    height: 0.58rem;
+  }
+
+  :global(.uiv2-release-friends__skel-chip) {
+    width: 5.6rem;
+    height: 1.65rem;
+  }
+
+  .uiv2-release-friends__skel-chip--label {
+    display: inline-flex;
+    align-items: center;
+    width: auto;
+    min-width: 5.6rem;
+    padding: 0 0.55rem;
+    border-radius: 6px;
+    background: linear-gradient(
+      90deg,
+      var(--uiv2-skeleton-base) 0%,
+      var(--uiv2-skeleton-highlight) 50%,
+      var(--uiv2-skeleton-base) 100%
+    );
+    background-size: 200% 100%;
+    animation: uiv2-rf-shimmer 1.35s ease-in-out infinite;
+  }
+
+  .uiv2-release-friends__slot--skel-mini:nth-child(3n) :global(.uiv2-release-friends__skel-chip) {
+    width: 4.4rem;
+  }
+
+  .uiv2-release-friends__slot--skel-mini:nth-child(3n + 1) :global(.uiv2-release-friends__skel-chip) {
+    width: 7.2rem;
+  }
+
+  @keyframes uiv2-rf-enter {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes uiv2-rf-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  :global(html:active-view-transition-type(uiv2-rf)::view-transition-old(root)),
+  :global(html:active-view-transition-type(uiv2-rf)::view-transition-new(root)) {
+    animation: none;
+    mix-blend-mode: normal;
+  }
+
+  :global(html:active-view-transition-type(uiv2-rf)::view-transition-group(.uiv2-rf-friend)) {
+    animation-duration: 0.42s;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    z-index: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .uiv2-release-friends__slot--in,
+    .uiv2-release-friends__slot--skel,
+    .uiv2-release-friends__bar--empty,
+    .uiv2-release-friends__skel-chip--label {
+      animation: none;
+    }
+
+    .uiv2-release-friends__bar-seg,
+    .uiv2-release-friends__icon-btn,
+    .uiv2-release-friends__item,
+    .uiv2-release-friends__list {
+      transition: none;
+    }
   }
 </style>

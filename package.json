@@ -39,7 +39,7 @@
         "electron"
     ],
     "author": "",
-    "license": "MIT",
+    "license": "PolyForm-Noncommercial-1.0.0",
     "devDependencies": {
         "@capacitor/android": "^8.5.0",
         "@capacitor/cli": "^8.5.0",

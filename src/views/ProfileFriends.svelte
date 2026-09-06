@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../stores/navigation';
+  import { handleUserProfileClick } from '../stores/user-profile';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import { resolveBadgeName, resolveProfileBadgeUrl } from '../utils/badge';
   import { setDiscordContext, refreshDiscordPresence } from '../services/discord-presence';
@@ -168,7 +169,7 @@
               <button
                 type="button"
                 class="search-page__profile"
-                onclick={() => navigate(`/profile/${fr.id}`)}
+                onclick={(event) => handleUserProfileClick(fr.id, event)}
               >
                 <div
                   class="search-page__profile-avatar"
@@ -199,7 +200,7 @@
             <button
               type="button"
               class="search-page__profile"
-              onclick={() => navigate(`/profile/${fr.id}`)}
+              onclick={(event) => handleUserProfileClick(fr.id, event)}
             >
               <div
                 class="search-page__profile-avatar"

@@ -78,12 +78,23 @@ function bindHlsHandlers(hls: Hls, video: HTMLVideoElement, handlers: SwapMediaH
   hls.on(Hls.Events.ERROR, onError);
 }
 
+function preferNativeHls(): boolean {
+  if (typeof window === 'undefined') return false;
+  if ((window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()) {
+    return true;
+  }
+  const el = document.createElement('video');
+  return !!el.canPlayType('application/vnd.apple.mpegurl');
+}
+
 export function swapMediaSource(
   video: HTMLVideoElement,
   url: string,
   handlers: SwapMediaHandlers = {},
 ): { reused: boolean; isHls: boolean } {
-  const wantHls = isHlsUrl(url) && Hls.isSupported();
+  // Android TV WebView: MSE/hls.js часто даёт чёрный кадр при живом currentTime.
+  // Нативный HLS в <video src> — тот же путь, что у старого Anixholy APK.
+  const wantHls = isHlsUrl(url) && Hls.isSupported() && !preferNativeHls();
   const existing = getAttachedHls(video);
 
   if (wantHls) {

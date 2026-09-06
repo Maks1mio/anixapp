@@ -55,7 +55,6 @@ export function pathRequiresAuth(path: string): boolean {
   ) {
     return true;
   }
-  if (p === '/profile') return true;
   if (/^\/profile\/(votes|friends|lists|comments|videos|collections)$/.test(p)) return true;
   return false;
 }

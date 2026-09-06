@@ -19,7 +19,6 @@
 @use 'profile-ui';
 @use 'uikit-v2-theme';
 @use 'profile-panel';
-@use 'user-profile-modal';
 @use 'watch-modal';
 @use 'watch';
 @use 'uikit';
@@ -32,6 +31,7 @@
 @use 'collections-page';
 @use 'downloads';
 @use 'feed';
+@use 'tv';
 
 *,
 *::before,

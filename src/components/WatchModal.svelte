@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
-  import { getCurrentRoomId, getCurrentParticipants, proposeAnimeChange, getLastPlayback } from '../services/lobby-state';
+  import { getCurrentRoomId, getCurrentParticipants, proposeAnimeChange, getLastPlayback, getLobbyHostPeerId, getLobbyMyPeerId } from '../services/lobby-state';
+  import { getFluoRoomSettings } from '../fluo/sync';
+  import { fluoAnimeSelectModeOf, fluoPlaybackControlMode, isFluoAnimeVoteEnabled } from '../fluo/types';
   import { isDubberBlacklisted } from '../views/Watch/_utils';
   import {
     buildDownloadFolder,
@@ -32,6 +34,8 @@
   import { episodeDisplayNumber } from '../utils/episode-display';
   import { formatDubberQuality, isDubberNovelty, readLastEpisodeTypeUpdateId, sortDubbersPinnedFirst } from '../utils/dubber-meta';
   import { listPlayableDubberSources, NO_EPISODE_PICK_OTHER_DUB } from '../utils/dubber-sources';
+  import { isTvMode } from '../platform/tv';
+  import { scheduleFocusTvOverlayContent } from '../services/tv-navigation';
 
   interface Props {
     releaseId: number;
@@ -149,6 +153,7 @@
   let showConfirm = $state(false);
   let confirmCallback = $state<(() => void) | null>(null);
   let confirmSkipCallback = $state<(() => void) | null>(null);
+  let confirmHideCancel = $state(false);
 
   let episodesListEl = $state<HTMLElement | null>(null);
 
@@ -299,6 +304,7 @@
     onYes: () => void;
     skipLabel?: string;
     onSkip?: () => void;
+    hideCancel?: boolean;
   }) {
     confirmTitle = opts.title;
     confirmText = opts.text;
@@ -306,6 +312,7 @@
     confirmCallback = opts.onYes;
     confirmSkipLabel = opts.skipLabel ?? '';
     confirmSkipCallback = opts.onSkip ?? null;
+    confirmHideCancel = opts.hideCancel === true;
     showConfirm = true;
   }
 
@@ -390,13 +397,22 @@
     loadUpdatesPage(updatesPage + 1, true);
   }
 
+  function focusTvModalContent() {
+    if (!isTvMode()) return;
+    scheduleFocusTvOverlayContent(24);
+  }
+
   function backFromNestedView() {
     if (modalView === 'episodes') {
       modalView = 'variants';
       optionsOpen = false;
+      focusTvModalContent();
       return;
     }
-    if (modalView === 'updates') modalView = 'variants';
+    if (modalView === 'updates') {
+      modalView = 'variants';
+      focusTvModalContent();
+    }
   }
 
   function sourceLabel(source: Source): string {
@@ -451,6 +467,8 @@
         return;
       }
       await selectSource(srcs[0], false);
+      await tick();
+      focusTvModalContent();
     } catch {
       episodesLoading = false;
       episodesError = 'Ошибка загрузки источников';
@@ -476,6 +494,7 @@
       }
       await refreshDownloadedState();
       await tick();
+      focusTvModalContent();
       if (lastWatchedEpisode) window.setTimeout(() => scrollToEpisode(lastWatchedEpisode!.position), 80);
     } catch {
       episodesLoading = false;
@@ -503,6 +522,7 @@
         title: releaseTitle,
         sourceName: selectedSource.name,
         dubberId: selectedDubber?.id,
+        dubberName: selectedDubber?.name,
       }).then(() => {
         void markEpisodeWatched(epPosition);
         close();
@@ -511,10 +531,14 @@
 
     if (isInLobbyWithOthers()) {
       const currentPlayback = getLastPlayback();
-      const isDifferentAnime = currentPlayback != null && String(currentPlayback.releaseId) !== String(releaseId);
+      const prevRid = String(currentPlayback?.releaseId ?? '').trim();
+      const isDifferentAnime = !prevRid || prevRid !== String(releaseId);
+      const settings = getFluoRoomSettings();
+      const iAmHost = !!getLobbyMyPeerId() && getLobbyMyPeerId() === getLobbyHostPeerId();
       if (isDifferentAnime) {
+        if (isFluoAnimeVoteEnabled(settings, getCurrentParticipants().length)) {
         openConfirm({
-          title: `Предложить серию ${params.ep}?`,
+          title: `Предложить «${releaseTitle}»?`,
           text: 'Все участники увидят предложение сменить аниме. Продолжить?',
           yesLabel: 'Предложить',
           onYes: () => {
@@ -527,9 +551,32 @@
             close();
           },
         });
-      } else {
+        return;
+        }
+        if (fluoAnimeSelectModeOf(settings) === 'host' && !iAmHost) {
+          openConfirm({
+            title: 'Выбор аниме',
+            text: 'В этой комнате тайтл выбирает только хост.',
+            yesLabel: 'Понятно',
+            hideCancel: true,
+            onYes: () => {},
+          });
+          return;
+        }
         doOpenPlayer();
+        return;
       }
+      if (fluoPlaybackControlMode(settings) === 'host' && !iAmHost) {
+        openConfirm({
+          title: 'Управление плеером',
+          text: 'Серии, озвучку и перемотку в этой комнате меняет только хост.',
+          yesLabel: 'Понятно',
+          hideCancel: true,
+          onYes: () => {},
+        });
+        return;
+      }
+      doOpenPlayer();
       return;
     }
     doOpenPlayer();
@@ -740,6 +787,7 @@
   onMount(() => {
     document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', handleKeydown);
+    focusTvModalContent();
 
     const cached = getWatchModalState(releaseId);
 
@@ -763,6 +811,8 @@
             return;
           }
           dubbers = sortDubbersPinnedFirst(types);
+          await tick();
+          focusTvModalContent();
 
           void api.release.info?.(releaseId).then((infoRes: { release?: unknown }) => {
             lastEpisodeTypeUpdateId = readLastEpisodeTypeUpdateId(infoRes?.release ?? infoRes);
@@ -1140,9 +1190,11 @@
           <div class="watch-modal__confirm-title">{confirmTitle}</div>
           <div class="watch-modal__confirm-text">{confirmText}</div>
           <div class="watch-modal__confirm-actions">
-            <button type="button" class="watch-modal__confirm-btn watch-modal__confirm-btn--secondary" onclick={handleConfirmNo}>
-              Отмена
-            </button>
+            {#if !confirmHideCancel}
+              <button type="button" class="watch-modal__confirm-btn watch-modal__confirm-btn--secondary" onclick={handleConfirmNo}>
+                Отмена
+              </button>
+            {/if}
             {#if confirmSkipLabel && confirmSkipCallback}
               <button type="button" class="watch-modal__confirm-btn watch-modal__confirm-btn--secondary" onclick={handleConfirmSkip}>
                 {confirmSkipLabel}

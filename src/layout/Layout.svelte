@@ -9,7 +9,7 @@
   import { ensureProfileId } from '../utils/profile';
   import { bindSearchHotkeys } from '../search-controller';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
-  import { iconHome, iconBookmark, iconCompass, iconFlame, iconLayoutGrid, iconDownload, iconNewspaper } from '../components/icons';
+  import { iconHome, iconBookmark, iconCompass, iconFlame, iconLayoutGrid, iconDownload, iconNewspaper, iconSignal } from '../components/icons';
   import { downloads, activeDownloadsCount, downloadsOverallProgress } from '../stores/downloads';
 
   import TitleBar from '../components/TitleBar.svelte';
@@ -38,6 +38,7 @@
   const SIDEBAR_NAV = [
     { href: '/', label: 'Главная', icon: iconHome(18) },
     { href: '/overview', label: 'Обзор', icon: iconCompass(18) },
+    { href: '/fluo', label: 'Fluo', icon: iconSignal(18) },
     { href: '/feed', label: 'Лента', icon: iconNewspaper(18) },
     { href: '/overview/popular', label: 'Популярное', icon: iconFlame(18) },
     { href: '/collections', label: 'Коллекции', icon: iconLayoutGrid(18) },
@@ -329,7 +330,7 @@
           {#each SIDEBAR_NAV as item}
             <UiV2Tooltip text={item.label} placement="right" class="sidebar__tooltip">
               <a
-                href={item.href}
+                href={`#${item.href === '/' ? '/' : item.href}`}
                 class="sidebar__link"
                 class:sidebar__link--active={isActive(item.href)}
                 class:sidebar__link--downloads={item.href === '/downloads'}

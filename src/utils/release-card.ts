@@ -5,11 +5,26 @@ function strField(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-export function mapReleaseRawToCard(raw: Record<string, unknown>): ReleaseCardData {
+export function pickReleasePosterRaw(
+  raw: Record<string, unknown>,
+  preferLarge = false,
+): string | undefined {
   const p = raw.poster as Record<string, { url?: string }> | undefined;
-  const posterRaw = p?.small?.url ?? p?.medium?.url ?? p?.original?.url
+  if (preferLarge) {
+    return p?.original?.url ?? p?.medium?.url ?? p?.small?.url
+      ?? (typeof raw.poster === 'string' ? raw.poster : undefined)
+      ?? (typeof raw.image === 'string' ? raw.image : undefined);
+  }
+  return p?.small?.url ?? p?.medium?.url ?? p?.original?.url
     ?? (typeof raw.poster === 'string' ? raw.poster : undefined)
     ?? (typeof raw.image === 'string' ? raw.image : undefined);
+}
+
+export function mapReleaseRawToCard(
+  raw: Record<string, unknown>,
+  options?: { preferLargePoster?: boolean },
+): ReleaseCardData {
+  const posterRaw = pickReleasePosterRaw(raw, options?.preferLargePoster === true);
   const poster = posterRaw ? buildPosterUrl(posterRaw) || undefined : undefined;
   const grade =
     typeof raw.grade === 'number'
@@ -60,6 +75,8 @@ export function mapReleaseRawToCard(raw: Record<string, unknown>): ReleaseCardDa
     releaseDate: (raw.release_date as string) || undefined,
     isFavorite: !!(raw.is_favorite),
     listStatus,
+    ageRating: typeof raw.age_rating === 'number' ? raw.age_rating : undefined,
+    isAdult: !!raw.is_adult,
   };
 }
 

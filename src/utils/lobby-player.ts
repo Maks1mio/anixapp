@@ -1,29 +1,44 @@
-import { createRoom, joinRoom, leaveRoom, isUsablePlayback, type LobbyParticipant, type LobbyPlayback } from '../services/lobby-api';
+import {
+  createFluoRoom,
+  joinFluoRoom,
+  leaveFluoRoomHttp,
+  catchUpFluoPlayback,
+  computeFluoPosition,
+  getFluoRoomSettings,
+  FluoJoinError,
+  type FluoProfilePayload,
+} from '../fluo/sync';
+import { isUsableFluoContent, type FluoContent, type FluoCreateRoomOptions, type FluoParticipant } from '../fluo/types';
 import {
   getCurrentParticipants,
   getCurrentRoomCode,
   getCurrentRoomId,
   getLastPlayback,
+  getLobbyHostPeerId,
+  getLobbyMyPeerId,
   leaveLobby,
   pushLobbySyncStateToPlayer,
   setLobbyRoom,
+  type LobbyPlayback,
 } from '../services/lobby-state';
 import { isPlayerWindowOpen } from '../stores/modals';
 import { openInAppPlayer, isEmbeddedWebPlayer } from './watch-nav';
 import { resolveCdnAssetUrl } from './posterUrl';
 
+export { FluoJoinError };
+export type { FluoCreateRoomOptions };
+
 export type LobbySession = {
   inLobby: boolean;
   roomId: string | null;
   roomCode: string | null;
-  participants: LobbyParticipant[];
+  participants: FluoParticipant[];
+  hostPeerId: string | null;
+  myPeerId: string | null;
+  settings?: import('../fluo/types').FluoRoomSettings;
 };
 
-export function getLobbyProfile(): {
-  profileId?: number;
-  login?: string;
-  avatar?: string | null;
-} {
+export function getLobbyProfile(): FluoProfilePayload {
   try {
     const raw = (window as unknown as { __anixProfile?: { id?: number; login?: string; avatar?: string | null } }).__anixProfile;
     if (raw && (raw.id || raw.login)) {
@@ -62,7 +77,7 @@ export async function getLobbyDeviceId(): Promise<string | null> {
       const id = await getDeviceId();
       if (id) return id;
     } catch {
-      // fall through to web id
+      // fall through
     }
   }
   return getOrCreateWebDeviceId();
@@ -75,6 +90,9 @@ export function getLobbySession(): LobbySession {
     roomId,
     roomCode: getCurrentRoomCode(),
     participants: getCurrentParticipants(),
+    hostPeerId: getLobbyHostPeerId(),
+    myPeerId: getLobbyMyPeerId(),
+    settings: getFluoRoomSettings(),
   };
 }
 
@@ -128,46 +146,86 @@ export async function openLobbyPlayerWindow(opts?: { applyRoomPlayback?: boolean
   window.dispatchEvent(new CustomEvent('lobby:session', { detail: getLobbySession() }));
 }
 
-export async function createLobbyRoomAndOpenPlayer(seed?: Partial<LobbyPlayback> | null): Promise<void> {
+export async function createLobbyRoomAndOpenPlayer(
+  seed?: Partial<LobbyPlayback> | null,
+  options: FluoCreateRoomOptions = {},
+): Promise<void> {
   const deviceId = await getLobbyDeviceId();
-  const playback = isUsablePlayback(seed) ? {
-    releaseId: String(seed!.releaseId),
-    sourceId: String(seed!.sourceId ?? ''),
-    ep: String(seed!.ep),
-    dubberId: seed!.dubberId != null ? String(seed!.dubberId) : undefined,
-    title: String(seed!.title ?? ''),
-    sourceName: String(seed!.sourceName ?? ''),
-    paused: seed!.paused !== false,
-    currentTime: typeof seed!.currentTime === 'number' ? seed!.currentTime : 0,
-  } : undefined;
-  const { roomId, code, myPeerId } = await createRoom({ ...getLobbyProfile(), deviceId }, playback);
+  const playback = isUsableFluoContent(seed)
+    ? {
+        releaseId: String(seed!.releaseId),
+        sourceId: String(seed!.sourceId ?? ''),
+        ep: String(seed!.ep),
+        dubberId: seed!.dubberId != null ? String(seed!.dubberId) : undefined,
+        title: String(seed!.title ?? ''),
+        sourceName: String(seed!.sourceName ?? ''),
+        dubberName: seed!.dubberName,
+        posterUrl: seed!.posterUrl,
+        paused: seed!.paused !== false,
+        currentTime: typeof seed!.currentTime === 'number' ? seed!.currentTime : 0,
+        duration: typeof seed!.duration === 'number' ? seed!.duration : undefined,
+      }
+    : undefined;
+  const { roomId, code, myPeerId, settings } = await createFluoRoom(
+    { ...getLobbyProfile(), deviceId },
+    playback,
+    options,
+  );
   setLobbyRoom(roomId, {
     myPeerId,
     participants: [],
     roomCode: code,
-    playback,
+    playback: playback as LobbyPlayback | undefined,
     isCreator: true,
+    hostPeerId: myPeerId,
+    settings: settings ?? undefined,
   });
   window.dispatchEvent(new CustomEvent('lobby:participantsChanged', { detail: { participants: [] } }));
   await openLobbyPlayerWindow();
 }
 
-export async function joinLobbyRoomAndOpenPlayer(code: string): Promise<void> {
+export async function joinLobbyRoomAndOpenPlayer(
+  code: string,
+  password?: string | null,
+): Promise<void> {
   const deviceId = await getLobbyDeviceId();
-  const room = await joinRoom(code, { ...getLobbyProfile(), deviceId });
+  const room = await joinFluoRoom(code, { ...getLobbyProfile(), deviceId }, password);
+  const serverClock = room.clock ?? null;
+  // Живая позиция: mediaOrigin + (now - t0), а не сырой mediaOrigin.
+  const liveT = serverClock ? computeFluoPosition(serverClock) : 0;
+  const pb = serverClock?.content
+    ? {
+        ...serverClock.content,
+        paused: serverClock.paused,
+        currentTime: liveT,
+      }
+    : null;
   setLobbyRoom(room.roomId, {
     myPeerId: room.myPeerId,
     participants: room.participants ?? [],
-    playback: room.playback ?? undefined,
+    playback: pb,
+    clock: serverClock,
     roomCode: room.code,
+    hostPeerId: room.hostPeerId,
+    settings: room.settings ?? undefined,
   });
   await openLobbyPlayerWindow({ applyRoomPlayback: true });
+  // Догон после открытия окна плеера (IPC мог уйти в пустоту).
+  window.setTimeout(() => catchUpFluoPlayback(true), 400);
+  window.setTimeout(() => catchUpFluoPlayback(true), 1200);
+  window.setTimeout(() => catchUpFluoPlayback(true), 2500);
+  window.setTimeout(() => catchUpFluoPlayback(true), 5000);
 }
 
 export async function leaveLobbyRoomFromUi(): Promise<void> {
   const id = getCurrentRoomId();
+  const peerId = getLobbyMyPeerId();
   const deviceId = await getLobbyDeviceId();
-  if (id && deviceId) await leaveRoom(id, deviceId).catch(() => undefined);
+  if (id) {
+    await leaveFluoRoomHttp(id, deviceId, peerId).catch(() => false);
+  }
   leaveLobby();
   pushLobbySessionToPlayer();
 }
+
+export type { FluoContent, LobbyPlayback };

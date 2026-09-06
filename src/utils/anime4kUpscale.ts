@@ -4,6 +4,7 @@ import {
   ModeA, ModeB, ModeC, ModeAA, ModeBB, ModeCA,
   render as anime4kRender,
 } from 'anime4k-webgpu';
+import { hasWebGpuApi, probeWebGpuAvailable } from './webgpu-availability.svelte';
 
 const MODE_MAP: Record<number, new (opts: {
   device: GPUDevice;
@@ -17,8 +18,7 @@ const MODE_MAP: Record<number, new (opts: {
   14: ModeA, 15: ModeB, 16: ModeC, 17: ModeAA, 18: ModeBB, 19: ModeCA,
 };
 
-export const GPU_AVAILABLE =
-  typeof navigator !== 'undefined' && typeof (navigator as Navigator & { gpu?: unknown }).gpu !== 'undefined';
+export const GPU_AVAILABLE = hasWebGpuApi();
 
 /** Мягкий потолок стороны буфера для realtime-плеера (8K = thrash/мигание). */
 const GPU_MAX_SIDE = 3840;
@@ -137,7 +137,7 @@ export async function startAnime4kImageUpscale(opts: {
   container?: HTMLElement | null;
   fit?: 'contain' | 'cover';
 }): Promise<Anime4kSession | null> {
-  if (!GPU_AVAILABLE) return null;
+  if (!(await probeWebGpuAvailable())) return null;
 
   const bitmap = await loadImageBitmap(opts.imageUrl);
   if (!bitmap?.width) return null;
@@ -241,7 +241,7 @@ export async function startAnime4kUpscale(opts: {
   /** Целевая высота буфера; null/omit = авто под контейнер. */
   targetHeight?: Anime4kTargetHeight;
 }): Promise<Anime4kSession | null> {
-  if (!GPU_AVAILABLE) return null;
+  if (!(await probeWebGpuAvailable())) return null;
 
   const {
     video,

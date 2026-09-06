@@ -9,9 +9,10 @@
     releaseId: number;
     relatedId: number;
     items: ReleaseCardData[];
+    tvMode?: boolean;
   }
 
-  let { releaseId, relatedId, items }: Props = $props();
+  let { releaseId, relatedId, items, tvMode = false }: Props = $props();
 
   const preview = $derived(items.slice(0, PREVIEW_COUNT));
   /** Android always shows link to RelatedFragment (chain view), not only when count > preview. */
@@ -44,6 +45,11 @@
   }
 
   $effect(() => {
+    if (tvMode) {
+      bgVisible = false;
+      return;
+    }
+
     preview.length;
     releaseId;
     const row = currentRowEl;
@@ -90,8 +96,13 @@
 </script>
 
 {#if preview.length > 0}
-  <div class="release-page__section release-page__related" bind:this={sectionEl}>
-    {#if bgVisible}
+  <div
+    class="release-page__section release-page__related"
+    class:tv-release-page__related-section={tvMode}
+    bind:this={sectionEl}
+    data-tv-release-section={tvMode ? 'related' : undefined}
+  >
+    {#if !tvMode && bgVisible}
       <div
         class="release-page__section-bg"
         aria-hidden="true"
@@ -115,10 +126,19 @@
     </div>
 
     <div class="release-page__related-list">
-      {#each preview as item (item.id)}
+      {#each preview as item, index (item.id)}
         {@const isCurrent = item.id === releaseId}
-        <div class="release-page__related-row" use:relatedRowRef={isCurrent}>
-          <RelatedReleaseRow data={item} current={isCurrent} />
+        <div
+          class="release-page__related-row"
+          class:release-page__related-row--current={tvMode && isCurrent}
+          use:relatedRowRef={!tvMode && isCurrent}
+        >
+          <RelatedReleaseRow
+            data={item}
+            isCurrent={isCurrent}
+            isFirst={index === 0}
+            isLast={index === preview.length - 1}
+          />
         </div>
       {/each}
     </div>

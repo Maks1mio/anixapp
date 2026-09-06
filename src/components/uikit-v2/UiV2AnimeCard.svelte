@@ -2,6 +2,7 @@
   import {
     iconBookOpen,
     iconCalendar,
+    iconChevronRight,
     iconFilm,
     iconFlag,
     iconMoreHorizontal,
@@ -23,6 +24,8 @@
   import { formatHistoryViewTime } from '../../utils/historyFormat';
   import { isReleaseAnnounce } from '../../utils/release-card';
   import { toPosterDisplayUrl } from '../../utils/posterUrl';
+  import { isTvMode } from '../../platform/tv';
+  import { tvLazyPoster } from '../../actions/tvLazyPoster';
 
   export type UiV2AnimeCardVariant = 'vertical' | 'horizontal';
 
@@ -94,6 +97,8 @@
     menuItems?: UiV2PopupMenuItem[];
     /** Доп. пункты перед стандартным меню (например «Удалить из истории») */
     prependMenuItems?: UiV2PopupMenuItem[];
+    /** Показывать подсказку «Перейти к тайтлу» на TV при фокусе */
+    showTvOpenHint?: boolean;
     class?: string;
     onclick?: (e: MouseEvent) => void;
     onMore?: (e: MouseEvent) => void;
@@ -137,6 +142,7 @@
     showMenu = true,
     menuItems,
     prependMenuItems,
+    showTvOpenHint = false,
     class: className = '',
     onclick,
     onMore,
@@ -280,6 +286,7 @@
         )
       : null,
   );
+  const deferPoster = isTvMode();
   const myVoteValue = $derived(
     typeof myVote === 'number' && myVote > 0 ? Math.min(5, Math.round(myVote)) : null,
   );
@@ -484,7 +491,11 @@
   >
     <div class="uiv2-anime-card__poster">
       {#if displayPosterUrl}
-        <img src={displayPosterUrl} alt="" loading="lazy" decoding="async" />
+        {#if deferPoster}
+          <img alt="" decoding="async" use:tvLazyPoster={displayPosterUrl} />
+        {:else}
+          <img src={displayPosterUrl} alt="" loading="lazy" decoding="async" />
+        {/if}
       {:else}
         <span class="uiv2-anime-card__poster-fallback" aria-hidden="true"></span>
       {/if}
@@ -507,6 +518,15 @@
         <div
           class="uiv2-anime-card__status-badge uiv2-anime-card__status-badge--{posterStatusBadge.tone}"
         >{posterStatusBadge.label}</div>
+      {/if}
+      {#if showTvOpenHint}
+        <span class="uiv2-anime-card__tv-open-hint" aria-hidden="true">
+          <span class="uiv2-anime-card__tv-open-hint-scrim"></span>
+          <span class="uiv2-anime-card__tv-open-hint-content">
+            <span class="uiv2-anime-card__tv-open-hint-icon">{@html iconChevronRight(28)}</span>
+            <span class="uiv2-anime-card__tv-open-hint-label">Перейти к тайтлу</span>
+          </span>
+        </span>
       {/if}
     </div>
     <div class="uiv2-anime-card__body">
@@ -570,7 +590,11 @@
     <div class="uiv2-anime-card__media">
       <div class="uiv2-anime-card__poster uiv2-anime-card__poster--h">
         {#if displayPosterUrl}
-          <img src={displayPosterUrl} alt="" loading="lazy" decoding="async" />
+          {#if deferPoster}
+            <img alt="" decoding="async" use:tvLazyPoster={displayPosterUrl} />
+          {:else}
+            <img src={displayPosterUrl} alt="" loading="lazy" decoding="async" />
+          {/if}
         {:else}
           <span class="uiv2-anime-card__poster-fallback" aria-hidden="true"></span>
         {/if}

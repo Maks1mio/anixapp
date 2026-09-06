@@ -850,8 +850,8 @@
   max-width: none;
 }
 
-.dl-v2-select :global(.uiv2-select__field),
-.dl-v2-select :global(.uiv2-select__trigger) {
+.dl-v2-select .uiv2-select__field,
+.dl-v2-select .uiv2-select__trigger {
   width: 100%;
 }
 

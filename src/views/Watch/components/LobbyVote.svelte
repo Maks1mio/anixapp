@@ -17,19 +17,30 @@
   let countdown   = $state(VOTE_TIMEOUT);
   let votedAccept = $state<boolean | null>(null);
   let timer: ReturnType<typeof setInterval> | null = null;
-  let startTime = 0;
+  let durationSec = VOTE_TIMEOUT;
+  let armedProposalId = '';
+  let tickDeadline = 0;
 
   $effect(() => {
-    if (status === 'vote') {
-      countdown  = VOTE_TIMEOUT;
+    if (status === 'vote' && proposal?.proposalId) {
+      // Повторная доставка того же proposal (IPC flush) не сбрасывает голос/таймер
+      if (armedProposalId === proposal.proposalId && timer) return;
+      armedProposalId = proposal.proposalId;
+      const expiresAt = typeof proposal.expiresAt === 'number'
+        ? proposal.expiresAt
+        : Date.now() + VOTE_TIMEOUT * 1000;
+      tickDeadline = expiresAt;
+      const remaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+      durationSec = Math.max(1, remaining);
+      countdown = remaining;
       votedAccept = null;
-      startTime  = Date.now();
+      clearTimer();
       timer = setInterval(() => {
-        const elapsed = (Date.now() - startTime) / 1000;
-        countdown = Math.max(0, VOTE_TIMEOUT - Math.floor(elapsed));
+        countdown = Math.max(0, Math.ceil((tickDeadline - Date.now()) / 1000));
         if (countdown <= 0) clearTimer();
       }, 250);
     } else {
+      armedProposalId = '';
       clearTimer();
     }
   });
@@ -40,7 +51,7 @@
 
   onDestroy(clearTimer);
 
-  const progress = $derived(Math.max(0, countdown / VOTE_TIMEOUT));
+  const progress = $derived(Math.max(0, countdown / durationSec));
 
   function vote(accept: boolean) {
     if (!proposal) return;

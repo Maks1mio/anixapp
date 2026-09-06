@@ -3,7 +3,7 @@ import { isLocalMediaUrl } from '../../../utils/local-media-url';
 import { isHlsUrl, stripKodikQueryParams } from '../_utils';
 import { detachHls, startHlsFromTime, swapMediaSource } from './hls-engine';
 import { prefetchEpisodeUrl, resolveEpisodeUrlCached, invalidateEpisodeUrlCache, type ResolvedEpisodeMedia } from './url-cache';
-import { UpscaleController, gpuAvailable } from './upscale';
+import { UpscaleController, isGpuAvailable } from './upscale';
 import { SurroundController } from './surround-audio';
 
 export type PlayerCorePlayOpts = {
@@ -253,4 +253,4 @@ export class PlayerCore {
   }
 }
 
-export { gpuAvailable };
+export { isGpuAvailable };

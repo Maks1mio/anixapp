@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { BrowserWindow, ipcMain, app } = require('electron');
 const state = require('../lib/app-state');
+const { getDevServerOrigin } = require('../lib/dev-server');
 
 function register(deps) {
   const { isDev, applyUiZoom, electronDir, getIconPath, config } = deps;
@@ -45,7 +46,7 @@ function createThemeEditorWindow(themeId, isNew) {
   const qs = query.toString();
 
   if (isDev) {
-    state.themeEditorWindow.loadURL('http://127.0.0.1:5173/theme-editor.html' + (qs ? '?' + qs : ''));
+    state.themeEditorWindow.loadURL(`${getDevServerOrigin()}/theme-editor.html${qs ? `?${qs}` : ''}`);
   } else {
     const p = path.join(electronDir, '../dist/theme-editor.html');
     state.themeEditorWindow.loadFile(p, qs ? { query: Object.fromEntries(query) } : {});
@@ -89,7 +90,7 @@ function createUpscaleToolWindow() {
   state.upscaleToolWindow.on('unmaximize', () => { if (state.upscaleToolWindow) state.upscaleToolWindow.webContents.send('tool:windowState', { isMaximized: false }); });
 
   if (isDev) {
-    state.upscaleToolWindow.loadURL('http://127.0.0.1:5173/upscale-tool.html');
+    state.upscaleToolWindow.loadURL(`${getDevServerOrigin()}/upscale-tool.html`);
   } else {
     state.upscaleToolWindow.loadFile(path.join(electronDir, '../dist/upscale-tool.html'));
   }
@@ -130,7 +131,7 @@ function createOverviewVideoEditorWindow() {
   });
 
   if (isDev) {
-    state.overviewEditorWindow.loadURL('http://127.0.0.1:5173/overview-video-editor.html');
+    state.overviewEditorWindow.loadURL(`${getDevServerOrigin()}/overview-video-editor.html`);
   } else {
     state.overviewEditorWindow.loadFile(path.join(electronDir, '../dist/overview-video-editor.html'));
   }
@@ -178,7 +179,7 @@ function createAdminPanelWindow() {
   });
 
   if (isDev) {
-    state.adminPanelWindow.loadURL('http://127.0.0.1:5173/#/admin/panel?standalone=1');
+    state.adminPanelWindow.loadURL(`${getDevServerOrigin()}/#/admin/panel?standalone=1`);
   } else {
     state.adminPanelWindow.loadFile(path.join(electronDir, '../dist/index.html'), {
       hash: '/admin/panel?standalone=1',

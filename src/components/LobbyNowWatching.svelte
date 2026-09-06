@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { lobbyCurrentPlayback, isPlayerWindowOpen, lobbyWatchingPeerIds } from '../stores/modals';
-  import { getCurrentRoomId, getCurrentParticipants, leaveLobby } from '../services/lobby-state';
+  import { getCurrentRoomId, getCurrentParticipants } from '../services/lobby-state';
+  import { leaveLobbyRoomFromUi } from '../utils/lobby-player';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import UiV2Tooltip from './uikit-v2/UiV2Tooltip.svelte';
 
@@ -75,7 +76,7 @@
   }
 
   function handleLeave() {
-    leaveLobby();
+    void leaveLobbyRoomFromUi();
     lobbyCurrentPlayback.set(null);
   }
 </script>

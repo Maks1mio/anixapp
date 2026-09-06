@@ -28,6 +28,7 @@
     surroundModeMeta,
     type SurroundMode,
   } from '../../Watch/core/surround-audio';
+  import { initWebGpuAvailability, isGpuAvailable } from '../../../utils/webgpu-availability.svelte';
 
   type BindField = PlayerHotkeyBindField;
 
@@ -46,7 +47,7 @@
 
   async function loadPlayback() {
     if (!window.electron?.getSettings) return;
-    gpuAvailable = 'gpu' in navigator;
+    gpuAvailable = await initWebGpuAvailability();
     const settings = await window.electron.getSettings();
     const preset = normalizeAnime4kPreset(settings);
     upscaleType = preset.type;

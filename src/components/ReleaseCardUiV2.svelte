@@ -1,6 +1,8 @@
 <script lang="ts">
   import { navigate } from '../stores/navigation';
   import { requireAuth } from '../stores/auth';
+  import { isTvMode } from '../platform/tv';
+  import { openTvReleaseFromCard } from '../services/tv-release-transition';
   import { toCdnProxyUrl } from '../utils/posterUrl';
   import { iconTrash2 } from './icons';
   import UiV2AnimeCard, {
@@ -18,6 +20,10 @@
     onDeleteFromHistory?: (id: number) => void;
     /** Не открывать релиз по клику (текущий в related-цепочке) */
     disableOpen?: boolean;
+    /** ПКМ / кнопка «⋯» — на TV обычно выкл. */
+    showMenu?: boolean;
+    /** Подсказка «Перейти к тайтлу» при фокусе (TV home) */
+    showTvOpenHint?: boolean;
   }
 
   let {
@@ -26,6 +32,8 @@
     cardVariant = 'default',
     onDeleteFromHistory,
     disableOpen = false,
+    showMenu = true,
+    showTvOpenHint = false,
   }: Props = $props();
 
   const id = $derived(data.id);
@@ -53,7 +61,15 @@
   function openRelease(e: MouseEvent) {
     if (disableOpen || !id) return;
     e.preventDefault();
-    navigate(`/release/${id}`);
+    const path = `/release/${id}`;
+    if (isTvMode()) {
+      const card = (e.currentTarget as HTMLElement).closest('.uiv2-anime-card');
+      if (card instanceof HTMLElement) {
+        openTvReleaseFromCard(card, id, toCdnProxyUrl(data.poster || ''), title);
+        return;
+      }
+    }
+    navigate(path);
   }
 
   function handleFavoriteChange(next: boolean) {
@@ -105,6 +121,8 @@
   myVote={data.myVote ?? null}
   historyView={data.historyView ?? null}
   prependMenuItems={historyMenu}
+  {showMenu}
+  {showTvOpenHint}
   onclick={openRelease}
   onFavoriteChange={handleFavoriteChange}
   onListStatusChange={handleListStatusChange}

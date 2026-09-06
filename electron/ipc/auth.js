@@ -768,7 +768,7 @@ ipcMain.handle('anix:setAnixbackEndpoint', (_, mode) => {
 });
 
 const ANIXBACK_LOCAL_ORIGIN = 'http://localhost:8787';
-const ANIXBACK_PROD_ORIGIN = 'https://anix.maks1mio.su';
+const ANIXBACK_PROD_ORIGIN = 'https://api.anixapp.com';
 
 function getAnixbackOrigin() {
   const raw = config.getRawConfig();

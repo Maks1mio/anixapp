@@ -8,6 +8,11 @@ export class LobbyState {
   activityLog  = $state<LobbyActivityEntry[]>([]);
   chatMessages = $state<LobbyChatMessage[]>([]);
   roomCode     = $state('');
+  hostPeerId   = $state<string | null>(null);
+  myPeerId     = $state<string | null>(null);
+  chatEnabled  = $state(true);
+  controlMode  = $state<'host' | 'everyone'>('everyone');
+  animeSelectMode = $state<'host' | 'everyone' | 'vote'>('everyone');
   voteState    = $state<VoteState>('hidden');
   voteProposal = $state<ProposalData | null>(null);
   waitingTitle = $state('');
@@ -50,10 +55,28 @@ export class LobbyState {
     this.chatMessages = [...this.chatMessages, msg].slice(-200);
   }
 
+  setChatHistory(messages: LobbyChatMessage[]) {
+    if (!Array.isArray(messages) || messages.length === 0) return;
+    const byId = new Map<string, LobbyChatMessage>();
+    for (const m of this.chatMessages) byId.set(m.id, m);
+    for (const m of messages) {
+      if (!m?.id || !m.text) continue;
+      byId.set(m.id, m);
+    }
+    this.chatMessages = [...byId.values()]
+      .sort((a, b) => a.ts - b.ts)
+      .slice(-200);
+  }
+
   resetRoom() {
     this.participants = [];
     this.chatMessages = [];
     this.roomCode = '';
+    this.hostPeerId = null;
+    this.myPeerId = null;
+    this.chatEnabled = true;
+    this.controlMode = 'everyone';
+    this.animeSelectMode = 'everyone';
     this.voteState = 'hidden';
     this.voteProposal = null;
   }

@@ -4,6 +4,11 @@ const COLLECTION_BASE = 'https://s.anixmirai.com/collections';
 
 const CDN_HOSTS = ['anixmirai.com', 'anixart.tv', 'anixsekai.com', 'static.anixart.tv'];
 
+function isTvBuild(): boolean {
+  const v = import.meta.env.VITE_TV_MODE;
+  return v === '1' || v === 'true';
+}
+
 export function isAnixartCdnUrl(url: string): boolean {
   const canonical = unwrapCdnUrl(url);
   if (!canonical?.trim()) return false;
@@ -51,6 +56,28 @@ export function unwrapCdnUrl(raw: string): string {
   return s;
 }
 
+function isCapacitorWebView(): boolean {
+  return typeof window !== 'undefined'
+    && !window.electron
+    && !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
+}
+
+/** CDN без Referer отдаёт пустышку — mirror-хост это переживает (как Discord RPC). */
+function toHotlinkSafeCdnUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, '');
+    if (host.startsWith('mirror-') || host.startsWith('mirror.')) return url;
+    const parts = host.split('.');
+    parsed.hostname = parts.length > 2
+      ? `mirror-${parts[0]}.${parts.slice(1).join('.')}`
+      : `mirror.${host}`;
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 /** Прокси через Electron main (Referer anixart.tv) или Vite /__cdn в браузере. */
 export function toCdnProxyUrl(url: string): string {
   const trimmed = unwrapCdnUrl(url?.trim() ?? '');
@@ -58,19 +85,22 @@ export function toCdnProxyUrl(url: string): string {
   if (trimmed.startsWith('anix-cdn://')) return trimmed;
   if (trimmed.startsWith('/__cdn/')) return trimmed;
   if (!isAnixartCdnUrl(trimmed)) return trimmed;
+  // Live APK / Capacitor: прямо на CDN. /__cdn через Vite на ПК душит обложки по LAN.
   if (typeof window !== 'undefined' && window.electron) {
     return `anix-cdn://asset/?u=${encodeURIComponent(trimmed)}`;
   }
+  if (isCapacitorWebView() || isTvBuild()) return toHotlinkSafeCdnUrl(trimmed);
   if (import.meta.env.DEV && typeof window !== 'undefined') {
     return `/__cdn/?u=${encodeURIComponent(trimmed)}`;
   }
   return trimmed;
 }
 
-/** Electron CDN-прокси отдаёт уже физически уменьшенную картинку нужного размера. */
+/** Electron CDN-прокси отдаёт уже физически уменьшенную картинку нужного размера. На TV — без ресайза (меньше нагрузка). */
 export function toCdnThumbnailUrl(url: string, width: number, height = width): string {
   const proxied = toCdnProxyUrl(url);
   if (!proxied || !proxied.startsWith('anix-cdn://')) return proxied;
+  if (isTvBuild()) return proxied;
 
   try {
     const parsed = new URL(proxied);
@@ -91,6 +121,10 @@ export const POSTER_THUMB_PRESETS = {
   cardHorizontal: { w: 220, h: 330 },
   /** Крупный постер на странице релиза */
   releaseHero: { w: 400, h: 600 },
+  /** Горизонтальный ряд на TV (~10rem карточка) */
+  tvRow: { w: 400, h: 600 },
+  /** Крупный постер в TV spotlight на главной */
+  tvSpotlight: { w: 560, h: 840 },
   /** Обложка коллекции (~карточка 16:10) */
   collectionCover: { w: 420, h: 262 },
   /** «Просмотрено недавно» в профиле (~34–44 CSS px) */
@@ -108,13 +142,14 @@ function displayDpr(): number {
   return Math.min(2, Math.max(1.5, Math.round(dpr * 2) / 2));
 }
 
-/** URL постера, подогнанный под реальный размер области на экране. */
+/** URL постера, подогнанный под реальный размер области на экране. На TV — оригинал без w/h. */
 export function toPosterDisplayUrl(
   url: string | null | undefined,
   preset: PosterThumbPreset = 'cardVertical',
 ): string {
   const raw = (url ?? '').trim();
   if (!raw) return '';
+  if (isTvBuild()) return toCdnProxyUrl(raw);
   const { w, h } = POSTER_THUMB_PRESETS[preset];
   const dpr = displayDpr();
   return toCdnThumbnailUrl(raw, Math.round(w * dpr), Math.round(h * dpr));

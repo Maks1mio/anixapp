@@ -10,6 +10,9 @@
   import ConnectionBanner from '../components/ConnectionBanner.svelte';
   import UiV2Tooltip from '../components/uikit-v2/UiV2Tooltip.svelte';
   import AnixappTermsModal, { isAnixappAboutHidden } from '../components/AnixappTermsModal.svelte';
+  import { isTvMode } from '../platform/tv';
+  import { tvLoginQrSvg } from '../utils/tv-login-qr';
+  import { startTvLanLogin, stopTvLanLogin, subscribeTvLanCredentials } from '../services/tv-lan-login';
 
   const ANIXART_TERMS_URL = 'https://anixart-app.com/terms';
   const ANIXART_PRIVACY_URL = 'https://anixart-app.com/privacy';
@@ -44,6 +47,8 @@
   }
 
   let { onSuccess, onDismiss, allowGuest = false, overlay = false, onConnectionRetry }: Props = $props();
+
+  const tv = isTvMode();
 
   type OAuthProvider = 'vk' | 'google' | 'telegram' | 'yandex';
   type AuthPanel =
@@ -99,6 +104,10 @@
   let signupProvider = $state<OAuthProvider | null>(null);
   let signupLogin = $state('');
   let signupEmail = $state('');
+
+  let lanUrl = $state('');
+  let lanError = $state('');
+  let qrSvg = $state('');
 
   const hasApi = typeof window !== 'undefined' && !!window.anixApi;
 
@@ -288,16 +297,17 @@
     return 'Не удалось завершить регистрацию.';
   }
 
-  async function handleSignIn(e: SubmitEvent) {
-    e.preventDefault();
-    if (!login.trim() || !password) return;
-    if (!window.anixApi) return;
+  async function doSignIn(user: string, pass: string) {
+    if (!user.trim() || !pass) return;
+    if (!window.anixApi || isSubmitting) return;
 
     errorText = '';
     isSubmitting = true;
+    login = user.trim();
+    password = pass;
 
     try {
-      const result = await window.anixApi.auth.signIn(login.trim(), password);
+      const result = await window.anixApi.auth.signIn(user.trim(), pass);
       if (result?.success) {
         finishSuccess();
         return;
@@ -312,6 +322,11 @@
     } finally {
       isSubmitting = false;
     }
+  }
+
+  async function handleSignIn(e: SubmitEvent) {
+    e.preventDefault();
+    await doSignIn(login, password);
   }
 
   async function handleOAuth(provider: OAuthProvider) {
@@ -645,6 +660,7 @@
     if (panel === 'registerVerify') return 'Подтвердите email кодом из письма';
     if (panel === 'forgot') return 'Восстановление пароля';
     if (panel === 'forgotVerify') return 'Введите код подтверждения из письма';
+    if (tv) return 'Войдите с телефона по QR или локальной ссылке — либо логином и паролем.';
     return 'Нужно войти по почте или никнейму Anixart.';
   });
 
@@ -687,6 +703,24 @@
   }
 
   onMount(() => {
+    let stopLan: (() => void) | undefined;
+    if (tv) {
+      stopLan = subscribeTvLanCredentials(({ login: user, password: pass }) => {
+        void doSignIn(user, pass);
+      });
+      void startTvLanLogin().then((res) => {
+        lanUrl = res.url ?? '';
+        lanError = res.error ?? '';
+        if (res.url) {
+          try {
+            qrSvg = tvLoginQrSvg(res.url);
+          } catch {
+            qrSvg = '';
+          }
+        }
+      });
+    }
+
     void (async () => {
       try {
         const versions = await window.electron?.getVersions?.();
@@ -707,7 +741,7 @@
 
     let aboutTimer: ReturnType<typeof setTimeout> | null = null;
     // При открытии авторизации — сначала «О проекте» (если не скрыто)
-    if (!isAnixappAboutHidden()) {
+    if (!tv && !isAnixappAboutHidden()) {
       aboutTimer = setTimeout(() => {
         openAnixappLegal({ step: 'about', offerDontShow: true });
       }, 420);
@@ -736,11 +770,13 @@
     return () => {
       window.removeEventListener('app-update-progress', onProgress);
       if (aboutTimer) clearTimeout(aboutTimer);
+      stopLan?.();
+      void stopTvLanLogin();
     };
   });
 </script>
 
-<div class="view view-auth view-auth--v2" class:view-auth--overlay={overlay} class:view-auth--fullscreen={!overlay} class:view-auth--exiting={exiting}>
+<div class="view view-auth view-auth--v2" class:view-auth--overlay={overlay} class:view-auth--fullscreen={!overlay} class:view-auth--exiting={exiting} class:view-auth--tv={tv}>
   <div class="titlebar titlebar--auth" role="banner">
     <div class="titlebar__drag">
       <span class="titlebar__logo" aria-hidden="true">
@@ -838,12 +874,35 @@
   </div>
 
   <div class="view-auth__body">
-    <div class="view-auth__covers">
-      <AuthCoverGrid />
-    </div>
+    {#if !tv}
+      <div class="view-auth__covers">
+        <AuthCoverGrid />
+      </div>
+    {/if}
 
     <div class="view-auth__panel">
-    <div class="auth auth--v2" role={overlay ? 'dialog' : undefined} aria-modal={overlay || undefined} aria-label="Вход">
+    <div class="auth auth--v2" class:auth--tv={tv} class:auth--tv-pair={tv && panel === 'signin'} role={overlay ? 'dialog' : undefined} aria-modal={overlay || undefined} aria-label="Вход">
+      {#if tv && panel === 'signin'}
+        <div class="tv-auth-pair">
+          <div class="tv-auth-pair__qr" aria-hidden="true">
+            {#if qrSvg}
+              {@html qrSvg}
+            {:else}
+              <div class="tv-auth-pair__qr-ph"></div>
+            {/if}
+          </div>
+          <div class="tv-auth-pair__meta">
+            <p class="tv-auth-pair__kicker">Телефон в той же Wi‑Fi сети</p>
+            <p class="tv-auth-pair__url">{lanUrl || 'Поднимаю локальную ссылку…'}</p>
+            {#if lanError && !lanUrl}
+              <p class="tv-auth-pair__warn">Локальный вход недоступен — используйте логин и пароль на ТВ.</p>
+            {/if}
+            <p class="tv-auth-pair__hint">Отсканируйте QR или откройте ссылку в браузере телефона.</p>
+          </div>
+        </div>
+      {/if}
+
+      <div class="auth__stack">
       <h1 class="auth__title">AnixApp</h1>
 
       <div class="auth__morph" bind:this={morphEl}>
@@ -875,6 +934,7 @@
                     maxlength={20}
                     required
                     disabled={busy}
+                    tvImeLock={tv}
                   />
                   {#if suggestedLogins.length}
                     <div class="auth-oauth__suggestions" role="list">
@@ -897,6 +957,7 @@
                     autocomplete="email"
                     required
                     disabled={busy}
+                    tvImeLock={tv}
                   />
                   <UiV2OutlinedField
                     label="Пароль"
@@ -906,6 +967,7 @@
                     maxlength={32}
                     required
                     disabled={busy}
+                    tvImeLock={tv}
                     revealable
                   />
                   <UiV2OutlinedField
@@ -916,6 +978,7 @@
                     maxlength={32}
                     required
                     disabled={busy}
+                    tvImeLock={tv}
                     revealable
                   />
                 {:else}
@@ -926,6 +989,7 @@
                     inputmode="email"
                     required
                     disabled={busy}
+                    tvImeLock={tv}
                   />
                   <UiV2OutlinedField
                     label="Пароль"
@@ -934,6 +998,7 @@
                     autocomplete="current-password"
                     required
                     disabled={busy}
+                    tvImeLock={tv}
                     revealable
                   />
                   <div class="auth-form__forgot">
@@ -969,6 +1034,7 @@
                   </span>
                 </button>
 
+                {#if !tv}
                 <div
                   class="auth-oauth"
                   aria-label={isRegister ? 'Регистрация через сервисы' : 'Вход через сервисы'}
@@ -999,6 +1065,7 @@
                     {/each}
                   </div>
                 </div>
+                {/if}
 
                 <p class="auth-switch">
                   {#if isRegister}
@@ -1040,6 +1107,7 @@
                   autocomplete="one-time-code"
                   required
                   disabled={busy}
+                  tvImeLock={tv}
                 />
                 {#if errorText}
                   <p class="auth-form__error" role="alert">{errorText}</p>
@@ -1078,6 +1146,7 @@
                   maxlength={255}
                   required
                   disabled={busy}
+                  tvImeLock={tv}
                 />
                 <UiV2OutlinedField
                   label="Новый пароль"
@@ -1087,6 +1156,7 @@
                   maxlength={32}
                   required
                   disabled={busy}
+                  tvImeLock={tv}
                   revealable
                 />
                 <UiV2OutlinedField
@@ -1097,6 +1167,7 @@
                   maxlength={32}
                   required
                   disabled={busy}
+                  tvImeLock={tv}
                   revealable
                 />
                 {#if errorText}
@@ -1129,6 +1200,7 @@
                   autocomplete="one-time-code"
                   required
                   disabled={busy}
+                  tvImeLock={tv}
                 />
                 {#if errorText}
                   <p class="auth-form__error" role="alert">{errorText}</p>
@@ -1165,6 +1237,7 @@
                   autocomplete="username"
                   required
                   disabled={busy}
+                  tvImeLock={tv}
                 />
                 {#if suggestedLogins.length}
                   <div class="auth-oauth__suggestions" role="list">
@@ -1187,6 +1260,7 @@
                   autocomplete="email"
                   required
                   disabled={busy}
+                  tvImeLock={tv}
                 />
                 {#if errorText}
                   <p class="auth-form__error" role="alert">{errorText}</p>
@@ -1214,6 +1288,7 @@
             {/key}
           {/if}
         </div>
+      </div>
       </div>
     </div>
     </div>

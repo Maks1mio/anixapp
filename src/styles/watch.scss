@@ -126,17 +126,23 @@ $p-skip-dark:   #66c94280;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  max-width: min(28rem, calc(100% - 2rem));
-  padding: 1.25rem 1.5rem;
+  gap: 0.65rem;
+  max-width: min(26rem, calc(100% - 2rem));
+  padding: 1.35rem 1.5rem 1.25rem;
   text-align: center;
   pointer-events: auto;
+  border-radius: 14px;
+  background: rgba(12, 14, 18, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .watch-page__player-error-title {
   margin: 0;
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 1.05rem;
   font-weight: 600;
   line-height: 1.35;
 }
@@ -148,9 +154,18 @@ $p-skip-dark:   #66c94280;
   line-height: 1.4;
 }
 
+.watch-page__player-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
 .watch-page__player-error-btn {
-  margin-top: 0.35rem;
-  padding: 0.55rem 1rem;
+  margin-top: 0;
+  padding: 0.55rem 1.1rem;
   border: none;
   border-radius: 8px;
   background: var(--color-accent);
@@ -159,6 +174,16 @@ $p-skip-dark:   #66c94280;
   font-weight: 600;
   line-height: 1.2;
   cursor: pointer;
+}
+
+.watch-page__player-error-btn--secondary {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.watch-page__player-error-btn--secondary:hover {
+  background: rgba(255, 255, 255, 0.18);
+  filter: none;
 }
 
 .watch-page__player-error-btn:hover {
@@ -501,13 +526,6 @@ $p-skip-dark:   #66c94280;
   background: #fff;
   border-radius: 50%;
   flex-shrink: 0;
-}
-
-.watch-page__dub-hint {
-  margin: 0;
-  font-size: 0.75rem;
-  color: var(--uiv2-on-image-fg-muted);
-  text-shadow: var(--uiv2-on-image-shadow);
 }
 
 .watch-page__selects {
@@ -2410,6 +2428,22 @@ $watch-float-panel-height: min(480px, 70vh);
   align-items: center;
   gap: 0.5rem;
   min-width: 0;
+  border-radius: 8px;
+  padding: 0.15rem 0.25rem;
+  margin: 0 -0.25rem;
+}
+
+.watch-lobby-sidebar__person--actionable {
+  cursor: context-menu;
+}
+
+.watch-lobby-sidebar__person--actionable:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.watch-lobby-sidebar__person--actionable:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.35);
+  outline-offset: 1px;
 }
 
 .watch-lobby-sidebar__avatar {
@@ -2438,6 +2472,19 @@ $watch-float-panel-height: min(480px, 70vh);
   white-space: nowrap;
   font-size: 0.82rem;
   font-weight: 650;
+}
+
+.watch-lobby-sidebar__host-badge {
+  margin-left: 0.35rem;
+  padding: 0.08rem 0.35rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  vertical-align: middle;
 }
 
 .watch-lobby-sidebar__chat {

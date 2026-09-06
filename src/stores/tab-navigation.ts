@@ -2,13 +2,14 @@ import { get, writable } from 'svelte/store';
 import { getPath, getSearchParams } from '../router';
 import { rendererLogger } from '../services/logger';
 
-export type SidebarTabId = 'home' | 'overview' | 'popular' | 'collections' | 'bookmarks' | 'downloads';
+export type SidebarTabId = 'home' | 'overview' | 'fluo' | 'popular' | 'collections' | 'bookmarks' | 'downloads';
 export type IndependentTabId = 'favorites' | 'search';
 export type NavigationContextId = SidebarTabId | IndependentTabId;
 
 export const SIDEBAR_TAB_ROOTS: Record<SidebarTabId, string> = {
   home: '/',
   overview: '/overview',
+  fluo: '/fluo',
   popular: '/overview/popular',
   collections: '/collections',
   bookmarks: '/bookmarks',
@@ -18,6 +19,7 @@ export const SIDEBAR_TAB_ROOTS: Record<SidebarTabId, string> = {
 const HREF_TO_TAB: Record<string, SidebarTabId> = {
   '/': 'home',
   '/overview': 'overview',
+  '/fluo': 'fluo',
   '/overview/popular': 'popular',
   '/collections': 'collections',
   '/bookmarks': 'bookmarks',
@@ -50,6 +52,7 @@ export function resolveTabFromPath(path: string): NavigationContextId | null {
   const pathname = path.split('?')[0] || '/';
   if (pathname === '/' || pathname === '') return 'home';
   if (pathname === '/overview') return 'overview';
+  if (pathname === '/fluo' || pathname.startsWith('/fluo/')) return 'fluo';
   if (pathname === '/overview/popular' || pathname.startsWith('/overview/popular/')) return 'popular';
   if (pathname === '/collections' || pathname.startsWith('/collections/') || pathname.startsWith('/collection/')) {
     return 'collections';

@@ -1,8 +1,10 @@
 /**
- * Browser dev API — тот же window.anixApi, что в Electron preload,
- * но через Vite middleware /__anix/invoke.
+ * Browser / Capacitor API — тот же window.anixApi, что в Electron preload.
+ * Dev: Vite middleware /__anix/invoke.
+ * Android TV: нативный мост (anixapi + CapacitorHttp).
  */
 import type { AnixApi } from '../types/api';
+import { getNativeInvoke, initNativeAnixApi } from '../native/anix-api-native';
 
 function invokeUrl(): string {
   if (typeof window === 'undefined') return '/__anix/invoke';
@@ -10,6 +12,9 @@ function invokeUrl(): string {
 }
 
 async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
+  const native = getNativeInvoke();
+  if (native) return native(channel, args) as Promise<T>;
+
   const res = await fetch(invokeUrl(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -255,9 +260,14 @@ function buildWebAnixApi(): AnixApi {
   };
 }
 
-/** Подключает window.anixApi в браузере (только dev с Vite plugin). */
+/** Подключает window.anixApi: Capacitor/TV production или Vite dev-bridge. */
 export async function initWebAnixApi(): Promise<boolean> {
   if (typeof window === 'undefined' || window.anixApi || window.electron) return false;
+
+  if (await initNativeAnixApi()) {
+    window.anixApi = buildWebAnixApi();
+    return true;
+  }
 
   try {
     const health = await fetch(`${window.location.origin}/__anix/health`);

@@ -1,5 +1,4 @@
 import {
-  GPU_AVAILABLE,
   startAnime4kUpscale,
   restoreNativeVideoFrameCallback,
   computeAnime4kCanvasLayout,
@@ -7,10 +6,11 @@ import {
   type Anime4kCanvasLayout,
   type Anime4kTargetHeight,
 } from '../../../utils/anime4kUpscale';
+import { isGpuAvailable, probeWebGpuAvailable } from '../../../utils/webgpu-availability.svelte';
+
+export { isGpuAvailable };
 
 const HIDE_CLASS = 'watch-page__video--hidden-for-upscale';
-
-export const gpuAvailable = GPU_AVAILABLE;
 
 export class UpscaleController {
   private session: Anime4kSession | null = null;
@@ -160,7 +160,7 @@ export class UpscaleController {
   ): Promise<boolean> {
     const { enabled, mode, aspectRatio = 'auto', targetHeight = null, video, canvas } = opts;
 
-    if (!gpuAvailable || !enabled || !video || !canvas) {
+    if (!(await probeWebGpuAvailable()) || !enabled || !video || !canvas) {
       this.teardown(video, canvas, { hard: true });
       return false;
     }

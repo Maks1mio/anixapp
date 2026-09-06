@@ -5,6 +5,7 @@
     iconPlay,
     iconFlag,
     iconMessageCircle,
+    iconChevronDown,
   } from '../../../components/icons';
   import TitleInfoTrigger from '../../../components/TitleInfoTrigger.svelte';
   import ReleaseMetaInfoIcon from './ReleaseMetaInfoIcon.svelte';
@@ -40,6 +41,10 @@
     onWatch:          () => void;
     onSetStatus:      (v: string) => void;
     onToggleDesc:     () => void;
+    /** TV: широкая шапка и кнопка статуса вместо Select */
+    tvMode?:           boolean;
+    statusButtonLabel?: string;
+    onOpenStatusPicker?: () => void;
   }
 
   let {
@@ -50,17 +55,26 @@
     metaInfoRows, playBtnText, playBtnDisabled, episodeAddedText,
     currentStatus, selectOptions,
     onToggleFavorite, onWatch, onSetStatus, onToggleDesc,
+    tvMode = false,
+    statusButtonLabel = 'В список',
+    onOpenStatusPicker,
   }: Props = $props();
 
   const displayPosterUrl = $derived(toPosterDisplayUrl(posterUrl, 'releaseHero'));
 
-  let isWide = $state(typeof window !== 'undefined' ? window.matchMedia('(min-width: 961px)').matches : true);
+  let isWide = $state(
+    tvMode || (typeof window !== 'undefined' ? window.matchMedia('(min-width: 961px)').matches : true),
+  );
 
   const favLabel = $derived(
     favoritesCount > 0 ? formatVoteCount(favoritesCount).replace(/\s/g, ' ') : '',
   );
 
   $effect(() => {
+    if (tvMode) {
+      isWide = true;
+      return;
+    }
     const mq = window.matchMedia('(min-width: 961px)');
     const update = () => {
       isWide = mq.matches;
@@ -79,10 +93,16 @@
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <div
     class="release-page__poster{posterUrl ? ' release-page__poster--clickable' : ''}"
+    data-tv-release-poster
     role={posterUrl ? 'button' : undefined}
     tabindex={posterUrl ? 0 : undefined}
-    onclick={() => posterUrl && openImageLightbox(posterUrl)}
-    onkeydown={(e) => e.key === 'Enter' && posterUrl && openImageLightbox(posterUrl)}
+    onclick={(e) => posterUrl && openImageLightbox(posterUrl, e.currentTarget as HTMLElement)}
+    onkeydown={(e) => {
+      if (e.key === 'Enter' && posterUrl) {
+        e.preventDefault();
+        openImageLightbox(posterUrl, e.currentTarget as HTMLElement);
+      }
+    }}
   >
     {#if displayPosterUrl}
       <img src={displayPosterUrl} alt={title} />
@@ -120,12 +140,35 @@
 {#snippet actionsBlock()}
   <div class="release-page__actions">
     <div class="release-page__actions-status">
-      <Select
-        options={selectOptions}
-        value={currentStatus ?? ''}
-        placeholder="Не в списке"
-        onChange={onSetStatus}
-      />
+      {#if tvMode}
+        <div class="uiv2-select">
+          <div class="uiv2-select__field">
+            <button
+              type="button"
+              class="uiv2-select__trigger"
+              aria-haspopup="dialog"
+              aria-label="Статус в списке"
+              onclick={() => onOpenStatusPicker?.()}
+            >
+              <span class="uiv2-select__value">
+                <span class="uiv2-select__value-main">
+                  <span class="uiv2-select__value-label">{statusButtonLabel}</span>
+                </span>
+              </span>
+              <span class="uiv2-select__chevron" aria-hidden="true">
+                {@html iconChevronDown(16)}
+              </span>
+            </button>
+          </div>
+        </div>
+      {:else}
+        <Select
+          options={selectOptions}
+          value={currentStatus ?? ''}
+          placeholder="Не в списке"
+          onChange={onSetStatus}
+        />
+      {/if}
     </div>
 
     <button
@@ -161,6 +204,7 @@
           disabled={playBtnDisabled}
           title={playBtnText}
           onclick={onWatch}
+          data-tv-focus-priority="play"
         >
           {#if !playBtnDisabled}
             <span class="release-page__btn-icon">{@html iconPlay(20)}</span>

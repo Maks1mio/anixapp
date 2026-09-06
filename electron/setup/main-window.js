@@ -5,16 +5,18 @@ const { BrowserWindow } = require('electron');
 const state = require('../lib/app-state');
 const logger = require('../logger');
 const { flushPendingDeepLink } = require('../lib/deep-link');
+const { getDevServerOrigin } = require('../lib/dev-server');
 
 function createMainWindow(deps) {
   const { isDev, getIconPath, applyUiZoom, config, electronDir } = deps;
+  const isTv = process.env.ANIXAPP_TV === '1';
 
   const iconPath = getIconPath();
   const winOpts = {
-    width: 1280,
-    height: 800,
-    minWidth: 900,
-    minHeight: 600,
+    width: isTv ? 1920 : 1280,
+    height: isTv ? 1080 : 800,
+    minWidth: isTv ? 1280 : 900,
+    minHeight: isTv ? 720 : 600,
     frame: false,
     titleBarStyle: 'hidden',
     backgroundColor: '#0d0d0d',
@@ -25,7 +27,7 @@ function createMainWindow(deps) {
       sandbox: false,
       backgroundThrottling: true,
     },
-    title: 'AnixApp',
+    title: isTv ? 'AnixApp TV' : 'AnixApp',
     show: false,
   };
   if (iconPath) winOpts.icon = iconPath;
@@ -33,7 +35,7 @@ function createMainWindow(deps) {
   logger.info('main', 'window created');
 
   if (isDev) {
-    state.mainWindow.loadURL('http://127.0.0.1:5173');
+    state.mainWindow.loadURL(getDevServerOrigin());
     if (process.env.ELECTRON_DEVTOOLS === '1') {
       state.mainWindow.webContents.openDevTools({ mode: 'detach' });
     }
@@ -43,7 +45,7 @@ function createMainWindow(deps) {
 
   state.mainWindow.once('ready-to-show', () => {
     logger.info('main', 'window ready-to-show');
-    applyUiZoom(config.getUiZoom());
+    applyUiZoom(isTv ? 100 : config.getUiZoom());
     state.mainWindow.show();
     flushPendingDeepLink();
   });

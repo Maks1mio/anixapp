@@ -1,0 +1,16 @@
+[Unit]
+Description=AnixApp TV web bridge (Kodik resolve + media proxy)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/anixapp
+ExecStart=/usr/bin/node scripts/tv-bridge-server.mjs
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=ANIXAPP_TV_BRIDGE_PORT=8790
+Environment=ANIXAPP_TV_BRIDGE_HOST=127.0.0.1
+
+[Install]
+WantedBy=multi-user.target

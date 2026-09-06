@@ -1406,6 +1406,7 @@
   position: absolute;
   top: 50%;
   right: 0.35rem;
+  z-index: 3;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1443,6 +1444,22 @@
   .uiv2-outlined-field {
     margin-bottom: 0;
   }
+}
+
+.uiv2-outlined-field__ime-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.uiv2-outlined-field--revealable.uiv2-outlined-field--tv-lock .uiv2-outlined-field__ime-hit {
+  right: 2.75rem;
 }
 
 .uiv2-outlined-field__hint {
@@ -5413,7 +5430,7 @@ body.uiv2-scroll-dragging * {
     cursor: default;
   }
 
-  :global(.icon) {
+  .icon {
     width: 18px;
     height: 18px;
   }
@@ -5549,7 +5566,7 @@ body.uiv2-scroll-dragging * {
     color: color-mix(in srgb, #{$color-accent} 88%, white);
   }
 
-  :global(.icon) {
+  .icon {
     width: 15px;
     height: 15px;
   }

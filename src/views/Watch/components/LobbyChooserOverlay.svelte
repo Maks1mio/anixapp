@@ -68,8 +68,11 @@
       }
       await joinLobbyRoomAndOpenPlayer(code);
       onClose();
-    } catch {
-      joinHint = 'Неверный код или комната не найдена';
+    } catch (err: unknown) {
+      const banned = err && typeof err === 'object' && (err as { code?: string }).code === 'banned';
+      joinHint = banned
+        ? 'Вас выгнали из этой комнаты — повторный вход недоступен'
+        : 'Неверный код или комната не найдена';
       joinHintError = true;
       joinLoading = false;
     }

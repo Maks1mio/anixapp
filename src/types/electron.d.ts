@@ -67,6 +67,9 @@ declare global {
       togglePlayerAlwaysOnTop: () => Promise<boolean>;
       isPlayerOpen: () => Promise<boolean>;
       openExternal: (url: string) => void;
+      startTvLanLogin?: () => Promise<{ url: string | null; error?: string }>;
+      stopTvLanLogin?: () => Promise<boolean>;
+      onTvLanCredentials?: (cb: (detail: { login: string; password: string }) => void) => () => void;
       setExtraVideoHosts?: (hosts: string[]) => Promise<string[]>;
       addExtraVideoHosts?: (hosts: string[]) => Promise<string[]>;
       /** JSON с Anixart CDN (Lottie-бейджи) через main — без fetch(anix-cdn://) */
@@ -242,6 +245,7 @@ declare global {
       }) => Promise<{ ok: boolean; error?: string }>;
       syncPlayerState: (playback: LobbyPlaybackPayload) => void;
       sendPlayerState: (playback: LobbyPlaybackPayload) => void;
+      sendFluoPreview?: (payload: { dataUrl: string; duration?: number }) => void;
       startUpdateDownload?: () => Promise<void>;
       checkForUpdate?: (currentVersion: string) => Promise<{
         version: string;
@@ -289,16 +293,23 @@ declare global {
         roomId: string | null;
         roomCode: string | null;
         participants: unknown[];
+        hostPeerId?: string | null;
+        myPeerId?: string | null;
       }) => void;
       sendLobbyChatToPlayer?: (msg: Record<string, unknown>) => void;
+      sendLobbyChatHistoryToPlayer?: (messages: unknown[]) => void;
       sendLobbyChooserErrorToPlayer?: (msg: string) => void;
       lobbyCreateFromPlayer?: (playback?: Record<string, unknown> | null) => void;
       lobbyJoinFromPlayer?: (code: string) => void;
       lobbyLeaveFromPlayer?: () => void;
       lobbyChatFromPlayer?: (text: string) => void;
+      lobbyKickFromPlayer?: (peerId: string) => void;
+      lobbyTransferHostFromPlayer?: (peerId: string) => void;
       lobbyRequestSession?: () => void;
       /** Окно плеера → главное: началась смена качества/озвучки в лобби */
       lobbyNotifyBufferingStart?: () => void;
+      /** Окно плеера → главное: догнать живые часы комнаты (после смены качества) */
+      lobbyRequestCatchUp?: () => void;
       /** Окно плеера → главное: плеер готов после sync (sync_ready на сервер) */
       lobbyPlayerSynced?: (currentTime?: number) => void;
       /** Главное → плеер: оверлей «ожидаем пользователя» */

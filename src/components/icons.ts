@@ -37,6 +37,7 @@ import {
   Image,
   Info,
   LayoutGrid,
+  LayoutList,
   Lock,
   LogOut,
   MessageCircle,
@@ -69,6 +70,7 @@ import {
   Clock,
   CircleCheck,
   TriangleAlert,
+  Type,
   User,
   UserPlus,
   Users,
@@ -266,6 +268,11 @@ export function iconLayoutGrid(size = 20): string {
   return toSvg(LayoutGrid, size);
 }
 
+/** Список */
+export function iconLayoutList(size = 20): string {
+  return toSvg(LayoutList, size);
+}
+
 /** Компас (вкладка «Обзор») */
 export function iconCompass(size = 20): string {
   return toSvg(Compass, size);
@@ -461,9 +468,14 @@ export function iconMinimize2(size = 20): string {
   return toSvg(Minimize2, size);
 }
 
-/** Часы (время просмотра) */
+/** Часы (время просмотра / сортировка по активности) */
 export function iconClock(size = 14): string {
   return toSvg(Clock, size);
+}
+
+/** Буква A (сортировка по никнейму) */
+export function iconType(size = 16): string {
+  return toSvg(Type, size);
 }
 
 /** Галочка в круге (просмотренная серия) */

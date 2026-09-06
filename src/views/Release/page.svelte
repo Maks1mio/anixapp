@@ -24,7 +24,7 @@
     numToStatusId, ratingHue, mapCardData, formatEpisodeAdded,
   } from './_utils';
   import { isReleaseAnnounce } from '../../utils/release-card';
-  import { ReleaseHead, ReleaseVideos, ReleaseRating, ReleaseRelated, ReleaseRecommendations, ReleaseScreenshots, ReleaseComments } from './components';
+  import { ReleaseHead, ReleaseVideos, ReleaseRating, ReleaseFriends, ReleaseRelated, ReleaseRecommendations, ReleaseScreenshots, ReleaseComments } from './components';
   import { notifyFavoritesChanged } from '../../utils/favorites-events';
   import { applyReleaseListStatus } from '../../utils/release-list-status';
   import { enrichBlockedRelease } from '../../services/release-geo-bypass';
@@ -439,6 +439,8 @@
         {canVote}
         onRefresh={refreshReleaseData}
       />
+
+      <ReleaseFriends releaseId={id} />
 
       <!-- Screenshots -->
       {#if screenshots.length > 0}

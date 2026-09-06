@@ -13,6 +13,11 @@ export type BookmarksTabId =
 
 const CARD_LAYOUT_KEY = 'anixapp.cardLayout';
 const BOOKMARKS_DEFAULT_TAB_KEY = 'anixapp.bookmarksDefaultTab';
+const RELEASE_FRIENDS_SORT_KEY = 'anixapp.releaseFriendsSort';
+const RELEASE_FRIENDS_LAYOUT_KEY = 'anixapp.releaseFriendsLayout';
+
+export type ReleaseFriendsSort = 'status' | 'nickname';
+export type ReleaseFriendsLayout = 'grid' | 'mini';
 
 const BOOKMARKS_TAB_IDS: readonly BookmarksTabId[] = [
   'watching',
@@ -63,4 +68,34 @@ export function setCardLayout(layout: CardLayout): void {
   if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return;
   window.localStorage.setItem(CARD_LAYOUT_KEY, layout);
   window.dispatchEvent(new CustomEvent('anix:cardLayoutChanged', { detail: { layout } }));
+}
+
+export function getReleaseFriendsSort(): ReleaseFriendsSort {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+    return 'status';
+  }
+  return window.localStorage.getItem(RELEASE_FRIENDS_SORT_KEY) === 'nickname'
+    ? 'nickname'
+    : 'status';
+}
+
+export function setReleaseFriendsSort(sort: ReleaseFriendsSort): void {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return;
+  window.localStorage.setItem(RELEASE_FRIENDS_SORT_KEY, sort);
+  window.dispatchEvent(new CustomEvent('anix:releaseFriendsSortChanged', { detail: { sort } }));
+}
+
+export function getReleaseFriendsLayout(): ReleaseFriendsLayout {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+    return 'grid';
+  }
+  return window.localStorage.getItem(RELEASE_FRIENDS_LAYOUT_KEY) === 'mini'
+    ? 'mini'
+    : 'grid';
+}
+
+export function setReleaseFriendsLayout(layout: ReleaseFriendsLayout): void {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return;
+  window.localStorage.setItem(RELEASE_FRIENDS_LAYOUT_KEY, layout);
+  window.dispatchEvent(new CustomEvent('anix:releaseFriendsLayoutChanged', { detail: { layout } }));
 }

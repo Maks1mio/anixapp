@@ -4660,6 +4660,21 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   background: $color-error;
 }
 
+.release-page__friends {
+  min-width: 0;
+}
+
+.release-page__friends--hidden {
+  display: block;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: none;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .release-page__screenshots {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));

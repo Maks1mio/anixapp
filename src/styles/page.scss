@@ -38,6 +38,10 @@
   --page-scroll-padding: 1.5rem;
 }
 
+.page--feed {
+  --page-scroll-padding: 0;
+}
+
 @media (max-width: 768px) {
   .page--padded {
     --page-scroll-padding: 1rem;

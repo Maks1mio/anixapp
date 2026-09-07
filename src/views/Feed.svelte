@@ -112,6 +112,11 @@
   const searchPlaceholder = $derived(
     tab === 'managed' ? 'Поиск каналов…' : 'Поиск записей в ленте…',
   );
+  const feedNoAside = $derived(
+    tab === 'managed'
+      || searchMode
+      || !(asideChannel || recommendedChannels.length > 0),
+  );
 
   function pageableContent(raw: unknown): unknown[] {
     if (!raw || typeof raw !== 'object') return [];
@@ -529,37 +534,42 @@
 </script>
 
 <div class="view view-feed">
-  <div class="feed-page__search">
-    <label class="feed-page__search-field">
-      <span class="feed-page__search-icon" aria-hidden="true">{@html iconSearch(18)}</span>
-      <input
-        class="feed-page__search-input"
-        type="search"
-        name="feed-search"
-        autocomplete="off"
-        spellcheck="false"
-        placeholder={searchPlaceholder}
-        aria-label={searchPlaceholder}
-        bind:value={searchQuery}
-      />
-      {#if searchQuery}
-        <button
-          type="button"
-          class="feed-page__search-clear"
-          aria-label="Очистить поиск"
-          onclick={() => {
-            searchQuery = '';
-          }}
-        >
-          {@html iconX(14)}
-        </button>
-      {/if}
-    </label>
+  <div
+    class="feed-page__search"
+    class:feed-page__search--no-aside={feedNoAside}
+  >
+    <div class="feed-page__search-inner">
+      <label class="feed-page__search-field">
+        <span class="feed-page__search-icon" aria-hidden="true">{@html iconSearch(18)}</span>
+        <input
+          class="feed-page__search-input"
+          type="search"
+          name="feed-search"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder={searchPlaceholder}
+          aria-label={searchPlaceholder}
+          bind:value={searchQuery}
+        />
+        {#if searchQuery}
+          <button
+            type="button"
+            class="feed-page__search-clear"
+            aria-label="Очистить поиск"
+            onclick={() => {
+              searchQuery = '';
+            }}
+          >
+            {@html iconX(14)}
+          </button>
+        {/if}
+      </label>
+    </div>
   </div>
 
   <div
     class="view-feed__layout"
-    class:view-feed__layout--no-aside={tab === 'managed' || searchMode || !(asideChannel || recommendedChannels.length > 0)}
+    class:view-feed__layout--no-aside={feedNoAside}
   >
   <aside class="feed-side" aria-label="Навигация ленты">
     <nav class="feed-side__nav">

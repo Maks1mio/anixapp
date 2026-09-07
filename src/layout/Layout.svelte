@@ -228,7 +228,12 @@
   }
 
   const isChatPage = $derived(/^\/announcement\/[^/]+\/chat$/.test(currentPath ?? ''));
-  const pageExtraClass = $derived(isChatPage ? 'page--chat' : undefined);
+  const isFeedPage = $derived((currentPath ?? '') === '/feed');
+  const pageExtraClass = $derived(
+    [isChatPage ? 'page--chat' : '', isFeedPage ? 'page--feed' : '']
+      .filter(Boolean)
+      .join(' ') || undefined,
+  );
   const mediaPreviewOpen = $derived($feedMediaLightbox != null);
 
   $effect(() => {
@@ -439,7 +444,7 @@
     <main class="layout__main">
       <div class="content-panel">
         <div class="content-panel__body">
-          <Page scrollId="content" extraClass={pageExtraClass}>
+          <Page scrollId="content" extraClass={pageExtraClass} noPadding={isFeedPage}>
             {@render children?.()}
           </Page>
         </div>

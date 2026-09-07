@@ -1,34 +1,36 @@
 @use 'variables' as *;
 
 .view-feed {
-  --feed-page-gutter: var(--page-scroll-padding, 1.5rem);
-  --feed-search-field-h: 2.75rem;
-  --feed-search-pad-top: 0.7rem;
-  --feed-search-pad-bottom: 0.55rem;
+  --feed-page-gutter: 1.25rem;
+  --feed-layout-max: 72rem;
+  --feed-layout-max-no-aside: 54.5rem;
+  --feed-search-field-h: 2.5rem;
+  --feed-search-pad-top: 0.75rem;
+  --feed-search-pad-bottom: 0.75rem;
   --feed-search-sticky-top: calc(
-    var(--feed-search-pad-top) + var(--feed-search-field-h) + var(--feed-search-pad-bottom)
+    var(--feed-search-pad-top) + var(--feed-search-field-h) + var(--feed-search-pad-bottom) + 0.75rem
   );
   display: flex;
   flex-direction: column;
-  width: calc(100% + 2 * var(--feed-page-gutter));
+  width: 100%;
   max-width: none;
-  margin: calc(-1 * var(--feed-page-gutter)) calc(-1 * var(--feed-page-gutter)) 0;
-  padding: 0 0 2.5rem;
+  margin: 0;
+  padding: 0 0 2rem;
 }
 
 .view-feed__layout {
   display: grid;
   grid-template-columns: minmax(12.5rem, 14rem) minmax(0, 1fr) minmax(15rem, 17.5rem);
-  gap: 0.75rem 1.5rem;
+  gap: 0.65rem 1.5rem;
   align-items: start;
   width: 100%;
-  max-width: calc(72rem + 2 * var(--feed-page-gutter));
+  max-width: calc(var(--feed-layout-max) + 2 * var(--feed-page-gutter));
   margin: 0 auto;
-  padding: 0 var(--feed-page-gutter) 0;
+  padding: 0 var(--feed-page-gutter);
 
   &--no-aside {
     grid-template-columns: minmax(12.5rem, 14rem) minmax(0, 1fr);
-    max-width: calc(54.5rem + 2 * var(--feed-page-gutter));
+    max-width: calc(var(--feed-layout-max-no-aside) + 2 * var(--feed-page-gutter));
   }
 }
 
@@ -205,11 +207,22 @@
   top: 0;
   z-index: 12;
   width: 100%;
-  margin: 0;
-  padding: var(--feed-search-pad-top) var(--feed-page-gutter) var(--feed-search-pad-bottom);
+  margin: 0 0 14px 0;
+  padding: var(--feed-search-pad-top) 0 var(--feed-search-pad-bottom);
   background: color-mix(in srgb, var(--uikit-v2-bg, #{$color-bg}) 92%, transparent);
   backdrop-filter: blur(16px);
   box-shadow: 0 1px 0 color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 6%, transparent);
+}
+
+.feed-page__search-inner {
+  width: 100%;
+  max-width: calc(var(--feed-layout-max) + 2 * var(--feed-page-gutter));
+  margin: 0 auto;
+  padding: 0 var(--feed-page-gutter);
+}
+
+.feed-page__search--no-aside .feed-page__search-inner {
+  max-width: calc(var(--feed-layout-max-no-aside) + 2 * var(--feed-page-gutter));
 }
 
 .feed-page__search-field {

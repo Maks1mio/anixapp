@@ -19,6 +19,8 @@
   import SidebarPins from '../components/SidebarPins.svelte';
   import Page from '../components/Page.svelte';
   import UiV2Tooltip from '../components/uikit-v2/UiV2Tooltip.svelte';
+  import UiV2MediaLightbox from '../components/uikit-v2/UiV2MediaLightbox.svelte';
+  import { feedMediaLightbox } from '../utils/feed-media-lightbox';
   import { initSidebarPins } from '../stores/sidebar-pins';
   import {
     profilePanelOpen,
@@ -227,6 +229,7 @@
 
   const isChatPage = $derived(/^\/announcement\/[^/]+\/chat$/.test(currentPath ?? ''));
   const pageExtraClass = $derived(isChatPage ? 'page--chat' : undefined);
+  const mediaPreviewOpen = $derived($feedMediaLightbox != null);
 
   $effect(() => {
     if (currentPath === '/schedule') {
@@ -238,6 +241,7 @@
   onMount(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       // Профиль закрывается только крестиком или расписанием — Esc только для расписания
+      if (e.key === 'Escape' && mediaPreviewOpen) return;
       if (e.key === 'Escape' && scheduleVisible && scheduleActive) closeSchedule();
     };
     window.addEventListener('keydown', onKeyDown);
@@ -439,6 +443,7 @@
             {@render children?.()}
           </Page>
         </div>
+        <UiV2MediaLightbox />
       </div>
     </main>
 

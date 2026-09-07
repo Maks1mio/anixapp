@@ -18,6 +18,7 @@ const COMMON_METHODS = [
   'search.releases',
   'search.profiles',
   'search.collections',
+  'search.feedSearch',
   'discover.recommendations',
   'discover.interesting',
   'notification.all',

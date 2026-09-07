@@ -6,11 +6,15 @@
   import type { FeedArticle } from '../types/feed';
   import {
     articleRenderBlocks,
+    applyArticleVote,
+    articleTags,
     channelAvatarUrl,
     formatFeedRelativeTime,
+    normalizeArticleVote,
     type RenderBlock,
   } from '../utils/feed-article';
-  import { iconArrowLeft, iconHeart, iconMessageCircle } from '../components/icons';
+  import UiV2FeedChannelCard from '../components/uikit-v2/UiV2FeedChannelCard.svelte';
+  import { iconArrowLeft, iconChevronDown, iconChevronUp, iconMessageCircle, iconRepost } from '../components/icons';
 
   interface Props {
     id: number;
@@ -29,7 +33,11 @@
   const channel = $derived(article?.channel ?? null);
   const timeStr = $derived(formatFeedRelativeTime(article?.creation_date ?? article?.last_update_date));
   const avatar = $derived(channelAvatarUrl(channel?.avatar));
-  const voted = $derived(Number(article?.vote ?? 0) > 0);
+  const myVote = $derived(normalizeArticleVote(article?.vote));
+  const tags = $derived(article ? articleTags(article) : []);
+  const votes = $derived(Number(article?.vote_count ?? 0));
+  const comments = $derived(Math.max(0, Number(article?.comment_count ?? 0)));
+  const shares = $derived(Math.max(0, Number(article?.repost_count ?? 0)));
 
   async function load() {
     loadState = 'loading';
@@ -51,18 +59,17 @@
     }
   }
 
-  async function toggleVote() {
+  async function setVote(next: 0 | 1 | 2) {
     if (!article || voteBusy || !window.anixApi?.article?.vote) return;
-    const next = voted ? 0 : 1;
+    const prev = myVote;
+    const resolved = prev === next ? 0 : next;
     voteBusy = true;
+    const snapshot = article;
+    article = applyArticleVote(article, resolved);
     try {
-      await window.anixApi.article.vote(article.id, next);
-      article = {
-        ...article,
-        vote: next,
-        vote_count: Math.max(0, Number(article.vote_count ?? 0) + (next ? 1 : -1)),
-      };
+      await window.anixApi.article.vote(article.id, resolved);
     } catch (err) {
+      article = snapshot;
       errorMsg = String(err);
     } finally {
       voteBusy = false;
@@ -106,6 +113,7 @@
       <UiV2Button label="Повторить" variant="primary" onclick={() => void load()} />
     </UiV2Card>
   {:else if article}
+    <div class="article-page__main">
     <header class="article-page__head">
       <button type="button" class="feed-article__channel" onclick={openChannel}>
         <span
@@ -178,20 +186,76 @@
       {/each}
     </div>
 
-    <footer class="article-page__foot">
-      <UiV2Button
-        label={String(article.vote_count ?? 0)}
-        size="sm"
-        variant={voted ? 'primary' : 'chrome'}
-        disabled={voteBusy}
-        onclick={() => void toggleVote()}
+    {#if tags.length > 0}
+      <ul class="uiv2-feed-post__tags">
+        {#each tags as tag (tag)}
+          <li><span class="uiv2-feed-post__tag">#{tag}</span></li>
+        {/each}
+      </ul>
+    {/if}
+
+    <footer class="uiv2-feed-post__foot article-page__feed-foot">
+      <div class="uiv2-feed-post__actions">
+        <span class="uiv2-feed-post__stat">
+          {@html iconMessageCircle(16)}
+          <span>{comments}</span>
+        </span>
+        <span class="uiv2-feed-post__stat">
+          {@html iconRepost(16)}
+          <span>{shares}</span>
+        </span>
+      </div>
+      <div
+        class="uiv2-feed-post__votes"
+        class:uiv2-feed-post__votes--plus={votes > 0}
+        class:uiv2-feed-post__votes--minus={votes < 0}
       >
-        {#snippet icon()}{@html iconHeart(14, voted)}{/snippet}
-      </UiV2Button>
-      <span class="feed-article__stat">
-        {@html iconMessageCircle(14)}
-        {article.comment_count ?? 0}
-      </span>
+        <button
+          type="button"
+          class="uiv2-feed-post__vote"
+          class:uiv2-feed-post__vote--up={myVote === 1}
+          title={myVote === 1 ? 'Убрать плюс' : 'Плюс'}
+          aria-pressed={myVote === 1}
+          aria-label="Плюс"
+          disabled={voteBusy}
+          onclick={() => void setVote(1)}
+        >
+          {@html iconChevronUp(16)}
+        </button>
+        <span class="uiv2-feed-post__score">{votes}</span>
+        <button
+          type="button"
+          class="uiv2-feed-post__vote"
+          class:uiv2-feed-post__vote--down={myVote === 2}
+          title={myVote === 2 ? 'Убрать минус' : 'Минус'}
+          aria-pressed={myVote === 2}
+          aria-label="Минус"
+          disabled={voteBusy}
+          onclick={() => void setVote(2)}
+        >
+          {@html iconChevronDown(16)}
+        </button>
+      </div>
     </footer>
+    </div>
+
+    {#if channel}
+      <aside class="article-page__aside" aria-label="О канале">
+        <UiV2FeedChannelCard
+          data={{
+            id: channel.id,
+            title: channel.title,
+            description: channel.description,
+            avatar,
+            cover: channel.cover,
+            isVerified: !!channel.is_verified,
+            isSubscribed: !!channel.is_subscribed,
+            subscriberCount: channel.subscriber_count,
+            articleCount: channel.article_count,
+          }}
+          onOpen={(channelId) => navigate(`/channel/${channelId}`)}
+        />
+      </aside>
+    {/if}
   {/if}
 </div>

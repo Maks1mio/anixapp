@@ -53,6 +53,7 @@ import {
   BookOpen,
   Radio,
   RefreshCw,
+  Repeat2,
   Reply,
   Tags,
   Tv,
@@ -348,6 +349,11 @@ export function iconPin(size = 16): string {
 
 export function iconShare(size = 18): string {
   return toSvg(Share2, size);
+}
+
+/** Репост / поделиться (изогнутая стрелка, как на сайте). */
+export function iconRepost(size = 18): string {
+  return toSvg(Repeat2, size);
 }
 
 /** Замок (приватная коллекция) */

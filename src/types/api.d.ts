@@ -289,6 +289,14 @@ export interface AnixApi {
       collections: (query: string, page?: number) => Promise<any>;
       /** Поиск в своём списке статуса (Смотрю / В планах / …) */
       profileList: (status: number, query: string, page?: number, searchBy?: number) => Promise<any>;
+      /** Глобальный поиск по ленте: записи, каналы, блоги, теги. */
+      feed: (query: string, page?: number, searchBy?: number) => Promise<{
+        code?: number;
+        articles?: { content?: unknown[]; total_page_count?: number; current_page?: number; total_count?: number };
+        channels?: { content?: unknown[]; total_count?: number };
+        blogs?: { content?: unknown[]; total_count?: number };
+        tags?: { content?: unknown[] };
+      }>;
     };
 
   collection: {
@@ -376,6 +384,7 @@ export interface AnixApi {
     mute: (id: number) => Promise<{ code?: number }>;
     unmute: (id: number) => Promise<{ code?: number }>;
     setPinned: (id: number, isPinned: boolean) => Promise<{ code?: number }>;
+    commentsPopular: (id: number) => Promise<{ content?: unknown[] }>;
   };
 
   report: {

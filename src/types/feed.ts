@@ -47,18 +47,38 @@ export interface FeedArticleBlock {
   data?: Record<string, unknown>;
 }
 
+export interface FeedArticlePayload {
+  time?: number;
+  version?: string;
+  blocks?: FeedArticleBlock[];
+  block_count?: number;
+}
+
+export interface FeedArticleLastComment {
+  message?: string;
+  text?: string;
+  profile?: FeedProfile | null;
+  author?: FeedProfile | null;
+  creation_date?: number;
+  date?: number;
+  is_spoiler?: boolean;
+  is_deleted?: boolean;
+  vote_count?: number;
+}
+
 export interface FeedArticle {
   id: number;
   channel?: FeedChannel | null;
   author?: FeedProfile | null;
-  payload?: {
-    time?: number;
-    blocks?: FeedArticleBlock[];
-  };
+  /** Объект или JSON-строка — лента иногда отдаёт payload строкой. */
+  payload?: FeedArticlePayload | string;
   comment_count?: number;
   repost_count?: number;
   vote_count?: number;
+  /** 0 — нет, 1 — плюс, 2 — минус. */
   vote?: number;
+  tags?: Array<string | { name?: string; title?: string; tag?: string }>;
+  last_comment?: FeedArticleLastComment | null;
   creation_date?: number;
   last_update_date?: number;
   is_deleted?: boolean;

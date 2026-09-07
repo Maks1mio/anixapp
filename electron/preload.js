@@ -470,6 +470,8 @@ contextBridge.exposeInMainWorld('anixApi', {
     collections: (query, page = 0) => ipcRenderer.invoke('anix:searchCollections', query, page),
     profileList: (status, query, page = 0, searchBy = 0) =>
       ipcRenderer.invoke('anix:searchProfileList', status, query, page, searchBy),
+    feed: (query, page = 0, searchBy = 0) =>
+      ipcRenderer.invoke('anix:searchFeed', query, page, searchBy),
   },
 
   collection: {
@@ -533,6 +535,7 @@ contextBridge.exposeInMainWorld('anixApi', {
     mute: (id) => ipcRenderer.invoke('anix:articleMute', id),
     unmute: (id) => ipcRenderer.invoke('anix:articleUnmute', id),
     setPinned: (id, isPinned) => ipcRenderer.invoke('anix:articlePin', id, isPinned),
+    commentsPopular: (id) => ipcRenderer.invoke('anix:articleCommentsPopular', id),
   },
 
   report: {

@@ -5,8 +5,13 @@
   import UiV2Button from '../components/uikit-v2/UiV2Button.svelte';
   import UiV2Card from '../components/uikit-v2/UiV2Card.svelte';
   import FeedArticleCard from '../components/feed/FeedArticleCard.svelte';
+  import UiV2FeedChannelCard from '../components/uikit-v2/UiV2FeedChannelCard.svelte';
   import type { FeedArticle, FeedChannel } from '../types/feed';
-  import { channelAvatarUrl } from '../utils/feed-article';
+  import {
+    applyArticleVote,
+    channelAvatarUrl,
+    normalizeArticleVote,
+  } from '../utils/feed-article';
   import { iconArrowLeft, iconRefreshCw } from '../components/icons';
 
   interface Props {
@@ -99,29 +104,15 @@
     }
   }
 
-  async function onVoteArticle(article: FeedArticle, nextVote: 0 | 1) {
+  async function onVoteArticle(article: FeedArticle, nextVote: 0 | 1 | 2) {
     if (!window.anixApi?.article?.vote) return;
-    const prevVote = Number(article.vote ?? 0) > 0 ? 1 : 0;
+    const prevVote = normalizeArticleVote(article.vote);
     if (prevVote === nextVote) return;
-    articles = articles.map((a) => {
-      if (a.id !== article.id) return a;
-      return {
-        ...a,
-        vote: nextVote,
-        vote_count: Math.max(0, Number(a.vote_count ?? 0) + (nextVote ? 1 : -1)),
-      };
-    });
+    articles = articles.map((a) => (a.id === article.id ? applyArticleVote(a, nextVote) : a));
     try {
       await window.anixApi.article.vote(article.id, nextVote);
     } catch (err) {
-      articles = articles.map((a) => {
-        if (a.id !== article.id) return a;
-        return {
-          ...a,
-          vote: prevVote,
-          vote_count: Math.max(0, Number(a.vote_count ?? 0) + (prevVote ? 1 : -1)),
-        };
-      });
+      articles = articles.map((a) => (a.id === article.id ? applyArticleVote(a, prevVote) : a));
       errorMsg = String(err);
     }
   }
@@ -176,68 +167,61 @@
       <UiV2Button label="Повторить" variant="primary" onclick={() => void reload()} />
     </UiV2Card>
   {:else if channel}
-    <header class="channel-page__head">
-      <span
-        class="channel-page__avatar"
-        class:channel-page__avatar--empty={!avatar}
-        style={avatar ? `background-image:url('${avatar}')` : undefined}
-        aria-hidden="true"
-      ></span>
-      <div class="channel-page__meta">
-        <h1 class="channel-page__title">
-          {channel.title || 'Канал'}
-          {#if channel.is_verified}
-            <span class="feed-article__verified" aria-hidden="true">✓</span>
-          {/if}
-        </h1>
-        {#if channel.description}
-          <p class="channel-page__desc">{channel.description}</p>
-        {/if}
-        <p class="channel-page__stats">
-          {channel.subscriber_count ?? 0} подп. · {channel.article_count ?? articles.length} записей
-        </p>
-      </div>
-      <UiV2Button
-        label={subscribed ? 'Отписаться' : 'Подписаться'}
-        variant={subscribed ? 'chrome' : 'primary'}
-        size="sm"
-        disabled={subBusy}
-        onclick={() => void toggleSubscribe()}
-      />
-    </header>
-
-    {#if errorMsg}
-      <p class="feed-page__hint" role="status">{errorMsg}</p>
-    {/if}
-
-    {#if articles.length === 0}
-      <UiV2Card title="Пока пусто">
-        <p class="feed-page__hint">В этом канале ещё нет записей.</p>
-      </UiV2Card>
-    {:else}
-      <div class="feed-page__list">
-        {#each articles as article (article.id)}
-          <FeedArticleCard
-            {article}
-            onOpen={openArticle}
-            hideSubscribe
-            menuPinAvailable
-            onVote={onVoteArticle}
-            onArticleRemove={onArticleRemove}
-            onArticleChange={onArticleChange}
-          />
-        {/each}
-      </div>
-      {#if hasMore}
-        <div class="feed-page__more">
-          <UiV2Button
-            variant="chrome"
-            label={loadingMore ? 'Загрузка…' : 'Ещё'}
-            disabled={loadingMore}
-            onclick={() => void loadArticles(page + 1, true)}
-          />
-        </div>
+    <div class="channel-page__main">
+      <h1 class="feed-page__title">Все записи</h1>
+      {#if errorMsg}
+        <p class="feed-page__hint" role="status">{errorMsg}</p>
       {/if}
-    {/if}
+
+      {#if articles.length === 0}
+        <UiV2Card title="Пока пусто">
+          <p class="feed-page__hint">В этом канале ещё нет записей.</p>
+        </UiV2Card>
+      {:else}
+        <div class="feed-page__list">
+          {#each articles as article (article.id)}
+            <FeedArticleCard
+              {article}
+              onOpen={openArticle}
+              hideSubscribe
+              menuPinAvailable
+              onVote={onVoteArticle}
+              onArticleRemove={onArticleRemove}
+              onArticleChange={onArticleChange}
+            />
+          {/each}
+        </div>
+        {#if hasMore}
+          <div class="feed-page__more">
+            <UiV2Button
+              variant="chrome"
+              label={loadingMore ? 'Загрузка…' : 'Ещё'}
+              disabled={loadingMore}
+              onclick={() => void loadArticles(page + 1, true)}
+            />
+          </div>
+        {/if}
+      {/if}
+    </div>
+
+    <aside class="channel-page__aside" aria-label="О канале">
+      <UiV2FeedChannelCard
+        data={{
+          id: channel.id,
+          title: channel.title,
+          description: channel.description,
+          avatar: avatar,
+          cover: channel.cover,
+          isVerified: !!channel.is_verified,
+          isSubscribed: subscribed,
+          subscriberCount: channel.subscriber_count,
+          articleCount: channel.article_count ?? articles.length,
+        }}
+        subscribeBusy={subBusy}
+        onSubscribe={async (_id, _next) => {
+          await toggleSubscribe();
+        }}
+      />
+    </aside>
   {/if}
 </div>

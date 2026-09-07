@@ -617,6 +617,7 @@ $schedule-duration: 0.34s;
 
 // ——— Закруглённое окно контента (стиль JB) ———
 .content-panel {
+  position: relative;
   flex: 1;
   min-height: 0;
   min-width: 0;

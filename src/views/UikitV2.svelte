@@ -55,10 +55,13 @@
   import UiV2FeedPost from '../components/uikit-v2/UiV2FeedPost.svelte';
   import UiV2FeedPostSkeleton from '../components/uikit-v2/UiV2FeedPostSkeleton.svelte';
   import UiV2FeedSideNav from '../components/uikit-v2/UiV2FeedSideNav.svelte';
+  import UiV2FeedChannelCard from '../components/uikit-v2/UiV2FeedChannelCard.svelte';
+  import UiV2FeedRecommended from '../components/uikit-v2/UiV2FeedRecommended.svelte';
   import UiV2ReleaseFriends, {
     type UiV2ReleaseFriend,
   } from '../components/uikit-v2/UiV2ReleaseFriends.svelte';
   import { UIV2_FEED_POST_DEMO } from '../utils/uikit-v2-feed-post';
+  import { nextArticleVoteCount, normalizeArticleVote } from '../utils/feed-article';
   import { buildFeedArticleMenuItems } from '../utils/feed-article-menu';
   import type { FeedArticle } from '../types/feed';
   import { showToast } from '../stores/toast';
@@ -110,15 +113,15 @@
     { id: 3, label: 'FrameLab', avatar: UIV2_FEED_POST_DEMO[2].channel.avatar },
   ];
 
-  function toggleFeedDemoVote(postId: string | number) {
+  function toggleFeedDemoVote(postId: string | number, nextVote: 0 | 1 | 2) {
     feedDemoPosts = feedDemoPosts.map((post) => {
       if (post.id !== postId) return post;
-      const voted = !post.voted;
-      const delta = voted ? 1 : -1;
+      const prev = post.vote === 1 || post.vote === 2 ? post.vote : normalizeArticleVote(post.voted ? 1 : 0);
       return {
         ...post,
-        voted,
-        voteCount: Math.max(0, Number(post.voteCount ?? 0) + delta),
+        vote: nextVote,
+        voted: nextVote === 1,
+        voteCount: nextArticleVoteCount(Number(post.voteCount ?? 0), prev, nextVote),
       };
     });
   }
@@ -1685,18 +1688,19 @@
           <div class="uikit-v2-demo-block">
             <h3 class="uikit-v2-demo-block__title">UiV2FeedPost</h3>
             <p class="uikit-v2-demo-block__desc">
-              Карточка поста ленты: канал, заголовок, превью, медиа, репост, голоса и комментарии.
+              Карточка поста: имя и время под аватаром, красный «+» на аватаре, «Показать ещё»,
+              сетка картинок, топовый комментарий под футером. Клик по фото открывает предпросмотр.
               Стили — классы <code>.uiv2-feed-post*</code> в <code>uikit-v2.scss</code>.
             </p>
             <div class="uikit-v2-feed-list">
               {#each feedDemoPosts as post (post.id)}
                 <UiV2FeedPost
                   data={post}
-                  showSubscribe={post.id === 'demo-image'}
+                  showSubscribe
                   menuItems={demoFeedMenuItems(post)}
                   onVote={async (data, next) => {
-                    toggleFeedDemoVote(data.id);
-                    showToast(next ? 'Оценено' : 'Оценка снята');
+                    toggleFeedDemoVote(data.id, next);
+                    showToast(next === 1 ? 'Плюс' : next === 2 ? 'Минус' : 'Оценка снята');
                   }}
                   onSubscribe={async (_id, next) => {
                     toggleFeedDemoSubscribe(post.channel.id, next);
@@ -1724,8 +1728,7 @@
           <div class="uikit-v2-demo-block">
             <h3 class="uikit-v2-demo-block__title">Layout: боковая навигация + лента</h3>
             <p class="uikit-v2-demo-block__desc">
-              Двухколоночный макет как на странице ленты: <code>max-width: 56rem</code>,
-              слева <code>UiV2FeedSideNav</code>, справа посты.
+              Трёхколоночный макет: слева разделы, в центре лента, справа карточка канала и рекомендации.
             </p>
             <div class="uikit-v2-feed-layout">
               <UiV2FeedSideNav
@@ -1756,10 +1759,39 @@
                     onclick={(data) => showToast(`Открыть: ${data.id}`)}
                     onAuthor={(_data, _e) => showToast(`Автор: ${post.channel.title}`)}
                     onChannel={(id) => showToast(`Канал: ${id}`)}
-                    onVote={async (data) => toggleFeedDemoVote(data.id)}
+                    onVote={async (data, next) => toggleFeedDemoVote(data.id, next)}
                   />
                 {/each}
               </div>
+              <aside class="uikit-v2-feed-layout__aside">
+                <UiV2FeedChannelCard
+                  data={{
+                    id: 1,
+                    title: 'Nassc',
+                    description: 'Демо-канал для UI Kit',
+                    avatar: UIV2_FEED_POST_DEMO[0].channel.avatar,
+                    isVerified: true,
+                    subscriberCount: 1280,
+                    articleCount: 94,
+                  }}
+                  onOpen={(id) => showToast(`Канал: ${id}`)}
+                  onSubscribe={async (_id, next) => showToast(next ? 'Подписка' : 'Отписка')}
+                />
+                <UiV2FeedRecommended
+                  items={feedSideTopics.flatMap((t) =>
+                    t.id == null
+                      ? []
+                      : [{
+                          id: t.id,
+                          title: t.label,
+                          avatar: t.avatar,
+                          isVerified: t.id === 1,
+                          subscriberCount: 1000,
+                        }],
+                  )}
+                  onOpen={(id) => showToast(`Рекомендация: ${id}`)}
+                />
+              </aside>
             </div>
           </div>
         {:else if s.id === 'comments'}

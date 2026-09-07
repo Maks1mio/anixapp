@@ -161,6 +161,7 @@ function buildWebAnixApi(): AnixApi {
       collections: (query, page = 0) => invoke('anix:searchCollections', query, page),
       profileList: (status, query, page = 0, searchBy = 0) =>
         invoke('anix:searchProfileList', status, query, page, searchBy),
+      feed: (query, page = 0, searchBy = 0) => invoke('anix:searchFeed', query, page, searchBy),
     },
 
     collection: {
@@ -227,6 +228,7 @@ function buildWebAnixApi(): AnixApi {
       mute: (id) => invoke('anix:articleMute', id),
       unmute: (id) => invoke('anix:articleUnmute', id),
       setPinned: (id, isPinned) => invoke('anix:articlePin', id, isPinned),
+      commentsPopular: (id) => invoke('anix:articleCommentsPopular', id),
     },
 
     report: {

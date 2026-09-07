@@ -1,6 +1,7 @@
 <script lang="ts">
   import { iconChevronLeft, iconChevronRight } from '../icons';
   import type { UiV2FeedPostMedia } from './UiV2FeedPost.svelte';
+  import { openFeedMediaLightbox } from '../../utils/feed-media-lightbox';
 
   type Props = {
     items: UiV2FeedPostMedia[];
@@ -40,6 +41,12 @@
     return item.kind === 'gif';
   }
 
+  function previewAt(index: number, e: MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    openFeedMediaLightbox(items, index, e.currentTarget as HTMLElement);
+  }
+
   $effect(() => {
     items;
     scroller;
@@ -49,6 +56,7 @@
 
 {#snippet mediaNode(item: UiV2FeedPostMedia, className = '')}
   {#if item.kind === 'video'}
+    <!-- svelte-ignore a11y_media_has_caption -->
     <video
       class={className}
       src={item.url}
@@ -67,41 +75,58 @@
   <!-- no media -->
 {:else if items.length === 1}
   {@const item = items[0]}
-  <div class="uiv2-feed-post__media uiv2-feed-post__media--single">
+  <button
+    type="button"
+    class="uiv2-feed-post__media uiv2-feed-post__media--single"
+    data-post-action
+    aria-label="Открыть изображение"
+    onclick={(e) => previewAt(0, e)}
+  >
     {@render mediaNode(item, 'uiv2-feed-post__media-img')}
     {#if showGifBadge(item)}
       <span class="uiv2-feed-post__media-badge">GIF</span>
     {/if}
-  </div>
+  </button>
 {:else if useGallery}
   <div
     class="uiv2-feed-post__gallery uiv2-feed-post__gallery--{items.length}"
     role="group"
     aria-label="Изображения записи"
+    data-post-action
   >
     {#each items as item, i (item.url + i)}
-      <div class="uiv2-feed-post__gallery-cell">
+      <button
+        type="button"
+        class="uiv2-feed-post__gallery-cell"
+        aria-label={`Открыть изображение ${i + 1}`}
+        onclick={(e) => previewAt(i, e)}
+      >
         {@render mediaNode(item, 'uiv2-feed-post__gallery-img')}
         {#if showGifBadge(item)}
           <span class="uiv2-feed-post__media-badge">GIF</span>
         {/if}
-      </div>
+      </button>
     {/each}
   </div>
 {:else}
-  <div class="uiv2-feed-post__carousel-wrap">
+  <div class="uiv2-feed-post__carousel-wrap" data-post-action>
     <div
       class="uiv2-feed-post__carousel"
       bind:this={scroller}
       onscroll={updateScrollState}
     >
       {#each items as item, i (item.url + i)}
-        <div class="uiv2-feed-post__carousel-slide">
+        <button
+          type="button"
+          class="uiv2-feed-post__carousel-slide"
+          aria-label={`Открыть изображение ${i + 1}`}
+          onclick={(e) => previewAt(i, e)}
+        >
           {@render mediaNode(item, 'uiv2-feed-post__carousel-img')}
           {#if showGifBadge(item)}
             <span class="uiv2-feed-post__media-badge">GIF</span>
           {/if}
-        </div>
+        </button>
       {/each}
     </div>
 

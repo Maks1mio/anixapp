@@ -4,14 +4,18 @@ import type {
   UiV2FeedPostMedia,
   UiV2FeedPostChannel,
 } from '../components/uikit-v2/UiV2FeedPost.svelte';
-import {
-  articleHeadline,
-  articleMediaItems,
-  articlePreviewText,
-  channelAvatarUrl,
-} from './feed-article';
+  import {
+    articleFeedPreviewParts,
+    articleHeadline,
+    articleMediaItems,
+    articlePreviewText,
+    articleTags,
+    channelAvatarUrl,
+    normalizeArticleVote,
+  } from './feed-article';
 import { formatCommentTimestamp } from './comment';
 import { resolveBadgeImageUrl, resolveBadgeName } from './badge';
+import { mapArticleCommentToTop } from './feed-top-comment';
 
 const DEMO_IMG =
   'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg';
@@ -33,6 +37,15 @@ function formatPostTime(ts: number | undefined | null): string {
   return formatCommentTimestamp(sec);
 }
 
+function mapLastComment(article: FeedArticle): UiV2FeedPostData['lastComment'] {
+  const mapped = mapArticleCommentToTop(article.last_comment);
+  if (!mapped) return null;
+  return {
+    ...mapped,
+    timeStr: formatPostTime(article.last_comment?.creation_date ?? article.last_comment?.date) || undefined,
+  };
+}
+
 function mapChannel(channel: FeedChannel): UiV2FeedPostChannel {
   const title =
     channel.title?.trim() ||
@@ -51,6 +64,7 @@ function mapChannel(channel: FeedChannel): UiV2FeedPostChannel {
 
 export function feedArticleToUiV2FeedPost(article: FeedArticle): UiV2FeedPostData {
   const channel = article.channel ?? { id: 0, title: 'Канал' };
+  const parts = articleFeedPreviewParts(article);
   const repostRaw =
     article.repost_article && Number(article.repost_article.id) > 0
       ? article.repost_article
@@ -61,11 +75,17 @@ export function feedArticleToUiV2FeedPost(article: FeedArticle): UiV2FeedPostDat
     channel: mapChannel(channel),
     timeStr: formatPostTime(article.creation_date ?? article.last_update_date),
     headline: articleHeadline(article),
-    preview: articlePreviewText(article),
+    preview: parts.lead,
+    moreText: parts.more || undefined,
+    canExpand: parts.canExpand,
     media: mapMedia(article),
+    tags: articleTags(article),
     voteCount: article.vote_count,
     commentCount: article.comment_count,
-    voted: Number(article.vote ?? 0) > 0,
+    repostCount: article.repost_count,
+    vote: normalizeArticleVote(article.vote),
+    voted: normalizeArticleVote(article.vote) === 1,
+    lastComment: mapLastComment(article),
     containsRepost: !!article.contains_repost_article,
     repost: repostRaw
       ? {
@@ -98,6 +118,11 @@ export const UIV2_FEED_POST_DEMO: UiV2FeedPostData[] = [
     preview: 'Отпуск закончился, эх',
     voteCount: 12,
     commentCount: 4,
+    lastComment: {
+      author: 'Velour_',
+      avatar: DEMO_IMG,
+      text: 'Базовый минимум — особенно финал.',
+    },
   },
   {
     id: 'demo-headline',
@@ -109,10 +134,12 @@ export const UIV2_FEED_POST_DEMO: UiV2FeedPostData[] = [
     timeStr: 'вчера в 23:00',
     headline: 'Почему второй сезон оправдал ожидания',
     preview:
-      'Разбор ключевых сцен, саундтрека и того, как режиссёр выстроил финальную арку без лишнего фансервиса.',
+      'Разбор ключевых сцен, саундтрека и того, как режиссёр выстроил финальную арку без лишнего фансервиса. Ещё два абзаца про монтаж, свет и то, почему финал держится на персонажах, а не на твистах.',
+    tags: ['Anime', 'Season2'],
     voteCount: 248,
     commentCount: 91,
     voted: true,
+    vote: 1,
   },
   {
     id: 'demo-image',
@@ -124,9 +151,17 @@ export const UIV2_FEED_POST_DEMO: UiV2FeedPostData[] = [
     },
     timeStr: '2 ч назад',
     preview: 'Кадр из финала — свет и композиция на высоте.',
+    moreText: 'P.S: ещё два кадра в полном посте — свет и композиция на высоте.',
+    canExpand: true,
     media: [{ url: DEMO_IMG, kind: 'image' }],
+    tags: ['TheOldTeam', 'AnimeMemes'],
     voteCount: 56,
     commentCount: 7,
+    lastComment: {
+      author: 'Velour_',
+      avatar: DEMO_IMG,
+      text: '1. Какой суперспецифичный музей ты бы с удовольствием посетил?\n2. Что тебя в последнее время приятно удивило?',
+    },
   },
   {
     id: 'demo-carousel',
@@ -144,6 +179,11 @@ export const UIV2_FEED_POST_DEMO: UiV2FeedPostData[] = [
     ],
     voteCount: 150,
     commentCount: 12,
+    lastComment: {
+      author: 'FrameLab',
+      avatar: DEMO_IMG,
+      text: '1. Какой суперспецифичный музей ты бы с удовольствием посетил?\n2. Что тебя в последнее время приятно удивило?',
+    },
   },
   {
     id: 'demo-gif',

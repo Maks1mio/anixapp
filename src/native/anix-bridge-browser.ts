@@ -287,6 +287,8 @@ export function createBrowserAnixBridge() {
     },
     'anix:articleById': h((c, id) => c.getClient().endpoints.channel.getArticle(id)),
     'anix:articleVote': h((c, id, vote) => c.getClient().endpoints.article.vote(id, vote)),
+    'anix:articleCommentsPopular': h((c, id) =>
+      c.getClient().endpoints.articleComment.commentsPopular(id)),
     'anix:channelById': h((c, id) => c.getClient().endpoints.channel.info(id)),
     'anix:channelArticles': h((c, channelId, page = 0) => c.getClient().endpoints.channel.articles(channelId, page)),
     'anix:channelSubscribe': h((c, channelId) => c.getClient().endpoints.channel.subscribe(channelId)),
@@ -403,6 +405,8 @@ export function createBrowserAnixBridge() {
       c.getClient().endpoints.search.collections({ query, page })),
     'anix:searchProfileList': h((c, status, query, page = 0, searchBy = 0) =>
       c.getClient().endpoints.search.profileList?.({ status, query, page, searchBy })),
+    'anix:searchFeed': h((c, query, page = 0, searchBy = 0) =>
+      c.getClient().endpoints.search.feedSearch(page, { query, page, searchBy })),
     'anix:addToFavorites': h((c, releaseId) => c.getClient().endpoints.release.addFavorite(releaseId)),
     'anix:removeFromFavorites': h((c, releaseId) => c.getClient().endpoints.release.removeFavorite(releaseId)),
     'anix:setListStatus': h(async (c, releaseId, statusId) => {

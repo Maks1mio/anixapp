@@ -533,6 +533,8 @@ function createAnixBridgeCore(options = {}) {
     },
     'anix:articleById': h((c, id) => c.getClient().endpoints.channel.getArticle(id)),
     'anix:articleVote': h((c, id, vote) => c.getClient().endpoints.article.vote(id, vote)),
+    'anix:articleCommentsPopular': h((c, id) =>
+      c.getClient().endpoints.articleComment.commentsPopular(id)),
     'anix:channelById': h((c, id) => c.getClient().endpoints.channel.info(id)),
     'anix:channelArticles': h((c, channelId, page = 0) =>
       c.getClient().endpoints.channel.articles(channelId, page)),
@@ -678,6 +680,8 @@ function createAnixBridgeCore(options = {}) {
     'anix:searchCollections': h((c, query, page = 0) => c.getClient().endpoints.search.collections(query, page)),
     'anix:searchProfileList': h((c, status, query, page = 0, searchBy = 0) =>
       c.getClient().endpoints.search.profileListSearch(status, page, { query, page, searchBy })),
+    'anix:searchFeed': h((c, query, page = 0, searchBy = 0) =>
+      c.getClient().endpoints.search.feedSearch(page, { query, page, searchBy })),
     'anix:addToFavorites': h(async (c, releaseId) => {
       const res = await c.getClient().endpoints.release.addFavorite(releaseId);
       if (res?.code !== DefaultResult.Ok) throw new Error(String(res?.code ?? 'fail'));

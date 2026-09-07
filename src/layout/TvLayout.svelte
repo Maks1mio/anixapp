@@ -15,6 +15,7 @@
   import { returnTvFocusToContent } from '../services/tv-navigation';
   import { ensureProfileId } from '../utils/profile';
   import Page from '../components/Page.svelte';
+  import UiV2MediaLightbox from '../components/uikit-v2/UiV2MediaLightbox.svelte';
   import TvPosterBackdrop from '../components/tv/TvPosterBackdrop.svelte';
   import SidebarProfilePanel from '../components/SidebarProfilePanel.svelte';
 
@@ -172,6 +173,7 @@
     <Page extraClass="page--tv" noPadding>
       {@render children?.()}
     </Page>
+    <UiV2MediaLightbox />
   </main>
 
   {#if profileVisible && $profilePanelUserId}

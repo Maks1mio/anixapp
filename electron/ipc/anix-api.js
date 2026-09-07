@@ -304,6 +304,15 @@ ipcMain.handle('anix:articleVote', async (_, id, vote) => {
   }
 });
 
+loggedHandle('anix:articleCommentsPopular', async (_, id) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.articleComment.commentsPopular(id);
+  } catch (err) {
+    handleAnixError(err, 'articleCommentsPopular');
+  }
+});
+
 ipcMain.handle('anix:articleDelete', async (_, id) => {
   try {
     const client = getAnixart();
@@ -1079,6 +1088,23 @@ ipcMain.handle('anix:searchCollections', async (_, query, page = 0) => {
     return data;
   } catch (err) {
     handleAnixError(err, 'searchCollections');
+  }
+});
+
+loggedHandle('anix:searchFeed', async (_, query, page = 0, searchBy = 0) => {
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.search.feedSearch(page, { query, page, searchBy });
+    logger.info('search', 'feed', {
+      query,
+      page,
+      searchBy,
+      articles: data?.articles?.total_count ?? data?.articles?.content?.length,
+      channels: data?.channels?.total_count ?? data?.channels?.content?.length,
+    });
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'searchFeed');
   }
 });
 

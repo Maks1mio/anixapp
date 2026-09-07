@@ -117,6 +117,8 @@ function attachLegacyEndpoints(client) {
     ep.search.profileSearch(page, { query, searchBy });
   ep.search.collections = ({ query, page, searchBy = 0 }) =>
     ep.search.collectionSearch(page, { query, searchBy });
+  ep.search.feed = ({ query, page, searchBy = 0 }) =>
+    ep.search.feedSearch(page, { query, searchBy, page });
 
   return client;
 }

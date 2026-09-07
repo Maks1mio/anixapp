@@ -12,7 +12,12 @@
     iconChevronDown,
     iconPlus,
   } from '../icons';
-  import { normalizeArticleVote, type ArticleVoteValue } from '../../utils/feed-article';
+  import {
+    ARTICLE_VOTE_MINUS,
+    ARTICLE_VOTE_PLUS,
+    normalizeArticleVote,
+    type ArticleVoteValue,
+  } from '../../utils/feed-article';
   import { ruCommentsLabel } from '../../utils/feed-top-comment';
 
   export type UiV2FeedPostMedia = {
@@ -129,9 +134,9 @@
   const comments = $derived(Math.max(0, Number(data.commentCount ?? 0)));
   const shares = $derived(Math.max(0, Number(data.repostCount ?? 0)));
   const myVote = $derived(
-    data.vote === 1 || data.vote === 2
+    data.vote === ARTICLE_VOTE_PLUS || data.vote === ARTICLE_VOTE_MINUS
       ? data.vote
-      : normalizeArticleVote(data.voted ? 1 : 0),
+      : normalizeArticleVote(data.voted ? ARTICLE_VOTE_PLUS : 0),
   );
   const subscribed = $derived(!!channel.isSubscribed);
   const showFollowBadge = $derived(
@@ -454,12 +459,12 @@
         <button
           type="button"
           class="uiv2-feed-post__vote"
-          class:uiv2-feed-post__vote--up={myVote === 1}
-          title={myVote === 1 ? 'Убрать плюс' : 'Плюс'}
-          aria-pressed={myVote === 1}
+          class:uiv2-feed-post__vote--up={myVote === ARTICLE_VOTE_PLUS}
+          title={myVote === ARTICLE_VOTE_PLUS ? 'Убрать плюс' : 'Плюс'}
+          aria-pressed={myVote === ARTICLE_VOTE_PLUS}
           aria-label="Плюс"
           disabled={voteBusy}
-          onclick={(e) => setVote(e, 1)}
+          onclick={(e) => setVote(e, ARTICLE_VOTE_PLUS)}
         >
           {@html iconChevronUp(16)}
         </button>
@@ -467,12 +472,12 @@
         <button
           type="button"
           class="uiv2-feed-post__vote"
-          class:uiv2-feed-post__vote--down={myVote === 2}
-          title={myVote === 2 ? 'Убрать минус' : 'Минус'}
-          aria-pressed={myVote === 2}
+          class:uiv2-feed-post__vote--down={myVote === ARTICLE_VOTE_MINUS}
+          title={myVote === ARTICLE_VOTE_MINUS ? 'Убрать минус' : 'Минус'}
+          aria-pressed={myVote === ARTICLE_VOTE_MINUS}
           aria-label="Минус"
           disabled={voteBusy}
-          onclick={(e) => setVote(e, 2)}
+          onclick={(e) => setVote(e, ARTICLE_VOTE_MINUS)}
         >
           {@html iconChevronDown(16)}
         </button>

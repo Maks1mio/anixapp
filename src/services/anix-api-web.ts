@@ -192,6 +192,8 @@ function buildWebAnixApi(): AnixApi {
       subscribe: (channelId) => invoke('anix:channelSubscribe', channelId),
       unsubscribe: (channelId) => invoke('anix:channelUnsubscribe', channelId),
       subscriptions: (page = 0) => invoke('anix:channelSubscriptions', page),
+      recommendations: (page = 0, opts) =>
+        invoke('anix:channelRecommendations', page, opts ?? {}),
       editorAll: () => invoke('anix:channelEditorAll'),
       uploadCover: (channelId, imageBase64, fileName) =>
         invoke('anix:channelUploadCover', channelId, imageBase64, fileName),

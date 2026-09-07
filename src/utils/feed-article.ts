@@ -98,9 +98,13 @@ export function articleHeadline(article: FeedArticle): string {
 
 export type ArticleVoteValue = 0 | 1 | 2;
 
+/** Как в Anixart: 1 — минус, 2 — плюс, 0 — нет. */
+export const ARTICLE_VOTE_MINUS = 1 as const;
+export const ARTICLE_VOTE_PLUS = 2 as const;
+
 export function normalizeArticleVote(raw: unknown): ArticleVoteValue {
   const n = Number(raw ?? 0);
-  if (n === 1 || n === 2) return n;
+  if (n === ARTICLE_VOTE_MINUS || n === ARTICLE_VOTE_PLUS) return n;
   return 0;
 }
 
@@ -110,10 +114,10 @@ export function nextArticleVoteCount(
   next: ArticleVoteValue,
 ): number {
   let n = Number(count) || 0;
-  if (prev === 1) n -= 1;
-  else if (prev === 2) n += 1;
-  if (next === 1) n += 1;
-  else if (next === 2) n -= 1;
+  if (prev === ARTICLE_VOTE_PLUS) n -= 1;
+  else if (prev === ARTICLE_VOTE_MINUS) n += 1;
+  if (next === ARTICLE_VOTE_PLUS) n += 1;
+  else if (next === ARTICLE_VOTE_MINUS) n -= 1;
   return n;
 }
 

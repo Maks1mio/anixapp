@@ -7,6 +7,8 @@
   import {
     articleRenderBlocks,
     applyArticleVote,
+    ARTICLE_VOTE_MINUS,
+    ARTICLE_VOTE_PLUS,
     articleTags,
     channelAvatarUrl,
     formatFeedRelativeTime,
@@ -213,12 +215,12 @@
         <button
           type="button"
           class="uiv2-feed-post__vote"
-          class:uiv2-feed-post__vote--up={myVote === 1}
-          title={myVote === 1 ? 'Убрать плюс' : 'Плюс'}
-          aria-pressed={myVote === 1}
+          class:uiv2-feed-post__vote--up={myVote === ARTICLE_VOTE_PLUS}
+          title={myVote === ARTICLE_VOTE_PLUS ? 'Убрать плюс' : 'Плюс'}
+          aria-pressed={myVote === ARTICLE_VOTE_PLUS}
           aria-label="Плюс"
           disabled={voteBusy}
-          onclick={() => void setVote(1)}
+          onclick={() => void setVote(ARTICLE_VOTE_PLUS)}
         >
           {@html iconChevronUp(16)}
         </button>
@@ -226,12 +228,12 @@
         <button
           type="button"
           class="uiv2-feed-post__vote"
-          class:uiv2-feed-post__vote--down={myVote === 2}
-          title={myVote === 2 ? 'Убрать минус' : 'Минус'}
-          aria-pressed={myVote === 2}
+          class:uiv2-feed-post__vote--down={myVote === ARTICLE_VOTE_MINUS}
+          title={myVote === ARTICLE_VOTE_MINUS ? 'Убрать минус' : 'Минус'}
+          aria-pressed={myVote === ARTICLE_VOTE_MINUS}
           aria-label="Минус"
           disabled={voteBusy}
-          onclick={() => void setVote(2)}
+          onclick={() => void setVote(ARTICLE_VOTE_MINUS)}
         >
           {@html iconChevronDown(16)}
         </button>

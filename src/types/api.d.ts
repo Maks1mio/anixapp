@@ -349,6 +349,22 @@ export interface AnixApi {
       }>;
       total_page_count?: number;
     }>;
+    recommendations: (
+      page?: number,
+      opts?: { isBlog?: boolean; excludeSubscribed?: boolean },
+    ) => Promise<{
+      content?: Array<{
+        id: number;
+        title?: string;
+        avatar?: string | null;
+        is_blog?: boolean;
+        is_verified?: boolean;
+        is_subscribed?: boolean;
+        subscriber_count?: number;
+      }>;
+      total_page_count?: number;
+      total_count?: number;
+    }>;
     editorAll: () => Promise<{ channels?: Array<{ id: number; title: string; avatar?: string | null; subscriber_count?: number; is_blog?: boolean }> }>;
     uploadCover: (
       channelId: number,

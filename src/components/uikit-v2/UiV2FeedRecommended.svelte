@@ -8,6 +8,7 @@
     title: string;
     avatar?: string | null;
     isVerified?: boolean;
+    isSubscribed?: boolean;
     subscriberCount?: number;
   };
 
@@ -21,7 +22,7 @@
 
   let {
     items,
-    title = 'Рекомендуем',
+    title = 'Каналы',
     initialCount = 5,
     onOpen,
     class: className = '',
@@ -36,27 +37,27 @@
 </script>
 
 {#if items.length > 0}
-  <section class="uiv2-feed-recommended {className}">
-    <h2 class="uiv2-feed-recommended__title">{title}</h2>
-    <ul class="uiv2-feed-recommended__list">
+  <section class="uiv2-feed-reco {className}">
+    <h2 class="uiv2-feed-reco__title">{title}</h2>
+    <ul class="uiv2-feed-reco__list">
       {#each visible as item (item.id)}
         <li>
           <button
             type="button"
-            class="uiv2-feed-recommended__item"
+            class="uiv2-feed-reco__item"
             onclick={() => onOpen?.(item.id)}
           >
-            <span class="uiv2-feed-recommended__avatar" aria-hidden="true">
+            <span class="uiv2-feed-reco__avatar" aria-hidden="true">
               <UserAvatar src={item.avatar} label={item.title} />
             </span>
-            <span class="uiv2-feed-recommended__meta">
-              <span class="uiv2-feed-recommended__name">
+            <span class="uiv2-feed-reco__meta">
+              <span class="uiv2-feed-reco__name">
                 {item.title}
                 {#if item.isVerified}
                   <span class="uiv2-feed-post__verified" title="Подтверждённый канал" aria-hidden="true">✓</span>
                 {/if}
               </span>
-              <span class="uiv2-feed-recommended__subs">
+              <span class="uiv2-feed-reco__subs">
                 {formatSubscriberLabel(item.subscriberCount)}
               </span>
             </span>

@@ -413,6 +413,18 @@ ipcMain.handle('anix:channelSubscriptions', async (_, page = 0) => {
   }
 });
 
+ipcMain.handle('anix:channelRecommendations', async (_, page = 0, opts = {}) => {
+  try {
+    const client = getAnixart();
+    const query = {};
+    if (typeof opts?.isBlog === 'boolean') query.is_blog = opts.isBlog;
+    if (typeof opts?.excludeSubscribed === 'boolean') query.exclude_subscribed = opts.excludeSubscribed;
+    return await client.endpoints.channel.recommendations(page, query);
+  } catch (err) {
+    handleAnixError(err, 'channelRecommendations');
+  }
+});
+
 ipcMain.handle('anix:channelEditorAll', async () => {
   try {
     const client = getAnixart();

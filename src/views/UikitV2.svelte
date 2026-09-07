@@ -61,7 +61,11 @@
     type UiV2ReleaseFriend,
   } from '../components/uikit-v2/UiV2ReleaseFriends.svelte';
   import { UIV2_FEED_POST_DEMO } from '../utils/uikit-v2-feed-post';
-  import { nextArticleVoteCount, normalizeArticleVote } from '../utils/feed-article';
+  import {
+    ARTICLE_VOTE_PLUS,
+    nextArticleVoteCount,
+    normalizeArticleVote,
+  } from '../utils/feed-article';
   import { buildFeedArticleMenuItems } from '../utils/feed-article-menu';
   import type { FeedArticle } from '../types/feed';
   import { showToast } from '../stores/toast';
@@ -116,11 +120,14 @@
   function toggleFeedDemoVote(postId: string | number, nextVote: 0 | 1 | 2) {
     feedDemoPosts = feedDemoPosts.map((post) => {
       if (post.id !== postId) return post;
-      const prev = post.vote === 1 || post.vote === 2 ? post.vote : normalizeArticleVote(post.voted ? 1 : 0);
+      const prev =
+        post.vote === 1 || post.vote === 2
+          ? post.vote
+          : normalizeArticleVote(post.voted ? ARTICLE_VOTE_PLUS : 0);
       return {
         ...post,
         vote: nextVote,
-        voted: nextVote === 1,
+        voted: nextVote === ARTICLE_VOTE_PLUS,
         voteCount: nextArticleVoteCount(Number(post.voteCount ?? 0), prev, nextVote),
       };
     });
@@ -1778,18 +1785,29 @@
                   onSubscribe={async (_id, next) => showToast(next ? 'Подписка' : 'Отписка')}
                 />
                 <UiV2FeedRecommended
-                  items={feedSideTopics.flatMap((t) =>
-                    t.id == null
-                      ? []
-                      : [{
-                          id: t.id,
-                          title: t.label,
-                          avatar: t.avatar,
-                          isVerified: t.id === 1,
-                          subscriberCount: 1000,
-                        }],
-                  )}
-                  onOpen={(id) => showToast(`Рекомендация: ${id}`)}
+                  title="Каналы"
+                  items={feedSideTopics
+                    .filter((t) => t.id != null && t.id % 2 === 1)
+                    .map((t) => ({
+                      id: t.id!,
+                      title: t.label,
+                      avatar: t.avatar,
+                      isVerified: t.id === 1,
+                      subscriberCount: 1000,
+                    }))}
+                  onOpen={(id) => showToast(`Канал: ${id}`)}
+                />
+                <UiV2FeedRecommended
+                  title="Блоги"
+                  items={feedSideTopics
+                    .filter((t) => t.id != null && t.id % 2 === 0)
+                    .map((t) => ({
+                      id: t.id!,
+                      title: t.label,
+                      avatar: t.avatar,
+                      subscriberCount: 120,
+                    }))}
+                  onOpen={(id) => showToast(`Блог: ${id}`)}
                 />
               </aside>
             </div>

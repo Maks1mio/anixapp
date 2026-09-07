@@ -294,6 +294,16 @@ export function createBrowserAnixBridge() {
     'anix:channelSubscribe': h((c, channelId) => c.getClient().endpoints.channel.subscribe(channelId)),
     'anix:channelUnsubscribe': h((c, channelId) => c.getClient().endpoints.channel.unsubscribe(channelId)),
     'anix:channelSubscriptions': h((c, page = 0) => c.getClient().endpoints.channel.subscriptions(page)),
+    'anix:channelRecommendations': h((c, page = 0, opts = {}) => {
+      const query: Record<string, boolean> = {};
+      if (typeof (opts as { isBlog?: boolean })?.isBlog === 'boolean') {
+        query.is_blog = (opts as { isBlog: boolean }).isBlog;
+      }
+      if (typeof (opts as { excludeSubscribed?: boolean })?.excludeSubscribed === 'boolean') {
+        query.exclude_subscribed = (opts as { excludeSubscribed: boolean }).excludeSubscribed;
+      }
+      return c.getClient().endpoints.channel.recommendations(page, query);
+    }),
     'anix:channelEditorAll': h((c) => c.getClient().endpoints.channel.editorAvailableAll()),
     'anix:channelBlog': h((c, id) => c.getClient().endpoints.channel.getBlog(id)),
     'anix:profileById': h((c, id) => c.getClient().endpoints.profile.info(id)),

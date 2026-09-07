@@ -502,6 +502,8 @@ contextBridge.exposeInMainWorld('anixApi', {
     subscribe: (channelId) => ipcRenderer.invoke('anix:channelSubscribe', channelId),
     unsubscribe: (channelId) => ipcRenderer.invoke('anix:channelUnsubscribe', channelId),
     subscriptions: (page = 0) => ipcRenderer.invoke('anix:channelSubscriptions', page),
+    recommendations: (page = 0, opts) =>
+      ipcRenderer.invoke('anix:channelRecommendations', page, opts ?? {}),
     editorAll: () => ipcRenderer.invoke('anix:channelEditorAll'),
     uploadCover: (channelId, imageBase64, fileName) =>
       ipcRenderer.invoke('anix:channelUploadCover', channelId, imageBase64, fileName),

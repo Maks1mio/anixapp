@@ -17,7 +17,6 @@
     applyArticleVote,
     channelAvatarUrl,
     channelSubscriberCount,
-    formatSubscriberLabel,
     normalizeArticleVote,
   } from '../utils/feed-article';
   import UiV2FeedChannelCard from '../components/uikit-v2/UiV2FeedChannelCard.svelte';
@@ -69,6 +68,9 @@
   let searchLoadState = $state<LoadState>('idle');
   let searchError = $state('');
   let searchRequestId = 0;
+  let recommendChannels = $state<FeedChannel[]>([]);
+  let recommendBlogs = $state<FeedChannel[]>([]);
+  let subscribeBusyId = $state<number | null>(null);
 
   const dateOptions = $derived.by((): UiV2SelectOption[] =>
     FEED_DATE_OPTIONS.map((o) => ({ value: String(o.id), label: o.label })),
@@ -93,19 +95,29 @@
           : 'Управляемые',
   );
 
-  const recommendedChannels = $derived.by(() => {
-    const skipId = asideChannel?.id ?? channelFilterId ?? 0;
-    const seen = new Set<number>();
-    const list: FeedChannel[] = [];
-    const push = (ch: FeedChannel | null | undefined) => {
-      if (!ch?.id || seen.has(ch.id) || ch.id === skipId) return;
-      seen.add(ch.id);
-      list.push(ch);
-    };
-    for (const a of articles) push(a.channel ?? undefined);
-    for (const ch of subscriptions) push(ch);
-    return list.slice(0, 8);
-  });
+  const recommendChannelsMapped = $derived(
+    recommendChannels.map((ch) => ({
+      id: ch.id,
+      title: ch.title || `Канал #${ch.id}`,
+      avatar: channelAvatarUrl(ch.avatar),
+      isVerified: !!ch.is_verified,
+      isSubscribed: !!ch.is_subscribed,
+      subscriberCount: channelSubscriberCount(ch),
+    })),
+  );
+  const recommendBlogsMapped = $derived(
+    recommendBlogs.map((ch) => ({
+      id: ch.id,
+      title: ch.title || `Блог #${ch.id}`,
+      avatar: channelAvatarUrl(ch.avatar),
+      isVerified: !!ch.is_verified,
+      isSubscribed: !!ch.is_subscribed,
+      subscriberCount: channelSubscriberCount(ch),
+    })),
+  );
+  const hasAsideLists = $derived(
+    recommendChannelsMapped.length > 0 || recommendBlogsMapped.length > 0,
+  );
 
   const searchNeedle = $derived(searchQuery.trim().toLowerCase());
   const searchMode = $derived(tab !== 'managed' && searchNeedle.length > 0);
@@ -115,7 +127,7 @@
   const feedNoAside = $derived(
     tab === 'managed'
       || searchMode
-      || !(asideChannel || recommendedChannels.length > 0),
+      || !(asideChannel || hasAsideLists),
   );
 
   function pageableContent(raw: unknown): unknown[] {
@@ -285,6 +297,32 @@
     }
   }
 
+  async function loadRecommendations(): Promise<void> {
+    const api = window.anixApi?.channel?.recommendations;
+    if (!api) {
+      recommendChannels = [];
+      recommendBlogs = [];
+      return;
+    }
+    try {
+      const [channelsRes, blogsRes] = await Promise.all([
+        api(0, { isBlog: false, excludeSubscribed: true }),
+        api(0, { isBlog: true, excludeSubscribed: true }),
+      ]);
+      recommendChannels = normalizeChannels(channelsRes?.content).slice(0, 12);
+      recommendBlogs = normalizeChannels(blogsRes?.content).slice(0, 12);
+    } catch {
+      recommendChannels = [];
+      recommendBlogs = [];
+    }
+  }
+
+  function patchChannelSubscribe(list: FeedChannel[], channelId: number, next: boolean): FeedChannel[] {
+    return list.map((ch) => (
+      ch.id === channelId ? { ...ch, is_subscribed: next } : ch
+    ));
+  }
+
   async function fetchPage(nextPage: number, append: boolean): Promise<void> {
     const api = window.anixApi?.feed;
     if (!api) {
@@ -433,6 +471,9 @@
     const prevSearchChannels = searchChannels;
     const prevSearchBlogs = searchBlogs;
     const prevSubs = subscriptions;
+    const prevRecChannels = recommendChannels;
+    const prevRecBlogs = recommendBlogs;
+    subscribeBusyId = channelId;
     articles = articles.map((a) => {
       if (a.channel?.id !== channelId) return a;
       return { ...a, channel: { ...a.channel, is_subscribed: nextSubscribed } };
@@ -441,12 +482,10 @@
       if (a.channel?.id !== channelId) return a;
       return { ...a, channel: { ...a.channel, is_subscribed: nextSubscribed } };
     });
-    searchChannels = searchChannels.map((ch) => (
-      ch.id === channelId ? { ...ch, is_subscribed: nextSubscribed } : ch
-    ));
-    searchBlogs = searchBlogs.map((ch) => (
-      ch.id === channelId ? { ...ch, is_subscribed: nextSubscribed } : ch
-    ));
+    searchChannels = patchChannelSubscribe(searchChannels, channelId, nextSubscribed);
+    searchBlogs = patchChannelSubscribe(searchBlogs, channelId, nextSubscribed);
+    recommendChannels = patchChannelSubscribe(recommendChannels, channelId, nextSubscribed);
+    recommendBlogs = patchChannelSubscribe(recommendBlogs, channelId, nextSubscribed);
     if (sidebarChannel?.id === channelId) {
       sidebarChannel = { ...sidebarChannel, is_subscribed: nextSubscribed };
     }
@@ -455,7 +494,9 @@
         articles.find((a) => a.channel?.id === channelId)?.channel
         ?? searchArticles.find((a) => a.channel?.id === channelId)?.channel
         ?? searchChannels.find((c) => c.id === channelId)
-        ?? searchBlogs.find((c) => c.id === channelId);
+        ?? searchBlogs.find((c) => c.id === channelId)
+        ?? recommendChannels.find((c) => c.id === channelId)
+        ?? recommendBlogs.find((c) => c.id === channelId);
       if (fromArticle && !subscriptions.some((c) => c.id === channelId)) {
         subscriptions = [...subscriptions, { ...fromArticle, is_subscribed: true }];
       }
@@ -467,13 +508,21 @@
     try {
       if (nextSubscribed) await api.subscribe(channelId);
       else await api.unsubscribe(channelId);
+      if (nextSubscribed) {
+        recommendChannels = recommendChannels.filter((c) => c.id !== channelId);
+        recommendBlogs = recommendBlogs.filter((c) => c.id !== channelId);
+      }
     } catch (err) {
       articles = prevArticles;
       searchArticles = prevSearch;
       searchChannels = prevSearchChannels;
       searchBlogs = prevSearchBlogs;
       subscriptions = prevSubs;
+      recommendChannels = prevRecChannels;
+      recommendBlogs = prevRecBlogs;
       errorMsg = String(err);
+    } finally {
+      subscribeBusyId = null;
     }
   }
 
@@ -525,10 +574,16 @@
   onMount(() => {
     const unsub = isAuthenticated.subscribe((v) => {
       authed = v;
-      if (v) void loadSubscriptions();
-      else subscriptions = [];
+      if (v) {
+        void loadSubscriptions();
+        void loadRecommendations();
+      } else {
+        subscriptions = [];
+        void loadRecommendations();
+      }
     });
     void reload();
+    void loadRecommendations();
     return unsub;
   });
 </script>
@@ -778,54 +833,30 @@
             </section>
           {/if}
           {#if searchChannels.length > 0}
-            <section class="feed-search-section" aria-label="Каналы">
-              <h2 class="feed-search-section__title">Каналы</h2>
-              <div class="feed-search-carousel">
-                {#each searchChannels as ch (ch.id)}
-                  <button
-                    type="button"
-                    class="feed-search-person"
-                    onclick={() => onOpenChannel(ch.id)}
-                  >
-                    <span
-                      class="feed-search-person__avatar"
-                      class:feed-search-person__avatar--empty={!channelAvatarUrl(ch.avatar)}
-                      style={channelAvatarUrl(ch.avatar)
-                        ? `background-image:url('${channelAvatarUrl(ch.avatar)}')`
-                        : undefined}
-                      aria-hidden="true"
-                    ></span>
-                    <span class="feed-search-person__name">{ch.title || `Канал #${ch.id}`}</span>
-                    <span class="feed-search-person__meta">{formatSubscriberLabel(ch.subscriber_count)}</span>
-                  </button>
-                {/each}
-              </div>
-            </section>
+            <UiV2FeedRecommended
+              title="Каналы"
+              items={searchChannels.map((ch) => ({
+                id: ch.id,
+                title: ch.title || `Канал #${ch.id}`,
+                avatar: channelAvatarUrl(ch.avatar),
+                isVerified: !!ch.is_verified,
+                subscriberCount: channelSubscriberCount(ch),
+              }))}
+              onOpen={onOpenChannel}
+            />
           {/if}
           {#if searchBlogs.length > 0}
-            <section class="feed-search-section" aria-label="Блоги">
-              <h2 class="feed-search-section__title">Блоги</h2>
-              <div class="feed-search-carousel">
-                {#each searchBlogs as ch (ch.id)}
-                  <button
-                    type="button"
-                    class="feed-search-person"
-                    onclick={() => onOpenChannel(ch.id)}
-                  >
-                    <span
-                      class="feed-search-person__avatar"
-                      class:feed-search-person__avatar--empty={!channelAvatarUrl(ch.avatar)}
-                      style={channelAvatarUrl(ch.avatar)
-                        ? `background-image:url('${channelAvatarUrl(ch.avatar)}')`
-                        : undefined}
-                      aria-hidden="true"
-                    ></span>
-                    <span class="feed-search-person__name">{ch.title || `Блог #${ch.id}`}</span>
-                    <span class="feed-search-person__meta">{formatSubscriberLabel(ch.subscriber_count)}</span>
-                  </button>
-                {/each}
-              </div>
-            </section>
+            <UiV2FeedRecommended
+              title="Блоги"
+              items={searchBlogs.map((ch) => ({
+                id: ch.id,
+                title: ch.title || `Блог #${ch.id}`,
+                avatar: channelAvatarUrl(ch.avatar),
+                isVerified: !!ch.is_verified,
+                subscriberCount: channelSubscriberCount(ch),
+              }))}
+              onOpen={onOpenChannel}
+            />
           {/if}
           {#if searchArticles.length > 0}
             <section class="feed-search-section" aria-label="Записи">
@@ -908,8 +939,8 @@
     </div>
   </div>
 
-  {#if tab !== 'managed' && !searchMode && (asideChannel || recommendedChannels.length > 0)}
-    <aside class="feed-aside" aria-label="О канале">
+  {#if tab !== 'managed' && !searchMode && (asideChannel || hasAsideLists)}
+    <aside class="feed-aside" aria-label="Каналы и блоги">
       {#if asideChannel}
         <UiV2FeedChannelCard
           data={{
@@ -928,13 +959,13 @@
         />
       {/if}
       <UiV2FeedRecommended
-        items={recommendedChannels.map((ch) => ({
-          id: ch.id,
-          title: ch.title || `Канал #${ch.id}`,
-          avatar: channelAvatarUrl(ch.avatar),
-          isVerified: !!ch.is_verified,
-          subscriberCount: channelSubscriberCount(ch),
-        }))}
+        title="Каналы"
+        items={recommendChannelsMapped}
+        onOpen={onOpenChannel}
+      />
+      <UiV2FeedRecommended
+        title="Блоги"
+        items={recommendBlogsMapped}
         onOpen={onOpenChannel}
       />
     </aside>

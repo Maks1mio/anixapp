@@ -5,6 +5,7 @@ import type {
   UiV2FeedPostChannel,
 } from '../components/uikit-v2/UiV2FeedPost.svelte';
   import {
+    ARTICLE_VOTE_PLUS,
     articleFeedPreviewParts,
     articleHeadline,
     articleMediaItems,
@@ -84,7 +85,7 @@ export function feedArticleToUiV2FeedPost(article: FeedArticle): UiV2FeedPostDat
     commentCount: article.comment_count,
     repostCount: article.repost_count,
     vote: normalizeArticleVote(article.vote),
-    voted: normalizeArticleVote(article.vote) === 1,
+    voted: normalizeArticleVote(article.vote) === ARTICLE_VOTE_PLUS,
     lastComment: mapLastComment(article),
     containsRepost: !!article.contains_repost_article,
     repost: repostRaw
@@ -139,7 +140,7 @@ export const UIV2_FEED_POST_DEMO: UiV2FeedPostData[] = [
     voteCount: 248,
     commentCount: 91,
     voted: true,
-    vote: 1,
+    vote: 2,
   },
   {
     id: 'demo-image',

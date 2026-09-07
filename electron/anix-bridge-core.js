@@ -543,6 +543,12 @@ function createAnixBridgeCore(options = {}) {
       c.getClient().endpoints.channel.unsubscribe(channelId)),
     'anix:channelSubscriptions': h((c, page = 0) =>
       c.getClient().endpoints.channel.subscriptions(page)),
+    'anix:channelRecommendations': h((c, page = 0, opts = {}) => {
+      const query = {};
+      if (typeof opts?.isBlog === 'boolean') query.is_blog = opts.isBlog;
+      if (typeof opts?.excludeSubscribed === 'boolean') query.exclude_subscribed = opts.excludeSubscribed;
+      return c.getClient().endpoints.channel.recommendations(page, query);
+    }),
     'anix:channelEditorAll': h((c) => c.getClient().endpoints.channel.editorAvailableAll()),
     'anix:channelBlog': h((c, id) => c.getClient().endpoints.channel.getBlog(id)),
     'anix:profileById': h((c, id) => c.getClient().endpoints.profile.info(id)),

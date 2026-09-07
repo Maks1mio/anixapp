@@ -75,7 +75,7 @@ export interface FeedArticle {
   comment_count?: number;
   repost_count?: number;
   vote_count?: number;
-  /** 0 — нет, 1 — плюс, 2 — минус. */
+  /** 0 — нет, 1 — минус, 2 — плюс (как в Anixart API). */
   vote?: number;
   tags?: Array<string | { name?: string; title?: string; tag?: string }>;
   last_comment?: FeedArticleLastComment | null;

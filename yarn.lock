@@ -36,10 +36,10 @@
     xcode "^3.0.1"
     xml2js "^0.6.2"
 
-"@capacitor/core@^8.5.0":
-  version "8.5.0"
-  resolved "https://registry.npmjs.org/@capacitor/core/-/core-8.5.0.tgz#425893fddd7fff93dcf2d784677c45643602987b"
-  integrity sha512-Ca4krtqH1hothjtBIwf2J2TW7IhYq1ujp8QeItTiJohNsqij8ja2DYYH3DU0l8RmxCWaBAFTGA2TgOgOMCSNsQ==
+"@capacitor/core@^8.5.1":
+  version "8.5.1"
+  resolved "https://registry.yarnpkg.com/@capacitor/core/-/core-8.5.1.tgz#e7adf1762ff98dbc2b37568ea9a1a10462b273af"
+  integrity sha512-IOQ7ynG1qgrJ/RLuCO3WgyRGmkmmG/cdStRR4ftU2dWEN1FdtLrnI/XpZmZuUsOEHEnzBRJY/PmRH8eTLiXfhA==
   dependencies:
     tslib "^2.1.0"
 

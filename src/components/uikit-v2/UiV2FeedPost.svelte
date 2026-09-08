@@ -3,13 +3,14 @@
   import UiV2ArticleBlocks from './UiV2ArticleBlocks.svelte';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from './UiV2PopupMenu.svelte';
   import UiV2RoundButton from './UiV2RoundButton.svelte';
+  import UiV2Tooltip from './UiV2Tooltip.svelte';
   import UserAvatar from '../UserAvatar.svelte';
   import UserBadge from '../UserBadge.svelte';
   import {
     iconMoreHorizontal,
     iconRepost,
-    iconChevronUp,
-    iconChevronDown,
+    iconThumbsUp,
+    iconThumbsDown,
     iconPlus,
   } from '../icons';
   import {
@@ -19,7 +20,17 @@
     type ArticleVoteValue,
   } from '../../utils/feed-article';
   import type { ArticleFormatBlock } from '../../utils/article-block-format';
-  import { formatCommentsCountShort, ruCommentsLabel } from '../../utils/feed-top-comment';
+  import { formatCommentsCountShort } from '../../utils/feed-top-comment';
+
+  function ruRepostLabel(count: number): string {
+    const n = Math.max(0, Math.floor(Number(count) || 0));
+    const abs = n % 100;
+    const d = abs % 10;
+    if (abs > 10 && abs < 20) return `${n} репостов`;
+    if (d === 1) return `${n} репост`;
+    if (d >= 2 && d <= 4) return `${n} репоста`;
+    return `${n} репостов`;
+  }
 
   export type UiV2FeedPostMedia = {
     url: string;
@@ -162,7 +173,6 @@
   const channel = $derived(data.channel);
   const displayName = $derived(channel.title?.trim() || 'Канал');
   const media = $derived(data.media ?? []);
-  const tags = $derived(data.tags ?? []);
   const votes = $derived(Number(data.voteCount ?? 0));
   const comments = $derived(Math.max(0, Number(data.commentCount ?? 0)));
   const shares = $derived(Math.max(0, Number(data.repostCount ?? 0)));
@@ -254,7 +264,7 @@
       await onShare(data);
       return;
     }
-    openPost();
+    // Заглушка: создание репоста ещё не подключено.
   }
 
   async function togglePreview(e: MouseEvent) {
@@ -362,15 +372,23 @@
         <UserAvatar src={channel.avatar} label={displayName} />
       </button>
       {#if showFollowBadge}
-        <button
-          type="button"
-          class="uiv2-feed-post__follow"
-          aria-label="Подписаться"
-          disabled={subscribeBusy}
-          onclick={toggleSubscribe}
+        <UiV2Tooltip
+          text="подписаться"
+          tone="danger"
+          placement="bottom"
+          showDelay={80}
+          class="uiv2-feed-post__follow-tip"
         >
-          {@html iconPlus(12)}
-        </button>
+          <button
+            type="button"
+            class="uiv2-feed-post__follow"
+            aria-label="Подписаться"
+            disabled={subscribeBusy}
+            onclick={toggleSubscribe}
+          >
+            {@html iconPlus(12)}
+          </button>
+        </UiV2Tooltip>
       {/if}
     </div>
 
@@ -545,68 +563,45 @@
         {/if}
       </div>
     {/if}
-
-    {#if tags.length > 0}
-      <ul class="uiv2-feed-post__tags" data-post-action>
-        {#each tags as tag (tag)}
-          <li>
-            <span class="uiv2-feed-post__tag">#{tag}</span>
-          </li>
-        {/each}
-      </ul>
-    {/if}
   </div>
 
   <footer class="uiv2-feed-post__foot" data-post-action>
     <button
       type="button"
-      class="uiv2-feed-post__comments"
-      title="Комментарии"
-      onclick={(e) => openComments(e, comments > 0 ? 'view' : 'write')}
+      class="uiv2-feed-post__repost-count"
+      onclick={sharePost}
     >
-      {ruCommentsLabel(comments)}
+      {@html iconRepost(16)}
+      <span>{ruRepostLabel(shares)}</span>
     </button>
-    <div class="uiv2-feed-post__foot-end">
+    <div
+      class="uiv2-feed-post__votes"
+      class:uiv2-feed-post__votes--plus={votes > 0}
+      class:uiv2-feed-post__votes--minus={votes < 0}
+    >
       <button
         type="button"
-        class="uiv2-feed-post__repost-count"
-        title="Поделиться"
-        onclick={sharePost}
+        class="uiv2-feed-post__vote"
+        class:uiv2-feed-post__vote--down={myVote === ARTICLE_VOTE_MINUS}
+        aria-pressed={myVote === ARTICLE_VOTE_MINUS}
+        aria-label="Минус"
+        disabled={voteBusy}
+        onclick={(e) => setVote(e, ARTICLE_VOTE_MINUS)}
       >
-        {@html iconRepost(16)}
-        <span>{shares}</span>
+        {@html iconThumbsDown(16)}
       </button>
-      <div
-        class="uiv2-feed-post__votes"
-        class:uiv2-feed-post__votes--plus={votes > 0}
-        class:uiv2-feed-post__votes--minus={votes < 0}
+      <span class="uiv2-feed-post__score {scoreClass}">{votes}</span>
+      <button
+        type="button"
+        class="uiv2-feed-post__vote"
+        class:uiv2-feed-post__vote--up={myVote === ARTICLE_VOTE_PLUS}
+        aria-pressed={myVote === ARTICLE_VOTE_PLUS}
+        aria-label="Плюс"
+        disabled={voteBusy}
+        onclick={(e) => setVote(e, ARTICLE_VOTE_PLUS)}
       >
-        <button
-          type="button"
-          class="uiv2-feed-post__vote"
-          class:uiv2-feed-post__vote--up={myVote === ARTICLE_VOTE_PLUS}
-          title={myVote === ARTICLE_VOTE_PLUS ? 'Убрать плюс' : 'Плюс'}
-          aria-pressed={myVote === ARTICLE_VOTE_PLUS}
-          aria-label="Плюс"
-          disabled={voteBusy}
-          onclick={(e) => setVote(e, ARTICLE_VOTE_PLUS)}
-        >
-          {@html iconChevronUp(16)}
-        </button>
-        <span class="uiv2-feed-post__score {scoreClass}">{votes}</span>
-        <button
-          type="button"
-          class="uiv2-feed-post__vote"
-          class:uiv2-feed-post__vote--down={myVote === ARTICLE_VOTE_MINUS}
-          title={myVote === ARTICLE_VOTE_MINUS ? 'Убрать минус' : 'Минус'}
-          aria-pressed={myVote === ARTICLE_VOTE_MINUS}
-          aria-label="Минус"
-          disabled={voteBusy}
-          onclick={(e) => setVote(e, ARTICLE_VOTE_MINUS)}
-        >
-          {@html iconChevronDown(16)}
-        </button>
-      </div>
+        {@html iconThumbsUp(16)}
+      </button>
     </div>
   </footer>
 

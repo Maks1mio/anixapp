@@ -19,6 +19,7 @@
     channelSubscriberCount,
     normalizeArticleVote,
   } from '../utils/feed-article';
+  import { getSearchParams } from '../router';
   import {
     channelHasNewArticles,
     markChannelArticlesSeen,
@@ -623,6 +624,13 @@
     searchQuery = tag.replace(/^#/, '').trim();
   }
 
+  function applyFeedSearchFromRoute(detailQ?: string) {
+    const q = String(detailQ ?? getSearchParams().get('q') ?? '').trim();
+    if (!q) return;
+    if (searchQuery.trim() === q) return;
+    searchQuery = q;
+  }
+
   $effect(() => {
     const q = searchQuery.trim();
     const currentTab = tab;
@@ -637,6 +645,21 @@
   });
 
   onMount(() => {
+    applyFeedSearchFromRoute();
+    const onFeedSearch = ((e: CustomEvent<{ q?: string }>) => {
+      applyFeedSearchFromRoute(e.detail?.q);
+    }) as EventListener;
+    const onNavigate = ((e: CustomEvent<string>) => {
+      const route = String(e.detail ?? '');
+      if (!route.startsWith('/feed')) return;
+      const q = route.includes('?')
+        ? new URLSearchParams(route.slice(route.indexOf('?') + 1)).get('q')
+        : getSearchParams().get('q');
+      applyFeedSearchFromRoute(q ?? undefined);
+    }) as EventListener;
+    window.addEventListener('anix:feed-search', onFeedSearch);
+    window.addEventListener('anix:navigate', onNavigate);
+
     const unsub = isAuthenticated.subscribe((v) => {
       authed = v;
       if (v) {
@@ -649,7 +672,11 @@
     });
     void reload();
     void loadRecommendations();
-    return unsub;
+    return () => {
+      unsub();
+      window.removeEventListener('anix:feed-search', onFeedSearch);
+      window.removeEventListener('anix:navigate', onNavigate);
+    };
   });
 </script>
 

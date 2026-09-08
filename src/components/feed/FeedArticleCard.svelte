@@ -15,6 +15,7 @@
   import { runFeedArticleMenuAction } from '../../utils/feed-article-menu-actions';
   import { loadArticleTopComment } from '../../utils/feed-top-comment';
   import { channelAvatarUrl } from '../../utils/feed-article';
+  import { showToast } from '../../stores/toast';
 
   interface Props {
     article: FeedArticle;
@@ -199,7 +200,7 @@
     onNeedMore={loadFullPreview}
     onOpenComments={openComments}
     onShare={async () => {
-      await runFeedArticleMenuAction('share', article);
+      showToast('Репост скоро будет доступен', 'info');
     }}
     onVote={async (_data, next) => {
       if (voteBusy || !onVote) return;

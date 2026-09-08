@@ -256,6 +256,14 @@ function collectBlockTexts(
   return parts.join('\n\n').trim();
 }
 
+export type FeedTextBlock = ArticleFormatBlock;
+
+function feedTextBlockPlain(block: FeedTextBlock): string {
+  if (block.kind === 'delimiter') return '';
+  if (block.kind === 'list') return block.itemsPlain.join('\n');
+  return block.plain;
+}
+
 /**
  * Текст поста для карточки ленты: целиком (до/после медиа).
  * canExpand — только если API отдал урезанный payload.
@@ -266,26 +274,10 @@ export function articleFeedPreviewParts(article: FeedArticle): {
   canExpand: boolean;
 } {
   const { before, after, canExpand } = articleFeedContentParts(article);
-  const lead = before
-    .map((b) => {
-      if (b.kind === 'list') return b.itemsPlain.join('\n');
-      return b.plain;
-    })
-    .filter(Boolean)
-    .join('\n\n')
-    .trim();
-  const more = after
-    .map((b) => {
-      if (b.kind === 'list') return b.itemsPlain.join('\n');
-      return b.plain;
-    })
-    .filter(Boolean)
-    .join('\n\n')
-    .trim();
+  const lead = before.map(feedTextBlockPlain).filter(Boolean).join('\n\n').trim();
+  const more = after.map(feedTextBlockPlain).filter(Boolean).join('\n\n').trim();
   return { lead, more, canExpand };
 }
-
-export type FeedTextBlock = ArticleFormatBlock;
 
 /** Текстовые/цитатные блоки до и после первого медиа. */
 export function articleFeedContentParts(article: FeedArticle): {
@@ -362,6 +354,35 @@ function mapPayloadBlockToFeedText(block: FeedArticleBlock): FeedTextBlock | nul
       itemsHtml: items.map((x) => x.html),
       itemsPlain: items.map((x) => x.plain),
     };
+  }
+  if (type === 'delimiter') {
+    return { kind: 'delimiter' };
+  }
+  if (type === 'tags' || type === 'hashtag' || type === 'hashtags') {
+    const items = data.items ?? data.tags ?? data.text;
+    const names: string[] = [];
+    if (Array.isArray(items)) {
+      for (const it of items) {
+        if (typeof it === 'string') names.push(it.replace(/^#/, '').trim());
+        else if (it && typeof it === 'object') {
+          names.push(String((it as { name?: string; title?: string; tag?: string }).name
+            ?? (it as { title?: string }).title
+            ?? (it as { tag?: string }).tag
+            ?? '').replace(/^#/, '').trim());
+        }
+      }
+    } else if (typeof items === 'string') {
+      for (const match of items.matchAll(/#([\p{L}\p{N}_]{2,40})/gu)) {
+        names.push(match[1]);
+      }
+      if (!names.length) names.push(...items.split(/[\s|,]+/).map((s) => s.replace(/^#/, '').trim()));
+    }
+    const line = names.filter(Boolean).map((n) => `#${n}`).join(' | ');
+    if (!line) return null;
+    const formatted = formatInlineField(line);
+    return formatted.plain || formatted.html
+      ? { kind: 'text', html: formatted.html, plain: formatted.plain }
+      : null;
   }
   return null;
 }
@@ -509,6 +530,10 @@ export function articleRenderBlocks(article: FeedArticle): RenderBlock[] {
       || type === 'header'
       || type === 'quote'
       || type === 'list'
+      || type === 'delimiter'
+      || type === 'tags'
+      || type === 'hashtag'
+      || type === 'hashtags'
     ) {
       const mapped = mapPayloadBlockToFeedText(block);
       if (mapped) out.push(mapped);

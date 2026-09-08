@@ -67,6 +67,27 @@ function sanitizeHref(href: string): string | null {
   return null;
 }
 
+function escapeText(raw: string): string {
+  return raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function escapeAttr(raw: string): string {
+  return escapeText(raw).replace(/"/g, '&quot;');
+}
+
+const HASHTAG_RE = /#([\p{L}\p{N}_]{2,40})/gu;
+
+/** Превращает `#тег` в кликабельные ссылки (текст уже экранирован). */
+export function linkifyHashtags(escapedText: string): string {
+  return escapedText.replace(HASHTAG_RE, (_full, tag: string) => {
+    const href = `/feed?q=${encodeURIComponent(tag)}`;
+    return `<a href="${escapeAttr(href)}" class="uiv2-hashtag" data-hashtag="${escapeAttr(tag)}">#${escapeText(tag)}</a>`;
+  });
+}
+
 /**
  * Безопасный HTML для {@html}: только разрешённые inline-теги.
  * Сущности декодируются до экранирования, иначе &#34; превращается в &amp;#34;.
@@ -77,7 +98,7 @@ export function sanitizeArticleHtml(raw: string): string {
 
   // Уже «голый» текст без тегов — экранируем символы, сущности уже символы
   if (!/<[a-z/]/i.test(decoded)) {
-    return escapeText(decoded);
+    return linkifyHashtags(escapeText(decoded));
   }
 
   let out = '';
@@ -122,7 +143,12 @@ export function sanitizeArticleHtml(raw: string): string {
       continue;
     }
 
-    out += escapeText(token);
+    // Внутри ссылок хэштеги не линкуем повторно
+    if (openStack.includes('a')) {
+      out += escapeText(token);
+    } else {
+      out += linkifyHashtags(escapeText(token));
+    }
   }
 
   while (openStack.length) {
@@ -133,22 +159,12 @@ export function sanitizeArticleHtml(raw: string): string {
   return out.trim();
 }
 
-function escapeText(raw: string): string {
-  return raw
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
-function escapeAttr(raw: string): string {
-  return escapeText(raw).replace(/"/g, '&quot;');
-}
-
 export type ArticleFormatBlock =
   | { kind: 'header'; html: string; plain: string; level: number }
   | { kind: 'text'; html: string; plain: string }
   | { kind: 'quote'; html: string; plain: string; captionHtml?: string; captionPlain?: string }
-  | { kind: 'list'; itemsHtml: string[]; itemsPlain: string[] };
+  | { kind: 'list'; itemsHtml: string[]; itemsPlain: string[] }
+  | { kind: 'delimiter' };
 
 export function formatInlineField(raw: string | null | undefined): { html: string; plain: string } {
   const source = String(raw ?? '');

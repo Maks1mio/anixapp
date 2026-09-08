@@ -9,7 +9,6 @@
     applyArticleVote,
     ARTICLE_VOTE_MINUS,
     ARTICLE_VOTE_PLUS,
-    articleTags,
     channelAvatarUrl,
     formatFeedRelativeTime,
     normalizeArticleVote,
@@ -40,7 +39,6 @@
   const timeStr = $derived(formatFeedRelativeTime(article?.creation_date ?? article?.last_update_date));
   const avatar = $derived(channelAvatarUrl(channel?.avatar));
   const myVote = $derived(normalizeArticleVote(article?.vote));
-  const tags = $derived(article ? articleTags(article) : []);
   const votes = $derived(Number(article?.vote_count ?? 0));
   const comments = $derived(Math.max(0, Number(article?.comment_count ?? 0)));
   const shares = $derived(Math.max(0, Number(article?.repost_count ?? 0)));
@@ -187,14 +185,6 @@
           onclick={(e) => handleUserProfileClick(signedAuthor.id, e)}
         >{signedAuthor.login}</button>
       </div>
-    {/if}
-
-    {#if tags.length > 0}
-      <ul class="uiv2-feed-post__tags">
-        {#each tags as tag (tag)}
-          <li><span class="uiv2-feed-post__tag">#{tag}</span></li>
-        {/each}
-      </ul>
     {/if}
 
     <footer class="uiv2-feed-post__foot article-page__feed-foot">

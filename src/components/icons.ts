@@ -83,6 +83,8 @@ import {
   VolumeX,
   Maximize2,
   Minimize2,
+  ThumbsDown,
+  ThumbsUp,
   X,
 } from 'lucide';
 
@@ -360,6 +362,14 @@ export function iconShare(size = 18): string {
 /** Репост / поделиться (изогнутая стрелка, как на сайте). */
 export function iconRepost(size = 18): string {
   return toSvg(Repeat2, size);
+}
+
+export function iconThumbsUp(size = 18): string {
+  return toSvg(ThumbsUp, size);
+}
+
+export function iconThumbsDown(size = 18): string {
+  return toSvg(ThumbsDown, size);
 }
 
 /** Замок (приватная коллекция) */

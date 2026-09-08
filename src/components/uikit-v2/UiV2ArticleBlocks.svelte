@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ArticleFormatBlock } from '../../utils/article-block-format';
   import { requestOpenExternal } from '../../utils/external-link';
+  import { openFeedHashtagSearch } from '../../utils/feed-hashtag';
 
   type Props = {
     blocks: ArticleFormatBlock[];
@@ -14,10 +15,17 @@
     if (!(target instanceof Element)) return;
     const anchor = target.closest('a');
     if (!anchor) return;
-    const href = anchor.getAttribute('href');
-    if (!href) return;
     e.preventDefault();
     e.stopPropagation();
+
+    const hashtag = anchor.getAttribute('data-hashtag');
+    if (hashtag || anchor.classList.contains('uiv2-hashtag')) {
+      openFeedHashtagSearch(hashtag || anchor.textContent || '');
+      return;
+    }
+
+    const href = anchor.getAttribute('href');
+    if (!href) return;
     requestOpenExternal(href);
   }
 </script>
@@ -45,6 +53,10 @@
             <li>{@html item}</li>
           {/each}
         </ul>
+      {:else if block.kind === 'delimiter'}
+        <div class="uiv2-article-blocks__delimiter" role="separator" aria-hidden="true">
+          <span>*</span><span>*</span><span>*</span>
+        </div>
       {:else}
         <p class="uiv2-article-blocks__p">{@html block.html}</p>
       {/if}

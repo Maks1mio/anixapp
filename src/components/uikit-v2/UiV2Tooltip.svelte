@@ -49,6 +49,8 @@
     followCursor?: boolean;
     /** Растянуть триггер на ширину родителя */
     block?: boolean;
+    /** Акцент тултипа */
+    tone?: 'default' | 'danger';
     class?: string;
   };
 
@@ -69,6 +71,7 @@
     interactive = false,
     followCursor = false,
     block = false,
+    tone = 'default',
     class: className = '',
   }: Props = $props();
 
@@ -239,6 +242,7 @@
     class:uiv2-tooltip--rich={hasStructured && !content}
     class:uiv2-tooltip--side={side === 'left' || side === 'right'}
     class:uiv2-tooltip--interactive={interactive}
+    class:uiv2-tooltip--danger={tone === 'danger'}
     role={interactive ? 'dialog' : 'tooltip'}
     data-placement={side}
     style:left="{tipLeft}px"

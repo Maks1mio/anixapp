@@ -276,7 +276,13 @@ html.tv-mode #app {
 }
 
 .tv-layout__profile-panel {
-  z-index: 40;
+  z-index: 80;
+  top: 0;
+}
+
+.tv-layout .schedule-panel-backdrop {
+  top: 0;
+  z-index: 70;
 }
 
 .tv-layout__rail-item {

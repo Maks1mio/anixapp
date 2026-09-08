@@ -383,25 +383,54 @@ $profile-panel-width: 26rem;
 $schedule-panel-gap: 0.75rem;
 $schedule-ease: cubic-bezier(0.22, 1, 0.36, 1);
 $schedule-duration: 0.34s;
+$titlebar-h: 40px;
 
-.schedule-panel-wrap {
-  flex-shrink: 0;
-  align-self: stretch;
-  width: 0;
-  min-width: 0;
-  overflow: hidden;
-  box-sizing: border-box;
-  transition: width $schedule-duration $schedule-ease;
-  will-change: width;
+.schedule-panel-backdrop {
+  position: fixed;
+  top: $titlebar-h;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 70;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: rgba(0, 0, 0, 0.42);
+  opacity: 0;
+  pointer-events: none;
+  cursor: default;
+  transition: opacity $schedule-duration $schedule-ease;
 
   &--open {
-    width: calc(#{$schedule-panel-width} + #{$schedule-panel-gap});
-    padding-right: $schedule-panel-gap;
-    padding-bottom: $schedule-panel-gap;
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.schedule-panel-wrap {
+  position: fixed;
+  top: $titlebar-h;
+  right: 0;
+  bottom: 0;
+  z-index: 80;
+  display: flex;
+  justify-content: flex-end;
+  align-items: stretch;
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  // padding: 0 $schedule-panel-gap $schedule-panel-gap 0; отключено
+  box-sizing: border-box;
+  overflow: visible;
+  pointer-events: none;
+
+  &--open {
+    pointer-events: none;
   }
 
-  &--profile.schedule-panel-wrap--open {
-    width: calc(#{$profile-panel-width} + #{$schedule-panel-gap});
+  &--open .schedule-panel-shell {
+    transform: translateX(0);
+    pointer-events: auto;
   }
 }
 
@@ -411,13 +440,25 @@ $schedule-duration: 0.34s;
   width: $schedule-panel-width;
   height: 100%;
   min-height: 0;
-  border-radius: 10px;
   overflow: hidden;
   background: $color-bg;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.25),
+    -12px 0 40px rgba(0, 0, 0, 0.35);
+  transform: translateX(calc(100% + #{$schedule-panel-gap}));
+  transition: transform $schedule-duration $schedule-ease;
+  will-change: transform;
+  pointer-events: none;
 
   &--profile {
     width: $profile-panel-width;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .schedule-panel-backdrop,
+  .schedule-panel-shell {
+    transition: none;
   }
 }
 
@@ -607,12 +648,6 @@ $schedule-duration: 0.34s;
 .sidebar-schedule__card-ep {
   font-size: 0.68rem;
   color: $color-text-muted;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .schedule-panel-wrap {
-    transition: none;
-  }
 }
 
 // ——— Закруглённое окно контента (стиль JB) ———

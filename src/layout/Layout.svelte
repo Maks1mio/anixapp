@@ -451,31 +451,44 @@
         <UiV2MediaLightbox />
       </div>
     </main>
-
-    {#if scheduleVisible}
-      <aside
-        class="schedule-panel-wrap"
-        class:schedule-panel-wrap--open={scheduleActive}
-        aria-label="Расписание"
-        aria-hidden={!scheduleActive}
-        ontransitionend={onScheduleTransitionEnd}
-      >
-        <div class="schedule-panel-shell">
-          <SidebarSchedulePanel onClose={() => closeSchedule()} />
-        </div>
-      </aside>
-    {:else if profileVisible && panelUserId}
-      <aside
-        class="schedule-panel-wrap schedule-panel-wrap--profile"
-        class:schedule-panel-wrap--open={profileActive}
-        aria-label="Профиль"
-        aria-hidden={!profileActive}
-        ontransitionend={onProfileTransitionEnd}
-      >
-        <div class="schedule-panel-shell schedule-panel-shell--profile">
-          <SidebarProfilePanel userId={panelUserId} onClose={() => closeProfile()} />
-        </div>
-      </aside>
-    {/if}
   </div>
+
+  {#if scheduleVisible || (profileVisible && panelUserId)}
+    <button
+      type="button"
+      class="schedule-panel-backdrop"
+      class:schedule-panel-backdrop--open={scheduleActive || profileActive}
+      aria-label="Закрыть панель"
+      onclick={() => {
+        if (scheduleActive) closeSchedule();
+        else if (profileActive) closeProfile();
+      }}
+    ></button>
+  {/if}
+
+  {#if scheduleVisible}
+    <aside
+      class="schedule-panel-wrap"
+      class:schedule-panel-wrap--open={scheduleActive}
+      aria-label="Расписание"
+      aria-hidden={!scheduleActive}
+      ontransitionend={onScheduleTransitionEnd}
+    >
+      <div class="schedule-panel-shell">
+        <SidebarSchedulePanel onClose={() => closeSchedule()} />
+      </div>
+    </aside>
+  {:else if profileVisible && panelUserId}
+    <aside
+      class="schedule-panel-wrap schedule-panel-wrap--profile"
+      class:schedule-panel-wrap--open={profileActive}
+      aria-label="Профиль"
+      aria-hidden={!profileActive}
+      ontransitionend={onProfileTransitionEnd}
+    >
+      <div class="schedule-panel-shell schedule-panel-shell--profile">
+        <SidebarProfilePanel userId={panelUserId} onClose={() => closeProfile()} />
+      </div>
+    </aside>
+  {/if}
 </div>

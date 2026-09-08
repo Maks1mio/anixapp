@@ -177,6 +177,13 @@
   </main>
 
   {#if profileVisible && $profilePanelUserId}
+    <button
+      type="button"
+      class="schedule-panel-backdrop"
+      class:schedule-panel-backdrop--open={profileActive}
+      aria-label="Закрыть панель"
+      onclick={() => closeProfile()}
+    ></button>
     <aside
       class="schedule-panel-wrap schedule-panel-wrap--profile tv-layout__profile-panel"
       class:schedule-panel-wrap--open={profileActive}

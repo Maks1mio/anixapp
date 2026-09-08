@@ -539,6 +539,8 @@ function createAnixBridgeCore(options = {}) {
       c.getClient().endpoints.articleComment.comments(id, page, { sort })),
     'anix:articleCommentAdd': h((c, id, body) =>
       c.getClient().endpoints.articleComment.add(id, body)),
+    'anix:articleCommentReplies': h((c, commentId, page = 0, sort = 2) =>
+      c.getClient().endpoints.articleComment.replies(commentId, page, { sort })),
     'anix:channelById': h((c, id) => c.getClient().endpoints.channel.info(id)),
     'anix:channelArticles': h((c, channelId, page = 0) =>
       c.getClient().endpoints.channel.articles(channelId, page)),

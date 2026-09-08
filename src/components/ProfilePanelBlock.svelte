@@ -4,6 +4,7 @@
   import {
     iconMoreHorizontal,
     iconMessageCircle,
+    iconMessageSquareX,
     iconPlus,
   } from './icons';
   import {
@@ -14,7 +15,13 @@
   } from '../stores/profile-panel';
   import { resolveCdnAssetUrl, toCdnProxyUrl, fetchCdnJson } from '../utils/posterUrl';
   import { resolveFriendButtonState } from '../utils/profile-friend';
-  import { fmtDate, fmtLastSeen, isLottieBadgeUrl, posterUrl } from '../views/Profile/_utils';
+  import {
+    fmtDate,
+    fmtLastSeen,
+    getProfileBanNotice,
+    isLottieBadgeUrl,
+    posterUrl,
+  } from '../views/Profile/_utils';
   import { resolveJacksonRefs } from '../utils/jackson-refs';
   import {
     hasProfilePrivacyRestrictions,
@@ -177,6 +184,7 @@
   const badge = $derived((profile?.badge as { image_url?: string; name?: string } | null) ?? null);
   const friendCount = $derived(Number(profile?.friend_count ?? 0));
   const showPrivacy = $derived(profile ? hasProfilePrivacyRestrictions(profile, isMyProfile) : false);
+  const banNotice = $derived(getProfileBanNotice(profile));
   const friendNamesPreview = $derived.by(() => {
     const names = friends
       .map((f) => String(f.login ?? '').trim())
@@ -624,6 +632,15 @@
               class:profile-panel__top--wide={isWide}
               bind:this={topEl}
             >
+              {#if banNotice}
+                <div class="profile-panel__ban-alert" role="status">
+                  <span class="profile-panel__ban-alert-icon" aria-hidden="true">
+                    {@html iconMessageSquareX(18)}
+                  </span>
+                  <p class="profile-panel__ban-alert-text">{banNotice}</p>
+                </div>
+              {/if}
+
               {#if coverUrl}
                 <button
                   type="button"

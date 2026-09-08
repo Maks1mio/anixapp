@@ -5671,6 +5671,21 @@ body.uiv2-scroll-dragging * {
   cursor: zoom-in;
 }
 
+.uiv2-feed-post__gallery-more {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, #000 52%, transparent);
+  color: #fff;
+  font-size: clamp(1.4rem, 4vw, 2rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
 .uiv2-feed-post__gallery-img {
   display: block;
   width: 100%;
@@ -5764,6 +5779,15 @@ body.uiv2-scroll-dragging * {
   align-items: center;
   justify-content: center;
   gap: 0.65rem;
+}
+
+.uiv2-feed-post__carousel-count {
+  min-width: 1.5rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .uiv2-feed-post__repost {

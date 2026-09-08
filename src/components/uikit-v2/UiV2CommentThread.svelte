@@ -204,7 +204,12 @@
     }
 
     const hasLoaded = (node.replies?.length ?? 0) > 0;
-    if (hasLoaded || !onLoadReplies) return;
+    if (hasLoaded) return;
+    if (!onLoadReplies) {
+      // Без загрузчика не оставляем пустое «раскрыто».
+      expanded = { ...expanded, [k]: false };
+      return;
+    }
     if (loadingReplies[k]) return;
 
     loadingReplies = { ...loadingReplies, [k]: true };

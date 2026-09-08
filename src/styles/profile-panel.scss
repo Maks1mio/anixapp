@@ -981,6 +981,40 @@ $pp-btn-bg-hover: var(--pp-btn-bg-hover);
   color: $color-text-muted;
 }
 
+.profile-panel__ban-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  width: 100%;
+  margin: 0;
+  padding: 3.65rem 0.85rem 0.65rem 0.85rem;
+  box-sizing: border-box;
+  background: #e53935;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.profile-panel__ban-alert-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  margin-top: 0.05rem;
+  color: inherit;
+  opacity: 0.95;
+
+  :global(svg) {
+    display: block;
+  }
+}
+
+.profile-panel__ban-alert-text {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  font-weight: 500;
+}
+
 // ——— Friends / edit subviews ———
 
 .profile-panel__friends-view,

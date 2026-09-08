@@ -13,7 +13,12 @@
     normalizeComment,
     normalizeCommentsFromResponse,
   } from '../../utils/comment';
-  import { commentDataToUiV2Node } from '../../utils/comment-v2';
+  import {
+    appendUiV2CommentReply,
+    commentDataToUiV2Node,
+    setUiV2CommentReplies,
+    uiV2NodeToCommentData,
+  } from '../../utils/comment-v2';
   import { formatCommentsCountShort } from '../../utils/feed-top-comment';
   import { resolveJacksonRefs } from '../../utils/jackson-refs';
 
@@ -72,20 +77,41 @@
     }
   }
 
-  async function submitTop(payload: UiV2CommentComposerPayload) {
+  async function loadReplies(node: UiV2CommentNode) {
+    const commentId = typeof node.id === 'number' ? node.id : Number(node.id);
+    if (!Number.isFinite(commentId) || !window.anixApi?.article?.commentReplies) return;
+    try {
+      const data = await window.anixApi.article.commentReplies(commentId, 0, 2);
+      const list = normalizeCommentsFromResponse(data as Record<string, unknown>);
+      const replies = list.map((c) => commentDataToUiV2Node(c));
+      nodes = setUiV2CommentReplies(nodes, node.id, replies);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function submitNew(
+    payload: UiV2CommentComposerPayload,
+    parent: UiV2CommentNode | null = null,
+  ) {
     if (!requireAuth() || !window.anixApi?.article?.commentAdd) return;
     submitting = true;
     try {
+      const replyTarget = parent ? uiV2NodeToCommentData(parent) : null;
       const res = (await window.anixApi.article.commentAdd(
         articleId,
-        buildReleaseCommentAddBody(payload),
+        buildReleaseCommentAddBody(payload, { replyTarget }),
       )) as { code?: number; comment?: Record<string, unknown> };
       if (res.code != null && res.code !== 0) return;
       if (res.comment) {
         const resolved = resolveJacksonRefs(res) as Record<string, unknown>;
         const raw = (resolved.comment ?? res.comment) as Record<string, unknown>;
         const added = commentDataToUiV2Node(normalizeComment(raw, resolved));
-        nodes = [added, ...nodes];
+        if (parent) {
+          nodes = appendUiV2CommentReply(nodes, parent.id, added);
+        } else {
+          nodes = [added, ...nodes];
+        }
         knownTotal += 1;
         onCountChange?.(knownTotal);
       } else {
@@ -98,6 +124,14 @@
     } finally {
       submitting = false;
     }
+  }
+
+  async function submitTop(payload: UiV2CommentComposerPayload) {
+    await submitNew(payload, null);
+  }
+
+  async function submitReply(node: UiV2CommentNode, payload: UiV2CommentComposerPayload) {
+    await submitNew(payload, node);
   }
 
   function openAuthor(node: UiV2CommentNode) {
@@ -160,8 +194,10 @@
     <UiV2CommentThread
       {nodes}
       {selfProfileId}
-      enableInlineReply={false}
+      enableInlineReply={true}
       onAuthorClick={openAuthor}
+      onLoadReplies={loadReplies}
+      onSubmitReply={submitReply}
     />
   {/if}
 </section>

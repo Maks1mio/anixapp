@@ -415,6 +415,11 @@ export interface AnixApi {
         replyToProfileId?: number | null;
       },
     ) => Promise<{ code?: number; comment?: unknown }>;
+    commentReplies: (
+      commentId: number,
+      page?: number,
+      sort?: number,
+    ) => Promise<{ content?: unknown[]; total_count?: number }>;
   };
 
   report: {

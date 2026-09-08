@@ -98,3 +98,45 @@ export function fmtLastSeen(ts: number): string {
   const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
   return `был(а) в сети ${date.getDate()} ${months[date.getMonth()]} в ${time}`;
 }
+
+/** «14 сент. в 23:00» — дата окончания бана */
+export function fmtBanUntil(ts: number): string {
+  if (!ts) return '';
+  const date = new Date(ts < 1e12 ? ts * 1000 : ts);
+  const months = ['янв.', 'фев.', 'мар.', 'апр.', 'мая', 'июн.', 'июл.', 'авг.', 'сен.', 'окт.', 'нояб.', 'дек.'];
+  const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  return `${date.getDate()} ${months[date.getMonth()]} в ${time}`;
+}
+
+export type ProfileBanFields = {
+  is_banned?: boolean;
+  is_perm_banned?: boolean;
+  ban_expires?: number | null;
+  ban_reason?: string | null;
+};
+
+/** Текст плашки бана или `null`, если пользователь не заблокирован. */
+export function getProfileBanNotice(profile: ProfileBanFields | null | undefined): string | null {
+  if (!profile) return null;
+
+  const perm = !!profile.is_perm_banned;
+  const expiresRaw = Number(profile.ban_expires ?? 0);
+  const expiresMs = expiresRaw > 0 ? (expiresRaw < 1e12 ? expiresRaw * 1000 : expiresRaw) : 0;
+  const tempActive = expiresMs > Date.now();
+  const flagged = !!profile.is_banned || perm;
+
+  if (!flagged && !tempActive) return null;
+  if (!perm && expiresMs > 0 && expiresMs <= Date.now() && !profile.is_banned) return null;
+
+  const reason = String(profile.ban_reason ?? '').trim() || 'нарушение правил';
+
+  if (perm) {
+    return `Пользователь был заблокирован навсегда за ${reason}`;
+  }
+
+  const until = expiresRaw > 0 ? fmtBanUntil(expiresRaw) : '';
+  if (until) {
+    return `Пользователь был заблокирован за ${reason} до ${until}`;
+  }
+  return `Пользователь был заблокирован за ${reason}`;
+}

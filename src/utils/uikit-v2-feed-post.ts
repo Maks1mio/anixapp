@@ -40,7 +40,19 @@ function mapBodyBlocks(article: FeedArticle): NonNullable<UiV2FeedPostData['body
   const out: NonNullable<UiV2FeedPostData['bodyBlocks']> = [];
   for (const block of articleRenderBlocks(article) as RenderBlock[]) {
     if (block.kind === 'media') {
-      if (block.items.length) out.push({ kind: 'media', items: block.items });
+      if (!block.items.length) continue;
+      const prev = out[out.length - 1];
+      // Соседние media-блоки склеиваем → плитка/карусель, а не стопка одиночных.
+      if (prev && prev.kind === 'media') {
+        const seen = new Set(prev.items.map((item) => item.url));
+        for (const item of block.items) {
+          if (seen.has(item.url)) continue;
+          seen.add(item.url);
+          prev.items.push(item);
+        }
+        continue;
+      }
+      out.push({ kind: 'media', items: [...block.items] });
       continue;
     }
     if (block.kind === 'embed') continue;

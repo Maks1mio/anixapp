@@ -331,6 +331,15 @@ loggedHandle('anix:articleCommentAdd', async (_, id, body) => {
   }
 });
 
+loggedHandle('anix:articleCommentReplies', async (_, commentId, page = 0, sort = 2) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.articleComment.replies(commentId, page, { sort });
+  } catch (err) {
+    handleAnixError(err, 'articleCommentReplies');
+  }
+});
+
 ipcMain.handle('anix:articleDelete', async (_, id) => {
   try {
     const client = getAnixart();

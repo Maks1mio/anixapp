@@ -41,6 +41,7 @@ import {
   Lock,
   LogOut,
   MessageCircle,
+  MessageSquareX,
   Mic,
   MoreHorizontal,
   MoreVertical,
@@ -188,6 +189,11 @@ export function iconEyeOff(size = 18): string {
 
 export function iconBan(size = 18): string {
   return toSvg(Ban, size);
+}
+
+/** Сообщение с крестиком (бан / mute) */
+export function iconMessageSquareX(size = 18): string {
+  return toSvg(MessageSquareX, size);
 }
 
 export function iconLoginHistory(size = 18): string {

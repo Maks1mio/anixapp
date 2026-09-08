@@ -13,8 +13,25 @@
   let canPrev = $state(false);
   let canNext = $state(false);
 
-  const useGallery = $derived(items.length >= 2 && items.length <= 4);
-  const useCarousel = $derived(items.length >= 5);
+  /** 2–6 — плитки; 7+ — карусель. */
+  const GALLERY_MAX = 6;
+  const useGallery = $derived(items.length >= 2 && items.length <= GALLERY_MAX);
+  const useCarousel = $derived(items.length > GALLERY_MAX);
+  /** В плитке больше 4 — показываем 4 ячейки, на последней «+N». */
+  const TILE_VISIBLE_MAX = 4;
+  const galleryItems = $derived(
+    useGallery && items.length > TILE_VISIBLE_MAX
+      ? items.slice(0, TILE_VISIBLE_MAX)
+      : items,
+  );
+  const galleryOverflow = $derived(
+    useGallery ? Math.max(0, items.length - TILE_VISIBLE_MAX) : 0,
+  );
+  const galleryMod = $derived(
+    useGallery
+      ? Math.min(items.length, TILE_VISIBLE_MAX)
+      : items.length,
+  );
 
   function updateScrollState() {
     const el = scroller;
@@ -112,26 +129,33 @@
   </button>
 {:else if useGallery}
   <div
-    class="uiv2-feed-post__gallery uiv2-feed-post__gallery--{items.length}"
+    class="uiv2-feed-post__gallery uiv2-feed-post__gallery--{galleryMod}"
     role="group"
     aria-label="Изображения записи"
     data-post-action
   >
-    {#each items as item, i (item.url + i)}
+    {#each galleryItems as item, i (item.url + i)}
+      {@const isLastOverflow = galleryOverflow > 0 && i === galleryItems.length - 1}
       <button
         type="button"
         class="uiv2-feed-post__gallery-cell"
-        aria-label={`Открыть изображение ${i + 1}`}
+        aria-label={
+          isLastOverflow
+            ? `Открыть изображение ${i + 1}, ещё ${galleryOverflow}`
+            : `Открыть изображение ${i + 1}`
+        }
         onclick={(e) => previewAt(i, e)}
       >
         {@render mediaNode(item, 'uiv2-feed-post__gallery-img')}
-        {#if showGifBadge(item)}
+        {#if isLastOverflow}
+          <span class="uiv2-feed-post__gallery-more" aria-hidden="true">+{galleryOverflow}</span>
+        {:else if showGifBadge(item)}
           <span class="uiv2-feed-post__media-badge">GIF</span>
         {/if}
       </button>
     {/each}
   </div>
-{:else}
+{:else if useCarousel}
   <div class="uiv2-feed-post__carousel-wrap" data-post-action>
     <div
       class="uiv2-feed-post__carousel"
@@ -153,7 +177,7 @@
       {/each}
     </div>
 
-    {#if useCarousel && (canPrev || canNext)}
+    {#if canPrev || canNext}
       <div class="uiv2-feed-post__carousel-nav-row">
         <button
           type="button"
@@ -164,6 +188,7 @@
         >
           {@html iconChevronLeft(18)}
         </button>
+        <span class="uiv2-feed-post__carousel-count">{items.length}</span>
         <button
           type="button"
           class="uiv2-feed-post__carousel-nav"

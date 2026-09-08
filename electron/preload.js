@@ -542,6 +542,8 @@ contextBridge.exposeInMainWorld('anixApi', {
     comments: (id, page = 0, sort = 2) =>
       ipcRenderer.invoke('anix:articleComments', id, page, sort),
     commentAdd: (id, body) => ipcRenderer.invoke('anix:articleCommentAdd', id, body),
+    commentReplies: (commentId, page = 0, sort = 2) =>
+      ipcRenderer.invoke('anix:articleCommentReplies', commentId, page, sort),
   },
 
   report: {

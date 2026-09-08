@@ -233,6 +233,8 @@ function buildWebAnixApi(): AnixApi {
       commentsPopular: (id) => invoke('anix:articleCommentsPopular', id),
       comments: (id, page = 0, sort = 2) => invoke('anix:articleComments', id, page, sort),
       commentAdd: (id, body) => invoke('anix:articleCommentAdd', id, body),
+      commentReplies: (commentId, page = 0, sort = 2) =>
+        invoke('anix:articleCommentReplies', commentId, page, sort),
     },
 
     report: {

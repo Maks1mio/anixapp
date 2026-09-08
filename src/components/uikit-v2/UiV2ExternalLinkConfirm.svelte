@@ -23,9 +23,9 @@
   }
 </script>
 
-{#if url}
-  <svelte:window onkeydown={onWindowKeydown} />
+<svelte:window onkeydown={onWindowKeydown} />
 
+{#if url}
   <div
     class="uiv2-ext-link"
     role="dialog"

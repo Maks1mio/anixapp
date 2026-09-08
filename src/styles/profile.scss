@@ -469,15 +469,33 @@
 .profile__ban {
   display: flex;
   align-items: flex-start;
-  gap: 0.6rem;
-  padding: 0.75rem 1rem;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: $radius-md;
-  font-size: 0.85rem;
-  color: #ef4444;
+  gap: 0.65rem;
+  padding: 0.7rem 0.85rem;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid #b84a4a;
+  border-radius: 12px;
+  color: #c75a5a;
   margin: 0.5rem 0 1rem;
-  line-height: 1.5;
+  line-height: 1.35;
+}
+
+.profile__ban-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  margin-top: 0.1rem;
+  color: inherit;
+
+  :global(svg) {
+    display: block;
+  }
+}
+
+.profile__ban-text {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
 .profile__privacy {

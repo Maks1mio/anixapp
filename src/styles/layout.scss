@@ -435,29 +435,138 @@ $titlebar-h: 40px;
 }
 
 .schedule-panel-shell {
+  --schedule-panel-edge: color-mix(in srgb, #{$color-text} 22%, transparent);
+  position: relative;
   display: flex;
   flex-direction: column;
   width: $schedule-panel-width;
   height: 100%;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   background: $color-bg;
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.25),
-    -12px 0 40px rgba(0, 0, 0, 0.35);
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.35);
   transform: translateX(calc(100% + #{$schedule-panel-gap}));
   transition: transform $schedule-duration $schedule-ease;
   will-change: transform;
   pointer-events: none;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 4;
+    width: 1px;
+    background: var(--schedule-panel-edge);
+    pointer-events: none;
+  }
 
   &--profile {
     width: $profile-panel-width;
   }
 }
 
+.schedule-panel-shell__body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.schedule-panel-resize {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 3.25rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  transform: translate(-50%, calc(-50% + var(--resize-y, 0px)));
+  transition: none;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-app-region: no-drag;
+  will-change: transform;
+
+  &--bounce {
+    transition: transform 0.62s cubic-bezier(0.22, 1.7, 0.36, 1);
+  }
+
+  &--dragging {
+    transition: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, $color-accent 70%, white);
+    outline-offset: 2px;
+    border-radius: 999px;
+  }
+
+  &--dragging .schedule-panel-resize__pill,
+  &:hover .schedule-panel-resize__pill {
+    border-color: color-mix(in srgb, $color-text 42%, transparent);
+    background: color-mix(in srgb, $color-surface 92%, $color-bg);
+  }
+
+  &--dragging .schedule-panel-resize__bar,
+  &:hover .schedule-panel-resize__bar {
+    background: color-mix(in srgb, $color-text 72%, transparent);
+  }
+}
+
+.schedule-panel-resize__pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 0.85rem;
+  height: 2.15rem;
+  border-radius: 999px;
+  border: 1px solid var(--schedule-panel-edge, color-mix(in srgb, #{$color-text} 22%, transparent));
+  background: $color-bg;
+  pointer-events: none;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.schedule-panel-resize__bar {
+  display: block;
+  width: 2px;
+  height: 0.85rem;
+  border-radius: 1px;
+  background: color-mix(in srgb, $color-text 48%, transparent);
+  transition: background 0.15s ease;
+}
+
+:global(body.is-sidebar-panel-resizing) {
+  cursor: col-resize !important;
+  user-select: none !important;
+
+  * {
+    cursor: col-resize !important;
+    user-select: none !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .schedule-panel-backdrop,
   .schedule-panel-shell {
+    transition: none;
+  }
+
+  .schedule-panel-resize--bounce {
     transition: none;
   }
 }

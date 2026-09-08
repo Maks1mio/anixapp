@@ -18,6 +18,8 @@
   import UiV2MediaLightbox from '../components/uikit-v2/UiV2MediaLightbox.svelte';
   import TvPosterBackdrop from '../components/tv/TvPosterBackdrop.svelte';
   import SidebarProfilePanel from '../components/SidebarProfilePanel.svelte';
+  import SidebarPanelResizeHandle from '../components/SidebarPanelResizeHandle.svelte';
+  import { getProfilePanelWidthPx, setProfilePanelWidthPx } from '../prefs';
 
   interface Props {
     children?: Snippet;
@@ -30,6 +32,7 @@
 
   let profileVisible = $state(false);
   let profileActive = $state(false);
+  let profilePanelWidthPx = $state(getProfilePanelWidthPx());
 
   function isActive(item: TvNavItem): boolean {
     if ('action' in item && item.action === 'profile') {
@@ -190,8 +193,20 @@
       aria-label="Профиль"
       aria-hidden={!profileActive}
     >
-      <div class="schedule-panel-shell schedule-panel-shell--profile">
-        <SidebarProfilePanel userId={$profilePanelUserId} onClose={() => closeProfile()} />
+      <div class="schedule-panel-shell schedule-panel-shell--profile" style={`width: ${profilePanelWidthPx}px`}>
+        <div class="schedule-panel-shell__body">
+          <SidebarProfilePanel userId={$profilePanelUserId} onClose={() => closeProfile()} />
+        </div>
+        <SidebarPanelResizeHandle
+          widthPx={profilePanelWidthPx}
+          label="Ширина профиля"
+          onWidthChange={(w) => {
+            profilePanelWidthPx = w;
+          }}
+          onWidthCommit={(w) => {
+            profilePanelWidthPx = setProfilePanelWidthPx(w);
+          }}
+        />
       </div>
     </aside>
   {/if}

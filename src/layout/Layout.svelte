@@ -16,6 +16,7 @@
   import LobbyNowWatching from '../components/LobbyNowWatching.svelte';
   import SidebarSchedulePanel from '../components/SidebarSchedulePanel.svelte';
   import SidebarProfilePanel from '../components/SidebarProfilePanel.svelte';
+  import SidebarPanelResizeHandle from '../components/SidebarPanelResizeHandle.svelte';
   import SidebarPins from '../components/SidebarPins.svelte';
   import Page from '../components/Page.svelte';
   import UiV2Tooltip from '../components/uikit-v2/UiV2Tooltip.svelte';
@@ -28,6 +29,12 @@
     resetProfilePanelHistory,
     toggleProfilePanel,
   } from '../stores/profile-panel';
+  import {
+    getProfilePanelWidthPx,
+    getSchedulePanelWidthPx,
+    setProfilePanelWidthPx,
+    setSchedulePanelWidthPx,
+  } from '../prefs';
 
   interface Props {
     children?: Snippet;
@@ -78,6 +85,9 @@
   let openScheduleAfterProfileClose = $state(false);
   /** После анимации закрытия расписания открыть профиль */
   let openProfileAfterScheduleClose = $state<number | null>(null);
+
+  let schedulePanelWidthPx = $state(getSchedulePanelWidthPx());
+  let profilePanelWidthPx = $state(getProfilePanelWidthPx());
 
   function clearScheduleCloseTimer() {
     if (scheduleCloseTimer != null) {
@@ -474,8 +484,20 @@
       aria-hidden={!scheduleActive}
       ontransitionend={onScheduleTransitionEnd}
     >
-      <div class="schedule-panel-shell">
-        <SidebarSchedulePanel onClose={() => closeSchedule()} />
+      <div class="schedule-panel-shell" style={`width: ${schedulePanelWidthPx}px`}>
+        <div class="schedule-panel-shell__body">
+          <SidebarSchedulePanel onClose={() => closeSchedule()} />
+        </div>
+        <SidebarPanelResizeHandle
+          widthPx={schedulePanelWidthPx}
+          label="Ширина расписания"
+          onWidthChange={(w) => {
+            schedulePanelWidthPx = w;
+          }}
+          onWidthCommit={(w) => {
+            schedulePanelWidthPx = setSchedulePanelWidthPx(w);
+          }}
+        />
       </div>
     </aside>
   {:else if profileVisible && panelUserId}
@@ -486,8 +508,20 @@
       aria-hidden={!profileActive}
       ontransitionend={onProfileTransitionEnd}
     >
-      <div class="schedule-panel-shell schedule-panel-shell--profile">
-        <SidebarProfilePanel userId={panelUserId} onClose={() => closeProfile()} />
+      <div class="schedule-panel-shell schedule-panel-shell--profile" style={`width: ${profilePanelWidthPx}px`}>
+        <div class="schedule-panel-shell__body">
+          <SidebarProfilePanel userId={panelUserId} onClose={() => closeProfile()} />
+        </div>
+        <SidebarPanelResizeHandle
+          widthPx={profilePanelWidthPx}
+          label="Ширина профиля"
+          onWidthChange={(w) => {
+            profilePanelWidthPx = w;
+          }}
+          onWidthCommit={(w) => {
+            profilePanelWidthPx = setProfilePanelWidthPx(w);
+          }}
+        />
       </div>
     </aside>
   {/if}

@@ -99,3 +99,51 @@ export function setReleaseFriendsLayout(layout: ReleaseFriendsLayout): void {
   window.localStorage.setItem(RELEASE_FRIENDS_LAYOUT_KEY, layout);
   window.dispatchEvent(new CustomEvent('anix:releaseFriendsLayoutChanged', { detail: { layout } }));
 }
+
+const SCHEDULE_PANEL_WIDTH_KEY = 'anixapp.schedulePanelWidth';
+const PROFILE_PANEL_WIDTH_KEY = 'anixapp.profilePanelWidth';
+
+/** Дефолты: 22rem / 26rem при 16px root */
+export const DEFAULT_SCHEDULE_PANEL_WIDTH_PX = 352;
+export const DEFAULT_PROFILE_PANEL_WIDTH_PX = 416;
+export const SIDEBAR_PANEL_WIDTH_MIN_PX = 380;
+export const SIDEBAR_PANEL_WIDTH_MAX_PX = 720;
+
+function readPanelWidthPx(key: string, fallback: number): number {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+    return fallback;
+  }
+  const raw = Number(window.localStorage.getItem(key));
+  if (!Number.isFinite(raw)) return fallback;
+  return clampSidebarPanelWidthPx(raw);
+}
+
+export function clampSidebarPanelWidthPx(widthPx: number): number {
+  const max =
+    typeof window !== 'undefined'
+      ? Math.min(SIDEBAR_PANEL_WIDTH_MAX_PX, Math.max(SIDEBAR_PANEL_WIDTH_MIN_PX, window.innerWidth - 96))
+      : SIDEBAR_PANEL_WIDTH_MAX_PX;
+  return Math.round(Math.min(max, Math.max(SIDEBAR_PANEL_WIDTH_MIN_PX, widthPx)));
+}
+
+export function getSchedulePanelWidthPx(): number {
+  return readPanelWidthPx(SCHEDULE_PANEL_WIDTH_KEY, DEFAULT_SCHEDULE_PANEL_WIDTH_PX);
+}
+
+export function setSchedulePanelWidthPx(widthPx: number): number {
+  const next = clampSidebarPanelWidthPx(widthPx);
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return next;
+  window.localStorage.setItem(SCHEDULE_PANEL_WIDTH_KEY, String(next));
+  return next;
+}
+
+export function getProfilePanelWidthPx(): number {
+  return readPanelWidthPx(PROFILE_PANEL_WIDTH_KEY, DEFAULT_PROFILE_PANEL_WIDTH_PX);
+}
+
+export function setProfilePanelWidthPx(widthPx: number): number {
+  const next = clampSidebarPanelWidthPx(widthPx);
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return next;
+  window.localStorage.setItem(PROFILE_PANEL_WIDTH_KEY, String(next));
+  return next;
+}

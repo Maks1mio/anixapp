@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import Page from './Page.svelte';
   import {
     iconMoreHorizontal,
@@ -28,6 +28,7 @@
   import ProfilePanelLoginHistoryView from './ProfilePanelLoginHistoryView.svelte';
   import ProfileSocialSheet from './ProfileSocialSheet.svelte';
   import ProfilePanelMoreSheet, { type ProfileMoreAction } from './ProfilePanelMoreSheet.svelte';
+  import { captureFlip, playFlip, unlockHeight } from '../utils/flip-move';
   import UiV2Button from './uikit-v2/UiV2Button.svelte';
   import UiV2RoundButton from './uikit-v2/UiV2RoundButton.svelte';
   import UiV2Card from './uikit-v2/UiV2Card.svelte';
@@ -68,6 +69,91 @@
 
   let badgeLottieEl = $state<HTMLElement | undefined>();
   let badgeAnim: { destroy?: () => void } | null = null;
+
+  /** Широкий UI шапки профиля (FLIP + плавная высота, с реверсом на лету). */
+  const PROFILE_WIDE_ENTER = 480;
+  const PROFILE_WIDE_EXIT = 450;
+  const PROFILE_LAYOUT_MS = 480;
+  let isWide = $state(false);
+  let topEl = $state<HTMLElement | null>(null);
+  let layoutAnimGen = 0;
+  /** Актуальная ширина для hysteresis без stale-closure. */
+  let wideRef = false;
+
+  function prefersReducedMotion(): boolean {
+    return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function wideFromWidth(w: number, currentlyWide: boolean): boolean {
+    return currentlyWide ? w >= PROFILE_WIDE_EXIT : w >= PROFILE_WIDE_ENTER;
+  }
+
+  function waitTwoFrames(): Promise<void> {
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
+  }
+
+  async function setProfileWide(next: boolean, animate: boolean) {
+    if (next === isWide) return;
+    const el = topEl;
+    if (!el) {
+      isWide = next;
+      wideRef = next;
+      return;
+    }
+
+    if (!animate || prefersReducedMotion()) {
+      unlockHeight(el);
+      isWide = next;
+      wideRef = next;
+      return;
+    }
+
+    const gen = ++layoutAnimGen;
+
+    // Текущий визуальный кадр (в т.ч. mid-transition / mid-FLIP)
+    const heightFrom = el.getBoundingClientRect().height;
+    const snapshot = captureFlip(el);
+
+    isWide = next;
+    wideRef = next;
+    await tick();
+    await waitTwoFrames();
+    if (gen !== layoutAnimGen) return;
+
+    // Сначала зафиксировать кадр и узнать целевую высоту, потом FLIP внутри этого кадра
+    el.style.transition = 'none';
+    el.style.overflow = 'hidden';
+    el.style.height = 'auto';
+    void el.offsetHeight;
+    const heightTo = el.getBoundingClientRect().height;
+    el.style.height = `${heightFrom}px`;
+    void el.offsetHeight;
+
+    playFlip(snapshot, { duration: PROFILE_LAYOUT_MS });
+
+    if (Math.abs(heightFrom - heightTo) < 1) {
+      unlockHeight(el);
+      return;
+    }
+
+    el.style.transition = `height ${PROFILE_LAYOUT_MS}ms cubic-bezier(0.22, 1.05, 0.36, 1)`;
+    el.style.height = `${heightTo}px`;
+
+    const token = `${gen}:${heightTo}`;
+    el.dataset.ppHeightTo = token;
+    const onEnd = (e: TransitionEvent) => {
+      if (e.target !== el || e.propertyName !== 'height') return;
+      el.removeEventListener('transitionend', onEnd);
+      if (el.dataset.ppHeightTo !== token) return;
+      unlockHeight(el);
+      delete el.dataset.ppHeightTo;
+    };
+    el.addEventListener('transitionend', onEnd);
+  }
 
   const login = $derived(String(profile?.login ?? 'Профиль'));
   const avatarUrl = $derived(profile?.avatar ? posterUrl(String(profile.avatar)) : '');
@@ -469,6 +555,23 @@
     void loadProfile();
   });
 
+  $effect(() => {
+    const el = topEl;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const initial = wideFromWidth(el.getBoundingClientRect().width, false);
+    isWide = initial;
+    wideRef = initial;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      void setProfileWide(wideFromWidth(w, wideRef), true);
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      unlockHeight(el);
+    };
+  });
+
   onDestroy(() => destroyBadgeAnim());
 </script>
 
@@ -503,103 +606,111 @@
           inert={panelView === 'overview' ? undefined : true}
         >
           <Page scrollId={`profile-panel-${userId}`} extraClass="profile-panel__page">
-            <section class="profile-panel__top">
+            <section
+              class="profile-panel__top"
+              class:profile-panel__top--wide={isWide}
+              bind:this={topEl}
+            >
               <div class="profile-panel__banner" class:profile-panel__banner--empty={!coverUrl && !roles[0]?.color} style={bannerStyle}></div>
 
-              <div class="profile-panel__identity">
-                <div class="profile-panel__avatar-wrap">
-                  <div
-                    class="profile-panel__avatar"
-                    style={avatarUrl ? `background-image:url('${avatarUrl}')` : undefined}
-                    role="img"
-                    aria-label={login}
-                  ></div>
-                  <span
-                    class="profile-panel__online"
-                    class:profile-panel__online--on={isOnline}
-                    aria-hidden="true"
-                  ></span>
+              <div class="profile-panel__head">
+                <div class="profile-panel__identity">
+                  <div class="profile-panel__avatar-wrap" data-pp-flip>
+                    <div
+                      class="profile-panel__avatar"
+                      style={avatarUrl ? `background-image:url('${avatarUrl}')` : undefined}
+                      role="img"
+                      aria-label={login}
+                    ></div>
+                    <span
+                      class="profile-panel__online"
+                      class:profile-panel__online--on={isOnline}
+                      aria-hidden="true"
+                    ></span>
+                  </div>
+
+                  <div class="profile-panel__identity-main" data-pp-flip>
+                    <h2 class="profile-panel__name">
+                      <span class="profile-panel__name-text">{login}</span>
+                      {#if badge?.image_url}
+                        {#if isLottieBadgeUrl(badge.image_url)}
+                          <span class="profile-panel__badge" title={badge.name ?? ''} bind:this={badgeLottieEl}></span>
+                        {:else}
+                          <img class="profile-panel__badge-img" src={toCdnProxyUrl(badge.image_url)} alt={badge.name ?? ''} />
+                        {/if}
+                      {/if}
+                      {#if profile.is_verified}
+                        <span class="profile-panel__verified" title="Подтверждён">✓</span>
+                      {/if}
+                    </h2>
+
+                    {#if statusText}
+                      <p class="profile-panel__bio">{statusText}</p>
+                    {/if}
+
+                    {#if level != null || metaSecondary}
+                      <div class="profile-panel__meta">
+                        {#if level != null}
+                          <span class="profile-panel__level">{level}</span>
+                        {/if}
+                        {#if level != null && metaSecondary}
+                          <span class="profile-panel__meta-dot" aria-hidden="true">·</span>
+                        {/if}
+                        {#if metaSecondary}
+                          <span class="profile-panel__meta-text">{metaSecondary}</span>
+                        {/if}
+                      </div>
+                    {/if}
+
+                    {#if roles.length}
+                      <div class="profile-panel__roles">
+                        {#each roles as role}
+                          <span class="profile-panel__role" style={roleStyle(role.color)}>
+                            <i class="profile-panel__role-dot" style="background:{role.color || '#888'}"></i>
+                            {role.name}
+                          </span>
+                        {/each}
+                      </div>
+                    {/if}
+                  </div>
                 </div>
 
-                <h2 class="profile-panel__name">
-                  <span class="profile-panel__name-text">{login}</span>
-                  {#if badge?.image_url}
-                    {#if isLottieBadgeUrl(badge.image_url)}
-                      <span class="profile-panel__badge" title={badge.name ?? ''} bind:this={badgeLottieEl}></span>
-                    {:else}
-                      <img class="profile-panel__badge-img" src={toCdnProxyUrl(badge.image_url)} alt={badge.name ?? ''} />
-                    {/if}
+                <div class="profile-panel__cta" data-pp-flip>
+                  {#if isMyProfile || friendButton.action !== 'none'}
+                    <UiV2Button
+                      label={friendBusy ? '…' : primaryLabel}
+                      size="lg"
+                      block={!isWide}
+                      variant={!isMyProfile && friendButton.action === 'send' ? 'light' : 'chrome'}
+                      disabled={!isMyProfile && (friendBusy || friendButton.disabled)}
+                      onclick={() => void onFriendClick()}
+                    />
+                  {:else if friendButton.disabled}
+                    <UiV2Button label={friendButton.label} size="lg" block={!isWide} disabled />
                   {/if}
-                  {#if profile.is_verified}
-                    <span class="profile-panel__verified" title="Подтверждён">✓</span>
+                  {#if !isMyProfile}
+                    <UiV2RoundButton
+                      label="Сообщение"
+                      size="lg"
+                      title="Сообщение"
+                      disabled={socialBusy}
+                      class={!hasSocial ? 'uiv2-round-btn--muted' : ''}
+                      onclick={() => void openSocialSheet(userId, profile)}
+                    >
+                      {@html iconMessageCircle(18)}
+                    </UiV2RoundButton>
                   {/if}
-                </h2>
-
-                {#if statusText}
-                  <p class="profile-panel__bio">{statusText}</p>
-                {/if}
-
-                {#if level != null || metaSecondary}
-                  <div class="profile-panel__meta">
-                    {#if level != null}
-                      <span class="profile-panel__level">{level}</span>
-                    {/if}
-                    {#if level != null && metaSecondary}
-                      <span class="profile-panel__meta-dot" aria-hidden="true">·</span>
-                    {/if}
-                    {#if metaSecondary}
-                      <span class="profile-panel__meta-text">{metaSecondary}</span>
-                    {/if}
-                  </div>
-                {/if}
-
-                {#if roles.length}
-                  <div class="profile-panel__roles">
-                    {#each roles as role}
-                      <span class="profile-panel__role" style={roleStyle(role.color)}>
-                        <i class="profile-panel__role-dot" style="background:{role.color || '#888'}"></i>
-                        {role.name}
-                      </span>
-                    {/each}
-                  </div>
-                {/if}
-              </div>
-
-              <div class="profile-panel__cta">
-                {#if isMyProfile || friendButton.action !== 'none'}
-                  <UiV2Button
-                    label={friendBusy ? '…' : primaryLabel}
-                    size="lg"
-                    block
-                    variant={!isMyProfile && friendButton.action === 'send' ? 'light' : 'chrome'}
-                    disabled={!isMyProfile && (friendBusy || friendButton.disabled)}
-                    onclick={() => void onFriendClick()}
-                  />
-                {:else if friendButton.disabled}
-                  <UiV2Button label={friendButton.label} size="lg" block disabled />
-                {/if}
-                {#if !isMyProfile}
                   <UiV2RoundButton
-                    label="Сообщение"
+                    label="Ещё"
                     size="lg"
-                    title="Сообщение"
-                    disabled={socialBusy}
-                    class={!hasSocial ? 'uiv2-round-btn--muted' : ''}
-                    onclick={() => void openSocialSheet(userId, profile)}
+                    title="Ещё"
+                    ariaHaspopup="dialog"
+                    ariaExpanded={moreSheetOpen}
+                    onclick={onMoreClick}
                   >
-                    {@html iconMessageCircle(18)}
+                    {@html iconMoreHorizontal(18)}
                   </UiV2RoundButton>
-                {/if}
-                <UiV2RoundButton
-                  label="Ещё"
-                  size="lg"
-                  title="Ещё"
-                  ariaHaspopup="dialog"
-                  ariaExpanded={moreSheetOpen}
-                  onclick={onMoreClick}
-                >
-                  {@html iconMoreHorizontal(18)}
-                </UiV2RoundButton>
+                </div>
               </div>
 
               {#if isMyProfile}

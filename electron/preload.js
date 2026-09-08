@@ -181,6 +181,7 @@ contextBridge.exposeInMainWorld('electron', {
   setExtraVideoHosts: (hosts) => ipcRenderer.invoke('video:setExtraHosts', hosts),
   addExtraVideoHosts: (hosts) => ipcRenderer.invoke('video:addExtraHosts', hosts),
   fetchCdnJson: (url) => ipcRenderer.invoke('cdn:fetchJson', url),
+  fetchRemoteImage: (url) => ipcRenderer.invoke('cdn:fetchImage', url),
   downloadEpisodes: (payload) => ipcRenderer.invoke('episode-download:download', payload),
   queueEpisodeDownloads: (payload) => ipcRenderer.invoke('episode-download:queue', payload),
   getDownloadSettings: () => ipcRenderer.invoke('downloads:getSettings'),

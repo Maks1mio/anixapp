@@ -143,6 +143,59 @@ async function fetchCdnJson(url) {
   return JSON.parse(asset.buffer.toString('utf8'));
 }
 
+const REMOTE_IMAGE_MAX_BYTES = 48 * 1024 * 1024;
+
+/**
+ * Любой http(s) image для renderer (Anime4K и т.п.) — без CORS, из main process.
+ * @returns {{ mimeType: string, data: Uint8Array }}
+ */
+async function fetchRemoteImage(url) {
+  const target = typeof url === 'string' ? url.trim() : '';
+  if (!target || !/^https?:\/\//i.test(target)) {
+    throw new Error('Invalid image URL');
+  }
+
+  let buffer;
+  let mimeType;
+
+  if (isAnixartCdnUrl(target)) {
+    const asset = await fetchCdnAsset(target);
+    buffer = asset.buffer;
+    mimeType = asset.mimeType;
+  } else {
+    let origin = ANIXART_SITE_ORIGIN;
+    try {
+      origin = new URL(target).origin;
+    } catch {
+      /* keep default */
+    }
+    const headers = {
+      'User-Agent': BROWSER_UA,
+      Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+      Referer: `${origin}/`,
+    };
+    const { session } = require('electron');
+    const fetcher = typeof session?.defaultSession?.fetch === 'function'
+      ? session.defaultSession.fetch.bind(session.defaultSession)
+      : fetch;
+    const response = await fetcher(target, { headers, redirect: 'follow' });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    buffer = Buffer.from(await response.arrayBuffer());
+    mimeType = response.headers.get('content-type')?.split(';')[0]?.trim() || guessMime(target);
+  }
+
+  if (!buffer?.length) throw new Error('Empty image');
+  if (buffer.length > REMOTE_IMAGE_MAX_BYTES) throw new Error('Image too large');
+
+  return {
+    mimeType: mimeType || 'image/jpeg',
+    data: new Uint8Array(buffer),
+  };
+}
+
 function registerCdnScheme() {
   protocol.registerSchemesAsPrivileged([
     {
@@ -217,6 +270,7 @@ module.exports = {
   registerCdnScheme,
   setupCdnProtocol,
   fetchCdnJson,
+  fetchRemoteImage,
   isAnixartCdnUrl,
   ANIXART_CDN_HOSTS,
   ANIXART_SITE_ORIGIN,

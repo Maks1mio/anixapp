@@ -74,6 +74,7 @@ declare global {
       addExtraVideoHosts?: (hosts: string[]) => Promise<string[]>;
       /** JSON с Anixart CDN (Lottie-бейджи) через main — без fetch(anix-cdn://) */
       fetchCdnJson?: (url: string) => Promise<unknown | null>;
+      fetchRemoteImage?: (url: string) => Promise<{ mimeType: string; data: Uint8Array } | null>;
       downloadEpisodes?: (payload: {
         title?: string;
         items: Array<{

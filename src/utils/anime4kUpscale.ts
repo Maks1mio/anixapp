@@ -120,97 +120,410 @@ export function computeAnime4kCanvasLayout(
 
 async function loadImageBitmap(url: string): Promise<ImageBitmap | null> {
   try {
-    const res = await fetch(url, { cache: 'force-cache' });
+    const res = await fetch(url, { cache: 'force-cache', mode: 'cors', credentials: 'omit' });
     if (!res.ok) return null;
     const blob = await res.blob();
+    if (!blob || blob.size < 32) return null;
     return await createImageBitmap(blob);
   } catch {
     return null;
   }
 }
 
-/** Anime4K для статичного постера (через captureStream → video). */
+async function loadImageBitmapViaElectron(url: string): Promise<ImageBitmap | null> {
+  try {
+    const api = (window as Window & {
+      electron?: { fetchRemoteImage?: (u: string) => Promise<{ mimeType: string; data: Uint8Array } | null> };
+    }).electron?.fetchRemoteImage;
+    if (!api) return null;
+    const result = await api(url);
+    if (!result?.data?.byteLength) return null;
+    const copy = new Uint8Array(result.data.byteLength);
+    copy.set(result.data);
+    const blob = new Blob([copy], { type: result.mimeType || 'image/jpeg' });
+    return await createImageBitmap(blob);
+  } catch {
+    return null;
+  }
+}
+
+/** fetch / Electron IPC — без DOM-img (CORS травит WebGPU). */
+async function loadUntaintedBitmap(urls: Array<string | null | undefined>): Promise<ImageBitmap | null> {
+  const seen = new Set<string>();
+  for (const raw of urls) {
+    const url = raw?.trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    const viaFetch = await loadImageBitmap(url);
+    if (viaFetch?.width) return viaFetch;
+    const viaMain = await loadImageBitmapViaElectron(url);
+    if (viaMain?.width) return viaMain;
+  }
+  return null;
+}
+
+/** Снимок canvas (в т.ч. WebGPU) в Blob для скачивания. */
+export async function snapshotCanvasImage(
+  source: HTMLCanvasElement,
+  type = 'image/png',
+  quality?: number,
+): Promise<Blob | null> {
+  if (source.width < 2 || source.height < 2) return null;
+  const tryToBlob = (canvas: HTMLCanvasElement) =>
+    new Promise<Blob | null>((resolve) => {
+      try {
+        canvas.toBlob((blob) => resolve(blob && blob.size > 0 ? blob : null), type, quality);
+      } catch {
+        resolve(null);
+      }
+    });
+
+  const direct = await tryToBlob(source);
+  if (direct) return direct;
+
+  try {
+    const out = document.createElement('canvas');
+    out.width = source.width;
+    out.height = source.height;
+    const ctx = out.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(source, 0, 0);
+    return await tryToBlob(out);
+  } catch {
+    return null;
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export type Anime4kImageUpscaleResult =
+  | { ok: true; session: Anime4kSession }
+  | { ok: false; error: string };
+
+function fitSourceToGpuLimit(sw: number, sh: number): { w: number; h: number } {
+  const maxSide = Math.max(sw, sh);
+  if (maxSide <= GPU_MAX_SIDE) return { w: sw, h: sh };
+  const scale = GPU_MAX_SIDE / maxSide;
+  return {
+    w: Math.max(2, Math.round(sw * scale)),
+    h: Math.max(2, Math.round(sh * scale)),
+  };
+}
+
+/** CSS-размер canvas с сохранением пропорций буфера (max-width+max-height вместе сплющивают). */
+function setCanvasDisplaySize(
+  canvas: HTMLCanvasElement,
+  bufferW: number,
+  bufferH: number,
+  container: HTMLElement | null | undefined,
+  fallbackCss?: { cssW: number; cssH: number },
+): void {
+  const aspect = bufferW / Math.max(1, bufferH);
+  const media = container?.querySelector?.('img, video') as HTMLElement | null;
+  let boxW = fallbackCss?.cssW ?? 0;
+  let boxH = fallbackCss?.cssH ?? 0;
+  if (media && media.clientWidth > 4 && media.clientHeight > 4) {
+    boxW = media.clientWidth;
+    boxH = media.clientHeight;
+  }
+  if (boxW < 4 || boxH < 4) {
+    const maxW = typeof window !== 'undefined' ? window.innerWidth * 0.85 : bufferW;
+    const maxH = typeof window !== 'undefined' ? window.innerHeight * 0.8 : bufferH;
+    boxW = Math.min(maxW, bufferW);
+    boxH = Math.min(maxH, bufferH);
+  }
+  let w = boxW;
+  let h = w / aspect;
+  if (h > boxH) {
+    h = boxH;
+    w = h * aspect;
+  }
+  canvas.style.width = `${Math.max(1, Math.round(w))}px`;
+  canvas.style.height = `${Math.max(1, Math.round(h))}px`;
+  canvas.style.maxWidth = 'none';
+  canvas.style.maxHeight = 'none';
+  canvas.style.aspectRatio = 'auto';
+}
+
+const BLIT_VERT_WGSL = `
+struct VertexOutput {
+  @builtin(position) Position : vec4<f32>,
+  @location(0) fragUV : vec2<f32>,
+}
+
+@vertex
+fn vert_main(@builtin(vertex_index) VertexIndex : u32) -> VertexOutput {
+  const pos = array(
+    vec2( 1.0,  1.0),
+    vec2( 1.0, -1.0),
+    vec2(-1.0, -1.0),
+    vec2( 1.0,  1.0),
+    vec2(-1.0, -1.0),
+    vec2(-1.0,  1.0),
+  );
+  const uv = array(
+    vec2(1.0, 0.0),
+    vec2(1.0, 1.0),
+    vec2(0.0, 1.0),
+    vec2(1.0, 0.0),
+    vec2(0.0, 1.0),
+    vec2(0.0, 0.0),
+  );
+  var output : VertexOutput;
+  output.Position = vec4(pos[VertexIndex], 0.0, 1.0);
+  output.fragUV = uv[VertexIndex];
+  return output;
+}
+`;
+
+const BLIT_FRAG_WGSL = `
+@group(0) @binding(1) var mySampler: sampler;
+@group(0) @binding(2) var myTexture: texture_2d<f32>;
+
+@fragment
+fn main(@location(0) fragUV : vec2f) -> @location(0) vec4f {
+  return textureSampleBaseClampToEdge(myTexture, mySampler, fragUV);
+}
+`;
+
+/**
+ * Anime4K для статичной картинки — один проход WebGPU (без captureStream/video).
+ * В Electron captureStream часто недоступен, поэтому не используем video-цикл библиотеки.
+ */
 export async function startAnime4kImageUpscale(opts: {
   imageUrl: string;
+  /** Доп. URL (прокси/оригинал) — пробуем по очереди через fetch. */
+  imageUrls?: string[];
   canvas: HTMLCanvasElement;
   mode?: number;
   container?: HTMLElement | null;
   fit?: 'contain' | 'cover';
-}): Promise<Anime4kSession | null> {
-  if (!(await probeWebGpuAvailable())) return null;
-
-  const bitmap = await loadImageBitmap(opts.imageUrl);
-  if (!bitmap?.width) return null;
-
-  const srcCanvas = document.createElement('canvas');
-  srcCanvas.width = bitmap.width;
-  srcCanvas.height = bitmap.height;
-  const ctx = srcCanvas.getContext('2d');
-  if (!ctx) {
-    bitmap.close();
-    return null;
-  }
-  ctx.drawImage(bitmap, 0, 0);
-  bitmap.close();
-
-  const video = document.createElement('video');
-  video.muted = true;
-  video.playsInline = true;
-  const stream = srcCanvas.captureStream(1);
-  video.srcObject = stream;
+  targetHeight?: Anime4kTargetHeight;
+  hideSourceClass?: string;
+  canvasVisibleClass?: string;
+  /** @deprecated Не используем DOM-img: cross-origin травит GPU copy. */
+  sourceImage?: HTMLImageElement | null;
+  warmMs?: number;
+}): Promise<Anime4kImageUpscaleResult> {
+  let bitmap: ImageBitmap | null = null;
   try {
-    await video.play();
-  } catch {
-    stream.getTracks().forEach((t) => t.stop());
-    return null;
-  }
-
-  await new Promise<void>((resolve) => {
-    if (video.videoWidth > 0) {
-      resolve();
-      return;
+    if (!(await probeWebGpuAvailable())) {
+      return { ok: false, error: 'WebGPU недоступен' };
     }
-    video.addEventListener('loadeddata', () => resolve(), { once: true });
-    setTimeout(resolve, 800);
-  });
 
-  if (video.videoWidth < 1) {
-    video.pause();
-    video.srcObject = null;
-    stream.getTracks().forEach((t) => t.stop());
-    return null;
+    bitmap = await loadUntaintedBitmap([...(opts.imageUrls ?? []), opts.imageUrl]);
+    if (!bitmap?.width) {
+      return {
+        ok: false,
+        error: 'Не удалось загрузить картинку (нужен перезапуск приложения после обновления)',
+      };
+    }
+
+    const sized = fitSourceToGpuLimit(bitmap.width, bitmap.height);
+    const srcCanvas = document.createElement('canvas');
+    srcCanvas.width = sized.w;
+    srcCanvas.height = sized.h;
+    const ctx2d = srcCanvas.getContext('2d', { alpha: false, willReadFrequently: false });
+    if (!ctx2d) {
+      bitmap.close();
+      return { ok: false, error: 'Нет 2D-контекста' };
+    }
+    ctx2d.drawImage(bitmap, 0, 0, sized.w, sized.h);
+    bitmap.close();
+    bitmap = null;
+
+    const layout = computeAnime4kCanvasLayout(
+      sized.w,
+      sized.h,
+      opts.container ?? opts.canvas.parentElement,
+      opts.fit ?? 'contain',
+      1,
+      opts.targetHeight ?? null,
+    );
+
+    const canvas = opts.canvas;
+    canvas.hidden = false;
+    canvas.removeAttribute('hidden');
+    canvas.width = layout.bufferW;
+    canvas.height = layout.bufferH;
+    setCanvasDisplaySize(canvas, layout.bufferW, layout.bufferH, opts.container, layout);
+
+    const gpu = navigator.gpu;
+    if (!gpu?.requestAdapter) {
+      return { ok: false, error: 'WebGPU API нет' };
+    }
+
+    const adapter = await gpu.requestAdapter({ powerPreference: 'high-performance' })
+      ?? await gpu.requestAdapter();
+    if (!adapter) {
+      return { ok: false, error: 'GPU-адаптер не найден' };
+    }
+    const device = await adapter.requestDevice();
+    const context = canvas.getContext('webgpu') as GPUCanvasContext | null;
+    if (!context) {
+      try { device.destroy(); } catch { /* ignore */ }
+      return { ok: false, error: 'Нет webgpu-контекста canvas' };
+    }
+
+    const format = gpu.getPreferredCanvasFormat();
+    const configureContext = () => {
+      context.configure({
+        device,
+        format,
+        alphaMode: 'premultiplied',
+      });
+    };
+    configureContext();
+
+    const native = { width: sized.w, height: sized.h };
+    const target = { width: layout.bufferW, height: layout.bufferH };
+
+    const inputTexture = device.createTexture({
+      size: [native.width, native.height, 1],
+      format: 'rgba16float',
+      // TEXTURE_BINDING | COPY_DST | RENDER_ATTACHMENT
+      usage: 0x04 | 0x02 | 0x10,
+    });
+
+    device.queue.copyExternalImageToTexture(
+      { source: srcCanvas },
+      { texture: inputTexture },
+      [native.width, native.height],
+    );
+
+    const mode = opts.mode ?? 15;
+    const ModeClass = MODE_MAP[mode] ?? ModeB;
+    const pipelines = [
+      new ModeClass({
+        device,
+        inputTexture,
+        nativeDimensions: native,
+        targetDimensions: target,
+      }),
+    ] as Array<{ pass: (encoder: GPUCommandEncoder) => void; getOutputTexture: () => GPUTexture }>;
+
+    const bindGroupLayout = device.createBindGroupLayout({
+      entries: [
+        { binding: 1, visibility: 0x2, sampler: {} }, // FRAGMENT
+        { binding: 2, visibility: 0x2, texture: {} },
+      ],
+    });
+    const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] });
+    const renderPipeline = device.createRenderPipeline({
+      layout: pipelineLayout,
+      vertex: {
+        module: device.createShaderModule({ code: BLIT_VERT_WGSL }),
+        entryPoint: 'vert_main',
+      },
+      fragment: {
+        module: device.createShaderModule({ code: BLIT_FRAG_WGSL }),
+        entryPoint: 'main',
+        targets: [{ format }],
+      },
+      primitive: { topology: 'triangle-list' },
+    });
+    const sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
+
+    const runCompute = () => {
+      const encoder = device.createCommandEncoder();
+      for (const p of pipelines) p.pass(encoder);
+      device.queue.submit([encoder.finish()]);
+    };
+
+    const blitToCanvas = (outTex: GPUTexture) => {
+      const encoder = device.createCommandEncoder();
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [
+          {
+            view: context.getCurrentTexture().createView(),
+            clearValue: { r: 0, g: 0, b: 0, a: 1 },
+            loadOp: 'clear',
+            storeOp: 'store',
+          },
+        ],
+      });
+      pass.setPipeline(renderPipeline);
+      pass.setBindGroup(
+        0,
+        device.createBindGroup({
+          layout: bindGroupLayout,
+          entries: [
+            { binding: 1, resource: sampler },
+            { binding: 2, resource: outTex.createView() },
+          ],
+        }),
+      );
+      pass.draw(6);
+      pass.end();
+      device.queue.submit([encoder.finish()]);
+    };
+
+    runCompute();
+    await device.queue.onSubmittedWorkDone();
+
+    const outTex = pipelines.at(-1)!.getOutputTexture();
+    const outW = Math.max(2, outTex.width);
+    const outH = Math.max(2, outTex.height);
+    // Если пайплайн отдал другой размер — подгоняем canvas, иначе blit сплющит кадр
+    if (canvas.width !== outW || canvas.height !== outH) {
+      canvas.width = outW;
+      canvas.height = outH;
+      configureContext();
+    }
+    setCanvasDisplaySize(canvas, outW, outH, opts.container, layout);
+
+    blitToCanvas(outTex);
+    await device.queue.onSubmittedWorkDone();
+    blitToCanvas(outTex);
+    await device.queue.onSubmittedWorkDone();
+
+    if (opts.warmMs) await sleep(opts.warmMs);
+
+    let stopped = false;
+    return {
+      ok: true,
+      session: {
+        stop: () => {
+          if (stopped) return;
+          stopped = true;
+          try {
+            inputTexture.destroy();
+          } catch {
+            /* ignore */
+          }
+          canvas.width = 1;
+          canvas.height = 1;
+          canvas.style.width = '';
+          canvas.style.height = '';
+          canvas.style.maxWidth = '';
+          canvas.style.maxHeight = '';
+          canvas.style.aspectRatio = '';
+        },
+      },
+    };
+  } catch (err) {
+    try {
+      bitmap?.close();
+    } catch {
+      /* ignore */
+    }
+    const raw = err instanceof Error && err.message ? err.message : 'Ошибка Anime4K';
+    const msg = /tainted|cross-origin/i.test(raw)
+      ? 'Картинка с чужого домена (CORS) — открой через CDN-прокси'
+      : raw;
+    return { ok: false, error: msg };
   }
-
-  const session = await startAnime4kUpscale({
-    video,
-    canvas: opts.canvas,
-    mode: opts.mode,
-    container: opts.container,
-    fit: opts.fit ?? 'cover',
-  });
-
-  if (!session) {
-    video.pause();
-    video.srcObject = null;
-    stream.getTracks().forEach((t) => t.stop());
-    return null;
-  }
-
-  const origStop = session.stop;
-  return {
-    stop: () => {
-      origStop();
-      video.pause();
-      video.srcObject = null;
-      stream.getTracks().forEach((t) => t.stop());
-      opts.canvas.classList.remove('hero-media__canvas--poster');
-    },
-  };
 }
 
-function copyExtentWH(copySize: GPUExtent3D): { w: number; h: number } {
+function copyExtentWH(copySize: GPUExtent3D | Iterable<number> | number[]): { w: number; h: number } {
   if (Array.isArray(copySize)) {
     return { w: Number(copySize[0]) || 0, h: Number(copySize[1]) || 0 };
+  }
+  if (copySize && typeof copySize === 'object' && Symbol.iterator in Object(copySize)) {
+    const arr = Array.from(copySize as Iterable<number>);
+    return { w: Number(arr[0]) || 0, h: Number(arr[1]) || 0 };
   }
   const d = copySize as GPUExtent3DDict;
   return { w: Number(d?.width) || 0, h: Number(d?.height) || 0 };
@@ -255,11 +568,12 @@ export async function startAnime4kUpscale(opts: {
     cssLayout = 'contain',
     targetHeight = null,
   } = opts;
-  if (video.readyState < HTMLVideoElement.HAVE_FUTURE_DATA) {
+  if (video.readyState < 2) {
     await new Promise<void>((resolve) => {
       const done = () => resolve();
       video.addEventListener('loadeddata', done, { once: true });
       video.addEventListener('canplay', done, { once: true });
+      video.addEventListener('playing', done, { once: true });
       setTimeout(done, 1200);
     });
   }
@@ -323,7 +637,7 @@ export async function startAnime4kUpscale(opts: {
     queue.copyExternalImageToTexture = (source, destination, copySize) => {
       const src = source?.source;
       if (src instanceof HTMLVideoElement) {
-        const { w, h } = copyExtentWH(copySize);
+        const { w, h } = copyExtentWH(copySize as GPUExtent3D);
         if (src.videoWidth < w || src.videoHeight < h || w < 2 || h < 2) {
           copyFails++;
           if (copyFails >= 6) stop();
@@ -331,7 +645,7 @@ export async function startAnime4kUpscale(opts: {
         }
       }
       try {
-        const result = origCopy(source, destination, copySize);
+        const result = origCopy(source, destination, copySize as never);
         copyFails = 0;
         return result;
       } catch {

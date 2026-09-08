@@ -6077,9 +6077,9 @@ body.uiv2-scroll-dragging * {
     display: block;
     max-width: calc(100cqw - 7rem);
     max-height: calc(100cqh - 5rem);
-    width: auto;
-    height: auto;
-    object-fit: contain;
+    width: auto !important;
+    height: auto !important;
+    object-fit: contain !important;
     background: #000;
   }
 }
@@ -6127,6 +6127,150 @@ body.uiv2-scroll-dragging * {
     width: 18px;
     height: 18px;
   }
+}
+
+.uiv2-media-lightbox__tool--active {
+  background: color-mix(in srgb, #fff 22%, #000 55%);
+  outline: 2px solid color-mix(in srgb, #fff 45%, transparent);
+  outline-offset: 1px;
+}
+
+.uiv2-media-lightbox__a4k {
+  position: absolute;
+  top: 3.35rem;
+  right: 0.7rem;
+  z-index: 3;
+  width: min(22rem, calc(100vw - 1.4rem));
+  padding: 0.85rem 0.9rem 0.95rem;
+  border-radius: 14px;
+  background: color-mix(in srgb, #121212 92%, transparent);
+  border: 1px solid color-mix(in srgb, #fff 12%, transparent);
+  box-shadow: 0 12px 40px color-mix(in srgb, #000 55%, transparent);
+  color: #fff;
+}
+
+.uiv2-media-lightbox__a4k-title {
+  margin: 0 0 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  opacity: 0.78;
+}
+
+.uiv2-media-lightbox__a4k-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.55rem;
+}
+
+.uiv2-media-lightbox__a4k-chip {
+  appearance: none;
+  border: 1px solid color-mix(in srgb, #fff 14%, transparent);
+  background: color-mix(in srgb, #fff 6%, transparent);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0.28rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover:not(:disabled),
+  &:focus-visible {
+    background: color-mix(in srgb, #fff 12%, transparent);
+    outline: 2px solid color-mix(in srgb, #fff 45%, transparent);
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.uiv2-media-lightbox__a4k-chip--active {
+  background: color-mix(in srgb, #fff 20%, transparent);
+  border-color: color-mix(in srgb, #fff 35%, transparent);
+}
+
+.uiv2-media-lightbox__a4k-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.uiv2-media-lightbox__a4k-btn {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: #fff;
+  color: #111;
+
+  &:hover:not(:disabled),
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, #fff 55%, transparent);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+}
+
+.uiv2-media-lightbox__a4k-btn--ghost {
+  background: color-mix(in srgb, #fff 10%, transparent);
+  color: #fff;
+  border: 1px solid color-mix(in srgb, #fff 16%, transparent);
+}
+
+.uiv2-media-lightbox__source--hidden {
+  /* оставляем место в layout, чтобы stage не схлопнулся */
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.uiv2-media-lightbox__upscale {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: block;
+  /* размер задаёт JS (пропорции буфера) — max-* здесь сплющивают canvas */
+  max-width: none;
+  max-height: none;
+  background: #000;
+  border-radius: 12px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.uiv2-media-lightbox__upscale--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.uiv2-media-lightbox__badge {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 0.85rem;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, #000 50%, transparent);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .uiv2-media-lightbox__nav {

@@ -458,7 +458,6 @@
             {@render children?.()}
           </Page>
         </div>
-        <UiV2MediaLightbox />
       </div>
     </main>
   </div>
@@ -525,4 +524,6 @@
       </div>
     </aside>
   {/if}
+
+  <UiV2MediaLightbox />
 </div>

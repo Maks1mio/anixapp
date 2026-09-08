@@ -76,7 +76,7 @@ export function ratingHue(grade: number): number {
 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
 
-export { closeImageLightbox, isImageLightboxOpen, openImageLightbox } from '../../utils/image-lightbox';
+export { closeImageLightbox, isImageLightboxOpen, openImageLightbox, openImageLightboxGallery } from '../../utils/image-lightbox';
 
 // ── Card mapper ───────────────────────────────────────────────────────────────
 

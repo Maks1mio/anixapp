@@ -96,11 +96,11 @@
     data-tv-release-poster
     role={posterUrl ? 'button' : undefined}
     tabindex={posterUrl ? 0 : undefined}
-    onclick={(e) => posterUrl && openImageLightbox(posterUrl, e.currentTarget as HTMLElement)}
+    onclick={(e) => posterUrl && openImageLightbox(displayPosterUrl || posterUrl, e.currentTarget as HTMLElement)}
     onkeydown={(e) => {
       if (e.key === 'Enter' && posterUrl) {
         e.preventDefault();
-        openImageLightbox(posterUrl, e.currentTarget as HTMLElement);
+        openImageLightbox(displayPosterUrl || posterUrl, e.currentTarget as HTMLElement);
       }
     }}
   >

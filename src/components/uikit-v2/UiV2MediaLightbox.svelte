@@ -53,26 +53,87 @@
     }
   }
 
-  function playOpen(origin: { left: number; top: number; width: number; height: number }) {
+  type OriginRect = {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    borderRadius?: string;
+  };
+
+  function mediaEl(stage: HTMLElement): HTMLElement | null {
+    return stage.querySelector('img, video');
+  }
+
+  /** Фиксируем рамку и включаем cover — кадр обрезает, картинка не сплющивается. */
+  function lockStageFrame(stage: HTMLElement, rect: DOMRect) {
+    stage.style.position = 'fixed';
+    stage.style.left = `${rect.left}px`;
+    stage.style.top = `${rect.top}px`;
+    stage.style.width = `${rect.width}px`;
+    stage.style.height = `${rect.height}px`;
+    stage.style.maxWidth = 'none';
+    stage.style.maxHeight = 'none';
+    stage.style.margin = '0';
+    stage.style.zIndex = '3';
+    const media = mediaEl(stage);
+    if (media) {
+      media.style.width = '100%';
+      media.style.height = '100%';
+      media.style.maxWidth = 'none';
+      media.style.maxHeight = 'none';
+      media.style.objectFit = 'cover';
+    }
+  }
+
+  function frameKeyframes(from: OriginRect, to: OriginRect, fromOpacity: number, toOpacity: number) {
+    return [
+      {
+        left: `${from.left}px`,
+        top: `${from.top}px`,
+        width: `${from.width}px`,
+        height: `${from.height}px`,
+        opacity: fromOpacity,
+        borderRadius: from.borderRadius ?? '12px',
+      },
+      {
+        left: `${to.left}px`,
+        top: `${to.top}px`,
+        width: `${to.width}px`,
+        height: `${to.height}px`,
+        opacity: toOpacity,
+        borderRadius: to.borderRadius ?? '12px',
+      },
+    ];
+  }
+
+  function playOpen(origin: OriginRect) {
     const el = stageEl;
     if (!el || prefersReducedMotion()) return;
     const last = el.getBoundingClientRect();
     if (last.width < 4 || last.height < 4) return;
-    const dx = origin.left - last.left;
-    const dy = origin.top - last.top;
-    const sx = origin.width / last.width;
-    const sy = origin.height / last.height;
-    el.animate(
-      [
-        {
-          transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`,
-          opacity: 0.92,
-          borderRadius: '16px',
-        },
-        { transform: 'none', opacity: 1, borderRadius: '12px' },
-      ],
-      { duration: 340, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both' },
-    );
+    lockStageFrame(el, last);
+    const openTo: OriginRect = {
+      left: last.left,
+      top: last.top,
+      width: last.width,
+      height: last.height,
+      borderRadius: '12px',
+    };
+    const anim = el.animate(frameKeyframes(origin, openTo, 0.92, 1), {
+      duration: 340,
+      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+      fill: 'forwards',
+    });
+    void anim.finished
+      .then(() => {
+        el.style.cssText = '';
+        const media = mediaEl(el);
+        if (media) media.style.cssText = '';
+      })
+      .catch(() => {
+        /* cancelled */
+      });
   }
 
   async function closeWithMotion() {
@@ -82,22 +143,20 @@
     const origin = state.origin;
     if (el && origin && !prefersReducedMotion()) {
       const last = el.getBoundingClientRect();
-      const dx = origin.left - last.left;
-      const dy = origin.top - last.top;
-      const sx = origin.width / Math.max(1, last.width);
-      const sy = origin.height / Math.max(1, last.height);
+      lockStageFrame(el, last);
+      const from: OriginRect = {
+        left: last.left,
+        top: last.top,
+        width: last.width,
+        height: last.height,
+        borderRadius: '12px',
+      };
       try {
-        await el.animate(
-          [
-            { transform: 'none', opacity: 1, borderRadius: '12px' },
-            {
-              transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`,
-              opacity: 0.55,
-              borderRadius: '16px',
-            },
-          ],
-          { duration: 240, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' },
-        ).finished;
+        await el.animate(frameKeyframes(from, origin, 1, 0.45), {
+          duration: 260,
+          easing: 'cubic-bezier(0.4, 0, 1, 1)',
+          fill: 'forwards',
+        }).finished;
       } catch {
         /* ignore cancelled animation */
       }

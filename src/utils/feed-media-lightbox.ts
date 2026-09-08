@@ -10,6 +10,7 @@ export type FeedLightboxOrigin = {
   top: number;
   width: number;
   height: number;
+  borderRadius: string;
 };
 
 export type FeedLightboxState = {
@@ -29,11 +30,18 @@ export function openFeedMediaLightbox(
   if (usable.length === 0) return;
   const safeIndex = Math.max(0, Math.min(index, usable.length - 1));
   const rect = originEl?.getBoundingClientRect();
+  const borderRadius = originEl ? getComputedStyle(originEl).borderRadius || '12px' : '12px';
   feedMediaLightbox.set({
     items: usable,
     index: safeIndex,
     origin: rect
-      ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height }
+      ? {
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+          borderRadius,
+        }
       : null,
   });
 }

@@ -176,7 +176,6 @@
     <Page extraClass="page--tv" noPadding>
       {@render children?.()}
     </Page>
-    <UiV2MediaLightbox />
   </main>
 
   {#if profileVisible && $profilePanelUserId}
@@ -210,4 +209,6 @@
       </div>
     </aside>
   {/if}
+
+  <UiV2MediaLightbox />
 </div>

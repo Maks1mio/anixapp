@@ -28,7 +28,16 @@
   import ProfilePanelLoginHistoryView from './ProfilePanelLoginHistoryView.svelte';
   import ProfileSocialSheet from './ProfileSocialSheet.svelte';
   import ProfilePanelMoreSheet, { type ProfileMoreAction } from './ProfilePanelMoreSheet.svelte';
-  import { captureFlip, playFlip, unlockHeight } from '../utils/flip-move';
+  import { openFeedMediaLightbox } from '../utils/feed-media-lightbox';
+  import {
+    captureFlip,
+    playFlip,
+    lockHeightAndMeasure,
+    playHeightTo,
+    unlockHeight,
+    clearAllFlips,
+    PROFILE_LAYOUT_MS,
+  } from '../utils/flip-move';
   import UiV2Button from './uikit-v2/UiV2Button.svelte';
   import UiV2RoundButton from './uikit-v2/UiV2RoundButton.svelte';
   import UiV2Card from './uikit-v2/UiV2Card.svelte';
@@ -73,7 +82,6 @@
   /** Широкий UI шапки профиля (FLIP + плавная высота, с реверсом на лету). */
   const PROFILE_WIDE_ENTER = 480;
   const PROFILE_WIDE_EXIT = 450;
-  const PROFILE_LAYOUT_MS = 480;
   let isWide = $state(false);
   let topEl = $state<HTMLElement | null>(null);
   let layoutAnimGen = 0;
@@ -84,16 +92,27 @@
     return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
+  function isPanelResizing(): boolean {
+    return typeof document !== 'undefined' && document.body.classList.contains('is-sidebar-panel-resizing');
+  }
+
   function wideFromWidth(w: number, currentlyWide: boolean): boolean {
     return currentlyWide ? w >= PROFILE_WIDE_EXIT : w >= PROFILE_WIDE_ENTER;
   }
 
-  function waitTwoFrames(): Promise<void> {
-    return new Promise((resolve) => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => resolve());
-      });
+  function applyWideInstant(el: HTMLElement, next: boolean) {
+    layoutAnimGen += 1;
+    clearAllFlips(el);
+    unlockHeight(el);
+    // сброс inline transition:none после clear
+    requestAnimationFrame(() => {
+      clearAllFlips(el);
+      for (const node of el.querySelectorAll<HTMLElement>('[data-pp-flip]')) {
+        node.style.transition = '';
+      }
     });
+    isWide = next;
+    wideRef = next;
   }
 
   async function setProfileWide(next: boolean, animate: boolean) {
@@ -105,54 +124,26 @@
       return;
     }
 
-    if (!animate || prefersReducedMotion()) {
-      unlockHeight(el);
-      isWide = next;
-      wideRef = next;
+    // Во время drag ширины панели морф даёт артефакты — только мгновенный layout
+    if (!animate || prefersReducedMotion() || isPanelResizing()) {
+      applyWideInstant(el, next);
       return;
     }
 
     const gen = ++layoutAnimGen;
+    const token = `h-${gen}`;
 
-    // Текущий визуальный кадр (в т.ч. mid-transition / mid-FLIP)
     const heightFrom = el.getBoundingClientRect().height;
     const snapshot = captureFlip(el);
 
     isWide = next;
     wideRef = next;
     await tick();
-    await waitTwoFrames();
     if (gen !== layoutAnimGen) return;
 
-    // Сначала зафиксировать кадр и узнать целевую высоту, потом FLIP внутри этого кадра
-    el.style.transition = 'none';
-    el.style.overflow = 'hidden';
-    el.style.height = 'auto';
-    void el.offsetHeight;
-    const heightTo = el.getBoundingClientRect().height;
-    el.style.height = `${heightFrom}px`;
-    void el.offsetHeight;
-
+    const heightTo = lockHeightAndMeasure(el, heightFrom);
     playFlip(snapshot, { duration: PROFILE_LAYOUT_MS });
-
-    if (Math.abs(heightFrom - heightTo) < 1) {
-      unlockHeight(el);
-      return;
-    }
-
-    el.style.transition = `height ${PROFILE_LAYOUT_MS}ms cubic-bezier(0.22, 1.05, 0.36, 1)`;
-    el.style.height = `${heightTo}px`;
-
-    const token = `${gen}:${heightTo}`;
-    el.dataset.ppHeightTo = token;
-    const onEnd = (e: TransitionEvent) => {
-      if (e.target !== el || e.propertyName !== 'height') return;
-      el.removeEventListener('transitionend', onEnd);
-      if (el.dataset.ppHeightTo !== token) return;
-      unlockHeight(el);
-      delete el.dataset.ppHeightTo;
-    };
-    el.addEventListener('transitionend', onEnd);
+    playHeightTo(el, heightTo, { duration: PROFILE_LAYOUT_MS, token });
   }
 
   const login = $derived(String(profile?.login ?? 'Профиль'));
@@ -531,6 +522,28 @@
     return 'друзей';
   }
 
+  function previewCover(e: MouseEvent) {
+    if (!coverUrl) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openFeedMediaLightbox(
+      [{ url: toCdnProxyUrl(coverUrl), kind: 'image' }],
+      0,
+      e.currentTarget as HTMLElement,
+    );
+  }
+
+  function previewAvatar(e: MouseEvent) {
+    if (!avatarUrl) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openFeedMediaLightbox(
+      [{ url: avatarUrl, kind: 'image' }],
+      0,
+      e.currentTarget as HTMLElement,
+    );
+  }
+
   $effect(() => {
     const url = badge?.image_url;
     if (badgeLottieEl && url && isLottieBadgeUrl(url)) {
@@ -611,17 +624,40 @@
               class:profile-panel__top--wide={isWide}
               bind:this={topEl}
             >
-              <div class="profile-panel__banner" class:profile-panel__banner--empty={!coverUrl && !roles[0]?.color} style={bannerStyle}></div>
+              {#if coverUrl}
+                <button
+                  type="button"
+                  class="profile-panel__banner profile-panel__banner--clickable"
+                  style={bannerStyle}
+                  aria-label="Смотреть обложку"
+                  onclick={previewCover}
+                ></button>
+              {:else}
+                <div
+                  class="profile-panel__banner"
+                  class:profile-panel__banner--empty={!roles[0]?.color}
+                  style={bannerStyle}
+                ></div>
+              {/if}
 
               <div class="profile-panel__head">
                 <div class="profile-panel__identity">
                   <div class="profile-panel__avatar-wrap" data-pp-flip>
-                    <div
-                      class="profile-panel__avatar"
-                      style={avatarUrl ? `background-image:url('${avatarUrl}')` : undefined}
-                      role="img"
-                      aria-label={login}
-                    ></div>
+                    {#if avatarUrl}
+                      <button
+                        type="button"
+                        class="profile-panel__avatar profile-panel__avatar--clickable"
+                        style={`background-image:url('${avatarUrl}')`}
+                        aria-label="Смотреть аватар"
+                        onclick={previewAvatar}
+                      ></button>
+                    {:else}
+                      <div
+                        class="profile-panel__avatar"
+                        role="img"
+                        aria-label={login}
+                      ></div>
+                    {/if}
                     <span
                       class="profile-panel__online"
                       class:profile-panel__online--on={isOnline}
@@ -677,16 +713,20 @@
 
                 <div class="profile-panel__cta" data-pp-flip>
                   {#if isMyProfile || friendButton.action !== 'none'}
-                    <UiV2Button
-                      label={friendBusy ? '…' : primaryLabel}
-                      size="lg"
-                      block={!isWide}
-                      variant={!isMyProfile && friendButton.action === 'send' ? 'light' : 'chrome'}
-                      disabled={!isMyProfile && (friendBusy || friendButton.disabled)}
-                      onclick={() => void onFriendClick()}
-                    />
+                    <span class="profile-panel__cta-primary">
+                      <UiV2Button
+                        label={friendBusy ? '…' : primaryLabel}
+                        size="lg"
+                        block
+                        variant={!isMyProfile && friendButton.action === 'send' ? 'light' : 'chrome'}
+                        disabled={!isMyProfile && (friendBusy || friendButton.disabled)}
+                        onclick={() => void onFriendClick()}
+                      />
+                    </span>
                   {:else if friendButton.disabled}
-                    <UiV2Button label={friendButton.label} size="lg" block={!isWide} disabled />
+                    <span class="profile-panel__cta-primary">
+                      <UiV2Button label={friendButton.label} size="lg" block disabled />
+                    </span>
                   {/if}
                   {#if !isMyProfile}
                     <UiV2RoundButton

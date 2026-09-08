@@ -289,6 +289,10 @@ export function createBrowserAnixBridge() {
     'anix:articleVote': h((c, id, vote) => c.getClient().endpoints.article.vote(id, vote)),
     'anix:articleCommentsPopular': h((c, id) =>
       c.getClient().endpoints.articleComment.commentsPopular(id)),
+    'anix:articleComments': h((c, id, page = 0, sort = 2) =>
+      c.getClient().endpoints.articleComment.comments(id, page, { sort })),
+    'anix:articleCommentAdd': h((c, id, body) =>
+      c.getClient().endpoints.articleComment.add(id, body)),
     'anix:channelById': h((c, id) => c.getClient().endpoints.channel.info(id)),
     'anix:channelArticles': h((c, channelId, page = 0) => c.getClient().endpoints.channel.articles(channelId, page)),
     'anix:channelSubscribe': h((c, channelId) => c.getClient().endpoints.channel.subscribe(channelId)),

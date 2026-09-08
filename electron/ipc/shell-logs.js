@@ -8,7 +8,14 @@ const logger = require('../logger');
 function register() {
 
 ipcMain.handle('shell:openExternal', (_, url) => {
-  if (url && typeof url === 'string') shell.openExternal(url);
+  if (!url || typeof url !== 'string') return false;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+    return shell.openExternal(parsed.href);
+  } catch {
+    return false;
+  }
 });
 
 ipcMain.handle('app:getVersion', () => app.getVersion());

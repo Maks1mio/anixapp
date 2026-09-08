@@ -313,6 +313,24 @@ loggedHandle('anix:articleCommentsPopular', async (_, id) => {
   }
 });
 
+loggedHandle('anix:articleComments', async (_, id, page = 0, sort = 2) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.articleComment.comments(id, page, { sort });
+  } catch (err) {
+    handleAnixError(err, 'articleComments');
+  }
+});
+
+loggedHandle('anix:articleCommentAdd', async (_, id, body) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.articleComment.add(id, body);
+  } catch (err) {
+    handleAnixError(err, 'articleCommentAdd');
+  }
+});
+
 ipcMain.handle('anix:articleDelete', async (_, id) => {
   try {
     const client = getAnixart();

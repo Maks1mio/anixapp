@@ -1,11 +1,11 @@
 <script lang="ts">
   import UiV2FeedPostMediaView from './UiV2FeedPostMedia.svelte';
+  import UiV2ArticleBlocks from './UiV2ArticleBlocks.svelte';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from './UiV2PopupMenu.svelte';
   import UiV2RoundButton from './UiV2RoundButton.svelte';
   import UserAvatar from '../UserAvatar.svelte';
   import UserBadge from '../UserBadge.svelte';
   import {
-    iconMessageCircle,
     iconMoreHorizontal,
     iconRepost,
     iconChevronUp,
@@ -18,7 +18,8 @@
     normalizeArticleVote,
     type ArticleVoteValue,
   } from '../../utils/feed-article';
-  import { ruCommentsLabel } from '../../utils/feed-top-comment';
+  import type { ArticleFormatBlock } from '../../utils/article-block-format';
+  import { formatCommentsCountShort, ruCommentsLabel } from '../../utils/feed-top-comment';
 
   export type UiV2FeedPostMedia = {
     url: string;
@@ -36,11 +37,21 @@
     isBlog?: boolean;
   };
 
+  export type UiV2FeedPostTextBlock = ArticleFormatBlock;
+
+  export type UiV2FeedPostBodyBlock =
+    | UiV2FeedPostTextBlock
+    | { kind: 'media'; items: UiV2FeedPostMedia[] };
+
   export type UiV2FeedPostRepost = {
     channel: UiV2FeedPostChannel;
     timeStr?: string;
     headline?: string;
     preview?: string;
+    beforeBlocks?: UiV2FeedPostTextBlock[];
+    afterBlocks?: UiV2FeedPostTextBlock[];
+    /** Текст и медиа репоста в исходном порядке. */
+    bodyBlocks?: UiV2FeedPostBodyBlock[];
     media?: UiV2FeedPostMedia[];
     missing?: boolean;
   };
@@ -54,14 +65,26 @@
     voteCount?: number;
   };
 
+  export type UiV2FeedPostSignedAuthor = {
+    id: number;
+    login: string;
+    avatar?: string | null;
+  };
+
   export type UiV2FeedPostData = {
     id: number | string;
     channel: UiV2FeedPostChannel;
     timeStr?: string;
     headline?: string;
     preview?: string;
-    /** Текст после медиа, скрытый за «Показать ещё». */
+    /** Текст после медиа (fallback без structured blocks). */
     moreText?: string;
+    /** Структурированные блоки до медиа (цитаты, списки, абзацы). */
+    beforeBlocks?: UiV2FeedPostTextBlock[];
+    /** Структурированные блоки после медиа. */
+    afterBlocks?: UiV2FeedPostTextBlock[];
+    /** Текст и медиа поста в исходном порядке блоков. */
+    bodyBlocks?: UiV2FeedPostBodyBlock[];
     /** Есть скрытый хвост (в т.ч. когда API не прислал остальные блоки). */
     canExpand?: boolean;
     media?: UiV2FeedPostMedia[];
@@ -74,6 +97,8 @@
     lastComment?: UiV2FeedPostLastComment | null;
     repost?: UiV2FeedPostRepost | null;
     containsRepost?: boolean;
+    /** Подпись автора при is_signed. */
+    signedAuthor?: UiV2FeedPostSignedAuthor | null;
   };
 
   type Props = {
@@ -89,14 +114,19 @@
     onShare?: (data: UiV2FeedPostData) => void | Promise<void>;
     onRepostClick?: (data: UiV2FeedPostData) => void;
     onRepostChannel?: (channelId: number) => void;
+    onSignedAuthor?: (authorId: number, e: MouseEvent) => void;
     menuItems?: UiV2PopupMenuItem[];
     onMenuSelect?: (id: string) => void | Promise<void>;
     /** Подгрузить полный payload, если в ленте только превью. */
     onNeedMore?: () => void | Promise<void>;
+    /** Раскрыты ли комментарии под постом. */
+    commentsExpanded?: boolean;
+    /** Аватар текущего пользователя для пустого превью. */
+    selfAvatar?: string | null;
+    /** Открыть комментарии под постом (`write` — сразу фокус в поле). */
+    onOpenComments?: (mode?: 'view' | 'write') => void;
     class?: string;
   };
-
-  const PREVIEW_COLLAPSE_CHARS = 180;
 
   let {
     data,
@@ -111,9 +141,13 @@
     onShare,
     onRepostClick,
     onRepostChannel,
+    onSignedAuthor,
     menuItems = [],
     onMenuSelect,
     onNeedMore,
+    commentsExpanded = false,
+    selfAvatar = null,
+    onOpenComments,
     class: className = '',
   }: Props = $props();
 
@@ -122,9 +156,8 @@
   let menuY = $state(0);
   let menuPlacement = $state<'point' | 'anchor'>('anchor');
   let menuAnchorEl = $state<HTMLElement | null>(null);
-  let previewExpanded = $state(false);
   let moreBusy = $state(false);
-  let topCommentOpen = $state(true);
+  let fetchedMoreForId = $state<string | number | null>(null);
 
   const channel = $derived(data.channel);
   const displayName = $derived(channel.title?.trim() || 'Канал');
@@ -146,14 +179,16 @@
   const headHasActions = $derived(hasMenu);
   const preview = $derived((data.preview ?? '').trim());
   const moreText = $derived((data.moreText ?? '').trim());
-  const canExpandPreview = $derived(
-    !!data.canExpand || moreText.length > 0 || preview.length > PREVIEW_COLLAPSE_CHARS,
-  );
-  const shownPreview = $derived(
-    preview.length > PREVIEW_COLLAPSE_CHARS && !previewExpanded
-      ? `${preview.slice(0, PREVIEW_COLLAPSE_CHARS).trimEnd()}…`
-      : preview,
-  );
+  const beforeBlocks = $derived(data.beforeBlocks ?? []);
+  const afterBlocks = $derived(data.afterBlocks ?? []);
+  const bodyBlocks = $derived(data.bodyBlocks ?? []);
+  const hasBodyBlocks = $derived(bodyBlocks.length > 0);
+  const hasStructuredBefore = $derived(beforeBlocks.length > 0);
+  const hasStructuredAfter = $derived(afterBlocks.length > 0);
+  const signedAuthor = $derived(data.signedAuthor ?? null);
+  const showExpandControl = $derived(!!data.canExpand || moreBusy);
+  const shownPreview = $derived(hasBodyBlocks || hasStructuredBefore ? '' : preview);
+  const shownMoreText = $derived(hasBodyBlocks || hasStructuredAfter ? '' : moreText);
   const lastComment = $derived(data.lastComment ?? null);
   const scoreClass = $derived(
     votes > 0 ? 'is-plus' : votes < 0 ? 'is-minus' : '',
@@ -165,6 +200,13 @@
   const repostChannelTitle = $derived(repostChannel?.title?.trim() || 'Канал');
   const repostAvatar = $derived(repostChannel?.avatar?.trim() || '');
   const repostMedia = $derived(repost?.media ?? []);
+  const repostBefore = $derived(repost?.beforeBlocks ?? []);
+  const repostAfter = $derived(repost?.afterBlocks ?? []);
+  const repostBodyBlocks = $derived(repost?.bodyBlocks ?? []);
+  const hasRepostBodyBlocks = $derived(repostBodyBlocks.length > 0);
+  const hasRepostBlocks = $derived(
+    hasRepostBodyBlocks || repostBefore.length > 0 || repostAfter.length > 0,
+  );
 
   function openPost() {
     onclick?.(data);
@@ -217,24 +259,39 @@
 
   async function togglePreview(e: MouseEvent) {
     e.stopPropagation();
-    if (previewExpanded) {
-      previewExpanded = false;
-      return;
+    if (!onNeedMore || moreBusy) return;
+    moreBusy = true;
+    fetchedMoreForId = data.id;
+    try {
+      await onNeedMore();
+    } finally {
+      moreBusy = false;
     }
-    if (!moreText && onNeedMore) {
-      moreBusy = true;
-      try {
-        await onNeedMore();
-      } finally {
-        moreBusy = false;
-      }
-    }
-    previewExpanded = true;
   }
 
-  function toggleTopComment(e: MouseEvent) {
+  $effect(() => {
+    const id = data.id;
+    if (!data.canExpand || !onNeedMore) return;
+    if (fetchedMoreForId === id) return;
+    fetchedMoreForId = id;
+    moreBusy = true;
+    void Promise.resolve(onNeedMore()).finally(() => {
+      moreBusy = false;
+    });
+  });
+
+  function openComments(e: MouseEvent, mode: 'view' | 'write' = 'view') {
     e.stopPropagation();
-    topCommentOpen = !topCommentOpen;
+    if (onOpenComments) {
+      onOpenComments(mode);
+      return;
+    }
+    openPost();
+  }
+
+  function openSignedAuthor(e: MouseEvent) {
+    e.stopPropagation();
+    if (signedAuthor?.id) onSignedAuthor?.(signedAuthor.id, e);
   }
 
   function openMenu(e: MouseEvent) {
@@ -354,38 +411,80 @@
   </header>
 
   <div class="uiv2-feed-post__body">
-    {#if data.headline || shownPreview || canExpandPreview}
-      <div class="uiv2-feed-post__text-copy">
-        {#if data.headline}
+    {#if hasBodyBlocks}
+      {#if data.headline}
+        <div class="uiv2-feed-post__text-copy">
           <p class="uiv2-feed-post__headline">{data.headline}</p>
+        </div>
+      {/if}
+      {#each bodyBlocks as block, i (i)}
+        {#if block.kind === 'media'}
+          <UiV2FeedPostMediaView items={block.items} />
+        {:else}
+          <div class="uiv2-feed-post__text-copy">
+            <UiV2ArticleBlocks blocks={[block]} />
+          </div>
         {/if}
-        {#if shownPreview}
-          <p class="uiv2-feed-post__text">{shownPreview}</p>
-        {/if}
-        {#if canExpandPreview}
+      {/each}
+      {#if showExpandControl}
+        <div class="uiv2-feed-post__text-copy">
           <button
             type="button"
             class="uiv2-feed-post__more-link"
             disabled={moreBusy}
             onclick={togglePreview}
           >
-            {#if moreBusy}
-              Загрузка…
-            {:else}
-              {previewExpanded ? 'Свернуть' : 'Показать ещё'}
-            {/if}
+            {moreBusy ? 'Загрузка…' : 'Показать ещё'}
           </button>
-        {/if}
-      </div>
+        </div>
+      {/if}
+    {:else}
+      {#if data.headline || hasStructuredBefore || shownPreview || showExpandControl}
+        <div class="uiv2-feed-post__text-copy">
+          {#if data.headline}
+            <p class="uiv2-feed-post__headline">{data.headline}</p>
+          {/if}
+          {#if hasStructuredBefore}
+            <UiV2ArticleBlocks blocks={beforeBlocks} />
+          {:else if shownPreview}
+            <p class="uiv2-feed-post__text">{shownPreview}</p>
+          {/if}
+          {#if showExpandControl}
+            <button
+              type="button"
+              class="uiv2-feed-post__more-link"
+              disabled={moreBusy}
+              onclick={togglePreview}
+            >
+              {moreBusy ? 'Загрузка…' : 'Показать ещё'}
+            </button>
+          {/if}
+        </div>
+      {/if}
+
+      {#if media.length > 0}
+        <UiV2FeedPostMediaView items={media} />
+      {/if}
+
+      {#if hasStructuredAfter}
+        <div class="uiv2-feed-post__text-copy">
+          <UiV2ArticleBlocks blocks={afterBlocks} />
+        </div>
+      {:else if shownMoreText}
+        <div class="uiv2-feed-post__text-copy">
+          <p class="uiv2-feed-post__text">{shownMoreText}</p>
+        </div>
+      {/if}
     {/if}
 
-        {#if !hasRepost && media.length > 0}
-          <UiV2FeedPostMediaView items={media} />
-        {/if}
-
-    {#if previewExpanded && moreText}
-      <div class="uiv2-feed-post__text-copy">
-        <p class="uiv2-feed-post__text">{moreText}</p>
+    {#if signedAuthor?.login}
+      <div class="uiv2-feed-post__signed" data-post-action>
+        <span class="uiv2-feed-post__signed-label">Автор:</span>
+        <button
+          type="button"
+          class="uiv2-feed-post__signed-name"
+          onclick={openSignedAuthor}
+        >{signedAuthor.login}</button>
       </div>
     {/if}
 
@@ -406,17 +505,38 @@
             {/if}
           </button>
           <div class="uiv2-feed-post__repost-body">
-            {#if repost.headline || repost.preview}
+            {#if hasRepostBodyBlocks}
+              {#each repostBodyBlocks as block, i (i)}
+                {#if block.kind === 'media'}
+                  <UiV2FeedPostMediaView items={block.items} />
+                {:else}
+                  <button type="button" class="uiv2-feed-post__repost-copy" onclick={openRepost}>
+                    <UiV2ArticleBlocks blocks={[block]} />
+                  </button>
+                {/if}
+              {/each}
+            {:else if hasRepostBlocks}
+              {#if repostBefore.length > 0}
+                <button type="button" class="uiv2-feed-post__repost-copy" onclick={openRepost}>
+                  <UiV2ArticleBlocks blocks={repostBefore} />
+                </button>
+              {/if}
+              {#if repostMedia.length > 0}
+                <UiV2FeedPostMediaView items={repostMedia} />
+              {/if}
+              {#if repostAfter.length > 0}
+                <button type="button" class="uiv2-feed-post__repost-copy" onclick={openRepost}>
+                  <UiV2ArticleBlocks blocks={repostAfter} />
+                </button>
+              {/if}
+            {:else if repost?.preview}
               <button type="button" class="uiv2-feed-post__repost-copy" onclick={openRepost}>
-                {#if repost.headline}
-                  <p class="uiv2-feed-post__headline uiv2-feed-post__headline--sm">{repost.headline}</p>
-                {/if}
-                {#if repost.preview}
-                  <p class="uiv2-feed-post__text">{repost.preview}</p>
-                {/if}
+                <p class="uiv2-feed-post__text">{repost.preview}</p>
               </button>
-            {/if}
-            {#if repostMedia.length > 0}
+              {#if repostMedia.length > 0}
+                <UiV2FeedPostMediaView items={repostMedia} />
+              {/if}
+            {:else if repostMedia.length > 0}
               <UiV2FeedPostMediaView items={repostMedia} />
             {/if}
           </div>
@@ -438,7 +558,12 @@
   </div>
 
   <footer class="uiv2-feed-post__foot" data-post-action>
-    <button type="button" class="uiv2-feed-post__comments" title="Комментарии" onclick={openPost}>
+    <button
+      type="button"
+      class="uiv2-feed-post__comments"
+      title="Комментарии"
+      onclick={(e) => openComments(e, comments > 0 ? 'view' : 'write')}
+    >
       {ruCommentsLabel(comments)}
     </button>
     <div class="uiv2-feed-post__foot-end">
@@ -485,39 +610,38 @@
     </div>
   </footer>
 
-  {#if lastComment && topCommentOpen}
-    <div class="uiv2-feed-post__top-comment" data-post-action>
-      <button type="button" class="uiv2-feed-post__top-comment-main" onclick={openPost}>
-        <span class="uiv2-feed-post__top-comment-icon" aria-hidden="true">{@html iconMessageCircle(16)}</span>
-        <span class="uiv2-feed-post__comment-avatar" aria-hidden="true">
-          <UserAvatar src={lastComment.avatar} label={lastComment.author} />
+  {#if !commentsExpanded}
+    <button
+      type="button"
+      class="uiv2-feed-post__comments-teaser"
+      data-post-action
+      aria-expanded="false"
+      onclick={(e) => openComments(e, lastComment && comments > 0 ? 'view' : 'write')}
+    >
+      <span class="uiv2-feed-post__comments-teaser-head">
+        <span class="uiv2-feed-post__comments-teaser-title">Комментарии</span>
+        {#if comments > 0}
+          <span class="uiv2-feed-post__comments-teaser-count">{formatCommentsCountShort(comments)}</span>
+        {/if}
+      </span>
+      {#if lastComment && comments > 0}
+        <span class="uiv2-feed-post__comments-teaser-preview">
+          <span class="uiv2-feed-post__comments-teaser-avatar" aria-hidden="true">
+            <UserAvatar src={lastComment.avatar} label={lastComment.author} />
+          </span>
+          <span class="uiv2-feed-post__comments-teaser-text" class:is-spoiler={lastComment.isSpoiler}>
+            {lastComment.text}
+          </span>
         </span>
-        <span class="uiv2-feed-post__top-comment-text" class:is-spoiler={lastComment.isSpoiler}>
-          {lastComment.text}
+      {:else}
+        <span class="uiv2-feed-post__comments-teaser-preview uiv2-feed-post__comments-teaser-preview--write">
+          <span class="uiv2-feed-post__comments-teaser-avatar" aria-hidden="true">
+            <UserAvatar src={selfAvatar} label="Вы" />
+          </span>
+          <span class="uiv2-feed-post__comments-teaser-placeholder">Написать комментарий</span>
         </span>
-      </button>
-      <button
-        type="button"
-        class="uiv2-feed-post__top-comment-toggle"
-        title="Скрыть комментарий"
-        aria-label="Скрыть топовый комментарий"
-        onclick={toggleTopComment}
-      >
-        {@html iconChevronUp(16)}
-      </button>
-    </div>
-  {:else if lastComment}
-    <div class="uiv2-feed-post__top-comment uiv2-feed-post__top-comment--collapsed" data-post-action>
-      <button
-        type="button"
-        class="uiv2-feed-post__top-comment-toggle"
-        title="Показать топовый комментарий"
-        aria-label="Показать топовый комментарий"
-        onclick={toggleTopComment}
-      >
-        {@html iconChevronDown(16)}
-      </button>
-    </div>
+      {/if}
+    </button>
   {/if}
 </article>
 

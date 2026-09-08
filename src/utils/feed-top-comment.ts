@@ -1,19 +1,10 @@
 import type { UiV2FeedPostLastComment } from '../components/uikit-v2/UiV2FeedPost.svelte';
 import { channelAvatarUrl } from './feed-article';
+import { articlePlainText } from './article-block-format';
 import { resolveJacksonRefs } from './jackson-refs';
 
 const cache = new Map<number, UiV2FeedPostLastComment | null>();
 const inflight = new Map<number, Promise<UiV2FeedPostLastComment | null>>();
-
-function stripHtml(raw: string): string {
-  return raw
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/[^\S\n]+/g, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
 
 export function mapArticleCommentToTop(
   raw: unknown,
@@ -24,7 +15,9 @@ export function mapArticleCommentToTop(
   const profile = (rec.profile ?? rec.author) as
     | { login?: string; avatar?: string | null }
     | undefined;
-  const text = stripHtml(String(rec.message ?? rec.text ?? rec.content ?? ''));
+  const text = articlePlainText(
+    String(rec.message ?? rec.text ?? rec.content ?? '').replace(/<br\s*\/?>/gi, '\n'),
+  );
   if (!text) return null;
   const spoiler = rec.is_spoiler === true || rec.isSpoiler === true;
   return {
@@ -83,4 +76,18 @@ export function ruCommentsLabel(count: number): string {
   if (d === 1) return `${n} комментарий`;
   if (d >= 2 && d <= 4) return `${n} комментария`;
   return `${n} комментариев`;
+}
+
+/** Короткий счётчик как в приложении: «17 тыс.». */
+export function formatCommentsCountShort(count: number): string {
+  const n = Math.max(0, Math.floor(Number(count) || 0));
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) {
+    const k = n / 1000;
+    const s = k >= 10 ? String(Math.round(k)) : k.toFixed(1).replace(/\.0$/, '');
+    return `${s} тыс.`;
+  }
+  const m = n / 1_000_000;
+  const s = m >= 10 ? String(Math.round(m)) : m.toFixed(1).replace(/\.0$/, '');
+  return `${s} млн`;
 }

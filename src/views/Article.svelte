@@ -16,7 +16,11 @@
     type RenderBlock,
   } from '../utils/feed-article';
   import UiV2FeedChannelCard from '../components/uikit-v2/UiV2FeedChannelCard.svelte';
+  import UiV2ArticleBlocks from '../components/uikit-v2/UiV2ArticleBlocks.svelte';
   import { iconArrowLeft, iconChevronDown, iconChevronUp, iconMessageCircle, iconRepost } from '../components/icons';
+  import { handleUserProfileClick } from '../stores/user-profile';
+  import type { ArticleFormatBlock } from '../utils/article-block-format';
+  import { requestOpenExternal } from '../utils/external-link';
 
   interface Props {
     id: number;
@@ -40,6 +44,13 @@
   const votes = $derived(Number(article?.vote_count ?? 0));
   const comments = $derived(Math.max(0, Number(article?.comment_count ?? 0)));
   const shares = $derived(Math.max(0, Number(article?.repost_count ?? 0)));
+  const signedAuthor = $derived.by(() => {
+    if (!article?.is_signed) return null;
+    const id = Number(article.author?.id ?? 0);
+    const login = article.author?.login?.trim() || '';
+    if (!(id > 0) || !login) return null;
+    return { id, login };
+  });
 
   async function load() {
     loadState = 'loading';
@@ -83,11 +94,7 @@
   }
 
   function openExternal(url: string) {
-    if (window.electron?.openExternal) {
-      void window.electron.openExternal(url);
-      return;
-    }
-    window.open(url, '_blank', 'noopener,noreferrer');
+    requestOpenExternal(url);
   }
 
   onMount(() => {
@@ -140,26 +147,7 @@
 
     <div class="article-page__content">
       {#each blocks as block, i (i)}
-        {#if block.kind === 'text'}
-          {#if block.level && block.level <= 2}
-            <h2 class="article-page__h">{block.text}</h2>
-          {:else if block.level}
-            <h3 class="article-page__h3">{block.text}</h3>
-          {:else}
-            <p class="article-page__p">{block.text}</p>
-          {/if}
-        {:else if block.kind === 'quote'}
-          <blockquote class="article-page__quote">
-            <p>{block.text}</p>
-            {#if block.caption}<cite>{block.caption}</cite>{/if}
-          </blockquote>
-        {:else if block.kind === 'list'}
-          <ul class="article-page__list">
-            {#each block.items as item}
-              <li>{item}</li>
-            {/each}
-          </ul>
-        {:else if block.kind === 'media'}
+        {#if block.kind === 'media'}
           <div class="article-page__media">
             {#each block.items as item}
               {#if item.kind === 'video'}
@@ -184,9 +172,22 @@
               {#if block.description}<span>{block.description}</span>{/if}
             </span>
           </button>
+        {:else}
+          <UiV2ArticleBlocks blocks={[block as ArticleFormatBlock]} />
         {/if}
       {/each}
     </div>
+
+    {#if signedAuthor}
+      <div class="article-page__signed">
+        <span>Автор:</span>
+        <button
+          type="button"
+          class="article-page__signed-name"
+          onclick={(e) => handleUserProfileClick(signedAuthor.id, e)}
+        >{signedAuthor.login}</button>
+      </div>
+    {/if}
 
     {#if tags.length > 0}
       <ul class="uiv2-feed-post__tags">

@@ -19,14 +19,24 @@
     channelSubscriberCount,
     normalizeArticleVote,
   } from '../utils/feed-article';
+  import {
+    channelHasNewArticles,
+    markChannelArticlesSeen,
+    normalizeLastArticleDate,
+  } from '../utils/channel-last-seen';
+  import { sortSubscriptionsSmart } from '../utils/subscription-order';
+  import {
+    getSubscriptionPins,
+    toggleSubscriptionPin,
+  } from '../utils/subscription-pins';
   import UiV2FeedChannelCard from '../components/uikit-v2/UiV2FeedChannelCard.svelte';
   import UiV2FeedRecommended from '../components/uikit-v2/UiV2FeedRecommended.svelte';
   import {
     iconFlame,
     iconNewspaper,
+    iconPin,
     iconRefreshCw,
     iconSearch,
-    iconSparkles,
     iconUsers,
     iconX,
   } from '../components/icons';
@@ -70,6 +80,10 @@
   let searchRequestId = 0;
   let recommendChannels = $state<FeedChannel[]>([]);
   let recommendBlogs = $state<FeedChannel[]>([]);
+  /** Инкремент после mark-seen — чтобы точки обновились. */
+  let lastSeenTick = $state(0);
+  /** Инкремент после pin/unpin. */
+  let pinTick = $state(0);
   let subscribeBusyId = $state<number | null>(null);
 
   const dateOptions = $derived.by((): UiV2SelectOption[] =>
@@ -244,15 +258,59 @@
     if (!Array.isArray(raw)) return [];
     return raw
       .map((item) => {
-        const c = item as FeedChannel;
+        const c = item as FeedChannel & { lastArticleDate?: unknown };
         if (!c || typeof c !== 'object' || !(Number(c.id) > 0)) return null;
         return {
           ...c,
           is_subscribed: c.is_subscribed !== false,
           subscriber_count: channelSubscriberCount(c),
+          last_article_date: normalizeLastArticleDate(
+            c.last_article_date ?? c.lastArticleDate,
+          ),
         };
       })
       .filter((c): c is FeedChannel => c != null);
+  }
+
+  function subscriptionIsFresh(ch: FeedChannel): boolean {
+    void lastSeenTick;
+    return channelHasNewArticles(ch.id, ch.last_article_date);
+  }
+
+  /** Закрепы сверху, затем свежие. */
+  const displaySubscriptions = $derived.by(() => {
+    void lastSeenTick;
+    void pinTick;
+    const pins = getSubscriptionPins();
+    return sortSubscriptionsSmart(
+      subscriptions,
+      (ch) => channelHasNewArticles(ch.id, ch.last_article_date),
+      pins,
+    );
+  });
+
+  const pinnedIdSet = $derived.by(() => {
+    void pinTick;
+    return new Set(getSubscriptionPins());
+  });
+
+  const subscriptionSelected = $derived(tab === 'my' && channelFilterId != null);
+
+  function subscriptionIsPinned(channelId: number): boolean {
+    return pinnedIdSet.has(channelId);
+  }
+
+  function onTogglePin(e: MouseEvent, channelId: number) {
+    e.stopPropagation();
+    e.preventDefault();
+    toggleSubscriptionPin(channelId);
+    pinTick += 1;
+  }
+
+  function markSubscriptionSeen(ch: FeedChannel | undefined | null) {
+    if (!ch?.id) return;
+    markChannelArticlesSeen(ch.id, ch.last_article_date ?? 0);
+    lastSeenTick += 1;
   }
 
   function withLocalSubscribeFlags(list: FeedArticle[]): FeedArticle[] {
@@ -418,8 +476,8 @@
     if (id === 'my' && !authed && !requireAuth()) return;
     if (id === 'managed' && !authed && !requireAuth()) return;
     tab = id;
-    if (id !== 'my') channelFilterId = null;
-    void loadSidebarChannel(id === 'my' ? channelFilterId : null);
+    channelFilterId = null;
+    void loadSidebarChannel(null);
     void reload();
   }
 
@@ -430,11 +488,15 @@
     void reload();
   }
 
-  function selectSubscription(channelId: number | null) {
-    if (channelId != null && !authed && !requireAuth()) return;
+  function selectSubscription(channelId: number) {
+    if (!authed && !requireAuth()) return;
     tab = 'my';
-    channelFilterId = channelId;
-    void loadSidebarChannel(channelId);
+    const nextId = channelFilterId === channelId ? null : channelId;
+    channelFilterId = nextId;
+    if (nextId != null) {
+      markSubscriptionSeen(subscriptions.find((c) => c.id === nextId));
+    }
+    void loadSidebarChannel(nextId);
     void reload();
   }
 
@@ -443,7 +505,10 @@
   }
 
   function onOpenChannel(channelId: number) {
-    if (channelId > 0) navigate(`/channel/${channelId}`);
+    if (channelId > 0) {
+      markSubscriptionSeen(subscriptions.find((c) => c.id === channelId));
+      navigate(`/channel/${channelId}`);
+    }
   }
 
   async function onVoteArticle(article: FeedArticle, nextVote: 0 | 1 | 2) {
@@ -627,7 +692,7 @@
     class:view-feed__layout--no-aside={feedNoAside}
   >
   <aside class="feed-side" aria-label="Навигация ленты">
-    <nav class="feed-side__nav">
+    <nav class="feed-side__nav" aria-label="Разделы ленты">
       <button
         type="button"
         class="feed-side__item"
@@ -640,15 +705,6 @@
       <button
         type="button"
         class="feed-side__item"
-        class:feed-side__item--active={tab === 'my' && channelFilterId == null}
-        onclick={() => onTabChange('my')}
-      >
-        <span class="feed-side__item-icon" aria-hidden="true">{@html iconNewspaper(18)}</span>
-        <span class="feed-side__item-label">Моя лента</span>
-      </button>
-      <button
-        type="button"
-        class="feed-side__item"
         class:feed-side__item--active={tab === 'managed'}
         onclick={() => onTabChange('managed')}
       >
@@ -657,37 +713,41 @@
       </button>
     </nav>
 
-    {#if authed}
-      <div class="feed-side__section">
-        <p class="feed-side__section-title">Подписки</p>
+    <section class="feed-side__group" aria-label="Моя лента">
+      <button
+        type="button"
+        class="feed-side__item feed-side__item--group"
+        class:feed-side__item--active={tab === 'my' && channelFilterId == null}
+        class:feed-side__item--dim={subscriptionSelected}
+        onclick={() => onTabChange('my')}
+      >
+        <span class="feed-side__item-icon" aria-hidden="true">{@html iconNewspaper(18)}</span>
+        <span class="feed-side__item-label">Моя лента</span>
+      </button>
+
+      {#if authed}
         {#if subscriptions.length === 0}
           <p class="feed-side__empty">Пока нет подписок</p>
         {:else}
-          <ul class="feed-side__topics">
-            <li>
-              <button
-                type="button"
-                class="feed-side__topic"
-                class:feed-side__topic--active={tab === 'my' && channelFilterId == null}
-                onclick={() => selectSubscription(null)}
-              >
-                <span class="feed-side__topic-icon feed-side__topic-icon--all" aria-hidden="true">
-                  {@html iconSparkles(14)}
-                </span>
-                <span class="feed-side__topic-label">Все подписки</span>
-              </button>
-            </li>
-            {#each subscriptions as ch (ch.id)}
-              <li>
+          <ul class="feed-side__topics" class:feed-side__topics--has-selection={subscriptionSelected}>
+            {#each displaySubscriptions as ch (ch.id)}
+              {@const pinned = subscriptionIsPinned(ch.id)}
+              <li class="feed-side__topic-row">
                 <button
                   type="button"
                   class="feed-side__topic"
                   class:feed-side__topic--active={tab === 'my' && channelFilterId === ch.id}
+                  class:feed-side__topic--dim={subscriptionSelected && channelFilterId !== ch.id}
                   onclick={() => selectSubscription(ch.id)}
+                  aria-pressed={tab === 'my' && channelFilterId === ch.id}
+                  aria-label={subscriptionIsFresh(ch)
+                    ? `${ch.title || `Канал #${ch.id}`}, есть новое`
+                    : undefined}
                 >
                   <span
                     class="feed-side__topic-avatar"
                     class:feed-side__topic-avatar--empty={!channelAvatarUrl(ch.avatar)}
+                    class:feed-side__topic-avatar--fresh={subscriptionIsFresh(ch)}
                     style={channelAvatarUrl(ch.avatar)
                       ? `background-image:url('${channelAvatarUrl(ch.avatar)}')`
                       : undefined}
@@ -695,12 +755,24 @@
                   ></span>
                   <span class="feed-side__topic-label">{ch.title || `Канал #${ch.id}`}</span>
                 </button>
+                <button
+                  type="button"
+                  class="feed-side__topic-pin"
+                  class:feed-side__topic-pin--on={pinned}
+                  class:feed-side__topic-pin--dim={subscriptionSelected && channelFilterId !== ch.id}
+                  title={pinned ? 'Открепить' : 'Закрепить'}
+                  aria-label={pinned ? 'Открепить' : 'Закрепить'}
+                  aria-pressed={pinned}
+                  onclick={(e) => onTogglePin(e, ch.id)}
+                >
+                  {@html iconPin(14)}
+                </button>
               </li>
             {/each}
           </ul>
         {/if}
-      </div>
-    {/if}
+      {/if}
+    </section>
   </aside>
 
   <div class="feed-main">

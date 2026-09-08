@@ -1,18 +1,21 @@
 import type { FeedArticle, FeedChannel } from '../types/feed';
-import type {
-  UiV2FeedPostData,
-  UiV2FeedPostMedia,
-  UiV2FeedPostChannel,
-} from '../components/uikit-v2/UiV2FeedPost.svelte';
+  import type {
+    UiV2FeedPostData,
+    UiV2FeedPostMedia,
+    UiV2FeedPostChannel,
+  } from '../components/uikit-v2/UiV2FeedPost.svelte';
+  import type { ArticleFormatBlock } from './article-block-format';
   import {
     ARTICLE_VOTE_PLUS,
+    articleFeedContentParts,
     articleFeedPreviewParts,
-    articleHeadline,
     articleMediaItems,
     articlePreviewText,
+    articleRenderBlocks,
     articleTags,
     channelAvatarUrl,
     normalizeArticleVote,
+    type RenderBlock,
   } from './feed-article';
 import { formatCommentTimestamp } from './comment';
 import { resolveBadgeImageUrl, resolveBadgeName } from './badge';
@@ -30,6 +33,20 @@ function mapMedia(article: FeedArticle, max = 10): UiV2FeedPostMedia[] {
     url: item.url,
     kind: item.kind,
   }));
+}
+
+/** Текст + медиа в исходном порядке блоков (как в приложении). */
+function mapBodyBlocks(article: FeedArticle): NonNullable<UiV2FeedPostData['bodyBlocks']> {
+  const out: NonNullable<UiV2FeedPostData['bodyBlocks']> = [];
+  for (const block of articleRenderBlocks(article) as RenderBlock[]) {
+    if (block.kind === 'media') {
+      if (block.items.length) out.push({ kind: 'media', items: block.items });
+      continue;
+    }
+    if (block.kind === 'embed') continue;
+    out.push(block);
+  }
+  return out;
 }
 
 function formatPostTime(ts: number | undefined | null): string {
@@ -66,19 +83,35 @@ function mapChannel(channel: FeedChannel): UiV2FeedPostChannel {
 export function feedArticleToUiV2FeedPost(article: FeedArticle): UiV2FeedPostData {
   const channel = article.channel ?? { id: 0, title: 'Канал' };
   const parts = articleFeedPreviewParts(article);
+  const content = articleFeedContentParts(article);
+  const beforeBlocks: ArticleFormatBlock[] = content.before;
+  const afterBlocks: ArticleFormatBlock[] = content.after;
   const repostRaw =
     article.repost_article && Number(article.repost_article.id) > 0
       ? article.repost_article
+      : null;
+  const authorLogin = article.author?.login?.trim() || '';
+  const authorId = Number(article.author?.id ?? 0);
+  const signedAuthor =
+    article.is_signed && authorId > 0 && authorLogin
+      ? {
+          id: authorId,
+          login: authorLogin,
+          avatar: article.author?.avatar ?? null,
+        }
       : null;
 
   return {
     id: article.id,
     channel: mapChannel(channel),
     timeStr: formatPostTime(article.creation_date ?? article.last_update_date),
-    headline: articleHeadline(article),
+    // Заголовки рендерятся как header-блоки — отдельный headline даёт дубль.
     preview: parts.lead,
     moreText: parts.more || undefined,
-    canExpand: parts.canExpand,
+    beforeBlocks,
+    afterBlocks,
+    bodyBlocks: mapBodyBlocks(article),
+    canExpand: content.canExpand,
     media: mapMedia(article),
     tags: articleTags(article),
     voteCount: article.vote_count,
@@ -88,18 +121,24 @@ export function feedArticleToUiV2FeedPost(article: FeedArticle): UiV2FeedPostDat
     voted: normalizeArticleVote(article.vote) === ARTICLE_VOTE_PLUS,
     lastComment: mapLastComment(article),
     containsRepost: !!article.contains_repost_article,
+    signedAuthor,
     repost: repostRaw
-      ? {
-          channel: repostRaw.channel
-            ? mapChannel(repostRaw.channel)
-            : { title: 'Канал' },
-          timeStr: formatPostTime(
-            repostRaw.creation_date ?? repostRaw.last_update_date,
-          ),
-          headline: articleHeadline(repostRaw),
-          preview: articlePreviewText(repostRaw),
-          media: mapMedia(repostRaw),
-        }
+      ? (() => {
+          const repostContent = articleFeedContentParts(repostRaw);
+          return {
+            channel: repostRaw.channel
+              ? mapChannel(repostRaw.channel)
+              : { title: 'Канал' },
+            timeStr: formatPostTime(
+              repostRaw.creation_date ?? repostRaw.last_update_date,
+            ),
+            beforeBlocks: repostContent.before,
+            afterBlocks: repostContent.after,
+            bodyBlocks: mapBodyBlocks(repostRaw),
+            preview: articlePreviewText(repostRaw) || undefined,
+            media: mapMedia(repostRaw),
+          };
+        })()
       : article.contains_repost_article
         ? { channel: { title: 'Канал' }, missing: true }
         : null,

@@ -231,6 +231,8 @@ function buildWebAnixApi(): AnixApi {
       unmute: (id) => invoke('anix:articleUnmute', id),
       setPinned: (id, isPinned) => invoke('anix:articlePin', id, isPinned),
       commentsPopular: (id) => invoke('anix:articleCommentsPopular', id),
+      comments: (id, page = 0, sort = 2) => invoke('anix:articleComments', id, page, sort),
+      commentAdd: (id, body) => invoke('anix:articleCommentAdd', id, body),
     },
 
     report: {
@@ -274,7 +276,9 @@ export async function initWebAnixApi(): Promise<boolean> {
   }
 
   try {
-    const health = await fetch(`${window.location.origin}/__anix/health`);
+    const health = await fetch(`${window.location.origin}/__anix/health`, {
+      signal: AbortSignal.timeout(2500),
+    });
     if (!health.ok) return false;
     window.anixApi = buildWebAnixApi();
     return true;

@@ -22,8 +22,13 @@ if (isTvMode()) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  void Promise.all([initWebAnixApi(), initWebGpuAvailability()]).finally(() => {
-    if (isTvMode()) initTvNavigation();
-    mount(App, { target: document.getElementById('app')! });
-  });
+  // WebGPU не блокирует первый кадр — probe в фоне (Anime4K / плеер подхватят статус).
+  void initWebGpuAvailability();
+
+  void initWebAnixApi()
+    .catch(() => false)
+    .finally(() => {
+      if (isTvMode()) initTvNavigation();
+      mount(App, { target: document.getElementById('app')! });
+    });
 });

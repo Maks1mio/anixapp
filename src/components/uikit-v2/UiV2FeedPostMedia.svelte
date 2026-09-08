@@ -82,6 +82,29 @@
     aria-label="Открыть изображение"
     onclick={(e) => previewAt(0, e)}
   >
+    {#if item.kind === 'video'}
+      <!-- svelte-ignore a11y_media_has_caption -->
+      <video
+        class="uiv2-feed-post__media-blur"
+        src={item.url}
+        muted
+        playsinline
+        loop
+        autoplay
+        preload="metadata"
+        aria-hidden="true"
+        tabindex="-1"
+      ></video>
+    {:else}
+      <img
+        class="uiv2-feed-post__media-blur"
+        src={item.url}
+        alt=""
+        aria-hidden="true"
+        loading="lazy"
+        decoding="async"
+      />
+    {/if}
     {@render mediaNode(item, 'uiv2-feed-post__media-img')}
     {#if showGifBadge(item)}
       <span class="uiv2-feed-post__media-badge">GIF</span>

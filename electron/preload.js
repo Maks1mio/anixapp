@@ -539,6 +539,9 @@ contextBridge.exposeInMainWorld('anixApi', {
     unmute: (id) => ipcRenderer.invoke('anix:articleUnmute', id),
     setPinned: (id, isPinned) => ipcRenderer.invoke('anix:articlePin', id, isPinned),
     commentsPopular: (id) => ipcRenderer.invoke('anix:articleCommentsPopular', id),
+    comments: (id, page = 0, sort = 2) =>
+      ipcRenderer.invoke('anix:articleComments', id, page, sort),
+    commentAdd: (id, body) => ipcRenderer.invoke('anix:articleCommentAdd', id, body),
   },
 
   report: {

@@ -95,6 +95,7 @@
   import LobbyModal from './components/LobbyModal.svelte';
   import NotificationsModal from './components/NotificationsModal.svelte';
   import WatchModal from './components/WatchModal.svelte';
+  import UiV2ExternalLinkConfirm from './components/uikit-v2/UiV2ExternalLinkConfirm.svelte';
   import Toast from './components/Toast.svelte';
   import TvDebugMetrics from './components/tv/TvDebugMetrics.svelte';
 
@@ -755,10 +756,8 @@
         }
         setConnectionOk();
         notifyAuthChanged();
-        window.setTimeout(() => {
-          appScreen.set('main');
-          if (authKnown && !hasToken) openLoginPrompt();
-        }, 500);
+        appScreen.set('main');
+        if (authKnown && !hasToken) openLoginPrompt();
       })
       .catch(async () => {
         setConnectionProblem();
@@ -1032,6 +1031,7 @@
       onClose={() => watchModalOpen.set(false)}
     />
   {/if}
+  <UiV2ExternalLinkConfirm />
   {#if $loginPromptOpen}
     <Login
       overlay

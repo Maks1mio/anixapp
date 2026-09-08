@@ -67,7 +67,11 @@
   font-weight: 550;
   text-align: left;
   cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    opacity 0.2s ease,
+    filter 0.2s ease;
 
   &:hover,
   &:focus-visible {
@@ -80,6 +84,19 @@
     background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 12%, transparent);
     color: var(--uikit-v2-text, #{$color-text});
     font-weight: 650;
+    opacity: 1;
+    filter: none;
+  }
+
+  &--dim:not(:hover):not(:focus-visible) {
+    opacity: 0.38;
+    filter: saturate(0.75);
+  }
+
+  &--dim:hover,
+  &--dim:focus-visible {
+    opacity: 0.82;
+    filter: none;
   }
 }
 
@@ -94,6 +111,20 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.feed-side__group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.feed-side__group .feed-side__topics {
+  margin-top: 0.1rem;
+  padding-left: 0.35rem;
+  border-left: 1px solid color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 10%, transparent);
+  margin-left: 1.15rem;
 }
 
 .feed-side__section {
@@ -115,7 +146,7 @@
 
 .feed-side__empty {
   margin: 0;
-  padding: 0.35rem 0.7rem;
+  padding: 0.35rem 0.7rem 0.35rem 1.5rem;
   font-size: 0.8rem;
   color: var(--uiv2-fg-muted, #{$color-text-muted});
 }
@@ -129,12 +160,21 @@
   gap: 0.12rem;
 }
 
+.feed-side__topic-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
 .feed-side__topic {
   display: flex;
   align-items: center;
   gap: 0.55rem;
+  flex: 1 1 auto;
+  min-width: 0;
   width: 100%;
-  padding: 0.4rem 0.65rem;
+  padding: 0.4rem 1.85rem 0.4rem 0.65rem;
   border: 0;
   border-radius: 10px;
   background: transparent;
@@ -143,7 +183,11 @@
   font-size: 0.84rem;
   text-align: left;
   cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    opacity 0.2s ease,
+    filter 0.2s ease;
 
   &:hover,
   &:focus-visible {
@@ -156,10 +200,75 @@
     background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 11%, transparent);
     color: var(--uikit-v2-text, #{$color-text});
     font-weight: 600;
+    opacity: 1;
+    filter: none;
+  }
+
+  &--dim:not(:hover):not(:focus-visible) {
+    opacity: 0.38;
+    filter: saturate(0.75);
+  }
+
+  &--dim:hover,
+  &--dim:focus-visible {
+    opacity: 0.82;
+    filter: none;
   }
 }
 
+.feed-side__topic-pin {
+  position: absolute;
+  right: 0.28rem;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.45rem;
+  height: 1.45rem;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 55%, transparent);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.14s ease,
+    color 0.14s ease,
+    background 0.14s ease,
+    filter 0.2s ease;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--uikit-v2-text, #{$color-text});
+    background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 10%, transparent);
+    outline: none;
+  }
+
+  &--on {
+    color: var(--uikit-v2-text, #{$color-text});
+    opacity: 1;
+    pointer-events: auto;
+
+    &.feed-side__topic-pin--dim:not(:hover):not(:focus-visible) {
+      filter: saturate(0.75);
+      opacity: 0.38;
+    }
+  }
+}
+
+.feed-side__topic-row:hover .feed-side__topic-pin,
+.feed-side__topic-row:focus-within .feed-side__topic-pin {
+  opacity: 1;
+  pointer-events: auto;
+  filter: none;
+}
+
 .feed-side__topic-avatar {
+  position: relative;
   flex: 0 0 auto;
   width: 1.5rem;
   height: 1.5rem;
@@ -170,6 +279,19 @@
 
   &--empty {
     background-image: none;
+  }
+
+  &--fresh::after {
+    content: '';
+    position: absolute;
+    top: -0.12rem;
+    left: -0.12rem;
+    width: 0.42rem;
+    height: 0.42rem;
+    border-radius: 50%;
+    background: #e53935;
+    box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--uikit-v2-bg, #121212) 92%, #000);
+    pointer-events: none;
   }
 }
 
@@ -473,6 +595,68 @@
   min-width: 0;
 }
 
+.feed-article-comments {
+  margin: 0 0.75rem 0.85rem;
+  padding: 0.75rem 0.8rem 0.85rem;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--uikit-v2-elevated, #{$color-surface-hover}) 88%, #000 12%);
+}
+
+.feed-article-comments__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.feed-article-comments__heading {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.feed-article-comments__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--uikit-v2-text, #{$color-text});
+}
+
+.feed-article-comments__count {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
+}
+
+.feed-article-comments__close {
+  flex: 0 0 auto;
+  padding: 0.2rem 0.45rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
+  font-size: 0.8rem;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--uikit-v2-text, #{$color-text});
+    outline: none;
+  }
+}
+
+.feed-article-comments__composer {
+  margin-bottom: 0.75rem;
+}
+
+.feed-article-comments__empty {
+  margin: 0.35rem 0 0;
+  font-size: 0.84rem;
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
+}
+
 .feed-page__more {
   display: flex;
   justify-content: center;
@@ -705,6 +889,34 @@
     display: block;
     margin-top: 0.35rem;
     font-size: 0.8rem;
+  }
+}
+
+.article-page__signed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+  font-size: 0.84rem;
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
+}
+
+.article-page__signed-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--uikit-v2-text, #{$color-text});
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--uikit-v2-accent, #{$color-accent});
+    outline: none;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
   }
 }
 

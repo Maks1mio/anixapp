@@ -30,6 +30,8 @@ export interface FeedChannel {
   is_administrator_or_higher?: boolean;
   subscriber_count?: number;
   article_count?: number;
+  /** Unix-секунды последней статьи (для индикатора «свежее»). */
+  last_article_date?: number;
   /** Значок канала / блога (объект badge или URL). */
   badge?: unknown;
 }
@@ -85,6 +87,8 @@ export interface FeedArticle {
   is_under_moderation?: boolean;
   is_pinned?: boolean;
   is_muted?: boolean;
+  /** Пост подписан автором канала (показать «Автор: …»). */
+  is_signed?: boolean;
   has_delete_enforcement?: boolean;
   contains_repost_article?: boolean;
   /** Вложенная статья при репосте. */

@@ -1,44 +1,21 @@
 import { resolveCdnAssetUrl } from './posterUrl';
 import type { FeedArticle, FeedArticleBlock, FeedArticlePayload } from '../types/feed';
+import {
+  articlePlainText,
+  formatInlineField,
+  type ArticleFormatBlock,
+} from './article-block-format';
+
+export type { ArticleFormatBlock } from './article-block-format';
+export {
+  articlePlainText,
+  decodeHtmlEntities,
+  formatInlineField,
+  sanitizeArticleHtml,
+} from './article-block-format';
 
 /** Как Android Preview: после первой картинки/эмбеда превью обрывается. */
-const PREVIEW_MAX_BLOCKS = 3;
-const PREVIEW_MAX_PARAGRAPH = 350;
-const PREVIEW_TOP_BLOCKS = new Set(['header', 'paragraph', 'text']);
-const PREVIEW_MIDDLE_BLOCKS = new Set(['header', 'paragraph', 'text', 'quote', 'list']);
 const PREVIEW_BOTTOM_BLOCKS = new Set(['media', 'image', 'gallery', 'embed']);
-
-function decodeHtmlEntities(raw: string): string {
-  return raw
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex: string) => {
-      const code = Number.parseInt(hex, 16);
-      try {
-        return Number.isFinite(code) ? String.fromCodePoint(code) : _;
-      } catch {
-        return _;
-      }
-    })
-    .replace(/&#(\d+);/g, (_, dec: string) => {
-      const code = Number.parseInt(dec, 10);
-      try {
-        return Number.isFinite(code) ? String.fromCodePoint(code) : _;
-      } catch {
-        return _;
-      }
-    })
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&quot;/gi, '"')
-    .replace(/&apos;/gi, "'")
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&amp;/gi, '&');
-}
-
-function stripHtml(raw: string): string {
-  return decodeHtmlEntities(raw.replace(/<[^>]+>/g, ' '))
-    .replace(/\s+/g, ' ')
-    .trim();
-}
 
 function blockKind(block: FeedArticleBlock): string {
   return String(block.type ?? block.name ?? '').toLowerCase().trim();
@@ -74,11 +51,13 @@ function blockText(block: FeedArticleBlock): string {
   const type = blockKind(block);
   if (type === 'paragraph' || type === 'text' || type === 'header' || type === 'quote') {
     const text = typeof data.text === 'string' ? data.text : '';
-    return stripHtml(text);
+    return articlePlainText(text);
   }
   if (type === 'list' && Array.isArray(data.items)) {
     return data.items
-      .map((item) => stripHtml(typeof item === 'string' ? item : String((item as { content?: string })?.content ?? '')))
+      .map((item) =>
+        articlePlainText(typeof item === 'string' ? item : String((item as { content?: string })?.content ?? '')),
+      )
       .filter(Boolean)
       .join(' · ');
   }
@@ -256,67 +235,6 @@ function isMediaBlockKind(kind: string): boolean {
   return PREVIEW_BOTTOM_BLOCKS.has(kind);
 }
 
-function truncatePreviewText(text: string): string {
-  if (text.length <= PREVIEW_MAX_PARAGRAPH) return text;
-  const cut = Math.max(0, PREVIEW_MAX_PARAGRAPH - 3);
-  return `${text.slice(0, cut)}…`;
-}
-
-function copyBlockForPreview(block: FeedArticleBlock): FeedArticleBlock {
-  const kind = blockKind(block);
-  if (kind !== 'paragraph' && kind !== 'text' && kind !== 'header' && kind !== 'quote') {
-    return block;
-  }
-  const data = { ...(block.data ?? {}) };
-  const text = typeof data.text === 'string' ? data.text : '';
-  if (text.length > PREVIEW_MAX_PARAGRAPH) {
-    data.text = truncatePreviewText(text);
-  }
-  return { ...block, data };
-}
-
-function blockNeedsExpand(block: FeedArticleBlock): boolean {
-  const data = block.data ?? {};
-  const text = typeof data.text === 'string' ? data.text : '';
-  const declared = Number(data.text_length ?? data.textLength);
-  if (Number.isFinite(declared) && declared > text.length) return true;
-  const kind = blockKind(block);
-  return (kind === 'paragraph' || kind === 'text' || kind === 'header' || kind === 'quote')
-    && text.length > PREVIEW_MAX_PARAGRAPH;
-}
-
-/** Как Android Preview.create: header/абзац, затем медиа — и обрыв. */
-function createArticlePreviewSlice(blocks: FeedArticleBlock[]): {
-  preview: FeedArticleBlock[];
-  rest: FeedArticleBlock[];
-} {
-  if (blocks.length < 1) return { preview: blocks, rest: [] };
-  const preview: FeedArticleBlock[] = [];
-  let lastIncluded = -1;
-  let stage = 0;
-  for (let i = 0; i < blocks.length && preview.length < PREVIEW_MAX_BLOCKS; i++) {
-    const copied = copyBlockForPreview(blocks[i]);
-    const name = blockKind(copied);
-    if (preview.length < 2) {
-      if (stage === 0 && PREVIEW_TOP_BLOCKS.has(name)) {
-        preview.push(copied);
-        lastIncluded = i;
-        stage = 1;
-      } else if (stage <= 1 && PREVIEW_MIDDLE_BLOCKS.has(name)) {
-        preview.push(copied);
-        lastIncluded = i;
-        stage = 2;
-      }
-    }
-    if (PREVIEW_BOTTOM_BLOCKS.has(name)) {
-      preview.push(copied);
-      lastIncluded = i;
-      return { preview, rest: blocks.slice(lastIncluded + 1) };
-    }
-  }
-  return { preview, rest: blocks.slice(lastIncluded + 1) };
-}
-
 function collectBlockTexts(
   blocks: FeedArticleBlock[],
   headline: string,
@@ -339,27 +257,113 @@ function collectBlockTexts(
 }
 
 /**
- * Превью ленты как в Anixart:
- * абзац → «Показать ещё» → картинка; хвост (P.S.) скрыт.
- * Кнопка нужна и когда API уже отдал урезанные blocks, но block_count больше.
+ * Текст поста для карточки ленты: целиком (до/после медиа).
+ * canExpand — только если API отдал урезанный payload.
  */
 export function articleFeedPreviewParts(article: FeedArticle): {
   lead: string;
   more: string;
   canExpand: boolean;
 } {
-  const { blocks, blockCount } = resolveArticlePayload(article);
-  const headline = articleHeadline(article);
-  const { preview, rest } = createArticlePreviewSlice(blocks);
-  const lead = collectBlockTexts(preview, headline, true);
-  const more = collectBlockTexts(rest, '', false);
-  const canExpand =
-    rest.length > 0
-    || blockCount > blocks.length
-    || blocks.some(blockNeedsExpand)
-    || more.length > 0;
-
+  const { before, after, canExpand } = articleFeedContentParts(article);
+  const lead = before
+    .map((b) => {
+      if (b.kind === 'list') return b.itemsPlain.join('\n');
+      return b.plain;
+    })
+    .filter(Boolean)
+    .join('\n\n')
+    .trim();
+  const more = after
+    .map((b) => {
+      if (b.kind === 'list') return b.itemsPlain.join('\n');
+      return b.plain;
+    })
+    .filter(Boolean)
+    .join('\n\n')
+    .trim();
   return { lead, more, canExpand };
+}
+
+export type FeedTextBlock = ArticleFormatBlock;
+
+/** Текстовые/цитатные блоки до и после первого медиа. */
+export function articleFeedContentParts(article: FeedArticle): {
+  before: FeedTextBlock[];
+  after: FeedTextBlock[];
+  canExpand: boolean;
+} {
+  const { blocks, blockCount } = resolveArticlePayload(article);
+  const before: FeedTextBlock[] = [];
+  const after: FeedTextBlock[] = [];
+  let seenMedia = false;
+
+  for (const block of blocks) {
+    const type = blockKind(block);
+    if (isMediaBlockKind(type)) {
+      seenMedia = true;
+      continue;
+    }
+    const mapped = mapPayloadBlockToFeedText(block);
+    if (!mapped) continue;
+    (seenMedia ? after : before).push(mapped);
+  }
+
+  const apiTruncated = blocks.some((block) => {
+    const data = block.data ?? {};
+    const text = typeof data.text === 'string' ? data.text : '';
+    const declared = Number(data.text_length ?? data.textLength);
+    return Number.isFinite(declared) && declared > text.length + 2;
+  });
+
+  return {
+    before,
+    after,
+    canExpand: blockCount > blocks.length || apiTruncated,
+  };
+}
+
+function mapPayloadBlockToFeedText(block: FeedArticleBlock): FeedTextBlock | null {
+  const type = blockKind(block);
+  const data = (block.data ?? {}) as Record<string, unknown>;
+
+  if (type === 'paragraph' || type === 'text') {
+    const { html, plain } = formatInlineField(typeof data.text === 'string' ? data.text : '');
+    return plain || html ? { kind: 'text', html, plain } : null;
+  }
+  if (type === 'header') {
+    const { html, plain } = formatInlineField(typeof data.text === 'string' ? data.text : '');
+    const level = typeof data.level === 'number' ? data.level : 2;
+    return plain || html ? { kind: 'header', html, plain, level } : null;
+  }
+  if (type === 'quote') {
+    const body = formatInlineField(typeof data.text === 'string' ? data.text : '');
+    const caption = formatInlineField(typeof data.caption === 'string' ? data.caption : '');
+    if (!body.plain && !body.html) return null;
+    return {
+      kind: 'quote',
+      html: body.html,
+      plain: body.plain,
+      captionHtml: caption.html || undefined,
+      captionPlain: caption.plain || undefined,
+    };
+  }
+  if (type === 'list' && Array.isArray(data.items)) {
+    const items = data.items
+      .map((item) =>
+        formatInlineField(
+          typeof item === 'string' ? item : String((item as { content?: string })?.content ?? ''),
+        ),
+      )
+      .filter((x) => x.plain || x.html);
+    if (!items.length) return null;
+    return {
+      kind: 'list',
+      itemsHtml: items.map((x) => x.html),
+      itemsPlain: items.map((x) => x.plain),
+    };
+  }
+  return null;
 }
 
 function isVideoUrl(raw: string): boolean {
@@ -486,9 +490,7 @@ export function channelCoverUrl(cover: string | undefined | null): string {
 }
 
 export type RenderBlock =
-  | { kind: 'text'; text: string; level?: number }
-  | { kind: 'quote'; text: string; caption?: string }
-  | { kind: 'list'; items: string[] }
+  | ArticleFormatBlock
   | { kind: 'media'; items: FeedMediaItem[] }
   | { kind: 'embed'; title?: string; description?: string; image?: string; url?: string; siteName?: string };
 
@@ -501,28 +503,15 @@ export function articleRenderBlocks(article: FeedArticle): RenderBlock[] {
     const type = blockKind(block);
     const data = (block.data ?? {}) as Record<string, unknown>;
 
-    if (type === 'paragraph' || type === 'text') {
-      const text = stripHtml(typeof data.text === 'string' ? data.text : '');
-      if (text) out.push({ kind: 'text', text });
-      continue;
-    }
-    if (type === 'header') {
-      const text = stripHtml(typeof data.text === 'string' ? data.text : '');
-      const level = typeof data.level === 'number' ? data.level : 2;
-      if (text) out.push({ kind: 'text', text, level });
-      continue;
-    }
-    if (type === 'quote') {
-      const text = stripHtml(typeof data.text === 'string' ? data.text : '');
-      const caption = stripHtml(typeof data.caption === 'string' ? data.caption : '');
-      if (text) out.push({ kind: 'quote', text, caption: caption || undefined });
-      continue;
-    }
-    if (type === 'list' && Array.isArray(data.items)) {
-      const items = data.items
-        .map((item) => stripHtml(typeof item === 'string' ? item : String((item as { content?: string })?.content ?? '')))
-        .filter(Boolean);
-      if (items.length) out.push({ kind: 'list', items });
+    if (
+      type === 'paragraph'
+      || type === 'text'
+      || type === 'header'
+      || type === 'quote'
+      || type === 'list'
+    ) {
+      const mapped = mapPayloadBlockToFeedText(block);
+      if (mapped) out.push(mapped);
       continue;
     }
     if (type === 'media' || type === 'image' || type === 'gallery') {

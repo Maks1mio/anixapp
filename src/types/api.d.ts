@@ -400,7 +400,21 @@ export interface AnixApi {
     mute: (id: number) => Promise<{ code?: number }>;
     unmute: (id: number) => Promise<{ code?: number }>;
     setPinned: (id: number, isPinned: boolean) => Promise<{ code?: number }>;
-    commentsPopular: (id: number) => Promise<{ content?: unknown[] }>;
+    commentsPopular: (id: number) => Promise<{ content?: unknown[]; total_count?: number }>;
+    comments: (
+      id: number,
+      page?: number,
+      sort?: number,
+    ) => Promise<{ content?: unknown[]; total_count?: number; total_page_count?: number }>;
+    commentAdd: (
+      id: number,
+      body: {
+        message: string;
+        isSpoiler: boolean;
+        parentCommentId?: number | null;
+        replyToProfileId?: number | null;
+      },
+    ) => Promise<{ code?: number; comment?: unknown }>;
   };
 
   report: {

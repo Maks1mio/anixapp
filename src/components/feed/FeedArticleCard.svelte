@@ -4,6 +4,7 @@
   import UiV2FeedPost, {
     type UiV2FeedPostLastComment,
   } from '../uikit-v2/UiV2FeedPost.svelte';
+  import FeedArticleComments from './FeedArticleComments.svelte';
   import { feedArticleToUiV2FeedPost } from '../../utils/uikit-v2-feed-post';
   import { handleUserProfileClick } from '../../stores/user-profile';
   import {
@@ -13,6 +14,7 @@
   } from '../../utils/feed-article-menu';
   import { runFeedArticleMenuAction } from '../../utils/feed-article-menu-actions';
   import { loadArticleTopComment } from '../../utils/feed-top-comment';
+  import { channelAvatarUrl } from '../../utils/feed-article';
 
   interface Props {
     article: FeedArticle;
@@ -49,6 +51,10 @@
   let cardRoot = $state<HTMLDivElement | null>(null);
   let topCommentOverride = $state<UiV2FeedPostLastComment | null | undefined>(undefined);
   let expandedPayloadArticle = $state<FeedArticle | null>(null);
+  let commentsOpen = $state(false);
+  let commentsFocusWrite = $state(false);
+  let selfAvatar = $state<string | null>(null);
+  let commentCountOverride = $state<number | null>(null);
 
   const sourceArticle = $derived.by(() => {
     if (expandedPayloadArticle && expandedPayloadArticle.id === article.id) {
@@ -57,8 +63,12 @@
     return article;
   });
   const mappedPost = $derived(feedArticleToUiV2FeedPost(sourceArticle));
+  const displayCommentCount = $derived(
+    commentCountOverride ?? Math.max(0, Number(article.comment_count ?? 0)),
+  );
   const post = $derived({
     ...mappedPost,
+    commentCount: displayCommentCount,
     lastComment:
       topCommentOverride !== undefined ? topCommentOverride : mappedPost.lastComment,
   });
@@ -99,10 +109,28 @@
     void ensureFeedArticleMenuSession().then(() => {
       menuSessionTick += 1;
     });
+    void window.anixApi?.profile?.self?.().then((data: { profile?: { avatar?: string | null } }) => {
+      selfAvatar = channelAvatarUrl(data?.profile?.avatar ?? null) || null;
+    });
   });
 
   function openArticle() {
     onOpen?.(sourceArticle);
+  }
+
+  function openComments(mode: 'view' | 'write' = 'view') {
+    commentsFocusWrite = mode === 'write';
+    commentsOpen = true;
+    queueMicrotask(() => {
+      cardRoot
+        ?.querySelector(`#feed-article-comments-${article.id}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }
+
+  function closeComments() {
+    commentsOpen = false;
+    commentsFocusWrite = false;
   }
 
   async function loadFullPreview() {
@@ -135,6 +163,10 @@
     if (ch?.id) onChannel?.(ch.id);
   }
 
+  function openSignedAuthor(authorId: number, e: MouseEvent) {
+    handleUserProfileClick(authorId, e);
+  }
+
   async function handleMenuSelect(id: string) {
     const result = await runFeedArticleMenuAction(id, article);
     if (result.kind === 'removed') {
@@ -155,13 +187,17 @@
     {menuItems}
     voteBusy={voteBusy}
     subscribeBusy={subBusy}
+    commentsExpanded={commentsOpen}
+    selfAvatar={selfAvatar}
     onclick={() => openArticle()}
     onAuthor={openAuthor}
+    onSignedAuthor={openSignedAuthor}
     onChannel={onChannel}
     onRepostClick={() => openRepost()}
     onRepostChannel={onChannel}
     onMenuSelect={handleMenuSelect}
     onNeedMore={loadFullPreview}
+    onOpenComments={openComments}
     onShare={async () => {
       await runFeedArticleMenuAction('share', article);
     }}
@@ -185,5 +221,16 @@
       }
     }}
   />
+  {#if commentsOpen}
+    <FeedArticleComments
+      articleId={Number(article.id)}
+      totalCount={displayCommentCount}
+      focusComposer={commentsFocusWrite}
+      onClose={closeComments}
+      onCountChange={(n) => {
+        commentCountOverride = n;
+      }}
+    />
+  {/if}
 </div>
 {/key}

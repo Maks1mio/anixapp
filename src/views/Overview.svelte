@@ -54,7 +54,7 @@
 
   const OVERVIEW_UI_KEY = () => buildViewStateKey('/overview');
 
-  const DISCOVER_TIMEOUT_MS = 20_000;
+  const DISCOVER_TIMEOUT_MS = 8_000;
 
   let loadState = $state<LoadState>('loading');
   let errorMsg = $state('');
@@ -199,7 +199,7 @@
     try {
       const data = await request;
       applyCache(data);
-      await loadHeroOverrides(data.banners);
+      void loadHeroOverrides(data.banners);
     } catch (err) {
       errorMsg = String(err);
       loadState = 'error';

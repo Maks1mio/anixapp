@@ -1,6 +1,7 @@
 'use strict';
 
 const { protocol, nativeImage } = require('electron');
+const { fetchAnixartProxy, getProxyAppKey } = require('./lib/anixart-proxy-auth');
 
 const ANIXART_SITE_ORIGIN = 'https://anixart.tv';
 const ANIXART_SITE_REFERER = `${ANIXART_SITE_ORIGIN}/`;
@@ -10,10 +11,37 @@ const ANIXART_CDN_HOSTS = ['anixmirai.com', 'anixart.tv', 'anixsekai.com'];
 
 const CACHE_MAX = 256;
 const CACHE_TTL_MS = 60 * 60 * 1000;
+/** Сколько раз пробовать оригинал + mirror при сбоях CDN / сети. */
+const CDN_FETCH_ATTEMPTS = 10;
+const CDN_FETCH_BASE_MS = 350;
+/** После сбоя прямого CDN — тянуть через api.anixapp.com (обход zapret/DPI на клиенте). */
+const CDN_RELAY_STICKY_MS = 15 * 60 * 1000;
 /** @type {Map<string, { buffer: Buffer, mimeType: string, ts: number }>} */
 const cache = new Map();
 /** @type {Map<string, { buffer: Buffer, mimeType: string, ts: number }>} */
 const thumbnailCache = new Map();
+/** @type {number} */
+let preferRelayUntil = 0;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getHttpFetcher() {
+  try {
+    const { session } = require('electron');
+    if (typeof session?.defaultSession?.fetch === 'function') {
+      return session.defaultSession.fetch.bind(session.defaultSession);
+    }
+  } catch {
+    /* renderer-less / tests */
+  }
+  return fetch;
+}
+
+function isRetryableHttpStatus(status) {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
 
 function hostMatchesList(host, list) {
   return list.some((h) => host === h || host.endsWith('.' + h));
@@ -101,6 +129,73 @@ function getThumbnail(url, sourceBuffer, width, height) {
   return entry;
 }
 
+function cacheEntry(url, buffer, mimeType) {
+  const entry = { buffer, mimeType, ts: Date.now() };
+  cache.set(url, entry);
+  trimCache();
+  return entry;
+}
+
+/**
+ * Server-side CDN relay via AnixApp backup API.
+ * Client only talks to api.anixapp.com — avoids zapret/WinDivert breaking s3.anixmirai.com TLS.
+ */
+async function fetchCdnAssetViaRelay(url) {
+  if (!getProxyAppKey()) {
+    throw new Error('CDN relay unavailable: proxy key not set');
+  }
+  const path = `/cdn-asset?u=${encodeURIComponent(url)}`;
+  const response = await fetchAnixartProxy(path, {
+    method: 'GET',
+    redirect: 'follow',
+    signal: AbortSignal.timeout(30_000),
+    headers: {
+      Accept: 'image/*,application/octet-stream,*/*',
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`CDN relay HTTP ${response.status}`);
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (!buffer.length) throw new Error('Empty CDN relay body');
+  const mimeType = response.headers.get('content-type')?.split(';')[0]?.trim() || guessMime(url);
+  return cacheEntry(url, buffer, mimeType);
+}
+
+async function fetchCdnAssetDirect(url, httpFetch, headers) {
+  const candidates = [url];
+  const mirror = buildMirrorUrl(url);
+  if (mirror && mirror !== url) candidates.push(mirror);
+
+  let lastError = null;
+  for (const candidate of candidates) {
+    try {
+      const response = await httpFetch(candidate, {
+        headers,
+        redirect: 'follow',
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!response.ok) {
+        lastError = new Error(`CDN HTTP ${response.status} for ${candidate}`);
+        if (!isRetryableHttpStatus(response.status) && response.status !== 404) {
+          continue;
+        }
+        continue;
+      }
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (!buffer.length) {
+        lastError = new Error(`Empty CDN body for ${candidate}`);
+        continue;
+      }
+      const mimeType = response.headers.get('content-type')?.split(';')[0]?.trim() || guessMime(url);
+      return cacheEntry(url, buffer, mimeType);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+    }
+  }
+  throw lastError || new Error(`CDN fetch failed for ${url}`);
+}
+
 async function fetchCdnAsset(url) {
   const cached = cache.get(url);
   if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
@@ -115,30 +210,55 @@ async function fetchCdnAsset(url) {
     'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
   };
 
-  const candidates = [url];
-  const mirror = buildMirrorUrl(url);
-  if (mirror && mirror !== url) candidates.push(mirror);
-
+  const httpFetch = getHttpFetcher();
   let lastError = null;
-  for (const candidate of candidates) {
+  const stickyRelay = Date.now() < preferRelayUntil;
+
+  for (let attempt = 0; attempt < CDN_FETCH_ATTEMPTS; attempt += 1) {
+    if (attempt > 0) {
+      const delay = Math.min(8_000, CDN_FETCH_BASE_MS * 2 ** (attempt - 1));
+      await sleep(delay);
+    }
+
+    // Race direct S3 vs server relay so zapret/WinDivert users don't wait for TLS timeouts.
+    if (stickyRelay || attempt >= 1) {
+      try {
+        const entry = await fetchCdnAssetViaRelay(url);
+        preferRelayUntil = Date.now() + CDN_RELAY_STICKY_MS;
+        return entry;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+      }
+      try {
+        const entry = await fetchCdnAssetDirect(url, httpFetch, headers);
+        return entry;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        preferRelayUntil = Date.now() + CDN_RELAY_STICKY_MS;
+      }
+      continue;
+    }
+
     try {
-      const response = await fetch(candidate, { headers, redirect: 'follow' });
-      if (!response.ok) {
-        lastError = new Error(`CDN HTTP ${response.status} for ${candidate}`);
-        continue;
+      const entry = await Promise.any([
+        fetchCdnAssetDirect(url, httpFetch, headers).then((value) => ({ via: 'direct', value })),
+        fetchCdnAssetViaRelay(url).then((value) => ({ via: 'relay', value })),
+      ]);
+      if (entry.via === 'relay') {
+        preferRelayUntil = Date.now() + CDN_RELAY_STICKY_MS;
+      } else {
+        preferRelayUntil = 0;
       }
-      const buffer = Buffer.from(await response.arrayBuffer());
-      if (!buffer.length) {
-        lastError = new Error(`Empty CDN body for ${candidate}`);
-        continue;
-      }
-      const mimeType = response.headers.get('content-type')?.split(';')[0]?.trim() || guessMime(url);
-      const entry = { buffer, mimeType, ts: Date.now() };
-      cache.set(url, entry);
-      trimCache();
-      return entry;
+      return entry.value;
     } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
+      // Promise.any → AggregateError
+      const nested = err && typeof err === 'object' && Array.isArray(err.errors) ? err.errors : null;
+      lastError = nested?.[0] instanceof Error
+        ? nested[0]
+        : err instanceof Error
+          ? err
+          : new Error(String(err));
+      preferRelayUntil = Date.now() + CDN_RELAY_STICKY_MS;
     }
   }
 

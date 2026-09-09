@@ -77,23 +77,124 @@ function sendJson(res, code, payload) {
   res.end(JSON.stringify(payload));
 }
 
-async function proxyCdn(url, res) {
+async function proxyCdnViaRelay(url) {
   try {
-    const upstream = await fetch(url, {
-      headers: {
-        Referer: ANIXART_REFERER,
-        Origin: ANIXART_ORIGIN,
-        Accept: 'image/*,*/*',
-        'User-Agent': 'AnixApp/0.1 (Web Dev)',
-      },
-    });
-    const ct = upstream.headers.get('content-type') || 'application/octet-stream';
-    res.writeHead(upstream.status, { 'Content-Type': ct, 'Cache-Control': 'public, max-age=3600' });
-    const buf = Buffer.from(await upstream.arrayBuffer());
-    res.end(buf);
-  } catch (err) {
-    sendJson(res, 502, { ok: false, error: String(err?.message || err) });
+    const { loadLocalEnv } = require('../electron/lib/load-dotenv.js');
+    loadLocalEnv();
+  } catch {
+    /* optional */
   }
+  const key = String(process.env.ANIXART_PROXY_APP_KEY || process.env.ANIXAPP_PROXY_KEY || '').trim();
+  if (!key) throw new Error('CDN relay unavailable: proxy key not set');
+
+  const relayUrl = `https://api.anixapp.com/anixart-api/cdn-asset?u=${encodeURIComponent(url)}`;
+  const upstream = await fetch(relayUrl, {
+    method: 'GET',
+    headers: {
+      Accept: 'image/*,application/octet-stream,*/*',
+      'User-Agent': 'AnixApp/0.1 (Web Dev)',
+      'x-anixapp-proxy-key': key,
+    },
+    redirect: 'follow',
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!upstream.ok) throw new Error(`CDN relay HTTP ${upstream.status}`);
+  const buf = Buffer.from(await upstream.arrayBuffer());
+  if (!buf.length) throw new Error('Empty CDN relay body');
+  const ct = upstream.headers.get('content-type') || 'application/octet-stream';
+  return { buf, ct };
+}
+
+async function proxyCdn(url, res) {
+  const headers = {
+    Referer: ANIXART_REFERER,
+    Origin: ANIXART_ORIGIN,
+    Accept: 'image/*,*/*',
+    'User-Agent': 'AnixApp/0.1 (Web Dev)',
+  };
+  const candidates = [url];
+  try {
+    const parsed = new URL(url);
+    const parts = parsed.hostname.split('.');
+    parsed.hostname = parts.length > 2
+      ? `mirror-${parts[0]}.${parts.slice(1).join('.')}`
+      : `mirror.${parsed.hostname}`;
+    const mirror = parsed.toString();
+    if (mirror !== url) candidates.push(mirror);
+  } catch {
+    /* keep original only */
+  }
+
+  let lastErr = null;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, Math.min(6000, 300 * 2 ** (attempt - 1))));
+    }
+
+    // After first direct failure, prefer server relay (zapret/DPI-safe).
+    if (attempt >= 1) {
+      try {
+        const relayed = await proxyCdnViaRelay(url);
+        if (res.headersSent || res.writableEnded) return;
+        res.writeHead(200, {
+          'Content-Type': relayed.ct,
+          'Cache-Control': 'public, max-age=3600',
+          'X-AnixApp-Cdn-Relay': '1',
+        });
+        res.end(relayed.buf);
+        return;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+
+    for (const candidate of candidates) {
+      try {
+        const upstream = await fetch(candidate, {
+          headers,
+          redirect: 'follow',
+          signal: AbortSignal.timeout(20_000),
+        });
+        if (!upstream.ok && (upstream.status >= 500 || upstream.status === 429 || upstream.status === 404)) {
+          lastErr = new Error(`CDN HTTP ${upstream.status}`);
+          continue;
+        }
+        if (!upstream.ok) {
+          lastErr = new Error(`CDN HTTP ${upstream.status}`);
+          continue;
+        }
+        const ct = upstream.headers.get('content-type') || 'application/octet-stream';
+        const buf = Buffer.from(await upstream.arrayBuffer());
+        if (!buf.length) {
+          lastErr = new Error('Empty CDN body');
+          continue;
+        }
+        if (res.headersSent || res.writableEnded) return;
+        res.writeHead(200, { 'Content-Type': ct, 'Cache-Control': 'public, max-age=3600' });
+        res.end(buf);
+        return;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+  }
+
+  // Last chance: relay even if never tried (key missing earlier / all direct timed out).
+  try {
+    const relayed = await proxyCdnViaRelay(url);
+    if (res.headersSent || res.writableEnded) return;
+    res.writeHead(200, {
+      'Content-Type': relayed.ct,
+      'Cache-Control': 'public, max-age=3600',
+      'X-AnixApp-Cdn-Relay': '1',
+    });
+    res.end(relayed.buf);
+    return;
+  } catch (err) {
+    lastErr = err;
+  }
+
+  sendJson(res, 502, { ok: false, error: String(lastErr?.message || lastErr || 'CDN fetch failed') });
 }
 
 async function proxyAnixback(req, res, url) {

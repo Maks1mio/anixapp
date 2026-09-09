@@ -1,8 +1,8 @@
 <script lang="ts">
   import { toCdnProxyUrl } from '../utils/posterUrl';
 
-  const MAX_RETRIES = 2;
-  const RETRY_MS = [1200, 3000];
+  const MAX_RETRIES = 12;
+  const RETRY_MS = [800, 1200, 1800, 2500, 3500, 4500, 6000, 7000, 8000, 9000, 10000, 12000];
 
   interface Props {
     src?: string | null;

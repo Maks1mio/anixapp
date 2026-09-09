@@ -8,8 +8,8 @@
     type PosterThumbPreset,
   } from '../utils/posterUrl';
 
-  const MAX_RETRIES = 2;
-  const RETRY_MS = [800, 2000];
+  const MAX_RETRIES = 12;
+  const RETRY_MS = [600, 1000, 1500, 2200, 3000, 4000, 5000, 6500, 8000, 9000, 10000, 12000];
 
   interface Props {
     src?: string | null;
@@ -73,12 +73,20 @@
 
   function scheduleRetry(baseUrl: string, nextAttempt: number) {
     const delay = RETRY_MS[nextAttempt - 1] ?? 3000;
-    const cleanBase = baseUrl.split('?')[0];
     clearRetryTimer();
     retryTimer = setTimeout(() => {
       retryTimer = null;
       if (!normalizedSrc) return;
-      imgSrc = `${cleanBase}?_retry=${nextAttempt}&_t=${Date.now()}`;
+      // Preserve anix-cdn://…?u=… (do not strip query — that drops the real CDN URL).
+      try {
+        const parsed = new URL(baseUrl, 'anix-cdn://asset/');
+        parsed.searchParams.set('_retry', String(nextAttempt));
+        parsed.searchParams.set('_t', String(Date.now()));
+        imgSrc = parsed.toString();
+      } catch {
+        const sep = baseUrl.includes('?') ? '&' : '?';
+        imgSrc = `${baseUrl}${sep}_retry=${nextAttempt}&_t=${Date.now()}`;
+      }
     }, delay);
   }
 

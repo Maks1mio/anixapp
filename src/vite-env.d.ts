@@ -5,6 +5,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_TV_MODE?: string;
+  readonly VITE_VPN_67_URL?: string;
 }
 
 interface ImportMeta {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import UiV2Select, { type UiV2SelectOption } from './UiV2Select.svelte';
+  import UiV2VpnCrtBanner from './UiV2VpnCrtBanner.svelte';
   import {
     API_ENDPOINT_OPTIONS,
     BACKUP_API_PROXY,
@@ -33,6 +34,8 @@
     pingIntervalMs?: number;
     disabled?: boolean;
     class?: string;
+    /** Рекламный CRT-баннер 67 VPN под селектом */
+    showVpnAd?: boolean;
     onChange?: (value: string) => void | Promise<void>;
   };
 
@@ -42,6 +45,7 @@
     pingIntervalMs = 1500,
     disabled = false,
     class: className = '',
+    showVpnAd = true,
     onChange,
   }: Props = $props();
 
@@ -667,5 +671,9 @@
         Для регионов, где Anixart недоступен напрямую. Для повседневной работы лучше VPN и прямой эндпоинт.
       </p>
     </div>
+  {/if}
+
+  {#if showVpnAd}
+    <UiV2VpnCrtBanner class="uiv2-endpoint-select__vpn" />
   {/if}
 </div>

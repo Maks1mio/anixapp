@@ -12,7 +12,9 @@
   {:else}
     <div class="settings-section">
       <p class="settings-section__label">Эндпоинт API</p>
-      <p class="settings-section__desc">Anixart — основные запросы приложения.</p>
+      <p class="settings-section__desc">
+        Прямые Anixart-хосты или резерв AnixApp proxy (backend → туннель → Anixart).
+      </p>
       <UiV2EndpointSelect label="" placeholder="Выберите эндпоинт" onChange={onEndpointChange} />
     </div>
   {/if}

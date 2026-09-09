@@ -13,13 +13,16 @@
     getFeedArticleMenuSession,
   } from '../../utils/feed-article-menu';
   import { runFeedArticleMenuAction } from '../../utils/feed-article-menu-actions';
-  import { loadArticleTopComment } from '../../utils/feed-top-comment';
+  import { loadArticleTopComment, setArticleTopCommentCache, clearArticleTopCommentCache } from '../../utils/feed-top-comment';
   import { channelAvatarUrl } from '../../utils/feed-article';
   import { showToast } from '../../stores/toast';
 
   interface Props {
     article: FeedArticle;
+    /** Пост выбран в ленте — комментарии раскрыты. */
+    selected?: boolean;
     onOpen?: (article: FeedArticle) => void;
+    onDeselect?: () => void;
     onChannel?: (channelId: number) => void;
     onVote?: (article: FeedArticle, nextVote: 0 | 1 | 2) => void | Promise<void>;
     onSubscribe?: (channelId: number, nextSubscribed: boolean) => void | Promise<void>;
@@ -35,7 +38,9 @@
 
   let {
     article,
+    selected = false,
     onOpen,
+    onDeselect,
     onChannel,
     onVote,
     onSubscribe,
@@ -106,6 +111,16 @@
     return () => io.disconnect();
   });
 
+  $effect(() => {
+    if (selected) {
+      commentsOpen = true;
+      commentsFocusWrite = false;
+    } else {
+      commentsOpen = false;
+      commentsFocusWrite = false;
+    }
+  });
+
   onMount(() => {
     void ensureFeedArticleMenuSession().then(() => {
       menuSessionTick += 1;
@@ -114,6 +129,11 @@
       selfAvatar = channelAvatarUrl(data?.profile?.avatar ?? null) || null;
     });
   });
+
+  function applyPreviewComment(comment: UiV2FeedPostLastComment | null) {
+    topCommentOverride = comment;
+    setArticleTopCommentCache(Number(article.id), comment);
+  }
 
   function openArticle() {
     onOpen?.(sourceArticle);
@@ -132,6 +152,19 @@
   function closeComments() {
     commentsOpen = false;
     commentsFocusWrite = false;
+    const id = Number(article.id);
+    const count = displayCommentCount;
+    const hasPreview =
+      topCommentOverride !== undefined
+        ? !!topCommentOverride
+        : !!mappedPost.lastComment;
+    if (count > 0 && !hasPreview && id > 0) {
+      clearArticleTopCommentCache(id);
+      void loadArticleTopComment(id).then((comment) => {
+        if (comment) applyPreviewComment(comment);
+      });
+    }
+    if (selected) onDeselect?.();
   }
 
   async function loadFullPreview() {
@@ -155,13 +188,15 @@
     else openArticle();
   }
 
-  function openAuthor(_data: ReturnType<typeof feedArticleToUiV2FeedPost>, e: MouseEvent) {
+  function openAuthor(_data: ReturnType<typeof feedArticleToUiV2FeedPost>, _e: MouseEvent) {
     const ch = article.channel;
-    if (ch?.is_blog && ch.id) {
-      handleUserProfileClick(ch.id, e);
+    // Канал и блог — лента на /feed
+    if (ch?.id) {
+      onChannel?.(ch.id);
       return;
     }
-    if (ch?.id) onChannel?.(ch.id);
+    const profileId = Number(article.author?.id ?? 0);
+    if (profileId > 0) handleUserProfileClick(profileId, _e);
   }
 
   function openSignedAuthor(authorId: number, e: MouseEvent) {
@@ -181,7 +216,12 @@
 </script>
 
 {#key article.id}
-<div class="feed-article-card" bind:this={cardRoot}>
+<div
+  class="feed-article-card"
+  class:feed-article-card--selected={selected}
+  bind:this={cardRoot}
+  data-feed-article-id={article.id}
+>
   <UiV2FeedPost
     data={post}
     {showSubscribe}
@@ -231,6 +271,7 @@
       onCountChange={(n) => {
         commentCountOverride = n;
       }}
+      onPreviewCommentChange={applyPreviewComment}
     />
   {/if}
 </div>

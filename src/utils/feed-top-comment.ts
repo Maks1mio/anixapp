@@ -1,4 +1,5 @@
 import type { UiV2FeedPostLastComment } from '../components/uikit-v2/UiV2FeedPost.svelte';
+import type { UiV2CommentNode } from '../components/uikit-v2/UiV2CommentThread.svelte';
 import { channelAvatarUrl } from './feed-article';
 import { articlePlainText } from './article-block-format';
 import { resolveJacksonRefs } from './jackson-refs';
@@ -27,6 +28,37 @@ export function mapArticleCommentToTop(
     isSpoiler: spoiler,
     voteCount: Number(rec.vote_count ?? rec.likes_count ?? rec.voteCount ?? 0) || undefined,
   };
+}
+
+/** Превью для свёрнутого блока комментариев из узла треда. */
+export function uiV2NodeToFeedLastComment(
+  node: UiV2CommentNode | null | undefined,
+): UiV2FeedPostLastComment | null {
+  if (!node || node.isDeleted) return null;
+  const text = articlePlainText(String(node.message ?? '').replace(/<br\s*\/?>/gi, '\n'));
+  if (!text) return null;
+  const spoiler = !!node.isSpoiler;
+  return {
+    author: node.profile?.login?.trim() || 'Пользователь',
+    avatar: channelAvatarUrl(node.profile?.avatar ?? null) || undefined,
+    text: spoiler ? 'Спойлер' : text,
+    isSpoiler: spoiler,
+    voteCount: Number(node.voteCount ?? 0) || undefined,
+  };
+}
+
+export function setArticleTopCommentCache(
+  articleId: number,
+  comment: UiV2FeedPostLastComment | null,
+): void {
+  if (!(articleId > 0)) return;
+  cache.set(articleId, comment);
+}
+
+export function clearArticleTopCommentCache(articleId: number): void {
+  if (!(articleId > 0)) return;
+  cache.delete(articleId);
+  inflight.delete(articleId);
 }
 
 export async function loadArticleTopComment(

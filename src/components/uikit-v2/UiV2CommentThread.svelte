@@ -59,6 +59,7 @@
   import {
     applyVoteDelta,
     episodeContextLabel,
+    formatCommentHtml,
     formatCommentTimestamp,
     hiddenCommentMeta,
     isCommentContentHidden,
@@ -69,6 +70,7 @@
     formatVoteCountDisplay,
   } from '../../utils/comment';
   import type { CommentData } from '../../types/comment';
+  import { requestOpenExternal } from '../../utils/external-link';
   import { tick } from 'svelte';
 
   type Props = {
@@ -240,6 +242,23 @@
 
   function hideSpoiler(node: UiV2CommentNode) {
     spoilerOpen = { ...spoilerOpen, [keyOf(node.id)]: false };
+  }
+
+  function onMessageClick(e: MouseEvent, node: UiV2CommentNode) {
+    const target = e.target;
+    if (target instanceof Element) {
+      const anchor = target.closest('a');
+      if (anchor) {
+        const href = anchor.getAttribute('href');
+        if (href) {
+          e.preventDefault();
+          e.stopPropagation();
+          requestOpenExternal(href);
+          return;
+        }
+      }
+    }
+    onCommentClick?.(node);
   }
 
   function asCommentData(node: UiV2CommentNode): CommentData {
@@ -527,15 +546,28 @@
               <span class="uiv2-comment__spoiler-gate-cta">Показать</span>
             </button>
           {:else if onCommentClick}
-            <button
-              type="button"
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+            <div
               class="uiv2-comment__body uiv2-comment__body--button"
-              onclick={() => onCommentClick(node)}
-            >
-              {node.message}
-            </button>
+              role="button"
+              tabindex="0"
+              onclick={(e) => onMessageClick(e, node)}
+              onkeydown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onCommentClick(node);
+                }
+              }}
+            >{@html formatCommentHtml(node.message)}</div>
           {:else}
-            <div class="uiv2-comment__body">{node.message}</div>
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+            <div class="uiv2-comment__body" onclick={(e) => onMessageClick(e, node)}>
+              {@html formatCommentHtml(node.message)}
+            </div>
           {/if}
           {#if canRehide}
             <button

@@ -58,17 +58,17 @@ export async function runFeedArticleMenuAction(
 
   if (actionId === 'votes') {
     showToast('Список оценивших скоро будет в desktop-версии', 'info');
-    return { kind: 'navigate', path: `/article/${articleId}` };
+    return { kind: 'none' };
   }
 
   if (actionId === 'reposts') {
     showToast('Список репостнувших скоро будет в desktop-версии', 'info');
-    return { kind: 'navigate', path: `/article/${articleId}` };
+    return { kind: 'none' };
   }
 
   if (actionId === 'edit') {
     showToast('Редактор записей скоро будет в desktop-версии', 'info');
-    return { kind: 'navigate', path: `/article/${articleId}` };
+    return { kind: 'none' };
   }
 
   if (actionId === 'delete') {

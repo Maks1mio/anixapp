@@ -1,8 +1,41 @@
 /**
+ * Anixapi joins absolute paths with `new URL('/x', base)` — path prefixes on base
+ * (e.g. https://api.anixapp.com/anixart-api) would be dropped. Rewrite to relative join.
+ * @param {import('anixapi').Anixart} client
+ */
+function patchPathPrefixedBaseUrl(client) {
+  if (!client || typeof client.call !== 'function') return client;
+  const original = client.call.bind(client);
+  client.call = (request) => {
+    const base = String(request?.customBaseUrl ?? client.baseUrl ?? '');
+    const path = request?.path;
+    if (!base || typeof path !== 'string' || !path.startsWith('/')) {
+      return original(request);
+    }
+    try {
+      const normalized = base.endsWith('/') ? base : `${base}/`;
+      const parsed = new URL(normalized);
+      if (!parsed.pathname || parsed.pathname === '/') {
+        return original(request);
+      }
+      return original({
+        ...request,
+        path: path.replace(/^\//, ''),
+        customBaseUrl: parsed.toString(),
+      });
+    } catch {
+      return original(request);
+    }
+  };
+  return client;
+}
+
+/**
  * Совместимость AnixApp (AnixartJS 0.1.x API) → AnixApi 0.3.x
  * @param {import('anixapi').Anixart} client
  */
 function attachLegacyEndpoints(client) {
+  patchPathPrefixedBaseUrl(client);
   const ep = client.endpoints;
 
   ep.feed.latest = (page) => ep.feed.latestArticles(page);

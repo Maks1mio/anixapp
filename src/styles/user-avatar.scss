@@ -9,6 +9,10 @@
   overflow: hidden;
   background: $color-surface-hover;
 
+  &--channel {
+    border-radius: 8px;
+  }
+
   img {
     display: block;
     width: 100%;

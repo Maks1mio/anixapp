@@ -62,22 +62,20 @@
 
   const displayPosterUrl = $derived(toPosterDisplayUrl(posterUrl, 'releaseHero'));
 
-  let isWide = $state(
-    tvMode || (typeof window !== 'undefined' ? window.matchMedia('(min-width: 961px)').matches : true),
+  let mqWide = $state(
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 961px)').matches : true,
   );
+  const isWide = $derived(tvMode || mqWide);
 
   const favLabel = $derived(
     favoritesCount > 0 ? formatVoteCount(favoritesCount).replace(/\s/g, ' ') : '',
   );
 
   $effect(() => {
-    if (tvMode) {
-      isWide = true;
-      return;
-    }
+    if (tvMode) return;
     const mq = window.matchMedia('(min-width: 961px)');
     const update = () => {
-      isWide = mq.matches;
+      mqWide = mq.matches;
     };
     update();
     mq.addEventListener('change', update);

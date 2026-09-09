@@ -12,6 +12,7 @@
     iconThumbsUp,
     iconThumbsDown,
     iconPlus,
+    iconPin,
   } from '../icons';
   import {
     ARTICLE_VOTE_MINUS,
@@ -110,6 +111,8 @@
     containsRepost?: boolean;
     /** Подпись автора при is_signed. */
     signedAuthor?: UiV2FeedPostSignedAuthor | null;
+    /** Закреплённый пост канала/блога. */
+    isPinned?: boolean;
   };
 
   type Props = {
@@ -366,10 +369,15 @@
       <button
         type="button"
         class="uiv2-feed-post__avatar"
+        class:uiv2-feed-post__avatar--channel={!channel.isBlog}
         aria-label={displayName}
         onclick={openAuthor}
       >
-        <UserAvatar src={channel.avatar} label={displayName} />
+        <UserAvatar
+          src={channel.avatar}
+          label={displayName}
+          shape={channel.isBlog ? 'circle' : 'channel'}
+        />
       </button>
       {#if showFollowBadge}
         <UiV2Tooltip
@@ -405,8 +413,21 @@
           <span class="uiv2-feed-post__verified" title="Подтверждённый канал" aria-hidden="true">✓</span>
         {/if}
       </button>
-      {#if data.timeStr}
-        <time class="uiv2-feed-post__time">{data.timeStr}</time>
+      {#if data.isPinned || data.timeStr}
+        <div class="uiv2-feed-post__meta">
+          {#if data.isPinned}
+            <span class="uiv2-feed-post__pinned" title="Закреплено">
+              <span class="uiv2-feed-post__pinned-icon" aria-hidden="true">{@html iconPin(12)}</span>
+              <span>Закреплено</span>
+            </span>
+          {/if}
+          {#if data.isPinned && data.timeStr}
+            <span class="uiv2-feed-post__meta-sep" aria-hidden="true">·</span>
+          {/if}
+          {#if data.timeStr}
+            <time class="uiv2-feed-post__time">{data.timeStr}</time>
+          {/if}
+        </div>
       {/if}
     </div>
 
@@ -513,6 +534,7 @@
             <span class="uiv2-feed-post__repost-icon" aria-hidden="true">{@html iconRepost(14)}</span>
             <span
               class="uiv2-feed-post__repost-avatar"
+              class:uiv2-feed-post__repost-avatar--channel={!repostChannel?.isBlog}
               class:uiv2-feed-post__repost-avatar--empty={!repostAvatar}
               style={repostAvatar ? `background-image:url('${repostAvatar}')` : undefined}
               aria-hidden="true"
@@ -627,6 +649,10 @@
           <span class="uiv2-feed-post__comments-teaser-text" class:is-spoiler={lastComment.isSpoiler}>
             {lastComment.text}
           </span>
+        </span>
+      {:else if comments > 0}
+        <span class="uiv2-feed-post__comments-teaser-preview uiv2-feed-post__comments-teaser-preview--write">
+          <span class="uiv2-feed-post__comments-teaser-placeholder">Открыть комментарии</span>
         </span>
       {:else}
         <span class="uiv2-feed-post__comments-teaser-preview uiv2-feed-post__comments-teaser-preview--write">

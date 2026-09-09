@@ -5,6 +5,7 @@ import {
   render as anime4kRender,
 } from 'anime4k-webgpu';
 import { hasWebGpuApi, probeWebGpuAvailable } from './webgpu-availability.svelte';
+import { isAnixartCdnUrl, unwrapCdnUrl } from './posterUrl';
 
 const MODE_MAP: Record<number, new (opts: {
   device: GPUDevice;
@@ -119,6 +120,8 @@ export function computeAnime4kCanvasLayout(
 }
 
 async function loadImageBitmap(url: string): Promise<ImageBitmap | null> {
+  // Chromium fetch() не умеет custom schemes вроде anix-cdn:// — даже с supportFetchAPI.
+  if (!/^https?:\/\//i.test(url) && !url.startsWith('/__cdn')) return null;
   try {
     const res = await fetch(url, { cache: 'force-cache', mode: 'cors', credentials: 'omit' });
     if (!res.ok) return null;
@@ -136,7 +139,9 @@ async function loadImageBitmapViaElectron(url: string): Promise<ImageBitmap | nu
       electron?: { fetchRemoteImage?: (u: string) => Promise<{ mimeType: string; data: Uint8Array } | null> };
     }).electron?.fetchRemoteImage;
     if (!api) return null;
-    const result = await api(url);
+    const target = unwrapCdnUrl(url) || url;
+    if (!/^https?:\/\//i.test(target)) return null;
+    const result = await api(target);
     if (!result?.data?.byteLength) return null;
     const copy = new Uint8Array(result.data.byteLength);
     copy.set(result.data);
@@ -147,13 +152,33 @@ async function loadImageBitmapViaElectron(url: string): Promise<ImageBitmap | nu
   }
 }
 
+function expandImageLoadUrls(urls: Array<string | null | undefined>): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (raw?: string | null) => {
+    const url = raw?.trim();
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    out.push(url);
+  };
+  for (const raw of urls) {
+    push(raw);
+    const unwrapped = unwrapCdnUrl(raw ?? '');
+    if (unwrapped && unwrapped !== raw?.trim()) push(unwrapped);
+  }
+  return out;
+}
+
 /** fetch / Electron IPC — без DOM-img (CORS травит WebGPU). */
 async function loadUntaintedBitmap(urls: Array<string | null | undefined>): Promise<ImageBitmap | null> {
-  const seen = new Set<string>();
-  for (const raw of urls) {
-    const url = raw?.trim();
-    if (!url || seen.has(url)) continue;
-    seen.add(url);
+  for (const url of expandImageLoadUrls(urls)) {
+    const viaCdn = url.startsWith('anix-cdn://') || isAnixartCdnUrl(url);
+    // CDN: только main (Referer + mirror fallback). Renderer fetch(anix-cdn://) падает.
+    if (viaCdn) {
+      const viaMain = await loadImageBitmapViaElectron(url);
+      if (viaMain?.width) return viaMain;
+      continue;
+    }
     const viaFetch = await loadImageBitmap(url);
     if (viaFetch?.width) return viaFetch;
     const viaMain = await loadImageBitmapViaElectron(url);

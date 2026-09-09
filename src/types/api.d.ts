@@ -46,6 +46,49 @@ export interface AnixApi {
     getBaseUrl: () => Promise<string>;
     setBaseUrl: (baseUrl: string) => Promise<void>;
     pingBaseUrl: (baseUrl: string) => Promise<any>;
+    endpointGeo: (baseUrl: string) => Promise<{
+      countryCode?: string | null;
+      countryName?: string | null;
+      ip?: string | null;
+    }>;
+    getBackupProxy: () => Promise<{
+      enabled: boolean;
+      url: string;
+      active: boolean;
+      stickyUntil: number | null;
+      connections?: number | null;
+      tunnel?: {
+        mode?: string | null;
+        ready?: boolean;
+        label?: string | null;
+        serverHost?: string | null;
+        serverIp?: string | null;
+        countryHint?: string | null;
+        latencyMs?: number | null;
+        exitIp?: string | null;
+        lastUpstream?: string | null;
+        error?: string | null;
+      } | null;
+    }>;
+    setBackupProxyEnabled: (enabled: boolean) => Promise<{
+      enabled: boolean;
+      url: string;
+      active: boolean;
+      stickyUntil: number | null;
+      connections?: number | null;
+      tunnel?: {
+        mode?: string | null;
+        ready?: boolean;
+        label?: string | null;
+        serverHost?: string | null;
+        serverIp?: string | null;
+        countryHint?: string | null;
+        latencyMs?: number | null;
+        exitIp?: string | null;
+        lastUpstream?: string | null;
+        error?: string | null;
+      } | null;
+    }>;
     getAuthStatus: () => Promise<{ hasToken: boolean }>;
     checkConnection: () => Promise<boolean>;
     testOffline: () => Promise<void>;

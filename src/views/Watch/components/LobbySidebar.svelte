@@ -256,10 +256,11 @@
         <p class="watch-lobby-sidebar__empty">Ожидание участников…</p>
       {:else}
         {#each participants as p (String(p.peerId ?? p.login))}
+          <!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions -->
           <div
             class="watch-lobby-sidebar__person"
             class:watch-lobby-sidebar__person--actionable={canModerate(p)}
-            role={canModerate(p) ? 'button' : undefined}
+            role={canModerate(p) ? 'button' : 'listitem'}
             tabindex={canModerate(p) ? 0 : undefined}
             oncontextmenu={(e) => openParticipantMenu(p, e)}
             onkeydown={(e) => {

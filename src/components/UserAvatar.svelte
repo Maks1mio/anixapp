@@ -7,10 +7,12 @@
   interface Props {
     src?: string | null;
     label?: string;
+    /** `circle` — пользователь; `channel` — канал (скругление 8px). */
+    shape?: 'circle' | 'channel';
     class?: string;
   }
 
-  let { src = '', label = '?', class: className = '' }: Props = $props();
+  let { src = '', label = '?', shape = 'circle', class: className = '' }: Props = $props();
 
   let attempt = $state(0);
   let loaded = $state(false);
@@ -80,7 +82,10 @@
   }
 </script>
 
-<span class="user-avatar {className}">
+<span
+  class="user-avatar {className}"
+  class:user-avatar--channel={shape === 'channel'}
+>
   {#if showSkeleton}
     <span class="user-avatar__skeleton" aria-hidden="true"></span>
   {/if}

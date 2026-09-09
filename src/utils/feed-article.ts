@@ -3,6 +3,7 @@ import type { FeedArticle, FeedArticleBlock, FeedArticlePayload } from '../types
 import {
   articlePlainText,
   formatInlineField,
+  matchArticleHashtags,
   type ArticleFormatBlock,
 } from './article-block-format';
 
@@ -11,6 +12,7 @@ export {
   articlePlainText,
   decodeHtmlEntities,
   formatInlineField,
+  matchArticleHashtags,
   sanitizeArticleHtml,
 } from './article-block-format';
 
@@ -154,8 +156,6 @@ export function channelSubscriberCount(channel: object | null | undefined): numb
   return fallback;
 }
 
-const TAG_RE = /#([\p{L}\p{N}_]{2,40})/gu;
-
 function pushUniqueTag(out: string[], seen: Set<string>, raw: string): void {
   const tag = raw.replace(/^#/, '').trim();
   if (!tag) return;
@@ -192,14 +192,14 @@ export function articleTags(article: FeedArticle, limit = 12): string[] {
         }
       }
     } else if (typeof items === 'string') {
-      for (const match of items.matchAll(TAG_RE)) pushUniqueTag(out, seen, match[1]);
+      for (const tag of matchArticleHashtags(items)) pushUniqueTag(out, seen, tag);
     }
   }
 
   if (out.length === 0) {
     const blob = `${articleHeadline(article)} ${articlePreviewText(article, 4000)}`;
-    for (const match of blob.matchAll(TAG_RE)) {
-      pushUniqueTag(out, seen, match[1]);
+    for (const tag of matchArticleHashtags(blob)) {
+      pushUniqueTag(out, seen, tag);
       if (out.length >= limit) break;
     }
   }
@@ -372,8 +372,8 @@ function mapPayloadBlockToFeedText(block: FeedArticleBlock): FeedTextBlock | nul
         }
       }
     } else if (typeof items === 'string') {
-      for (const match of items.matchAll(/#([\p{L}\p{N}_]{2,40})/gu)) {
-        names.push(match[1]);
+      for (const tag of matchArticleHashtags(items)) {
+        names.push(tag);
       }
       if (!names.length) names.push(...items.split(/[\s|,]+/).map((s) => s.replace(/^#/, '').trim()));
     }

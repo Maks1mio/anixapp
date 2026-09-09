@@ -182,10 +182,26 @@ export function createBrowserAnixBridge() {
       c.saveConfig({ baseUrl: String(baseUrl || DEFAULT_BASE_URL) });
       return { ok: true };
     },
+    'anix:getBackupProxy': async () => ({
+      enabled: true,
+      url: 'https://api.anixapp.com/anixart-api',
+      active: false,
+      stickyUntil: null,
+    }),
+    'anix:setBackupProxyEnabled': async (_c, [enabled]) => ({
+      enabled: enabled !== false,
+      url: 'https://api.anixapp.com/anixart-api',
+      active: false,
+      stickyUntil: null,
+    }),
     'anix:pingBaseUrl': async (_c, [baseUrl]) => {
       const url = String(baseUrl || DEFAULT_BASE_URL).replace(/\/$/, '');
       const res = await fetch(`${url}/`);
       return { ok: res.ok, status: res.status };
+    },
+    'anix:endpointGeo': async (_c, [baseUrl]) => {
+      const { staticEndpointCountry } = await import('../utils/endpointCountry');
+      return staticEndpointCountry(String(baseUrl || ''));
     },
     'anix:testOffline': async () => {
       throw new Error('TypeError: fetch failed (test)');

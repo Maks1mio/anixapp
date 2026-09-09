@@ -138,7 +138,7 @@
   class:schedule-panel-resize--dragging={dragging}
   class:schedule-panel-resize--bounce={bouncing}
   style={`--resize-y: ${offsetY}px`}
-  role="separator"
+  role="slider"
   aria-orientation="vertical"
   aria-valuenow={Math.round(widthPx)}
   aria-valuemin={SIDEBAR_PANEL_WIDTH_MIN_PX}

@@ -41,7 +41,7 @@
     const s = map[key];
     if (!s) return '';
     if (s.ok && typeof s.latencyMs === 'number') return `${s.latencyMs} мс`;
-    if (!s.ok) return 'недоступен';
+    if (!s.ok) return 'неработает';
     return '';
   }
 

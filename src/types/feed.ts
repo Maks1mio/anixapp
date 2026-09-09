@@ -24,6 +24,8 @@ export interface FeedChannel {
   avatar?: string;
   cover?: string;
   is_blog?: boolean;
+  /** ID профиля владельца блога (не путать с id канала). */
+  blog_profile_id?: number;
   is_verified?: boolean;
   is_subscribed?: boolean;
   is_creator?: boolean;

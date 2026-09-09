@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../stores/navigation';
+  import { focusFeedArticle, focusFeedChannel } from '../stores/feed-focus';
   import { handleUserProfileClick } from '../stores/user-profile';
   import {
     fetchAllNotifications,
@@ -57,7 +58,8 @@
   function handleItemClick(n: ParsedNotification, event: MouseEvent) {
     if (n.articleId) {
       close();
-      navigate(`/article/${n.articleId}`);
+      focusFeedArticle(n.articleId);
+      navigate('/feed');
       return;
     }
     if (n.releaseId) {
@@ -67,7 +69,8 @@
     }
     if (n.channelId) {
       close();
-      navigate(`/channel/${n.channelId}`);
+      focusFeedChannel(n.channelId);
+      navigate('/feed');
       return;
     }
     if (n.profileId) {

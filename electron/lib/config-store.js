@@ -8,6 +8,7 @@ const { randomBytes } = require('crypto');
 const {
   AUTH_FILE,
   DEFAULT_BASE_URL,
+  BACKUP_API_PROXY,
   LOG_DIR,
   UI_ZOOM_LEVELS,
   DISCORD_RPC_PAGE_KEYS,
@@ -125,11 +126,26 @@ function appendLog(name, payload, isDev) {
   }
 }
 
+function isBackupApiProxyUrl(url) {
+  const n = String(url || '')
+    .trim()
+    .replace(/\/$/, '');
+  return n === String(BACKUP_API_PROXY).replace(/\/$/, '') || n.includes('api.anixapp.com/anixart-api');
+}
+
+function normalizeBaseUrl(url) {
+  if (!url) return DEFAULT_BASE_URL;
+  const n = String(url).trim().replace(/\/$/, '');
+  if (isBackupApiProxyUrl(n)) return String(BACKUP_API_PROXY).replace(/\/$/, '');
+  return n || DEFAULT_BASE_URL;
+}
+
 function loadConfig() {
   const raw = _readConfigFromDisk();
   const cfg = {
     token: raw.token || null,
-    baseUrl: raw.baseUrl || DEFAULT_BASE_URL,
+    baseUrl: normalizeBaseUrl(raw.baseUrl || DEFAULT_BASE_URL),
+    backupProxyEnabled: raw.backupProxyEnabled !== false,
     profileId: raw.profileId ?? null,
     profileLogin: raw.profileLogin || null,
     profileAvatar: raw.profileAvatar || null,

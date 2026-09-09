@@ -102,6 +102,10 @@ ipcRenderer.on('anix:offline', (_, payload) => {
   window.dispatchEvent(new CustomEvent('anix:offline', { detail: payload }));
 });
 
+ipcRenderer.on('anix:backupProxy', (_, payload) => {
+  window.dispatchEvent(new CustomEvent('anix:backupProxy', { detail: payload }));
+});
+
 // Discord RPC: join lobby via Discord party invite
 ipcRenderer.on('discord:joinLobby', (_, payload) => {
   window.dispatchEvent(new CustomEvent('discord:joinLobby', { detail: payload }));
@@ -343,6 +347,9 @@ contextBridge.exposeInMainWorld('anixApi', {
     getBaseUrl: () => ipcRenderer.invoke('anix:getBaseUrl'),
     setBaseUrl: (baseUrl) => ipcRenderer.invoke('anix:setBaseUrl', baseUrl),
     pingBaseUrl: (baseUrl) => ipcRenderer.invoke('anix:pingBaseUrl', baseUrl),
+    endpointGeo: (baseUrl) => ipcRenderer.invoke('anix:endpointGeo', baseUrl),
+    getBackupProxy: () => ipcRenderer.invoke('anix:getBackupProxy'),
+    setBackupProxyEnabled: (enabled) => ipcRenderer.invoke('anix:setBackupProxyEnabled', enabled),
     getAuthStatus: () => ipcRenderer.invoke('anix:getAuthStatus'),
     checkConnection: () => ipcRenderer.invoke('anix:checkConnection'),
     testOffline: () => ipcRenderer.invoke('anix:testOffline'),

@@ -33,7 +33,7 @@
   interface Props { id: number; }
   let { id }: Props = $props();
 
-  const tvOpenTarget = isTvMode() ? getTvReleaseOpenTarget(id) : null;
+  const tvOpenTarget = $derived(isTvMode() ? getTvReleaseOpenTarget(id) : null);
 
   // ── State ──────────────────────────────────────────────────────────────────
   let loadState   = $state<'loading' | 'error' | 'ready'>('loading');

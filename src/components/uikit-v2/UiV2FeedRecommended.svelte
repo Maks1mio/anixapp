@@ -15,6 +15,8 @@
   type Props = {
     items: UiV2FeedRecommendedItem[];
     title?: string;
+    /** Форма аватара: блоги/пользователи — круг, каналы — 8px. */
+    avatarShape?: 'circle' | 'channel';
     initialCount?: number;
     onOpen?: (id: number) => void;
     class?: string;
@@ -23,6 +25,7 @@
   let {
     items,
     title = 'Каналы',
+    avatarShape = 'channel',
     initialCount = 5,
     onOpen,
     class: className = '',
@@ -47,8 +50,12 @@
             class="uiv2-feed-reco__item"
             onclick={() => onOpen?.(item.id)}
           >
-            <span class="uiv2-feed-reco__avatar" aria-hidden="true">
-              <UserAvatar src={item.avatar} label={item.title} />
+            <span
+              class="uiv2-feed-reco__avatar"
+              class:uiv2-feed-reco__avatar--channel={avatarShape === 'channel'}
+              aria-hidden="true"
+            >
+              <UserAvatar src={item.avatar} label={item.title} shape={avatarShape} />
             </span>
             <span class="uiv2-feed-reco__meta">
               <span class="uiv2-feed-reco__name">

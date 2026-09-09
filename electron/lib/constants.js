@@ -4,6 +4,8 @@ const { BookmarkType } = require('anixapi');
 
 const AUTH_FILE = 'auth.json';
 const DEFAULT_BASE_URL = 'https://api-s.anixsekai.com';
+/** Резервный прокси AnixApp (не выбирать как основной эндпоинт). */
+const BACKUP_API_PROXY = 'https://api.anixapp.com/anixart-api';
 const LOG_DIR = 'logs';
 
 const ANIXART_UA = 'AnixartApp/9.0 BETA 19-26073118 (Android 9; SDK 28; x86_64; ROG ASUS AI2201_B; ru)';
@@ -46,6 +48,7 @@ const DISCORD_RPC_PAGE_KEYS = [
 module.exports = {
   AUTH_FILE,
   DEFAULT_BASE_URL,
+  BACKUP_API_PROXY,
   LOG_DIR,
   ANIXART_UA,
   VIDEO_HOSTS,

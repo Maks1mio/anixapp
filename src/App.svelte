@@ -17,6 +17,7 @@
     setConnectionProblem,
   } from './stores/connection';
   import { currentPath, navigate, replacePath } from './stores/navigation';
+  import { focusFeedArticle, focusFeedChannel } from './stores/feed-focus';
   import { openLobbyModal, settingsModalOpen, lobbyModalOpen, lobbyModalInitialCode, notificationsModalOpen, watchModalOpen, watchModalReleaseId, watchModalReleaseTitle, lobbyCurrentPlayback, isPlayerWindowOpen, lobbyWatchingPeerIds } from './stores/modals';
   import { sendPlayerViewActive } from './services/lobby-ws';
   import { getPath, getSearchParams } from './router';
@@ -50,8 +51,6 @@
   import Overview from './views/Overview.svelte';
   import FluoPage from './views/Fluo/page.svelte';
   import Feed from './views/Feed.svelte';
-  import Article from './views/Article.svelte';
-  import Channel from './views/Channel.svelte';
   import Popular from './views/Popular.svelte';
   import CollectionsList from './views/CollectionsList.svelte';
   import MyCollections from './views/MyCollections.svelte';
@@ -168,6 +167,26 @@
     const route = path;
     if (!openProfileFromPath(route)) return;
     queueMicrotask(() => replacePath('/'));
+  });
+
+  // /article/:id больше нет — открываем запись в ленте
+  $effect(() => {
+    const m = articleMatch;
+    if (!m) return;
+    const id = parseInt(m[1], 10);
+    if (!(id > 0)) return;
+    focusFeedArticle(id);
+    queueMicrotask(() => replacePath('/feed'));
+  });
+
+  // /channel/:id больше нет — лента канала/блога внутри /feed
+  $effect(() => {
+    const m = channelMatch;
+    if (!m) return;
+    const id = parseInt(m[1], 10);
+    if (!(id > 0)) return;
+    focusFeedChannel(id);
+    queueMicrotask(() => replacePath('/feed'));
   });
 
   $effect(() => {
@@ -940,16 +959,8 @@
       <Overview />
     {:else if path === '/fluo'}
       <FluoPage />
-    {:else if path === '/feed'}
+    {:else if path === '/feed' || articleMatch || channelMatch}
       <Feed />
-    {:else if articleMatch}
-      {#key articleMatch[1]}
-        <Article id={parseInt(articleMatch[1], 10)} />
-      {/key}
-    {:else if channelMatch}
-      {#key channelMatch[1]}
-        <Channel id={parseInt(channelMatch[1], 10)} />
-      {/key}
     {:else if path === '/overview/popular'}
       <Popular />
     {:else if path === '/schedule'}

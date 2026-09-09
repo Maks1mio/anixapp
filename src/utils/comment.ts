@@ -3,6 +3,7 @@ import { resolveCdnAssetUrl } from './posterUrl';
 import { resolveBadgeName, resolveBadgeImageUrl } from './badge';
 import { COMMENT_SORT_OPTIONS } from '../types/comment';
 import { resolveJacksonEntity, resolveJacksonRefs } from './jackson-refs';
+import { normalizeLinkHref } from './external-link';
 
 export { COMMENT_SORT_OPTIONS };
 export type { CommentSort };
@@ -15,8 +16,58 @@ const MONTHS_SHORT = [
   'июл.', 'авг.', 'сен.', 'окт.', 'нояб.', 'дек.',
 ];
 
+const COMMENT_URL_RE = /https?:\/\/[^\s<>"']+/gi;
+const TRAILING_URL_PUNCT_RE = /[),.!?;:…»"'”’]+$/u;
+
 function pad2(n: number): string {
   return n < 10 ? `0${n}` : String(n);
+}
+
+function escapeCommentText(raw: string): string {
+  return raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function escapeCommentAttr(raw: string): string {
+  return escapeCommentText(raw).replace(/"/g, '&quot;');
+}
+
+/**
+ * Экранирует текст комментария и делает http(s)-ссылки кликабельными.
+ * Anixart-ссылки обрабатываются через requestOpenExternal → внутри приложения.
+ */
+export function formatCommentHtml(raw: string): string {
+  const text = String(raw ?? '');
+  if (!text) return '';
+
+  let out = '';
+  let last = 0;
+  COMMENT_URL_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = COMMENT_URL_RE.exec(text)) !== null) {
+    out += escapeCommentText(text.slice(last, match.index));
+
+    let url = match[0];
+    let trailing = '';
+    const punct = TRAILING_URL_PUNCT_RE.exec(url);
+    if (punct) {
+      trailing = punct[0];
+      url = url.slice(0, -trailing.length);
+    }
+
+    const href = normalizeLinkHref(url);
+    if (href && url) {
+      out += `<a href="${escapeCommentAttr(href)}" class="uiv2-comment__link uiv2-ext-link-inline" rel="noopener noreferrer">${escapeCommentText(url)}</a>`;
+      out += escapeCommentText(trailing);
+    } else {
+      out += escapeCommentText(match[0]);
+    }
+    last = match.index + match[0].length;
+  }
+  out += escapeCommentText(text.slice(last));
+  return out;
 }
 
 /** Mobile-style: «10 июн. в 15:24» */
@@ -234,7 +285,7 @@ export function mapProfileCommentPreview(
       ?? article?.channelId
       ?? 0,
     );
-    if (articleId && channelId) targetPath = `/channel/${channelId}/article/${articleId}`;
+    if (articleId && channelId) targetPath = `/article/${articleId}`;
     targetTitle = String(article?.title ?? article?.embeddable_title ?? article?.embeddableTitle ?? '').trim();
   } else {
     const releaseId = entityNumericId(release);

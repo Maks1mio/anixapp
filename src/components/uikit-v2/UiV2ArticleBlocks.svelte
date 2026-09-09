@@ -31,7 +31,9 @@
 </script>
 
 {#if blocks.length > 0}
-  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div class="uiv2-article-blocks {className}" onclick={onBlocksClick}>
     {#each blocks as block, i (i)}
       {#if block.kind === 'header'}

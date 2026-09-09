@@ -13,6 +13,7 @@
 const path = require('path');
 const { loadLocalEnv } = require('./lib/load-dotenv');
 loadLocalEnv();
+require('./lib/anixart-proxy-auth').installAnixartProxyFetchAuth();
 
 const { app, BrowserWindow } = require('electron');
 
@@ -126,6 +127,9 @@ app.whenReady().then(() => {
   createTray(deps);
   discord.initDiscordRpc();
   flushPendingDeepLink();
+  try {
+    require('./lib/backup-proxy').initBackupProxyKeepAlive();
+  } catch (_) {}
   void startFetchAAppBridge(logger).catch((err) => {
     logger.warn('fetchaapp', `bridge failed: ${err?.message || err}`);
   });

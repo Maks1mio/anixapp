@@ -134,6 +134,7 @@ export function feedArticleToUiV2FeedPost(article: FeedArticle): UiV2FeedPostDat
     lastComment: mapLastComment(article),
     containsRepost: !!article.contains_repost_article,
     signedAuthor,
+    isPinned: !!article.is_pinned,
     repost: repostRaw
       ? (() => {
           const repostContent = articleFeedContentParts(repostRaw);
@@ -202,6 +203,7 @@ export const UIV2_FEED_POST_DEMO: UiV2FeedPostData[] = [
       isSubscribed: true,
     },
     timeStr: '2 ч назад',
+    isPinned: true,
     preview: 'Кадр из финала — свет и композиция на высоте.',
     moreText: 'P.S: ещё два кадра в полном посте — свет и композиция на высоте.',
     canExpand: true,

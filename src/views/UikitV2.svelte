@@ -269,7 +269,7 @@
     {
       value: 'api.anixart.tv',
       label: 'api.anixart.tv',
-      desc: 'Заблокирован в РФ',
+      desc: 'заблокирован в вашей стране',
       status: 'offline' as const,
       disabled: true,
     },
@@ -1786,6 +1786,7 @@
                 />
                 <UiV2FeedRecommended
                   title="Каналы"
+                  avatarShape="channel"
                   items={feedSideTopics
                     .filter((t) => t.id != null && t.id % 2 === 1)
                     .map((t) => ({
@@ -1799,6 +1800,7 @@
                 />
                 <UiV2FeedRecommended
                   title="Блоги"
+                  avatarShape="circle"
                   items={feedSideTopics
                     .filter((t) => t.id != null && t.id % 2 === 0)
                     .map((t) => ({

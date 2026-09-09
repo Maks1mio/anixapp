@@ -1,7 +1,40 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type AnyClient = {
   endpoints: any;
+  baseUrl?: string;
+  call?: (request: any) => Promise<any>;
 };
+
+/**
+ * Anixapi joins absolute paths with `new URL('/x', base)` — path prefixes on base
+ * (e.g. https://api.anixapp.com/anixart-api) would be dropped. Rewrite to relative join.
+ */
+function patchPathPrefixedBaseUrl<T extends AnyClient>(client: T): T {
+  if (typeof client.call !== 'function') return client;
+  const original = client.call.bind(client);
+  client.call = (request: any) => {
+    const base = String(request?.customBaseUrl ?? client.baseUrl ?? '');
+    const path = request?.path;
+    if (!base || typeof path !== 'string' || !path.startsWith('/')) {
+      return original(request);
+    }
+    try {
+      const normalized = base.endsWith('/') ? base : `${base}/`;
+      const parsed = new URL(normalized);
+      if (!parsed.pathname || parsed.pathname === '/') {
+        return original(request);
+      }
+      return original({
+        ...request,
+        path: path.replace(/^\//, ''),
+        customBaseUrl: parsed.toString(),
+      });
+    } catch {
+      return original(request);
+    }
+  };
+  return client;
+}
 
 function unsupportedUpload(): never {
   throw new Error('Загрузка изображений на Android TV пока не поддерживается');
@@ -20,6 +53,7 @@ function normalizeSocial(data: Record<string, unknown> | null | undefined) {
 
 /** Совместимость AnixApp → AnixApi 0.3.x (без Node Buffer). */
 export function attachLegacyEndpoints<T extends AnyClient>(client: T): T {
+  patchPathPrefixedBaseUrl(client);
   const ep = client.endpoints;
 
   ep.feed.latest = (page: number) => ep.feed.latestArticles(page);

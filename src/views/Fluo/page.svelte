@@ -384,9 +384,9 @@
           in:fly={{ y: 18, duration: 300, easing: cubicOut }}
           out:fly={{ y: -10, duration: 220, easing: cubicOut }}
         >
-          <article
+          <button
+            type="button"
             class="fluo-room"
-            tabindex="0"
             aria-label={`Войти в ${displayName(room)}`}
             onclick={() => onRoomActivate(room)}
             onkeydown={(e) => onCardKeydown(e, room)}
@@ -503,7 +503,7 @@
                 </div>
               </div>
             </div>
-          </article>
+          </button>
         </li>
       {/each}
     </ul>
@@ -736,6 +736,7 @@
     border-radius: 14px;
     background: color-mix(in srgb, var(--color-surface, #161616) 94%, #000);
     color: inherit;
+    font: inherit;
     cursor: pointer;
     transition: border-color 0.15s ease, background 0.15s ease;
   }
@@ -1010,31 +1011,6 @@
     margin: 0;
     font-size: 0.9rem;
     color: var(--color-text-secondary, rgba(255, 255, 255, 0.55));
-  }
-
-  .fluo-modal__fieldset {
-    margin: 0;
-    padding: 0;
-    border: none;
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-  }
-
-  .fluo-modal__fieldset legend {
-    font-size: 0.8rem;
-    font-weight: 600;
-    margin-bottom: 0.25rem;
-    color: var(--color-text-secondary, rgba(255, 255, 255, 0.65));
-  }
-
-  .fluo-modal__radio,
-  .fluo-modal__check {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.9rem;
-    cursor: pointer;
   }
 
   .fluo-modal__foot {

@@ -8,11 +8,13 @@
   import { buildPosterUrl } from '../utils/posterUrl';
   import { resolveJacksonRefs } from '../utils/jackson-refs';
   import {
+    formatCommentHtml,
     formatCommentTimestamp,
     isCommentContentHidden,
     mapProfileCommentPreview,
     type ProfileCommentPreviewItem,
   } from '../utils/comment';
+  import { requestOpenExternal } from '../utils/external-link';
   import { setDiscordContext, refreshDiscordPresence } from '../services/discord-presence';
 
   interface Props { id?: number; }
@@ -204,7 +206,20 @@
                     </button>
                   {:else}
                     {#if item.message}
-                      <p class="overview-comment-week__message">{item.message}</p>
+                      <!-- svelte-ignore a11y_click_events_have_key_events -->
+                      <!-- svelte-ignore a11y_no_static_element_interactions -->
+                      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                      <p
+                        class="overview-comment-week__message"
+                        onclick={(e) => {
+                          const a = e.target instanceof Element ? e.target.closest('a') : null;
+                          const href = a?.getAttribute('href');
+                          if (!href) return;
+                          e.preventDefault();
+                          e.stopPropagation();
+                          requestOpenExternal(href);
+                        }}
+                      >{@html formatCommentHtml(item.message)}</p>
                     {/if}
                   {/if}
                   <div class="overview-comment-week__foot">

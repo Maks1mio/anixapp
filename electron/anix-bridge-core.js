@@ -63,12 +63,19 @@ function createAnixBridgeCore(options = {}) {
     if ('token' in partial || 'baseUrl' in partial) anixart = null;
   }
 
-  function createClient({ baseUrl, token } = {}) {
+  function createClient({ baseUrl, token, backupFailover = true } = {}) {
     const cfg = loadConfig();
-    return attachLegacyEndpoints(new Anixart({
+    const client = attachLegacyEndpoints(new Anixart({
       baseUrl: baseUrl ?? cfg.baseUrl,
       token: token ?? cfg.token ?? undefined,
     }));
+    if (backupFailover === false) return client;
+    try {
+      const { attachBackupProxyFailover } = require('./lib/backup-proxy');
+      return attachBackupProxyFailover(client);
+    } catch {
+      return client;
+    }
   }
 
   function getClient() {
@@ -352,15 +359,51 @@ function createAnixBridgeCore(options = {}) {
       c.saveConfig({ baseUrl });
       c.resetClient();
     },
+    'anix:getBackupProxy': async () => {
+      try {
+        const { getStatusWithConnections } = require('./lib/backup-proxy');
+        return await getStatusWithConnections();
+      } catch {
+        return {
+          enabled: true,
+          url: 'https://api.anixapp.com/anixart-api',
+          active: false,
+          stickyUntil: null,
+          connections: null,
+        };
+      }
+    },
+    'anix:setBackupProxyEnabled': async (_c, [enabled]) => {
+      try {
+        const { setBackupProxyEnabled, getStatus } = require('./lib/backup-proxy');
+        setBackupProxyEnabled(enabled !== false);
+        return getStatus();
+      } catch {
+        return {
+          enabled: enabled !== false,
+          url: 'https://api.anixapp.com/anixart-api',
+          active: false,
+          stickyUntil: null,
+        };
+      }
+    },
     'anix:pingBaseUrl': async (c, [baseUrl]) => {
       if (typeof baseUrl !== 'string' || !baseUrl) return { ok: false, latencyMs: null };
       try {
         const started = Date.now();
-        const client = c.createClient({ baseUrl, token: undefined });
+        const client = c.createClient({ baseUrl, token: undefined, backupFailover: false });
         await client.endpoints.feed.latest(1);
         return { ok: true, latencyMs: Date.now() - started };
       } catch {
         return { ok: false, latencyMs: null };
+      }
+    },
+    'anix:endpointGeo': async (_c, [baseUrl]) => {
+      try {
+        const { resolveEndpointGeo } = require('./lib/endpoint-geo');
+        return await resolveEndpointGeo(String(baseUrl || ''));
+      } catch {
+        return { countryCode: null, countryName: null, ip: null };
       }
     },
     'anix:testOffline': async () => {

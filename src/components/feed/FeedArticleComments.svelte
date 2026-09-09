@@ -19,7 +19,8 @@
     setUiV2CommentReplies,
     uiV2NodeToCommentData,
   } from '../../utils/comment-v2';
-  import { formatCommentsCountShort } from '../../utils/feed-top-comment';
+  import { formatCommentsCountShort, uiV2NodeToFeedLastComment } from '../../utils/feed-top-comment';
+  import type { UiV2FeedPostLastComment } from '../uikit-v2/UiV2FeedPost.svelte';
   import { resolveJacksonRefs } from '../../utils/jackson-refs';
 
   type Props = {
@@ -27,6 +28,8 @@
     totalCount?: number;
     focusComposer?: boolean;
     onCountChange?: (count: number) => void;
+    /** Актуальный комментарий для превью в свёрнутом посте. */
+    onPreviewCommentChange?: (comment: UiV2FeedPostLastComment | null) => void;
     onClose?: () => void;
   };
 
@@ -35,6 +38,7 @@
     totalCount = 0,
     focusComposer = false,
     onCountChange,
+    onPreviewCommentChange,
     onClose,
   }: Props = $props();
 
@@ -49,6 +53,11 @@
     knownTotal = Math.max(0, Number(totalCount) || 0);
   });
 
+  function emitPreview(list: UiV2CommentNode[] = nodes) {
+    const preview = uiV2NodeToFeedLastComment(list[0] ?? null);
+    onPreviewCommentChange?.(preview);
+  }
+
   async function loadComments() {
     loading = true;
     try {
@@ -60,6 +69,7 @@
         (res ?? {}) as Record<string, unknown>,
       );
       nodes = list.map((c) => commentDataToUiV2Node(c));
+      emitPreview(nodes);
       const apiTotal = Number(
         (res as { total_count?: number } | undefined)?.total_count,
       );
@@ -72,6 +82,7 @@
       }
     } catch {
       nodes = [];
+      emitPreview([]);
     } finally {
       loading = false;
     }
@@ -109,8 +120,10 @@
         const added = commentDataToUiV2Node(normalizeComment(raw, resolved));
         if (parent) {
           nodes = appendUiV2CommentReply(nodes, parent.id, added);
+          emitPreview(nodes);
         } else {
           nodes = [added, ...nodes];
+          emitPreview(nodes);
         }
         knownTotal += 1;
         onCountChange?.(knownTotal);

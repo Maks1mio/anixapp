@@ -12,6 +12,7 @@
     cover?: string | null;
     isVerified?: boolean;
     isSubscribed?: boolean;
+    isBlog?: boolean;
     subscriberCount?: number;
     articleCount?: number;
   };
@@ -60,8 +61,16 @@
       style={cover ? `background-image:url('${cover}')` : undefined}
       aria-hidden="true"
     ></span>
-    <span class="uiv2-feed-channel-card__avatar" aria-hidden="true">
-      <UserAvatar src={data.avatar} label={title} />
+    <span
+      class="uiv2-feed-channel-card__avatar"
+      class:uiv2-feed-channel-card__avatar--blog={!!data.isBlog}
+      aria-hidden="true"
+    >
+      <UserAvatar
+        src={data.avatar}
+        label={title}
+        shape={data.isBlog ? 'circle' : 'channel'}
+      />
     </span>
   </button>
 

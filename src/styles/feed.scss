@@ -120,6 +120,92 @@
   min-width: 0;
 }
 
+.feed-side__group-head {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 0;
+
+  .feed-side__item--group {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+.feed-side__item--group {
+  .feed-side__item-label {
+    flex: 0 1 auto;
+  }
+}
+
+.feed-side__avatar-stack {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  margin-left: auto;
+  padding-left: 0.35rem;
+}
+
+.feed-side__avatar-stack-item {
+  flex: 0 0 auto;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  background-color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 14%, transparent);
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--uikit-v2-bg, #121212) 92%, #000);
+  margin-left: -0.38rem;
+
+  &:first-child {
+    margin-left: 0;
+  }
+
+  &--channel {
+    border-radius: 5px;
+  }
+
+  &--empty {
+    background-image: none;
+  }
+}
+
+.feed-side__collapse {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 48%, transparent);
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    transform 0.18s ease;
+
+  :global(svg) {
+    display: block;
+    transform: rotate(-90deg);
+    transition: transform 0.18s ease;
+  }
+
+  &--on :global(svg) {
+    transform: rotate(0deg);
+  }
+
+  &:hover,
+  &:focus-visible {
+    background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 8%, transparent);
+    color: var(--uikit-v2-text, #{$color-text});
+    outline: none;
+  }
+}
+
 .feed-side__group .feed-side__topics {
   margin-top: 0.1rem;
   padding-left: 0.35rem;
@@ -165,6 +251,10 @@
   display: flex;
   align-items: center;
   min-width: 0;
+
+  &--history .feed-side__topic {
+    padding-right: 0.65rem;
+  }
 }
 
 .feed-side__topic {
@@ -277,6 +367,10 @@
   background-size: cover;
   background-position: center;
 
+  &--channel {
+    border-radius: 8px;
+  }
+
   &--empty {
     background-image: none;
   }
@@ -292,6 +386,10 @@
     background: #e53935;
     box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--uikit-v2-bg, #121212) 92%, #000);
     pointer-events: none;
+  }
+
+  &--post {
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 28%, transparent);
   }
 }
 
@@ -444,11 +542,46 @@
   min-width: 0;
 }
 
+.feed-page__back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--uikit-v2-text, #{$color-text});
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 10%, transparent);
+    outline: none;
+  }
+
+  .icon,
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
 .feed-page__title {
   margin: 0;
   font-size: 1.35rem;
   font-weight: 700;
   letter-spacing: -0.02em;
+  color: var(--uikit-v2-text, #{$color-text});
+}
+
+.feed-post-view__more-title {
+  margin: 0.35rem 0 0;
+  padding: 0.15rem 0.15rem 0;
+  font-size: 1.05rem;
+  font-weight: 750;
   color: var(--uikit-v2-text, #{$color-text});
 }
 
@@ -672,6 +805,113 @@
   padding-bottom: 1rem;
 }
 
+.feed-aside-more {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 0.85rem 0.8rem 0.95rem;
+  border: 1px solid color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 10%, transparent);
+  border-radius: 20px;
+  background: var(--uiv2-surface, #{$color-surface});
+}
+
+.feed-aside-more__title {
+  margin: 0;
+  padding: 0 0.15rem;
+  font-size: 0.95rem;
+  font-weight: 750;
+  color: var(--uikit-v2-text, #{$color-text});
+}
+
+.feed-aside-more__hint {
+  margin: 0;
+  padding: 0.25rem 0.15rem 0.1rem;
+  font-size: 0.82rem;
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
+}
+
+.feed-aside-more__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.feed-aside-more__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.45rem 0.35rem;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 8%, transparent);
+    outline: none;
+  }
+
+  &--active {
+    background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 10%, transparent);
+  }
+}
+
+.feed-aside-more__avatar {
+  flex: 0 0 auto;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  background-color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 12%, transparent);
+  background-size: cover;
+  background-position: center;
+
+  &--channel {
+    border-radius: 8px;
+  }
+
+  &--empty {
+    background-image: none;
+  }
+}
+
+.feed-aside-more__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.feed-aside-more__name {
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: var(--uikit-v2-text, #{$color-text});
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feed-aside-more__preview {
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.feed-article-card--selected {
+  scroll-margin-top: calc(var(--feed-search-sticky-top) + 0.5rem);
+}
+
 @media (max-width: 1100px) {
   .view-feed__layout,
   .view-feed__layout--no-aside {
@@ -750,6 +990,24 @@
   &:focus-visible {
     border-color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 28%, transparent);
     outline: none;
+  }
+}
+
+.feed-article__avatar {
+  flex: 0 0 auto;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background-color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 12%, transparent);
+  background-size: cover;
+  background-position: center;
+
+  &--channel {
+    border-radius: 8px;
+  }
+
+  &--empty {
+    background-image: none;
   }
 }
 

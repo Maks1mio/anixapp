@@ -115,23 +115,34 @@ async function fetchCdnAsset(url) {
     'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
   };
 
-  let response = await fetch(url, { headers, redirect: 'follow' });
-  if (!response.ok) {
-    const mirror = buildMirrorUrl(url);
-    if (mirror !== url) {
-      response = await fetch(mirror, { headers, redirect: 'follow' });
+  const candidates = [url];
+  const mirror = buildMirrorUrl(url);
+  if (mirror && mirror !== url) candidates.push(mirror);
+
+  let lastError = null;
+  for (const candidate of candidates) {
+    try {
+      const response = await fetch(candidate, { headers, redirect: 'follow' });
+      if (!response.ok) {
+        lastError = new Error(`CDN HTTP ${response.status} for ${candidate}`);
+        continue;
+      }
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (!buffer.length) {
+        lastError = new Error(`Empty CDN body for ${candidate}`);
+        continue;
+      }
+      const mimeType = response.headers.get('content-type')?.split(';')[0]?.trim() || guessMime(url);
+      const entry = { buffer, mimeType, ts: Date.now() };
+      cache.set(url, entry);
+      trimCache();
+      return entry;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
     }
   }
-  if (!response.ok) {
-    throw new Error(`CDN HTTP ${response.status} for ${url}`);
-  }
 
-  const buffer = Buffer.from(await response.arrayBuffer());
-  const mimeType = response.headers.get('content-type')?.split(';')[0]?.trim() || guessMime(url);
-  const entry = { buffer, mimeType, ts: Date.now() };
-  cache.set(url, entry);
-  trimCache();
-  return entry;
+  throw lastError || new Error(`CDN fetch failed for ${url}`);
 }
 
 /** JSON с CDN (Lottie-бейджи) — для IPC, без renderer fetch(anix-cdn://). */

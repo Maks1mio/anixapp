@@ -10,6 +10,7 @@
     label: string;
     avatar?: string | null;
     fresh?: boolean;
+    isBlog?: boolean;
   };
 
   type Props = {
@@ -67,6 +68,7 @@
             >
               <span
                 class="uiv2-feed-side__topic-avatar"
+                class:uiv2-feed-side__topic-avatar--channel={!topic.isBlog}
                 class:uiv2-feed-side__topic-avatar--empty={!topic.avatar}
                 class:uiv2-feed-side__topic-avatar--fresh={!!topic.fresh}
                 style={topic.avatar ? `background-image:url('${topic.avatar}')` : undefined}

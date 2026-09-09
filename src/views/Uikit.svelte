@@ -69,7 +69,7 @@
   const SELECT_OPTIONS: SelectOption[] = [
     { value: 'api-s.anixsekai.com', label: 'api-s.anixsekai.com' },
     { value: 'api.anixart.app',     label: 'api.anixart.app' },
-    { value: 'api.anixart.tv',      label: 'api.anixart.tv (Заблокирован в РФ)' },
+    { value: 'api.anixart.tv',      label: 'api.anixart.tv' },
   ];
   let selectDemoValue = $state('api-s.anixsekai.com');
 

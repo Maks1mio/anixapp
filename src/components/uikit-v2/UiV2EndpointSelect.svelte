@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import UiV2Select, { type UiV2SelectOption } from './UiV2Select.svelte';
-  import UiV2VpnCrtBanner from './UiV2VpnCrtBanner.svelte';
+  import UiV2CrtAdBanner from './UiV2CrtAdBanner.svelte';
   import {
     API_ENDPOINT_OPTIONS,
     BACKUP_API_PROXY,
@@ -34,8 +34,12 @@
     pingIntervalMs?: number;
     disabled?: boolean;
     class?: string;
-    /** Рекламный CRT-баннер 67 VPN под селектом */
+    /** Показать рекламный CRT-баннер под селектом */
+    showAd?: boolean;
+    /** @deprecated используйте showAd */
     showVpnAd?: boolean;
+    /** Слот embed с админки (`connection` / `offline` / `uikit` / свой) */
+    adSlot?: string;
     onChange?: (value: string) => void | Promise<void>;
   };
 
@@ -45,9 +49,13 @@
     pingIntervalMs = 1500,
     disabled = false,
     class: className = '',
+    showAd,
     showVpnAd = true,
+    adSlot = 'connection',
     onChange,
   }: Props = $props();
+
+  const showBanner = $derived(showAd ?? showVpnAd);
 
   let value = $state(DEFAULT_API_ENDPOINT);
   let ready = $state(false);
@@ -673,7 +681,7 @@
     </div>
   {/if}
 
-  {#if showVpnAd}
-    <UiV2VpnCrtBanner class="uiv2-endpoint-select__vpn" />
+  {#if showBanner}
+    <UiV2CrtAdBanner slotId={adSlot} class="uiv2-endpoint-select__vpn uiv2-endpoint-select__ad" />
   {/if}
 </div>

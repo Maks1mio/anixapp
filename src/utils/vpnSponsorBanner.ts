@@ -17,6 +17,8 @@ export const VPN_67_COPY = {
   aria: 'Реклама 67 VPN: стабильный VPN и белые списки за 67 рублей. Открыть сайт спонсора.',
 };
 
+export type AdLayerId = 'icon' | 'kicker' | 'title' | 'body' | 'cta';
+
 export type VpnBannerOverlay = {
   kicker: string;
   title: string;
@@ -29,12 +31,46 @@ export type VpnBannerOverlay = {
   /** Масштаб текста и иконки, % (50…180). */
   textScale: number;
   icon: string;
+  /** Смещения отдельных слоёв, % размера баннера (−50…50). */
+  iconDX: number;
+  iconDY: number;
+  kickerDX: number;
+  kickerDY: number;
+  titleDX: number;
+  titleDY: number;
+  bodyDX: number;
+  bodyDY: number;
+  ctaDX: number;
+  ctaDY: number;
 };
 
 export type VpnBannerStates = {
   rest: VpnBannerOverlay;
   hover: VpnBannerOverlay;
 };
+
+export type AdLayerBox = {
+  id: AdLayerId;
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  visible: boolean;
+};
+
+const LAYER_ZERO = {
+  iconDX: 0,
+  iconDY: 0,
+  kickerDX: 0,
+  kickerDY: 0,
+  titleDX: 0,
+  titleDY: 0,
+  bodyDX: 0,
+  bodyDY: 0,
+  ctaDX: 0,
+  ctaDY: 0,
+} as const;
 
 export const VPN_OVERLAY_PRESET: VpnBannerOverlay = {
   kicker: '',
@@ -45,6 +81,7 @@ export const VPN_OVERLAY_PRESET: VpnBannerOverlay = {
   textY: 15,
   textScale: 151,
   icon: 'wifi-off',
+  ...LAYER_ZERO,
 };
 
 export const VPN_OVERLAY_HOVER_PRESET: VpnBannerOverlay = {
@@ -56,6 +93,7 @@ export const VPN_OVERLAY_HOVER_PRESET: VpnBannerOverlay = {
   textY: 8,
   textScale: 100,
   icon: 'wifi',
+  ...LAYER_ZERO,
 };
 
 export const VPN_BANNER_STATES_PRESET: VpnBannerStates = {
@@ -87,6 +125,7 @@ function asIcon(value: unknown, fallback: string): string {
 export function sanitizeVpnOverlay(raw: Partial<VpnBannerOverlay> | null | undefined): VpnBannerOverlay {
   const src = raw ?? {};
   const base = VPN_OVERLAY_PRESET;
+  const dx = (v: unknown) => clamp(asFinite(v, 0), -50, 50);
   return {
     kicker: asText(src.kicker, base.kicker),
     title: asText(src.title, base.title),
@@ -96,6 +135,16 @@ export function sanitizeVpnOverlay(raw: Partial<VpnBannerOverlay> | null | undef
     textY: clamp(asFinite(src.textY, base.textY), -50, 50),
     textScale: clamp(asFinite(src.textScale, base.textScale), 50, 180),
     icon: asIcon(src.icon, base.icon),
+    iconDX: dx(src.iconDX),
+    iconDY: dx(src.iconDY),
+    kickerDX: dx(src.kickerDX),
+    kickerDY: dx(src.kickerDY),
+    titleDX: dx(src.titleDX),
+    titleDY: dx(src.titleDY),
+    bodyDX: dx(src.bodyDX),
+    bodyDY: dx(src.bodyDY),
+    ctaDX: dx(src.ctaDX),
+    ctaDY: dx(src.ctaDY),
   };
 }
 
@@ -129,7 +178,26 @@ export function saveVpnBannerStates(states: VpnBannerStates): void {
 
 export function overlaySignature(overlay: VpnBannerOverlay): string {
   const o = sanitizeVpnOverlay(overlay);
-  return `${o.kicker}\n${o.title}\n${o.body}\n${o.cta}\n${o.textX}\n${o.textY}\n${o.textScale}\n${o.icon}`;
+  return [
+    o.kicker,
+    o.title,
+    o.body,
+    o.cta,
+    o.textX,
+    o.textY,
+    o.textScale,
+    o.icon,
+    o.iconDX,
+    o.iconDY,
+    o.kickerDX,
+    o.kickerDY,
+    o.titleDX,
+    o.titleDY,
+    o.bodyDX,
+    o.bodyDY,
+    o.ctaDX,
+    o.ctaDY,
+  ].join('\n');
 }
 
 export function statesSignature(states: VpnBannerStates): string {
@@ -185,6 +253,7 @@ function drawCover(
 }
 
 type TextRun = {
+  role: AdLayerId;
   text: string;
   x: number;
   y: number;
@@ -201,6 +270,24 @@ type OverlayLayout = {
   runs: TextRun[];
 };
 
+function layerOffset(
+  overlay: VpnBannerOverlay,
+  id: AdLayerId,
+): { dx: number; dy: number } {
+  switch (id) {
+    case 'icon':
+      return { dx: overlay.iconDX, dy: overlay.iconDY };
+    case 'kicker':
+      return { dx: overlay.kickerDX, dy: overlay.kickerDY };
+    case 'title':
+      return { dx: overlay.titleDX, dy: overlay.titleDY };
+    case 'body':
+      return { dx: overlay.bodyDX, dy: overlay.bodyDY };
+    case 'cta':
+      return { dx: overlay.ctaDX, dy: overlay.ctaDY };
+  }
+}
+
 function layoutOverlay(
   ctx: CanvasRenderingContext2D,
   w: number,
@@ -210,38 +297,147 @@ function layoutOverlay(
   const copy = sanitizeVpnOverlay(overlay);
   const minSide = Math.min(w, h);
   const scale = copy.textScale / 100;
-  const cx = w * 0.5 + (copy.textX / 100) * w;
-  const iconY = h * 0.22 + (copy.textY / 100) * h;
+  const baseCx = w * 0.5 + (copy.textX / 100) * w;
+  const baseIconY = h * 0.22 + (copy.textY / 100) * h;
+  const iconOff = layerOffset(copy, 'icon');
+  const iconX = baseCx + (iconOff.dx / 100) * w;
+  const iconY = baseIconY + (iconOff.dy / 100) * h;
   const iconR = minSide * 0.11 * scale;
   const font = '"IBM Plex Sans", "Segoe UI", sans-serif';
   const pad = w * 0.08;
   const maxW = w - pad * 2;
   const runs: TextRun[] = [];
-  let y = iconY + iconR + h * 0.08 * scale;
+  let y = baseIconY + iconR + h * 0.08 * scale;
 
-  const push = (text: string, weight: string, size: number, gap: number, alpha: number) => {
+  const push = (
+    role: AdLayerId,
+    text: string,
+    weight: string,
+    size: number,
+    gap: number,
+    alpha: number,
+  ) => {
     if (!text.trim()) return;
+    const off = layerOffset(copy, role);
+    const cx = baseCx + (off.dx / 100) * w;
+    const dy = (off.dy / 100) * h;
     ctx.font = `${weight} ${Math.round(size)}px ${font}`;
     const lines = wrapLines(ctx, text, maxW);
     for (const line of lines) {
-      runs.push({ text: line, x: cx, y, size, weight, alpha });
+      runs.push({ role, text: line, x: cx, y: y + dy, size, weight, alpha });
       y += gap;
     }
   };
 
-  push(copy.kicker, '600', minSide * 0.055 * scale, minSide * 0.08 * scale, 1);
-  push(copy.title, '700', minSide * 0.078 * scale, minSide * 0.11 * scale, 1);
-  push(copy.body, '500', minSide * 0.042 * scale, minSide * 0.058 * scale, 1);
+  push('kicker', copy.kicker, '600', minSide * 0.055 * scale, minSide * 0.08 * scale, 1);
+  push('title', copy.title, '700', minSide * 0.078 * scale, minSide * 0.11 * scale, 1);
+  push('body', copy.body, '500', minSide * 0.042 * scale, minSide * 0.058 * scale, 1);
   if (copy.body.trim()) y += minSide * 0.02 * scale;
-  push(copy.cta, '500', minSide * 0.038 * scale, minSide * 0.055 * scale, 0.88);
+  push('cta', copy.cta, '500', minSide * 0.038 * scale, minSide * 0.055 * scale, 0.88);
 
   return {
     icon: copy.icon,
-    iconX: cx,
+    iconX,
     iconY,
     iconSize: iconR * 2,
     runs,
   };
+}
+
+/** CSS-пиксельные bbox слоёв для редактора (как в Figma). */
+export function measureAdLayers(
+  cssW: number,
+  cssH: number,
+  overlay: VpnBannerOverlay,
+): AdLayerBox[] {
+  const w = Math.max(1, cssW);
+  const h = Math.max(1, cssH);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return [];
+  const layout = layoutOverlay(ctx, w, h, overlay);
+  const copy = sanitizeVpnOverlay(overlay);
+  const labels: Record<AdLayerId, string> = {
+    icon: 'Icon',
+    kicker: 'Kicker',
+    title: copy.title.trim() || 'Title',
+    body: copy.body.trim() ? copy.body.trim().slice(0, 28) : 'Body',
+    cta: copy.cta.trim() || 'CTA',
+  };
+  const boxes: AdLayerBox[] = [];
+
+  const iconHalf = layout.iconSize / 2;
+  boxes.push({
+    id: 'icon',
+    label: labels.icon,
+    x: layout.iconX - iconHalf,
+    y: layout.iconY - iconHalf,
+    w: layout.iconSize,
+    h: layout.iconSize,
+    visible: true,
+  });
+
+  for (const role of ['kicker', 'title', 'body', 'cta'] as AdLayerId[]) {
+    const runs = layout.runs.filter((r) => r.role === role);
+    if (runs.length === 0) {
+      boxes.push({
+        id: role,
+        label: labels[role],
+        x: 0,
+        y: 0,
+        w: 0,
+        h: 0,
+        visible: false,
+      });
+      continue;
+    }
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const run of runs) {
+      ctx.font = `${run.weight} ${Math.round(run.size)}px "IBM Plex Sans", "Segoe UI", sans-serif`;
+      const tw = ctx.measureText(run.text).width;
+      minX = Math.min(minX, run.x - tw / 2);
+      maxX = Math.max(maxX, run.x + tw / 2);
+      minY = Math.min(minY, run.y);
+      maxY = Math.max(maxY, run.y + run.size * 1.15);
+    }
+    boxes.push({
+      id: role,
+      label: labels[role],
+      x: minX,
+      y: minY,
+      w: Math.max(1, maxX - minX),
+      h: Math.max(1, maxY - minY),
+      visible: true,
+    });
+  }
+
+  return boxes;
+}
+
+export const AD_LAYER_META: Array<{ id: AdLayerId; name: string }> = [
+  { id: 'icon', name: 'Icon' },
+  { id: 'kicker', name: 'Kicker' },
+  { id: 'title', name: 'Title' },
+  { id: 'body', name: 'Body' },
+  { id: 'cta', name: 'CTA' },
+];
+
+export function layerOffsetKeys(id: AdLayerId): { dx: keyof VpnBannerOverlay; dy: keyof VpnBannerOverlay } {
+  switch (id) {
+    case 'icon':
+      return { dx: 'iconDX', dy: 'iconDY' };
+    case 'kicker':
+      return { dx: 'kickerDX', dy: 'kickerDY' };
+    case 'title':
+      return { dx: 'titleDX', dy: 'titleDY' };
+    case 'body':
+      return { dx: 'bodyDX', dy: 'bodyDY' };
+    case 'cta':
+      return { dx: 'ctaDX', dy: 'ctaDY' };
+  }
 }
 
 function lerpLayout(a: OverlayLayout, b: OverlayLayout, t: number): OverlayLayout {
@@ -295,16 +491,17 @@ function drawRuns(
   ctx.shadowBlur = 0;
 }
 
-function lerpRuns(a: TextRun[], b: TextRun[], t: number, x: number): TextRun[] {
+function lerpRuns(a: TextRun[], b: TextRun[], t: number): TextRun[] {
   const n = Math.max(a.length, b.length);
   const out: TextRun[] = [];
   for (let i = 0; i < n; i += 1) {
     const from = a[i];
     const to = b[i];
-    if (from && to && from.text === to.text) {
+    if (from && to && from.text === to.text && from.role === to.role) {
       out.push({
+        role: from.role,
         text: from.text,
-        x,
+        x: lerp(from.x, to.x, t),
         y: lerp(from.y, to.y, t),
         size: lerp(from.size, to.size, t),
         weight: t < 0.5 ? from.weight : to.weight,
@@ -315,7 +512,7 @@ function lerpRuns(a: TextRun[], b: TextRun[], t: number, x: number): TextRun[] {
     if (from) {
       out.push({
         ...from,
-        x,
+        x: to ? lerp(from.x, to.x, t) : from.x,
         y: to ? lerp(from.y, to.y, t) : from.y,
         size: to ? lerp(from.size, to.size, t) : from.size,
         alpha: from.alpha * (1 - t),
@@ -324,7 +521,7 @@ function lerpRuns(a: TextRun[], b: TextRun[], t: number, x: number): TextRun[] {
     if (to) {
       out.push({
         ...to,
-        x,
+        x: from ? lerp(from.x, to.x, t) : to.x,
         y: from ? lerp(from.y, to.y, t) : to.y,
         size: from ? lerp(from.size, to.size, t) : to.size,
         alpha: to.alpha * t,
@@ -371,5 +568,5 @@ export function composeVpnSponsorFrame(
     drawIcon(ctx, layoutB.icon, mixed.iconX, mixed.iconY, mixed.iconSize, k);
   }
 
-  drawRuns(ctx, lerpRuns(layoutA.runs, layoutB.runs, k, mixed.iconX), minSide, w - w * 0.16, 1);
+  drawRuns(ctx, lerpRuns(layoutA.runs, layoutB.runs, k), minSide, w - w * 0.16, 1);
 }

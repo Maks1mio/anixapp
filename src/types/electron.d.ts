@@ -300,7 +300,10 @@ declare global {
       sendLobbyChatToPlayer?: (msg: Record<string, unknown>) => void;
       sendLobbyChatHistoryToPlayer?: (messages: unknown[]) => void;
       sendLobbyChooserErrorToPlayer?: (msg: string) => void;
-      lobbyCreateFromPlayer?: (playback?: Record<string, unknown> | null) => void;
+      lobbyCreateFromPlayer?: (payload?: {
+        playback?: Record<string, unknown> | null;
+        options?: Record<string, unknown>;
+      } | Record<string, unknown> | null) => void;
       lobbyJoinFromPlayer?: (code: string) => void;
       lobbyLeaveFromPlayer?: () => void;
       lobbyChatFromPlayer?: (text: string) => void;

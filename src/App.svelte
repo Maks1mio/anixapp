@@ -18,7 +18,7 @@
   } from './stores/connection';
   import { currentPath, navigate, replacePath } from './stores/navigation';
   import { focusFeedArticle, focusFeedChannel } from './stores/feed-focus';
-  import { openLobbyModal, settingsModalOpen, lobbyModalOpen, lobbyModalInitialCode, notificationsModalOpen, watchModalOpen, watchModalReleaseId, watchModalReleaseTitle, lobbyCurrentPlayback, isPlayerWindowOpen, lobbyWatchingPeerIds } from './stores/modals';
+  import { settingsModalOpen, notificationsModalOpen, watchModalOpen, watchModalReleaseId, watchModalReleaseTitle, lobbyCurrentPlayback, isPlayerWindowOpen, lobbyWatchingPeerIds } from './stores/modals';
   import { sendPlayerViewActive } from './services/lobby-ws';
   import { getPath, getSearchParams } from './router';
   import { captureActiveScroll, resetScrollAfterRouteChange } from './stores/view-state';
@@ -91,7 +91,6 @@
   import { isEmbeddedWebPlayer } from './utils/watch-nav';
 
   import SettingsModal from './components/SettingsModal.svelte';
-  import LobbyModal from './components/LobbyModal.svelte';
   import NotificationsModal from './components/NotificationsModal.svelte';
   import WatchModal from './components/WatchModal.svelte';
   import UiV2ExternalLinkConfirm from './components/uikit-v2/UiV2ExternalLinkConfirm.svelte';
@@ -479,9 +478,25 @@
       }) as EventListener],
 
       ['lobby:createFromPlayer', ((e: CustomEvent) => {
-        const seed = e.detail && typeof e.detail === 'object' ? e.detail : null;
-        void createLobbyRoomAndOpenPlayer(seed).catch(() => {
-          window.electron?.sendLobbyChooserErrorToPlayer?.('Не удалось создать комнату. Попробуйте ещё раз.');
+        const detail = e.detail && typeof e.detail === 'object' ? e.detail as Record<string, unknown> : null;
+        let seed: Record<string, unknown> | null = null;
+        let options = {};
+        if (detail) {
+          if ('playback' in detail || 'options' in detail) {
+            seed = (detail.playback && typeof detail.playback === 'object'
+              ? detail.playback
+              : null) as Record<string, unknown> | null;
+            options = (detail.options && typeof detail.options === 'object'
+              ? detail.options
+              : {}) as Record<string, unknown>;
+          } else {
+            seed = detail;
+          }
+        }
+        void createLobbyRoomAndOpenPlayer(seed as any, options as any).catch((err: unknown) => {
+          window.electron?.sendLobbyChooserErrorToPlayer?.(
+            err instanceof Error ? err.message : 'Не удалось создать комнату. Попробуйте ещё раз.',
+          );
         });
       }) as EventListener],
 
@@ -691,8 +706,9 @@
       }) as EventListener],
 
       ['discord:joinLobby', ((e: CustomEvent) => {
-        const { roomCode } = e.detail ?? {};
-        if (roomCode) openLobbyModal(roomCode);
+        const roomCode = String(e.detail?.roomCode ?? '').trim();
+        if (!roomCode) return;
+        void joinLobbyRoomAndOpenPlayer(roomCode).catch(() => {});
       }) as EventListener],
     ];
 
@@ -1028,9 +1044,6 @@
 
   {#if $settingsModalOpen}
     <SettingsModal onClose={() => settingsModalOpen.set(false)} />
-  {/if}
-  {#if $lobbyModalOpen}
-    <LobbyModal initialCode={$lobbyModalInitialCode ?? undefined} onClose={() => lobbyModalOpen.set(false)} />
   {/if}
   {#if $notificationsModalOpen}
     <NotificationsModal onClose={() => notificationsModalOpen.set(false)} />

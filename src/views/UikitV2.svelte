@@ -1428,6 +1428,7 @@
             <div class="uikit-v2-select-demo">
               <UiV2EndpointSelect
                 pingIntervalMs={1000}
+                adSlot="uikit"
                 onChange={(v) => showToast(`Эндпоинт: ${v.replace(/^https:\/\//, '')}`)}
               />
             </div>

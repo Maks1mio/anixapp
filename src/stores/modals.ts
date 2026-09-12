@@ -1,5 +1,4 @@
 import { get, writable } from 'svelte/store';
-import { requireAuth } from './auth';
 import { openProfilePanel, closeProfilePanel } from './profile-panel';
 
 export interface LobbyCurrentPlayback {
@@ -24,8 +23,6 @@ export const lobbyWatchingPeerIds = writable<string[]>([]);
 
 export const settingsModalOpen = writable(false);
 export const settingsModalInitialTab = writable<string | null>(null);
-export const lobbyModalOpen = writable(false);
-export const lobbyModalInitialCode = writable<string | null>(null);
 export const notificationsModalOpen = writable(false);
 export const watchModalOpen = writable(false);
 export const watchModalReleaseId = writable<number>(0);
@@ -65,16 +62,6 @@ export function getWatchModalState(releaseId: number): WatchModalCachedState | n
 export function clearWatchModalState(releaseId?: number): void {
   if (releaseId != null) watchModalStateCache.delete(releaseId);
   else watchModalStateCache.clear();
-}
-
-export function openLobbyModal(roomCode?: string): void {
-  if (!requireAuth()) return;
-  lobbyModalInitialCode.set(roomCode ?? null);
-  lobbyModalOpen.set(true);
-}
-export function closeLobbyModal(): void {
-  lobbyModalOpen.set(false);
-  lobbyModalInitialCode.set(null);
 }
 
 export function openNotificationsModal(): void {

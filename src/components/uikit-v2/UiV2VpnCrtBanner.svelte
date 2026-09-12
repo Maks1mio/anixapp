@@ -6,6 +6,7 @@
   import { portal } from '../../actions/portal';
   import { iconX } from '../icons';
   import { requestOpenExternal } from '../../utils/external-link';
+  import { fetchAdEmbed, resolveAdImageUrl, type CrtAdVisual } from '../../services/ads-api';
   import {
     CrtScreenRenderer,
     CRT_ABERRATION_OPTIONS,
@@ -45,11 +46,47 @@
   type Props = {
     href?: string;
     class?: string;
+    /** Слот embed — загружает креатив с AnixBack. */
+    slotId?: string;
+    creative?: CrtAdVisual | null;
+    imageUrl?: string | null;
+    width?: string;
+    height?: string;
+    aspectRatio?: string;
+    /** Показать панель настройки (админка / dev). */
+    editable?: boolean;
+    /** Скрыть gear-popover — инспектор снаружи. */
+    hideGear?: boolean;
+    /** Drag текста на канвасе (редактор). */
+    enableDrag?: boolean;
+    /** Не реагировать на pointer-hover (в редакторе только Rest/Hover вручную). */
+    ignorePointerHover?: boolean;
+    /** Внешний переключатель rest/hover превью. */
+    editHover?: boolean;
+    onCreativeChange?: (next: { crt: CrtScreenStates; overlay: VpnBannerStates }) => void;
   };
 
-  let { href = VPN_67_URL, class: className = '' }: Props = $props();
+  let {
+    href = VPN_67_URL,
+    class: className = '',
+    slotId = '',
+    creative = null,
+    imageUrl = null,
+    width = '',
+    height = '',
+    aspectRatio = '',
+    editable = false,
+    hideGear = false,
+    enableDrag = false,
+    ignorePointerHover = false,
+    editHover = $bindable(false),
+    onCreativeChange,
+  }: Props = $props();
 
   const isDev = import.meta.env.DEV;
+  const canEdit = $derived(editable || (isDev && !slotId && !creative));
+  const showGear = $derived(canEdit && !hideGear);
+  const lockPointerHover = $derived(ignorePointerHover || (canEdit && hideGear));
   const PRESET_REV = 'blocked-wifi-v1';
   const PRESET_REV_KEY = 'anixapp.vpnBannerPresetRev';
   const PANEL_GAP = 8;
@@ -73,6 +110,8 @@
   }
 
   function initCrtStates(): CrtScreenStates {
+    if (creative?.crt) return cloneCrtStates(creative.crt);
+    if (slotId || editable || onCreativeChange) return cloneCrtStates(CRT_VPN_STATES_PRESET);
     if (shouldApplyPreset()) {
       const next = cloneCrtStates(CRT_VPN_STATES_PRESET);
       if (isDev) saveCrtVpnStates(next);
@@ -82,6 +121,8 @@
   }
 
   function initOverlayStates(): VpnBannerStates {
+    if (creative?.overlay) return cloneStates(creative.overlay);
+    if (slotId || editable || onCreativeChange) return cloneStates(VPN_BANNER_STATES_PRESET);
     if (shouldApplyPreset()) {
       const next = cloneStates(VPN_BANNER_STATES_PRESET);
       if (isDev) saveVpnBannerStates(next);
@@ -105,10 +146,30 @@
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
   let crtStates = $state<CrtScreenStates>(initCrtStates());
   let states = $state<VpnBannerStates>(initOverlayStates());
-  let editHover = $state(false);
   let redrawBanner: (() => void) | null = null;
+  let remoteCreative = $state<CrtAdVisual | null>(null);
+  let dragActive = false;
+  let dragMoved = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let dragOrigX = 0;
+  let dragOrigY = 0;
   const params = $derived(editHover ? crtStates.hover : crtStates.rest);
   const overlay = $derived(editHover ? states.hover : states.rest);
+  const adRow = $derived(creative ?? remoteCreative);
+  const liveHref = $derived((href && href !== VPN_67_URL ? href : '') || adRow?.href || VPN_67_URL);
+  const artSrc = $derived(
+    resolveAdImageUrl(imageUrl || adRow?.imageUrl, adRow?.updatedAt) || bannerArt,
+  );
+  const boxStyle = $derived.by(() => {
+    const w = width || adRow?.width || '100%';
+    const h = height || adRow?.height || '';
+    const ar = aspectRatio || adRow?.aspectRatio || '16 / 11';
+    const parts = [`width:${w}`];
+    if (h && h !== 'auto') parts.push(`height:${h}`, 'aspect-ratio:auto');
+    else parts.push(`aspect-ratio:${ar}`);
+    return parts.join(';');
+  });
   const bannerAria = $derived(
     overlay.title.trim()
       ? `${overlay.kicker} ${overlay.title}. ${overlay.body} ${overlay.cta}`.trim()
@@ -119,16 +180,27 @@
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.decoding = 'async';
+      try {
+        const origin = new URL(src, window.location.href).origin;
+        if (origin !== window.location.origin) img.crossOrigin = 'anonymous';
+      } catch {
+        /* ignore */
+      }
       img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('vpn banner art failed'));
+      img.onerror = () => reject(new Error('crt ad art failed'));
       img.src = src;
     });
+  }
+
+  function emitCreative() {
+    onCreativeChange?.({ crt: crtStates, overlay: states });
   }
 
   function persistCrt(next: CrtScreenParams) {
     const clean = sanitizeCrtParams(next);
     crtStates = editHover ? { ...crtStates, hover: clean } : { ...crtStates, rest: clean };
-    if (isDev) saveCrtVpnStates(crtStates);
+    if (onCreativeChange) emitCreative();
+    else if (isDev && !slotId && !creative) saveCrtVpnStates(crtStates);
   }
 
   function setSlider(key: CrtSliderKey, raw: string) {
@@ -147,7 +219,8 @@
 
   function persistStates(next: VpnBannerStates) {
     states = sanitizeVpnBannerStates(next);
-    if (isDev) saveVpnBannerStates(states);
+    if (onCreativeChange) emitCreative();
+    else if (isDev && !slotId && !creative) saveVpnBannerStates(states);
   }
 
   function persistOverlay(next: VpnBannerOverlay) {
@@ -173,11 +246,47 @@
     crtStates = cloneCrtStates(CRT_VPN_STATES_PRESET);
     states = cloneStates(VPN_BANNER_STATES_PRESET);
     choiceOpen = null;
-    if (isDev) {
+    if (onCreativeChange) emitCreative();
+    else if (isDev && !slotId && !creative) {
       saveCrtVpnStates(crtStates);
       saveVpnBannerStates(states);
     }
   }
+
+  $effect(() => {
+    const next = creative;
+    if (!next) return;
+    const nextCrt = sanitizeCrtStates(next.crt);
+    const nextOverlay = sanitizeVpnBannerStates(next.overlay);
+    const same = untrack(() => {
+      const sameCrt =
+        JSON.stringify(crtStates.rest) === JSON.stringify(nextCrt.rest)
+        && JSON.stringify(crtStates.hover) === JSON.stringify(nextCrt.hover);
+      const sameOverlay = statesSignature(states) === statesSignature(nextOverlay);
+      return sameCrt && sameOverlay;
+    });
+    if (same) return;
+    crtStates = cloneCrtStates(nextCrt);
+    states = cloneStates(nextOverlay);
+  });
+
+  $effect(() => {
+    if (creative || !slotId) return;
+    let cancelled = false;
+    void fetchAdEmbed(slotId)
+      .then((row) => {
+        if (cancelled || !row) return;
+        remoteCreative = row;
+        crtStates = cloneCrtStates(sanitizeCrtStates(row.crt));
+        states = cloneStates(sanitizeVpnBannerStates(row.overlay));
+      })
+      .catch(() => {
+        /* fallback preset already on canvas */
+      });
+    return () => {
+      cancelled = true;
+    };
+  });
 
   async function copyParams() {
     const text = JSON.stringify(
@@ -273,7 +382,7 @@
   }
 
   $effect(() => {
-    if (!isDev || !panelOpen) return;
+    if (!canEdit || !panelOpen) return;
     void updatePanelPosition();
 
     const onKey = (e: KeyboardEvent) => {
@@ -314,6 +423,7 @@
   $effect(() => {
     const root = rootEl;
     const canvas = canvasEl;
+    const src = artSrc;
     if (!root || !canvas) return;
 
     let cancelled = false;
@@ -371,6 +481,7 @@
     const liveStates = (): VpnBannerStates => untrack(() => cloneStates(states));
     const settingsOpen = () => untrack(() => panelOpen);
     const previewHover = () => untrack(() => editHover);
+    const noPointerHover = () => untrack(() => lockPointerHover);
 
     const paintFallback = (
       rest: VpnBannerOverlay,
@@ -395,10 +506,15 @@
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const dt = lastTime ? Math.min(48, Math.max(0, timeMs - lastTime)) : 16;
       lastTime = timeMs;
-      const target = previewHover() || pointerHover ? 1 : 0;
-      const tau = 140;
-      hoverT += (target - hoverT) * (1 - Math.exp(-dt / tau));
-      if (Math.abs(target - hoverT) < 0.002) hoverT = target;
+      const usePointer = !noPointerHover() && pointerHover;
+      const target = previewHover() || usePointer ? 1 : 0;
+      if (noPointerHover()) {
+        hoverT = target;
+      } else {
+        const tau = 140;
+        hoverT += (target - hoverT) * (1 - Math.exp(-dt / tau));
+        if (Math.abs(target - hoverT) < 0.002) hoverT = target;
+      }
       const eased = easeInOutCubic(hoverT);
       const nextStates = liveStates();
       const overlayKey = `${statesSignature(nextStates)}|${eased.toFixed(3)}`;
@@ -430,8 +546,9 @@
       raf = 0;
       if (cancelled || !visible || document.hidden) return;
       const freeze = reduced && !untrack(() => panelOpen);
-      const target = untrack(() => editHover) || pointerHover ? 1 : 0;
-      if (freeze) hoverT = target;
+      const usePointer = !untrack(() => lockPointerHover) && pointerHover;
+      const target = untrack(() => editHover) || usePointer ? 1 : 0;
+      if (freeze || untrack(() => lockPointerHover)) hoverT = target;
       drawFrame(now);
       const hoverBusy = Math.abs(target - hoverT) > 0.002;
       if (!freeze || hoverBusy) raf = requestAnimationFrame(loop);
@@ -490,7 +607,12 @@
 
     void (async () => {
       try {
-        art = await loadImage(bannerArt);
+        try {
+          art = await loadImage(src);
+        } catch {
+          if (src !== bannerArt) art = await loadImage(bannerArt);
+          else throw new Error('crt ad art failed');
+        }
         if (cancelled) return;
 
         try {
@@ -499,7 +621,7 @@
             engine = 'webgl';
           }
         } catch (err) {
-          console.warn('[vpn-crt-banner] webgl fallback', err);
+          console.warn('[crt-ad-banner] webgl fallback', err);
           renderer = null;
         }
         if (!renderer) engine = '2d';
@@ -521,7 +643,7 @@
           /* шрифт не обязателен */
         }
       } catch (err) {
-        console.warn('[vpn-crt-banner]', err);
+        console.warn('[crt-ad-banner]', err);
       }
     })();
 
@@ -551,25 +673,79 @@
   function onClick(e: MouseEvent) {
     if (e.button !== 0) return;
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (dragMoved) {
+      e.preventDefault();
+      dragMoved = false;
+      return;
+    }
+    if (canEdit && enableDrag) {
+      e.preventDefault();
+      return;
+    }
+    if (canEdit && (hideGear || ignorePointerHover)) {
+      e.preventDefault();
+      return;
+    }
     e.preventDefault();
-    requestOpenExternal(href);
+    requestOpenExternal(liveHref);
+  }
+
+  function onPointerDown(e: PointerEvent) {
+    if (!canEdit || !enableDrag || e.button !== 0) return;
+    const root = rootEl;
+    if (!root) return;
+    e.preventDefault();
+    dragActive = true;
+    dragMoved = false;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    dragOrigX = overlay.textX;
+    dragOrigY = overlay.textY;
+    root.setPointerCapture(e.pointerId);
+  }
+
+  function onPointerMove(e: PointerEvent) {
+    if (!dragActive || !rootEl) return;
+    const rect = rootEl.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return;
+    const dx = ((e.clientX - dragStartX) / rect.width) * 100;
+    const dy = ((e.clientY - dragStartY) / rect.height) * 100;
+    if (Math.abs(dx) > 0.3 || Math.abs(dy) > 0.3) dragMoved = true;
+    const nextX = Math.min(50, Math.max(-50, dragOrigX + dx));
+    const nextY = Math.min(50, Math.max(-50, dragOrigY + dy));
+    persistOverlay({ ...overlay, textX: nextX, textY: nextY });
+  }
+
+  function onPointerUp(e: PointerEvent) {
+    if (!dragActive) return;
+    dragActive = false;
+    try {
+      rootEl?.releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
   }
 </script>
 
-<div class="uiv2-vpn-crt-wrap {className}">
+<div class="uiv2-vpn-crt-wrap uiv2-crt-ad-wrap {className}" style={boxStyle}>
   <a
     bind:this={rootEl}
-    class="uiv2-vpn-crt"
-    href={href}
+    class="uiv2-vpn-crt uiv2-crt-ad"
+    class:uiv2-vpn-crt--draggable={canEdit && enableDrag}
+    href={liveHref}
     rel="noopener noreferrer"
     target="_blank"
     aria-label={bannerAria}
     onclick={onClick}
+    onpointerdown={onPointerDown}
+    onpointermove={onPointerMove}
+    onpointerup={onPointerUp}
+    onpointercancel={onPointerUp}
   >
     <canvas bind:this={canvasEl} class="uiv2-vpn-crt__canvas" aria-hidden="true"></canvas>
   </a>
 
-  {#if isDev}
+  {#if showGear}
     <button
       bind:this={gearEl}
       type="button"

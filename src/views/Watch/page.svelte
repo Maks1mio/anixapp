@@ -26,7 +26,7 @@
   import { PlayerState } from './_usePlayer.svelte';
   import { LobbyState }  from './_useLobby.svelte';
   import { PlayerCore } from './core/PlayerCore';
-  import { isGpuAvailable } from '../../utils/webgpu-availability.svelte';
+  import { initWebGpuAvailability, isGpuAvailable } from '../../utils/webgpu-availability.svelte';
   import { swapMediaSource } from './core/hls-engine';
   import {
     anime4kTargetHeight,
@@ -3499,7 +3499,10 @@
     player.playbackRate = readStoredPlaybackRate();
 
     if ((window as any).electron?.getSettings) {
-      (window as any).electron.getSettings().then((s: any) => {
+      void Promise.all([
+        (window as any).electron.getSettings() as Promise<any>,
+        initWebGpuAvailability(true),
+      ]).then(([s]) => {
         player.debugOverlay = s?.playerDebugOverlay === true;
         adaptiveQualityByWindow = s?.adaptiveQualityByWindow === true;
         hotkeys = normalizePlayerHotkeys(s?.playerHotkeys);
@@ -3520,6 +3523,8 @@
         }
         if (adaptiveQualityByWindow) scheduleAdaptiveQuality();
       }).catch(() => {});
+    } else {
+      void initWebGpuAvailability(true);
     }
 
     const flushEqOnLeave = () => persistEqSettings({ immediate: true });

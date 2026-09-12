@@ -27,8 +27,8 @@ ipcRenderer.on('lobby:voteFromPlayer', (_, data) => {
   window.dispatchEvent(new CustomEvent('lobby:voteFromPlayer', { detail: data }));
 });
 
-ipcRenderer.on('lobby:createFromPlayer', (_, playback) => {
-  window.dispatchEvent(new CustomEvent('lobby:createFromPlayer', { detail: playback ?? null }));
+ipcRenderer.on('lobby:createFromPlayer', (_, payload) => {
+  window.dispatchEvent(new CustomEvent('lobby:createFromPlayer', { detail: payload ?? null }));
 });
 
 ipcRenderer.on('lobby:joinFromPlayer', (_, code) => {
@@ -239,7 +239,7 @@ contextBridge.exposeInMainWorld('electron', {
   sendLobbyChatToPlayer: (msg) => ipcRenderer.send('lobby:chatToPlayer', msg),
   sendLobbyChatHistoryToPlayer: (messages) => ipcRenderer.send('lobby:chatHistoryToPlayer', messages ?? []),
   sendLobbyChooserErrorToPlayer: (msg) => ipcRenderer.send('lobby:chooserErrorToPlayer', msg),
-  lobbyCreateFromPlayer: (playback) => ipcRenderer.send('lobby:createFromPlayer', playback ?? null),
+  lobbyCreateFromPlayer: (payload) => ipcRenderer.send('lobby:createFromPlayer', payload ?? null),
   lobbyJoinFromPlayer: (code) => ipcRenderer.send('lobby:joinFromPlayer', code),
   lobbyLeaveFromPlayer: () => ipcRenderer.send('lobby:leaveFromPlayer'),
   lobbyChatFromPlayer: (text) => ipcRenderer.send('lobby:chatFromPlayer', text),

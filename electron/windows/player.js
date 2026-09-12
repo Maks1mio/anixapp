@@ -371,9 +371,9 @@ ipcMain.on('lobby:chooserErrorToPlayer', (_, msg) => {
   }
 });
 
-ipcMain.on('lobby:createFromPlayer', (_, playback) => {
+ipcMain.on('lobby:createFromPlayer', (_, payload) => {
   if (state.mainWindow && !state.mainWindow.isDestroyed()) {
-    state.mainWindow.webContents.send('lobby:createFromPlayer', playback ?? null);
+    state.mainWindow.webContents.send('lobby:createFromPlayer', payload ?? null);
   }
 });
 

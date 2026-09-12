@@ -18,8 +18,9 @@
   import StaffPanel from './StaffPanel.svelte';
   import OverviewPanel from './OverviewPanel.svelte';
   import AniListPanel from './AniListPanel.svelte';
+  import AdsPanel from './AdsPanel.svelte';
 
-  type Tab = 'announcements' | 'staff' | 'overview' | 'anilist';
+  type Tab = 'announcements' | 'staff' | 'overview' | 'anilist' | 'ads';
   type PanelMode = 'idle' | 'create' | 'edit';
 
   const TYPE_CONFIG: Record<AnnouncementType, { label: string; color: string }> = {
@@ -59,9 +60,13 @@
   const canManageStaff = $derived($adminPermissions.includes('manage_staff'));
   const canManageAnnouncements = $derived($adminPermissions.includes('manage_announcements'));
   const canManageOverview = $derived($adminPermissions.includes('manage_overview'));
+  const canManageAds = $derived(
+    $adminPermissions.includes('manage_ads') || $adminPermissions.includes('manage_overview'),
+  );
 
   const tabItems = $derived([
     ...(canManageAnnouncements ? [{ id: 'announcements', label: 'Объявления', badge: announcements.length || undefined }] : []),
+    ...(canManageAds ? [{ id: 'ads', label: 'Реклама' }] : []),
     ...(canManageOverview ? [{ id: 'overview', label: 'Обзоры' }] : []),
     { id: 'staff', label: canManageStaff ? 'Команда' : 'Мой доступ' },
     { id: 'anilist', label: "Anime API's" },
@@ -93,7 +98,8 @@
       navigate('/admin');
       return;
     }
-    if (!canManageAnnouncements && canManageStaff) tab = 'staff';
+    if (!canManageAnnouncements && canManageAds) tab = 'ads';
+    else if (!canManageAnnouncements && canManageStaff) tab = 'staff';
     else if (!canManageAnnouncements && canManageOverview) tab = 'overview';
     void load();
   });
@@ -413,6 +419,10 @@
         {/if}
       </section>
 
+    {:else if tab === 'ads' && canManageAds}
+      <div class="adm-body__full">
+        <AdsPanel />
+      </div>
     {:else if tab === 'overview' && canManageOverview}
       <div class="adm-body__full">
         <OverviewPanel />

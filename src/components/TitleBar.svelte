@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
-  import { iconArrowLeft, iconArrowRight, iconSearch, iconUsers, iconBell, iconCalendar, iconUser, iconSettings, iconDownload, iconChevronDown, iconPlus, iconX } from './icons';
+  import { iconArrowLeft, iconArrowRight, iconSearch, iconBell, iconCalendar, iconUser, iconSettings, iconDownload, iconChevronDown, iconPlus, iconX } from './icons';
   import { checkForUpdate, type UpdateInfo } from '../services/update-checker';
   import type { AppUpdateProgress } from '../types/electron';
   import { isAuthenticated, openLoginPrompt, applyAccountSessionChange } from '../stores/auth';
@@ -15,7 +15,6 @@
   type SavedAccountRow = { id: number; login: string; avatar: string | null; active: boolean };
 
   interface Props {
-    onLobby?: () => void;
     onNotifications?: () => void;
     onSchedule?: () => void;
     scheduleOpen?: boolean;
@@ -27,7 +26,6 @@
   }
 
   let {
-    onLobby,
     onNotifications,
     onSchedule,
     scheduleOpen = false,
@@ -404,18 +402,6 @@
         </UiV2Tooltip>
       {/if}
     {/if}
-
-    <UiV2Tooltip text="Совместный просмотр">
-      <button
-        type="button"
-        class="titlebar__menu-item"
-        id="titlebar-lobby"
-        aria-label="Совместный просмотр"
-        onclick={onLobby}
-      >
-        {@html iconUsers(18)}
-      </button>
-    </UiV2Tooltip>
 
     <UiV2Tooltip text="Расписание">
       <button

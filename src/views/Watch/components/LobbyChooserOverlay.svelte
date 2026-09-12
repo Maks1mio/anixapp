@@ -1,13 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { fade, scale } from 'svelte/transition';
-  import { cubicOut } from 'svelte/easing';
   import { portal } from '../../../actions/portal';
-  import LobbyChooser from '../../../components/LobbyChooser.svelte';
-  import UiV2Tooltip from '../../../components/uikit-v2/UiV2Tooltip.svelte';
+  import FluoCreateRoomModal from '../../../components/FluoCreateRoomModal.svelte';
+  import type { FluoCreateRoomOptions } from '../../../fluo/types';
   import {
     createLobbyRoomAndOpenPlayer,
-    joinLobbyRoomAndOpenPlayer,
   } from '../../../utils/lobby-player';
   import type { LobbyPlayback } from '../../../services/lobby-api';
 
@@ -18,72 +15,42 @@
 
   let { onClose, getPlayback }: Props = $props();
 
-  let createLoading = $state(false);
-  let joinLoading = $state(false);
-  let joinHint = $state('');
-  let joinHintError = $state(false);
+  let createBusy = $state(false);
+  let createHint = $state('');
 
   function canIpc(): boolean {
     return typeof window.electron?.lobbyCreateFromPlayer === 'function';
   }
 
-  async function handleCreate() {
+  async function handleCreate(options: FluoCreateRoomOptions) {
     const playback = getPlayback?.() ?? null;
     if (playback && typeof (playback as { localFile?: unknown }).localFile === 'string'
       && String((playback as { localFile?: string }).localFile).trim()) {
-      joinHint = 'Совместный просмотр недоступен для скачанных файлов';
-      joinHintError = true;
+      createHint = 'Совместный просмотр недоступен для скачанных файлов';
       return;
     }
-    createLoading = true;
-    joinHint = '';
-    joinHintError = false;
+    createBusy = true;
+    createHint = '';
     try {
       if (canIpc()) {
-        window.electron?.lobbyCreateFromPlayer?.(playback);
+        window.electron?.lobbyCreateFromPlayer?.({
+          playback: playback ?? null,
+          options,
+        });
         return;
       }
-      await createLobbyRoomAndOpenPlayer(playback);
-      onClose();
-    } catch {
-      joinHint = 'Не удалось создать комнату. Попробуйте ещё раз.';
-      joinHintError = true;
-      createLoading = false;
-    }
-  }
-
-  async function handleJoin(code: string) {
-    if (!code) {
-      joinHint = 'Введите код комнаты';
-      joinHintError = true;
-      return;
-    }
-    joinLoading = true;
-    joinHint = '';
-    joinHintError = false;
-    try {
-      if (canIpc()) {
-        window.electron?.lobbyJoinFromPlayer?.(code);
-        return;
-      }
-      await joinLobbyRoomAndOpenPlayer(code);
+      await createLobbyRoomAndOpenPlayer(playback, options);
       onClose();
     } catch (err: unknown) {
-      const banned = err && typeof err === 'object' && (err as { code?: string }).code === 'banned';
-      joinHint = banned
-        ? 'Вас выгнали из этой комнаты — повторный вход недоступен'
-        : 'Неверный код или комната не найдена';
-      joinHintError = true;
-      joinLoading = false;
+      createHint = err instanceof Error ? err.message : 'Не удалось создать комнату. Попробуйте ещё раз.';
+      createBusy = false;
     }
   }
 
   function onChooserError(e: Event) {
     const msg = String((e as CustomEvent).detail ?? '');
-    joinHint = msg || 'Не удалось подключиться';
-    joinHintError = true;
-    createLoading = false;
-    joinLoading = false;
+    createHint = msg || 'Не удалось создать комнату';
+    createBusy = false;
   }
 
   function onSession(e: Event) {
@@ -107,44 +74,17 @@
   });
 </script>
 
-<div class="lobby-chooser-overlay" role="dialog" aria-modal="true" aria-label="Совместный просмотр" use:portal>
-  <button
-    type="button"
-    class="lobby-chooser-overlay__backdrop"
-    aria-label="Закрыть"
-    onclick={onClose}
-    transition:fade={{ duration: 160 }}
-  ></button>
-
-  <div
-    class="lobby-chooser-overlay__panel"
-    transition:scale={{ duration: 220, start: 0.94, easing: cubicOut }}
-  >
-    <div class="lobby-chooser-overlay__header">
-      <div class="lobby-chooser-overlay__header-left">
-        <div class="lobby-chooser-overlay__header-icon" aria-hidden="true">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-            <circle cx="9" cy="7" r="4"/>
-            <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-          </svg>
-        </div>
-        <h2 class="lobby-chooser-overlay__title">Совместный просмотр</h2>
-        <UiV2Tooltip text="Может быть переделано в будущем" placement="bottom" showDelay={80}>
-          <button type="button" class="beta-badge">beta</button>
-        </UiV2Tooltip>
-      </div>
-      <button type="button" class="lobby-chooser-overlay__close" aria-label="Закрыть" onclick={onClose}></button>
-    </div>
-
-    <LobbyChooser
-      {createLoading}
-      {joinLoading}
-      {joinHint}
-      {joinHintError}
-      onCreate={handleCreate}
-      onJoin={handleJoin}
-    />
-  </div>
+<div class="lobby-create-portal" use:portal>
+  <FluoCreateRoomModal
+    busy={createBusy}
+    hint={createHint}
+    onClose={onClose}
+    onSubmit={handleCreate}
+  />
 </div>
+
+<style>
+  .lobby-create-portal {
+    display: contents;
+  }
+</style>

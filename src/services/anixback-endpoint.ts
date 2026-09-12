@@ -44,6 +44,30 @@ export function getAnixbackDirectOrigin(): string {
   return originForMode(currentMode);
 }
 
+/**
+ * Origin for public ad iframes. Must be a real AnixBack root (not `/__anixback`),
+ * because the player resolves `/api` and `/ads-embed` from the document origin.
+ * In DEV + local mode, falls back to prod when localhost:8787 is down.
+ */
+let embedOriginOverride: string | null = null;
+
+export function getAnixbackEmbedOrigin(): string {
+  const vite = viteOriginOverride();
+  if (vite) return vite.replace(/\/$/, '');
+  if (embedOriginOverride) return embedOriginOverride;
+  return getAnixbackDirectOrigin();
+}
+
+async function refreshEmbedOrigin(): Promise<void> {
+  embedOriginOverride = null;
+  if (viteOriginOverride()) return;
+  if (currentMode !== 'local') return;
+  const localOk = await pingAnixbackOrigin(ANIXBACK_LOCAL_ORIGIN);
+  if (!localOk.ok) {
+    embedOriginOverride = originForMode('prod');
+  }
+}
+
 /** Static uploads (MP4/JPG/PNG) — тот же сервер, что выбран в настройках разработчика. */
 export function getAnixbackUploadsOrigin(): string {
   const uploadsOverride = (import.meta.env.VITE_ANIXBACK_UPLOADS_ORIGIN as string | undefined)?.trim();
@@ -125,23 +149,26 @@ export async function initAnixbackEndpoint(): Promise<void> {
     /* ignore */
   }
 
-  if (import.meta.env.DEV) {
-    return;
-  }
-
   if (currentMode === 'local') {
     const localOk = await pingAnixbackOrigin(ANIXBACK_LOCAL_ORIGIN);
     if (!localOk.ok) {
-      currentMode = 'prod';
-      anixbackEndpointMode.set('prod');
+      // DEV: оставляем mode=local для API-прокси с failover, но iframe → prod.
+      // Prod build: переключаем mode целиком на prod.
+      if (!import.meta.env.DEV) {
+        currentMode = 'prod';
+        anixbackEndpointMode.set('prod');
+      }
     }
   }
+
+  await refreshEmbedOrigin();
 }
 
 export async function setAnixbackEndpoint(mode: AnixbackEndpointMode): Promise<void> {
   if (viteOriginOverride()) return;
   currentMode = mode;
   anixbackEndpointMode.set(mode);
+  await refreshEmbedOrigin();
   await window.electron?.setAnixbackEndpoint?.(mode);
   window.dispatchEvent(new CustomEvent('anix:anixbackEndpointChanged', { detail: { mode } }));
 }

@@ -4,7 +4,7 @@
   import { navigate, navigateSearchTab, navigateSidebarTab } from '../stores/navigation';
   import { activeSidebarTab, isSidebarTabActive } from '../stores/tab-navigation';
   import { openAdminArea, restoreAdminSession, checkTeamMembership, isTeamMember } from '../stores/admin';
-  import { openLobbyModal, openNotificationsModal, openSettingsModal } from '../stores/modals';
+  import { openNotificationsModal, openSettingsModal } from '../stores/modals';
   import { isAuthenticated, requireAuth } from '../stores/auth';
   import { ensureProfileId } from '../utils/profile';
   import { bindSearchHotkeys } from '../search-controller';
@@ -326,7 +326,6 @@
 
 <div class="layout">
   <TitleBar
-    onLobby={() => openLobbyModal()}
     onSchedule={toggleSchedule}
     scheduleOpen={scheduleActive}
     onNotifications={() => {

@@ -5,7 +5,7 @@
   import { cubicOut } from 'svelte/easing';
   import { listFluoRooms, type FluoRoomListItem } from '../../fluo/rooms-api';
   import { subscribeFluoCatalog } from '../../fluo/catalog-ws';
-  import type { FluoAnimeSelectMode, FluoControlMode, FluoCreateRoomOptions, FluoRoomVisibility } from '../../fluo/types';
+  import type { FluoControlMode, FluoCreateRoomOptions } from '../../fluo/types';
   import { fluoPlaybackControlMode, fluoAnimeSelectModeOf } from '../../fluo/types';
   import {
     createLobbyRoomAndOpenPlayer,
@@ -28,8 +28,9 @@
   } from '../../components/icons';
   import UiV2Button from '../../components/uikit-v2/UiV2Button.svelte';
   import UiV2OutlinedField from '../../components/uikit-v2/UiV2OutlinedField.svelte';
-  import UiV2Select, { type UiV2SelectOption } from '../../components/uikit-v2/UiV2Select.svelte';
+  import UiV2PillField from '../../components/uikit-v2/UiV2PillField.svelte';
   import UiV2Tooltip from '../../components/uikit-v2/UiV2Tooltip.svelte';
+  import FluoCreateRoomModal from '../../components/FluoCreateRoomModal.svelte';
 
   let rooms = $state<FluoRoomListItem[]>([]);
   let loadState = $state<'loading' | 'ready' | 'error'>('loading');
@@ -40,12 +41,6 @@
   let joinHintError = $state(false);
 
   let createOpen = $state(false);
-  let createName = $state('');
-  let createVisibility = $state<FluoRoomVisibility>('public');
-  let createPassword = $state('');
-  let createControl = $state<FluoControlMode>('everyone');
-  let createAnime = $state<FluoAnimeSelectMode>('everyone');
-  let createChat = $state(true);
   let createBusy = $state(false);
   let createHint = $state('');
 
@@ -118,25 +113,6 @@
     unsubCatalog?.();
     if (pollTimer) clearInterval(pollTimer);
   });
-
-  const visibilityOptions: UiV2SelectOption[] = [
-    { value: 'public', label: 'Публичный', desc: 'В каталоге, войти может любой' },
-    { value: 'private', label: 'Приватный', desc: 'Скрыт из каталога, вход по коду' },
-    { value: 'closed', label: 'Закрытый', desc: 'В каталоге, вход только с паролем' },
-  ];
-  const playerControlOptions: UiV2SelectOption[] = [
-    { value: 'host', label: 'Хост', desc: 'Play, пауза, перемотка и серии текущего тайтла' },
-    { value: 'everyone', label: 'Могут все', desc: 'Свободное управление плеером' },
-  ];
-  const animeSelectOptions: UiV2SelectOption[] = [
-    { value: 'host', label: 'Хост', desc: 'Хост сам решает, что смотреть' },
-    { value: 'everyone', label: 'Могут все', desc: 'Свободное переключение тайтла' },
-    { value: 'vote', label: 'Могут все (голосование)', desc: 'Смена тайтла через голосование' },
-  ];
-  const chatOptions: UiV2SelectOption[] = [
-    { value: 'on', label: 'Включён' },
-    { value: 'off', label: 'Выключен' },
-  ];
 
   function controlLabel(mode: FluoControlMode | undefined): string {
     return fluoPlaybackControlMode({ controlMode: mode }) === 'host' ? 'Хост' : 'Могут все';
@@ -246,33 +222,13 @@
   }
 
   function openCreate() {
-    createName = '';
-    createVisibility = 'public';
-    createPassword = '';
-    createControl = 'everyone';
-    createAnime = 'everyone';
-    createChat = true;
     createHint = '';
     createOpen = true;
   }
 
-  async function submitCreate() {
-    if (createVisibility === 'closed' && !createPassword.trim()) {
-      createHint = 'Укажите пароль для закрытой комнаты';
-      return;
-    }
+  async function submitCreate(options: FluoCreateRoomOptions) {
     createBusy = true;
     createHint = '';
-    const options: FluoCreateRoomOptions = {
-      name: createName.trim() || undefined,
-      visibility: createVisibility,
-      password: createVisibility === 'closed' ? createPassword : undefined,
-      settings: {
-        controlMode: createControl === 'host' ? 'host' : 'everyone',
-        animeSelectMode: createAnime,
-        chatEnabled: createChat,
-      },
-    };
     try {
       await createLobbyRoomAndOpenPlayer(null, options);
       createOpen = false;
@@ -332,37 +288,49 @@
   }
 </script>
 
-<div class="fluo-page">
-  <header class="fluo-page__header">
-    <div class="fluo-page__title-row">
-      <span class="fluo-page__brand-icon" aria-hidden="true">{@html iconSignal(22)}</span>
-      <h1 class="fluo-page__title">Fluo</h1>
-      <p class="fluo-page__subtitle">Комнаты совместного просмотра</p>
-    </div>
-    <div class="fluo-page__actions">
-      <div class="fluo-page__join">
-        <UiV2OutlinedField
-          label="Код комнаты"
-          bind:value={joinCode}
-          maxlength={12}
-          autocomplete="off"
-          spellcheck={false}
-          oninput={() => { joinHint = ''; joinHintError = false; }}
-        />
-        <UiV2Button
-          label={joinBusy ? 'Вход…' : 'Войти'}
-          variant="chrome"
-          disabled={joinBusy}
-          onclick={() => void handleQuickJoin()}
-        />
+<div class="view view-fluo fluo-page">
+  <header class="fluo-page__hero">
+    <div class="fluo-page__hero-top">
+      <div class="fluo-page__brand">
+        <span class="fluo-page__brand-icon" aria-hidden="true">{@html iconSignal(22)}</span>
+        <div class="fluo-page__brand-text">
+          <h1 class="fluo-page__title">Fluo</h1>
+          <p class="fluo-page__subtitle">Комнаты совместного просмотра</p>
+        </div>
       </div>
       <UiV2Button
         label="Создать комнату"
         variant="primary"
+        class="fluo-page__create"
         onclick={openCreate}
       >
         {#snippet icon()}{@html iconPlus(16)}{/snippet}
       </UiV2Button>
+    </div>
+
+    <div class="fluo-page__toolbar" role="group" aria-label="Вход по коду комнаты">
+      <UiV2PillField
+        label="Код комнаты"
+        bind:value={joinCode}
+        maxlength={12}
+        autocomplete="off"
+        spellcheck={false}
+        error={joinHintError}
+        class="fluo-page__code"
+        oninput={() => { joinHint = ''; joinHintError = false; }}
+        onkeydown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            void handleQuickJoin();
+          }
+        }}
+      />
+      <UiV2Button
+        label={joinBusy ? 'Вход…' : 'Войти'}
+        variant="chrome"
+        disabled={joinBusy || !joinCode.trim()}
+        onclick={() => void handleQuickJoin()}
+      />
     </div>
     {#if joinHint}
       <p class="fluo-page__hint" class:fluo-page__hint--error={joinHintError} role="status">{joinHint}</p>
@@ -370,13 +338,37 @@
   </header>
 
   {#if loadState === 'loading'}
-    <p class="fluo-page__status" transition:fade={{ duration: 160 }}>Загрузка комнат…</p>
+    <div class="fluo-page__state fluo-page__state--loading" aria-busy="true" aria-live="polite" transition:fade={{ duration: 160 }}>
+      <div class="fluo-page__skeleton-grid" aria-hidden="true">
+        {#each [1, 2, 3] as n (n)}
+          <div class="fluo-skel">
+            <div class="fluo-skel__frame"></div>
+            <div class="fluo-skel__line fluo-skel__line--lg"></div>
+            <div class="fluo-skel__line"></div>
+            <div class="fluo-skel__line fluo-skel__line--sm"></div>
+          </div>
+        {/each}
+      </div>
+      <p class="fluo-page__state-sub">Загрузка комнат…</p>
+    </div>
   {:else if loadState === 'error'}
-    <p class="fluo-page__status fluo-page__status--error" transition:fade={{ duration: 160 }}>{errorMsg}</p>
-    <UiV2Button label="Повторить" variant="chrome" onclick={() => void refreshRooms()} />
+    <div class="fluo-page__state fluo-page__state--error" transition:fade={{ duration: 160 }} role="alert">
+      <div class="fluo-page__state-icon" aria-hidden="true">{@html iconSignal(36)}</div>
+      <p class="fluo-page__state-title">{errorMsg || 'Не удалось загрузить комнаты'}</p>
+      <p class="fluo-page__state-sub">Проверьте соединение и попробуйте снова</p>
+      <UiV2Button label="Повторить" variant="chrome" onclick={() => void refreshRooms()} />
+    </div>
   {:else if rooms.length === 0}
-    <p class="fluo-page__status" transition:fade={{ duration: 180 }}>Пока нет активных комнат. Создайте первую.</p>
+    <div class="fluo-page__state" transition:fade={{ duration: 180 }}>
+      <div class="fluo-page__state-icon" aria-hidden="true">{@html iconSignal(36)}</div>
+      <p class="fluo-page__state-title">Пока нет активных комнат</p>
+      <p class="fluo-page__state-sub">Создайте комнату сверху или войдите по коду</p>
+    </div>
   {:else}
+    <div class="fluo-page__section-head">
+      <h2 class="fluo-page__section-title">Активные комнаты</h2>
+      <span class="fluo-page__section-meta">{rooms.length}</span>
+    </div>
     <ul class="fluo-page__grid" role="list">
       {#each rooms as room (room.roomId || room.code)}
         <li
@@ -511,85 +503,12 @@
 </div>
 
 {#if createOpen}
-  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-  <div
-    class="fluo-modal-overlay"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Создать комнату"
-    tabindex="-1"
-    onclick={(e) => { if (e.target === e.currentTarget) createOpen = false; }}
-  >
-    <div class="fluo-modal">
-      <div class="fluo-modal__head">
-        <h2>Создать комнату</h2>
-        <button type="button" class="fluo-modal__close" aria-label="Закрыть" onclick={() => { createOpen = false; }}>
-          {@html iconX(18)}
-        </button>
-      </div>
-      <div class="fluo-modal__body">
-        <UiV2OutlinedField label="Название" bind:value={createName} maxlength={80} />
-
-        <UiV2Select
-          label="Настройки комнаты"
-          options={visibilityOptions}
-          value={createVisibility}
-          onChange={(v) => {
-            if (v === 'public' || v === 'private' || v === 'closed') createVisibility = v;
-          }}
-        />
-
-        {#if createVisibility === 'closed'}
-          <UiV2OutlinedField
-            label="Пароль"
-            type="password"
-            revealable
-            bind:value={createPassword}
-            maxlength={64}
-            required
-          />
-        {/if}
-
-        <UiV2Select
-          label="Управление плеером"
-          options={playerControlOptions}
-          value={createControl}
-          onChange={(v) => {
-            if (v === 'host' || v === 'everyone') createControl = v;
-          }}
-        />
-
-        <UiV2Select
-          label="Выбор аниме"
-          options={animeSelectOptions}
-          value={createAnime}
-          onChange={(v) => {
-            if (v === 'host' || v === 'everyone' || v === 'vote') createAnime = v;
-          }}
-        />
-
-        <UiV2Select
-          label="Настройки чата"
-          options={chatOptions}
-          value={createChat ? 'on' : 'off'}
-          onChange={(v) => { createChat = v === 'on'; }}
-        />
-
-        {#if createHint}
-          <p class="fluo-page__hint fluo-page__hint--error" role="alert">{createHint}</p>
-        {/if}
-      </div>
-      <div class="fluo-modal__foot">
-        <UiV2Button label="Отмена" variant="ghost" onclick={() => { createOpen = false; }} />
-        <UiV2Button
-          label={createBusy ? 'Создание…' : 'Создать'}
-          variant="primary"
-          disabled={createBusy}
-          onclick={() => void submitCreate()}
-        />
-      </div>
-    </div>
-  </div>
+  <FluoCreateRoomModal
+    busy={createBusy}
+    hint={createHint}
+    onClose={() => { createOpen = false; }}
+    onSubmit={submitCreate}
+  />
 {/if}
 
 {#if passwordOpen && passwordRoom}
@@ -637,79 +556,209 @@
 
 <style>
   .fluo-page {
-    padding: 1.25rem 1.5rem 2.5rem;
-    max-width: 1120px;
+    width: 100%;
+    max-width: 56rem;
+    margin: 0 auto;
+    min-width: 0;
+    box-sizing: border-box;
+    padding-bottom: 2.5rem;
+    container-type: inline-size;
   }
 
-  .fluo-page__header {
+  .fluo-page__hero {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.85rem;
     margin-bottom: 1.5rem;
+    padding: 1.1rem 1.15rem 1.05rem;
+    border-radius: 18px;
+    border: 1px solid var(--uiv2-border-subtle, transparent);
+    background:
+      linear-gradient(
+        165deg,
+        color-mix(in srgb, var(--uikit-v2-accent, var(--color-accent)) 10%, transparent) 0%,
+        transparent 42%
+      ),
+      var(--uiv2-card-bg, var(--color-surface, #161616));
+    box-shadow: var(--uiv2-chrome-shadow, none);
   }
 
-  .fluo-page__title-row {
+  .fluo-page__hero-top {
     display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.85rem 1rem;
     flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.5rem 0.75rem;
+  }
+
+  .fluo-page__brand {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    min-width: 0;
   }
 
   .fluo-page__brand-icon {
-    display: inline-flex;
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--uikit-v2-accent, var(--color-accent)) 16%, transparent);
     color: var(--uikit-v2-accent, var(--color-accent));
+    flex-shrink: 0;
+  }
+
+  .fluo-page__brand-text {
+    min-width: 0;
   }
 
   .fluo-page__title {
     margin: 0;
-    font-size: 1.75rem;
+    font-size: 1.45rem;
     font-weight: 700;
     letter-spacing: -0.02em;
+    line-height: 1.15;
+    color: var(--uiv2-fg-strong, var(--color-text, #fff));
   }
 
   .fluo-page__subtitle {
-    margin: 0;
-    color: var(--color-text-secondary, rgba(255, 255, 255, 0.55));
-    font-size: 0.95rem;
+    margin: 0.2rem 0 0;
+    font-size: 0.85rem;
+    color: var(--uiv2-fg-muted, rgba(255, 255, 255, 0.55));
   }
 
-  .fluo-page__actions {
+  .fluo-page__toolbar {
     display: flex;
+    align-items: center;
+    gap: 0.55rem;
     flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 0.75rem 1rem;
   }
 
-  .fluo-page__join {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 0.5rem;
-    flex: 1 1 240px;
-    max-width: 420px;
-  }
-
-  .fluo-page__join :global(.uiv2-outlined-field) {
-    flex: 1 1 140px;
+  .fluo-page__code {
+    flex: 1 1 12rem;
+    max-width: 22rem;
   }
 
   .fluo-page__hint {
     margin: 0;
-    font-size: 0.875rem;
-    color: var(--color-text-secondary, rgba(255, 255, 255, 0.6));
+    font-size: 0.82rem;
+    color: var(--uiv2-fg-muted, rgba(255, 255, 255, 0.55));
   }
 
   .fluo-page__hint--error {
-    color: var(--color-danger, #f07178);
+    color: var(--uikit-v2-danger, var(--color-error, #f07178));
   }
 
-  .fluo-page__status {
-    margin: 2rem 0;
-    color: var(--color-text-secondary, rgba(255, 255, 255, 0.55));
+  .fluo-page__section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 0 0 0.85rem;
   }
 
-  .fluo-page__status--error {
-    color: var(--color-danger, #f07178);
+  .fluo-page__section-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--uiv2-fg-strong, var(--color-text, #fff));
+  }
+
+  .fluo-page__section-meta {
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--uiv2-fg-muted, rgba(255, 255, 255, 0.5));
+  }
+
+  .fluo-page__state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 3rem 1rem 2.5rem;
+    text-align: center;
+  }
+
+  .fluo-page__state--loading {
+    align-items: stretch;
+    padding-top: 0.25rem;
+  }
+
+  .fluo-page__state-icon {
+    color: var(--uiv2-fg-muted, rgba(255, 255, 255, 0.5));
+    opacity: 0.35;
+    margin-bottom: 0.25rem;
+  }
+
+  .fluo-page__state-title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 550;
+    color: var(--uiv2-fg-strong, var(--color-text, #fff));
+  }
+
+  .fluo-page__state-sub {
+    margin: 0 0 0.65rem;
+    font-size: 0.82rem;
+    color: var(--uiv2-fg-muted, rgba(255, 255, 255, 0.55));
+  }
+
+  .fluo-page__state--error .fluo-page__state-title {
+    color: var(--uikit-v2-danger, var(--color-error, #f07178));
+  }
+
+  .fluo-page__skeleton-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .fluo-skel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 0.7rem;
+    border-radius: var(--uikit-v2-radius, 8px);
+    border: 1px solid var(--uiv2-border-subtle, transparent);
+    background: var(--uiv2-card-bg, transparent);
+  }
+
+  .fluo-skel__frame,
+  .fluo-skel__line {
+    border-radius: 6px;
+    background: linear-gradient(
+      90deg,
+      var(--uiv2-skeleton-base, rgba(255, 255, 255, 0.07)) 0%,
+      var(--uiv2-skeleton-highlight, rgba(255, 255, 255, 0.12)) 50%,
+      var(--uiv2-skeleton-base, rgba(255, 255, 255, 0.07)) 100%
+    );
+    background-size: 200% 100%;
+    animation: fluo-skel-shine 1.2s ease-in-out infinite;
+  }
+
+  .fluo-skel__frame {
+    aspect-ratio: 16 / 9;
+  }
+
+  .fluo-skel__line {
+    height: 0.7rem;
+    width: 72%;
+  }
+
+  .fluo-skel__line--lg {
+    width: 88%;
+    height: 0.85rem;
+  }
+
+  .fluo-skel__line--sm {
+    width: 42%;
+  }
+
+  @keyframes fluo-skel-shine {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
   }
 
   .fluo-page__grid {
@@ -718,7 +767,7 @@
     padding: 0;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1.1rem;
+    gap: 1rem;
   }
 
   .fluo-page__grid > li {
@@ -732,9 +781,9 @@
     height: 100%;
     text-align: left;
     padding: 0.7rem;
-    border: 1px solid color-mix(in srgb, var(--color-border, #333) 80%, transparent);
-    border-radius: 14px;
-    background: color-mix(in srgb, var(--color-surface, #161616) 94%, #000);
+    border: 1px solid var(--uiv2-border-subtle, var(--color-border, #333));
+    border-radius: var(--uikit-v2-radius, 8px);
+    background: var(--uiv2-card-bg, var(--color-surface, #161616));
     color: inherit;
     font: inherit;
     cursor: pointer;
@@ -743,15 +792,19 @@
 
   .fluo-room:hover,
   .fluo-room:focus-visible {
-    border-color: var(--uikit-v2-accent, var(--color-accent));
+    border-color: color-mix(in srgb, var(--uikit-v2-accent, var(--color-accent)) 55%, transparent);
     outline: none;
+  }
+
+  .fluo-room:focus-visible {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--uikit-v2-accent, var(--color-accent)) 35%, transparent);
   }
 
   .fluo-room__frame {
     position: relative;
     width: 100%;
     aspect-ratio: 16 / 9;
-    border-radius: 10px;
+    border-radius: calc(var(--uikit-v2-radius, 8px) - 2px);
     overflow: hidden;
     background: color-mix(in srgb, #000 45%, transparent);
     display: grid;
@@ -767,32 +820,31 @@
 
   .fluo-room__frame-fallback {
     opacity: 0.45;
+    color: var(--uiv2-fg-muted, rgba(255, 255, 255, 0.5));
+  }
+
+  .fluo-room__live,
+  .fluo-room__lock {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    border-radius: var(--uikit-v2-radius, 8px);
+    background: var(--uiv2-media-control-bg, rgba(0, 0, 0, 0.62));
+    color: #fff;
   }
 
   .fluo-room__live {
-    position: absolute;
     left: 8px;
     bottom: 8px;
-    display: grid;
-    place-items: center;
     width: 28px;
     height: 28px;
-    border-radius: 8px;
-    background: rgba(0, 0, 0, 0.62);
-    color: #fff;
   }
 
   .fluo-room__lock {
-    position: absolute;
     top: 8px;
     right: 8px;
-    display: grid;
-    place-items: center;
     width: 26px;
     height: 26px;
-    border-radius: 8px;
-    background: rgba(0, 0, 0, 0.62);
-    color: #fff;
   }
 
   .fluo-room__body {
@@ -801,7 +853,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
-    padding: 0.75rem 0.2rem 0.15rem;
+    padding: 0.75rem 0.15rem 0.1rem;
   }
 
   .fluo-room__name-row {
@@ -811,11 +863,12 @@
   }
 
   .fluo-room__name {
-    font-weight: 700;
+    font-weight: 650;
     font-size: 0.95rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: var(--uiv2-fg-strong, var(--color-text, #fff));
   }
 
   .fluo-room__badge {
@@ -825,20 +878,18 @@
     letter-spacing: 0.04em;
     padding: 0.15rem 0.4rem;
     border-radius: 4px;
-    background: color-mix(in srgb, var(--color-border, #444) 60%, transparent);
+    background: var(--uiv2-surface-subtle, rgba(255, 255, 255, 0.06));
+    color: var(--uiv2-fg-muted, rgba(255, 255, 255, 0.65));
   }
 
   .fluo-room__badge[data-vis='closed'] {
     background: color-mix(in srgb, var(--uikit-v2-accent, var(--color-accent)) 25%, transparent);
-  }
-
-  .fluo-room__badge[data-vis='private'] {
-    background: color-mix(in srgb, var(--color-border, #444) 80%, transparent);
+    color: var(--uiv2-fg-strong, #fff);
   }
 
   .fluo-room__title {
     margin: 0;
-    font-size: 0.92rem;
+    font-size: 0.9rem;
     font-weight: 600;
     line-height: 1.35;
     overflow: hidden;
@@ -847,10 +898,16 @@
     -webkit-box-orient: vertical;
   }
 
+  .fluo-room__meta,
+  .fluo-room__time,
+  .fluo-room__count,
+  .fluo-room__flags {
+    color: var(--uiv2-fg-muted, rgba(255, 255, 255, 0.55));
+  }
+
   .fluo-room__meta {
     margin: 0;
     font-size: 0.8rem;
-    color: var(--color-text-secondary, rgba(255, 255, 255, 0.55));
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -859,7 +916,7 @@
   .fluo-room__progress {
     height: 3px;
     border-radius: 99px;
-    background: color-mix(in srgb, var(--color-border, #444) 70%, transparent);
+    background: var(--uiv2-border-subtle, rgba(255, 255, 255, 0.1));
     overflow: hidden;
     margin-top: 0.2rem;
   }
@@ -874,7 +931,6 @@
     margin: 0;
     font-size: 0.7rem;
     font-variant-numeric: tabular-nums;
-    color: var(--color-text-secondary, rgba(255, 255, 255, 0.5));
   }
 
   .fluo-room__people {
@@ -900,9 +956,9 @@
     height: 22px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid var(--color-surface, #1a1a1a);
+    border: 2px solid var(--uikit-v2-bg, var(--color-bg, #111));
     margin-left: -6px;
-    background: #333;
+    background: var(--uiv2-surface-subtle, #333);
     font-size: 0.65rem;
     display: inline-grid;
     place-items: center;
@@ -931,7 +987,6 @@
     align-items: center;
     gap: 0.25rem;
     font-size: 0.75rem;
-    color: var(--color-text-secondary, rgba(255, 255, 255, 0.55));
   }
 
   .fluo-room__flags {
@@ -939,7 +994,6 @@
     flex-wrap: wrap;
     gap: 0.5rem;
     font-size: 0.72rem;
-    color: var(--color-text-secondary, rgba(255, 255, 255, 0.5));
   }
 
   .fluo-room__flags span {
@@ -955,17 +1009,17 @@
     display: grid;
     place-items: center;
     padding: 1rem;
-    background: rgba(0, 0, 0, 0.55);
+    background: var(--uiv2-overlay, rgba(0, 0, 0, 0.55));
   }
 
   .fluo-modal {
     width: min(480px, 100%);
     max-height: min(88vh, 720px);
     overflow: auto;
-    border-radius: 14px;
-    background: var(--color-surface, #1c1c1e);
-    border: 1px solid var(--color-border, #333);
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+    border-radius: var(--uikit-v2-radius, 8px);
+    background: var(--uiv2-panel-bg, var(--color-surface, #1c1c1e));
+    border: 1px solid var(--uiv2-panel-border, var(--color-border, #333));
+    box-shadow: var(--uiv2-panel-shadow, 0 16px 48px rgba(0, 0, 0, 0.45));
   }
 
   .fluo-modal--sm {
@@ -990,14 +1044,19 @@
     width: 32px;
     height: 32px;
     border: none;
-    border-radius: 8px;
+    border-radius: var(--uikit-v2-radius, 8px);
     background: transparent;
     color: inherit;
     cursor: pointer;
   }
 
   .fluo-modal__close:hover {
-    background: color-mix(in srgb, #fff 8%, transparent);
+    background: var(--uiv2-surface-subtle, rgba(255, 255, 255, 0.08));
+  }
+
+  .fluo-modal__close:focus-visible {
+    outline: 2px solid var(--uikit-v2-accent, var(--color-accent));
+    outline-offset: 1px;
   }
 
   .fluo-modal__body {
@@ -1010,7 +1069,7 @@
   .fluo-modal__lead {
     margin: 0;
     font-size: 0.9rem;
-    color: var(--color-text-secondary, rgba(255, 255, 255, 0.55));
+    color: var(--uiv2-fg-muted, rgba(255, 255, 255, 0.55));
   }
 
   .fluo-modal__foot {
@@ -1020,21 +1079,55 @@
     padding: 0 1rem 1rem;
   }
 
-  @media (max-width: 860px) {
-    .fluo-page {
-      padding: 1rem;
+  @container (min-width: 720px) {
+    .fluo-page__grid,
+    .fluo-page__skeleton-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+  }
 
-    .fluo-page__grid {
+  @container (max-width: 560px) {
+    .fluo-page__grid,
+    .fluo-page__skeleton-grid {
       grid-template-columns: 1fr;
     }
 
-    .fluo-page__actions {
+    .fluo-page__hero-top {
       flex-direction: column;
       align-items: stretch;
     }
 
-    .fluo-page__join {
+    .fluo-page__create {
+      width: 100%;
+    }
+
+    .fluo-page__toolbar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .fluo-page__code {
+      max-width: none;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .fluo-page__grid,
+    .fluo-page__skeleton-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .fluo-page__hero-top {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .fluo-page__toolbar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .fluo-page__code {
       max-width: none;
     }
   }

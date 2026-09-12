@@ -250,8 +250,9 @@ async function proxyAnixback(req, res, url) {
         break;
       } catch (err) {
         lastErr = err;
-        // Admin / long-running: не уходим на следующий origin после timeout/сети.
-        if (longRunning || path.startsWith('/api/admin/')) break;
+        // Long-running: не прыгаем на другой origin.
+        // Admin: при недоступном localhost всё же пробуем prod (иначе сейвы «в никуда»).
+        if (longRunning) break;
       }
     }
 
@@ -267,7 +268,7 @@ async function proxyAnixback(req, res, url) {
       }
     }
     if (!outHeaders['cache-control']) {
-      if (path.startsWith('/fluo')) {
+      if (path.startsWith('/fluo') || path.startsWith('/api/ads') || path.startsWith('/api/admin/ads') || path.startsWith('/embed/')) {
         outHeaders['Cache-Control'] = 'no-store, no-cache, must-revalidate';
       } else {
         outHeaders['Cache-Control'] = path.includes('/uploads/')

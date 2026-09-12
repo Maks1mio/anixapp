@@ -8,9 +8,16 @@ import { encodeSvgDataUrl } from './svgTint';
 import { measureAdLayers, type VpnBannerOverlay } from './vpnSponsorBanner';
 
 export type AdPaint =
-  | { type: 'solid'; color: string; opacity: number }
-  | { type: 'image'; src: string; opacity: number; scaleMode: 'fill' | 'fit' | 'crop' | 'tile' }
-  | { type: 'gradient'; opacity: number; stops: Array<{ color: string; position: number }> };
+  | { id: string; visible: boolean; type: 'solid'; color: string; opacity: number }
+  | { id: string; visible: boolean; type: 'image'; src: string; opacity: number; scaleMode: 'fill' | 'fit' | 'crop' | 'tile' }
+  | {
+      id: string;
+      visible: boolean;
+      type: 'gradient';
+      opacity: number;
+      angle: number;
+      stops: Array<{ color: string; position: number }>;
+    };
 
 export type AdStroke = {
   color: string;
@@ -45,6 +52,7 @@ type AdNodeBase = {
   h: number;
   rotation: number;
   opacity: number;
+  effects: AdEffect[];
 };
 
 export type AdFrameNode = AdNodeBase & {
@@ -62,7 +70,6 @@ export type AdFrameNode = AdNodeBase & {
   cornerRadius: number;
   fills: AdPaint[];
   strokes: AdStroke[];
-  effects: AdEffect[];
 };
 
 export type AdTextNode = AdNodeBase & {
@@ -85,6 +92,9 @@ export type AdImageNode = AdNodeBase & {
   cornerRadius: number;
   /** Fill color for SVG icons (data URL). */
   tint?: string;
+  /** Lucide/banner icon id when this layer is a glyph. */
+  iconId?: string;
+  fills: AdPaint[];
 };
 
 export type AdRectNode = AdNodeBase & {
@@ -113,8 +123,46 @@ function uid(prefix = 'n'): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+export function createEffectId(): string {
+  return uid('fx');
+}
+
+export function createPaintId(): string {
+  return uid('pt');
+}
+
 export function solid(color: string, opacity = 1): AdPaint {
-  return { type: 'solid', color, opacity };
+  return { id: createPaintId(), visible: true, type: 'solid', color, opacity };
+}
+
+export function linearPaint(opacity = 1, angle = 180): AdPaint {
+  return {
+    id: createPaintId(),
+    visible: true,
+    type: 'gradient',
+    opacity,
+    angle,
+    stops: [
+      { color: '#000000', position: 0 },
+      { color: '#FFFFFF', position: 1 },
+    ],
+  };
+}
+
+export function imagePaint(src: string, opacity = 1): AdPaint {
+  return { id: createPaintId(), visible: true, type: 'image', src, opacity, scaleMode: 'fill' };
+}
+
+export function nodeFills(node: AdNode | null | undefined): AdPaint[] {
+  if (!node) return [];
+  if (node.type === 'frame' || node.type === 'text' || node.type === 'rectangle' || node.type === 'image') {
+    return node.fills ?? [];
+  }
+  return [];
+}
+
+export function canHaveFills(node: AdNode | null | undefined): boolean {
+  return Boolean(node && (node.type === 'frame' || node.type === 'text' || node.type === 'rectangle' || node.type === 'image'));
 }
 
 export function createEmptyDesignDoc(width = 640, height = 440): AdDesignDoc {
@@ -267,6 +315,7 @@ export function createTextNode(partial?: Partial<AdTextNode>): AdTextNode {
     textAlign: 'center',
     verticalAlign: 'middle',
     fills: [solid('#FFFFFF')],
+    effects: [],
     ...partial,
   };
 }
@@ -288,6 +337,8 @@ export function createImageNode(src: string, partial?: Partial<AdImageNode>): Ad
     src,
     scaleMode: 'fill',
     cornerRadius: 0,
+    effects: [],
+    fills: [],
     ...partial,
   };
 }
@@ -309,6 +360,7 @@ export function createRectNode(partial?: Partial<AdRectNode>): AdRectNode {
     cornerRadius: 8,
     fills: [solid('#3d8bfd', 0.35)],
     strokes: [],
+    effects: [],
     ...partial,
   };
 }
@@ -378,31 +430,73 @@ function asBool(v: unknown, fb: boolean): boolean {
   return typeof v === 'boolean' ? v : fb;
 }
 
-function sanitizePaint(raw: unknown): AdPaint {
+function sanitizePaint(raw: unknown, index = 0): AdPaint {
   const p = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const id = asStr(p.id, `pt_${index}`);
+  const visible = asBool(p.visible, true);
+  const opacity = Math.min(1, Math.max(0, asNum(p.opacity, 1)));
   if (p.type === 'image') {
     return {
+      id,
+      visible,
       type: 'image',
       src: asStr(p.src, ''),
-      opacity: asNum(p.opacity, 1),
+      opacity,
       scaleMode: (['fill', 'fit', 'crop', 'tile'] as const).includes(p.scaleMode as 'fill')
-        ? (p.scaleMode as AdPaint & { type: 'image' })['scaleMode']
+        ? (p.scaleMode as 'fill' | 'fit' | 'crop' | 'tile')
         : 'fill',
     };
   }
   if (p.type === 'gradient') {
     return {
+      id,
+      visible,
       type: 'gradient',
-      opacity: asNum(p.opacity, 1),
-      stops: Array.isArray(p.stops)
+      opacity,
+      angle: asNum(p.angle, 180),
+      stops: Array.isArray(p.stops) && p.stops.length
         ? p.stops.map((s) => {
             const o = s && typeof s === 'object' ? (s as Record<string, unknown>) : {};
             return { color: asStr(o.color, '#fff'), position: asNum(o.position, 0) };
           })
-        : [{ color: '#000', position: 0 }, { color: '#fff', position: 1 }],
+        : [{ color: '#000000', position: 0 }, { color: '#ffffff', position: 1 }],
     };
   }
-  return solid(asStr(p.color, '#ffffff'), asNum(p.opacity, 1));
+  return { id, visible, type: 'solid', color: asStr(p.color, '#ffffff'), opacity };
+}
+
+export function sanitizeEffects(raw: unknown): AdEffect[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((e, i) => {
+    const x = e && typeof e === 'object' ? (e as Record<string, unknown>) : {};
+    const t = asStr(x.type, 'blur');
+    if (t === 'crt') {
+      return {
+        id: asStr(x.id, `fx_${i}`),
+        type: 'crt' as const,
+        visible: asBool(x.visible, true),
+        params: x.params && typeof x.params === 'object' ? (x.params as Record<string, number | boolean | string>) : {},
+      };
+    }
+    if (t === 'noise') {
+      return {
+        id: asStr(x.id, `fx_${i}`),
+        type: 'noise' as const,
+        visible: asBool(x.visible, true),
+        amount: asNum(x.amount, 0.2),
+      };
+    }
+    return {
+      id: asStr(x.id, `fx_${i}`),
+      type: 'blur' as const,
+      visible: asBool(x.visible, true),
+      radius: asNum(x.radius, 8),
+    };
+  });
+}
+
+export function nodeEffects(node: AdNode | null | undefined): AdEffect[] {
+  return node?.effects ?? [];
 }
 
 function sanitizeNode(raw: unknown): AdNode | null {
@@ -421,6 +515,7 @@ function sanitizeNode(raw: unknown): AdNode | null {
     h: Math.max(1, asNum(o.h, 40)),
     rotation: asNum(o.rotation, 0),
     opacity: Math.min(1, Math.max(0, asNum(o.opacity, 1))),
+    effects: sanitizeEffects(o.effects),
   };
   if (type === 'text') {
     return {
@@ -438,7 +533,7 @@ function sanitizeNode(raw: unknown): AdNode | null {
       verticalAlign: (['top', 'middle', 'bottom'] as const).includes(o.verticalAlign as 'top')
         ? (o.verticalAlign as AdVerticalAlign)
         : 'top',
-      fills: Array.isArray(o.fills) && o.fills.length ? o.fills.map(sanitizePaint) : [solid('#fff')],
+      fills: Array.isArray(o.fills) && o.fills.length ? o.fills.map((p, i) => sanitizePaint(p, i)) : [solid('#fff')],
     };
   }
   if (type === 'image') {
@@ -451,6 +546,8 @@ function sanitizeNode(raw: unknown): AdNode | null {
         : 'fill',
       cornerRadius: asNum(o.cornerRadius, 0),
       tint: typeof o.tint === 'string' && /^#/.test(o.tint) ? o.tint : undefined,
+      iconId: typeof o.iconId === 'string' && o.iconId ? o.iconId : undefined,
+      fills: Array.isArray(o.fills) ? o.fills.map((p, i) => sanitizePaint(p, i)) : [],
     };
   }
   if (type === 'rectangle') {
@@ -458,7 +555,7 @@ function sanitizeNode(raw: unknown): AdNode | null {
       ...base,
       type: 'rectangle',
       cornerRadius: asNum(o.cornerRadius, 0),
-      fills: Array.isArray(o.fills) ? o.fills.map(sanitizePaint) : [solid('#888')],
+      fills: Array.isArray(o.fills) ? o.fills.map((p, i) => sanitizePaint(p, i)) : [solid('#888')],
       strokes: Array.isArray(o.strokes)
         ? o.strokes.map((s) => {
             const x = s && typeof s === 'object' ? (s as Record<string, unknown>) : {};
@@ -489,7 +586,7 @@ function sanitizeNode(raw: unknown): AdNode | null {
       paddingLeft: asNum(o.paddingLeft, 0),
       clipsContent: asBool(o.clipsContent, true),
       cornerRadius: asNum(o.cornerRadius, 0),
-      fills: Array.isArray(o.fills) ? o.fills.map(sanitizePaint) : [solid('#121218')],
+      fills: Array.isArray(o.fills) ? o.fills.map((p, i) => sanitizePaint(p, i)) : [solid('#121218')],
       strokes: Array.isArray(o.strokes)
         ? o.strokes.map((s) => {
             const x = s && typeof s === 'object' ? (s as Record<string, unknown>) : {};
@@ -498,34 +595,6 @@ function sanitizeNode(raw: unknown): AdNode | null {
               opacity: asNum(x.opacity, 1),
               weight: asNum(x.weight, 1),
               align: 'inside' as const,
-            };
-          })
-        : [],
-      effects: Array.isArray(o.effects)
-        ? o.effects.map((e, i) => {
-            const x = e && typeof e === 'object' ? (e as Record<string, unknown>) : {};
-            const t = asStr(x.type, 'blur');
-            if (t === 'crt') {
-              return {
-                id: asStr(x.id, `fx_${i}`),
-                type: 'crt' as const,
-                visible: asBool(x.visible, true),
-                params: x.params && typeof x.params === 'object' ? (x.params as Record<string, number | boolean | string>) : {},
-              };
-            }
-            if (t === 'noise') {
-              return {
-                id: asStr(x.id, `fx_${i}`),
-                type: 'noise' as const,
-                visible: asBool(x.visible, true),
-                amount: asNum(x.amount, 0.2),
-              };
-            }
-            return {
-              id: asStr(x.id, `fx_${i}`),
-              type: 'blur' as const,
-              visible: asBool(x.visible, true),
-              radius: asNum(x.radius, 8),
             };
           })
         : [],
@@ -592,7 +661,7 @@ export function designMissingCover(doc: AdDesignDoc, imageUrl?: string | null): 
   });
 }
 
-function iconToDataUrl(iconId: string, size: number, color = '#ffffff'): string {
+export function iconToDataUrl(iconId: string, size: number, color = '#ffffff'): string {
   const svg = bannerIconSvg(iconId || 'wifi-off', Math.max(24, Math.round(size)), color);
   return encodeSvgDataUrl(svg);
 }
@@ -694,6 +763,7 @@ export function legacyOverlayToDesign(
         h: iconSize,
         scaleMode: 'fit',
         tint: '#ffffff',
+        iconId,
       }),
   );
 

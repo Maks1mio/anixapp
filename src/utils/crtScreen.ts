@@ -258,6 +258,26 @@ export function formatCrtValue(key: CrtSliderKey, value: number, unit?: string):
   return unit ? `${shown}${unit}` : shown;
 }
 
+/** Fade CRT intensities (hide / Rest↔Hover mix). Structural sizes stay put. */
+export function scaleCrtIntensity(params: CrtScreenParams, amount: number): CrtScreenParams {
+  const k = clamp(amount, 0, 1);
+  const src = sanitizeCrtParams(params);
+  if (k >= 0.999) return src;
+  return {
+    ...src,
+    mask: src.mask * k,
+    curvature: src.curvature * k,
+    scanlines: src.scanlines * k,
+    aberration: src.aberration * k,
+    flicker: src.flicker * k,
+    noise: src.noise * k,
+    jitter: src.jitter * k,
+    vignette: src.vignette * k,
+    rollSpeed: src.rollSpeed * k,
+    brightness: src.brightness * k,
+  };
+}
+
 const VERT = `#version 300 es
 layout(location = 0) in vec2 a_pos;
 layout(location = 1) in vec2 a_uv;
@@ -544,12 +564,12 @@ export class CrtScreenRenderer {
   private outH = 1;
   private destroyed = false;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, opts?: { preserveDrawingBuffer?: boolean }) {
     const gl = canvas.getContext('webgl2', {
       alpha: true,
       premultipliedAlpha: true,
       antialias: false,
-      preserveDrawingBuffer: false,
+      preserveDrawingBuffer: Boolean(opts?.preserveDrawingBuffer),
       powerPreference: 'low-power',
     });
     if (!gl) throw new Error('WebGL2 unavailable');
@@ -706,5 +726,49 @@ export class CrtScreenRenderer {
     gl.deleteProgram(this.program);
     const ext = gl.getExtension('WEBGL_lose_context');
     ext?.loseContext();
+  }
+}
+
+let filterCanvas: HTMLCanvasElement | null = null;
+let filterRenderer: CrtScreenRenderer | null = null;
+let filterFailed = false;
+
+/**
+ * Run the CRT shader on a flattened layer. Returns a canvas snapshot the caller
+ * must draw immediately (the buffer is reused on the next call).
+ */
+export function applyCrtFilter(
+  source: HTMLCanvasElement,
+  params: CrtScreenParams,
+  timeMs: number,
+): HTMLCanvasElement | null {
+  if (filterFailed || typeof document === 'undefined') return null;
+  const w = Math.max(1, source.width || 0);
+  const h = Math.max(1, source.height || 0);
+  if (w < 1 || h < 1) return null;
+  try {
+    if (!isCrtScreenSupported()) {
+      filterFailed = true;
+      return null;
+    }
+    if (!filterCanvas) filterCanvas = document.createElement('canvas');
+    if (!filterRenderer) {
+      filterRenderer = new CrtScreenRenderer(filterCanvas, { preserveDrawingBuffer: true });
+    }
+    filterRenderer.resize(w, h, 1);
+    filterRenderer.setSource(source);
+    filterRenderer.setParams(sanitizeCrtParams(params));
+    filterRenderer.render(timeMs);
+    return filterCanvas;
+  } catch {
+    filterFailed = true;
+    try {
+      filterRenderer?.destroy();
+    } catch {
+      /* ignore */
+    }
+    filterRenderer = null;
+    filterCanvas = null;
+    return null;
   }
 }

@@ -3,6 +3,7 @@
     addChild,
     alignNode,
     cloneDesignDoc,
+    createEffectId,
     createFrameNode,
     createImageNode,
     createRectNode,
@@ -10,46 +11,58 @@
     flattenLayers,
     getNode,
     getRoot,
+    iconToDataUrl,
+    imagePaint,
+    linearPaint,
+    nodeFills,
     removeNode,
     solid,
     type AdDesignDoc,
     type AdDesignStates,
+    type AdEffect,
     type AdFrameNode,
     type AdNode,
+    type AdPaint,
     type AdTextNode,
   } from '../../utils/adDesignDoc';
   import {
     absBoxOf,
+    addNodeEffect,
+    addNodeFill,
     applyStructure,
     cloneDesignStatesAligned,
     copyNodeVisual,
     easeInOutCubic,
     hoverDiffers,
+    isLayerShown,
     mixedNode,
     nodeOpacity,
     patchCurrentNode,
+    patchNodeEffectParams,
+    patchNodeFill,
     patchSharedMeta,
+    patchVariantNode,
+    removeNodeEffect,
+    removeNodeFill,
+    reorderNodeFills,
     resizeArtboard,
+    setNodeEffectVisible,
+    setNodeFillVisible,
     stepHoverT,
+    toggleLayerShown,
     ARTBOARD_PRESETS,
   } from '../../utils/adDesignMotion';
   import { composeAdDesign } from '../../utils/composeAdDesign';
   import {
     CRT_SLIDER_FIELDS,
-    CrtScreenRenderer,
-    cloneCrtParams,
-    cloneCrtStates,
+    CRT_VPN_PRESET,
     formatCrtValue,
-    isCrtScreenSupported,
-    mixCrtParams,
     sanitizeCrtParams,
-    sanitizeCrtStates,
-    type CrtScreenParams,
-    type CrtScreenStates,
     type CrtSliderKey,
   } from '../../utils/crtScreen';
   import { fileToDataUrl } from '../../services/ads-api';
   import { isSvgDataUrl, parseSvgDataUrlColor, tintSvgDataUrl } from '../../utils/svgTint';
+  import { bannerIconSvg, VPN_BANNER_ICONS } from '../../utils/vpnBannerIcons';
   import EditorIcon from './editor/EditorIcon.svelte';
   import { editorIcons } from './editor/editorIconRaw';
 
@@ -59,11 +72,24 @@
   type Props = {
     states: AdDesignStates;
     onStatesChange: (next: AdDesignStates) => void;
-    crt: CrtScreenStates;
-    onCrtChange: (next: CrtScreenStates) => void;
+    title?: string;
+    onTitleChange?: (title: string) => void;
+    error?: string;
+    busy?: boolean;
+    onClose?: () => void;
+    onSave?: () => void;
   };
 
-  let { states, onStatesChange, crt, onCrtChange }: Props = $props();
+  let {
+    states,
+    onStatesChange,
+    title = '',
+    onTitleChange,
+    error = '',
+    busy = false,
+    onClose,
+    onSave,
+  }: Props = $props();
 
   let tool = $state<Tool>('select');
   let variant = $state<Variant>('rest');
@@ -78,6 +104,13 @@
   let stageEl: HTMLDivElement | null = $state(null);
   let fileInput: HTMLInputElement | null = $state(null);
   let previewCanvas: HTMLCanvasElement | null = $state(null);
+  let addFxOpen = $state(false);
+  let addFillOpen = $state(false);
+  let expandedFillId = $state<string | null>(null);
+  let fillDragIndex = $state<number | null>(null);
+  let fillFileInput: HTMLInputElement | null = $state(null);
+  let pendingFillTarget = $state<'new' | string | null>(null);
+  let iconQuery = $state('');
   let spaceDown = $state(false);
   let panning = $state(false);
   let pointerHover = false;
@@ -86,7 +119,6 @@
 
   let dragStates: AdDesignStates | null = $state(null);
   const view = $derived(dragStates ?? cloneDesignStatesAligned(states));
-  const crtStates = $derived(sanitizeCrtStates(crt));
   const restDoc = $derived(view.rest);
   const hoverDoc = $derived(view.hover);
   const activeDoc = $derived(variant === 'hover' ? hoverDoc : restDoc);
@@ -95,10 +127,17 @@
   const selectedHover = $derived(getNode(hoverDoc, selectedId));
   const layers = $derived(flattenLayers(restDoc));
   const root = $derived(getRoot(restDoc));
+  const iconChoices = $derived(
+    VPN_BANNER_ICONS.filter((ic) => {
+      const q = iconQuery.trim().toLowerCase();
+      if (!q) return true;
+      return ic.id.includes(q) || ic.label.toLowerCase().includes(q);
+    }),
+  );
+  const selectedIconId = $derived(selected?.type === 'image' ? selected.iconId ?? '' : '');
 
   const box = {
-    view: view as AdDesignStates,
-    crt: crtStates as CrtScreenStates,
+    view: { version: 2 as const, width: 1, height: 1, rootId: '', nodes: {} },
     variant: 'rest' as Variant,
     livePreview: false,
     zoom: 1,
@@ -107,10 +146,15 @@
 
   $effect(() => {
     box.view = view;
-    box.crt = crtStates;
     box.variant = variant;
     box.livePreview = livePreview;
     box.zoom = zoom;
+  });
+
+  $effect(() => {
+    selectedId;
+    addFxOpen = false;
+    addFillOpen = false;
   });
 
   $effect(() => {
@@ -121,18 +165,22 @@
   $effect(() => {
     const canvas = previewCanvas;
     if (!canvas) return;
+    const probe = canvas.getContext('2d', { alpha: true });
+    if (!probe) {
+      const next = document.createElement('canvas');
+      next.className = canvas.className;
+      next.setAttribute('aria-hidden', 'true');
+      canvas.replaceWith(next);
+      previewCanvas = next;
+      return;
+    }
     let dead = false;
     let raf = 0;
-    let renderer: CrtScreenRenderer | null = null;
-    let source: HTMLCanvasElement | null = null;
-    let lastCompose = 0;
+    let lastCompose = '';
     let composeBusy = false;
     let lastTime = 0;
-    try {
-      if (isCrtScreenSupported()) renderer = new CrtScreenRenderer(canvas);
-    } catch {
-      renderer = null;
-    }
+    let frozenFxTime = 0;
+    let lastViewRef: AdDesignStates | null = null;
 
     const loop = (timeMs: number) => {
       raf = 0;
@@ -143,9 +191,13 @@
         ? (pointerHover || box.pointerHover ? 1 : 0)
         : box.variant === 'hover' ? 1 : 0;
       hoverT = stepHoverT(hoverT, target, dt);
+      const springing = Math.abs(hoverT - target) > 0.003;
+      const animateFx = box.livePreview || springing;
+      if (animateFx) frozenFxTime += dt;
+      const fxTime = frozenFxTime;
       const eased = easeInOutCubic(hoverT);
-      const rest = cloneDesignDoc(box.view.rest);
-      const hover = cloneDesignDoc(box.view.hover);
+      const rest = box.view.rest;
+      const hover = box.view.hover;
       const w = Math.max(1, rest.width);
       const h = Math.max(1, rest.height);
       const displayW = Math.max(1, w * box.zoom);
@@ -153,38 +205,19 @@
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       canvas.style.width = `${displayW}px`;
       canvas.style.height = `${displayH}px`;
+      const pxW = Math.max(1, Math.round(displayW * dpr));
+      const pxH = Math.max(1, Math.round(displayH * dpr));
+      if (canvas.width !== pxW) canvas.width = pxW;
+      if (canvas.height !== pxH) canvas.height = pxH;
 
-      const crtLive = mixCrtParams(box.crt.rest, box.crt.hover, eased);
-      if (renderer) {
-        renderer.resize(displayW, displayH, dpr);
-        if (!source) source = document.createElement('canvas');
-        const sw = Math.max(1, Math.round(displayW * dpr));
-        const sh = Math.max(1, Math.round(displayH * dpr));
-        if (source.width !== sw || source.height !== sh) {
-          source.width = sw;
-          source.height = sh;
-        }
-        if (!composeBusy && timeMs - lastCompose > 24) {
+      const sig = `${Math.round(fxTime)}|${eased.toFixed(3)}|${pxW}x${pxH}`;
+      if (!composeBusy && (box.view !== lastViewRef || sig !== lastCompose)) {
+        lastViewRef = box.view;
+        lastCompose = sig;
+        const ctx = canvas.getContext('2d', { alpha: true });
+        if (ctx) {
           composeBusy = true;
-          const ctx = source.getContext('2d', { alpha: true });
-          if (ctx) {
-            void composeAdDesign(ctx, rest, sw, sh, hover, eased).then(() => {
-              if (!dead && renderer && source) renderer.setSource(source);
-              lastCompose = timeMs;
-              composeBusy = false;
-            });
-          } else composeBusy = false;
-        }
-        renderer.setParams(crtLive);
-        renderer.render(timeMs);
-      } else {
-        canvas.width = Math.max(1, Math.round(displayW * dpr));
-        canvas.height = Math.max(1, Math.round(displayH * dpr));
-        const ctx = canvas.getContext('2d');
-        if (ctx && !composeBusy && timeMs - lastCompose > 24) {
-          composeBusy = true;
-          void composeAdDesign(ctx, rest, canvas.width, canvas.height, hover, eased).then(() => {
-            lastCompose = timeMs;
+          void composeAdDesign(ctx, rest, pxW, pxH, hover, eased, fxTime).then(() => {
             composeBusy = false;
           });
         }
@@ -196,7 +229,6 @@
     return () => {
       dead = true;
       if (raf) cancelAnimationFrame(raf);
-      renderer?.destroy();
     };
   });
 
@@ -357,6 +389,49 @@
     addNode(createFrameNode({ x: 60, y: 60 }));
   }
 
+  function addIconLayer() {
+    const size = 96;
+    const color = '#ffffff';
+    const iconId = 'wifi-off';
+    addNode(createImageNode(iconToDataUrl(iconId, size, color), {
+      name: 'Icon',
+      x: Math.round(root.w / 2 - size / 2),
+      y: Math.round(root.h * 0.16),
+      w: size,
+      h: size,
+      scaleMode: 'fit',
+      tint: color,
+      iconId,
+    }));
+  }
+
+  function applyBannerIcon(iconId: string) {
+    if (!selected || selected.type !== 'image' || !selectedId) {
+      const size = 96;
+      const color = '#ffffff';
+      addNode(createImageNode(iconToDataUrl(iconId, size, color), {
+        name: 'Icon',
+        x: Math.round(root.w / 2 - size / 2),
+        y: Math.round(root.h * 0.16),
+        w: size,
+        h: size,
+        scaleMode: 'fit',
+        tint: color,
+        iconId,
+      }));
+      return;
+    }
+    const color = selected.tint || parseSvgDataUrlColor(selected.src) || '#ffffff';
+    const size = Math.max(24, Math.round(Math.max(selected.w, selected.h)));
+    commitVariant(selectedId, {
+      src: iconToDataUrl(iconId, size, color),
+      iconId,
+      tint: color,
+      scaleMode: 'fit',
+      name: selected.name === 'Image' ? 'Icon' : selected.name,
+    } as Partial<AdNode>);
+  }
+
   async function addImageFromFile(file: File) {
     const src = await fileToDataUrl(file);
     addNode(createImageNode(src, {
@@ -379,11 +454,11 @@
     void fileToDataUrl(file).then((src) => {
       if (!selectedId || !selected) return;
       if (selected.type === 'image') {
-        commitVariant(selectedId, { src, name: file.name || selected.name });
+        commitVariant(selectedId, { src, name: file.name || selected.name, iconId: undefined } as Partial<AdNode>);
         return;
       }
-      if (selected.type === 'frame' || selected.type === 'rectangle') {
-        commitVariant(selectedId, { fills: [{ type: 'image', src, opacity: 1, scaleMode: 'fill' }] } as Partial<AdNode>);
+      if (selected.type === 'frame' || selected.type === 'rectangle' || selected.type === 'text') {
+        commit(addNodeFill(view, selectedId, imagePaint(src)));
         return;
       }
       void addImageFromFile(file);
@@ -410,7 +485,7 @@
   function toggleVisible(id: string) {
     const node = getNode(activeDoc, id);
     if (!node) return;
-    commitVariant(id, { visible: !node.visible });
+    commitVariant(id, toggleLayerShown(node));
   }
 
   function toggleLocked(id: string) {
@@ -662,12 +737,6 @@
     commitVariant(selectedId, patch as Partial<AdNode>);
   }
 
-  function canTintSelected(): boolean {
-    if (!selected) return false;
-    if (selected.type === 'text' || selected.type === 'frame' || selected.type === 'rectangle') return true;
-    return selected.type === 'image' && isSvgDataUrl(selected.src);
-  }
-
   function solidColor(): string {
     if (!selected) return '#ffffff';
     if (selected.type === 'image') {
@@ -684,31 +753,162 @@
   function setSolidColor(color: string) {
     if (!selected || !selectedId) return;
     const hex = color.trim();
-    if (selected.type === 'text' || selected.type === 'frame' || selected.type === 'rectangle') {
-      commitVariant(selectedId, { fills: [solid(hex)] } as Partial<AdNode>);
-      return;
-    }
     if (selected.type === 'image' && isSvgDataUrl(selected.src)) {
+      const size = Math.max(24, Math.round(Math.max(selected.w, selected.h)));
+      const src = selected.iconId
+        ? iconToDataUrl(selected.iconId, size, hex)
+        : tintSvgDataUrl(selected.src, hex);
       commitVariant(selectedId, {
         tint: hex,
-        src: tintSvgDataUrl(selected.src, hex),
+        src,
       } as Partial<AdNode>);
     }
   }
 
-  function liveCrt(): CrtScreenParams {
-    return variant === 'hover' ? crtStates.hover : crtStates.rest;
+  function selectedFillList(): AdPaint[] {
+    return nodeFills(selected);
+  }
+
+  function fillLabel(p: AdPaint): string {
+    if (p.type === 'solid') return p.color.replace('#', '').toUpperCase();
+    if (p.type === 'gradient') return 'Linear';
+    return 'Image';
+  }
+
+  function fillSwatchStyle(p: AdPaint): string {
+    if (p.type === 'solid') return `background: ${p.color};`;
+    if (p.type === 'gradient') {
+      const stops = p.stops.map((s) => `${s.color} ${Math.round(s.position * 100)}%`).join(', ');
+      return `background: linear-gradient(${p.angle ?? 180}deg, ${stops});`;
+    }
+    if (p.src) return `background: center / cover no-repeat url("${p.src}");`;
+    return 'background: #555;';
+  }
+
+  function addFillSolid() {
+    if (!selectedId) return;
+    commit(addNodeFill(view, selectedId, solid('#FFFFFF')));
+    addFillOpen = false;
+  }
+
+  function addFillLinear() {
+    if (!selectedId) return;
+    commit(addNodeFill(view, selectedId, linearPaint()));
+    addFillOpen = false;
+  }
+
+  function addFillImage() {
+    pendingFillTarget = 'new';
+    addFillOpen = false;
+    fillFileInput?.click();
+  }
+
+  function onFillFile(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    const target = pendingFillTarget;
+    pendingFillTarget = null;
+    if (!file || !selectedId) return;
+    void fileToDataUrl(file).then((src) => {
+      if (!selectedId) return;
+      if (target === 'new') {
+        commit(addNodeFill(view, selectedId, imagePaint(src)));
+        return;
+      }
+      if (target) commit(patchNodeFill(view, variant, selectedId, target, { src }));
+    });
+  }
+
+  function patchFill(paintId: string, patch: Record<string, unknown>) {
+    if (!selectedId) return;
+    commit(patchNodeFill(view, variant, selectedId, paintId, patch));
+  }
+
+  function toggleFillVisible(paintId: string) {
+    const p = selectedFillList().find((f) => f.id === paintId);
+    if (!selectedId || !p) return;
+    commit(setNodeFillVisible(view, variant, selectedId, paintId, p.visible === false));
+  }
+
+  function deleteFill(paintId: string) {
+    if (!selectedId) return;
+    commit(removeNodeFill(view, selectedId, paintId));
+    if (expandedFillId === paintId) expandedFillId = null;
+  }
+
+  function onFillDragStart(index: number, e: DragEvent) {
+    fillDragIndex = index;
+    e.dataTransfer?.setData('text/plain', String(index));
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function onFillDrop(index: number, e: DragEvent) {
+    e.preventDefault();
+    if (fillDragIndex == null || !selectedId) return;
+    commit(reorderNodeFills(view, selectedId, fillDragIndex, index));
+    fillDragIndex = null;
+  }
+
+  function parseHexInput(raw: string): string | null {
+    const v = raw.trim().replace('#', '');
+    if (/^[0-9a-fA-F]{6}$/.test(v)) return `#${v.toUpperCase()}`;
+    if (/^[0-9a-fA-F]{3}$/.test(v)) return `#${v[0]}${v[0]}${v[1]}${v[1]}${v[2]}${v[2]}`.toUpperCase();
+    return null;
+  }
+
+  function liveCrtEffect(): Extract<AdEffect, { type: 'crt' }> | null {
+    const fx = selected?.effects?.find((e) => e.type === 'crt');
+    return fx && fx.type === 'crt' ? fx : null;
+  }
+
+  function liveCrtParams() {
+    const fx = liveCrtEffect();
+    return sanitizeCrtParams(fx?.params);
   }
 
   function patchCrtParam(key: string, value: number | boolean) {
-    const next = cloneCrtStates(crtStates);
-    const which = variant === 'hover' ? 'hover' : 'rest';
-    next[which] = sanitizeCrtParams({ ...next[which], [key]: value });
-    onCrtChange(next);
+    const fx = liveCrtEffect();
+    if (!selectedId || !fx) return;
+    commit(patchNodeEffectParams(view, variant, selectedId, fx.id, { [key]: value }));
+  }
+
+  function addCrtToSelected() {
+    if (!selectedId || !selected) return;
+    if (selected.effects?.some((e) => e.type === 'crt')) {
+      addFxOpen = false;
+      return;
+    }
+    const fx: AdEffect = {
+      id: createEffectId(),
+      type: 'crt',
+      visible: true,
+      params: { ...CRT_VPN_PRESET },
+    };
+    commit(addNodeEffect(view, selectedId, fx));
+    addFxOpen = false;
+  }
+
+  function toggleEffectVisible(effectId: string) {
+    const fx = selected?.effects?.find((e) => e.id === effectId);
+    if (!selectedId || !fx) return;
+    commit(setNodeEffectVisible(view, variant, selectedId, effectId, !fx.visible));
+  }
+
+  function deleteEffect(effectId: string) {
+    if (!selectedId) return;
+    commit(removeNodeEffect(view, selectedId, effectId));
   }
 
   function copyCrtRestToHover() {
-    onCrtChange({ rest: cloneCrtParams(crtStates.rest), hover: cloneCrtParams(crtStates.rest) });
+    const restFx = selectedRest?.effects.find((e) => e.type === 'crt');
+    if (!selectedId || !restFx || restFx.type !== 'crt' || !selectedHover) return;
+    const hoverEffects = selectedHover.effects.map((e) => (
+      e.id === restFx.id && e.type === 'crt'
+        ? { ...e, params: { ...restFx.params } }
+        : e
+    ));
+    commit(patchVariantNode(view, 'hover', selectedId, { effects: hoverEffects } as Partial<AdNode>));
   }
 
   function abs(doc: AdDesignDoc, id: string) {
@@ -745,33 +945,68 @@
       <button type="button" class="figma__tool" onclick={() => fileInput?.click()} title="Image">
         <EditorIcon svg={editorIcons.styleFill} size={20} />
       </button>
+      <button type="button" class="figma__tool" onclick={addIconLayer} title="Icon">
+        <span class="figma__tool-svg">{@html bannerIconSvg('star', 18)}</span>
+      </button>
       <input bind:this={fileInput} type="file" accept="image/*" hidden onchange={onPickImage} />
+      <input bind:this={fillFileInput} type="file" accept="image/*" hidden onchange={onFillFile} />
     </div>
 
-    <div class="figma__variants" role="tablist" aria-label="Состояние">
-      <button type="button" class="figma__var" class:figma__var--on={!livePreview && variant === 'rest'} onclick={() => { variant = 'rest'; livePreview = false; }}>Rest</button>
-      <button type="button" class="figma__var" class:figma__var--on={!livePreview && variant === 'hover'} onclick={() => { variant = 'hover'; livePreview = false; }}>Hover</button>
-      <button type="button" class="figma__var figma__var--play" class:figma__var--on={livePreview} onclick={() => { livePreview = !livePreview; }} title="Как в iframe — наведите на холст">
-        <EditorIcon svg={editorIcons.view} size={16} /> Preview
-      </button>
-    </div>
-
-    <div class="figma__zoom">
-      <label class="figma__onion" title="Показать второй стейт контуром">
-        <input type="checkbox" bind:checked={onion} /> Onion
+    {#if onTitleChange}
+      <label class="figma__title">
+        <span class="figma__sr">Название рекламы</span>
+        <input
+          type="text"
+          value={title}
+          placeholder="Название рекламы"
+          oninput={(e) => onTitleChange(e.currentTarget.value)}
+        />
       </label>
-      <button type="button" class="figma__tool" onclick={() => zoomBy(0.9)} title="Уменьшить">
-        <EditorIcon svg={editorIcons.remove} size={16} />
-      </button>
-      <button type="button" class="figma__zoom-val" onclick={fitToView} title="Вписать (0)">
-        <EditorIcon svg={editorIcons.resizeFit} size={16} />
-        {Math.round(zoom * 100)}%
-      </button>
-      <button type="button" class="figma__tool" onclick={() => zoomBy(1.1)} title="Увеличить">
-        <EditorIcon svg={editorIcons.add} size={16} />
-      </button>
+    {/if}
+
+    <div class="figma__toolbar-end">
+      <div class="figma__variants" role="tablist" aria-label="Состояние">
+        <button type="button" class="figma__var" class:figma__var--on={!livePreview && variant === 'rest'} onclick={() => { variant = 'rest'; livePreview = false; }}>Rest</button>
+        <button type="button" class="figma__var" class:figma__var--on={!livePreview && variant === 'hover'} onclick={() => { variant = 'hover'; livePreview = false; }}>Hover</button>
+        <button type="button" class="figma__var figma__var--play" class:figma__var--on={livePreview} onclick={() => { livePreview = !livePreview; }} title="Как в iframe — наведите на холст">
+          <EditorIcon svg={editorIcons.view} size={16} /> Preview
+        </button>
+      </div>
+
+      <div class="figma__zoom">
+        <label class="figma__onion" title="Показать второй стейт контуром">
+          <input type="checkbox" bind:checked={onion} /> Onion
+        </label>
+        <button type="button" class="figma__tool" onclick={() => zoomBy(0.9)} title="Уменьшить">
+          <EditorIcon svg={editorIcons.remove} size={16} />
+        </button>
+        <button type="button" class="figma__zoom-val" onclick={fitToView} title="Вписать (0)">
+          <EditorIcon svg={editorIcons.resizeFit} size={16} />
+          {Math.round(zoom * 100)}%
+        </button>
+        <button type="button" class="figma__tool" onclick={() => zoomBy(1.1)} title="Увеличить">
+          <EditorIcon svg={editorIcons.add} size={16} />
+        </button>
+      </div>
+
+      {#if onClose || onSave}
+        <div class="figma__actions">
+          {#if onClose}
+            <button type="button" class="figma__text-btn" onclick={onClose}>Закрыть редактор</button>
+          {/if}
+          {#if onSave}
+            <button type="button" class="figma__save" disabled={busy} onclick={onSave}>
+              {busy ? '…' : 'Сохранить'}
+            </button>
+          {/if}
+        </div>
+      {/if}
     </div>
   </header>
+
+  {#if error}
+    <p class="figma__error" role="alert">{error}</p>
+  {/if}
 
   <div class="figma__body">
     <aside class="figma__layers">
@@ -788,7 +1023,7 @@
             <div
               class="figma__layer"
               class:figma__layer--on={selectedId === node.id}
-              class:figma__layer--ghost={live && nodeOpacity(live) < 0.02}
+              class:figma__layer--ghost={live && !isLayerShown(live)}
               style:padding-left="{0.45 + depth * 0.7}rem"
             >
               <button type="button" class="figma__layer-main" onclick={() => select(node.id)}>
@@ -801,10 +1036,10 @@
               <button
                 type="button"
                 class="figma__eye"
-                class:figma__eye--off={live && !live.visible}
-                title={live && !live.visible ? 'Показать' : 'Скрыть'}
+                class:figma__eye--off={live && !isLayerShown(live)}
+                title={live && !isLayerShown(live) ? 'Показать' : 'Скрыть'}
                 onclick={() => toggleVisible(node.id)}
-              ><EditorIcon svg={live && !live.visible ? editorIcons.show : editorIcons.hide} size={16} /></button>
+              ><EditorIcon svg={live && !isLayerShown(live) ? editorIcons.show : editorIcons.hide} size={16} /></button>
               <button
                 type="button"
                 class="figma__lock"
@@ -908,7 +1143,7 @@
 
     <aside class="figma__inspector">
       <div class="figma__panel-head">
-        <span>{selected ? (selected.type === 'frame' ? 'Frame' : selected.type === 'text' ? 'Text' : selected.type === 'image' ? 'Image' : 'Rectangle') : 'Frame'} · {variant}</span>
+        <span>{selected ? (selected.type === 'frame' ? 'Frame' : selected.type === 'text' ? 'Text' : selected.type === 'image' ? (selected.iconId || selected.name === 'Icon' ? 'Icon' : 'Image') : 'Rectangle') : 'Frame'} · {variant}</span>
       </div>
 
       {#if selected && selectedId && selectedRest && selectedHover}
@@ -969,13 +1204,17 @@
             </div>
           {:else}
             <div class="figma__row2">
+              <label>X <input type="number" step="0.5" value={selected.x.toFixed(1)} oninput={(e) => commitVariant(selectedId!, { x: Number(e.currentTarget.value) })} /></label>
+              <label>Y <input type="number" step="0.5" value={selected.y.toFixed(1)} oninput={(e) => commitVariant(selectedId!, { y: Number(e.currentTarget.value) })} /></label>
+            </div>
+            <div class="figma__row2">
               <label>W <input type="number" step="0.1" value={selected.w.toFixed(2)} oninput={(e) => commitVariant(selectedId!, { w: Math.max(1, Number(e.currentTarget.value)) })} /></label>
               <label>H <input type="number" step="0.1" value={selected.h.toFixed(2)} oninput={(e) => commitVariant(selectedId!, { h: Math.max(1, Number(e.currentTarget.value)) })} /></label>
             </div>
           {/if}
           <div class="figma__row2">
-            <label><span class="figma__field-ico"><EditorIcon svg={editorIcons.rotation} size={16} /></span> <input type="number" step="1" value={selected.rotation} oninput={(e) => commitVariant(selectedId!, { rotation: Number(e.currentTarget.value) })} /></label>
-            <label><span class="figma__field-ico"><EditorIcon svg={editorIcons.opacity} size={16} /></span> <input type="number" step="1" min="0" max="100" value={Math.round(selected.opacity * 100)} oninput={(e) => commitVariant(selectedId!, { opacity: Number(e.currentTarget.value) / 100 })} /></label>
+            <label title="Поворот"><span class="figma__field-ico"><EditorIcon svg={editorIcons.rotation} size={16} /></span> <input type="number" step="1" value={selected.rotation} oninput={(e) => commitVariant(selectedId!, { rotation: Number(e.currentTarget.value) })} /></label>
+            <label title="Прозрачность, %"><span class="figma__field-ico"><EditorIcon svg={editorIcons.opacity} size={16} /></span> <input type="number" step="1" min="0" max="100" value={Math.round(selected.opacity * 100)} oninput={(e) => commitVariant(selectedId!, { opacity: Math.min(1, Math.max(0, Number(e.currentTarget.value) / 100)) })} /></label>
           </div>
         </section>
 
@@ -1040,52 +1279,309 @@
           </section>
         {/if}
 
-        <section class="figma__sec">
-          <div class="figma__sec-title">
-            <span class="figma__sec-title-row">
-              <EditorIcon svg={editorIcons.styleFill} size={18} />
-              Fill · {variant}
-            </span>
-          </div>
-          {#if canTintSelected()}
-            <div class="figma__fill">
-              <input type="color" value={solidColor()} oninput={(e) => setSolidColor(e.currentTarget.value)} />
-              <input type="text" value={solidColor()} oninput={(e) => setSolidColor(e.currentTarget.value)} />
-              <button type="button" class="figma__mini" onclick={() => fileInput?.click()}>Image…</button>
-            </div>
-          {:else}
-            <div class="figma__fill">
-              <button type="button" class="figma__mini" onclick={() => fileInput?.click()}>Image…</button>
-            </div>
-          {/if}
-        </section>
-
-        {#if selected.type === 'frame' && selectedId === restDoc.rootId}
+        {#if selected.type === 'image'}
           <section class="figma__sec">
             <div class="figma__sec-title">
-              CRT Screen · {variant}
-              <button type="button" class="figma__mini" onclick={copyCrtRestToHover}>Rest → Hover</button>
+              <span class="figma__sec-title-row">
+                <span class="figma__tool-svg">{@html bannerIconSvg('star', 16)}</span>
+                Icon
+              </span>
             </div>
-            <p class="figma__hint-inline">Тот же шейдер, что в публичном iframe. Rest/Hover смешиваются при наведении.</p>
-            {#each CRT_SLIDER_FIELDS as field}
-              <label class="figma__slider">
-                <span>{field.label}</span>
-                <input
-                  type="range"
-                  min={field.min}
-                  max={field.max}
-                  step={field.step}
-                  value={Number(liveCrt()[field.key as CrtSliderKey] ?? 0)}
-                  oninput={(e) => patchCrtParam(field.key, Number(e.currentTarget.value))}
-                />
-                <span>{formatCrtValue(field.key as CrtSliderKey, Number(liveCrt()[field.key as CrtSliderKey] ?? 0), field.unit)}</span>
-              </label>
-            {/each}
+            <input
+              class="figma__icon-search"
+              type="search"
+              placeholder="Найти иконку"
+              value={iconQuery}
+              oninput={(e) => (iconQuery = e.currentTarget.value)}
+              aria-label="Найти иконку"
+            />
+            <div class="figma__icons" role="listbox" aria-label="Иконка слоя">
+              {#each iconChoices as ic (ic.id)}
+                <button
+                  type="button"
+                  class="figma__icon"
+                  class:figma__icon--on={selectedIconId === ic.id}
+                  role="option"
+                  aria-selected={selectedIconId === ic.id}
+                  title={ic.label}
+                  onclick={() => applyBannerIcon(ic.id)}
+                >
+                  {@html bannerIconSvg(ic.id, 16)}
+                </button>
+              {/each}
+            </div>
+            {#if iconChoices.length === 0}
+              <p class="figma__hint">Ничего не найдено</p>
+            {/if}
           </section>
         {/if}
 
         <section class="figma__sec">
-          <label class="figma__check"><input type="checkbox" checked={selected.visible} onchange={(e) => commitVariant(selectedId!, { visible: e.currentTarget.checked })} /> Visible</label>
+          <div class="figma__sec-title">
+            <span class="figma__sec-title-row">
+              <EditorIcon svg={editorIcons.styleFill} size={18} />
+              Fill
+            </span>
+            <div class="figma__fx-add">
+              <button
+                type="button"
+                class="figma__icon-btn"
+                title="Добавить заливку"
+                aria-expanded={addFillOpen}
+                onclick={() => (addFillOpen = !addFillOpen)}
+              >
+                <EditorIcon svg={editorIcons.add} size={16} />
+              </button>
+              {#if addFillOpen}
+                <div class="figma__fx-menu" role="menu">
+                  <button type="button" role="menuitem" onclick={addFillSolid}>Solid</button>
+                  <button type="button" role="menuitem" onclick={addFillLinear}>Linear</button>
+                  <button type="button" role="menuitem" onclick={addFillImage}>Image</button>
+                </div>
+              {/if}
+            </div>
+          </div>
+
+          {#if selected.type === 'image' && isSvgDataUrl(selected.src)}
+            <div class="figma__fill-row figma__fill-row--tint">
+              <span class="figma__swatch" style:background={solidColor()}>
+                <input type="color" value={solidColor()} oninput={(e) => setSolidColor(e.currentTarget.value)} aria-label="Tint" />
+              </span>
+              <input class="figma__fill-hex" type="text" value={solidColor().replace('#', '')} onchange={(e) => {
+                const hex = parseHexInput(e.currentTarget.value);
+                if (hex) setSolidColor(hex);
+              }} />
+              <span class="figma__fill-kind">Tint</span>
+            </div>
+          {/if}
+
+          <div class="figma__fill-stack" role="list">
+          {#each selectedFillList() as paint, index (paint.id)}
+            <div
+              class="figma__fill-item"
+              class:figma__fill-item--off={paint.visible === false}
+              class:figma__fill-item--on={expandedFillId === paint.id}
+              role="listitem"
+            >
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                class="figma__fill-row"
+                ondragover={(e) => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'; }}
+                ondrop={(e) => onFillDrop(index, e)}
+              >
+                <button
+                  type="button"
+                  class="figma__fill-grip"
+                  title="Перетащить"
+                  draggable="true"
+                  ondragstart={(e) => onFillDragStart(index, e)}
+                  ondragend={() => (fillDragIndex = null)}
+                  aria-label="Перетащить заливку"
+                ></button>
+                <button
+                  type="button"
+                  class="figma__swatch"
+                  style={fillSwatchStyle(paint)}
+                  onclick={() => (expandedFillId = expandedFillId === paint.id ? null : paint.id)}
+                  aria-label="Параметры заливки"
+                >
+                  {#if paint.type === 'solid'}
+                    <input
+                      type="color"
+                      value={paint.color}
+                      onclick={(e) => e.stopPropagation()}
+                      oninput={(e) => patchFill(paint.id, { color: e.currentTarget.value })}
+                    />
+                  {/if}
+                </button>
+                {#if paint.type === 'solid'}
+                  <input
+                    class="figma__fill-hex"
+                    type="text"
+                    value={fillLabel(paint)}
+                    onchange={(e) => {
+                      const hex = parseHexInput(e.currentTarget.value);
+                      if (hex) patchFill(paint.id, { color: hex });
+                    }}
+                  />
+                {:else}
+                  <button type="button" class="figma__fill-hex figma__fill-hex--btn" onclick={() => (expandedFillId = expandedFillId === paint.id ? null : paint.id)}>
+                    {fillLabel(paint)}
+                  </button>
+                {/if}
+                <label class="figma__fill-op">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={Math.round(paint.opacity * 100)}
+                    oninput={(e) => patchFill(paint.id, { opacity: Math.min(1, Math.max(0, Number(e.currentTarget.value) / 100)) })}
+                  />
+                  <span>%</span>
+                </label>
+                <button
+                  type="button"
+                  class="figma__eye"
+                  class:figma__eye--off={paint.visible === false}
+                  title={paint.visible === false ? 'Показать заливку' : 'Скрыть заливку'}
+                  onclick={() => toggleFillVisible(paint.id)}
+                ><EditorIcon svg={paint.visible === false ? editorIcons.show : editorIcons.hide} size={16} /></button>
+                <button
+                  type="button"
+                  class="figma__lock"
+                  title="Удалить заливку"
+                  onclick={() => deleteFill(paint.id)}
+                ><EditorIcon svg={editorIcons.remove} size={16} /></button>
+              </div>
+
+              {#if expandedFillId === paint.id && paint.type === 'gradient'}
+                <div class="figma__fill-extra">
+                  <label class="figma__slider">
+                    <span>Angle</span>
+                    <input type="range" min="0" max="360" step="1" value={paint.angle ?? 180} oninput={(e) => patchFill(paint.id, { angle: Number(e.currentTarget.value) })} />
+                    <span>{Math.round(paint.angle ?? 180)}°</span>
+                  </label>
+                  {#each paint.stops as stop, si}
+                    <div class="figma__fill-stop">
+                      <span class="figma__swatch" style:background={stop.color}>
+                        <input type="color" value={stop.color} oninput={(e) => {
+                          const stops = paint.stops.map((s, i) => i === si ? { ...s, color: e.currentTarget.value } : s);
+                          patchFill(paint.id, { stops });
+                        }} />
+                      </span>
+                      <input
+                        class="figma__fill-hex"
+                        type="text"
+                        value={stop.color.replace('#', '').toUpperCase()}
+                        onchange={(e) => {
+                          const hex = parseHexInput(e.currentTarget.value);
+                          if (!hex) return;
+                          const stops = paint.stops.map((s, i) => i === si ? { ...s, color: hex } : s);
+                          patchFill(paint.id, { stops });
+                        }}
+                      />
+                      <label class="figma__fill-op">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={Math.round(stop.position * 100)}
+                          oninput={(e) => {
+                            const stops = paint.stops.map((s, i) => i === si ? { ...s, position: Math.min(1, Math.max(0, Number(e.currentTarget.value) / 100)) } : s);
+                            patchFill(paint.id, { stops });
+                          }}
+                        />
+                        <span>%</span>
+                      </label>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+
+              {#if expandedFillId === paint.id && paint.type === 'image'}
+                <div class="figma__fill-extra">
+                  <div class="figma__fill-img-actions">
+                    <button type="button" class="figma__mini" onclick={() => { pendingFillTarget = paint.id; fillFileInput?.click(); }}>Replace…</button>
+                    <select
+                      value={paint.scaleMode}
+                      onchange={(e) => patchFill(paint.id, { scaleMode: e.currentTarget.value })}
+                    >
+                      <option value="fill">Fill</option>
+                      <option value="fit">Fit</option>
+                      <option value="crop">Crop</option>
+                      <option value="tile">Tile</option>
+                    </select>
+                  </div>
+                </div>
+              {/if}
+            </div>
+          {/each}
+          </div>
+        </section>
+
+        <section class="figma__sec">
+          <div class="figma__sec-title">
+            <span class="figma__sec-title-row">
+              <EditorIcon svg={editorIcons.styleEffect} size={18} />
+              Effects
+            </span>
+            <div class="figma__fx-add">
+              <button
+                type="button"
+                class="figma__icon-btn"
+                title="Добавить эффект"
+                aria-expanded={addFxOpen}
+                onclick={() => (addFxOpen = !addFxOpen)}
+              >
+                <EditorIcon svg={editorIcons.add} size={16} />
+              </button>
+              {#if addFxOpen}
+                <div class="figma__fx-menu" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={Boolean(liveCrtEffect())}
+                    onclick={addCrtToSelected}
+                  >
+                    CRT Screen
+                  </button>
+                </div>
+              {/if}
+            </div>
+          </div>
+          {#if !(selected.effects ?? []).length}
+            <p class="figma__hint-inline">Эффект можно повесить на любой слой. Глаз скрывает в {variant}, минус удаляет в обоих стейтах.</p>
+          {/if}
+          {#each (selected.effects ?? []) as fx (fx.id)}
+            {#if fx.type === 'crt'}
+              <div class="figma__fx" class:figma__fx--off={!fx.visible}>
+                <div class="figma__fx-row">
+                  <span class="figma__fx-ico"><EditorIcon svg={editorIcons.styleEffect} size={16} /></span>
+                  <span class="figma__fx-name">CRT Screen</span>
+                  <button
+                    type="button"
+                    class="figma__eye"
+                    class:figma__eye--off={!fx.visible}
+                    title={fx.visible ? 'Скрыть эффект' : 'Показать эффект'}
+                    onclick={() => toggleEffectVisible(fx.id)}
+                  ><EditorIcon svg={fx.visible ? editorIcons.hide : editorIcons.show} size={16} /></button>
+                  <button
+                    type="button"
+                    class="figma__lock"
+                    title="Удалить эффект"
+                    onclick={() => deleteEffect(fx.id)}
+                  ><EditorIcon svg={editorIcons.remove} size={16} /></button>
+                </div>
+                {#if variant === 'rest'}
+                  <button type="button" class="figma__mini figma__fx-copy" onclick={copyCrtRestToHover}>Rest → Hover</button>
+                {/if}
+                {#each CRT_SLIDER_FIELDS as field}
+                  <label class="figma__slider">
+                    <span>{field.label}</span>
+                    <input
+                      type="range"
+                      min={field.min}
+                      max={field.max}
+                      step={field.step}
+                      value={Number(liveCrtParams()[field.key as CrtSliderKey] ?? 0)}
+                      oninput={(e) => patchCrtParam(field.key, Number(e.currentTarget.value))}
+                    />
+                    <span>{formatCrtValue(field.key as CrtSliderKey, Number(liveCrtParams()[field.key as CrtSliderKey] ?? 0), field.unit)}</span>
+                  </label>
+                {/each}
+              </div>
+            {/if}
+          {/each}
+        </section>
+
+        <section class="figma__sec">
+          <label class="figma__check"><input type="checkbox" checked={isLayerShown(selected)} onchange={(e) => {
+            if (!selectedId || !selected) return;
+            if (e.currentTarget.checked) commitVariant(selectedId, { visible: true, opacity: selected.opacity > 0.02 ? selected.opacity : 1 });
+            else commitVariant(selectedId, { visible: false });
+          }} /> Visible</label>
           <label class="figma__check"><input type="checkbox" checked={selected.locked} onchange={(e) => commit(patchSharedMeta(view, selectedId!, { locked: e.currentTarget.checked }))} /> Locked</label>
           <label class="figma__full">Name <input type="text" value={selected.name} oninput={(e) => commit(patchSharedMeta(view, selectedId!, { name: e.currentTarget.value }))} /></label>
           {#if selectedId !== restDoc.rootId}
@@ -1122,12 +1618,107 @@
 .figma__toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.5rem;
   padding: 0.3rem 0.55rem;
   background: #2c2c2c;
   border-bottom: 1px solid #1a1a1a;
   flex-shrink: 0;
+}
+
+.figma__toolbar-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.figma__title {
+  position: relative;
+  flex: 1 1 12rem;
+  min-width: 8rem;
+  max-width: 22rem;
+  display: flex;
+  align-items: center;
+  input {
+    width: 100%;
+    border: 0;
+    border-radius: 6px;
+    background: #383838;
+    color: var(--figma-text);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 0.45rem 0.65rem;
+    outline: none;
+    &:focus {
+      box-shadow: inset 0 0 0 1px var(--figma-blue);
+    }
+    &::placeholder {
+      color: var(--figma-muted);
+      font-weight: 500;
+    }
+  }
+}
+
+.figma__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.figma__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.figma__text-btn,
+.figma__save {
+  border: 0;
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 600;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+}
+
+.figma__text-btn {
+  background: transparent;
+  color: #ddd;
+  &:hover { background: rgba(255, 255, 255, 0.08); }
+}
+
+.figma__save {
+  background: var(--figma-blue);
+  color: #fff;
+  &:hover:not(:disabled) { filter: brightness(1.08); }
+  &:disabled { opacity: 0.55; cursor: default; }
+}
+
+.figma__error {
+  margin: 0;
+  padding: 0.4rem 0.75rem;
+  background: #3d1f1f;
+  color: #ffb4b4;
+  border-bottom: 1px solid #1a1a1a;
+  flex-shrink: 0;
+}
+
+.figma__tool-svg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  :global(svg) {
+    display: block;
+  }
 }
 
 .figma__tools,
@@ -1430,6 +2021,50 @@
   gap: 0.3rem;
 }
 
+.figma__icon-search {
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: var(--figma-input);
+  color: inherit;
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  outline: none;
+  &:focus { box-shadow: inset 0 0 0 1px var(--figma-blue); }
+}
+
+.figma__icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  max-height: 11.5rem;
+  overflow: auto;
+}
+
+.figma__icon {
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--figma-border);
+  background: var(--figma-input);
+  color: var(--figma-text);
+  cursor: pointer;
+  padding: 0;
+  :global(svg) {
+    width: 1rem;
+    height: 1rem;
+  }
+  &:hover { border-color: #666; }
+  &--on {
+    border-color: var(--figma-blue);
+    background: color-mix(in srgb, var(--figma-blue) 22%, var(--figma-input));
+    color: #fff;
+  }
+}
+
 .figma__size {
   display: grid;
   grid-template-columns: 1fr 1.75rem 1fr;
@@ -1583,25 +2218,129 @@
   }
 }
 
-.figma__fill {
+.figma__fill-stack {
   display: grid;
-  grid-template-columns: 2rem 1fr auto;
+  gap: 0.28rem;
+}
+
+.figma__fill-item {
+  display: grid;
+  gap: 0.3rem;
+  &--off { opacity: 0.45; }
+  &--on .figma__fill-row { outline: 1px solid rgba(13, 153, 255, 0.45); }
+}
+
+.figma__fill-row {
+  display: grid;
+  grid-template-columns: 0.7rem 1.5rem minmax(0, 1fr) 3.1rem 1.5rem 1.5rem;
+  gap: 0.2rem;
+  align-items: center;
+  min-height: 1.85rem;
+  padding: 0.12rem 0.1rem 0.12rem 0.15rem;
+  border-radius: 6px;
+  background: var(--figma-input);
+  &--tint {
+    grid-template-columns: 1.5rem minmax(0, 1fr) auto;
+  }
+}
+
+.figma__fill-grip {
+  width: 0.7rem;
+  height: 1.3rem;
+  border: 0;
+  padding: 0;
+  cursor: grab;
+  background:
+    radial-gradient(circle, #8a8a8a 1.1px, transparent 1.2px) 0 0 / 4px 4px;
+  opacity: 0.7;
+  &:active { cursor: grabbing; }
+}
+
+.figma__swatch {
+  position: relative;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 0;
+  border-radius: 4px;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  background-color: #2a2a2a;
+  input[type='color'] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    border: 0;
+    padding: 0;
+  }
+}
+
+.figma__fill-hex {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0.15rem 0.2rem;
+  text-transform: uppercase;
+  &--btn {
+    text-align: left;
+    cursor: pointer;
+    text-transform: none;
+  }
+}
+
+.figma__fill-kind {
+  color: var(--figma-muted);
+  padding: 0 0.2rem;
+}
+
+.figma__fill-op {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  color: var(--figma-muted);
+  input {
+    width: 2.1rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: right;
+    padding: 0;
+  }
+}
+
+.figma__fill-extra {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.15rem 0.2rem 0.35rem 1rem;
+}
+
+.figma__fill-stop {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr) 3.1rem;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.figma__fill-img-actions {
+  display: flex;
   gap: 0.35rem;
   align-items: center;
-  input[type='text'] {
+  select {
+    flex: 1;
     border: 0;
     border-radius: 4px;
     background: var(--figma-input);
     color: inherit;
-    padding: 0.35rem;
     font: inherit;
-  }
-  input[type='color'] {
-    width: 2rem;
-    height: 2rem;
-    border: 0;
-    background: transparent;
-    padding: 0;
+    padding: 0.28rem 0.35rem;
   }
 }
 
@@ -1627,6 +2366,81 @@
   color: var(--figma-muted);
   line-height: 1.4;
   padding: 0.75rem;
+}
+
+.figma__icon-btn {
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  &:hover { background: rgba(255, 255, 255, 0.12); }
+}
+
+.figma__fx-add {
+  position: relative;
+}
+
+.figma__fx-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.2rem);
+  z-index: 8;
+  min-width: 9.5rem;
+  padding: 0.2rem;
+  border-radius: 8px;
+  background: #1f1f1f;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  button {
+    display: block;
+    width: 100%;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--figma-text);
+    font: inherit;
+    text-align: left;
+    padding: 0.4rem 0.5rem;
+    cursor: pointer;
+    &:hover:not(:disabled) { background: #0c6dd8; }
+    &:disabled { opacity: 0.4; cursor: default; }
+  }
+}
+
+.figma__fx {
+  display: grid;
+  gap: 0.35rem;
+  &--off { opacity: 0.55; }
+}
+
+.figma__fx-row {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  min-height: 1.8rem;
+  padding: 0.1rem 0.15rem 0.1rem 0.35rem;
+  border-radius: 6px;
+  background: var(--figma-input);
+}
+
+.figma__fx-ico {
+  display: inline-flex;
+  opacity: 0.85;
+}
+
+.figma__fx-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.figma__fx-copy {
+  justify-self: start;
 }
 
 .figma__slider {

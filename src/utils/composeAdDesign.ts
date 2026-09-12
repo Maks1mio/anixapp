@@ -1,6 +1,7 @@
 import type { AdDesignDoc, AdFrameNode, AdNode, AdPaint } from './adDesignDoc';
 import { getRoot, listChildren } from './adDesignDoc';
 import { mixNodeVisual, nodeOpacity } from './adDesignMotion';
+import { applyCrtFilter, sanitizeCrtParams, type CrtScreenParams } from './crtScreen';
 import { isSvgDataUrl, parseSvgDataUrlColor, tintSvgDataUrl } from './svgTint';
 
 const imageCache = new Map<string, HTMLImageElement | 'error'>();
@@ -71,14 +72,16 @@ async function drawPaint(
   h: number,
   radius = 0,
 ) {
-  for (const p of paints) {
+  const layers = (paints ?? []).filter((p) => p && p.visible !== false && p.opacity > 0.001);
+  for (let i = layers.length - 1; i >= 0; i--) {
+    const p = layers[i]!;
     ctx.save();
     if (radius > 0) {
       roundRect(ctx, x, y, w, h, radius);
       ctx.clip();
     }
+    ctx.globalAlpha *= p.opacity;
     if (p.type === 'solid') {
-      ctx.globalAlpha = p.opacity;
       ctx.fillStyle = p.color;
       if (radius > 0) {
         roundRect(ctx, x, y, w, h, radius);
@@ -89,17 +92,67 @@ async function drawPaint(
     } else if (p.type === 'image' && p.src) {
       const img = await loadImage(p.src);
       if (img) {
-        ctx.globalAlpha = p.opacity;
-        drawImageCover(ctx, img, x, y, w, h, p.scaleMode === 'fit' ? 'fit' : 'fill');
+        if (p.scaleMode === 'tile') {
+          const pat = ctx.createPattern(img, 'repeat');
+          if (pat) {
+            ctx.fillStyle = pat;
+            ctx.fillRect(x, y, w, h);
+          }
+        } else {
+          drawImageCover(ctx, img, x, y, w, h, p.scaleMode === 'fit' ? 'fit' : 'fill');
+        }
       }
     } else if (p.type === 'gradient') {
-      const g = ctx.createLinearGradient(x, y, x + w, y + h);
-      for (const s of p.stops) g.addColorStop(Math.min(1, Math.max(0, s.position)), s.color);
-      ctx.globalAlpha = p.opacity;
+      const g = linearGradient(ctx, x, y, w, h, p.angle ?? 180);
+      addGradientStops(g, p.stops);
       ctx.fillStyle = g;
-      ctx.fillRect(x, y, w, h);
+      if (radius > 0) {
+        roundRect(ctx, x, y, w, h, radius);
+        ctx.fill();
+      } else {
+        ctx.fillRect(x, y, w, h);
+      }
     }
     ctx.restore();
+  }
+}
+
+function linearGradient(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  angleDeg: number,
+): CanvasGradient {
+  const rad = ((angleDeg - 90) * Math.PI) / 180;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const dx = Math.cos(rad);
+  const dy = Math.sin(rad);
+  const len = (Math.abs(w * dx) + Math.abs(h * dy)) / 2;
+  return ctx.createLinearGradient(cx - dx * len, cy - dy * len, cx + dx * len, cy + dy * len);
+}
+
+function addGradientStops(g: CanvasGradient, stops: Array<{ color: string; position: number }>) {
+  const sorted = [...stops]
+    .map((s) => ({ color: s.color, position: Math.min(1, Math.max(0, s.position)) }))
+    .sort((a, b) => a.position - b.position);
+  if (!sorted.length) {
+    g.addColorStop(0, '#000');
+    g.addColorStop(1, '#fff');
+    return;
+  }
+  let last = -1;
+  for (const s of sorted) {
+    let pos = s.position;
+    if (pos <= last) pos = Math.min(1, last + 0.0001);
+    last = pos;
+    try {
+      g.addColorStop(pos, s.color);
+    } catch {
+      /* invalid color */
+    }
   }
 }
 
@@ -140,17 +193,31 @@ function drawImageCover(
   ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
 }
 
-function drawTextNode(ctx: CanvasRenderingContext2D, node: Extract<AdNode, { type: 'text' }>, x: number, y: number, alphaMul = 1) {
-  const fill = node.fills[0];
+function paintFillStyle(
+  ctx: CanvasRenderingContext2D,
+  p: AdPaint,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): string | CanvasGradient | CanvasPattern | null {
+  if (p.type === 'solid') return p.color;
+  if (p.type === 'gradient') {
+    const g = linearGradient(ctx, x, y, w, h, p.angle ?? 180);
+    addGradientStops(g, p.stops);
+    return g;
+  }
+  return null;
+}
+
+async function drawTextNode(ctx: CanvasRenderingContext2D, node: Extract<AdNode, { type: 'text' }>, x: number, y: number, alphaMul = 1) {
+  const paints = (node.fills ?? []).filter((p) => p.visible !== false && p.opacity > 0.001 && p.type !== 'image');
+  const ordered = [...paints].reverse();
   ctx.save();
   ctx.globalAlpha *= alphaMul;
-  ctx.fillStyle = fill ? paintColor(fill) : '#fff';
   ctx.textAlign = node.textAlign;
   ctx.textBaseline = node.verticalAlign === 'middle' ? 'middle' : node.verticalAlign === 'bottom' ? 'bottom' : 'top';
   applyTextStyle(ctx, node);
-  ctx.shadowColor = 'rgba(0,0,0,0.55)';
-  ctx.shadowBlur = Math.max(3, Math.min(node.w, node.h) * 0.03);
-  ctx.shadowOffsetY = 1;
   let tx = x;
   if (node.textAlign === 'center') tx = x + node.w / 2;
   if (node.textAlign === 'right') tx = x + node.w;
@@ -159,12 +226,29 @@ function drawTextNode(ctx: CanvasRenderingContext2D, node: Extract<AdNode, { typ
   if (node.verticalAlign === 'bottom') ty = y + node.h;
   const lh = node.lineHeight === 'auto' ? node.fontSize * 1.25 : node.lineHeight;
   const lines = wrapText(ctx, node.characters, node.w);
-  let lineY = ty;
-  if (node.verticalAlign === 'middle') lineY = ty - ((lines.length - 1) * lh) / 2;
-  if (node.verticalAlign === 'bottom') lineY = ty - (lines.length - 1) * lh;
-  for (const line of lines) {
-    ctx.fillText(line, tx, lineY, node.w);
-    lineY += lh;
+  const paintsOrDefault = ordered.length ? ordered : [{ type: 'solid' as const, color: '#fff', opacity: 1, id: 'd', visible: true }];
+  for (let pi = 0; pi < paintsOrDefault.length; pi++) {
+    const p = paintsOrDefault[pi]!;
+    ctx.save();
+    ctx.globalAlpha *= p.opacity;
+    const style = paintFillStyle(ctx, p, x, y, node.w, node.h);
+    ctx.fillStyle = style || '#fff';
+    if (pi === 0) {
+      ctx.shadowColor = 'rgba(0,0,0,0.55)';
+      ctx.shadowBlur = Math.max(3, Math.min(node.w, node.h) * 0.03);
+      ctx.shadowOffsetY = 1;
+    } else {
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+    }
+    let lineY = ty;
+    if (node.verticalAlign === 'middle') lineY = ty - ((lines.length - 1) * lh) / 2;
+    if (node.verticalAlign === 'bottom') lineY = ty - (lines.length - 1) * lh;
+    for (const line of lines) {
+      ctx.fillText(line, tx, lineY, node.w);
+      lineY += lh;
+    }
+    ctx.restore();
   }
   ctx.restore();
 }
@@ -182,15 +266,105 @@ async function drawImageNode(
     src = tintSvgDataUrl(src, color);
   }
   const img = await loadImage(src);
-  if (!img) return;
   ctx.save();
   ctx.globalAlpha *= alphaMul;
   if (node.cornerRadius > 0) {
     roundRect(ctx, x, y, node.w, node.h, node.cornerRadius);
     ctx.clip();
   }
-  drawImageCover(ctx, img, x, y, node.w, node.h, node.scaleMode === 'fit' ? 'fit' : 'fill');
+  if (img) drawImageCover(ctx, img, x, y, node.w, node.h, node.scaleMode === 'fit' ? 'fit' : 'fill');
+  if (node.fills?.length) await drawPaint(ctx, node.fills, x, y, node.w, node.h, 0);
   ctx.restore();
+}
+
+const layerPool: HTMLCanvasElement[] = [];
+
+function acquireLayer(w: number, h: number): HTMLCanvasElement {
+  const c = layerPool.pop() ?? document.createElement('canvas');
+  if (c.width !== w || c.height !== h) {
+    c.width = w;
+    c.height = h;
+  } else {
+    const ctx = c.getContext('2d');
+    if (ctx) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      ctx.globalAlpha = 1;
+    }
+  }
+  return c;
+}
+
+function releaseLayer(c: HTMLCanvasElement) {
+  if (layerPool.length < 8) layerPool.push(c);
+}
+
+function visibleCrtParams(node: AdNode): CrtScreenParams | null {
+  const fx = node.effects?.find((e) => e.type === 'crt' && e.visible);
+  if (!fx || fx.type !== 'crt') return null;
+  return sanitizeCrtParams(fx.params);
+}
+
+async function paintNodeBody(
+  ctx: CanvasRenderingContext2D,
+  doc: AdDesignDoc,
+  restNode: AdNode,
+  mixed: AdNode,
+  counterpart: AdNode | undefined,
+  x: number,
+  y: number,
+  hoverDoc: AdDesignDoc | null | undefined,
+  t: number,
+  timeMs: number,
+) {
+  if (mixed.type === 'frame') {
+    if (mixed.clipsContent) {
+      roundRect(ctx, x, y, mixed.w, mixed.h, mixed.cornerRadius);
+      ctx.clip();
+    }
+    await drawPaint(ctx, mixed.fills, x, y, mixed.w, mixed.h, mixed.cornerRadius);
+    for (const stroke of mixed.strokes) {
+      ctx.save();
+      ctx.globalAlpha *= stroke.opacity;
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.weight;
+      roundRect(ctx, x, y, mixed.w, mixed.h, mixed.cornerRadius);
+      ctx.stroke();
+      ctx.restore();
+    }
+    for (const child of listChildren(doc, mixed.id)) {
+      await drawNode(ctx, doc, child, x, y, hoverDoc, t, timeMs);
+    }
+  } else if (mixed.type === 'rectangle') {
+    await drawPaint(ctx, mixed.fills, x, y, mixed.w, mixed.h, mixed.cornerRadius);
+    for (const stroke of mixed.strokes) {
+      ctx.save();
+      ctx.globalAlpha *= stroke.opacity;
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.weight;
+      roundRect(ctx, x, y, mixed.w, mixed.h, mixed.cornerRadius);
+      ctx.stroke();
+      ctx.restore();
+    }
+  } else if (mixed.type === 'image') {
+    const restImg = restNode.type === 'image' ? restNode : mixed;
+    const other = counterpart && counterpart.type === 'image' ? counterpart : null;
+    if (other && other.src !== restImg.src && t > 0.02 && t < 0.98) {
+      await drawImageNode(ctx, { ...mixed, src: restImg.src, scaleMode: restImg.scaleMode }, x, y, 1 - t);
+      await drawImageNode(ctx, { ...mixed, src: other.src, scaleMode: other.scaleMode }, x, y, t);
+    } else {
+      await drawImageNode(ctx, mixed, x, y, 1);
+    }
+  } else if (mixed.type === 'text') {
+    const restText = restNode.type === 'text' ? restNode : mixed;
+    const other = counterpart && counterpart.type === 'text' ? counterpart : null;
+    if (other && other.characters !== restText.characters && t > 0.02 && t < 0.98) {
+      drawTextNode(ctx, { ...restText, ...mixed, characters: restText.characters, type: 'text' }, x, y, 1 - t);
+      drawTextNode(ctx, { ...other, w: mixed.w, h: mixed.h, fontSize: mixed.fontSize }, x, y, t);
+    } else {
+      drawTextNode(ctx, mixed, x, y, 1);
+    }
+  }
 }
 
 async function drawNode(
@@ -201,6 +375,7 @@ async function drawNode(
   oy: number,
   hoverDoc?: AdDesignDoc | null,
   t = 0,
+  timeMs = 0,
 ) {
   const counterpart = hoverDoc?.nodes[node.id];
   const mixed = counterpart && counterpart.type === node.type ? mixNodeVisual(node, counterpart, t) : node;
@@ -215,49 +390,28 @@ async function drawNode(
     ctx.translate(-(x + mixed.w / 2), -(y + mixed.h / 2));
   }
 
-  if (mixed.type === 'frame') {
-    if (mixed.clipsContent) {
-      roundRect(ctx, x, y, mixed.w, mixed.h, mixed.cornerRadius);
-      ctx.clip();
+  const crtParams = visibleCrtParams(mixed);
+  if (crtParams && mixed.w > 0.5 && mixed.h > 0.5 && typeof document !== 'undefined') {
+    const m = ctx.getTransform();
+    const scaleX = Math.hypot(m.a, m.b) || 1;
+    const scaleY = Math.hypot(m.c, m.d) || 1;
+    const pxW = Math.max(1, Math.min(4096, Math.round(mixed.w * scaleX)));
+    const pxH = Math.max(1, Math.min(4096, Math.round(mixed.h * scaleY)));
+    const layer = acquireLayer(pxW, pxH);
+    try {
+      const lctx = layer.getContext('2d', { alpha: true });
+      if (lctx) {
+        lctx.setTransform(pxW / Math.max(1, mixed.w), 0, 0, pxH / Math.max(1, mixed.h), 0, 0);
+        await paintNodeBody(lctx, doc, node, mixed, counterpart, 0, 0, hoverDoc, t, timeMs);
+        const filtered = applyCrtFilter(layer, crtParams, timeMs);
+        ctx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
+        ctx.drawImage(filtered ?? layer, x, y, mixed.w, mixed.h);
+      }
+    } finally {
+      releaseLayer(layer);
     }
-    await drawPaint(ctx, mixed.fills, x, y, mixed.w, mixed.h, mixed.cornerRadius);
-    for (const stroke of mixed.strokes) {
-      ctx.strokeStyle = stroke.color;
-      ctx.globalAlpha = stroke.opacity * mixed.opacity;
-      ctx.lineWidth = stroke.weight;
-      roundRect(ctx, x, y, mixed.w, mixed.h, mixed.cornerRadius);
-      ctx.stroke();
-    }
-    for (const child of listChildren(doc, mixed.id)) {
-      await drawNode(ctx, doc, child, x, y, hoverDoc, t);
-    }
-  } else if (mixed.type === 'rectangle') {
-    await drawPaint(ctx, mixed.fills, x, y, mixed.w, mixed.h, mixed.cornerRadius);
-    for (const stroke of mixed.strokes) {
-      ctx.strokeStyle = stroke.color;
-      ctx.globalAlpha = stroke.opacity * mixed.opacity;
-      ctx.lineWidth = stroke.weight;
-      roundRect(ctx, x, y, mixed.w, mixed.h, mixed.cornerRadius);
-      ctx.stroke();
-    }
-  } else if (mixed.type === 'image') {
-    const restImg = node.type === 'image' ? node : mixed;
-    const other = counterpart && counterpart.type === 'image' ? counterpart : null;
-    if (other && other.src !== restImg.src && t > 0.02 && t < 0.98) {
-      await drawImageNode(ctx, { ...mixed, src: restImg.src, scaleMode: restImg.scaleMode }, x, y, 1 - t);
-      await drawImageNode(ctx, { ...mixed, src: other.src, scaleMode: other.scaleMode }, x, y, t);
-    } else {
-      await drawImageNode(ctx, mixed, x, y, 1);
-    }
-  } else if (mixed.type === 'text') {
-    const restText = node.type === 'text' ? node : mixed;
-    const other = counterpart && counterpart.type === 'text' ? counterpart : null;
-    if (other && other.characters !== restText.characters && t > 0.02 && t < 0.98) {
-      drawTextNode(ctx, { ...restText, ...mixed, characters: restText.characters, type: 'text' }, x, y, 1 - t);
-      drawTextNode(ctx, { ...other, w: mixed.w, h: mixed.h, fontSize: mixed.fontSize }, x, y, t);
-    } else {
-      drawTextNode(ctx, mixed, x, y, 1);
-    }
+  } else {
+    await paintNodeBody(ctx, doc, node, mixed, counterpart, x, y, hoverDoc, t, timeMs);
   }
   ctx.restore();
 }
@@ -293,6 +447,7 @@ export async function composeAdDesign(
   cssH: number,
   hoverDoc?: AdDesignDoc | null,
   t = 0,
+  timeMs = 0,
 ): Promise<void> {
   ctx.clearRect(0, 0, cssW, cssH);
   const root = getRoot(doc);
@@ -300,13 +455,12 @@ export async function composeAdDesign(
   const sy = cssH / Math.max(1, doc.height);
   ctx.save();
   ctx.scale(sx, sy);
-  await drawNode(ctx, doc, root, 0, 0, hoverDoc ?? null, hoverDoc ? Math.min(1, Math.max(0, t)) : 0);
+  await drawNode(ctx, doc, root, 0, 0, hoverDoc ?? null, hoverDoc ? Math.min(1, Math.max(0, t)) : 0, timeMs);
   ctx.restore();
 }
 
 export function designHasCrt(doc: AdDesignDoc): boolean {
-  const root = doc.nodes[doc.rootId] as AdFrameNode | undefined;
-  return Boolean(root?.effects?.some((e) => e.type === 'crt' && e.visible));
+  return Object.values(doc.nodes).some((n) => n.effects?.some((e) => e.type === 'crt' && e.visible));
 }
 
 export function getRootCrtParams(doc: AdDesignDoc): Record<string, number | boolean | string> | null {

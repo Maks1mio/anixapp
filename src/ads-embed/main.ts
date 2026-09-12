@@ -11,20 +11,20 @@ import {
   type CrtScreenStates,
 } from '../utils/crtScreen';
 import {
-  cloneStates,
-  composeVpnSponsorFrame,
-  sanitizeVpnBannerStates,
-  statesSignature,
-  type VpnBannerOverlay,
-  type VpnBannerStates,
+    cloneStates,
+    composeVpnSponsorFrame,
+    sanitizeVpnBannerStates,
+    statesSignature,
+    type VpnBannerOverlay,
+    type VpnBannerStates,
 } from '../utils/vpnSponsorBanner';
 import {
-  isDesignStates,
-  sanitizeDesignStates,
-  type AdDesignDoc,
-  type AdDesignStates,
+    isDesignStates,
+    sanitizeDesignStates,
+    type AdDesignDoc,
+    type AdDesignStates,
 } from '../utils/adDesignDoc';
-import { composeAdDesign } from '../utils/composeAdDesign';
+import { composeAdDesign, designHasCrt } from '../utils/composeAdDesign';
 import { alignDesignPair, easeInOutCubic, stepHoverT } from '../utils/adDesignMotion';
 
 type AdPayload = {
@@ -184,16 +184,20 @@ async function start() {
   let lastDpr = 0;
   let lastOverlayKey = '';
   let visible = true;
+  let composeBusy = false;
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const useDesign = Boolean(designStates);
 
-  try {
-    if (isCrtScreenSupported()) {
-      renderer = new CrtScreenRenderer(canvas);
-      engine = 'webgl';
+  if (!useDesign) {
+    try {
+      if (isCrtScreenSupported()) {
+        renderer = new CrtScreenRenderer(canvas);
+        engine = 'webgl';
+      }
+    } catch (err) {
+      console.warn('[ads-embed] webgl fallback', err);
+      renderer = null;
     }
-  } catch (err) {
-    console.warn('[ads-embed] webgl fallback', err);
-    renderer = null;
   }
   if (!renderer) engine = '2d';
 
@@ -219,10 +223,26 @@ async function start() {
     }
     const ctx = source.getContext('2d', { alpha: true });
     if (!ctx) return;
-    const design = pickDesign();
-    if (design) await composeAdDesign(ctx, design, sw, sh, designStates?.hover ?? null, t);
-    else composeVpnSponsorFrame(ctx, art, sw, sh, rest, hover, t);
+    composeVpnSponsorFrame(ctx, art, sw, sh, rest, hover, t);
     renderer?.setSource(source);
+  };
+
+  const paintDesign = async (
+    t: number,
+    cssW: number,
+    cssH: number,
+    dpr: number,
+    timeMs: number,
+  ) => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const design = pickDesign();
+    if (!design) return;
+    const pxW = Math.max(1, Math.round(cssW * dpr));
+    const pxH = Math.max(1, Math.round(cssH * dpr));
+    if (canvas.width !== pxW) canvas.width = pxW;
+    if (canvas.height !== pxH) canvas.height = pxH;
+    await composeAdDesign(ctx, design, canvas.width, canvas.height, designStates?.hover ?? null, t, timeMs);
   };
 
   const paintFallback = async (
@@ -238,9 +258,7 @@ async function start() {
     if (!ctx) return;
     canvas.width = Math.max(1, Math.round(cssW * dpr));
     canvas.height = Math.max(1, Math.round(cssH * dpr));
-    const design = pickDesign();
-    if (design) await composeAdDesign(ctx, design, canvas.width, canvas.height, designStates?.hover ?? null, t);
-    else composeVpnSponsorFrame(ctx, art, canvas.width, canvas.height, rest, hover, t);
+    composeVpnSponsorFrame(ctx, art, canvas.width, canvas.height, rest, hover, t);
   };
 
   const drawFrame = (timeMs: number) => {
@@ -263,6 +281,20 @@ async function start() {
       lastDpr = dpr;
       renderer?.resize(cssW, cssH, dpr);
     }
+
+    if (useDesign) {
+      const hasCrt = designHasCrt(designStates!.rest) || designHasCrt(designStates!.hover);
+      const fxTime = reduced ? 0 : timeMs;
+      if (!composeBusy && (hasCrt || sizeChanged || overlayKey !== lastOverlayKey)) {
+        lastOverlayKey = overlayKey;
+        composeBusy = true;
+        void paintDesign(eased, cssW, cssH, dpr, fxTime).finally(() => {
+          composeBusy = false;
+        });
+      }
+      return;
+    }
+
     if (sizeChanged || overlayKey !== lastOverlayKey) {
       lastOverlayKey = overlayKey;
       if (engine === 'webgl') {

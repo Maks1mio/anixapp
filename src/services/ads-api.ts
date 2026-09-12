@@ -17,8 +17,7 @@ import {
   sanitizeDesignStates,
   type AdDesignStates,
 } from '../utils/adDesignDoc';
-import { alignDesignPair, ensureCrtOnRoot, setCoverImage } from '../utils/adDesignMotion';
-import { designHasCrt } from '../utils/composeAdDesign';
+import { alignDesignPair, setCoverImage } from '../utils/adDesignMotion';
 
 export type CrtAdVisual = {
   href?: string;
@@ -118,12 +117,6 @@ export function ensureAdDesign(
     }
     if (imageUrl && designMissingCover(current.rest, imageUrl)) {
       current = setCoverImage(current, imageUrl);
-    }
-    if (!designHasCrt(current.rest)) {
-      current = {
-        rest: ensureCrtOnRoot(current.rest, crt.rest as unknown as Record<string, number | boolean | string>),
-        hover: ensureCrtOnRoot(current.hover, crt.hover as unknown as Record<string, number | boolean | string>),
-      };
     }
     return current;
   }

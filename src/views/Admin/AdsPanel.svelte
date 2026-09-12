@@ -27,7 +27,7 @@
   import {
     type AdDesignStates,
   } from '../../utils/adDesignDoc';
-  import { cloneDesignStatesAligned } from '../../utils/adDesignMotion';
+  import { cloneDesignStatesAligned, crtStatesFromDesign } from '../../utils/adDesignMotion';
 
   type FormState = Omit<CrtAdCreative, 'id' | 'createdAt' | 'updatedAt'> & { id: string | null };
 
@@ -225,7 +225,7 @@
         width: formWidth.trim() || '100%',
         height: formHeight.trim() || 'auto',
         aspectRatio: formAspect.trim() || '16 / 11',
-        crt: formCrt,
+        crt: crtStatesFromDesign(formDesign),
         overlay: formOverlay,
         design: cloneDesignStatesAligned(formDesign),
       };
@@ -333,31 +333,16 @@
 
   {#if panelOpen && designMode}
     <div class="adm-ads__workspace">
-      <header class="adm-ads__ws-head">
-        <div>
-          <h2 class="adm-editor__title">{creating ? 'Новая реклама' : formTitle || 'Реклама'}</h2>
-          <p class="adm-editor__sub">Один холст · Rest/Hover как в Figma · Preview как публичный iframe</p>
-        </div>
-        <div class="adm-ads__ws-actions">
-          <button type="button" class="uiv2-btn uiv2-btn--ghost uiv2-btn--sm" onclick={() => { designMode = false; }}>
-            Закрыть редактор
-          </button>
-          <button type="button" class="uiv2-btn uiv2-btn--primary uiv2-btn--sm" disabled={busy} onclick={() => void save()}>
-            {busy ? '…' : 'Сохранить'}
-          </button>
-        </div>
-      </header>
-
-      {#if formError}
-        <p class="adm-msg adm-msg--error adm-msg--inline" role="alert">{formError}</p>
-      {/if}
-
       <div class="adm-ads__ws-body adm-ads__ws-body--figma">
         <AdFigmaEditor
           states={formDesign}
           onStatesChange={setFormDesign}
-          crt={formCrt}
-          onCrtChange={(next) => { formCrt = next; }}
+          title={formTitle}
+          onTitleChange={(next) => { formTitle = next; }}
+          error={formError}
+          busy={busy}
+          onClose={() => { designMode = false; }}
+          onSave={() => void save()}
         />
       </div>
     </div>
@@ -745,23 +730,6 @@
   background: var(--uikit-v2-bg);
 }
 
-.adm-ads__ws-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.85rem 1.25rem;
-  border-bottom: 1px solid var(--uiv2-border-subtle);
-  flex-shrink: 0;
-}
-
-.adm-ads__ws-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
 .adm-ads__variants {
   display: inline-flex;
   padding: 0.15rem;
@@ -790,7 +758,6 @@
 
 .adm-ads__ws-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 18rem;
   flex: 1 1 0;
   min-height: 0;
   overflow: hidden;

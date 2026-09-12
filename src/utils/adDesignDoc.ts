@@ -6,6 +6,11 @@
 import { bannerIconSvg } from './vpnBannerIcons';
 import { encodeSvgDataUrl } from './svgTint';
 import { measureAdLayers, type VpnBannerOverlay } from './vpnSponsorBanner';
+import {
+  isAdShaderType,
+  sanitizeShaderParams,
+  type AdShaderEffectType,
+} from './adLayerShaderCatalog';
 
 export type AdGradientStop = { color: string; position: number; opacity: number };
 
@@ -28,10 +33,18 @@ export type AdStroke = {
   align: 'inside' | 'center' | 'outside';
 };
 
+export type AdParamEffectType = 'crt' | AdShaderEffectType;
+
 export type AdEffect =
-  | { id: string; type: 'crt'; visible: boolean; params: Record<string, number | boolean | string> }
+  | { id: string; type: AdParamEffectType; visible: boolean; params: Record<string, number | boolean | string> }
   | { id: string; type: 'blur'; visible: boolean; radius: number }
   | { id: string; type: 'noise'; visible: boolean; amount: number };
+
+export function effectHasParams(
+  fx: AdEffect,
+): fx is Extract<AdEffect, { params: Record<string, number | boolean | string> }> {
+  return fx.type !== 'blur' && fx.type !== 'noise';
+}
 
 export type AdLayoutMode = 'none' | 'horizontal' | 'vertical';
 export type AdPrimaryAlign = 'min' | 'center' | 'max' | 'space-between';
@@ -578,12 +591,15 @@ export function sanitizeEffects(raw: unknown): AdEffect[] {
   return raw.map((e, i) => {
     const x = e && typeof e === 'object' ? (e as Record<string, unknown>) : {};
     const t = asStr(x.type, 'blur');
-    if (t === 'crt') {
+    if (t === 'crt' || isAdShaderType(t)) {
+      const rawParams = x.params && typeof x.params === 'object'
+        ? (x.params as Record<string, number | boolean | string>)
+        : {};
       return {
         id: asStr(x.id, `fx_${i}`),
-        type: 'crt' as const,
+        type: t as AdParamEffectType,
         visible: asBool(x.visible, true),
-        params: x.params && typeof x.params === 'object' ? (x.params as Record<string, number | boolean | string>) : {},
+        params: t === 'crt' ? rawParams : sanitizeShaderParams(t, rawParams),
       };
     }
     if (t === 'noise') {

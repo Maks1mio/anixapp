@@ -22,6 +22,7 @@ import {
   type CrtScreenParams,
   type CrtScreenStates,
 } from './crtScreen';
+import { isAdShaderType, mixShaderParams } from './adLayerShaderCatalog';
 
 export const AD_HOVER_TAU_MS = 140;
 
@@ -291,6 +292,7 @@ const VARIANT_FOLLOW_SKIP = new Set([
   'fills',
   'textAlign',
   'verticalAlign',
+  'effects',
 ]);
 
 function visualEqual(a: unknown, b: unknown): boolean {
@@ -347,7 +349,7 @@ export function addNodeEffect(
   return mapBoth(states, (doc, which) => {
     const node = doc.nodes[id];
     if (!node) return doc;
-    if ((node.effects ?? []).some((e) => e.id === effect.id || (effect.type === 'crt' && e.type === 'crt'))) {
+    if ((node.effects ?? []).some((e) => e.id === effect.id || e.type === effect.type)) {
       return doc;
     }
     const fx = which === 'hover' ? hoverFx : effect;
@@ -378,7 +380,7 @@ export function setNodeEffectVisible(
   return patchVariantNode(states, variant, id, { effects } as Partial<AdNode>);
 }
 
-/** Patch CRT params on the active variant; matching params on the other side follow. */
+/** Patch effect params on the active Rest/Hover side only. The other side stays put. */
 export function patchNodeEffectParams(
   states: AdDesignStates,
   variant: 'rest' | 'hover',
@@ -386,24 +388,14 @@ export function patchNodeEffectParams(
   effectId: string,
   paramsPatch: Record<string, number | boolean | string>,
 ): AdDesignStates {
-  const other: 'rest' | 'hover' = variant === 'rest' ? 'hover' : 'rest';
   const cur = getNode(states[variant], id);
-  const alt = getNode(states[other], id);
   const curFx = cur?.effects.find((e) => e.id === effectId);
-  if (!cur || !curFx || curFx.type !== 'crt') return states;
+  if (!cur || !curFx || !('params' in curFx)) return states;
   const nextParams = { ...curFx.params, ...paramsPatch };
-  const nextEffects = cur.effects.map((e) => (e.id === effectId && e.type === 'crt' ? { ...e, params: nextParams } : e));
-  let next = patchVariantNode(states, variant, id, { effects: nextEffects } as Partial<AdNode>);
-  const altFx = alt?.effects.find((e) => e.id === effectId);
-  if (!alt || !altFx || altFx.type !== 'crt') return next;
-  const follow: Record<string, number | boolean | string> = {};
-  for (const [key, value] of Object.entries(paramsPatch)) {
-    if (visualEqual(altFx.params[key], curFx.params[key])) follow[key] = value;
-  }
-  if (Object.keys(follow).length === 0) return next;
-  const altParams = { ...altFx.params, ...follow };
-  const altEffects = alt.effects.map((e) => (e.id === effectId && e.type === 'crt' ? { ...e, params: altParams } : e));
-  return patchVariantNode(next, other, id, { effects: altEffects } as Partial<AdNode>);
+  const nextEffects = cur.effects.map((e) => (
+    e.id === effectId && 'params' in e ? { ...e, params: nextParams } : e
+  ));
+  return patchVariantNode(states, variant, id, { effects: nextEffects } as Partial<AdNode>);
 }
 
 function crtParamsFromDoc(doc: AdDesignDoc): CrtScreenParams {
@@ -652,6 +644,15 @@ function mixOneEffect(a: AdEffect, b: AdEffect, t: number): AdEffect {
       type: 'crt',
       visible: vis > 0.02,
       params: scaleCrtIntensity(mixed, vis),
+    };
+  }
+  if (isAdShaderType(a.type) && a.type === b.type && 'params' in a && 'params' in b) {
+    const vis = lerp(a.visible ? 1 : 0, b.visible ? 1 : 0, t);
+    return {
+      id: a.id,
+      type: a.type,
+      visible: vis > 0.02,
+      params: mixShaderParams(a.type, a.params, b.params, t),
     };
   }
   if (a.type === 'blur' && b.type === 'blur') {

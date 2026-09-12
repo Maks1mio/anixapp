@@ -1,7 +1,8 @@
 import type { AdDesignDoc, AdFrameNode, AdNode, AdPaint, AdTextNode } from './adDesignDoc';
 import { getRoot, listChildren, stopCssColor } from './adDesignDoc';
 import { easeInOutCubic, mixNodeVisual, nodeOpacity } from './adDesignMotion';
-import { applyCrtFilter, sanitizeCrtParams, type CrtScreenParams } from './crtScreen';
+import { applyLayerFilters, layerHasAnimatedFx } from './adLayerShaders';
+import { isAdShaderType } from './adLayerShaderCatalog';
 import { isSvgDataUrl, parseSvgDataUrlColor, tintSvgDataUrl } from './svgTint';
 
 const imageCache = new Map<string, HTMLImageElement | 'error'>();
@@ -326,10 +327,8 @@ function releaseLayer(c: HTMLCanvasElement) {
   if (layerPool.length < 8) layerPool.push(c);
 }
 
-function visibleCrtParams(node: AdNode): CrtScreenParams | null {
-  const fx = node.effects?.find((e) => e.type === 'crt' && e.visible);
-  if (!fx || fx.type !== 'crt') return null;
-  return sanitizeCrtParams(fx.params);
+function visibleFilterEffects(node: AdNode) {
+  return (node.effects ?? []).filter((e) => e.visible && (e.type === 'crt' || isAdShaderType(e.type)));
 }
 
 function dissolveAlphas(t: number): { outA: number; inA: number } {
@@ -458,8 +457,8 @@ async function drawNode(
     ctx.translate(-(x + mixed.w / 2), -(y + mixed.h / 2));
   }
 
-  const crtParams = visibleCrtParams(mixed);
-  if (crtParams && mixed.w > 0.5 && mixed.h > 0.5 && typeof document !== 'undefined') {
+  const filters = visibleFilterEffects(mixed);
+  if (filters.length && mixed.w > 0.5 && mixed.h > 0.5 && typeof document !== 'undefined') {
     const m = ctx.getTransform();
     const scaleX = Math.hypot(m.a, m.b) || 1;
     const scaleY = Math.hypot(m.c, m.d) || 1;
@@ -471,7 +470,7 @@ async function drawNode(
       if (lctx) {
         lctx.setTransform(pxW / Math.max(1, mixed.w), 0, 0, pxH / Math.max(1, mixed.h), 0, 0);
         await paintNodeBody(lctx, doc, node, mixed, counterpart, 0, 0, hoverDoc, t, timeMs);
-        const filtered = applyCrtFilter(layer, crtParams, timeMs);
+        const filtered = applyLayerFilters(layer, filters, timeMs);
         ctx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
         ctx.drawImage(filtered ?? layer, x, y, mixed.w, mixed.h);
       }
@@ -528,7 +527,7 @@ export async function composeAdDesign(
 }
 
 export function designHasCrt(doc: AdDesignDoc): boolean {
-  return Object.values(doc.nodes).some((n) => n.effects?.some((e) => e.type === 'crt' && e.visible));
+  return Object.values(doc.nodes).some((n) => layerHasAnimatedFx(n.effects));
 }
 
 export function getRootCrtParams(doc: AdDesignDoc): Record<string, number | boolean | string> | null {

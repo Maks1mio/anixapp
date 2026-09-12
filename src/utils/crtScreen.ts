@@ -121,6 +121,32 @@ export const CRT_SLIDER_FIELDS: Array<{
   { key: 'speed', label: 'Speed', min: 0, max: 3, step: 0.01 },
 ];
 
+export type CrtInspectorField =
+  | { key: CrtSliderKey; label: string; kind: 'range'; min: number; max: number; step: number; unit?: string }
+  | { key: 'maskType' | 'aberrationScheme'; label: string; kind: 'select'; options: ReadonlyArray<{ value: number; label: string }> }
+  | { key: 'clipToCurve'; label: string; kind: 'toggle' };
+
+/** Full Figma CRT inspector, in panel order. */
+export const CRT_INSPECTOR_FIELDS: CrtInspectorField[] = [
+  { key: 'mask', label: 'Mask', kind: 'range', min: 0, max: 100, step: 1, unit: '%' },
+  { key: 'maskType', label: 'Mask type', kind: 'select', options: CRT_MASK_TYPE_OPTIONS },
+  { key: 'maskPitch', label: 'Mask size', kind: 'range', min: 2, max: 12, step: 0.5, unit: 'px' },
+  { key: 'curvature', label: 'Curvature', kind: 'range', min: 0, max: 100, step: 1, unit: '%' },
+  { key: 'clipToCurve', label: 'Clip to curve', kind: 'toggle' },
+  { key: 'scanlines', label: 'Scanlines', kind: 'range', min: 0, max: 100, step: 1, unit: '%' },
+  { key: 'scanlineSize', label: 'Scanline size', kind: 'range', min: 1, max: 32, step: 0.5 },
+  { key: 'aberration', label: 'Dispersion', kind: 'range', min: 0, max: 100, step: 1, unit: '%' },
+  { key: 'aberrationScheme', label: 'Dispersion type', kind: 'select', options: CRT_ABERRATION_OPTIONS },
+  { key: 'flicker', label: 'Flicker', kind: 'range', min: 0, max: 100, step: 1, unit: '%' },
+  { key: 'noise', label: 'Static', kind: 'range', min: 0, max: 100, step: 1, unit: '%' },
+  { key: 'noiseSize', label: 'Static size', kind: 'range', min: 1, max: 8, step: 0.5 },
+  { key: 'rollSpeed', label: 'Roll speed', kind: 'range', min: 0, max: 5, step: 0.01 },
+  { key: 'jitter', label: 'Jitter', kind: 'range', min: 0, max: 100, step: 1, unit: '%' },
+  { key: 'vignette', label: 'Vignette', kind: 'range', min: 0, max: 100, step: 1, unit: '%' },
+  { key: 'brightness', label: 'Brightness', kind: 'range', min: -1, max: 1, step: 0.01 },
+  { key: 'speed', label: 'Speed', kind: 'range', min: 0, max: 3, step: 0.01 },
+];
+
 const CRT_STORAGE_KEY = 'anixapp.vpnCrtParams.v4';
 
 function clamp(n: number, min: number, max: number): number {

@@ -28,6 +28,7 @@
     type AdNode,
     type AdPaint,
     type AdTextNode,
+    effectHasParams,
   } from '../../utils/adDesignDoc';
   import {
     absBoxOf,
@@ -57,8 +58,16 @@
     ARTBOARD_PRESETS,
   } from '../../utils/adDesignMotion';
   import { composeAdDesign } from '../../utils/composeAdDesign';
+  import { layerHasAnimatedFx } from '../../utils/adLayerShaders';
   import {
-    CRT_SLIDER_FIELDS,
+    AD_SHADER_CATALOG,
+    defaultShaderParams,
+    isAdShaderType,
+    shaderCatalogItem,
+    type ShaderField,
+  } from '../../utils/adLayerShaderCatalog';
+  import {
+    CRT_INSPECTOR_FIELDS,
     CRT_VPN_PRESET,
     formatCrtValue,
     sanitizeCrtParams,
@@ -148,6 +157,7 @@
     livePreview: false,
     zoom: 1,
     pointerHover: false,
+    fxAnimated: false,
   };
 
   $effect(() => {
@@ -155,6 +165,8 @@
     box.variant = variant;
     box.livePreview = livePreview;
     box.zoom = zoom;
+    box.fxAnimated = Object.values(view.rest.nodes).some((n) => layerHasAnimatedFx(n.effects))
+      || Object.values(view.hover.nodes).some((n) => layerHasAnimatedFx(n.effects));
   });
 
   $effect(() => {
@@ -198,7 +210,7 @@
         : box.variant === 'hover' ? 1 : 0;
       hoverT = stepHoverT(hoverT, target, dt);
       const springing = Math.abs(hoverT - target) > 0.003;
-      const animateFx = box.livePreview || springing;
+      const animateFx = box.livePreview || springing || box.fxAnimated;
       if (animateFx) frozenFxTime += dt;
       const fxTime = frozenFxTime;
       const rest = box.view.rest;
@@ -953,6 +965,48 @@
     addFxOpen = false;
   }
 
+  function addShaderToSelected(type: (typeof AD_SHADER_CATALOG)[number]['type']) {
+    if (!selectedId || !selected) return;
+    if (selected.effects?.some((e) => e.type === type)) {
+      addFxOpen = false;
+      return;
+    }
+    const fx: AdEffect = {
+      id: createEffectId(),
+      type,
+      visible: true,
+      params: defaultShaderParams(type),
+    };
+    commit(addNodeEffect(view, selectedId, fx));
+    addFxOpen = false;
+  }
+
+  function patchFxParam(effectId: string, key: string, value: number | boolean | string) {
+    if (!selectedId) return;
+    commit(patchNodeEffectParams(view, variant, selectedId, effectId, { [key]: value }));
+  }
+
+  function formatShaderValue(field: ShaderField, value: number | boolean | string): string {
+    if (field.kind !== 'range') return String(value);
+    const n = Number(value);
+    const shown = field.step < 1 ? n.toFixed(2).replace(/\.?0+$/, '') : String(Math.round(n));
+    return field.unit ? `${shown}${field.unit}` : shown;
+  }
+
+  function copyFxParams(effectId: string, from: Variant, to: Variant) {
+    if (!selectedId || from === to) return;
+    const srcNode = from === 'rest' ? selectedRest : selectedHover;
+    const dstNode = to === 'rest' ? selectedRest : selectedHover;
+    const srcFx = srcNode?.effects.find((e) => e.id === effectId);
+    if (!srcFx || !effectHasParams(srcFx) || !dstNode) return;
+    const nextEffects = dstNode.effects.map((e) => (
+      e.id === srcFx.id && effectHasParams(e)
+        ? { ...e, params: { ...srcFx.params } }
+        : e
+    ));
+    commit(patchVariantNode(view, to, selectedId, { effects: nextEffects } as Partial<AdNode>));
+  }
+
   function toggleEffectVisible(effectId: string) {
     const fx = selected?.effects?.find((e) => e.id === effectId);
     if (!selectedId || !fx) return;
@@ -962,17 +1016,6 @@
   function deleteEffect(effectId: string) {
     if (!selectedId) return;
     commit(removeNodeEffect(view, selectedId, effectId));
-  }
-
-  function copyCrtRestToHover() {
-    const restFx = selectedRest?.effects.find((e) => e.type === 'crt');
-    if (!selectedId || !restFx || restFx.type !== 'crt' || !selectedHover) return;
-    const hoverEffects = selectedHover.effects.map((e) => (
-      e.id === restFx.id && e.type === 'crt'
-        ? { ...e, params: { ...restFx.params } }
-        : e
-    ));
-    commit(patchVariantNode(view, 'hover', selectedId, { effects: hoverEffects } as Partial<AdNode>));
   }
 
   function abs(doc: AdDesignDoc, id: string) {
@@ -988,6 +1031,13 @@
 />
 
 <div class="figma">
+  {#snippet effectCopyRow(effectId: string)}
+    <div class="figma__fx-copy-row">
+      <span class="figma__fx-editing">Правится {variant === 'hover' ? 'Hover' : 'Rest'}</span>
+      <button type="button" class="figma__mini figma__fx-copy" onclick={() => copyFxParams(effectId, 'rest', 'hover')}>Rest → Hover</button>
+      <button type="button" class="figma__mini figma__fx-copy" onclick={() => copyFxParams(effectId, 'hover', 'rest')}>Hover → Rest</button>
+    </div>
+  {/snippet}
   <header class="figma__toolbar" aria-label="Инструменты">
     <div class="figma__tools">
       <button type="button" class="figma__tool" class:figma__tool--on={tool === 'select' && !livePreview} onclick={() => { tool = 'select'; livePreview = false; }} title="Выбор (V)">
@@ -1622,19 +1672,30 @@
                   >
                     CRT Screen
                   </button>
+                  {#each AD_SHADER_CATALOG as item}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={Boolean(selected.effects?.some((e) => e.type === item.type))}
+                      onclick={() => addShaderToSelected(item.type)}
+                    >
+                      {item.label}{#if item.animated}<span class="figma__fx-live">live</span>{/if}
+                    </button>
+                  {/each}
                 </div>
               {/if}
             </div>
           </div>
           {#if !(selected.effects ?? []).length}
-            <p class="figma__hint-inline">Эффект можно повесить на любой слой. Глаз скрывает в {variant}, минус удаляет в обоих стейтах.</p>
+            <p class="figma__hint-inline">Эффект можно повесить на любой слой. Параметры правят только текущий стейт (Rest или Hover). Глаз скрывает в нём, минус удаляет в обоих.</p>
           {/if}
           {#each (selected.effects ?? []) as fx (fx.id)}
             {#if fx.type === 'crt'}
+              {@const crt = liveCrtParams()}
               <div class="figma__fx" class:figma__fx--off={!fx.visible}>
                 <div class="figma__fx-row">
                   <span class="figma__fx-ico"><EditorIcon svg={editorIcons.styleEffect} size={16} /></span>
-                  <span class="figma__fx-name">CRT Screen</span>
+                  <span class="figma__fx-name">CRT Screen <span class="figma__fx-var">· {variant === 'hover' ? 'Hover' : 'Rest'}</span></span>
                   <button
                     type="button"
                     class="figma__eye"
@@ -1649,24 +1710,115 @@
                     onclick={() => deleteEffect(fx.id)}
                   ><EditorIcon svg={editorIcons.remove} size={16} /></button>
                 </div>
-                {#if variant === 'rest'}
-                  <button type="button" class="figma__mini figma__fx-copy" onclick={copyCrtRestToHover}>Rest → Hover</button>
-                {/if}
-                {#each CRT_SLIDER_FIELDS as field}
-                  <label class="figma__slider">
-                    <span>{field.label}</span>
-                    <input
-                      type="range"
-                      min={field.min}
-                      max={field.max}
-                      step={field.step}
-                      value={Number(liveCrtParams()[field.key as CrtSliderKey] ?? 0)}
-                      oninput={(e) => patchCrtParam(field.key, Number(e.currentTarget.value))}
-                    />
-                    <span>{formatCrtValue(field.key as CrtSliderKey, Number(liveCrtParams()[field.key as CrtSliderKey] ?? 0), field.unit)}</span>
-                  </label>
+                {@render effectCopyRow(fx.id)}
+                {#each CRT_INSPECTOR_FIELDS as field}
+                  {#if field.kind === 'range'}
+                    <label class="figma__slider">
+                      <span>{field.label}</span>
+                      <input
+                        type="range"
+                        min={field.min}
+                        max={field.max}
+                        step={field.step}
+                        value={Number(crt[field.key])}
+                        oninput={(e) => patchCrtParam(field.key, Number(e.currentTarget.value))}
+                      />
+                      <span>{formatCrtValue(field.key as CrtSliderKey, Number(crt[field.key]), field.unit)}</span>
+                    </label>
+                  {:else if field.kind === 'select'}
+                    <label class="figma__full">
+                      {field.label}
+                      <select
+                        value={String(crt[field.key])}
+                        onchange={(e) => patchCrtParam(field.key, Number(e.currentTarget.value))}
+                      >
+                        {#each field.options as opt}
+                          <option value={String(opt.value)}>{opt.label}</option>
+                        {/each}
+                      </select>
+                    </label>
+                  {:else if field.kind === 'toggle'}
+                    <label class="figma__check">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(crt.clipToCurve)}
+                        onchange={(e) => patchCrtParam('clipToCurve', e.currentTarget.checked)}
+                      />
+                      {field.label}
+                    </label>
+                  {/if}
                 {/each}
               </div>
+            {:else if isAdShaderType(fx.type) && effectHasParams(fx)}
+              {@const spec = shaderCatalogItem(fx.type)}
+              {#if spec}
+                <div class="figma__fx" class:figma__fx--off={!fx.visible}>
+                  <div class="figma__fx-row">
+                    <span class="figma__fx-ico"><EditorIcon svg={editorIcons.styleEffect} size={16} /></span>
+                    <span class="figma__fx-name">{spec.label} <span class="figma__fx-var">· {variant === 'hover' ? 'Hover' : 'Rest'}</span></span>
+                    <button
+                      type="button"
+                      class="figma__eye"
+                      class:figma__eye--off={!fx.visible}
+                      title={fx.visible ? 'Скрыть эффект' : 'Показать эффект'}
+                      onclick={() => toggleEffectVisible(fx.id)}
+                    ><EditorIcon svg={fx.visible ? editorIcons.hide : editorIcons.show} size={16} /></button>
+                    <button
+                      type="button"
+                      class="figma__lock"
+                      title="Удалить эффект"
+                      onclick={() => deleteEffect(fx.id)}
+                    ><EditorIcon svg={editorIcons.remove} size={16} /></button>
+                  </div>
+                  {@render effectCopyRow(fx.id)}
+                  {#each spec.fields as field}
+                    {#if field.kind === 'range'}
+                      <label class="figma__slider">
+                        <span>{field.label}</span>
+                        <input
+                          type="range"
+                          min={field.min}
+                          max={field.max}
+                          step={field.step}
+                          value={Number(fx.params[field.key] ?? spec.defaults[field.key] ?? 0)}
+                          oninput={(e) => patchFxParam(fx.id, field.key, Number(e.currentTarget.value))}
+                        />
+                        <span>{formatShaderValue(field, fx.params[field.key] ?? spec.defaults[field.key] ?? 0)}</span>
+                      </label>
+                    {:else if field.kind === 'select'}
+                      <label class="figma__full">
+                        {field.label}
+                        <select
+                          value={String(fx.params[field.key] ?? spec.defaults[field.key] ?? 0)}
+                          onchange={(e) => patchFxParam(fx.id, field.key, Number(e.currentTarget.value))}
+                        >
+                          {#each field.options as opt}
+                            <option value={String(opt.value)}>{opt.label}</option>
+                          {/each}
+                        </select>
+                      </label>
+                    {:else if field.kind === 'toggle'}
+                      <label class="figma__check">
+                        <input
+                          type="checkbox"
+                          checked={fx.params[field.key] === 1 || fx.params[field.key] === true}
+                          onchange={(e) => patchFxParam(fx.id, field.key, e.currentTarget.checked ? 1 : 0)}
+                        />
+                        {field.label}
+                      </label>
+                    {:else if field.kind === 'color'}
+                      <label class="figma__full">
+                        {field.label}
+                        <input
+                          type="color"
+                          value={sanitizeHexRgb(String(fx.params[field.key] ?? spec.defaults[field.key] ?? '#ffffff'))}
+                          oninput={(e) => patchFxParam(fx.id, field.key, e.currentTarget.value)}
+                        />
+                      </label>
+                    {/if}
+                  {/each}
+                </div>
+              {/if}
             {/if}
           {/each}
         </section>
@@ -2508,13 +2660,18 @@
   right: 0;
   top: calc(100% + 0.2rem);
   z-index: 8;
-  min-width: 9.5rem;
+  min-width: 12rem;
+  max-height: 18rem;
+  overflow: auto;
   padding: 0.2rem;
   border-radius: 8px;
   background: #1f1f1f;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   button {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
     width: 100%;
     border: 0;
     border-radius: 6px;
@@ -2527,6 +2684,13 @@
     &:hover:not(:disabled) { background: #0c6dd8; }
     &:disabled { opacity: 0.4; cursor: default; }
   }
+}
+
+.figma__fx-live {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #7b61ff;
 }
 
 .figma__fx {
@@ -2558,6 +2722,23 @@
 
 .figma__fx-copy {
   justify-self: start;
+}
+
+.figma__fx-copy-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.figma__fx-editing {
+  color: var(--figma-muted);
+  margin-right: auto;
+}
+
+.figma__fx-var {
+  color: var(--figma-blue);
+  font-weight: 500;
 }
 
 .figma__slider {

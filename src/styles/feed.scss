@@ -422,6 +422,422 @@
   gap: 0.85rem;
 }
 
+.feed-stories {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-width: 0;
+  margin: 0.1rem 0 0.15rem;
+}
+
+.feed-stories__carousel {
+  position: relative;
+  min-width: 0;
+}
+
+.feed-stories__scroll {
+  display: flex;
+  gap: 0.55rem;
+  list-style: none;
+  margin: 0;
+  padding: 0.4rem 0.4rem 0.25rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.feed-stories__cell {
+  flex: 0 0 auto;
+}
+
+.feed-stories__frame {
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 5.65rem;
+    height: 9.35rem;
+    border-radius: 16px;
+    pointer-events: none;
+    box-shadow:
+      0 0 0 2px var(--uikit-v2-bg, #{$color-bg}),
+      0 0 0 4px var(--uikit-v2-accent, #{$color-accent});
+    opacity: 0;
+    z-index: 1;
+    transition: opacity 0.16s ease;
+  }
+
+  &:has(.feed-stories__item--active)::after,
+  &:has(.feed-stories__item:focus-visible)::after,
+  &:hover:has(.feed-stories__item--pinned)::after,
+  &:focus-within:has(.feed-stories__item--pinned)::after {
+    opacity: 1;
+  }
+}
+
+.feed-stories__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  width: 5.65rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+
+  &:hover .feed-stories__card::before,
+  &:focus-visible .feed-stories__card::before {
+    opacity: 1;
+  }
+
+  &:focus-visible {
+    outline: none;
+  }
+}
+
+.feed-stories__card {
+  position: relative;
+  display: block;
+  width: 5.65rem;
+  height: 9.35rem;
+  overflow: hidden;
+  border-radius: 16px;
+  background-color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 10%, var(--uikit-v2-bg, #{$color-bg}));
+  background-image: var(--feed-story-cover);
+  background-size: cover;
+  background-position: center;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff 8%, transparent);
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, #fff 8%, transparent);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 1;
+    transition: opacity 0.16s ease;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0;
+    height: 3.4rem;
+    background: linear-gradient(
+      to top,
+      color-mix(in srgb, #000 62%, transparent),
+      transparent
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  &--empty {
+    background-image: none;
+  }
+}
+
+.feed-stories__avatar {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  bottom: 0.55rem;
+  width: 2.55rem;
+  height: 2.55rem;
+  padding: 2px;
+  overflow: visible;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--uikit-v2-bg, #{$color-bg}) 92%, #000);
+  transform: translateX(-50%);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, #fff 16%, transparent);
+
+  &--channel {
+    border-radius: 8px;
+  }
+
+  &--fresh {
+    box-shadow:
+      0 0 0 2px var(--uikit-v2-bg, #{$color-bg}),
+      0 0 0 4.5px var(--uikit-v2-accent, #{$color-accent});
+  }
+
+  :global(.user-avatar) {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.feed-stories__name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
+}
+
+.feed-stories__item--active .feed-stories__name {
+  color: var(--uikit-v2-text, #{$color-text});
+}
+
+.feed-stories__pin {
+  position: absolute;
+  z-index: 3;
+  top: 0.38rem;
+  right: 0.38rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--uikit-v2-bg, #{$color-bg}) 72%, transparent);
+  color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 78%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 0 1px color-mix(in srgb, #fff 10%, transparent);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.14s ease,
+    color 0.14s ease,
+    background 0.14s ease,
+    box-shadow 0.14s ease;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--uikit-v2-text, #{$color-text});
+    background: color-mix(in srgb, var(--uikit-v2-bg, #{$color-bg}) 88%, transparent);
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow:
+      0 0 0 2px var(--uikit-v2-bg, #{$color-bg}),
+      0 0 0 4px var(--uikit-v2-accent, #{$color-accent});
+  }
+
+  &--on {
+    color: var(--uikit-v2-accent, #{$color-accent});
+    background: color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 22%, var(--uikit-v2-bg, #{$color-bg}));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 45%, transparent);
+  }
+
+  :global(svg) {
+    display: block;
+  }
+}
+
+.feed-stories__frame:hover .feed-stories__pin,
+.feed-stories__frame:focus-within .feed-stories__pin {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none) {
+  .feed-stories__item--active ~ .feed-stories__pin,
+  .feed-stories__frame:focus-within .feed-stories__pin {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.feed-stories__fade {
+  display: none;
+}
+
+.feed-stories__arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--uikit-v2-surface, #{$color-surface}) 88%, transparent);
+  color: var(--uikit-v2-text, #{$color-text});
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 12%, transparent);
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+
+  &:hover,
+  &:focus-visible {
+    background: color-mix(in srgb, var(--uikit-v2-surface, #{$color-surface}) 96%, transparent);
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow:
+      0 0 0 2px var(--uikit-v2-bg, #{$color-bg}),
+      0 0 0 4px var(--uikit-v2-accent, #{$color-accent});
+  }
+
+  &:active {
+    transform: scale(0.94);
+  }
+
+  &:disabled {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  :global(svg) {
+    display: block;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .feed-stories__fade {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    width: 5.75rem;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+
+    &--visible {
+      opacity: 1;
+    }
+
+    &--left {
+      left: 0;
+      justify-content: flex-start;
+      padding-left: 0.35rem;
+      background: linear-gradient(
+        to right,
+        var(--uikit-v2-bg, #{$color-bg}) 0%,
+        var(--uikit-v2-bg, #{$color-bg}) 22%,
+        color-mix(in srgb, var(--uikit-v2-bg, #{$color-bg}) 88%, transparent) 42%,
+        color-mix(in srgb, var(--uikit-v2-bg, #{$color-bg}) 52%, transparent) 68%,
+        color-mix(in srgb, var(--uikit-v2-bg, #{$color-bg}) 18%, transparent) 86%,
+        transparent 100%
+      );
+    }
+
+    &--right {
+      right: 0;
+      justify-content: flex-end;
+      padding-right: 0.35rem;
+      background: linear-gradient(
+        to left,
+        var(--uikit-v2-bg, #{$color-bg}) 0%,
+        var(--uikit-v2-bg, #{$color-bg}) 22%,
+        color-mix(in srgb, var(--uikit-v2-bg, #{$color-bg}) 88%, transparent) 42%,
+        color-mix(in srgb, var(--uikit-v2-bg, #{$color-bg}) 52%, transparent) 68%,
+        color-mix(in srgb, var(--uikit-v2-bg, #{$color-bg}) 18%, transparent) 86%,
+        transparent 100%
+      );
+    }
+  }
+}
+
+.feed-stories__skel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  width: 5.65rem;
+}
+
+.feed-stories__skel-card,
+.feed-stories__skel-name {
+  display: block;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 8%, transparent);
+}
+
+.feed-stories__skel-card {
+  width: 5.65rem;
+  height: 9.35rem;
+}
+
+.feed-stories__skel-name {
+  width: 3.4rem;
+  height: 0.65rem;
+  border-radius: 999px;
+}
+
+.feed-stories__create-row {
+  display: flex;
+  justify-content: center;
+}
+
+.feed-stories__create {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2.25rem;
+  padding: 0.4rem 0.95rem;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 8%, transparent);
+  color: var(--uikit-v2-text, #{$color-text});
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease;
+
+  &:hover,
+  &:focus-visible {
+    background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 14%, transparent);
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow:
+      0 0 0 2px var(--uikit-v2-bg, #{$color-bg}),
+      0 0 0 4px var(--uikit-v2-accent, #{$color-accent});
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+.feed-stories__create-icon,
+.feed-stories__create-chevron {
+  display: inline-flex;
+  flex: 0 0 auto;
+  opacity: 0.9;
+  line-height: 0;
+
+  :global(svg) {
+    display: block;
+  }
+}
+
+.feed-stories__create-chevron {
+  opacity: 0.7;
+}
+
 .feed-page__search {
   position: sticky;
   top: 0;

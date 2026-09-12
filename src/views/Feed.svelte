@@ -30,7 +30,9 @@
   } from '../types/feed';
   import {
     applyArticleVote,
+    articlePreviewImage,
     channelAvatarUrl,
+    channelCoverUrl,
     channelSubscriberCount,
     normalizeArticleVote,
   } from '../utils/feed-article';
@@ -55,6 +57,7 @@
   } from '../utils/feed-browse-history';
   import UiV2FeedChannelCard from '../components/uikit-v2/UiV2FeedChannelCard.svelte';
   import UiV2FeedRecommended from '../components/uikit-v2/UiV2FeedRecommended.svelte';
+  import FeedStoriesStrip from '../components/feed/FeedStoriesStrip.svelte';
   import {
     iconArrowLeft,
     iconChevronDown,
@@ -441,7 +444,7 @@
     return channelHasNewArticles(ch.id, ch.last_article_date);
   }
 
-  /** Закрепы сверху, затем свежие. Только подписки. */
+  /** Непрочитанные с пином, непрочитанные, пины, остальные. */
   const displaySubscriptions = $derived.by(() => {
     void lastSeenTick;
     void pinTick;
@@ -505,6 +508,41 @@
     void pinTick;
     return new Set(getSubscriptionPins());
   });
+
+  const showFeedStories = $derived(
+    tab === 'my' && !postViewActive && !searchMode,
+  );
+
+  const storyCoverByChannelId = $derived.by(() => {
+    const covers = new Map<number, string>();
+    for (const article of articles) {
+      const id = Number(article.channel?.id ?? 0);
+      if (!(id > 0) || covers.has(id)) continue;
+      const image = articlePreviewImage(article);
+      if (image) covers.set(id, image);
+    }
+    return covers;
+  });
+
+  const feedStoryItems = $derived.by(() =>
+    displaySubscriptions.map((ch) => {
+      const avatar = channelAvatarUrl(ch.avatar);
+      const cover = channelCoverUrl(ch.cover) || storyCoverByChannelId.get(ch.id) || avatar;
+      return {
+        id: ch.id,
+        title: ch.title || `Канал #${ch.id}`,
+        avatar,
+        cover,
+        isBlog: !!ch.is_blog,
+        fresh: subscriptionIsFresh(ch),
+        pinned: pinnedIdSet.has(ch.id),
+      };
+    }),
+  );
+
+  const storiesLoading = $derived(
+    authed && displaySubscriptions.length === 0 && loadState === 'loading',
+  );
 
   const subscriptionSelected = $derived(
     tab === 'my'
@@ -1675,6 +1713,22 @@
         </UiV2Button>
       </div>
     </header>
+
+    {#if showFeedStories}
+      <FeedStoriesStrip
+        items={feedStoryItems}
+        selectedId={channelFilterId}
+        loading={storiesLoading}
+        createBusy={createBusy}
+        onSelect={selectSubscription}
+        onPin={(id) => {
+          toggleSubscriptionPin(id);
+          pinTick += 1;
+        }}
+        onCreate={() => void createChannel()}
+        onManaged={() => onTabChange('managed')}
+      />
+    {/if}
 
     <div class="feed-page__body">
       {#if tab === 'managed'}

@@ -18,6 +18,7 @@ import {
   type AdDesignStates,
 } from '../utils/adDesignDoc';
 import { alignDesignPair, setCoverImage } from '../utils/adDesignMotion';
+import { setAdComposeSrcResolver } from '../utils/composeAdDesign';
 
 export type CrtAdVisual = {
   href?: string;
@@ -268,6 +269,8 @@ export function resolveAdImageUrl(url: string | null | undefined, stamp?: string
   if (value.startsWith('data:') || value.startsWith('blob:')) return value;
   return resolveAnixbackUploadUrl(url, stamp);
 }
+
+setAdComposeSrcResolver((src) => resolveAdImageUrl(src) || src);
 
 /**
  * Публичный плеер — корень AnixBack (не `/__anixback`), чтобы `/api` и `/ads-embed`

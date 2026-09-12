@@ -64,7 +64,7 @@
     sanitizeCrtParams,
     type CrtSliderKey,
   } from '../../utils/crtScreen';
-  import { fileToDataUrl } from '../../services/ads-api';
+  import { fileToDataUrl, resolveAdImageUrl } from '../../services/ads-api';
   import { isSvgDataUrl, parseSvgDataUrlColor, tintSvgDataUrl } from '../../utils/svgTint';
   import { bannerIconSvg, VPN_BANNER_ICONS } from '../../utils/vpnBannerIcons';
   import EditorIcon from './editor/EditorIcon.svelte';
@@ -795,7 +795,10 @@
       const stops = p.stops.map((s) => `${stopCssColor(s)} ${Math.round(s.position * 100)}%`).join(', ');
       return `background: linear-gradient(${p.angle ?? 180}deg, ${stops});`;
     }
-    if (p.src) return `background: center / cover no-repeat url("${p.src}");`;
+    if (p.src) {
+      const url = resolveAdImageUrl(p.src) || p.src;
+      return `background: center / cover no-repeat url("${url.replace(/"/g, '%22')}");`;
+    }
     return 'background: #555;';
   }
 

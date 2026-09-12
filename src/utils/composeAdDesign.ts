@@ -5,33 +5,57 @@ import { applyCrtFilter, sanitizeCrtParams, type CrtScreenParams } from './crtSc
 import { isSvgDataUrl, parseSvgDataUrlColor, tintSvgDataUrl } from './svgTint';
 
 const imageCache = new Map<string, HTMLImageElement | 'error'>();
+const imageInflight = new Map<string, Promise<HTMLImageElement | null>>();
+
+let srcResolver: ((src: string) => string) | null = null;
+
+/** Editor: rewrite `/uploads/...` to the AnixBack origin. Embed leaves src as-is. */
+export function setAdComposeSrcResolver(fn: ((src: string) => string) | null): void {
+  srcResolver = fn;
+  imageCache.clear();
+  imageInflight.clear();
+}
+
+function resolveComposeSrc(src: string): string {
+  const raw = String(src || '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
+  return srcResolver ? (srcResolver(raw) || raw) : raw;
+}
 
 function loadImage(src: string): Promise<HTMLImageElement | null> {
-  if (!src) return Promise.resolve(null);
-  const hit = imageCache.get(src);
+  const url = resolveComposeSrc(src);
+  if (!url) return Promise.resolve(null);
+  const hit = imageCache.get(url);
   if (hit === 'error') return Promise.resolve(null);
   if (hit) return Promise.resolve(hit);
-  return new Promise((resolve) => {
+  const pending = imageInflight.get(url);
+  if (pending) return pending;
+  const job = new Promise<HTMLImageElement | null>((resolve) => {
     const img = new Image();
     img.decoding = 'async';
     try {
-      if (!src.startsWith('data:') && !src.startsWith('blob:')) {
-        const origin = new URL(src, typeof location !== 'undefined' ? location.href : 'http://localhost').origin;
+      if (!url.startsWith('data:') && !url.startsWith('blob:')) {
+        const origin = new URL(url, typeof location !== 'undefined' ? location.href : 'http://localhost').origin;
         if (typeof location !== 'undefined' && origin !== location.origin) img.crossOrigin = 'anonymous';
       }
     } catch {
       /* ignore */
     }
     img.onload = () => {
-      imageCache.set(src, img);
+      imageInflight.delete(url);
+      imageCache.set(url, img);
       resolve(img);
     };
     img.onerror = () => {
-      imageCache.set(src, 'error');
+      imageInflight.delete(url);
+      imageCache.set(url, 'error');
       resolve(null);
     };
-    img.src = src;
+    img.src = url;
   });
+  imageInflight.set(url, job);
+  return job;
 }
 
 function paintColor(p: AdPaint): string {

@@ -88,9 +88,19 @@ export function resolveAnixbackUploadUrl(
 ): string {
   const value = String(url ?? '').trim();
   if (!value) return '';
-  const base = /^https?:\/\//i.test(value)
-    ? value
-    : `${getAnixbackUploadsOrigin()}${value.startsWith('/') ? value : `/${value}`}`;
+  let base = value;
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      const parsed = new URL(value);
+      if (parsed.pathname.startsWith('/uploads/')) {
+        base = `${getAnixbackUploadsOrigin()}${parsed.pathname}${parsed.search}`;
+      }
+    } catch {
+      base = value;
+    }
+  } else {
+    base = `${getAnixbackUploadsOrigin()}${value.startsWith('/') ? value : `/${value}`}`;
+  }
   if (!stamp) return base;
   return `${base}${base.includes('?') ? '&' : '?'}t=${encodeURIComponent(stamp)}`;
 }

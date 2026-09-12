@@ -13,10 +13,11 @@ import {
 const VERT = `#version 300 es
 layout(location = 0) in vec2 a_pos;
 layout(location = 1) in vec2 a_uv;
+uniform float uFlipY;
 out vec2 v_uv;
 void main() {
   v_uv = a_uv;
-  gl_Position = vec4(a_pos, 0.0, 1.0);
+  gl_Position = vec4(a_pos.x, a_pos.y * uFlipY, 0.0, 1.0);
 }
 `;
 
@@ -718,6 +719,7 @@ type ProgramRec = {
   program: WebGLProgram;
   uRes: WebGLUniformLocation | null;
   uTime: WebGLUniformLocation | null;
+  uFlipY: WebGLUniformLocation | null;
   uP: WebGLUniformLocation | null;
   uC0: WebGLUniformLocation | null;
   uC1: WebGLUniformLocation | null;
@@ -808,6 +810,7 @@ class LayerShaderEngine {
         program,
         uRes: gl.getUniformLocation(program, 'uRes'),
         uTime: gl.getUniformLocation(program, 'uTime'),
+        uFlipY: gl.getUniformLocation(program, 'uFlipY'),
         uP: gl.getUniformLocation(program, 'uP[0]') ?? gl.getUniformLocation(program, 'uP'),
         uC0: gl.getUniformLocation(program, 'uC0'),
         uC1: gl.getUniformLocation(program, 'uC1'),
@@ -859,6 +862,9 @@ class LayerShaderEngine {
       gl.useProgram(rec.program);
       gl.uniform2f(rec.uRes, w, h);
       gl.uniform1f(rec.uTime, time);
+      // Canvas uploads store the top row at texel y=0; FBO writes normally store it at y=h.
+      // Flip clip-space Y so ping-pong textures keep the same origin as the source canvas.
+      gl.uniform1f(rec.uFlipY, -1);
       gl.uniform1fv(rec.uP, packed.p);
       gl.uniform3f(rec.uC0, packed.c0[0], packed.c0[1], packed.c0[2]);
       gl.uniform3f(rec.uC1, packed.c1[0], packed.c1[1], packed.c1[2]);
@@ -913,7 +919,7 @@ class LayerShaderEngine {
     gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.fbo);
     gl.framebufferTexture2D(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, read, 0);
     gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
-    gl.blitFramebuffer(0, 0, w, h, 0, 0, w, h, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+    gl.blitFramebuffer(0, 0, w, h, 0, h, w, 0, gl.COLOR_BUFFER_BIT, gl.NEAREST);
     gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
     return canvas;
   }
@@ -938,6 +944,19 @@ class LayerShaderEngine {
 let engine: LayerShaderEngine | null = null;
 let engineCanvas: HTMLCanvasElement | null = null;
 let engineFailed = false;
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    try {
+      engine?.destroy();
+    } catch {
+      /* ignore */
+    }
+    engine = null;
+    engineCanvas = null;
+    engineFailed = false;
+  });
+}
 
 export function layerHasAnimatedFx(effects: AdEffect[] | undefined): boolean {
   return (effects ?? []).some((e) => {

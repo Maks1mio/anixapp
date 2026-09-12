@@ -91,7 +91,9 @@ export function hoverDiffers(rest: AdNode | null, hover: AdNode | null): boolean
   if (rest.type === 'text' && hover.type === 'text') {
     return rest.characters !== hover.characters
       || rest.fontSize !== hover.fontSize
-      || rest.fontWeight !== hover.fontWeight;
+      || rest.fontWeight !== hover.fontWeight
+      || rest.textAlign !== hover.textAlign
+      || rest.verticalAlign !== hover.verticalAlign;
   }
   if (rest.type === 'image' && hover.type === 'image') {
     return rest.src !== hover.src || (rest.tint || '') !== (hover.tint || '');
@@ -287,6 +289,8 @@ const VARIANT_FOLLOW_SKIP = new Set([
   'name',
   'locked',
   'fills',
+  'textAlign',
+  'verticalAlign',
 ]);
 
 function visualEqual(a: unknown, b: unknown): boolean {
@@ -303,6 +307,7 @@ function visualEqual(a: unknown, b: unknown): boolean {
  * Edit the active Rest/Hover side. Properties that still match on the other
  * side follow, so a new layer stays identical until you switch and change it.
  * `visible` / `opacity` never follow: hide on Hover leaves Rest shown.
+ * `textAlign` / `verticalAlign` never follow: Rest can be left, Hover center.
  */
 export function patchCurrentNode(
   states: AdDesignStates,
@@ -596,9 +601,13 @@ function mixOnePaint(a: AdPaint, b: AdPaint, t: number): AdPaint {
     const count = Math.max(a.stops.length, b.stops.length, 2);
     const stops = [];
     for (let i = 0; i < count; i++) {
-      const sa = a.stops[Math.min(i, a.stops.length - 1)] ?? { color: '#000', position: 0 };
+      const sa = a.stops[Math.min(i, a.stops.length - 1)] ?? { color: '#000000', position: 0, opacity: 1 };
       const sb = b.stops[Math.min(i, b.stops.length - 1)] ?? sa;
-      stops.push({ color: lerpHex(sa.color, sb.color, t), position: lerp(sa.position, sb.position, t) });
+      stops.push({
+        color: lerpHex(sa.color, sb.color, t),
+        position: lerp(sa.position, sb.position, t),
+        opacity: lerp(sa.opacity ?? 1, sb.opacity ?? 1, t),
+      });
     }
     return {
       ...a,
@@ -698,6 +707,8 @@ export function mixNodeVisual(a: AdNode, b: AdNode, t: number): AdNode {
       letterSpacing: lerp(a.letterSpacing, b.letterSpacing, k),
       fontWeight: k < 0.5 ? a.fontWeight : b.fontWeight,
       characters: k < 0.5 ? a.characters : b.characters,
+      textAlign: k < 0.5 ? a.textAlign : b.textAlign,
+      verticalAlign: k < 0.5 ? a.verticalAlign : b.verticalAlign,
       fills: mixPaints(a.fills, b.fills, k),
     };
     return node;
@@ -778,9 +789,15 @@ export function ensureCrtOnRoot(doc: AdDesignDoc, params: Record<string, number 
 export function setCoverImage(states: AdDesignStates, src: string): AdDesignStates {
   const patchDoc = (doc: AdDesignDoc): AdDesignDoc => {
     const root = getRoot(doc);
-    const bg = Object.values(doc.nodes).find(
-      (n) => n.type === 'image' && (n.name === 'Background' || n.parentId === root.id),
-    );
+    const bg = Object.values(doc.nodes).find((n) => n.type === 'image' && n.name === 'Background')
+      ?? Object.values(doc.nodes).find((n) => (
+        n.type === 'image'
+        && n.parentId === root.id
+        && Math.abs(n.x) < 1
+        && Math.abs(n.y) < 1
+        && Math.abs(n.w - doc.width) < 2
+        && Math.abs(n.h - doc.height) < 2
+      ));
     if (bg && bg.type === 'image') {
       return { ...doc, nodes: { ...doc.nodes, [bg.id]: { ...bg, src } } };
     }

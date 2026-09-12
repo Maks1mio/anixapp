@@ -2,7 +2,6 @@
   import { tick, untrack } from 'svelte';
   import { scale } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
-  import bannerArt from '../../assets/vpn/banner-art.png';
   import { portal } from '../../actions/portal';
   import { iconX } from '../icons';
   import { requestOpenExternal } from '../../utils/external-link';
@@ -159,8 +158,20 @@
   const adRow = $derived(creative ?? remoteCreative);
   const liveHref = $derived((href && href !== VPN_67_URL ? href : '') || adRow?.href || VPN_67_URL);
   const artSrc = $derived(
-    resolveAdImageUrl(imageUrl || adRow?.imageUrl, adRow?.updatedAt) || bannerArt,
+    resolveAdImageUrl(imageUrl || adRow?.imageUrl, adRow?.updatedAt),
   );
+
+  function makeFallbackArt(): HTMLCanvasElement {
+    const c = document.createElement('canvas');
+    c.width = 640;
+    c.height = 440;
+    const ctx = c.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#121218';
+      ctx.fillRect(0, 0, c.width, c.height);
+    }
+    return c;
+  }
   const boxStyle = $derived.by(() => {
     const w = width || adRow?.width || '100%';
     const h = height || adRow?.height || '';
@@ -430,7 +441,7 @@
     let renderer: CrtScreenRenderer | null = null;
     let raf = 0;
     let source: HTMLCanvasElement | null = null;
-    let art: HTMLImageElement | null = null;
+    let art: CanvasImageSource | null = null;
     let visible = true;
     let reduced = false;
     let lastCssW = 0;
@@ -607,11 +618,14 @@
 
     void (async () => {
       try {
-        try {
-          art = await loadImage(src);
-        } catch {
-          if (src !== bannerArt) art = await loadImage(bannerArt);
-          else throw new Error('crt ad art failed');
+        if (src) {
+          try {
+            art = await loadImage(src);
+          } catch {
+            art = makeFallbackArt();
+          }
+        } else {
+          art = makeFallbackArt();
         }
         if (cancelled) return;
 

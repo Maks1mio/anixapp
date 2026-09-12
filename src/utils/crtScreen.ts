@@ -543,11 +543,20 @@ function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLSh
   return shader;
 }
 
+let crtSupport: boolean | null = null;
+
 export function isCrtScreenSupported(): boolean {
   if (typeof document === 'undefined') return false;
+  if (crtSupport != null) return crtSupport;
   const c = document.createElement('canvas');
   const gl = c.getContext('webgl2', { alpha: true });
-  return !!gl;
+  crtSupport = Boolean(gl);
+  try {
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+  } catch {
+    /* ignore */
+  }
+  return crtSupport;
 }
 
 export class CrtScreenRenderer {

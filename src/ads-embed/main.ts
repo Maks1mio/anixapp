@@ -273,7 +273,7 @@ async function start() {
     const designKey = designStates
       ? `d2:${designStates.rest.rootId}:${Object.keys(designStates.rest.nodes).length}:${Object.keys(designStates.hover.nodes).length}`
       : '';
-    const overlayKey = `${designKey}|${statesSignature(overlayStates)}|${eased.toFixed(3)}`;
+    const overlayKey = `${designKey}|${statesSignature(overlayStates)}|${hoverT.toFixed(3)}`;
     const sizeChanged = cssW !== lastCssW || cssH !== lastCssH || dpr !== lastDpr;
     if (sizeChanged) {
       lastCssW = cssW;
@@ -288,7 +288,7 @@ async function start() {
       if (!composeBusy && (hasCrt || sizeChanged || overlayKey !== lastOverlayKey)) {
         lastOverlayKey = overlayKey;
         composeBusy = true;
-        void paintDesign(eased, cssW, cssH, dpr, fxTime).finally(() => {
+        void paintDesign(hoverT, cssW, cssH, dpr, fxTime).finally(() => {
           composeBusy = false;
         });
       }

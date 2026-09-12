@@ -38,7 +38,7 @@
     showAd?: boolean;
     /** @deprecated используйте showAd */
     showVpnAd?: boolean;
-    /** Слот embed с админки (`connection` / `offline` / `uikit` / свой) */
+    /** Слот embed с админки (`connection` / `uikit` / свой). Off не имеет слота. */
     adSlot?: string;
     onChange?: (value: string) => void | Promise<void>;
   };

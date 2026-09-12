@@ -1,6 +1,6 @@
-import type { AdDesignDoc, AdFrameNode, AdNode, AdPaint } from './adDesignDoc';
-import { getRoot, listChildren } from './adDesignDoc';
-import { mixNodeVisual, nodeOpacity } from './adDesignMotion';
+import type { AdDesignDoc, AdFrameNode, AdNode, AdPaint, AdTextNode } from './adDesignDoc';
+import { getRoot, listChildren, stopCssColor } from './adDesignDoc';
+import { easeInOutCubic, mixNodeVisual, nodeOpacity } from './adDesignMotion';
 import { applyCrtFilter, sanitizeCrtParams, type CrtScreenParams } from './crtScreen';
 import { isSvgDataUrl, parseSvgDataUrlColor, tintSvgDataUrl } from './svgTint';
 
@@ -134,12 +134,15 @@ function linearGradient(
   return ctx.createLinearGradient(cx - dx * len, cy - dy * len, cx + dx * len, cy + dy * len);
 }
 
-function addGradientStops(g: CanvasGradient, stops: Array<{ color: string; position: number }>) {
+function addGradientStops(g: CanvasGradient, stops: Array<{ color: string; position: number; opacity?: number }>) {
   const sorted = [...stops]
-    .map((s) => ({ color: s.color, position: Math.min(1, Math.max(0, s.position)) }))
+    .map((s) => ({
+      color: stopCssColor(s),
+      position: Math.min(1, Math.max(0, s.position)),
+    }))
     .sort((a, b) => a.position - b.position);
   if (!sorted.length) {
-    g.addColorStop(0, '#000');
+    g.addColorStop(0, 'rgba(0,0,0,0)');
     g.addColorStop(1, '#fff');
     return;
   }
@@ -233,7 +236,7 @@ async function drawTextNode(ctx: CanvasRenderingContext2D, node: Extract<AdNode,
     ctx.globalAlpha *= p.opacity;
     const style = paintFillStyle(ctx, p, x, y, node.w, node.h);
     ctx.fillStyle = style || '#fff';
-    if (pi === 0) {
+    if (pi === 0 && alphaMul > 0.92) {
       ctx.shadowColor = 'rgba(0,0,0,0.55)';
       ctx.shadowBlur = Math.max(3, Math.min(node.w, node.h) * 0.03);
       ctx.shadowOffsetY = 1;
@@ -305,6 +308,31 @@ function visibleCrtParams(node: AdNode): CrtScreenParams | null {
   return sanitizeCrtParams(fx.params);
 }
 
+function dissolveAlphas(t: number): { outA: number; inA: number } {
+  const x = Math.min(1, Math.max(0, t));
+  const smooth = (v: number) => {
+    const u = Math.min(1, Math.max(0, v));
+    return u * u * (3 - 2 * u);
+  };
+  return { outA: 1 - smooth(x), inA: smooth(x) };
+}
+
+function textForFade(from: AdTextNode, box: AdTextNode): AdTextNode {
+  return {
+    ...from,
+    type: 'text',
+    x: box.x,
+    y: box.y,
+    w: box.w,
+    h: box.h,
+    rotation: box.rotation,
+    fontSize: box.fontSize,
+    letterSpacing: box.letterSpacing,
+    opacity: 1,
+    visible: true,
+  };
+}
+
 async function paintNodeBody(
   ctx: CanvasRenderingContext2D,
   doc: AdDesignDoc,
@@ -357,12 +385,27 @@ async function paintNodeBody(
     }
   } else if (mixed.type === 'text') {
     const restText = restNode.type === 'text' ? restNode : mixed;
-    const other = counterpart && counterpart.type === 'text' ? counterpart : null;
-    if (other && other.characters !== restText.characters && t > 0.02 && t < 0.98) {
-      drawTextNode(ctx, { ...restText, ...mixed, characters: restText.characters, type: 'text' }, x, y, 1 - t);
-      drawTextNode(ctx, { ...other, w: mixed.w, h: mixed.h, fontSize: mixed.fontSize }, x, y, t);
+    const hoverText = counterpart && counterpart.type === 'text' ? counterpart : null;
+    const fadeT = Math.min(1, Math.max(0, t));
+    const fadeCopy =
+      hoverText
+      && fadeT > 0.001
+      && fadeT < 0.999
+      && (
+        hoverText.characters !== restText.characters
+        || hoverText.textAlign !== restText.textAlign
+        || hoverText.verticalAlign !== restText.verticalAlign
+      );
+    if (fadeCopy) {
+      const { outA, inA } = dissolveAlphas(fadeT);
+      if (outA > 0.01) {
+        await drawTextNode(ctx, textForFade(restText, mixed), x, y, outA);
+      }
+      if (inA > 0.01) {
+        await drawTextNode(ctx, textForFade(hoverText, mixed), x, y, inA);
+      }
     } else {
-      drawTextNode(ctx, mixed, x, y, 1);
+      await drawTextNode(ctx, mixed, x, y, 1);
     }
   }
 }
@@ -378,7 +421,8 @@ async function drawNode(
   timeMs = 0,
 ) {
   const counterpart = hoverDoc?.nodes[node.id];
-  const mixed = counterpart && counterpart.type === node.type ? mixNodeVisual(node, counterpart, t) : node;
+  const motionT = easeInOutCubic(t);
+  const mixed = counterpart && counterpart.type === node.type ? mixNodeVisual(node, counterpart, motionT) : node;
   if (nodeOpacity(mixed) <= 0.001) return;
   const x = ox + mixed.x;
   const y = oy + mixed.y;

@@ -7,12 +7,16 @@
     adEmbedUrlById,
     adEmbedUrlBySlot,
     adIframeSnippet,
+    adSlotLabel,
     blankAdDraft,
     createAd,
     deleteAd,
     ensureAdDesign,
     fetchAds,
     fileToDataUrl,
+    persistDesignImages,
+    stripHeavyDesignImages,
+    normalizeAdSlot,
     resolveAdImageUrl,
     setCoverImage,
     updateAd,
@@ -56,14 +60,18 @@
 
   const selected = $derived(selectedId ? ads.find((a) => a.id === selectedId) ?? null : null);
   const panelOpen = $derived(creating || selected != null);
-  const slotLabel = $derived(
-    (AD_SLOT_OPTIONS.find((s) => s.value === formSlot)?.label ?? formSlot) || 'слот',
-  );
+  const slotKey = $derived(normalizeAdSlot(formSlot));
+  const slotLabel = $derived(adSlotLabel(formSlot) || 'слот');
   const slotTaken = $derived(
     formActive
-      && ads.some((a) => a.active && a.slot === formSlot.trim() && a.id !== selectedId),
+      && Boolean(slotKey)
+      && ads.some((a) => a.active && normalizeAdSlot(a.slot) === slotKey && a.id !== selectedId),
   );
-  const embedBySlot = $derived(adIframeSnippet({ slot: formSlot.trim() || 'connection', width: formWidth, aspectRatio: formAspect }));
+  const embedBySlot = $derived(
+    slotKey
+      ? adIframeSnippet({ slot: slotKey, width: formWidth, aspectRatio: formAspect })
+      : '',
+  );
   const embedById = $derived(
     selectedId && !creating
       ? adIframeSnippet({ id: selectedId, width: formWidth, aspectRatio: formAspect })
@@ -72,8 +80,8 @@
   const livePlayerSrc = $derived(
     selectedId && !creating
       ? `${adEmbedUrlById(selectedId)}?t=${encodeURIComponent(formUpdatedAt || String(iframeKey))}`
-      : formSlot
-        ? `${adEmbedUrlBySlot(formSlot.trim())}?t=${encodeURIComponent(formUpdatedAt || String(iframeKey))}`
+      : slotKey
+        ? `${adEmbedUrlBySlot(slotKey)}?t=${encodeURIComponent(formUpdatedAt || String(iframeKey))}`
         : '',
   );
 
@@ -88,7 +96,7 @@
 
   function applyForm(next: FormState & { updatedAt?: string }) {
     formTitle = next.title;
-    formSlot = next.slot;
+    formSlot = normalizeAdSlot(next.slot);
     formHref = next.href;
     formActive = next.active;
     formWidth = next.width;
@@ -208,10 +216,6 @@
       formError = 'Введите название';
       return;
     }
-    if (!formSlot.trim()) {
-      formError = 'Укажите слот embed';
-      return;
-    }
     busy = true;
     formError = '';
     try {
@@ -219,7 +223,7 @@
       if (!token) throw new Error('Нет сессии');
       const payload = {
         title: formTitle.trim(),
-        slot: formSlot.trim(),
+        slot: slotKey,
         href: formHref.trim(),
         active: formActive,
         width: formWidth.trim() || '100%',
@@ -230,8 +234,17 @@
         design: cloneDesignStatesAligned(formDesign),
       };
       let saved: CrtAdCreative;
-      if (creating || !selectedId) saved = await createAd(payload, token);
-      else saved = await updateAd(selectedId, payload, token);
+      if (creating || !selectedId) {
+        saved = await createAd({
+          ...payload,
+          design: stripHeavyDesignImages(payload.design),
+        }, token);
+      } else {
+        saved = { id: selectedId } as CrtAdCreative;
+      }
+      const design = await persistDesignImages(formDesign, saved.id, token);
+      formDesign = design;
+      saved = await updateAd(saved.id, { ...payload, design }, token);
       if (pendingImage) {
         const dataUrl = pendingImage.type.startsWith('image/')
           ? await fileToDataUrl(pendingImage)
@@ -318,7 +331,7 @@
                 <span class="adm-ads__item-body">
                   <span class="adm-ads__item-title">{a.title}</span>
                   <span class="adm-ads__item-chips">
-                    <span class="adm-chip">{a.slot}</span>
+                    <span class="adm-chip">{adSlotLabel(a.slot)}</span>
                     {#if !a.active}<span class="adm-chip adm-chip--muted">Скрыто</span>{/if}
                   </span>
                 </span>
@@ -416,7 +429,7 @@
               </label>
               <label class="adm-field">
                 <span class="adm-field__label">Слот embed</span>
-                <input class="adm-field__input" type="text" bind:value={formSlot} placeholder="connection" />
+                <input class="adm-field__input" type="text" bind:value={formSlot} placeholder="пусто = Off" />
               </label>
             </div>
             <div class="adm-ads__chips">
@@ -424,13 +437,16 @@
                 <button
                   type="button"
                   class="adm-chip"
-                  class:adm-chip--accent={formSlot === s.value}
+                  class:adm-chip--accent={slotKey === s.value}
                   onclick={() => { formSlot = s.value; }}
                 >
                   {s.label}
                 </button>
               {/each}
             </div>
+            {#if !slotKey}
+              <p class="adm-section__desc">Off — только ссылка по ID, без `/embed/ads/slot/…`.</p>
+            {/if}
             {#if slotTaken}
               <p class="adm-section__desc">В этом слоте уже есть другая активная реклама — покажется последняя сохранённая.</p>
             {/if}
@@ -478,13 +494,18 @@
                 <button type="button" class="uiv2-btn uiv2-btn--ghost uiv2-btn--sm" onclick={() => void copyText(embedById)}>Копировать</button>
               </div>
             {/if}
-            <p class="adm-field__label">По слоту</p>
-            <div class="adm-ads__embed">
-              <code class="adm-ads__code">{embedBySlot}</code>
-              <button type="button" class="uiv2-btn uiv2-btn--ghost uiv2-btn--sm" onclick={() => void copyText(embedBySlot)}>Копировать</button>
-            </div>
+            {#if embedBySlot}
+              <p class="adm-field__label">По слоту</p>
+              <div class="adm-ads__embed">
+                <code class="adm-ads__code">{embedBySlot}</code>
+                <button type="button" class="uiv2-btn uiv2-btn--ghost uiv2-btn--sm" onclick={() => void copyText(embedBySlot)}>Копировать</button>
+              </div>
+            {/if}
             {#if selectedId && !creating}
-              <p class="adm-section__desc">Ссылки: <code>{adEmbedUrlById(selectedId)}</code> · <code>{adEmbedUrlBySlot(formSlot.trim())}</code></p>
+              <p class="adm-section__desc">
+                Ссылки: <code>{adEmbedUrlById(selectedId)}</code>
+                {#if slotKey} · <code>{adEmbedUrlBySlot(slotKey)}</code>{/if}
+              </p>
             {/if}
           </div>
 

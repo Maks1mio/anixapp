@@ -14,9 +14,13 @@
     iconToDataUrl,
     imagePaint,
     linearPaint,
+    moveNodeRelative,
     nodeFills,
+    nudgeNodeZ,
     removeNode,
+    sanitizeHexRgb,
     solid,
+    stopCssColor,
     type AdDesignDoc,
     type AdDesignStates,
     type AdEffect,
@@ -32,7 +36,6 @@
     applyStructure,
     cloneDesignStatesAligned,
     copyNodeVisual,
-    easeInOutCubic,
     hoverDiffers,
     isLayerShown,
     mixedNode,
@@ -46,6 +49,7 @@
     removeNodeFill,
     reorderNodeFills,
     resizeArtboard,
+    setCoverImage,
     setNodeEffectVisible,
     setNodeFillVisible,
     stepHoverT,
@@ -108,6 +112,8 @@
   let addFillOpen = $state(false);
   let expandedFillId = $state<string | null>(null);
   let fillDragIndex = $state<number | null>(null);
+  let layerDragId = $state<string | null>(null);
+  let layerDrop = $state<{ id: string; place: 'before' | 'after' | 'inside' } | null>(null);
   let fillFileInput: HTMLInputElement | null = $state(null);
   let pendingFillTarget = $state<'new' | string | null>(null);
   let iconQuery = $state('');
@@ -195,7 +201,6 @@
       const animateFx = box.livePreview || springing;
       if (animateFx) frozenFxTime += dt;
       const fxTime = frozenFxTime;
-      const eased = easeInOutCubic(hoverT);
       const rest = box.view.rest;
       const hover = box.view.hover;
       const w = Math.max(1, rest.width);
@@ -210,14 +215,14 @@
       if (canvas.width !== pxW) canvas.width = pxW;
       if (canvas.height !== pxH) canvas.height = pxH;
 
-      const sig = `${Math.round(fxTime)}|${eased.toFixed(3)}|${pxW}x${pxH}`;
+      const sig = `${Math.round(fxTime)}|${hoverT.toFixed(3)}|${pxW}x${pxH}`;
       if (!composeBusy && (box.view !== lastViewRef || sig !== lastCompose)) {
         lastViewRef = box.view;
         lastCompose = sig;
         const ctx = canvas.getContext('2d', { alpha: true });
         if (ctx) {
           composeBusy = true;
-          void composeAdDesign(ctx, rest, pxW, pxH, hover, eased, fxTime).then(() => {
+          void composeAdDesign(ctx, rest, pxW, pxH, hover, hoverT, fxTime).then(() => {
             composeBusy = false;
           });
         }
@@ -453,6 +458,10 @@
   function applyImageToSelected(file: File) {
     void fileToDataUrl(file).then((src) => {
       if (!selectedId || !selected) return;
+      if (selectedId === restDoc.rootId || selected.type === 'frame' && selected.id === restDoc.rootId) {
+        commit(setCoverImage(view, src));
+        return;
+      }
       if (selected.type === 'image') {
         commitVariant(selectedId, { src, name: file.name || selected.name, iconId: undefined } as Partial<AdNode>);
         return;
@@ -546,6 +555,11 @@
     if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault();
       deleteSelected();
+      return;
+    }
+    if ((e.key === ']' || e.key === '[') && selectedId && selectedId !== restDoc.rootId) {
+      e.preventDefault();
+      commit(applyStructure(view, (doc) => nudgeNodeZ(doc, selectedId!, e.key === ']')));
       return;
     }
     if (!selectedId || selectedId === restDoc.rootId || !selected) return;
@@ -778,7 +792,7 @@
   function fillSwatchStyle(p: AdPaint): string {
     if (p.type === 'solid') return `background: ${p.color};`;
     if (p.type === 'gradient') {
-      const stops = p.stops.map((s) => `${s.color} ${Math.round(s.position * 100)}%`).join(', ');
+      const stops = p.stops.map((s) => `${stopCssColor(s)} ${Math.round(s.position * 100)}%`).join(', ');
       return `background: linear-gradient(${p.angle ?? 180}deg, ${stops});`;
     }
     if (p.src) return `background: center / cover no-repeat url("${p.src}");`;
@@ -792,8 +806,11 @@
   }
 
   function addFillLinear() {
-    if (!selectedId) return;
-    commit(addNodeFill(view, selectedId, linearPaint()));
+    if (!selectedId || !selected) return;
+    const overlay = selected.type === 'image'
+      || selectedId === restDoc.rootId
+      || selectedFillList().some((p) => p.type === 'image' && p.visible !== false);
+    commit(addNodeFill(view, selectedId, linearPaint(1, 180, overlay)));
     addFillOpen = false;
   }
 
@@ -848,6 +865,50 @@
     if (fillDragIndex == null || !selectedId) return;
     commit(reorderNodeFills(view, selectedId, fillDragIndex, index));
     fillDragIndex = null;
+  }
+
+  function layerDropPlace(e: DragEvent, el: HTMLElement, nodeId: string): 'before' | 'after' | 'inside' {
+    const node = restDoc.nodes[nodeId];
+    const r = el.getBoundingClientRect();
+    const y = e.clientY - r.top;
+    if (nodeId === restDoc.rootId) return 'inside';
+    if (node?.type === 'frame' && y > r.height * 0.28 && y < r.height * 0.72) return 'inside';
+    return y < r.height / 2 ? 'before' : 'after';
+  }
+
+  function onLayerDragStart(e: DragEvent, id: string) {
+    if (id === restDoc.rootId) {
+      e.preventDefault();
+      return;
+    }
+    layerDragId = id;
+    e.dataTransfer?.setData('text/plain', id);
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function onLayerDragOver(e: DragEvent, id: string) {
+    if (!layerDragId || layerDragId === id) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    const el = e.currentTarget as HTMLElement;
+    layerDrop = { id, place: layerDropPlace(e, el, id) };
+  }
+
+  function onLayerDrop(e: DragEvent, targetId: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    const src = layerDragId || e.dataTransfer?.getData('text/plain');
+    const el = e.currentTarget as HTMLElement;
+    const place = layerDropPlace(e, el, targetId);
+    layerDragId = null;
+    layerDrop = null;
+    if (!src || src === targetId) return;
+    commit(applyStructure(view, (doc) => moveNodeRelative(doc, src, targetId, place)));
+  }
+
+  function onLayerDragEnd() {
+    layerDragId = null;
+    layerDrop = null;
   }
 
   function parseHexInput(raw: string): string | null {
@@ -995,9 +1056,9 @@
             <button type="button" class="figma__text-btn" onclick={onClose}>Закрыть редактор</button>
           {/if}
           {#if onSave}
-            <button type="button" class="figma__save" disabled={busy} onclick={onSave}>
-              {busy ? '…' : 'Сохранить'}
-            </button>
+          <button type="button" class="figma__save" disabled={busy} onclick={onSave} title="Сохранить">
+            {busy ? 'Сохранение…' : 'Сохранить'}
+          </button>
           {/if}
         </div>
       {/if}
@@ -1014,38 +1075,55 @@
         <span>Layers</span>
         <span class="figma__panel-sub">{variant}</span>
       </div>
-      <ul class="figma__layer-list">
+      <ul class="figma__layer-list" role="tree" aria-label="Слои">
         {#each layers as { node, depth } (node.id)}
           {@const restN = restDoc.nodes[node.id]}
           {@const hoverN = hoverDoc.nodes[node.id]}
           {@const live = variant === 'hover' ? hoverN : restN}
           <li>
+            <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
             <div
               class="figma__layer"
               class:figma__layer--on={selectedId === node.id}
               class:figma__layer--ghost={live && !isLayerShown(live)}
+              class:figma__layer--drop-before={layerDrop?.id === node.id && layerDrop.place === 'before'}
+              class:figma__layer--drop-after={layerDrop?.id === node.id && layerDrop.place === 'after'}
+              class:figma__layer--drop-inside={layerDrop?.id === node.id && layerDrop.place === 'inside'}
               style:padding-left="{0.45 + depth * 0.7}rem"
+              draggable={node.id !== restDoc.rootId}
+              role="treeitem"
+              aria-selected={selectedId === node.id}
+              aria-level={depth + 1}
+              tabindex="0"
+              onkeydown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(node.id); }
+              }}
+              onclick={() => select(node.id)}
+              ondragstart={(e) => onLayerDragStart(e, node.id)}
+              ondragover={(e) => onLayerDragOver(e, node.id)}
+              ondrop={(e) => onLayerDrop(e, node.id)}
+              ondragend={onLayerDragEnd}
             >
-              <button type="button" class="figma__layer-main" onclick={() => select(node.id)}>
+              <span class="figma__layer-main">
                 <span class="figma__layer-ico"><EditorIcon svg={layerIconSvg(node.type)} size={16} /></span>
                 <span class="figma__layer-name">{node.name || node.type}</span>
                 {#if hoverDiffers(restN ?? null, hoverN ?? null)}
                   <span class="figma__dot" title="Rest и Hover различаются"></span>
                 {/if}
-              </button>
+              </span>
               <button
                 type="button"
                 class="figma__eye"
                 class:figma__eye--off={live && !isLayerShown(live)}
                 title={live && !isLayerShown(live) ? 'Показать' : 'Скрыть'}
-                onclick={() => toggleVisible(node.id)}
+                onclick={(e) => { e.stopPropagation(); toggleVisible(node.id); }}
               ><EditorIcon svg={live && !isLayerShown(live) ? editorIcons.show : editorIcons.hide} size={16} /></button>
               <button
                 type="button"
                 class="figma__lock"
                 class:figma__lock--on={node.locked}
                 title={node.locked ? 'Разблокировать' : 'Заблокировать'}
-                onclick={() => toggleLocked(node.id)}
+                onclick={(e) => { e.stopPropagation(); toggleLocked(node.id); }}
               ><EditorIcon svg={node.locked ? editorIcons.lock : editorIcons.unlock} size={16} /></button>
             </div>
           </li>
@@ -1444,8 +1522,8 @@
                   </label>
                   {#each paint.stops as stop, si}
                     <div class="figma__fill-stop">
-                      <span class="figma__swatch" style:background={stop.color}>
-                        <input type="color" value={stop.color} oninput={(e) => {
+                      <span class="figma__swatch" style:background={stopCssColor(stop)}>
+                        <input type="color" value={sanitizeHexRgb(stop.color)} oninput={(e) => {
                           const stops = paint.stops.map((s, i) => i === si ? { ...s, color: e.currentTarget.value } : s);
                           patchFill(paint.id, { stops });
                         }} />
@@ -1453,7 +1531,7 @@
                       <input
                         class="figma__fill-hex"
                         type="text"
-                        value={stop.color.replace('#', '').toUpperCase()}
+                        value={sanitizeHexRgb(stop.color).replace('#', '').toUpperCase()}
                         onchange={(e) => {
                           const hex = parseHexInput(e.currentTarget.value);
                           if (!hex) return;
@@ -1461,7 +1539,7 @@
                           patchFill(paint.id, { stops });
                         }}
                       />
-                      <label class="figma__fill-op">
+                      <label class="figma__fill-op" title="Позиция">
                         <input
                           type="number"
                           min="0"
@@ -1474,6 +1552,20 @@
                           }}
                         />
                         <span>%</span>
+                      </label>
+                      <label class="figma__fill-op" title="Прозрачность стопа">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={Math.round((stop.opacity ?? 1) * 100)}
+                          oninput={(e) => {
+                            const stops = paint.stops.map((s, i) => i === si ? { ...s, opacity: Math.min(1, Math.max(0, Number(e.currentTarget.value) / 100)) } : s);
+                            patchFill(paint.id, { stops });
+                          }}
+                        />
+                        <span>A</span>
                       </label>
                     </div>
                   {/each}
@@ -1618,6 +1710,7 @@
 .figma__toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
   padding: 0.3rem 0.55rem;
   background: #2c2c2c;
@@ -1685,8 +1778,10 @@
   border-radius: 6px;
   font: inherit;
   font-weight: 600;
-  padding: 0.4rem 0.7rem;
+  padding: 0.4rem 0.75rem;
   cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .figma__text-btn {
@@ -1696,6 +1791,7 @@
 }
 
 .figma__save {
+  min-width: 7.25rem;
   background: var(--figma-blue);
   color: #fff;
   &:hover:not(:disabled) { filter: brightness(1.08); }
@@ -1850,9 +1946,27 @@
   border-radius: 4px;
   color: inherit;
   padding: 0.1rem 0.2rem 0.1rem 0;
+  position: relative;
+  cursor: grab;
   &--on { background: #0c6dd8; }
   &--ghost { opacity: 0.45; }
   &:hover:not(&--on) { background: #3a3a3a; }
+  &--drop-before::before,
+  &--drop-after::after {
+    content: '';
+    position: absolute;
+    left: 0.35rem;
+    right: 0.35rem;
+    height: 2px;
+    background: var(--figma-blue);
+    pointer-events: none;
+  }
+  &--drop-before::before { top: 0; }
+  &--drop-after::after { bottom: 0; }
+  &--drop-inside {
+    outline: 1px solid var(--figma-blue);
+    outline-offset: -1px;
+  }
 }
 
 .figma__layer-main {
@@ -2324,8 +2438,8 @@
 
 .figma__fill-stop {
   display: grid;
-  grid-template-columns: 1.5rem minmax(0, 1fr) 3.1rem;
-  gap: 0.25rem;
+  grid-template-columns: 1.5rem minmax(0, 1fr) 2.7rem 2.5rem;
+  gap: 0.2rem;
   align-items: center;
 }
 

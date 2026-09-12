@@ -7,6 +7,8 @@ import { bannerIconSvg } from './vpnBannerIcons';
 import { encodeSvgDataUrl } from './svgTint';
 import { measureAdLayers, type VpnBannerOverlay } from './vpnSponsorBanner';
 
+export type AdGradientStop = { color: string; position: number; opacity: number };
+
 export type AdPaint =
   | { id: string; visible: boolean; type: 'solid'; color: string; opacity: number }
   | { id: string; visible: boolean; type: 'image'; src: string; opacity: number; scaleMode: 'fill' | 'fit' | 'crop' | 'tile' }
@@ -16,7 +18,7 @@ export type AdPaint =
       type: 'gradient';
       opacity: number;
       angle: number;
-      stops: Array<{ color: string; position: number }>;
+      stops: AdGradientStop[];
     };
 
 export type AdStroke = {
@@ -135,17 +137,42 @@ export function solid(color: string, opacity = 1): AdPaint {
   return { id: createPaintId(), visible: true, type: 'solid', color, opacity };
 }
 
-export function linearPaint(opacity = 1, angle = 180): AdPaint {
+/** Keep `input[type=color]` valid — 3/8-digit hex otherwise becomes black. */
+export function sanitizeHexRgb(color: string, fallback = '#000000'): string {
+  const h = String(color || '').replace('#', '').trim();
+  if (/^[0-9a-f]{3}$/i.test(h)) {
+    return `#${h[0]}${h[0]}${h[1]}${h[1]}${h[2]}${h[2]}`.toLowerCase();
+  }
+  if (/^[0-9a-f]{6}([0-9a-f]{2})?$/i.test(h)) return `#${h.slice(0, 6).toLowerCase()}`;
+  return fallback;
+}
+
+export function stopCssColor(stop: { color: string; opacity?: number }): string {
+  const rgb = sanitizeHexRgb(stop.color);
+  const a = Math.min(1, Math.max(0, stop.opacity ?? 1));
+  const n = rgb.slice(1);
+  const r = parseInt(n.slice(0, 2), 16);
+  const g = parseInt(n.slice(2, 4), 16);
+  const b = parseInt(n.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
+export function linearPaint(opacity = 1, angle = 180, overlay = false): AdPaint {
   return {
     id: createPaintId(),
     visible: true,
     type: 'gradient',
     opacity,
     angle,
-    stops: [
-      { color: '#000000', position: 0 },
-      { color: '#FFFFFF', position: 1 },
-    ],
+    stops: overlay
+      ? [
+          { color: '#000000', position: 0, opacity: 0 },
+          { color: '#000000', position: 1, opacity: 0.72 },
+        ]
+      : [
+          { color: '#000000', position: 0, opacity: 1 },
+          { color: '#ffffff', position: 1, opacity: 1 },
+        ],
   };
 }
 
@@ -271,6 +298,80 @@ export function addChild(doc: AdDesignDoc, parentId: string, node: AdNode): AdDe
     ...doc,
     nodes: { ...doc.nodes, [parentId]: frame, [child.id]: child },
   };
+}
+
+function isAncestorOf(doc: AdDesignDoc, ancestorId: string, nodeId: string): boolean {
+  let cur: AdNode | null = getNode(doc, nodeId);
+  while (cur) {
+    if (cur.id === ancestorId) return true;
+    cur = cur.parentId ? getNode(doc, cur.parentId) : null;
+  }
+  return false;
+}
+
+/**
+ * Reorder / reparent like Figma layers. Display list is reverse(childIds):
+ * top of the panel = front = last childId.
+ */
+export function moveNodeRelative(
+  doc: AdDesignDoc,
+  nodeId: string,
+  targetId: string,
+  place: 'before' | 'after' | 'inside',
+): AdDesignDoc {
+  if (nodeId === targetId || nodeId === doc.rootId) return doc;
+  const node = getNode(doc, nodeId);
+  const target = getNode(doc, targetId);
+  if (!node || !target) return doc;
+  if (isAncestorOf(doc, nodeId, targetId)) return doc;
+
+  let parentId: string;
+  let displayIds: string[];
+
+  if (place === 'inside') {
+    if (target.type !== 'frame') return doc;
+    parentId = target.id;
+    const frame = target;
+    displayIds = [...frame.childIds].reverse().filter((id) => id !== nodeId);
+    displayIds = [nodeId, ...displayIds];
+  } else {
+    if (!target.parentId) return doc;
+    parentId = target.parentId;
+    const parent = getNode(doc, parentId);
+    if (!parent || parent.type !== 'frame') return doc;
+    displayIds = [...parent.childIds].reverse().filter((id) => id !== nodeId);
+    let idx = displayIds.indexOf(targetId);
+    if (idx < 0) return doc;
+    if (place === 'after') idx += 1;
+    displayIds.splice(idx, 0, nodeId);
+  }
+
+  const childIds = [...displayIds].reverse();
+  const nodes = { ...doc.nodes };
+  if (node.parentId && node.parentId !== parentId && nodes[node.parentId]?.type === 'frame') {
+    const old = nodes[node.parentId] as AdFrameNode;
+    nodes[node.parentId] = { ...old, childIds: old.childIds.filter((c) => c !== nodeId) };
+  }
+  const parent = nodes[parentId];
+  if (!parent || parent.type !== 'frame') return doc;
+  nodes[parentId] = { ...parent, childIds };
+  nodes[nodeId] = { ...node, parentId };
+  return { ...doc, nodes };
+}
+
+/** Nudge one step in the layers list. `forward` = toward the top (drawn later). */
+export function nudgeNodeZ(doc: AdDesignDoc, nodeId: string, forward: boolean): AdDesignDoc {
+  const node = getNode(doc, nodeId);
+  if (!node || !node.parentId || nodeId === doc.rootId) return doc;
+  const parent = getNode(doc, node.parentId);
+  if (!parent || parent.type !== 'frame') return doc;
+  const display = [...parent.childIds].reverse();
+  const from = display.indexOf(nodeId);
+  if (from < 0) return doc;
+  const to = forward ? from - 1 : from + 1;
+  if (to < 0 || to >= display.length) return doc;
+  const targetId = display[to]!;
+  return moveNodeRelative(doc, nodeId, targetId, forward ? 'before' : 'after');
 }
 
 export function removeNode(doc: AdDesignDoc, id: string): AdDesignDoc {
@@ -457,9 +558,16 @@ function sanitizePaint(raw: unknown, index = 0): AdPaint {
       stops: Array.isArray(p.stops) && p.stops.length
         ? p.stops.map((s) => {
             const o = s && typeof s === 'object' ? (s as Record<string, unknown>) : {};
-            return { color: asStr(o.color, '#fff'), position: asNum(o.position, 0) };
+            return {
+              color: sanitizeHexRgb(asStr(o.color, '#ffffff'), '#ffffff'),
+              position: asNum(o.position, 0),
+              opacity: Math.min(1, Math.max(0, asNum(o.opacity, 1))),
+            };
           })
-        : [{ color: '#000000', position: 0 }, { color: '#ffffff', position: 1 }],
+        : [
+            { color: '#000000', position: 0, opacity: 1 },
+            { color: '#ffffff', position: 1, opacity: 1 },
+          ],
     };
   }
   return { id, visible, type: 'solid', color: asStr(p.color, '#ffffff'), opacity };

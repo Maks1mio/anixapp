@@ -13,7 +13,6 @@ import {
 import {
   cloneStates,
   composeVpnSponsorFrame,
-  easeInOutCubic,
   sanitizeVpnBannerStates,
   statesSignature,
   type VpnBannerOverlay,
@@ -26,6 +25,7 @@ import {
   type AdDesignStates,
 } from '../utils/adDesignDoc';
 import { composeAdDesign } from '../utils/composeAdDesign';
+import { alignDesignPair, easeInOutCubic, stepHoverT } from '../utils/adDesignMotion';
 
 type AdPayload = {
   id?: string;
@@ -143,9 +143,19 @@ async function start() {
   const crtStates = cloneCrtStates(sanitizeCrtStates(ad.crt));
   const overlayStates = cloneStates(sanitizeVpnBannerStates(ad.overlay));
   const designStates: AdDesignStates | null = isDesignStates(ad.design)
-    ? sanitizeDesignStates(ad.design)
+    ? alignDesignPair(
+        sanitizeDesignStates(ad.design).rest,
+        sanitizeDesignStates(ad.design).hover,
+      )
     : null;
   const href = String(ad.href ?? '').trim();
+
+  try {
+    await document.fonts?.load('700 32px "IBM Plex Sans"');
+    await document.fonts?.ready;
+  } catch {
+    /* fallback stack */
+  }
 
   root.innerHTML = '';
   const canvas = document.createElement('canvas');
@@ -187,9 +197,9 @@ async function start() {
   }
   if (!renderer) engine = '2d';
 
-  const pickDesign = (t: number): AdDesignDoc | null => {
+  const pickDesign = (): AdDesignDoc | null => {
     if (!designStates) return null;
-    return t >= 0.5 ? designStates.hover : designStates.rest;
+    return designStates.rest;
   };
 
   const paintSource = async (
@@ -209,8 +219,8 @@ async function start() {
     }
     const ctx = source.getContext('2d', { alpha: true });
     if (!ctx) return;
-    const design = pickDesign(t);
-    if (design) await composeAdDesign(ctx, design, sw, sh);
+    const design = pickDesign();
+    if (design) await composeAdDesign(ctx, design, sw, sh, designStates?.hover ?? null, t);
     else composeVpnSponsorFrame(ctx, art, sw, sh, rest, hover, t);
     renderer?.setSource(source);
   };
@@ -228,8 +238,8 @@ async function start() {
     if (!ctx) return;
     canvas.width = Math.max(1, Math.round(cssW * dpr));
     canvas.height = Math.max(1, Math.round(cssH * dpr));
-    const design = pickDesign(t);
-    if (design) await composeAdDesign(ctx, design, canvas.width, canvas.height);
+    const design = pickDesign();
+    if (design) await composeAdDesign(ctx, design, canvas.width, canvas.height, designStates?.hover ?? null, t);
     else composeVpnSponsorFrame(ctx, art, canvas.width, canvas.height, rest, hover, t);
   };
 
@@ -240,12 +250,10 @@ async function start() {
     const dt = lastTime ? Math.min(48, Math.max(0, timeMs - lastTime)) : 16;
     lastTime = timeMs;
     const target = pointerHover ? 1 : 0;
-    const tau = 140;
-    hoverT += (target - hoverT) * (1 - Math.exp(-dt / tau));
-    if (Math.abs(target - hoverT) < 0.002) hoverT = target;
+    hoverT = reduced ? target : stepHoverT(hoverT, target, dt);
     const eased = easeInOutCubic(hoverT);
     const designKey = designStates
-      ? `d2:${designStates.rest.rootId}:${Object.keys(designStates.rest.nodes).length}`
+      ? `d2:${designStates.rest.rootId}:${Object.keys(designStates.rest.nodes).length}:${Object.keys(designStates.hover.nodes).length}`
       : '';
     const overlayKey = `${designKey}|${statesSignature(overlayStates)}|${eased.toFixed(3)}`;
     const sizeChanged = cssW !== lastCssW || cssH !== lastCssH || dpr !== lastDpr;

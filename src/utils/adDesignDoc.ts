@@ -4,6 +4,7 @@
  */
 
 import { bannerIconSvg } from './vpnBannerIcons';
+import { encodeSvgDataUrl } from './svgTint';
 import { measureAdLayers, type VpnBannerOverlay } from './vpnSponsorBanner';
 
 export type AdPaint =
@@ -82,6 +83,8 @@ export type AdImageNode = AdNodeBase & {
   src: string;
   scaleMode: 'fill' | 'fit' | 'crop';
   cornerRadius: number;
+  /** Fill color for SVG icons (data URL). */
+  tint?: string;
 };
 
 export type AdRectNode = AdNodeBase & {
@@ -447,6 +450,7 @@ function sanitizeNode(raw: unknown): AdNode | null {
         ? (o.scaleMode as 'fill' | 'fit' | 'crop')
         : 'fill',
       cornerRadius: asNum(o.cornerRadius, 0),
+      tint: typeof o.tint === 'string' && /^#/.test(o.tint) ? o.tint : undefined,
     };
   }
   if (type === 'rectangle') {
@@ -588,9 +592,9 @@ export function designMissingCover(doc: AdDesignDoc, imageUrl?: string | null): 
   });
 }
 
-function iconToDataUrl(iconId: string, size: number): string {
-  const svg = bannerIconSvg(iconId || 'wifi-off', Math.max(24, Math.round(size)));
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+function iconToDataUrl(iconId: string, size: number, color = '#ffffff'): string {
+  const svg = bannerIconSvg(iconId || 'wifi-off', Math.max(24, Math.round(size)), color);
+  return encodeSvgDataUrl(svg);
 }
 
 function crtEffectFromParams(
@@ -682,36 +686,44 @@ export function legacyOverlayToDesign(
   doc = addChild(
     doc,
     root.id,
-    createImageNode(iconToDataUrl(iconId, iconSize), {
-      name: 'Icon',
-      x: iconBox ? iconBox.x : width * 0.5 - iconSize / 2,
-      y: iconBox ? iconBox.y : height * 0.14,
-      w: iconSize,
-      h: iconSize,
-      scaleMode: 'fit',
-    }),
+    createImageNode(iconToDataUrl(iconId, iconSize, '#ffffff'), {
+        name: 'Icon',
+        x: iconBox ? iconBox.x : width * 0.5 - iconSize / 2,
+        y: iconBox ? iconBox.y : height * 0.14,
+        w: iconSize,
+        h: iconSize,
+        scaleMode: 'fit',
+        tint: '#ffffff',
+      }),
   );
 
-  const textMap: Array<{ id: string; name: string; text: string; weight: number; fallbackSize: number }> = [
-    { id: 'kicker', name: 'Kicker', text: overlay.kicker || '', weight: 600, fallbackSize: 18 },
-    { id: 'title', name: 'Title', text: overlay.title || '', weight: 700, fallbackSize: 28 },
-    { id: 'body', name: 'Body', text: overlay.body || '', weight: 500, fallbackSize: 15 },
-    { id: 'cta', name: 'CTA', text: overlay.cta || '', weight: 500, fallbackSize: 14 },
+  const minSide = Math.min(width, height);
+  const scale = Math.max(0.5, Math.min(1.8, Number(overlay.textScale || 100) / 100));
+  const textMap: Array<{
+    id: string;
+    name: string;
+    text: string;
+    weight: number;
+    size: number;
+  }> = [
+    { id: 'kicker', name: 'Kicker', text: overlay.kicker || '', weight: 600, size: minSide * 0.055 * scale },
+    { id: 'title', name: 'Title', text: overlay.title || '', weight: 700, size: minSide * 0.078 * scale },
+    { id: 'body', name: 'Body', text: overlay.body || '', weight: 500, size: minSide * 0.042 * scale },
+    { id: 'cta', name: 'CTA', text: overlay.cta || '', weight: 500, size: minSide * 0.038 * scale },
   ];
 
   for (const row of textMap) {
     const text = row.text.trim();
     if (!text) continue;
     const box = byId(row.id);
-    const fontSize = box && box.h > 0
-      ? Math.max(10, Math.round(box.h * 0.72))
-      : row.fallbackSize;
+    const fontSize = Math.max(10, Math.round(row.size));
     const node = createTextNode({
       name: row.name,
       characters: row.text,
       fontSize,
       fontWeight: row.weight,
       textAlign: 'center',
+      verticalAlign: 'top',
       x: box && box.visible ? box.x : width * 0.08,
       y: box && box.visible ? box.y : height * 0.4,
       w: box && box.visible ? Math.max(40, box.w) : width * 0.84,

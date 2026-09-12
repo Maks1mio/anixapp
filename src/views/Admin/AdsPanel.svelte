@@ -14,25 +14,20 @@
     fetchAds,
     fileToDataUrl,
     resolveAdImageUrl,
+    setCoverImage,
     updateAd,
     uploadAdImage,
     type CrtAdCreative,
   } from '../../services/ads-api';
   import { getAdminToken } from '../../stores/admin';
   import {
-    type CrtScreenParams,
     type CrtScreenStates,
   } from '../../utils/crtScreen';
   import { type VpnBannerStates } from '../../utils/vpnSponsorBanner';
   import {
-    cloneDesignDoc,
-    designLooksEmpty,
-    designMissingCover,
-    isDesignStates,
-    type AdDesignDoc,
     type AdDesignStates,
   } from '../../utils/adDesignDoc';
-  import { designHasCrt } from '../../utils/composeAdDesign';
+  import { cloneDesignStatesAligned } from '../../utils/adDesignMotion';
 
   type FormState = Omit<CrtAdCreative, 'id' | 'createdAt' | 'updatedAt'> & { id: string | null };
 
@@ -43,7 +38,6 @@
   let selectedId = $state<string | null>(null);
   let creating = $state(false);
   let designMode = $state(false);
-  let editHover = $state(false);
   let iframeKey = $state(0);
   let formUpdatedAt = $state('');
 
@@ -69,10 +63,6 @@
     formActive
       && ads.some((a) => a.active && a.slot === formSlot.trim() && a.id !== selectedId),
   );
-  const liveDesign = $derived<AdDesignDoc>(
-    editHover ? cloneDesignDoc(formDesign.hover) : cloneDesignDoc(formDesign.rest),
-  );
-  const liveCrt = $derived<CrtScreenParams>(editHover ? formCrt.hover : formCrt.rest);
   const embedBySlot = $derived(adIframeSnippet({ slot: formSlot.trim() || 'connection', width: formWidth, aspectRatio: formAspect }));
   const embedById = $derived(
     selectedId && !creating
@@ -108,14 +98,15 @@
     formCrt = next.crt;
     formOverlay = next.overlay;
     formDesign = ensureAdDesign({
-      ...next,
+      design: next.design,
+      overlay: next.overlay,
+      crt: next.crt,
       imageUrl: coverUrl(next.imageUrl, next.updatedAt || ''),
     });
     formUpdatedAt = next.updatedAt || '';
     pendingImage = null;
     formError = '';
     designMode = false;
-    editHover = false;
   }
 
   async function load(selectId?: string | null) {
@@ -161,42 +152,19 @@
     iframeKey += 1;
   }
 
-  function shouldHydrateDesign(design: AdDesignStates, imageUrl: string | null) {
-    if (!isDesignStates(design)) return true;
-    if (designLooksEmpty(design.rest)) return true;
-    if (designMissingCover(design.rest, imageUrl)) return true;
-    if (!designHasCrt(design.rest)) return true;
-    const hasIcon = Object.values(design.rest.nodes).some(
-      (n) => n.name === 'Icon' || (n.type === 'image' && String(n.src || '').startsWith('data:image/svg')),
-    );
-    return !hasIcon;
-  }
-
   function openEditor() {
     const cover = coverUrl();
-    formDesign = ensureAdDesign(
-      {
-        design: formDesign,
-        overlay: formOverlay,
-        crt: formCrt,
-        imageUrl: cover,
-      },
-      { force: shouldHydrateDesign(formDesign, cover) },
-    );
+    formDesign = cloneDesignStatesAligned(ensureAdDesign({
+      design: formDesign,
+      overlay: formOverlay,
+      crt: formCrt,
+      imageUrl: cover,
+    }));
     designMode = true;
   }
 
-  function setLiveDesign(next: AdDesignDoc) {
-    const plain = cloneDesignDoc(next);
-    formDesign = editHover
-      ? { ...formDesign, hover: plain }
-      : { ...formDesign, rest: plain };
-  }
-
-  function setLiveCrt(next: CrtScreenParams) {
-    formCrt = editHover
-      ? { ...formCrt, hover: next }
-      : { ...formCrt, rest: next };
+  function setFormDesign(next: AdDesignStates) {
+    formDesign = cloneDesignStatesAligned(next);
   }
 
   async function onImageFile(e: Event) {
@@ -215,15 +183,8 @@
         ads = ads.map((a) => (a.id === updated.id ? updated : a));
         formImageUrl = updated.imageUrl;
         formUpdatedAt = updated.updatedAt;
-        formDesign = ensureAdDesign(
-          {
-            design: formDesign,
-            overlay: formOverlay,
-            crt: formCrt,
-            imageUrl: coverUrl(updated.imageUrl, updated.updatedAt),
-          },
-          { force: true },
-        );
+        const cover = coverUrl(updated.imageUrl, updated.updatedAt);
+        if (cover) formDesign = setCoverImage(cloneDesignStatesAligned(formDesign), cover);
         iframeKey += 1;
       } catch (err) {
         formError = err instanceof Error ? err.message : 'Не удалось загрузить картинку';
@@ -235,15 +196,7 @@
     pendingImage = file;
     try {
       formImageUrl = await fileToDataUrl(file);
-      formDesign = ensureAdDesign(
-        {
-          design: formDesign,
-          overlay: formOverlay,
-          crt: formCrt,
-          imageUrl: formImageUrl,
-        },
-        { force: true },
-      );
+      if (formImageUrl) formDesign = setCoverImage(cloneDesignStatesAligned(formDesign), formImageUrl);
     } catch {
       formError = 'Не удалось прочитать файл';
     }
@@ -274,10 +227,7 @@
         aspectRatio: formAspect.trim() || '16 / 11',
         crt: formCrt,
         overlay: formOverlay,
-        design: {
-          rest: cloneDesignDoc(formDesign.rest),
-          hover: cloneDesignDoc(formDesign.hover),
-        },
+        design: cloneDesignStatesAligned(formDesign),
       };
       let saved: CrtAdCreative;
       if (creating || !selectedId) saved = await createAd(payload, token);
@@ -386,23 +336,9 @@
       <header class="adm-ads__ws-head">
         <div>
           <h2 class="adm-editor__title">{creating ? 'Новая реклама' : formTitle || 'Реклама'}</h2>
-          <p class="adm-editor__sub">Figma-редактор · тот же CRT, что в публичном iframe · Rest/Hover</p>
+          <p class="adm-editor__sub">Один холст · Rest/Hover как в Figma · Preview как публичный iframe</p>
         </div>
         <div class="adm-ads__ws-actions">
-          <div class="adm-ads__variants" role="tablist" aria-label="Состояние">
-            <button
-              type="button"
-              class="adm-ads__variant"
-              class:adm-ads__variant--on={!editHover}
-              onclick={() => { editHover = false; }}
-            >Rest</button>
-            <button
-              type="button"
-              class="adm-ads__variant"
-              class:adm-ads__variant--on={editHover}
-              onclick={() => { editHover = true; }}
-            >Hover</button>
-          </div>
           <button type="button" class="uiv2-btn uiv2-btn--ghost uiv2-btn--sm" onclick={() => { designMode = false; }}>
             Закрыть редактор
           </button>
@@ -417,7 +353,12 @@
       {/if}
 
       <div class="adm-ads__ws-body adm-ads__ws-body--figma">
-        <AdFigmaEditor doc={liveDesign} onDocChange={setLiveDesign} crt={liveCrt} onCrtChange={setLiveCrt} />
+        <AdFigmaEditor
+          states={formDesign}
+          onStatesChange={setFormDesign}
+          crt={formCrt}
+          onCrtChange={(next) => { formCrt = next; }}
+        />
       </div>
     </div>
   {:else}
@@ -605,7 +546,9 @@
   overflow: hidden;
 
   &--design {
-    grid-template-columns: 14rem minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+
+    .adm-ads__list { display: none; }
   }
 }
 
@@ -730,15 +673,20 @@
 }
 
 .adm-ads__ws-body--figma {
-  display: block;
-  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
+  flex: 1 1 0;
 }
 
 .adm-ads__ws-body--figma :global(.figma) {
-  height: calc(78vh - 4rem);
-  min-height: 480px;
+  flex: 1 1 0;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
 }
 
 .adm-ads__preview-variants {

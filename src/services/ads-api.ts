@@ -17,6 +17,8 @@ import {
   sanitizeDesignStates,
   type AdDesignStates,
 } from '../utils/adDesignDoc';
+import { alignDesignPair, ensureCrtOnRoot, setCoverImage } from '../utils/adDesignMotion';
+import { designHasCrt } from '../utils/composeAdDesign';
 
 export type CrtAdVisual = {
   href?: string;
@@ -56,11 +58,24 @@ function designFromCreative(input: {
   crt: CrtScreenStates;
   imageUrl?: string | null;
 }): AdDesignStates {
-  return {
-    rest: legacyOverlayToDesign(input.overlay.rest, input.imageUrl, 640, 440, input.crt.rest as unknown as Record<string, number | boolean | string>),
-    hover: legacyOverlayToDesign(input.overlay.hover, input.imageUrl, 640, 440, input.crt.hover as unknown as Record<string, number | boolean | string>),
-  };
+  const rest = legacyOverlayToDesign(
+    input.overlay.rest,
+    input.imageUrl,
+    640,
+    440,
+    input.crt.rest as unknown as Record<string, number | boolean | string>,
+  );
+  const hover = legacyOverlayToDesign(
+    input.overlay.hover,
+    input.imageUrl,
+    640,
+    440,
+    input.crt.hover as unknown as Record<string, number | boolean | string>,
+  );
+  return alignDesignPair(rest, hover);
 }
+
+export { setCoverImage };
 
 export function blankAdDraft(): Omit<CrtAdCreative, 'id' | 'createdAt' | 'updatedAt'> {
   const crt = cloneCrtStates(CRT_VPN_STATES_PRESET);
@@ -94,10 +109,23 @@ export function ensureAdDesign(
   const imageUrl = row.imageUrl ?? null;
 
   if (!opts?.force && isDesignStates(row.design)) {
-    const current = sanitizeDesignStates(row.design);
-    const empty = designLooksEmpty(current.rest);
-    const missingCover = designMissingCover(current.rest, imageUrl);
-    if (!empty && !missingCover) return current;
+    let current = alignDesignPair(
+      sanitizeDesignStates(row.design).rest,
+      sanitizeDesignStates(row.design).hover,
+    );
+    if (designLooksEmpty(current.rest)) {
+      return designFromCreative({ overlay, crt, imageUrl });
+    }
+    if (imageUrl && designMissingCover(current.rest, imageUrl)) {
+      current = setCoverImage(current, imageUrl);
+    }
+    if (!designHasCrt(current.rest)) {
+      current = {
+        rest: ensureCrtOnRoot(current.rest, crt.rest as unknown as Record<string, number | boolean | string>),
+        hover: ensureCrtOnRoot(current.hover, crt.hover as unknown as Record<string, number | boolean | string>),
+      };
+    }
+    return current;
   }
 
   return designFromCreative({ overlay, crt, imageUrl });

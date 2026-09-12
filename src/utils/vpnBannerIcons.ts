@@ -310,7 +310,7 @@ function toSvg(icon: IconNode[], size: number, stroke = 'currentColor'): string 
   return `<svg ${attrs}>${children}</svg>`;
 }
 
-export function bannerIconSvg(id: string, size = 18): string {
+export function bannerIconSvg(id: string, size = 18, color = 'currentColor'): string {
   const found = VPN_BANNER_ICONS.find((i) => i.id === id) ?? VPN_BANNER_ICONS[0];
-  return toSvg(found.icon, size);
+  return toSvg(found.icon, size, color);
 }

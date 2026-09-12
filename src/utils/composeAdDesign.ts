@@ -1,5 +1,7 @@
 import type { AdDesignDoc, AdFrameNode, AdNode, AdPaint } from './adDesignDoc';
 import { getRoot, listChildren } from './adDesignDoc';
+import { mixNodeVisual, nodeOpacity } from './adDesignMotion';
+import { isSvgDataUrl, parseSvgDataUrlColor, tintSvgDataUrl } from './svgTint';
 
 const imageCache = new Map<string, HTMLImageElement | 'error'>();
 
@@ -41,6 +43,23 @@ function paintColor(p: AdPaint): string {
     return p.color;
   }
   return '#ffffff';
+}
+
+function fontWeightCss(weight: number): string {
+  const w = Math.round(weight);
+  if (w >= 700) return '700';
+  if (w >= 600) return '600';
+  if (w >= 500) return '500';
+  return '400';
+}
+
+function applyTextStyle(ctx: CanvasRenderingContext2D, node: Extract<AdNode, { type: 'text' }>) {
+  ctx.font = `${fontWeightCss(node.fontWeight)} ${Math.round(node.fontSize)}px ${node.fontFamily}, "Segoe UI", sans-serif`;
+  const letter = (ctx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing;
+  if (letter !== undefined) {
+    (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing =
+      `${node.letterSpacing || 0}px`;
+  }
 }
 
 async function drawPaint(
@@ -111,13 +130,67 @@ function drawImageCover(
   h: number,
   mode: 'fill' | 'fit',
 ) {
-  const iw = 'naturalWidth' in img ? Number(img.naturalWidth) || Number(img.width) : Number(img.width);
-  const ih = 'naturalHeight' in img ? Number(img.naturalHeight) || Number(img.height) : Number(img.height);
+  const anyImg = img as { naturalWidth?: number; naturalHeight?: number; width?: number; height?: number };
+  const iw = Number(anyImg.naturalWidth || anyImg.width) || 0;
+  const ih = Number(anyImg.naturalHeight || anyImg.height) || 0;
   if (!iw || !ih) return;
   const scale = mode === 'fit' ? Math.min(w / iw, h / ih) : Math.max(w / iw, h / ih);
   const dw = iw * scale;
   const dh = ih * scale;
   ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+}
+
+function drawTextNode(ctx: CanvasRenderingContext2D, node: Extract<AdNode, { type: 'text' }>, x: number, y: number, alphaMul = 1) {
+  const fill = node.fills[0];
+  ctx.save();
+  ctx.globalAlpha *= alphaMul;
+  ctx.fillStyle = fill ? paintColor(fill) : '#fff';
+  ctx.textAlign = node.textAlign;
+  ctx.textBaseline = node.verticalAlign === 'middle' ? 'middle' : node.verticalAlign === 'bottom' ? 'bottom' : 'top';
+  applyTextStyle(ctx, node);
+  ctx.shadowColor = 'rgba(0,0,0,0.55)';
+  ctx.shadowBlur = Math.max(3, Math.min(node.w, node.h) * 0.03);
+  ctx.shadowOffsetY = 1;
+  let tx = x;
+  if (node.textAlign === 'center') tx = x + node.w / 2;
+  if (node.textAlign === 'right') tx = x + node.w;
+  let ty = y;
+  if (node.verticalAlign === 'middle') ty = y + node.h / 2;
+  if (node.verticalAlign === 'bottom') ty = y + node.h;
+  const lh = node.lineHeight === 'auto' ? node.fontSize * 1.25 : node.lineHeight;
+  const lines = wrapText(ctx, node.characters, node.w);
+  let lineY = ty;
+  if (node.verticalAlign === 'middle') lineY = ty - ((lines.length - 1) * lh) / 2;
+  if (node.verticalAlign === 'bottom') lineY = ty - (lines.length - 1) * lh;
+  for (const line of lines) {
+    ctx.fillText(line, tx, lineY, node.w);
+    lineY += lh;
+  }
+  ctx.restore();
+}
+
+async function drawImageNode(
+  ctx: CanvasRenderingContext2D,
+  node: Extract<AdNode, { type: 'image' }>,
+  x: number,
+  y: number,
+  alphaMul = 1,
+) {
+  let src = node.src;
+  if (isSvgDataUrl(src)) {
+    const color = node.tint || parseSvgDataUrlColor(src) || '#ffffff';
+    src = tintSvgDataUrl(src, color);
+  }
+  const img = await loadImage(src);
+  if (!img) return;
+  ctx.save();
+  ctx.globalAlpha *= alphaMul;
+  if (node.cornerRadius > 0) {
+    roundRect(ctx, x, y, node.w, node.h, node.cornerRadius);
+    ctx.clip();
+  }
+  drawImageCover(ctx, img, x, y, node.w, node.h, node.scaleMode === 'fit' ? 'fit' : 'fill');
+  ctx.restore();
 }
 
 async function drawNode(
@@ -126,73 +199,64 @@ async function drawNode(
   node: AdNode,
   ox: number,
   oy: number,
+  hoverDoc?: AdDesignDoc | null,
+  t = 0,
 ) {
-  if (!node.visible) return;
-  const x = ox + node.x;
-  const y = oy + node.y;
+  const counterpart = hoverDoc?.nodes[node.id];
+  const mixed = counterpart && counterpart.type === node.type ? mixNodeVisual(node, counterpart, t) : node;
+  if (nodeOpacity(mixed) <= 0.001) return;
+  const x = ox + mixed.x;
+  const y = oy + mixed.y;
   ctx.save();
-  ctx.globalAlpha *= node.opacity;
-  if (node.rotation) {
-    ctx.translate(x + node.w / 2, y + node.h / 2);
-    ctx.rotate((node.rotation * Math.PI) / 180);
-    ctx.translate(-(x + node.w / 2), -(y + node.h / 2));
+  ctx.globalAlpha *= mixed.opacity;
+  if (mixed.rotation) {
+    ctx.translate(x + mixed.w / 2, y + mixed.h / 2);
+    ctx.rotate((mixed.rotation * Math.PI) / 180);
+    ctx.translate(-(x + mixed.w / 2), -(y + mixed.h / 2));
   }
 
-  if (node.type === 'frame') {
-    if (node.clipsContent) {
-      roundRect(ctx, x, y, node.w, node.h, node.cornerRadius);
+  if (mixed.type === 'frame') {
+    if (mixed.clipsContent) {
+      roundRect(ctx, x, y, mixed.w, mixed.h, mixed.cornerRadius);
       ctx.clip();
     }
-    await drawPaint(ctx, node.fills, x, y, node.w, node.h, node.cornerRadius);
-    for (const stroke of node.strokes) {
+    await drawPaint(ctx, mixed.fills, x, y, mixed.w, mixed.h, mixed.cornerRadius);
+    for (const stroke of mixed.strokes) {
       ctx.strokeStyle = stroke.color;
-      ctx.globalAlpha = stroke.opacity * node.opacity;
+      ctx.globalAlpha = stroke.opacity * mixed.opacity;
       ctx.lineWidth = stroke.weight;
-      roundRect(ctx, x, y, node.w, node.h, node.cornerRadius);
+      roundRect(ctx, x, y, mixed.w, mixed.h, mixed.cornerRadius);
       ctx.stroke();
     }
-    for (const child of listChildren(doc, node.id)) {
-      await drawNode(ctx, doc, child, x, y);
+    for (const child of listChildren(doc, mixed.id)) {
+      await drawNode(ctx, doc, child, x, y, hoverDoc, t);
     }
-  } else if (node.type === 'rectangle') {
-    await drawPaint(ctx, node.fills, x, y, node.w, node.h, node.cornerRadius);
-    for (const stroke of node.strokes) {
+  } else if (mixed.type === 'rectangle') {
+    await drawPaint(ctx, mixed.fills, x, y, mixed.w, mixed.h, mixed.cornerRadius);
+    for (const stroke of mixed.strokes) {
       ctx.strokeStyle = stroke.color;
-      ctx.globalAlpha = stroke.opacity * node.opacity;
+      ctx.globalAlpha = stroke.opacity * mixed.opacity;
       ctx.lineWidth = stroke.weight;
-      roundRect(ctx, x, y, node.w, node.h, node.cornerRadius);
+      roundRect(ctx, x, y, mixed.w, mixed.h, mixed.cornerRadius);
       ctx.stroke();
     }
-  } else if (node.type === 'image') {
-    const img = await loadImage(node.src);
-    if (img) {
-      if (node.cornerRadius > 0) {
-        roundRect(ctx, x, y, node.w, node.h, node.cornerRadius);
-        ctx.clip();
-      }
-      drawImageCover(ctx, img, x, y, node.w, node.h, node.scaleMode === 'fit' ? 'fit' : 'fill');
+  } else if (mixed.type === 'image') {
+    const restImg = node.type === 'image' ? node : mixed;
+    const other = counterpart && counterpart.type === 'image' ? counterpart : null;
+    if (other && other.src !== restImg.src && t > 0.02 && t < 0.98) {
+      await drawImageNode(ctx, { ...mixed, src: restImg.src, scaleMode: restImg.scaleMode }, x, y, 1 - t);
+      await drawImageNode(ctx, { ...mixed, src: other.src, scaleMode: other.scaleMode }, x, y, t);
+    } else {
+      await drawImageNode(ctx, mixed, x, y, 1);
     }
-  } else if (node.type === 'text') {
-    const fill = node.fills[0];
-    ctx.fillStyle = fill ? paintColor(fill) : '#fff';
-    ctx.textAlign = node.textAlign;
-    ctx.textBaseline = node.verticalAlign === 'middle' ? 'middle' : node.verticalAlign === 'bottom' ? 'bottom' : 'top';
-    const weight = node.fontWeight >= 600 ? '700' : '500';
-    ctx.font = `${weight} ${Math.round(node.fontSize)}px ${node.fontFamily}, "Segoe UI", sans-serif`;
-    let tx = x;
-    if (node.textAlign === 'center') tx = x + node.w / 2;
-    if (node.textAlign === 'right') tx = x + node.w;
-    let ty = y;
-    if (node.verticalAlign === 'middle') ty = y + node.h / 2;
-    if (node.verticalAlign === 'bottom') ty = y + node.h;
-    const lh = node.lineHeight === 'auto' ? node.fontSize * 1.25 : node.lineHeight;
-    const lines = wrapText(ctx, node.characters, node.w);
-    let lineY = ty;
-    if (node.verticalAlign === 'middle') lineY = ty - ((lines.length - 1) * lh) / 2;
-    if (node.verticalAlign === 'bottom') lineY = ty - (lines.length - 1) * lh;
-    for (const line of lines) {
-      ctx.fillText(line, tx, lineY);
-      lineY += lh;
+  } else if (mixed.type === 'text') {
+    const restText = node.type === 'text' ? node : mixed;
+    const other = counterpart && counterpart.type === 'text' ? counterpart : null;
+    if (other && other.characters !== restText.characters && t > 0.02 && t < 0.98) {
+      drawTextNode(ctx, { ...restText, ...mixed, characters: restText.characters, type: 'text' }, x, y, 1 - t);
+      drawTextNode(ctx, { ...other, w: mixed.w, h: mixed.h, fontSize: mixed.fontSize }, x, y, t);
+    } else {
+      drawTextNode(ctx, mixed, x, y, 1);
     }
   }
   ctx.restore();
@@ -227,6 +291,8 @@ export async function composeAdDesign(
   doc: AdDesignDoc,
   cssW: number,
   cssH: number,
+  hoverDoc?: AdDesignDoc | null,
+  t = 0,
 ): Promise<void> {
   ctx.clearRect(0, 0, cssW, cssH);
   const root = getRoot(doc);
@@ -234,7 +300,7 @@ export async function composeAdDesign(
   const sy = cssH / Math.max(1, doc.height);
   ctx.save();
   ctx.scale(sx, sy);
-  await drawNode(ctx, doc, root, 0, 0);
+  await drawNode(ctx, doc, root, 0, 0, hoverDoc ?? null, hoverDoc ? Math.min(1, Math.max(0, t)) : 0);
   ctx.restore();
 }
 

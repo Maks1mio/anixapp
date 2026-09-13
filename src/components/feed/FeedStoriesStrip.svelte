@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { flip } from 'svelte/animate';
+  import { cubicOut } from 'svelte/easing';
   import UserAvatar from '../UserAvatar.svelte';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../uikit-v2/UiV2PopupMenu.svelte';
   import { iconChevronDown, iconChevronLeft, iconChevronRight, iconPin, iconPlus, iconUsers } from '../icons';
@@ -70,6 +72,34 @@
     return list;
   });
 
+  function prefersReducedMotion(): boolean {
+    return typeof window !== 'undefined'
+      && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function storyFlip(
+    node: HTMLElement,
+    rects: { from: DOMRect; to: DOMRect },
+  ) {
+    if (prefersReducedMotion()) return flip(node, rects, { duration: 0 });
+    const dx = rects.from.left - rects.to.left;
+    if (Math.abs(dx) > 1) node.style.zIndex = '6';
+    const animation = flip(node, rects, {
+      duration: (d) => Math.min(560, 260 + Math.sqrt(d) * 14),
+      easing: cubicOut,
+    });
+    const css = animation.css;
+    return {
+      ...animation,
+      css: css
+        ? (t: number, u: number) => {
+          if (t >= 1) node.style.zIndex = '';
+          return css(t, u);
+        }
+        : css,
+    };
+  }
+
   function coverStyle(url: string | null | undefined): string | undefined {
     if (!url) return undefined;
     const safe = url.replace(/\\/g, '/').replace(/"/g, '%22');
@@ -94,9 +124,42 @@
     return Math.round(cardWidth * 3 + gap * 2);
   }
 
+  let wheelRaf = 0;
+  let wheelTarget = 0;
+
+  function cancelWheelAnim() {
+    if (!wheelRaf) return;
+    cancelAnimationFrame(wheelRaf);
+    wheelRaf = 0;
+  }
+
+  function clampScroll(el: HTMLElement, left: number): number {
+    const max = Math.max(0, el.scrollWidth - el.clientWidth);
+    return Math.max(0, Math.min(max, left));
+  }
+
+  function tickWheel() {
+    const el = scrollEl;
+    if (!el) {
+      wheelRaf = 0;
+      return;
+    }
+    wheelTarget = clampScroll(el, wheelTarget);
+    const cur = el.scrollLeft;
+    const dist = wheelTarget - cur;
+    if (Math.abs(dist) < 0.4) {
+      el.scrollLeft = wheelTarget;
+      wheelRaf = 0;
+      return;
+    }
+    el.scrollLeft = cur + dist * 0.2;
+    wheelRaf = requestAnimationFrame(tickWheel);
+  }
+
   function scrollByDir(dir: -1 | 1) {
     const el = scrollEl;
     if (!el) return;
+    cancelWheelAnim();
     el.scrollBy({ left: dir * getScrollStep(el), behavior: 'smooth' });
   }
 
@@ -104,8 +167,21 @@
     const el = e.currentTarget as HTMLElement;
     if (el.scrollWidth <= el.clientWidth + 1) return;
     if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-    el.scrollLeft += e.deltaY;
     e.preventDefault();
+
+    let delta = e.deltaY;
+    if (e.deltaMode === 1) delta *= 16;
+    else if (e.deltaMode === 2) delta *= el.clientWidth;
+
+    if (prefersReducedMotion()) {
+      cancelWheelAnim();
+      el.scrollLeft = clampScroll(el, el.scrollLeft + delta);
+      return;
+    }
+
+    if (!wheelRaf) wheelTarget = el.scrollLeft;
+    wheelTarget = clampScroll(el, wheelTarget + delta);
+    if (!wheelRaf) wheelRaf = requestAnimationFrame(tickWheel);
   }
 
   function onPinClick(e: MouseEvent, id: number) {
@@ -154,6 +230,7 @@
     window.addEventListener('resize', update);
 
     return () => {
+      cancelWheelAnim();
       ro.disconnect();
       el.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', update);
@@ -176,7 +253,7 @@
       >
         {#each items as item (item.id)}
           {@const active = selectedId === item.id}
-          <li class="feed-stories__cell">
+          <li class="feed-stories__cell" animate:storyFlip>
             <div class="feed-stories__frame">
               <button
                 type="button"

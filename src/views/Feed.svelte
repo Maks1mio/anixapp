@@ -34,6 +34,7 @@
     channelAvatarUrl,
     channelCoverUrl,
     channelSubscriberCount,
+    formatFeedRelativeTime,
     normalizeArticleVote,
   } from '../utils/feed-article';
   import { getSearchParams } from '../router';
@@ -49,29 +50,26 @@
   } from '../utils/subscription-pins';
   import {
     getFeedBrowseHistory,
-    getFeedSideCollapse,
     pushFeedBrowseChannel,
     pushFeedBrowsePost,
-    setFeedSideCollapse,
     type FeedBrowseHistoryItem,
   } from '../utils/feed-browse-history';
   import UiV2FeedChannelCard from '../components/uikit-v2/UiV2FeedChannelCard.svelte';
   import UiV2FeedRecommended from '../components/uikit-v2/UiV2FeedRecommended.svelte';
   import FeedStoriesStrip from '../components/feed/FeedStoriesStrip.svelte';
+  import FeedHistoryMoment from '../components/feed/FeedHistoryMoment.svelte';
   import {
     iconArrowLeft,
-    iconChevronDown,
     iconClock,
     iconFlame,
     iconNewspaper,
-    iconPin,
     iconRefreshCw,
     iconSearch,
     iconUsers,
     iconX,
   } from '../components/icons';
 
-  type FeedTab = 'my' | 'latest' | 'managed';
+  type FeedTab = 'my' | 'latest' | 'managed' | 'history';
   type LoadState = 'idle' | 'loading' | 'ready' | 'empty' | 'error' | 'need-auth';
 
   type FeedPostViewSnapshot = {
@@ -146,8 +144,9 @@
   let pinTick = $state(0);
   /** Инкремент после записи в историю сайдбара. */
   let historyTick = $state(0);
-  let feedCollapsed = $state(false);
-  let historyCollapsed = $state(false);
+  let historyVisibleCount = $state(10);
+  let historyArticles = $state<Record<number, FeedArticle>>({});
+  let historyArticleBusy = $state<Record<number, boolean>>({});
   let subscribeBusyId = $state<number | null>(null);
   let selectedArticleId = $state<number | null>(null);
   let focusArticle = $state<FeedArticle | null>(null);
@@ -190,8 +189,36 @@
     };
   }
 
+  function isFeedTab(value: unknown): value is FeedTab {
+    return value === 'my' || value === 'latest' || value === 'managed' || value === 'history';
+  }
+
+  function historyMomentMs(at: number): number {
+    return at > 1e12 ? at : at * 1000;
+  }
+
+  function historyDayKey(at: number): string {
+    const d = new Date(historyMomentMs(at));
+    return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  }
+
+  function historyDayLabel(at: number): string {
+    const d = new Date(historyMomentMs(at));
+    const now = new Date();
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const startThat = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const diffDays = Math.round((startToday - startThat) / 86_400_000);
+    if (diffDays === 0) return 'Сегодня';
+    if (diffDays === 1) return 'Вчера';
+    return d.toLocaleDateString('ru-RU', {
+      day: 'numeric',
+      month: 'long',
+      year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+    });
+  }
+
   function applyFeedListSnapshot(s: FeedListSnapshot) {
-    tab = s.tab;
+    tab = isFeedTab(s.tab) ? s.tab : 'latest';
     dateFilter = s.dateFilter;
     channelFilterId = s.channelFilterId;
     articles = s.articles;
@@ -267,7 +294,9 @@
             : 'Лента')
           : tab === 'latest'
             ? 'Свежее'
-            : 'Управляемые',
+            : tab === 'history'
+              ? 'История'
+              : 'Управляемые',
   );
 
   const recommendChannelsMapped = $derived(
@@ -295,12 +324,17 @@
   );
 
   const searchNeedle = $derived(searchQuery.trim().toLowerCase());
-  const searchMode = $derived(tab !== 'managed' && searchNeedle.length > 0);
+  const searchMode = $derived(tab !== 'managed' && tab !== 'history' && searchNeedle.length > 0);
   const searchPlaceholder = $derived(
-    tab === 'managed' ? 'Поиск каналов…' : 'Поиск записей в ленте…',
+    tab === 'managed'
+      ? 'Поиск каналов…'
+      : tab === 'history'
+        ? 'Поиск в истории…'
+        : 'Поиск записей в ленте…',
   );
   const feedNoAside = $derived(
     tab === 'managed'
+      || tab === 'history'
       || (!postViewActive && searchMode)
       || (!postViewActive && !(asideChannel || hasAsideLists)),
   );
@@ -470,18 +504,24 @@
     avatar?: string | null;
     is_blog?: boolean;
     title: string;
+    fresh?: boolean;
   };
 
-  const feedCollapsedAvatars = $derived(
-    displaySubscriptions.slice(0, 3).map((ch) => ({
-      key: `sub-${ch.id}`,
-      avatar: ch.avatar,
-      is_blog: ch.is_blog,
-      title: ch.title || `Канал #${ch.id}`,
-    })),
-  );
+  const feedNavAvatars = $derived.by((): SidePreviewAvatar[] => {
+    void lastSeenTick;
+    return displaySubscriptions
+      .filter((ch) => channelHasNewArticles(ch.id, ch.last_article_date))
+      .slice(0, 3)
+      .map((ch) => ({
+        key: `sub-${ch.id}`,
+        avatar: ch.avatar,
+        is_blog: ch.is_blog,
+        title: ch.title || `Канал #${ch.id}`,
+        fresh: true,
+      }));
+  });
 
-  const historyCollapsedAvatars = $derived.by((): SidePreviewAvatar[] => {
+  const historyNavAvatars = $derived.by((): SidePreviewAvatar[] => {
     const seen = new Set<string>();
     const out: SidePreviewAvatar[] = [];
     for (const item of browseHistory) {
@@ -502,6 +542,30 @@
       if (out.length >= 3) break;
     }
     return out;
+  });
+
+  const historyItems = $derived.by(() => {
+    const q = searchNeedle;
+    const list = q
+      ? browseHistory.filter((item) => item.title.toLowerCase().includes(q))
+      : browseHistory;
+    return [...list].sort((a, b) => (b.at || 0) - (a.at || 0));
+  });
+
+  const shownHistory = $derived(historyItems.slice(0, historyVisibleCount));
+  const historyHasMore = $derived(historyItems.length > historyVisibleCount);
+  const historyGroups = $derived.by(() => {
+    const groups: { key: string; label: string; items: FeedBrowseHistoryItem[] }[] = [];
+    for (const item of shownHistory) {
+      const key = historyDayKey(item.at);
+      const last = groups[groups.length - 1];
+      if (last && last.key === key) {
+        last.items.push(item);
+      } else {
+        groups.push({ key, label: historyDayLabel(item.at), items: [item] });
+      }
+    }
+    return groups;
   });
 
   const pinnedIdSet = $derived.by(() => {
@@ -544,80 +608,17 @@
     authed && displaySubscriptions.length === 0 && loadState === 'loading',
   );
 
-  const subscriptionSelected = $derived(
-    tab === 'my'
-      && channelFilterId != null
-      && isLocalSubscription(channelFilterId),
-  );
-  const historyChannelSelected = $derived(
-    !postViewActive && tab === 'my' && channelFilterId != null,
-  );
-  const historyPostSelected = $derived(
-    postViewActive && !!focusArticle?.id,
-  );
-  const historySelected = $derived(historyChannelSelected || historyPostSelected);
-
-  function subscriptionIsPinned(channelId: number): boolean {
-    return pinnedIdSet.has(channelId);
-  }
-
-  function onTogglePin(e: MouseEvent, channelId: number) {
-    e.stopPropagation();
-    e.preventDefault();
-    toggleSubscriptionPin(channelId);
-    pinTick += 1;
-  }
-
-  function persistSideCollapse() {
-    setFeedSideCollapse({ feed: feedCollapsed, history: historyCollapsed });
-  }
-
-  function toggleFeedCollapsed(e: MouseEvent) {
-    e.stopPropagation();
-    e.preventDefault();
-    feedCollapsed = !feedCollapsed;
-    persistSideCollapse();
-  }
-
-  function toggleHistoryCollapsed(e?: MouseEvent) {
-    e?.stopPropagation();
-    e?.preventDefault();
-    historyCollapsed = !historyCollapsed;
-    persistSideCollapse();
-  }
-
   function rememberBrowseChannel(channel: FeedChannel | null | undefined) {
     const id = Number(channel?.id ?? 0);
     if (!(id > 0)) return;
-    const guest = !isLocalSubscription(id);
     pushFeedBrowseChannel(channel);
     historyTick += 1;
-    if (guest && historyCollapsed) {
-      historyCollapsed = false;
-      persistSideCollapse();
-    }
   }
 
   function rememberBrowsePost(article: FeedArticle | null | undefined) {
     if (!article?.id) return;
     pushFeedBrowsePost(article);
-    const ch = article.channel;
-    const channelId = Number(ch?.id ?? 0);
-    if (channelId > 0) {
-      pushFeedBrowseChannel(ch);
-    }
     historyTick += 1;
-  }
-
-  function historyItemActive(item: FeedBrowseHistoryItem): boolean {
-    if (item.kind === 'post') {
-      return postViewActive && focusArticle?.id === item.id;
-    }
-    return (
-      !postViewActive
-      && tab === 'my'
-      && channelFilterId === item.id
-    );
   }
 
   function onHistoryItemClick(item: FeedBrowseHistoryItem) {
@@ -626,6 +627,35 @@
       return;
     }
     void selectArticleById(item.id);
+  }
+
+  async function loadHistoryArticles(ids: number[]): Promise<void> {
+    const unique = [...new Set(ids.filter((id) => id > 0))];
+    const missing = unique.filter((id) => !historyArticles[id] && !historyArticleBusy[id]);
+    if (missing.length === 0) return;
+    const nextBusy: Record<number, boolean> = { ...historyArticleBusy };
+    for (const id of missing) nextBusy[id] = true;
+    historyArticleBusy = nextBusy;
+
+    await Promise.all(missing.map(async (id) => {
+      try {
+        const res = await window.anixApi?.article?.info?.(id);
+        const full = (res?.article ?? null) as FeedArticle | null;
+        if (full?.id) {
+          historyArticles = { ...historyArticles, [id]: full };
+        }
+      } catch {
+        /* запись могла быть удалена */
+      } finally {
+        const busy = { ...historyArticleBusy };
+        delete busy[id];
+        historyArticleBusy = busy;
+      }
+    }));
+  }
+
+  function loadMoreHistory() {
+    historyVisibleCount += 10;
   }
 
   function markSubscriptionSeen(ch: FeedChannel | undefined | null) {
@@ -841,6 +871,7 @@
         : moreArticles.find((a) => a.id === id)
           ?? articles.find((a) => a.id === id)
           ?? searchArticles.find((a) => a.id === id)
+          ?? historyArticles[id]
           ?? (spotlightArticle?.id === id ? spotlightArticle : null);
     if (existing) {
       await selectArticle(existing);
@@ -918,6 +949,13 @@
   }
 
   async function fetchPage(nextPage: number, append: boolean): Promise<void> {
+    if (tab === 'history') {
+      loadState = historyItems.length === 0 ? 'empty' : 'ready';
+      hasMore = false;
+      articles = [];
+      return;
+    }
+
     const api = window.anixApi?.feed;
     if (!api) {
       loadState = 'error';
@@ -1038,6 +1076,14 @@
       await fetchSearch(searchQuery.trim(), 0, false);
       return;
     }
+    if (tab === 'history') {
+      historyArticles = {};
+      historyArticleBusy = {};
+      historyVisibleCount = 10;
+      scrollFeedToTop();
+      loadState = historyItems.length === 0 ? 'empty' : 'ready';
+      return;
+    }
     scrollFeedToTop();
     page = 0;
     await fetchPage(0, false);
@@ -1046,13 +1092,14 @@
   function onTabChange(id: FeedTab) {
     if (id === 'my' && !authed && !requireAuth()) return;
     if (id === 'managed' && !authed && !requireAuth()) return;
-    if (id === tab && !postViewActive && channelFilterId == null) {
+    if (id === tab && !postViewActive && (id !== 'my' || channelFilterId == null)) {
       scrollFeedToTop();
       return;
     }
     clearArticleFocus();
     tab = id;
     channelFilterId = null;
+    if (id === 'history') historyVisibleCount = 10;
     void loadSidebarChannel(null);
     scrollFeedToTop();
     void reload();
@@ -1077,10 +1124,6 @@
       const ch = subscriptions.find((c) => c.id === nextId);
       markSubscriptionSeen(ch);
       if (ch) rememberBrowseChannel(ch);
-      if (feedCollapsed) {
-        feedCollapsed = false;
-        persistSideCollapse();
-      }
     }
     void loadSidebarChannel(nextId);
     scrollFeedToTop();
@@ -1201,10 +1244,6 @@
         subscriptions = subscriptions.map((c) =>
           c.id === channelId ? { ...c, is_subscribed: true } : c,
         );
-      }
-      if (feedCollapsed) {
-        feedCollapsed = false;
-        persistSideCollapse();
       }
     } else {
       subscriptions = subscriptions.filter((c) => c.id !== channelId);
@@ -1327,7 +1366,8 @@
   $effect(() => {
     const q = searchQuery.trim();
     const currentTab = tab;
-    if (currentTab === 'managed' || !q) {
+    if (currentTab === 'managed' || currentTab === 'history' || !q) {
+      if (currentTab === 'history') historyVisibleCount = 10;
       clearSearchResults();
       return;
     }
@@ -1337,11 +1377,15 @@
     return () => clearTimeout(handle);
   });
 
-  onMount(() => {
-    const collapse = getFeedSideCollapse();
-    feedCollapsed = collapse.feed;
-    historyCollapsed = collapse.history;
+  $effect(() => {
+    if (tab !== 'history') return;
+    const ids = shownHistory
+      .filter((item) => item.kind === 'post')
+      .map((item) => item.id);
+    void loadHistoryArticles(ids);
+  });
 
+  onMount(() => {
     applyFeedSearchFromRoute();
     unregisterScrollKey = registerActiveScrollKey(() => FEED_VIEW_KEY());
 
@@ -1391,11 +1435,15 @@
     });
 
     const cached = getViewState<FeedListSnapshot>(FEED_VIEW_KEY());
+    const cachedData = cached?.data;
     const canRestore =
-      !!cached?.data
-      && Array.isArray(cached.data.articles)
-      && cached.data.articles.length > 0
-      && (cached.data.loadState === 'ready' || cached.data.loadState === 'empty');
+      !!cachedData
+      && (cachedData.loadState === 'ready' || cachedData.loadState === 'empty')
+      && (
+        cachedData.tab === 'history'
+        || cachedData.tab === 'managed'
+        || (Array.isArray(cachedData.articles) && cachedData.articles.length > 0)
+      );
 
     if (canRestore && cached?.data) {
       applyFeedListSnapshot(cached.data);
@@ -1487,6 +1535,7 @@
         type="button"
         class="feed-side__item"
         class:feed-side__item--active={tab === 'latest'}
+        aria-current={tab === 'latest' ? 'page' : undefined}
         onclick={() => onTabChange('latest')}
       >
         <span class="feed-side__item-icon" aria-hidden="true">{@html iconFlame(18)}</span>
@@ -1496,184 +1545,70 @@
         type="button"
         class="feed-side__item"
         class:feed-side__item--active={tab === 'managed'}
+        aria-current={tab === 'managed' ? 'page' : undefined}
         onclick={() => onTabChange('managed')}
       >
         <span class="feed-side__item-icon" aria-hidden="true">{@html iconUsers(18)}</span>
         <span class="feed-side__item-label">Управляемые</span>
       </button>
-    </nav>
-
-    <section class="feed-side__group" aria-label="Лента">
-      <div class="feed-side__group-head">
-        <button
-          type="button"
-          class="feed-side__item feed-side__item--group"
-          class:feed-side__item--active={tab === 'my' && channelFilterId == null && !postViewActive}
-          class:feed-side__item--dim={subscriptionSelected || historySelected}
-          onclick={() => onTabChange('my')}
-        >
-          <span class="feed-side__item-icon" aria-hidden="true">{@html iconNewspaper(18)}</span>
-          <span class="feed-side__item-label">Лента</span>
-          {#if feedCollapsed && feedCollapsedAvatars.length > 0}
-            <span class="feed-side__avatar-stack" aria-hidden="true">
-              {#each feedCollapsedAvatars as av (av.key)}
-                <span
-                  class="feed-side__avatar-stack-item"
-                  class:feed-side__avatar-stack-item--channel={!av.is_blog}
-                  class:feed-side__avatar-stack-item--empty={!channelAvatarUrl(av.avatar)}
-                  style={channelAvatarUrl(av.avatar)
-                    ? `background-image:url('${channelAvatarUrl(av.avatar)}')`
-                    : undefined}
-                  title={av.title}
-                ></span>
-              {/each}
-            </span>
-          {/if}
-        </button>
-        <button
-          type="button"
-          class="feed-side__collapse"
-          class:feed-side__collapse--on={!feedCollapsed}
-          title={feedCollapsed ? 'Показать ленту' : 'Скрыть ленту'}
-          aria-label={feedCollapsed ? 'Показать ленту' : 'Скрыть ленту'}
-          aria-expanded={!feedCollapsed}
-          onclick={toggleFeedCollapsed}
-        >
-          {@html iconChevronDown(16)}
-        </button>
-      </div>
-
-      {#if !feedCollapsed}
-        {#if authed}
-          {#if displaySubscriptions.length === 0}
-            <p class="feed-side__empty">Пока нет подписок</p>
-          {:else}
-            <ul class="feed-side__topics" class:feed-side__topics--has-selection={subscriptionSelected}>
-              {#each displaySubscriptions as ch (ch.id)}
-                {@const pinned = subscriptionIsPinned(ch.id)}
-                <li class="feed-side__topic-row">
-                  <button
-                    type="button"
-                    class="feed-side__topic"
-                    class:feed-side__topic--active={tab === 'my' && channelFilterId === ch.id && !postViewActive}
-                    class:feed-side__topic--dim={subscriptionSelected && channelFilterId !== ch.id}
-                    onclick={() => selectSubscription(ch.id)}
-                    aria-pressed={tab === 'my' && channelFilterId === ch.id && !postViewActive}
-                    aria-label={subscriptionIsFresh(ch)
-                      ? `${ch.title || `Канал #${ch.id}`}, есть новое`
-                      : undefined}
-                  >
-                    <span
-                      class="feed-side__topic-avatar"
-                      class:feed-side__topic-avatar--channel={!ch.is_blog}
-                      class:feed-side__topic-avatar--empty={!channelAvatarUrl(ch.avatar)}
-                      class:feed-side__topic-avatar--fresh={subscriptionIsFresh(ch)}
-                      style={channelAvatarUrl(ch.avatar)
-                        ? `background-image:url('${channelAvatarUrl(ch.avatar)}')`
-                        : undefined}
-                      aria-hidden="true"
-                    ></span>
-                    <span class="feed-side__topic-label">{ch.title || `Канал #${ch.id}`}</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="feed-side__topic-pin"
-                    class:feed-side__topic-pin--on={pinned}
-                    class:feed-side__topic-pin--dim={subscriptionSelected && channelFilterId !== ch.id}
-                    title={pinned ? 'Открепить' : 'Закрепить'}
-                    aria-label={pinned ? 'Открепить' : 'Закрепить'}
-                    aria-pressed={pinned}
-                    onclick={(e) => onTogglePin(e, ch.id)}
-                  >
-                    {@html iconPin(14)}
-                  </button>
-                </li>
-              {/each}
-            </ul>
-          {/if}
-        {:else}
-          <p class="feed-side__empty">Войдите, чтобы видеть подписки</p>
-        {/if}
-      {/if}
-    </section>
-
-    <section class="feed-side__group" aria-label="История">
-      <div class="feed-side__group-head">
-        <button
-          type="button"
-          class="feed-side__item feed-side__item--group"
-          class:feed-side__item--dim={subscriptionSelected && !historySelected}
-          onclick={(e) => toggleHistoryCollapsed(e)}
-        >
-          <span class="feed-side__item-icon" aria-hidden="true">{@html iconClock(18)}</span>
-          <span class="feed-side__item-label">История</span>
-          {#if historyCollapsed && historyCollapsedAvatars.length > 0}
-            <span class="feed-side__avatar-stack" aria-hidden="true">
-              {#each historyCollapsedAvatars as av (av.key)}
-                <span
-                  class="feed-side__avatar-stack-item"
-                  class:feed-side__avatar-stack-item--channel={!av.is_blog}
-                  class:feed-side__avatar-stack-item--empty={!channelAvatarUrl(av.avatar)}
-                  style={channelAvatarUrl(av.avatar)
-                    ? `background-image:url('${channelAvatarUrl(av.avatar)}')`
-                    : undefined}
-                  title={av.title}
-                ></span>
-              {/each}
-            </span>
-          {/if}
-        </button>
-        <button
-          type="button"
-          class="feed-side__collapse"
-          class:feed-side__collapse--on={!historyCollapsed}
-          title={historyCollapsed ? 'Показать историю' : 'Скрыть историю'}
-          aria-label={historyCollapsed ? 'Показать историю' : 'Скрыть историю'}
-          aria-expanded={!historyCollapsed}
-          onclick={(e) => toggleHistoryCollapsed(e)}
-        >
-          {@html iconChevronDown(16)}
-        </button>
-      </div>
-
-      {#if !historyCollapsed}
-        {#if browseHistory.length === 0}
-          <p class="feed-side__empty">Пока пусто</p>
-        {:else}
-          <ul class="feed-side__topics" class:feed-side__topics--has-selection={historySelected}>
-            {#each browseHistory as item (`${item.kind}-${item.id}`)}
-              {@const active = historyItemActive(item)}
-              <li class="feed-side__topic-row feed-side__topic-row--history">
-                <button
-                  type="button"
-                  class="feed-side__topic"
-                  class:feed-side__topic--active={active}
-                  class:feed-side__topic--dim={historySelected && !active}
-                  class:feed-side__topic--post={item.kind === 'post'}
-                  onclick={() => onHistoryItemClick(item)}
-                  aria-pressed={active}
-                  aria-label={item.kind === 'post'
-                    ? `Пост: ${item.title}`
-                    : item.title}
-                >
-                  <span
-                    class="feed-side__topic-avatar"
-                    class:feed-side__topic-avatar--channel={!item.is_blog}
-                    class:feed-side__topic-avatar--empty={!channelAvatarUrl(item.avatar)}
-                    class:feed-side__topic-avatar--post={item.kind === 'post'}
-                    style={channelAvatarUrl(item.avatar)
-                      ? `background-image:url('${channelAvatarUrl(item.avatar)}')`
-                      : undefined}
-                    aria-hidden="true"
-                  ></span>
-                  <span class="feed-side__topic-label">{item.title}</span>
-                </button>
-              </li>
+      <button
+        type="button"
+        class="feed-side__item"
+        class:feed-side__item--active={tab === 'my' && !postViewActive}
+        aria-current={tab === 'my' && !postViewActive ? 'page' : undefined}
+        aria-label={feedNavAvatars.length > 0
+          ? `Лента, новые записи: ${feedNavAvatars.map((av) => av.title).join(', ')}`
+          : 'Лента'}
+        onclick={() => onTabChange('my')}
+      >
+        <span class="feed-side__item-icon" aria-hidden="true">{@html iconNewspaper(18)}</span>
+        <span class="feed-side__item-label">Лента</span>
+        {#if feedNavAvatars.length > 0}
+          <span class="feed-side__avatar-stack" aria-hidden="true">
+            {#each feedNavAvatars as av (av.key)}
+              <span
+                class="feed-side__avatar-stack-item"
+                class:feed-side__avatar-stack-item--channel={!av.is_blog}
+                class:feed-side__avatar-stack-item--empty={!channelAvatarUrl(av.avatar)}
+                class:feed-side__avatar-stack-item--fresh={!!av.fresh}
+                style={channelAvatarUrl(av.avatar)
+                  ? `background-image:url('${channelAvatarUrl(av.avatar)}')`
+                  : undefined}
+                title={av.title}
+              ></span>
             {/each}
-          </ul>
+          </span>
         {/if}
-      {/if}
-    </section>
+      </button>
+      <button
+        type="button"
+        class="feed-side__item"
+        class:feed-side__item--active={tab === 'history' && !postViewActive}
+        aria-current={tab === 'history' && !postViewActive ? 'page' : undefined}
+        aria-label={historyNavAvatars.length > 0
+          ? `История, недавно: ${historyNavAvatars.map((av) => av.title).join(', ')}`
+          : 'История'}
+        onclick={() => onTabChange('history')}
+      >
+        <span class="feed-side__item-icon" aria-hidden="true">{@html iconClock(18)}</span>
+        <span class="feed-side__item-label">История</span>
+        {#if historyNavAvatars.length > 0}
+          <span class="feed-side__avatar-stack" aria-hidden="true">
+            {#each historyNavAvatars as av (av.key)}
+              <span
+                class="feed-side__avatar-stack-item"
+                class:feed-side__avatar-stack-item--channel={!av.is_blog}
+                class:feed-side__avatar-stack-item--empty={!channelAvatarUrl(av.avatar)}
+                style={channelAvatarUrl(av.avatar)
+                  ? `background-image:url('${channelAvatarUrl(av.avatar)}')`
+                  : undefined}
+                title={av.title}
+              ></span>
+            {/each}
+          </span>
+        {/if}
+      </button>
+    </nav>
   </aside>
 
   <div class="feed-main">
@@ -1683,7 +1618,7 @@
           <button
             type="button"
             class="feed-page__back"
-            aria-label="Назад к ленте"
+            aria-label="Назад"
             onclick={exitPostViewToFeed}
           >
             {@html iconArrowLeft(18)}
@@ -1933,6 +1868,71 @@
             </div>
           {/if}
         {/if}
+      {:else if tab === 'history'}
+        {#if historyItems.length === 0}
+          <UiV2Card title={searchNeedle ? 'Ничего не найдено' : 'История пуста'}>
+            <p class="feed-page__hint">
+              {#if searchNeedle}
+                По запросу «{searchQuery.trim()}» в истории нет записей.
+              {:else}
+                Открывайте каналы и записи — они появятся здесь.
+              {/if}
+            </p>
+          </UiV2Card>
+        {:else}
+          <div class="feed-history">
+            {#each historyGroups as group (group.key)}
+              <section class="feed-history__day-group">
+                <h2 class="feed-history__day">{group.label}</h2>
+                {#each group.items as item (`${item.kind}-${item.id}-${item.at}`)}
+                  {@const article = item.kind === 'post' ? historyArticles[item.id] : null}
+                  {@const busy = item.kind === 'post' && !!historyArticleBusy[item.id]}
+                  <article class="feed-history__item">
+                    <p class="feed-history__when">
+                      {item.kind === 'post' ? 'Просмотрено' : 'Открыто'}
+                      {formatFeedRelativeTime(item.at)}
+                    </p>
+                    {#if article}
+                      <FeedArticleCard
+                        {article}
+                        selected={selectedArticleId === article.id}
+                        onOpen={onOpenArticle}
+                        onDeselect={collapseSelectedComments}
+                        onChannel={onOpenChannel}
+                        onVote={onVoteArticle}
+                        onSubscribe={onSubscribeChannel}
+                        onArticleRemove={onArticleRemove}
+                        onArticleChange={onArticleChange}
+                      />
+                    {:else if busy}
+                      <UiV2FeedPostSkeleton count={1} />
+                    {:else}
+                      <FeedHistoryMoment
+                        title={item.title}
+                        subtitle={item.kind === 'post'
+                          ? 'Запись'
+                          : (item.is_blog ? 'Блог' : 'Канал')}
+                        avatar={item.avatar}
+                        isBlog={!!item.is_blog}
+                        isPost={item.kind === 'post'}
+                        onOpen={() => onHistoryItemClick(item)}
+                      />
+                    {/if}
+                  </article>
+                {/each}
+              </section>
+            {/each}
+          </div>
+          {#if historyHasMore}
+            <div class="feed-page__more">
+              <UiV2Button
+                variant="chrome"
+                label="Ещё"
+                onclick={loadMoreHistory}
+              />
+            </div>
+          {/if}
+        {/if}
       {:else if loadState === 'need-auth'}
         <UiV2Card title="Нужен вход">
           <p class="feed-page__hint">
@@ -1952,6 +1952,8 @@
           <p class="feed-page__hint">
             {#if tab === 'my'}
               Подпишитесь на каналы в Anixart — тогда их записи появятся здесь.
+            {:else if tab === 'history'}
+              Открывайте каналы и записи — они появятся здесь.
             {:else}
               В свежей ленте пока пусто. Загляните позже.
             {/if}
@@ -1987,7 +1989,7 @@
     </div>
   </div>
 
-  {#if tab !== 'managed' && (postViewActive || (!searchMode && (asideChannel || hasAsideLists)))}
+  {#if tab !== 'managed' && tab !== 'history' && (postViewActive || (!searchMode && (asideChannel || hasAsideLists)))}
     <aside class="feed-aside" aria-label={postViewActive ? 'О канале' : 'Каналы и блоги'}>
       {#if displayAsideChannel}
         <UiV2FeedChannelCard

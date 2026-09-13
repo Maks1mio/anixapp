@@ -5,7 +5,7 @@ import { articlePreviewText, channelAvatarUrl } from './feed-article';
 
 const STORAGE_KEY = 'anixapp.feedBrowseHistory';
 const COLLAPSE_KEY = 'anixapp.feedSideCollapse';
-const MAX_ITEMS = 24;
+const MAX_ITEMS = 80;
 
 export type FeedBrowseHistoryItem =
   | {

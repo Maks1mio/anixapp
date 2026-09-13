@@ -3,14 +3,19 @@
 const { Anixart } = require('anixapi');
 const { attachLegacyEndpoints } = require('../anix-legacy-endpoints');
 const { attachBackupProxyFailover, clearSticky } = require('../lib/backup-proxy');
+const { attachAnixErrorMessages } = require('../lib/anix-errors');
+const { ANIXART_UA } = require('../lib/constants');
 const state = require('../lib/app-state');
 const config = require('../lib/config-store');
 
 function createAnixClient(options = {}) {
   const { backupFailover = true, ...anixOptions } = options;
-  const client = attachLegacyEndpoints(new Anixart(anixOptions));
-  if (backupFailover === false) return client;
-  return attachBackupProxyFailover(client);
+  if (!anixOptions.userAgent) anixOptions.userAgent = ANIXART_UA;
+  let client = attachLegacyEndpoints(new Anixart(anixOptions));
+  if (backupFailover !== false) {
+    client = attachBackupProxyFailover(client);
+  }
+  return attachAnixErrorMessages(client);
 }
 
 function getAnixart() {

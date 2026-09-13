@@ -7,6 +7,8 @@ const path = require('path');
 const os = require('os');
 const { Anixart, DefaultResult, BookmarkType, BookmarkSortType } = require('anixapi');
 const { attachLegacyEndpoints } = require('./anix-legacy-endpoints');
+const { ANIXART_UA } = require('./lib/constants');
+const { attachAnixErrorMessages, enrichAnixError } = require('./lib/anix-errors');
 const homeCustomFilter = require('./home-custom-filter');
 const { getDirectVideoLink } = require('./lib/direct-video-link');
 
@@ -65,17 +67,20 @@ function createAnixBridgeCore(options = {}) {
 
   function createClient({ baseUrl, token, backupFailover = true } = {}) {
     const cfg = loadConfig();
-    const client = attachLegacyEndpoints(new Anixart({
+    let client = attachLegacyEndpoints(new Anixart({
       baseUrl: baseUrl ?? cfg.baseUrl,
       token: token ?? cfg.token ?? undefined,
+      userAgent: ANIXART_UA,
     }));
-    if (backupFailover === false) return client;
-    try {
-      const { attachBackupProxyFailover } = require('./lib/backup-proxy');
-      return attachBackupProxyFailover(client);
-    } catch {
-      return client;
+    if (backupFailover !== false) {
+      try {
+        const { attachBackupProxyFailover } = require('./lib/backup-proxy');
+        client = attachBackupProxyFailover(client);
+      } catch {
+        /* без failover */
+      }
     }
+    return attachAnixErrorMessages(client);
   }
 
   function getClient() {
@@ -819,7 +824,11 @@ function createAnixBridgeCore(options = {}) {
   async function invoke(channel, args = []) {
     const handler = HANDLERS[channel];
     if (!handler) throw new Error(`Unknown channel: ${channel}`);
-    return handler(ctx(), args);
+    try {
+      return await handler(ctx(), args);
+    } catch (err) {
+      throw enrichAnixError(err);
+    }
   }
 
   return { invoke, loadConfig, saveConfig, configPath };

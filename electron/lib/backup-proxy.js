@@ -182,8 +182,11 @@ function emitStatus() {
 
 function shouldFailoverError(err) {
   const msg = err && err.message ? String(err.message) : String(err);
-  const httpStatus = err && typeof err.httpStatus === 'number' ? err.httpStatus : null;
-  if (httpStatus === 429 || httpStatus === 502 || httpStatus === 503 || httpStatus === 504) return true;
+  const httpStatus = err && typeof err.httpStatus === 'number'
+    ? err.httpStatus
+    : (err && typeof err.status === 'number' ? err.status : null);
+  if (httpStatus === 0 || httpStatus === 429 || httpStatus === 502 || httpStatus === 503 || httpStatus === 504) return true;
+  if (err && err.name === 'HttpError' && (httpStatus == null || httpStatus >= 500 || httpStatus === 429)) return true;
   return (
     msg.includes('fetch failed') ||
     msg.includes('ENOTFOUND') ||

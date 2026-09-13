@@ -8,7 +8,8 @@ const DEFAULT_BASE_URL = 'https://api-s.anixsekai.com';
 const BACKUP_API_PROXY = 'https://api.anixapp.com/anixart-api';
 const LOG_DIR = 'logs';
 
-const ANIXART_UA = 'AnixartApp/9.0 BETA 19-26073118 (Android 9; SDK 28; x86_64; ROG ASUS AI2201_B; ru)';
+/** Anixart 10.0. В anixapi по умолчанию всё ещё 9.0 — передаём явно при new Anixart(...). */
+const ANIXART_UA = 'AnixartApp/10.0-26090418 (Android 14; SDK 34; x86_64; ROG ASUS AI2201_B; ru)';
 
 const VIDEO_HOSTS = [
   'anixis.com', 'aniqart.com', 'aniqit.com', 'video.sibnet.ru', 'sibnet.ru',

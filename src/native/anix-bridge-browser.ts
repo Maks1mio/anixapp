@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Anixart, BookmarkSortType, BookmarkType, DefaultResult } from 'anixapi';
 import { attachLegacyEndpoints } from './legacy-endpoints';
+import { ANIXART_UA, attachAnixErrorMessages, enrichAnixError } from './anix-errors';
 import { isTvMode } from '../platform/tv';
 import { tvBridgeInvokeUrl } from '../constants/tv-bridge';
 
@@ -77,10 +78,11 @@ export function createBrowserAnixBridge() {
 
   function createClient({ baseUrl, token }: { baseUrl?: string; token?: string | null } = {}) {
     const cfg = loadConfig();
-    return attachLegacyEndpoints(new Anixart({
+    return attachAnixErrorMessages(attachLegacyEndpoints(new Anixart({
       baseUrl: baseUrl ?? cfg.baseUrl,
       token: token ?? cfg.token ?? undefined,
-    }) as any);
+      userAgent: ANIXART_UA,
+    }) as any));
   }
 
   function getClient() {
@@ -477,7 +479,11 @@ export function createBrowserAnixBridge() {
   async function invoke(channel: string, args: unknown[] = []) {
     const handler = HANDLERS[channel];
     if (!handler) throw new Error(`Unknown channel: ${channel}`);
-    return handler(ctx(), args);
+    try {
+      return await handler(ctx(), args);
+    } catch (err) {
+      throw enrichAnixError(err);
+    }
   }
 
   return { invoke, loadConfig, saveConfig };

@@ -2,6 +2,7 @@
 
 const { ipcMain } = require('electron');
 const { DefaultResult, OAuthAuthResult } = require('anixapi');
+const { ANIXART_UA } = require('../lib/constants');
 const config = require('../lib/config-store');
 const state = require('../lib/app-state');
 const {
@@ -139,9 +140,6 @@ function register(deps) {
     return { success: false, code };
   }
 
-  const ANIX_UA =
-    'AnixartApp/9.0 BETA 21-26080522 (Android 9; SDK 28; x86_64; ROG ASUS AI2201_B; ru)';
-
   /** Прямой POST /auth/vk — обходим возможные нюансы URLSearchParams. */
   async function signInWithVkRaw(baseUrl, vkAccessToken, fieldName = 'vkAccessToken') {
     const url = new URL('auth/vk', baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
@@ -150,7 +148,7 @@ function register(deps) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': ANIX_UA,
+        'User-Agent': ANIXART_UA,
         Accept: 'application/json',
       },
       body,

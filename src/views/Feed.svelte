@@ -69,7 +69,7 @@
     iconX,
   } from '../components/icons';
 
-  type FeedTab = 'my' | 'latest' | 'managed' | 'history';
+  type FeedTab = 'my' | 'latest' | 'managed' | 'history' | 'search';
   type LoadState = 'idle' | 'loading' | 'ready' | 'empty' | 'error' | 'need-auth';
 
   type FeedPostViewSnapshot = {
@@ -126,6 +126,8 @@
   let createBusy = $state(false);
   let sidebarChannel = $state<FeedChannel | null>(null);
   let searchQuery = $state('');
+  let listFilterQuery = $state('');
+  let searchInputEl = $state<HTMLInputElement | null>(null);
   let searchArticles = $state<FeedArticle[]>([]);
   let searchChannels = $state<FeedChannel[]>([]);
   let searchBlogs = $state<FeedChannel[]>([]);
@@ -190,7 +192,13 @@
   }
 
   function isFeedTab(value: unknown): value is FeedTab {
-    return value === 'my' || value === 'latest' || value === 'managed' || value === 'history';
+    return (
+      value === 'my'
+      || value === 'latest'
+      || value === 'managed'
+      || value === 'history'
+      || value === 'search'
+    );
   }
 
   function historyMomentMs(at: number): number {
@@ -286,7 +294,7 @@
     postViewActive
       ? (focusChannel?.title?.trim()
         || (focusChannel?.is_blog ? 'Блог' : 'Канал'))
-      : searchMode
+      : tab === 'search'
         ? 'Поиск'
         : tab === 'my'
           ? (channelFilterId != null
@@ -324,18 +332,12 @@
   );
 
   const searchNeedle = $derived(searchQuery.trim().toLowerCase());
-  const searchMode = $derived(tab !== 'managed' && tab !== 'history' && searchNeedle.length > 0);
-  const searchPlaceholder = $derived(
-    tab === 'managed'
-      ? 'Поиск каналов…'
-      : tab === 'history'
-        ? 'Поиск в истории…'
-        : 'Поиск записей в ленте…',
-  );
+  const listFilterNeedle = $derived(listFilterQuery.trim().toLowerCase());
+  /** Вкладка «Поиск» — API-поиск; на managed/history — локальный фильтр. */
+  const searchMode = $derived(tab === 'search');
   const feedNoAside = $derived(
     tab === 'managed'
       || tab === 'history'
-      || (!postViewActive && searchMode)
       || (!postViewActive && !(asideChannel || hasAsideLists)),
   );
 
@@ -432,8 +434,8 @@
     return base;
   });
   const visibleManaged = $derived(
-    searchNeedle
-      ? managed.filter((ch) => (ch.title || '').toLowerCase().includes(searchNeedle))
+    listFilterNeedle
+      ? managed.filter((ch) => (ch.title || '').toLowerCase().includes(listFilterNeedle))
       : managed,
   );
 
@@ -545,7 +547,7 @@
   });
 
   const historyItems = $derived.by(() => {
-    const q = searchNeedle;
+    const q = listFilterNeedle;
     const list = q
       ? browseHistory.filter((item) => item.title.toLowerCase().includes(q))
       : browseHistory;
@@ -949,6 +951,19 @@
   }
 
   async function fetchPage(nextPage: number, append: boolean): Promise<void> {
+    if (tab === 'search') {
+      const q = searchQuery.trim();
+      if (!q) {
+        clearSearchResults();
+        loadState = 'idle';
+        hasMore = false;
+        articles = [];
+        return;
+      }
+      await fetchSearch(q, nextPage, append);
+      return;
+    }
+
     if (tab === 'history') {
       loadState = historyItems.length === 0 ? 'empty' : 'ready';
       hasMore = false;
@@ -1071,9 +1086,15 @@
       void loadMoreFromChannel(focusChannel.id, focusArticle.id, 0, false);
       return;
     }
-    if (searchMode) {
+    if (tab === 'search') {
       scrollFeedToTop();
-      await fetchSearch(searchQuery.trim(), 0, false);
+      const q = searchQuery.trim();
+      if (!q) {
+        clearSearchResults();
+        loadState = 'idle';
+        return;
+      }
+      await fetchSearch(q, 0, false);
       return;
     }
     if (tab === 'history') {
@@ -1094,15 +1115,44 @@
     if (id === 'managed' && !authed && !requireAuth()) return;
     if (id === tab && !postViewActive && (id !== 'my' || channelFilterId == null)) {
       scrollFeedToTop();
+      if (id === 'search') focusSearchInput();
       return;
     }
     clearArticleFocus();
+    const leavingSearch = tab === 'search' && id !== 'search';
     tab = id;
     channelFilterId = null;
     if (id === 'history') historyVisibleCount = 10;
+    if (leavingSearch) {
+      searchQuery = '';
+      clearSearchResults();
+    }
+    if (id !== 'managed' && id !== 'history') {
+      listFilterQuery = '';
+    }
     void loadSidebarChannel(null);
     scrollFeedToTop();
     void reload();
+    if (id === 'search') {
+      void tick().then(() => focusSearchInput());
+    }
+  }
+
+  function focusSearchInput() {
+    searchInputEl?.focus();
+  }
+
+  function enterSearchTab() {
+    if (tab === 'search') {
+      focusSearchInput();
+      return;
+    }
+    clearArticleFocus();
+    tab = 'search';
+    channelFilterId = null;
+    void loadSidebarChannel(null);
+    scrollFeedToTop();
+    void tick().then(() => focusSearchInput());
   }
 
   function onDateChange(value: string) {
@@ -1354,21 +1404,37 @@
 
   function applySearchTag(tag: string) {
     searchQuery = tag.replace(/^#/, '').trim();
+    if (tab !== 'search') enterSearchTab();
   }
 
   function applyFeedSearchFromRoute(detailQ?: string) {
     const q = String(detailQ ?? getSearchParams().get('q') ?? '').trim();
     if (!q) return;
-    if (searchQuery.trim() === q) return;
+    const wasSearch = tab === 'search';
+    if (!wasSearch) {
+      clearArticleFocus();
+      tab = 'search';
+      channelFilterId = null;
+      void loadSidebarChannel(null);
+    }
+    if (searchQuery.trim() === q) {
+      if (!wasSearch) void fetchSearch(q, 0, false);
+      return;
+    }
     searchQuery = q;
   }
 
   $effect(() => {
     const q = searchQuery.trim();
     const currentTab = tab;
-    if (currentTab === 'managed' || currentTab === 'history' || !q) {
+    if (currentTab !== 'search') {
       if (currentTab === 'history') historyVisibleCount = 10;
       clearSearchResults();
+      return;
+    }
+    if (!q) {
+      clearSearchResults();
+      loadState = 'idle';
       return;
     }
     const handle = setTimeout(() => {
@@ -1493,44 +1559,21 @@
 
 <div class="view view-feed">
   <div
-    class="feed-page__search"
-    class:feed-page__search--no-aside={feedNoAside}
-  >
-    <div class="feed-page__search-inner">
-      <label class="feed-page__search-field">
-        <span class="feed-page__search-icon" aria-hidden="true">{@html iconSearch(18)}</span>
-        <input
-          class="feed-page__search-input"
-          type="search"
-          name="feed-search"
-          autocomplete="off"
-          spellcheck="false"
-          placeholder={searchPlaceholder}
-          aria-label={searchPlaceholder}
-          bind:value={searchQuery}
-        />
-        {#if searchQuery}
-          <button
-            type="button"
-            class="feed-page__search-clear"
-            aria-label="Очистить поиск"
-            onclick={() => {
-              searchQuery = '';
-            }}
-          >
-            {@html iconX(14)}
-          </button>
-        {/if}
-      </label>
-    </div>
-  </div>
-
-  <div
     class="view-feed__layout"
     class:view-feed__layout--no-aside={feedNoAside}
   >
   <aside class="feed-side" aria-label="Навигация ленты">
     <nav class="feed-side__nav" aria-label="Разделы ленты">
+      <button
+        type="button"
+        class="feed-side__item"
+        class:feed-side__item--active={tab === 'search' && !postViewActive}
+        aria-current={tab === 'search' && !postViewActive ? 'page' : undefined}
+        onclick={() => onTabChange('search')}
+      >
+        <span class="feed-side__item-icon" aria-hidden="true">{@html iconSearch(18)}</span>
+        <span class="feed-side__item-label">Поиск</span>
+      </button>
       <button
         type="button"
         class="feed-side__item"
@@ -1637,6 +1680,30 @@
             />
           </div>
         {/if}
+        {#if (tab === 'managed' || tab === 'history') && !postViewActive}
+          <label class="feed-page__search-field feed-page__search-field--compact">
+            <span class="feed-page__search-icon" aria-hidden="true">{@html iconSearch(16)}</span>
+            <input
+              class="feed-page__search-input"
+              type="search"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder={tab === 'managed' ? 'Поиск каналов…' : 'Поиск в истории…'}
+              aria-label={tab === 'managed' ? 'Поиск каналов' : 'Поиск в истории'}
+              bind:value={listFilterQuery}
+            />
+            {#if listFilterQuery}
+              <button
+                type="button"
+                class="feed-page__search-clear"
+                aria-label="Очистить фильтр"
+                onclick={() => { listFilterQuery = ''; }}
+              >
+                {@html iconX(14)}
+              </button>
+            {/if}
+          </label>
+        {/if}
         <UiV2Button
           variant="ghost"
           size="sm"
@@ -1648,6 +1715,35 @@
         </UiV2Button>
       </div>
     </header>
+
+    {#if searchMode && !postViewActive}
+      <div class="feed-page__search-inline">
+        <label class="feed-page__search-field">
+          <span class="feed-page__search-icon" aria-hidden="true">{@html iconSearch(18)}</span>
+          <input
+            class="feed-page__search-input"
+            type="search"
+            name="feed-search"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Поиск записей, каналов и блогов…"
+            aria-label="Поиск записей, каналов и блогов"
+            bind:this={searchInputEl}
+            bind:value={searchQuery}
+          />
+          {#if searchQuery}
+            <button
+              type="button"
+              class="feed-page__search-clear"
+              aria-label="Очистить поиск"
+              onclick={() => { searchQuery = ''; }}
+            >
+              {@html iconX(14)}
+            </button>
+          {/if}
+        </label>
+      </div>
+    {/if}
 
     {#if showFeedStories}
       <FeedStoriesStrip
@@ -1696,10 +1792,10 @@
               />
             </div>
             {#if visibleManaged.length === 0}
-              <UiV2Card title={searchNeedle ? 'Ничего не найдено' : 'Нет управляемых каналов'}>
+              <UiV2Card title={listFilterNeedle ? 'Ничего не найдено' : 'Нет управляемых каналов'}>
                 <p class="feed-page__hint">
-                  {#if searchNeedle}
-                    По запросу «{searchQuery.trim()}» каналов нет. Попробуйте другое слово.
+                  {#if listFilterNeedle}
+                    По запросу «{listFilterQuery.trim()}» каналов нет. Попробуйте другое слово.
                   {:else}
                     Создайте блог или получите права редактора в канале — они появятся здесь.
                   {/if}
@@ -1779,7 +1875,13 @@
           </div>
         {/if}
       {:else if searchMode}
-        {#if searchLoadState === 'error' && searchArticles.length === 0 && searchChannels.length === 0}
+        {#if !searchNeedle}
+          <UiV2Card title="Поиск по ленте">
+            <p class="feed-page__hint">
+              Введите запрос в поле выше — найдём записи, каналы и блоги.
+            </p>
+          </UiV2Card>
+        {:else if searchLoadState === 'error' && searchArticles.length === 0 && searchChannels.length === 0}
           <UiV2Card title="Не удалось найти">
             <p class="feed-page__hint">{searchError || 'Попробуйте ещё раз.'}</p>
             <UiV2Button variant="primary" label="Повторить" onclick={() => void reload()} />
@@ -1870,10 +1972,10 @@
         {/if}
       {:else if tab === 'history'}
         {#if historyItems.length === 0}
-          <UiV2Card title={searchNeedle ? 'Ничего не найдено' : 'История пуста'}>
+          <UiV2Card title={listFilterNeedle ? 'Ничего не найдено' : 'История пуста'}>
             <p class="feed-page__hint">
-              {#if searchNeedle}
-                По запросу «{searchQuery.trim()}» в истории нет записей.
+              {#if listFilterNeedle}
+                По запросу «{listFilterQuery.trim()}» в истории нет записей.
               {:else}
                 Открывайте каналы и записи — они появятся здесь.
               {/if}
@@ -1989,9 +2091,9 @@
     </div>
   </div>
 
-  {#if tab !== 'managed' && tab !== 'history' && (postViewActive || (!searchMode && (asideChannel || hasAsideLists)))}
+  {#if tab !== 'managed' && tab !== 'history' && (postViewActive || asideChannel || hasAsideLists)}
     <aside class="feed-aside" aria-label={postViewActive ? 'О канале' : 'Каналы и блоги'}>
-      {#if displayAsideChannel}
+      {#if displayAsideChannel && (postViewActive || tab !== 'search')}
         <UiV2FeedChannelCard
           data={{
             id: displayAsideChannel.id,

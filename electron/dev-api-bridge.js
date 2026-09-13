@@ -1,5 +1,6 @@
 const http = require('http');
 const crypto = require('crypto');
+const { formatAnixError } = require('./lib/anix-errors');
 
 const DEFAULT_PORT = 17320;
 const HOST = '127.0.0.1';
@@ -167,7 +168,7 @@ function createDevApiBridge(deps) {
 
       sendJson(res, 404, { ok: false, error: 'Not found' });
     } catch (err) {
-      const message = err?.message ? String(err.message) : String(err);
+      const message = formatAnixError(err);
       logger.error('dev-bridge', message);
       sendJson(res, 500, { ok: false, error: message });
     }

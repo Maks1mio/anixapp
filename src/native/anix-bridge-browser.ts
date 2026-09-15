@@ -274,7 +274,17 @@ export function createBrowserAnixBridge() {
     },
     'anix:randomRelease': h((c, extended = true) => c.getClient().endpoints.release.getRandomRelease(extended)),
     'anix:latestFeed': h((c, page = 0) => c.getClient().endpoints.feed.latest(page)),
-    'anix:myFeed': h((c, page = 0, opts = {}) => c.getClient().endpoints.feed.my?.(page, opts) ?? c.getClient().endpoints.feed.latest(page)),
+    'anix:myFeed': h((c, page = 0, opts = {}) => {
+      const channelId = opts?.channelId != null && Number(opts.channelId) > 0
+        ? Number(opts.channelId)
+        : undefined;
+      const date = Number.isFinite(Number(opts?.date)) ? Number(opts.date) : 0;
+      const query = {
+        date,
+        ...(channelId != null ? { channel_id: channelId } : {}),
+      };
+      return c.getClient().endpoints.feed.feed(page, query);
+    }),
     'anix:discoverRecommendations': async (c, [page = -1, previousPage = -1]) =>
       c.getClient().endpoints.discover.getRecommendations(page, previousPage),
     'anix:discoverInteresting': async (c) => c.getClient().endpoints.discover.interesting(),
@@ -305,6 +315,25 @@ export function createBrowserAnixBridge() {
     },
     'anix:articleById': h((c, id) => c.getClient().endpoints.channel.getArticle(id)),
     'anix:articleVote': h((c, id, vote) => c.getClient().endpoints.article.vote(id, vote)),
+    'anix:articleCreate': h((c, channelId, body) =>
+      c.getClient().endpoints.article.create(channelId, body)),
+    'anix:articleSuggestionCreate': h((c, channelId, body) =>
+      c.getClient().endpoints.articleSuggestion.create(channelId, body)),
+    'anix:articleSuggestions': h((c, page = 0, opts = {}) => {
+      const channelId = Number((opts as { channelId?: number; channel_id?: number })?.channelId
+        ?? (opts as { channelId?: number; channel_id?: number })?.channel_id
+        ?? 0);
+      return c.getClient().endpoints.articleSuggestion.articleSuggestions(page, {
+        channel_id: channelId > 0 ? channelId : undefined,
+      });
+    }),
+    'anix:articleSuggestionDelete': h((c, suggestionId) =>
+      c.getClient().endpoints.articleSuggestion.delete(suggestionId)),
+    'anix:articleUploadImage': async () => {
+      throw new Error('Загрузка изображений на Android TV пока не поддерживается');
+    },
+    'anix:articleGenerateEmbed': h((c, type, mediaToken, url) =>
+      c.getClient().endpoints.article.generateEmbedData(type, mediaToken, url)),
     'anix:articleCommentsPopular': h((c, id) =>
       c.getClient().endpoints.articleComment.commentsPopular(id)),
     'anix:articleComments': h((c, id, page = 0, sort = 2) =>
@@ -317,7 +346,35 @@ export function createBrowserAnixBridge() {
     'anix:channelArticles': h((c, channelId, page = 0) => c.getClient().endpoints.channel.articles(channelId, page)),
     'anix:channelSubscribe': h((c, channelId) => c.getClient().endpoints.channel.subscribe(channelId)),
     'anix:channelUnsubscribe': h((c, channelId) => c.getClient().endpoints.channel.unsubscribe(channelId)),
-    'anix:channelSubscriptions': h((c, page = 0) => c.getClient().endpoints.channel.subscriptions(page)),
+    'anix:channelMute': h((c, channelId) => c.getClient().endpoints.channel.mute(channelId)),
+    'anix:channelUnmute': h((c, channelId) => c.getClient().endpoints.channel.unmute(channelId)),
+    'anix:reportArticleReasons': h((c) => c.getClient().endpoints.report.articleReasons()),
+    'anix:reportArticle': h((c, body) => c.getClient().endpoints.report.article(body)),
+    'anix:reportChannelReasons': h((c) => c.getClient().endpoints.report.channelReasons()),
+    'anix:reportChannel': h((c, body) => c.getClient().endpoints.report.channel(body)),
+    'anix:channelSubscriptions': h((c, page = 0, opts = {}) => {
+      const query: Record<string, number> = {};
+      if (typeof (opts as { sort?: number })?.sort === 'number') {
+        query.sort = (opts as { sort: number }).sort;
+      }
+      return c.getClient().endpoints.channel.subscriptions(page, query);
+    }),
+    'anix:channelAll': h((c, page = 0, opts = {}) => {
+      const body: Record<string, unknown> = {};
+      if (typeof (opts as { isBlog?: boolean })?.isBlog === 'boolean') {
+        body.is_blog = (opts as { isBlog: boolean }).isBlog;
+      }
+      if (typeof (opts as { isSubscribed?: boolean })?.isSubscribed === 'boolean') {
+        body.is_subscribed = (opts as { isSubscribed: boolean }).isSubscribed;
+      }
+      if (typeof (opts as { permission?: number })?.permission === 'number') {
+        body.permission = (opts as { permission: number }).permission;
+      }
+      if (typeof (opts as { sort?: number })?.sort === 'number') {
+        body.sort = (opts as { sort: number }).sort;
+      }
+      return c.getClient().endpoints.channel.channels(page, body);
+    }),
     'anix:channelRecommendations': h((c, page = 0, opts = {}) => {
       const query: Record<string, boolean> = {};
       if (typeof (opts as { isBlog?: boolean })?.isBlog === 'boolean') {
@@ -329,6 +386,11 @@ export function createBrowserAnixBridge() {
       return c.getClient().endpoints.channel.recommendations(page, query);
     }),
     'anix:channelEditorAll': h((c) => c.getClient().endpoints.channel.editorAvailableAll()),
+    'anix:channelEditorAvailable': h((c, channelId, opts = {}) =>
+      c.getClient().endpoints.channel.editorAvailable(channelId, {
+        is_suggestion: !!(opts as { isSuggestion?: boolean })?.isSuggestion,
+        is_edit_mode: !!(opts as { isEditMode?: boolean })?.isEditMode,
+      })),
     'anix:channelBlog': h((c, id) => c.getClient().endpoints.channel.getBlog(id)),
     'anix:profileById': h((c, id) => c.getClient().endpoints.profile.info(id)),
     'anix:collectionById': h((c, id) => c.getClient().endpoints.collection.info(id)),
@@ -441,6 +503,13 @@ export function createBrowserAnixBridge() {
       c.getClient().endpoints.search.profileList?.({ status, query, page, searchBy })),
     'anix:searchFeed': h((c, query, page = 0, searchBy = 0) =>
       c.getClient().endpoints.search.feedSearch(page, { query, page, searchBy })),
+    'anix:searchChannelSubscribers': h((c, channelId, page = 0, query = '') =>
+      c.getClient().endpoints.search.channelSubscribersSearch(channelId, page, {
+        query: String(query ?? ''),
+        page,
+        searchBy: 0,
+        channel_id: Number(channelId),
+      })),
     'anix:addToFavorites': h((c, releaseId) => c.getClient().endpoints.release.addFavorite(releaseId)),
     'anix:removeFromFavorites': h((c, releaseId) => c.getClient().endpoints.release.removeFavorite(releaseId)),
     'anix:setListStatus': h(async (c, releaseId, statusId) => {

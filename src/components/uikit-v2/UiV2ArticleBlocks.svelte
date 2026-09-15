@@ -50,11 +50,19 @@
           {/if}
         </blockquote>
       {:else if block.kind === 'list'}
-        <ul class="uiv2-article-blocks__list">
-          {#each block.itemsHtml as item, j (j)}
-            <li>{@html item}</li>
-          {/each}
-        </ul>
+        {#if block.ordered}
+          <ol class="uiv2-article-blocks__list uiv2-article-blocks__list--ordered">
+            {#each block.itemsHtml as item, j (j)}
+              <li>{@html item}</li>
+            {/each}
+          </ol>
+        {:else}
+          <ul class="uiv2-article-blocks__list">
+            {#each block.itemsHtml as item, j (j)}
+              <li>{@html item}</li>
+            {/each}
+          </ul>
+        {/if}
       {:else if block.kind === 'delimiter'}
         <div class="uiv2-article-blocks__delimiter" role="separator" aria-hidden="true">
           <span>*</span><span>*</span><span>*</span>

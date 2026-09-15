@@ -33,6 +33,10 @@
     class?: string;
     /** Компактный триггер — только иконка (тулбары) */
     compact?: boolean;
+    /** Крупный заголовок без рамки (сортировка ленты как на Android). */
+    appearance?: 'default' | 'title';
+    /** Доступное имя, если нет видимого label */
+    ariaLabel?: string;
     onChange?: (value: string) => void;
   };
 
@@ -45,8 +49,12 @@
     id = `uiv2-select-${Math.random().toString(36).slice(2, 9)}`,
     class: className = '',
     compact = false,
+    appearance = 'default',
+    ariaLabel,
     onChange,
   }: Props = $props();
+
+  const isTitle = $derived(appearance === 'title');
 
   const GAP = 8;
   const EDGE = 10;
@@ -81,7 +89,7 @@
     await tick();
 
     const rect = triggerEl.getBoundingClientRect();
-    panelWidth = compact ? 0 : rect.width;
+    panelWidth = compact || isTitle ? 0 : rect.width;
 
     const spaceBelow = window.innerHeight - rect.bottom - GAP;
     const spaceAbove = rect.top - GAP;
@@ -186,6 +194,7 @@
   class:uiv2-select--disabled={disabled}
   class:uiv2-select--open={open}
   class:uiv2-select--compact={compact}
+  class:uiv2-select--title={isTitle}
 >
   {#if label && !compact}
     <label class="uiv2-select__label" for="{id}-trigger">{label}</label>
@@ -202,7 +211,7 @@
       aria-haspopup="listbox"
       aria-expanded={open}
       aria-controls={open ? listboxId : undefined}
-      aria-label={compact ? compactTitle : undefined}
+      aria-label={ariaLabel ?? (compact ? compactTitle : undefined)}
       title={compact ? compactTitle : undefined}
       {disabled}
       onclick={togglePanel}
@@ -259,13 +268,14 @@
       class="uiv2-select__panel"
       class:uiv2-select__panel--up={!openDown}
       class:uiv2-select__panel--with-leading={showLeading}
+      class:uiv2-select__panel--title={isTitle}
       role="listbox"
       tabindex="-1"
       aria-labelledby="{id}-trigger"
       style:left="{panelLeft}px"
       style:top="{panelTop}px"
-      style:width={compact ? undefined : `${panelWidth}px`}
-      style:min-width={compact ? '15rem' : undefined}
+      style:width={compact || isTitle ? undefined : `${panelWidth}px`}
+      style:min-width={compact ? '15rem' : isTitle ? '13rem' : undefined}
       style:max-height="{panelMaxHeight}px"
       style:transform-origin="50% {originY}"
       transition:scale={{ duration: 200, start: 0.97, easing: cubicOut }}

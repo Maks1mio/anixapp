@@ -1,6 +1,7 @@
 <script lang="ts">
   import UiV2FeedPostMediaView from './UiV2FeedPostMedia.svelte';
   import UiV2ArticleBlocks from './UiV2ArticleBlocks.svelte';
+  import UiV2FeedPostEmbed from './UiV2FeedPostEmbed.svelte';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from './UiV2PopupMenu.svelte';
   import UiV2RoundButton from './UiV2RoundButton.svelte';
   import UiV2Tooltip from './UiV2Tooltip.svelte';
@@ -53,7 +54,15 @@
 
   export type UiV2FeedPostBodyBlock =
     | UiV2FeedPostTextBlock
-    | { kind: 'media'; items: UiV2FeedPostMedia[] };
+    | { kind: 'media'; items: UiV2FeedPostMedia[] }
+    | {
+        kind: 'embed';
+        title?: string;
+        description?: string;
+        image?: string;
+        url?: string;
+        siteName?: string;
+      };
 
   export type UiV2FeedPostRepost = {
     channel: UiV2FeedPostChannel;
@@ -139,6 +148,8 @@
     selfAvatar?: string | null;
     /** Открыть комментарии под постом (`write` — сразу фокус в поле). */
     onOpenComments?: (mode?: 'view' | 'write') => void;
+    /** Только просмотр: без голосов, репоста и комментариев. */
+    staticPreview?: boolean;
     class?: string;
   };
 
@@ -162,6 +173,7 @@
     commentsExpanded = false,
     selfAvatar = null,
     onOpenComments,
+    staticPreview = false,
     class: className = '',
   }: Props = $props();
 
@@ -354,7 +366,8 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions -->
 <article
   class="uiv2-feed-post {className}"
-  class:uiv2-feed-post--openable={!!onclick}
+  class:uiv2-feed-post--openable={!!onclick && !staticPreview}
+  class:uiv2-feed-post--static={staticPreview}
   oncontextmenu={onContextMenu}
   onclick={onCardClick}
   onkeydown={onOpenKeydown}
@@ -459,6 +472,16 @@
       {#each bodyBlocks as block, i (i)}
         {#if block.kind === 'media'}
           <UiV2FeedPostMediaView items={block.items} />
+        {:else if block.kind === 'embed'}
+          <div class="uiv2-feed-post__embed-wrap">
+            <UiV2FeedPostEmbed
+              title={block.title}
+              description={block.description}
+              image={block.image}
+              url={block.url}
+              siteName={block.siteName}
+            />
+          </div>
         {:else}
           <div class="uiv2-feed-post__text-copy">
             <UiV2ArticleBlocks blocks={[block]} />
@@ -549,6 +572,14 @@
               {#each repostBodyBlocks as block, i (i)}
                 {#if block.kind === 'media'}
                   <UiV2FeedPostMediaView items={block.items} />
+                {:else if block.kind === 'embed'}
+                  <UiV2FeedPostEmbed
+                    title={block.title}
+                    description={block.description}
+                    image={block.image}
+                    url={block.url}
+                    siteName={block.siteName}
+                  />
                 {:else}
                   <button type="button" class="uiv2-feed-post__repost-copy" onclick={openRepost}>
                     <UiV2ArticleBlocks blocks={[block]} />
@@ -587,6 +618,7 @@
     {/if}
   </div>
 
+  {#if !staticPreview}
   <footer class="uiv2-feed-post__foot" data-post-action>
     <button
       type="button"
@@ -663,6 +695,7 @@
         </span>
       {/if}
     </button>
+  {/if}
   {/if}
 </article>
 

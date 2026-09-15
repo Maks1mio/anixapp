@@ -340,6 +340,11 @@ export interface AnixApi {
         blogs?: { content?: unknown[]; total_count?: number };
         tags?: { content?: unknown[] };
       }>;
+      channelSubscribers: (
+        channelId: number,
+        page?: number,
+        query?: string,
+      ) => Promise<{ content?: unknown[]; total_count?: number; total_page_count?: number }>;
     };
 
   collection: {
@@ -375,23 +380,50 @@ export interface AnixApi {
   };
 
   channel: {
-    info: (id: number) => Promise<{ channel?: unknown }>;
+    info: (id: number) => Promise<{ channel?: unknown; suggestion_count?: number }>;
     getBlog?: (id: number) => Promise<{ channel?: unknown; blogInfo?: unknown }>;
     articles: (channelId: number, page?: number) => Promise<{ content?: unknown[]; total_page_count?: number }>;
     subscribe: (channelId: number) => Promise<{ code?: number }>;
     unsubscribe: (channelId: number) => Promise<{ code?: number }>;
-    subscriptions: (page?: number) => Promise<{
-      content?: Array<{
-        id: number;
-        title?: string;
-        avatar?: string | null;
-        is_blog?: boolean;
-        is_verified?: boolean;
-        is_subscribed?: boolean;
-        subscriber_count?: number;
+    mute: (channelId: number) => Promise<{ code?: number }>;
+    unmute: (channelId: number) => Promise<{ code?: number }>;
+    subscriptions: (
+      page?: number,
+      opts?: { sort?: number },
+    ) => Promise<{
+        content?: Array<{
+          id: number;
+          title?: string;
+          avatar?: string | null;
+          is_blog?: boolean;
+          is_verified?: boolean;
+          is_subscribed?: boolean;
+          subscriber_count?: number;
+        }>;
+        total_page_count?: number;
       }>;
-      total_page_count?: number;
-    }>;
+      /** POST channel/all/{page} — каталог каналов как на Android. */
+      all: (
+        page?: number,
+        opts?: {
+          isBlog?: boolean | null;
+          isSubscribed?: boolean | null;
+          permission?: number | null;
+          sort?: number;
+        },
+      ) => Promise<{
+        content?: Array<{
+          id: number;
+          title?: string;
+          avatar?: string | null;
+          is_blog?: boolean;
+          is_verified?: boolean;
+          is_subscribed?: boolean;
+          subscriber_count?: number;
+        }>;
+        total_page_count?: number;
+        total_count?: number;
+      }>;
     recommendations: (
       page?: number,
       opts?: { isBlog?: boolean; excludeSubscribed?: boolean },
@@ -409,6 +441,10 @@ export interface AnixApi {
       total_count?: number;
     }>;
     editorAll: () => Promise<{ channels?: Array<{ id: number; title: string; avatar?: string | null; subscriber_count?: number; is_blog?: boolean }> }>;
+    editorAvailable: (
+      channelId: number,
+      opts?: { isSuggestion?: boolean; isEditMode?: boolean },
+    ) => Promise<{ code?: number; media_upload_token?: string }>;
     uploadCover: (
       channelId: number,
       imageBase64: string,
@@ -439,6 +475,85 @@ export interface AnixApi {
   article: {
     info: (id: number) => Promise<{ article?: unknown }>;
     vote: (id: number, vote: number) => Promise<{ code?: number }>;
+    create: (
+      channelId: number,
+      body: {
+        is_signed: boolean;
+        repost_article_id: number | null;
+        payload: {
+          time: number;
+          version: string;
+          blocks: Array<{
+            id: string;
+            type: string;
+            name: string;
+            data: Record<string, unknown>;
+          }>;
+          block_count: number;
+        };
+      },
+    ) => Promise<{ code?: number; article?: { id?: number } }>;
+    createSuggestion: (
+      channelId: number,
+      body: {
+        is_signed: boolean;
+        payload: {
+          time: number;
+          version: string;
+          blocks: Array<{
+            id: string;
+            type: string;
+            name: string;
+            data: Record<string, unknown>;
+          }>;
+          block_count: number;
+        };
+      },
+    ) => Promise<{ code?: number; article?: { id?: number } }>;
+    suggestions: (
+      page?: number,
+      opts?: { channelId?: number },
+    ) => Promise<{
+      content?: unknown[];
+      total_page_count?: number;
+      total_count?: number;
+    }>;
+    deleteSuggestion: (suggestionId: number) => Promise<{ code?: number }>;
+    uploadImage: (
+      mediaToken: string,
+      imageBase64: string,
+      fileName?: string,
+      uploadId?: string,
+    ) => Promise<{
+      code?: number;
+      success?: number;
+      aborted?: boolean;
+      file?: {
+        id?: string;
+        url?: string;
+        hash?: string;
+        width?: number;
+        height?: number;
+      };
+    }>;
+    abortUpload?: (uploadId: string) => void;
+    generateEmbed: (
+      type: 'youtube' | 'vk' | 'link',
+      mediaToken: string,
+      url: string,
+    ) => Promise<{
+      code?: number;
+      success?: number;
+      hash?: string;
+      embed?: string | null;
+      image?: string | null;
+      title?: string | null;
+      description?: string | null;
+      site_name?: string | null;
+      width?: number | null;
+      height?: number | null;
+      url?: string;
+    }>;
     delete: (id: number) => Promise<{ code?: number }>;
     mute: (id: number) => Promise<{ code?: number }>;
     unmute: (id: number) => Promise<{ code?: number }>;
@@ -468,6 +583,13 @@ export interface AnixApi {
   report: {
     articleReasons: () => Promise<Array<{ id: number; title?: string; name?: string; text?: string }>>;
     submitArticle: (body: {
+      entity_id?: number;
+      reason?: number;
+      reason_id?: number;
+      message?: string;
+    }) => Promise<{ code?: number }>;
+    channelReasons: () => Promise<Array<{ id: number; title?: string; name?: string; text?: string }>>;
+    submitChannel: (body: {
       entity_id?: number;
       reason?: number;
       reason_id?: number;

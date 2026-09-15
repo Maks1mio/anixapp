@@ -51,6 +51,7 @@
   import Overview from './views/Overview.svelte';
   import FluoPage from './views/Fluo/page.svelte';
   import Feed from './views/Feed.svelte';
+  import FeedComposerWindow from './views/FeedComposerWindow.svelte';
   import Popular from './views/Popular.svelte';
   import CollectionsList from './views/CollectionsList.svelte';
   import MyCollections from './views/MyCollections.svelte';
@@ -178,7 +179,7 @@
     queueMicrotask(() => replacePath('/feed'));
   });
 
-  // /channel/:id больше нет — лента канала/блога внутри /feed
+  // /channel/:id — группа в правом блоке ленты, без отдельной страницы
   $effect(() => {
     const m = channelMatch;
     if (!m) return;
@@ -244,6 +245,7 @@
   const collectionPickReturn  = $derived(getSearchParams().get('return') || '/collections/create');
   const announcementChatMatch = $derived(path.match(/^\/announcement\/([^/]+)\/chat$/));
   const isWatchRoute = $derived(path === '/watch');
+  const isComposerWindow = $derived(path === '/feed/composer');
 
   // ── App screen state machine ───────────────────────────────────────────────
   let offlineRetryTimer: number | null = null;
@@ -307,6 +309,18 @@
   }
 
   onMount(() => {
+    if (getPath() === '/feed/composer') {
+      initTooltipSystem();
+      appScreen.set('main');
+      void window.anixApi?.auth?.getStatus?.()
+        .then((status) => {
+          isAuthenticated.set(!!status?.hasToken);
+          if (status?.hasToken) notifyAuthChanged();
+        })
+        .catch(() => {});
+      return;
+    }
+
     initTooltipSystem();
     const stopBookmarksSync = initBookmarksChangeSync();
     void initAnixbackEndpoint();
@@ -1016,7 +1030,10 @@
     {/if}
 {/snippet}
 
-{#if $appScreen === 'login'}
+{#if isComposerWindow}
+  <FeedComposerWindow />
+
+{:else if $appScreen === 'login'}
   <!-- Нет anixApi (браузер без моста) -->
   <Login
     onSuccess={() => { void onLoginSuccess(); appScreen.set('main'); }}

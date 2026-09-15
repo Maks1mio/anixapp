@@ -4,6 +4,8 @@ const { BookmarkType } = require('anixapi');
 
 const AUTH_FILE = 'auth.json';
 const DEFAULT_BASE_URL = 'https://api-s.anixsekai.com';
+/** Хост редактора статей (картинки и embed), не основной API. */
+const EDITOR_ORIGIN = 'https://editor.anixsekai.com';
 /** Резервный прокси AnixApp (не выбирать как основной эндпоинт). */
 const BACKUP_API_PROXY = 'https://api.anixapp.com/anixart-api';
 const LOG_DIR = 'logs';
@@ -49,6 +51,7 @@ const DISCORD_RPC_PAGE_KEYS = [
 module.exports = {
   AUTH_FILE,
   DEFAULT_BASE_URL,
+  EDITOR_ORIGIN,
   BACKUP_API_PROXY,
   LOG_DIR,
   ANIXART_UA,

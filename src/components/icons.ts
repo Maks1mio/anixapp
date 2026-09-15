@@ -4,6 +4,7 @@
  */
 
 import {
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
   ArrowUp,
@@ -11,6 +12,7 @@ import {
   AudioLines,
   Bell,
   Newspaper,
+  Bold,
   Bookmark,
   Calendar,
   Check,
@@ -32,26 +34,34 @@ import {
   Flag,
   Globe,
   GripVertical,
+  Heading,
   Heart,
   Home,
   Image,
   Info,
+  Italic,
   LayoutGrid,
   LayoutList,
+  Link,
+  List,
+  ListOrdered,
   Lock,
   LogOut,
   MessageCircle,
   MessageSquareX,
   Mic,
+  Minus,
   MoreHorizontal,
   MoreVertical,
   Palette,
+  Paperclip,
   Pencil,
   Pause,
   Pin,
   Play,
   Plus,
   BookOpen,
+  Quote,
   Radio,
   RefreshCw,
   Repeat2,
@@ -292,6 +302,11 @@ export function iconFlame(size = 18): string {
   return toSvg(Flame, size);
 }
 
+/** Залитый огонёк ленты (Android ic_popular_orange) — «популярно за». */
+export function iconPopular(size = 24): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.9,20.875Q6.15,19.825 5.075,18.012Q4,16.2 4,14Q4,11.175 5.675,8.575Q7.35,5.975 10.275,4.025Q10.825,3.65 11.413,3.987Q12,4.325 12,5V6.3Q12,7.15 12.588,7.725Q13.175,8.3 14.025,8.3Q14.45,8.3 14.838,8.113Q15.225,7.925 15.525,7.575Q15.725,7.325 16.038,7.262Q16.35,7.2 16.625,7.4Q18.2,8.525 19.1,10.275Q20,12.025 20,14Q20,16.2 18.925,18.012Q17.85,19.825 16.1,20.875Q16.525,20.275 16.763,19.562Q17,18.85 17,18.05Q17,17.05 16.625,16.163Q16.25,15.275 15.55,14.575L12,11.1L8.475,14.575Q7.75,15.3 7.375,16.175Q7,17.05 7,18.05Q7,18.85 7.238,19.562Q7.475,20.275 7.9,20.875ZM12,21Q10.75,21 9.875,20.137Q9,19.275 9,18.05Q9,17.475 9.225,16.938Q9.45,16.4 9.875,15.975L12,13.9L14.125,15.975Q14.55,16.4 14.775,16.925Q15,17.45 15,18.05Q15,19.275 14.125,20.137Q13.25,21 12,21Z"/></svg>`;
+}
+
 /** Расписание */
 export function iconCalendar(size = 18): string {
   return toSvg(Calendar, size);
@@ -498,6 +513,46 @@ export function iconClock(size = 14): string {
 /** Буква A (сортировка по никнейму) */
 export function iconType(size = 16): string {
   return toSvg(Type, size);
+}
+
+export function iconBold(size = 16): string {
+  return toSvg(Bold, size);
+}
+
+export function iconItalic(size = 16): string {
+  return toSvg(Italic, size);
+}
+
+export function iconLink(size = 16): string {
+  return toSvg(Link, size);
+}
+
+export function iconHeading(size = 16): string {
+  return toSvg(Heading, size);
+}
+
+export function iconList(size = 16): string {
+  return toSvg(List, size);
+}
+
+export function iconListOrdered(size = 16): string {
+  return toSvg(ListOrdered, size);
+}
+
+export function iconMinus(size = 16): string {
+  return toSvg(Minus, size);
+}
+
+export function iconPaperclip(size = 16): string {
+  return toSvg(Paperclip, size);
+}
+
+export function iconQuote(size = 16): string {
+  return toSvg(Quote, size);
+}
+
+export function iconArrowDown(size = 20): string {
+  return toSvg(ArrowDown, size);
 }
 
 /** Галочка в круге (просмотренная серия) */

@@ -2,10 +2,9 @@
   import { flip } from 'svelte/animate';
   import { cubicOut } from 'svelte/easing';
   import UserAvatar from '../UserAvatar.svelte';
-  import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../uikit-v2/UiV2PopupMenu.svelte';
-  import { iconChevronDown, iconChevronLeft, iconChevronRight, iconPin, iconPlus, iconUsers } from '../icons';
+  import { iconChevronLeft, iconChevronRight, iconPin } from '../icons';
 
-  export type FeedStoryItem = {
+  export type FeedSubsItem = {
     id: number;
     title: string;
     avatar?: string | null;
@@ -16,31 +15,21 @@
   };
 
   type Props = {
-    items: FeedStoryItem[];
+    items: FeedSubsItem[];
     selectedId?: number | null;
     loading?: boolean;
-    createBusy?: boolean;
-    onSelect: (id: number) => void;
+    onSelect: (id: number | null) => void;
     onPin?: (id: number) => void;
-    onCreate?: () => void;
-    onManaged?: () => void;
   };
 
   let {
     items,
     selectedId = null,
     loading = false,
-    createBusy = false,
     onSelect,
     onPin,
-    onCreate,
-    onManaged,
   }: Props = $props();
 
-  let createOpen = $state(false);
-  let createX = $state(0);
-  let createY = $state(0);
-  let createBtn = $state<HTMLButtonElement | null>(null);
   let scrollEl = $state<HTMLUListElement | null>(null);
   let canScrollLeft = $state(false);
   let canScrollRight = $state(false);
@@ -48,36 +37,15 @@
 
   const SCROLL_EDGE = 4;
   const hasStrip = $derived(items.length > 0 || loading);
-  const hasCreate = $derived(!!onCreate || !!onManaged);
+  const hasSelection = $derived(selectedId != null);
   const measureKey = $derived(`${items.length}:${loading ? 1 : 0}`);
-
-  const createItems = $derived.by((): UiV2PopupMenuItem[] => {
-    const list: UiV2PopupMenuItem[] = [];
-    if (onCreate) {
-      list.push({
-        id: 'blog',
-        label: createBusy ? 'Создание…' : 'Создать блог',
-        icon: iconPlus(16),
-        disabled: createBusy,
-      });
-    }
-    if (onManaged) {
-      list.push({
-        id: 'managed',
-        label: 'Управляемые',
-        icon: iconUsers(16),
-        dividerBefore: list.length > 0,
-      });
-    }
-    return list;
-  });
 
   function prefersReducedMotion(): boolean {
     return typeof window !== 'undefined'
       && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   }
 
-  function storyFlip(
+  function subsFlip(
     node: HTMLElement,
     rects: { from: DOMRect; to: DOMRect },
   ) {
@@ -98,12 +66,6 @@
         }
         : css,
     };
-  }
-
-  function coverStyle(url: string | null | undefined): string | undefined {
-    if (!url) return undefined;
-    const safe = url.replace(/\\/g, '/').replace(/"/g, '%22');
-    return `--feed-story-cover:url("${safe}")`;
   }
 
   function updateScrollState() {
@@ -190,27 +152,6 @@
     onPin?.(id);
   }
 
-  function toggleCreate(e: MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (createOpen) {
-      createOpen = false;
-      return;
-    }
-    const el = createBtn;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    createX = r.left + r.width / 2;
-    createY = r.bottom;
-    createOpen = true;
-  }
-
-  function onCreateSelect(id: string) {
-    createOpen = false;
-    if (id === 'blog') onCreate?.();
-    if (id === 'managed') onManaged?.();
-  }
-
   $effect(() => {
     measureKey;
     const el = scrollEl;
@@ -239,28 +180,29 @@
 </script>
 
 {#if hasStrip}
-  <section class="feed-stories" aria-label="Пользователи ленты">
+  <section class="feed-subs" aria-label="Подписки">
     <div
-      class="feed-stories__carousel"
-      class:feed-stories__carousel--overflow={hasOverflow}
-      class:feed-stories__carousel--can-left={canScrollLeft}
-      class:feed-stories__carousel--can-right={canScrollRight}
+      class="feed-subs__carousel"
+      class:feed-subs__carousel--overflow={hasOverflow}
+      class:feed-subs__carousel--can-left={canScrollLeft}
+      class:feed-subs__carousel--can-right={canScrollRight}
     >
       <ul
-        class="feed-stories__scroll"
+        class="feed-subs__scroll"
         bind:this={scrollEl}
         onwheel={onStripWheel}
       >
         {#each items as item (item.id)}
           {@const active = selectedId === item.id}
-          <li class="feed-stories__cell" animate:storyFlip>
-            <div class="feed-stories__frame">
+          <li class="feed-subs__cell" animate:subsFlip>
+            <div class="feed-subs__frame">
               <button
                 type="button"
-                class="feed-stories__item"
-                class:feed-stories__item--active={active}
-                class:feed-stories__item--fresh={item.fresh && !active}
-                class:feed-stories__item--pinned={!!item.pinned}
+                class="feed-subs__item"
+                class:feed-subs__item--active={active}
+                class:feed-subs__item--dimmed={hasSelection && !active}
+                class:feed-subs__item--fresh={item.fresh && !active}
+                class:feed-subs__item--pinned={!!item.pinned}
                 onclick={() => onSelect(item.id)}
                 title={item.title}
                 aria-pressed={active}
@@ -268,16 +210,10 @@
                   ? `${item.title}, есть новое`
                   : item.title}
               >
-                <span
-                  class="feed-stories__card"
-                  class:feed-stories__card--empty={!item.cover}
-                  style={coverStyle(item.cover)}
-                  aria-hidden="true"
-                >
+                <span class="feed-subs__avatar-wrap" aria-hidden="true">
                   <span
-                    class="feed-stories__avatar"
-                    class:feed-stories__avatar--channel={!item.isBlog}
-                    class:feed-stories__avatar--fresh={item.fresh}
+                    class="feed-subs__avatar"
+                    class:feed-subs__avatar--channel={!item.isBlog}
                   >
                     <UserAvatar
                       src={item.avatar}
@@ -285,14 +221,17 @@
                       shape={item.isBlog ? 'circle' : 'channel'}
                     />
                   </span>
+                  {#if item.fresh && !active}
+                    <span class="feed-subs__dot"></span>
+                  {/if}
                 </span>
-                <span class="feed-stories__name">{item.title}</span>
+                <span class="feed-subs__name">{item.title}</span>
               </button>
               {#if onPin}
                 <button
                   type="button"
-                  class="feed-stories__pin"
-                  class:feed-stories__pin--on={!!item.pinned}
+                  class="feed-subs__pin"
+                  class:feed-subs__pin--on={!!item.pinned}
                   title={item.pinned ? 'Открепить' : 'Закрепить'}
                   aria-label={item.pinned ? `Открепить ${item.title}` : `Закрепить ${item.title}`}
                   aria-pressed={!!item.pinned}
@@ -307,10 +246,10 @@
 
         {#if loading && items.length === 0}
           {#each Array.from({ length: 5 }) as _, i (`skel-${i}`)}
-            <li class="feed-stories__cell" aria-hidden="true">
-              <div class="feed-stories__skel">
-                <span class="feed-stories__skel-card"></span>
-                <span class="feed-stories__skel-name"></span>
+            <li class="feed-subs__cell" aria-hidden="true">
+              <div class="feed-subs__skel">
+                <span class="feed-subs__skel-card"></span>
+                <span class="feed-subs__skel-name"></span>
               </div>
             </li>
           {/each}
@@ -318,13 +257,13 @@
       </ul>
 
       <div
-        class="feed-stories__fade feed-stories__fade--left"
-        class:feed-stories__fade--visible={canScrollLeft}
+        class="feed-subs__fade feed-subs__fade--left"
+        class:feed-subs__fade--visible={canScrollLeft}
         aria-hidden={!canScrollLeft}
       >
         <button
           type="button"
-          class="feed-stories__arrow"
+          class="feed-subs__arrow"
           aria-label="Прокрутить назад"
           tabindex={canScrollLeft ? 0 : -1}
           disabled={!canScrollLeft}
@@ -334,13 +273,13 @@
         </button>
       </div>
       <div
-        class="feed-stories__fade feed-stories__fade--right"
-        class:feed-stories__fade--visible={canScrollRight}
+        class="feed-subs__fade feed-subs__fade--right"
+        class:feed-subs__fade--visible={canScrollRight}
         aria-hidden={!canScrollRight}
       >
         <button
           type="button"
-          class="feed-stories__arrow"
+          class="feed-subs__arrow"
           aria-label="Прокрутить вперёд"
           tabindex={canScrollRight ? 0 : -1}
           disabled={!canScrollRight}
@@ -350,34 +289,5 @@
         </button>
       </div>
     </div>
-
-    {#if hasCreate}
-      <div class="feed-stories__create-row">
-        <button
-          type="button"
-          class="feed-stories__create"
-          bind:this={createBtn}
-          onclick={toggleCreate}
-          disabled={createBusy}
-          aria-haspopup="menu"
-          aria-expanded={createOpen}
-        >
-          <span class="feed-stories__create-icon" aria-hidden="true">{@html iconPlus(16)}</span>
-          <span>Создать</span>
-          <span class="feed-stories__create-chevron" aria-hidden="true">{@html iconChevronDown(14)}</span>
-        </button>
-      </div>
-      <UiV2PopupMenu
-        open={createOpen}
-        x={createX}
-        y={createY}
-        placement="anchor"
-        items={createItems}
-        onClose={() => {
-          createOpen = false;
-        }}
-        onSelect={onCreateSelect}
-      />
-    {/if}
   </section>
 {/if}

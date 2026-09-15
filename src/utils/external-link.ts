@@ -1,5 +1,6 @@
 import { get, writable } from 'svelte/store';
 import { navigate } from '../stores/navigation';
+import { focusFeedChannel } from '../stores/feed-focus';
 
 /** URL, по которому ждём подтверждение перед открытием во внешнем браузере. */
 export const pendingExternalUrl = writable<string | null>(null);
@@ -83,7 +84,10 @@ export function mapAnixartAppUrlToInternalPath(raw: string | null | undefined): 
   if (channelArticle) return `/article/${channelArticle[2]}`;
 
   const channel = path.match(/^\/channel\/(\d+)$/i);
-  if (channel) return `/channel/${channel[1]}`;
+  if (channel) {
+    focusFeedChannel(Number(channel[1]));
+    return '/feed';
+  }
 
   const profile = path.match(/^\/profile\/(\d+)$/i);
   if (profile) return `/profile/${profile[1]}`;

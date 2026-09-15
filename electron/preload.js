@@ -276,6 +276,12 @@ contextBridge.exposeInMainWorld('electron', {
   overviewEditorDone: () => ipcRenderer.send('overview-editor:done'),
   openAdminPanelWindow: () => ipcRenderer.invoke('admin:openWindow'),
   isAdminPanelWindow: () => ipcRenderer.invoke('admin:isStandaloneWindow'),
+  openComposerWindow: (payload) => ipcRenderer.invoke('composer:open', payload ?? {}),
+  getComposerPayload: () => ipcRenderer.invoke('composer:getPayload'),
+  isComposerWindow: () => ipcRenderer.invoke('composer:isStandaloneWindow'),
+  composerReadyToClose: () => ipcRenderer.send('composer:readyToClose'),
+  composerPublished: (data) => ipcRenderer.send('composer:published', data ?? null),
+  composerDraftsChanged: () => ipcRenderer.send('composer:draftsChanged'),
   // Logging
   logRenderer:      (entry) => ipcRenderer.invoke('log:renderer', entry),
   logGetSessions:   ()      => ipcRenderer.invoke('log:getSessions'),
@@ -337,6 +343,30 @@ ipcRenderer.on('theme-editor:deleted', (_, themeId) => {
 
 ipcRenderer.on('overview-editor:done', () => {
   window.dispatchEvent(new CustomEvent('anix:overviewEditorDone'));
+});
+
+ipcRenderer.on('composer:setPayload', (_, payload) => {
+  window.dispatchEvent(new CustomEvent('anix:composer-payload', { detail: payload ?? null }));
+});
+
+ipcRenderer.on('composer:requestClose', () => {
+  window.dispatchEvent(new CustomEvent('anix:composer-request-close'));
+});
+
+ipcRenderer.on('composer:published', (_, data) => {
+  window.dispatchEvent(new CustomEvent('anix:composer-published', { detail: data ?? null }));
+});
+
+ipcRenderer.on('composer:draftsChanged', () => {
+  window.dispatchEvent(new CustomEvent('anix:feed-drafts-changed'));
+});
+
+ipcRenderer.on('composer:closed', () => {
+  window.dispatchEvent(new CustomEvent('anix:composer-closed'));
+});
+
+ipcRenderer.on('anix:articleUploadProgress', (_, data) => {
+  window.dispatchEvent(new CustomEvent('anix:article-upload-progress', { detail: data ?? null }));
 });
 
 // ── Structured API (anixApi) — grouped endpoints like AniDesk ──
@@ -480,6 +510,8 @@ contextBridge.exposeInMainWorld('anixApi', {
       ipcRenderer.invoke('anix:searchProfileList', status, query, page, searchBy),
     feed: (query, page = 0, searchBy = 0) =>
       ipcRenderer.invoke('anix:searchFeed', query, page, searchBy),
+    channelSubscribers: (channelId, page = 0, query = '') =>
+      ipcRenderer.invoke('anix:searchChannelSubscribers', channelId, page, query),
   },
 
   collection: {
@@ -509,10 +541,15 @@ contextBridge.exposeInMainWorld('anixApi', {
     articles: (channelId, page = 0) => ipcRenderer.invoke('anix:channelArticles', channelId, page),
     subscribe: (channelId) => ipcRenderer.invoke('anix:channelSubscribe', channelId),
     unsubscribe: (channelId) => ipcRenderer.invoke('anix:channelUnsubscribe', channelId),
-    subscriptions: (page = 0) => ipcRenderer.invoke('anix:channelSubscriptions', page),
+    mute: (channelId) => ipcRenderer.invoke('anix:channelMute', channelId),
+    unmute: (channelId) => ipcRenderer.invoke('anix:channelUnmute', channelId),
+    subscriptions: (page = 0, opts) => ipcRenderer.invoke('anix:channelSubscriptions', page, opts ?? {}),
+    all: (page = 0, opts) => ipcRenderer.invoke('anix:channelAll', page, opts ?? {}),
     recommendations: (page = 0, opts) =>
       ipcRenderer.invoke('anix:channelRecommendations', page, opts ?? {}),
     editorAll: () => ipcRenderer.invoke('anix:channelEditorAll'),
+    editorAvailable: (channelId, opts) =>
+      ipcRenderer.invoke('anix:channelEditorAvailable', channelId, opts ?? {}),
     uploadCover: (channelId, imageBase64, fileName) =>
       ipcRenderer.invoke('anix:channelUploadCover', channelId, imageBase64, fileName),
     deleteCover: (channelId) => ipcRenderer.invoke('anix:channelDeleteCover', channelId),
@@ -541,6 +578,18 @@ contextBridge.exposeInMainWorld('anixApi', {
   article: {
     info: (id) => ipcRenderer.invoke('anix:articleById', id),
     vote: (id, vote) => ipcRenderer.invoke('anix:articleVote', id, vote),
+    create: (channelId, body) => ipcRenderer.invoke('anix:articleCreate', channelId, body),
+    createSuggestion: (channelId, body) =>
+      ipcRenderer.invoke('anix:articleSuggestionCreate', channelId, body),
+    suggestions: (page = 0, opts) =>
+      ipcRenderer.invoke('anix:articleSuggestions', page, opts ?? {}),
+    deleteSuggestion: (suggestionId) =>
+      ipcRenderer.invoke('anix:articleSuggestionDelete', suggestionId),
+    uploadImage: (mediaToken, imageBase64, fileName, uploadId) =>
+      ipcRenderer.invoke('anix:articleUploadImage', mediaToken, imageBase64, fileName, uploadId ?? ''),
+    abortUpload: (uploadId) => ipcRenderer.send('anix:articleUploadAbort', uploadId),
+    generateEmbed: (type, mediaToken, url) =>
+      ipcRenderer.invoke('anix:articleGenerateEmbed', type, mediaToken, url),
     delete: (id) => ipcRenderer.invoke('anix:articleDelete', id),
     mute: (id) => ipcRenderer.invoke('anix:articleMute', id),
     unmute: (id) => ipcRenderer.invoke('anix:articleUnmute', id),
@@ -556,6 +605,8 @@ contextBridge.exposeInMainWorld('anixApi', {
   report: {
     articleReasons: () => ipcRenderer.invoke('anix:reportArticleReasons'),
     submitArticle: (body) => ipcRenderer.invoke('anix:reportArticle', body),
+    channelReasons: () => ipcRenderer.invoke('anix:reportChannelReasons'),
+    submitChannel: (body) => ipcRenderer.invoke('anix:reportChannel', body),
   },
 
   home: {

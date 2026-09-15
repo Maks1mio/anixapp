@@ -55,7 +55,17 @@ function mapBodyBlocks(article: FeedArticle): NonNullable<UiV2FeedPostData['body
       out.push({ kind: 'media', items: [...block.items] });
       continue;
     }
-    if (block.kind === 'embed') continue;
+    if (block.kind === 'embed') {
+      out.push({
+        kind: 'embed',
+        title: block.title,
+        description: block.description,
+        image: block.image,
+        url: block.url,
+        siteName: block.siteName,
+      });
+      continue;
+    }
     out.push(block);
   }
   return out;

@@ -113,6 +113,32 @@ export function toCdnThumbnailUrl(url: string, width: number, height = width): s
   }
 }
 
+/**
+ * Картинка записи: data/blob как есть, CDN — через Electron-прокси (Referer + relay).
+ * Плитка — квадратное JPEG-превью, иначе вписываем в 640×960 без лишнего кропа.
+ */
+export function toFeedImageUrl(
+  url: string | null | undefined,
+  mode: 'full' | 'tile' = 'full',
+  intrinsic?: { width?: number; height?: number } | null,
+): string {
+  const raw = (url ?? '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
+  if (mode === 'tile') {
+    return toCdnThumbnailUrl(raw, 640, 640) || toCdnProxyUrl(raw) || raw;
+  }
+  const w = Number(intrinsic?.width) || 0;
+  const h = Number(intrinsic?.height) || 0;
+  if (w >= 16 && h >= 16) {
+    const scale = Math.min(640 / w, 960 / h, 1);
+    const tw = Math.max(16, Math.min(640, Math.round(w * scale)));
+    const th = Math.max(16, Math.min(960, Math.round(h * scale)));
+    return toCdnThumbnailUrl(raw, tw, th) || toCdnProxyUrl(raw) || raw;
+  }
+  return toCdnProxyUrl(raw) || raw;
+}
+
 /** Пресеты под CSS-размер постера (до учёта DPR / запаса резкости). */
 export const POSTER_THUMB_PRESETS = {
   /** Вертикальная карточка / карусель (~160–180 CSS px) */

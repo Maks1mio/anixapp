@@ -2,6 +2,7 @@
   import { iconChevronLeft, iconChevronRight } from '../icons';
   import type { UiV2FeedPostMedia } from './UiV2FeedPost.svelte';
   import { openFeedMediaLightbox } from '../../utils/feed-media-lightbox';
+  import { toCdnProxyUrl, toFeedImageUrl } from '../../utils/posterUrl';
 
   type Props = {
     items: UiV2FeedPostMedia[];
@@ -71,12 +72,12 @@
   });
 </script>
 
-{#snippet mediaNode(item: UiV2FeedPostMedia, className = '')}
+{#snippet mediaNode(item: UiV2FeedPostMedia, className = '', tile = false)}
   {#if item.kind === 'video'}
     <!-- svelte-ignore a11y_media_has_caption -->
     <video
       class={className}
-      src={item.url}
+      src={toCdnProxyUrl(item.url) || item.url}
       muted
       playsinline
       loop
@@ -84,7 +85,13 @@
       preload="metadata"
     ></video>
   {:else}
-    <img class={className} src={item.url} alt="" loading="lazy" decoding="async" />
+    <img
+      class={className}
+      src={toFeedImageUrl(item.url, tile ? 'tile' : 'full')}
+      alt=""
+      loading="lazy"
+      decoding="async"
+    />
   {/if}
 {/snippet}
 
@@ -103,7 +110,7 @@
       <!-- svelte-ignore a11y_media_has_caption -->
       <video
         class="uiv2-feed-post__media-blur"
-        src={item.url}
+        src={toCdnProxyUrl(item.url) || item.url}
         muted
         playsinline
         loop
@@ -115,7 +122,7 @@
     {:else}
       <img
         class="uiv2-feed-post__media-blur"
-        src={item.url}
+        src={toFeedImageUrl(item.url, 'tile')}
         alt=""
         aria-hidden="true"
         loading="lazy"
@@ -146,7 +153,7 @@
         }
         onclick={(e) => previewAt(i, e)}
       >
-        {@render mediaNode(item, 'uiv2-feed-post__gallery-img')}
+        {@render mediaNode(item, 'uiv2-feed-post__gallery-img', true)}
         {#if isLastOverflow}
           <span class="uiv2-feed-post__gallery-more" aria-hidden="true">+{galleryOverflow}</span>
         {:else if showGifBadge(item)}
@@ -169,7 +176,7 @@
           aria-label={`Открыть изображение ${i + 1}`}
           onclick={(e) => previewAt(i, e)}
         >
-          {@render mediaNode(item, 'uiv2-feed-post__carousel-img')}
+          {@render mediaNode(item, 'uiv2-feed-post__carousel-img', true)}
           {#if showGifBadge(item)}
             <span class="uiv2-feed-post__media-badge">GIF</span>
           {/if}

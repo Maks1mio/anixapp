@@ -338,6 +338,34 @@ declare global {
       overviewEditorDone?: () => void;
       openAdminPanelWindow?: () => Promise<void>;
       isAdminPanelWindow?: () => Promise<boolean>;
+      openComposerWindow?: (payload: {
+        channelId?: number | null;
+        draftId?: string | null;
+        repostArticle?: unknown;
+        isSuggestion?: boolean;
+        channels?: Array<{
+          id: number;
+          title: string;
+          avatar?: string | null;
+          is_blog?: boolean;
+        }>;
+      }) => Promise<void>;
+      getComposerPayload?: () => Promise<{
+        channelId?: number | null;
+        draftId?: string | null;
+        repostArticle?: unknown;
+        isSuggestion?: boolean;
+        channels?: Array<{
+          id: number;
+          title: string;
+          avatar?: string | null;
+          is_blog?: boolean;
+        }>;
+      } | null>;
+      isComposerWindow?: () => Promise<boolean>;
+      composerReadyToClose?: () => void;
+      composerPublished?: (data: { articleId?: number; channelId?: number } | null) => void;
+      composerDraftsChanged?: () => void;
       // Logging (diagnostics)
       logRenderer?: (entry: { level?: string; ch?: string; msg?: string; data?: unknown }) => Promise<void>;
       logGetSessions?: () => Promise<Array<{ id: string; ts: string }>>;

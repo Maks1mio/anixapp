@@ -217,6 +217,9 @@ function attachBackupProxyFailover(client) {
   client.call = async (request) => {
     const enabled = getBackupProxyEnabled();
     const primaryBase = String(request?.customBaseUrl ?? client.baseUrl ?? '');
+    if (/editor\.anixsekai\.com/i.test(primaryBase)) {
+      return original(request);
+    }
     const alreadyBackup =
       isBackupUrl(primaryBase) || (request?.customBaseUrl && isBackupUrl(request.customBaseUrl));
 

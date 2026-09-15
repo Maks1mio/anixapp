@@ -6,7 +6,6 @@
   import FeedArticleCard from '../components/feed/FeedArticleCard.svelte';
   import UiV2FeedPostSkeleton from '../components/uikit-v2/UiV2FeedPostSkeleton.svelte';
   import { isAuthenticated, requireAuth } from '../stores/auth';
-  import { navigate } from '../stores/navigation';
   import { feedArticleFocusId, feedChannelFocusId, takeFeedArticleFocus, takeFeedChannelFocus } from '../stores/feed-focus';
   import { showToast } from '../stores/toast';
   import {
@@ -30,9 +29,7 @@
   } from '../types/feed';
   import {
     applyArticleVote,
-    articlePreviewImage,
     channelAvatarUrl,
-    channelCoverUrl,
     channelSubscriberCount,
     formatFeedRelativeTime,
     normalizeArticleVote,
@@ -54,22 +51,41 @@
     pushFeedBrowsePost,
     type FeedBrowseHistoryItem,
   } from '../utils/feed-browse-history';
-  import UiV2FeedChannelCard from '../components/uikit-v2/UiV2FeedChannelCard.svelte';
   import UiV2FeedRecommended from '../components/uikit-v2/UiV2FeedRecommended.svelte';
-  import FeedStoriesStrip from '../components/feed/FeedStoriesStrip.svelte';
+  import FeedComposePrompt from '../components/feed/FeedComposePrompt.svelte';
+  import FeedArticleComposer from '../components/feed/FeedArticleComposer.svelte';
+  import FeedSuggestionsNav from '../components/feed/FeedSuggestionsNav.svelte';
+  import FeedSuggestionsModal from '../components/feed/FeedSuggestionsModal.svelte';
+  import { openFeedComposerWindow } from '../utils/feed-composer-open';
+  import {
+    deleteFeedDraft,
+    formatDraftTime,
+    getFeedDraft,
+    loadFeedDrafts,
+    type FeedArticleDraft,
+  } from '../utils/feed-article-drafts';
+  import FeedSubsStrip from '../components/feed/FeedSubsStrip.svelte';
   import FeedHistoryMoment from '../components/feed/FeedHistoryMoment.svelte';
+  import FeedChannelPanel from '../components/feed/FeedChannelPanel.svelte';
+  import FeedDirectoryModal from '../components/feed/FeedDirectoryModal.svelte';
+  import { openProfilePanel } from '../stores/profile-panel';
   import {
     iconArrowLeft,
     iconClock,
+    iconClipboardList,
     iconFlame,
     iconNewspaper,
+    iconPencil,
+    iconPlus,
+    iconPopular,
     iconRefreshCw,
     iconSearch,
     iconUsers,
     iconX,
   } from '../components/icons';
+  import { resolveCdnAssetUrl } from '../utils/posterUrl';
 
-  type FeedTab = 'my' | 'latest' | 'managed' | 'history' | 'search';
+  type FeedTab = 'my' | 'latest' | 'managed' | 'history' | 'drafts' | 'search';
   type LoadState = 'idle' | 'loading' | 'ready' | 'empty' | 'error' | 'need-auth';
 
   type FeedPostViewSnapshot = {
@@ -110,7 +126,7 @@
     is_blog?: boolean;
   }
 
-  let tab = $state<FeedTab>('latest');
+  let tab = $state<FeedTab>('my');
   let dateFilter = $state<FeedDateFilter>(0);
   let channelFilterId = $state<number | null>(null);
   let subscriptions = $state<FeedChannel[]>([]);
@@ -124,7 +140,17 @@
   let managed = $state<EditorChannel[]>([]);
   let managedBusy = $state(false);
   let createBusy = $state(false);
+  let composerOpen = $state(false);
+  let composerChannelId = $state<number | null>(null);
+  let composerRepost = $state<FeedArticle | null>(null);
+  let composerDraftId = $state<string | null>(null);
+  let composerDraft = $state<FeedArticleDraft | null>(null);
+  let composerIsSuggestion = $state(false);
+  let drafts = $state<FeedArticleDraft[]>([]);
+  let selfAvatarUrl = $state('');
   let sidebarChannel = $state<FeedChannel | null>(null);
+  let sidebarSuggestionCount = $state(0);
+  let suggestionsModalOpen = $state(false);
   let searchQuery = $state('');
   let listFilterQuery = $state('');
   let searchInputEl = $state<HTMLInputElement | null>(null);
@@ -138,8 +164,6 @@
   let searchLoadState = $state<LoadState>('idle');
   let searchError = $state('');
   let searchRequestId = 0;
-  let recommendChannels = $state<FeedChannel[]>([]);
-  let recommendBlogs = $state<FeedChannel[]>([]);
   /** Инкремент после mark-seen — чтобы точки обновились. */
   let lastSeenTick = $state(0);
   /** Инкремент после pin/unpin. */
@@ -147,6 +171,8 @@
   /** Инкремент после записи в историю сайдбара. */
   let historyTick = $state(0);
   let historyVisibleCount = $state(10);
+  /** Модалка всех подписок. */
+  let allSubsOpen = $state(false);
   let historyArticles = $state<Record<number, FeedArticle>>({});
   let historyArticleBusy = $state<Record<number, boolean>>({});
   let subscribeBusyId = $state<number | null>(null);
@@ -197,6 +223,7 @@
       || value === 'latest'
       || value === 'managed'
       || value === 'history'
+      || value === 'drafts'
       || value === 'search'
     );
   }
@@ -272,9 +299,19 @@
     resetScrollTop();
   }
 
+  const popularIconHtml = `<span class="feed-popular-icon">${iconPopular(20)}</span>`;
   const dateOptions = $derived.by((): UiV2SelectOption[] =>
-    FEED_DATE_OPTIONS.map((o) => ({ value: String(o.id), label: o.label })),
+    FEED_DATE_OPTIONS.map((o) => ({
+      value: String(o.id),
+      label: o.label,
+      icon: o.popular ? popularIconHtml : undefined,
+    })),
   );
+  const dateFilterAria = $derived.by(() => {
+    const opt = FEED_DATE_OPTIONS.find((o) => o.id === dateFilter);
+    if (!opt || !opt.popular) return 'Сортировка: последнее';
+    return `Сортировка: популярно за ${opt.label.toLowerCase()}`;
+  });
 
   const asideChannel = $derived(
     sidebarChannel
@@ -283,7 +320,6 @@
       : null),
   );
 
-  const displayAsideChannel = $derived(focusChannel ?? asideChannel);
   /** Просмотр поста: выбранная запись + остальные посты канала/блога ниже. */
   const postViewActive = $derived(!!focusArticle && !!focusChannel);
   const moreFromTitle = $derived(
@@ -299,47 +335,40 @@
         : tab === 'my'
           ? (channelFilterId != null
             ? (asideChannel?.title ?? subscriptions.find((c) => c.id === channelFilterId)?.title ?? 'Канал')
-            : 'Лента')
+            : 'Моя лента')
           : tab === 'latest'
             ? 'Свежее'
-            : tab === 'history'
-              ? 'История'
-              : 'Управляемые',
-  );
-
-  const recommendChannelsMapped = $derived(
-    recommendChannels.map((ch) => ({
-      id: ch.id,
-      title: ch.title || `Канал #${ch.id}`,
-      avatar: channelAvatarUrl(ch.avatar),
-      isVerified: !!ch.is_verified,
-      isSubscribed: !!ch.is_subscribed,
-      subscriberCount: channelSubscriberCount(ch),
-    })),
-  );
-  const recommendBlogsMapped = $derived(
-    recommendBlogs.map((ch) => ({
-      id: ch.id,
-      title: ch.title || `Блог #${ch.id}`,
-      avatar: channelAvatarUrl(ch.avatar),
-      isVerified: !!ch.is_verified,
-      isSubscribed: !!ch.is_subscribed,
-      subscriberCount: channelSubscriberCount(ch),
-    })),
-  );
-  const hasAsideLists = $derived(
-    recommendChannelsMapped.length > 0 || recommendBlogsMapped.length > 0,
+          : tab === 'history'
+            ? 'История'
+            : tab === 'drafts'
+              ? 'Черновики'
+              : 'Управляемые каналы',
   );
 
   const searchNeedle = $derived(searchQuery.trim().toLowerCase());
   const listFilterNeedle = $derived(listFilterQuery.trim().toLowerCase());
   /** Вкладка «Поиск» — API-поиск; на managed/history — локальный фильтр. */
   const searchMode = $derived(tab === 'search');
-  const feedNoAside = $derived(
-    tab === 'managed'
-      || tab === 'history'
-      || (!postViewActive && !(asideChannel || hasAsideLists)),
+  const showDateFilter = $derived(
+    tab === 'my' && !searchMode && !postViewActive,
   );
+
+  const groupAsideChannel = $derived.by((): FeedChannel | null => {
+    if (searchMode) return null;
+    if (postViewActive && focusChannel && !focusChannel.is_blog) return focusChannel;
+    if (
+      tab === 'my'
+      && !postViewActive
+      && channelFilterId != null
+      && asideChannel
+      && !asideChannel.is_blog
+    ) {
+      return asideChannel;
+    }
+    return null;
+  });
+  const showGroupAside = $derived(groupAsideChannel != null);
+  const hidePostSubscribe = $derived(showGroupAside);
 
   function pageableContent(raw: unknown): unknown[] {
     if (!raw || typeof raw !== 'object') return [];
@@ -438,6 +467,22 @@
       ? managed.filter((ch) => (ch.title || '').toLowerCase().includes(listFilterNeedle))
       : managed,
   );
+  const visibleDrafts = $derived(
+    listFilterNeedle
+      ? drafts.filter((d) => {
+          const hay = `${d.preview} ${d.channelId ?? ''}`.toLowerCase();
+          return hay.includes(listFilterNeedle);
+        })
+      : drafts,
+  );
+
+  function draftDestinationTitle(draft: FeedArticleDraft): string {
+    if (draft.channelId == null) return 'Канал не выбран';
+    const ch = managed.find((c) => c.id === draft.channelId)
+      ?? subscriptions.find((c) => c.id === draft.channelId);
+    if (ch) return `${ch.is_blog ? 'Блог' : 'Канал'} · ${ch.title}`;
+    return `Канал #${draft.channelId}`;
+  }
 
   function normalizeArticles(raw: unknown): FeedArticle[] {
     if (!Array.isArray(raw)) return [];
@@ -575,39 +620,79 @@
     return new Set(getSubscriptionPins());
   });
 
-  const showFeedStories = $derived(
+  const canWriteChannel = $derived(
+    channelFilterId != null && (
+      managed.some((c) => c.id === channelFilterId)
+      || !!asideChannel?.is_administrator_or_higher
+    ),
+  );
+
+  const canSuggestChannel = $derived.by(() => {
+    if (channelFilterId == null || !asideChannel || asideChannel.is_blog) return false;
+    if (canWriteChannel) return false;
+    return !!asideChannel.is_article_suggestion_enabled;
+  });
+
+  const showChannelSuggestUi = $derived(
+    tab === 'my'
+    && channelFilterId != null
+    && !postViewActive
+    && !searchMode
+    && asideChannel != null
+    && !asideChannel.is_blog
+    && (canWriteChannel || canSuggestChannel),
+  );
+
+  const composePromptPlaceholder = $derived(
+    canSuggestChannel
+      ? 'Предложите запись…'
+      : canWriteChannel
+        ? 'Добавить запись…'
+        : 'Расскажите о чём-нибудь…',
+  );
+
+  const showComposePrompt = $derived(
+    authed
+    && !postViewActive
+    && !searchMode
+    && (
+      ((tab === 'my' || tab === 'latest') && channelFilterId == null)
+      || (showChannelSuggestUi && (canSuggestChannel || canWriteChannel))
+    ),
+  );
+
+  const showSuggestionsNav = $derived(
+    showChannelSuggestUi
+    && sidebarSuggestionCount > 0
+    && (canWriteChannel || canSuggestChannel),
+  );
+
+  const showFeedSubs = $derived(
     tab === 'my' && !postViewActive && !searchMode,
   );
 
-  const storyCoverByChannelId = $derived.by(() => {
-    const covers = new Map<number, string>();
-    for (const article of articles) {
-      const id = Number(article.channel?.id ?? 0);
-      if (!(id > 0) || covers.has(id)) continue;
-      const image = articlePreviewImage(article);
-      if (image) covers.set(id, image);
-    }
-    return covers;
-  });
-
-  const feedStoryItems = $derived.by(() =>
-    displaySubscriptions.map((ch) => {
-      const avatar = channelAvatarUrl(ch.avatar);
-      const cover = channelCoverUrl(ch.cover) || storyCoverByChannelId.get(ch.id) || avatar;
-      return {
-        id: ch.id,
-        title: ch.title || `Канал #${ch.id}`,
-        avatar,
-        cover,
-        isBlog: !!ch.is_blog,
-        fresh: subscriptionIsFresh(ch),
-        pinned: pinnedIdSet.has(ch.id),
-      };
-    }),
+  const feedSubsItems = $derived.by(() =>
+    displaySubscriptions.map((ch) => ({
+      id: ch.id,
+      title: ch.title || `Канал #${ch.id}`,
+      avatar: channelAvatarUrl(ch.avatar),
+      isBlog: !!ch.is_blog,
+      fresh: subscriptionIsFresh(ch),
+      pinned: pinnedIdSet.has(ch.id),
+    })),
   );
 
-  const storiesLoading = $derived(
+  const subsLoading = $derived(
     authed && displaySubscriptions.length === 0 && loadState === 'loading',
+  );
+
+  const composerChannels = $derived(
+    managed.map((ch) => ({
+      id: ch.id,
+      title: ch.title || (ch.is_blog ? `Блог #${ch.id}` : `Канал #${ch.id}`),
+      avatar: ch.avatar,
+      is_blog: ch.is_blog,
+    })),
   );
 
   function rememberBrowseChannel(channel: FeedChannel | null | undefined) {
@@ -898,15 +983,19 @@
   async function loadSidebarChannel(channelId: number | null): Promise<void> {
     if (channelId == null || channelId <= 0) {
       sidebarChannel = null;
+      sidebarSuggestionCount = 0;
+      suggestionsModalOpen = false;
       return;
     }
     try {
       const res = await window.anixApi?.channel?.info?.(channelId);
       const ch = (res?.channel ?? null) as FeedChannel | null;
+      sidebarSuggestionCount = Math.max(0, Number(res?.suggestion_count ?? 0));
       sidebarChannel = ch?.id
         ? mergeChannelSubscribeFlag(ch)
         : (subscriptions.find((c) => c.id === channelId) ?? null);
     } catch {
+      sidebarSuggestionCount = 0;
       sidebarChannel = subscriptions.find((c) => c.id === channelId) ?? null;
     }
   }
@@ -917,30 +1006,10 @@
       return;
     }
     try {
-      const res = await window.anixApi.channel.subscriptions(0);
+      const res = await window.anixApi.channel.subscriptions(0, { sort: 1 });
       subscriptions = normalizeChannels(res?.content);
     } catch {
       subscriptions = [];
-    }
-  }
-
-  async function loadRecommendations(): Promise<void> {
-    const api = window.anixApi?.channel?.recommendations;
-    if (!api) {
-      recommendChannels = [];
-      recommendBlogs = [];
-      return;
-    }
-    try {
-      const [channelsRes, blogsRes] = await Promise.all([
-        api(0, { isBlog: false, excludeSubscribed: true }),
-        api(0, { isBlog: true, excludeSubscribed: true }),
-      ]);
-      recommendChannels = normalizeChannels(channelsRes?.content).slice(0, 12);
-      recommendBlogs = normalizeChannels(blogsRes?.content).slice(0, 12);
-    } catch {
-      recommendChannels = [];
-      recommendBlogs = [];
     }
   }
 
@@ -948,6 +1017,24 @@
     return list.map((ch) => (
       ch.id === channelId ? { ...ch, is_subscribed: next } : ch
     ));
+  }
+
+  function patchChannelMuted(channelId: number, muted: boolean) {
+    const patchCh = (ch: FeedChannel | null): FeedChannel | null => (
+      ch && ch.id === channelId ? { ...ch, is_muted: muted } : ch
+    );
+    sidebarChannel = patchCh(sidebarChannel);
+    if (focusChannel?.id === channelId) {
+      focusChannel = { ...focusChannel, is_muted: muted };
+    }
+    subscriptions = subscriptions.map((ch) => (
+      ch.id === channelId ? { ...ch, is_muted: muted } : ch
+    ));
+    if (muted) {
+      articles = articles.filter((a) => a.channel?.id !== channelId);
+      searchArticles = searchArticles.filter((a) => a.channel?.id !== channelId);
+      moreArticles = moreArticles.filter((a) => a.channel?.id !== channelId);
+    }
   }
 
   async function fetchPage(nextPage: number, append: boolean): Promise<void> {
@@ -966,6 +1053,14 @@
 
     if (tab === 'history') {
       loadState = historyItems.length === 0 ? 'empty' : 'ready';
+      hasMore = false;
+      articles = [];
+      return;
+    }
+
+    if (tab === 'drafts') {
+      drafts = loadFeedDrafts();
+      loadState = drafts.length === 0 ? 'empty' : 'ready';
       hasMore = false;
       articles = [];
       return;
@@ -1018,39 +1113,22 @@
 
     try {
       let res: { content?: unknown; total_page_count?: number } | null | undefined;
-      if (tab === 'my' && channelFilterId != null) {
-        const channelApi = window.anixApi?.channel;
-        if (!channelApi?.articles) {
-          loadState = 'error';
-          errorMsg = 'API недоступно';
-          return;
-        }
-        res = await channelApi.articles(channelFilterId, nextPage);
-        const list = withLocalSubscribeFlags(normalizeArticles(res?.content)).map((a) => ({
-          ...a,
-          channel: a.channel
-            ? {
-                ...a.channel,
-                id: a.channel.id || channelFilterId,
-              }
-            : a.channel,
-        }));
-        articles = append ? [...articles, ...list] : list;
-        page = nextPage;
-        const totalPages = Number(res?.total_page_count ?? 0);
-        hasMore = totalPages > 0
-          ? nextPage + 1 < totalPages
-          : list.length >= 10;
-        loadState = articles.length === 0 ? 'empty' : 'ready';
-        return;
-      }
-
       res = tab === 'my'
         ? await api.my(nextPage, {
             date: dateFilter,
+            ...(channelFilterId != null ? { channelId: channelFilterId } : {}),
           })
         : await api.latest(nextPage);
-      const list = withLocalSubscribeFlags(normalizeArticles(res?.content));
+      const list = withLocalSubscribeFlags(normalizeArticles(res?.content)).map((a) => (
+        channelFilterId != null
+          ? {
+              ...a,
+              channel: a.channel
+                ? { ...a.channel, id: a.channel.id || channelFilterId }
+                : a.channel,
+            }
+          : a
+      ));
       articles = append ? [...articles, ...list] : list;
       page = nextPage;
       const totalPages = Number(res?.total_page_count ?? 0);
@@ -1105,6 +1183,12 @@
       loadState = historyItems.length === 0 ? 'empty' : 'ready';
       return;
     }
+    if (tab === 'drafts') {
+      drafts = loadFeedDrafts();
+      scrollFeedToTop();
+      loadState = drafts.length === 0 ? 'empty' : 'ready';
+      return;
+    }
     scrollFeedToTop();
     page = 0;
     await fetchPage(0, false);
@@ -1113,6 +1197,7 @@
   function onTabChange(id: FeedTab) {
     if (id === 'my' && !authed && !requireAuth()) return;
     if (id === 'managed' && !authed && !requireAuth()) return;
+    if (allSubsOpen) allSubsOpen = false;
     if (id === tab && !postViewActive && (id !== 'my' || channelFilterId == null)) {
       scrollFeedToTop();
       if (id === 'search') focusSearchInput();
@@ -1127,7 +1212,7 @@
       searchQuery = '';
       clearSearchResults();
     }
-    if (id !== 'managed' && id !== 'history') {
+    if (id !== 'managed' && id !== 'history' && id !== 'drafts') {
       listFilterQuery = '';
     }
     void loadSidebarChannel(null);
@@ -1159,21 +1244,44 @@
     const n = Number(value) as FeedDateFilter;
     if (!Number.isFinite(n)) return;
     clearArticleFocus();
+    allSubsOpen = false;
     dateFilter = n;
     scrollFeedToTop();
     void reload();
   }
 
-  function selectSubscription(channelId: number) {
+  function openAllSubscriptions() {
+    if (!authed && !requireAuth()) return;
+    allSubsOpen = true;
+  }
+
+  function closeAllSubscriptions() {
+    allSubsOpen = false;
+  }
+
+  function selectSubscription(channelId: number | null, toggle = true) {
     if (!authed && !requireAuth()) return;
     clearArticleFocus();
+    allSubsOpen = false;
     tab = 'my';
-    const nextId = channelFilterId === channelId ? null : channelId;
+    if (channelId == null) {
+      channelFilterId = null;
+      void loadSidebarChannel(null);
+      scrollFeedToTop();
+      void reload();
+      return;
+    }
+    const nextId = toggle && channelFilterId === channelId ? null : channelId;
     channelFilterId = nextId;
     if (nextId != null) {
-      const ch = subscriptions.find((c) => c.id === nextId);
+      const ch = subscriptions.find((c) => c.id === nextId) ?? null;
       markSubscriptionSeen(ch);
-      if (ch) rememberBrowseChannel(ch);
+      if (ch) {
+        rememberBrowseChannel(ch);
+        if (!subscriptions.some((c) => c.id === ch.id)) {
+          subscriptions = [...subscriptions, { ...ch, is_subscribed: true }];
+        }
+      }
     }
     void loadSidebarChannel(nextId);
     scrollFeedToTop();
@@ -1201,11 +1309,57 @@
     void reload();
   }
 
+  async function openChannelDestination(ch: FeedChannel) {
+    const channelId = Number(ch.id ?? 0);
+    if (!(channelId > 0)) return;
+
+    if (ch.is_blog) {
+      let profileId = Number(ch.blog_profile_id ?? 0);
+      if (!(profileId > 0)) {
+        try {
+          const res = await window.anixApi?.channel?.info?.(channelId);
+          const info = (res?.channel ?? null) as FeedChannel | null;
+          profileId = Number(info?.blog_profile_id ?? 0);
+          if (info?.id && sidebarChannel?.id === channelId) {
+            sidebarChannel = { ...sidebarChannel, ...info };
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      if (profileId > 0) {
+        openProfilePanel(profileId, { login: ch.title });
+        return;
+      }
+      showToast('Профиль блога недоступен', 'err');
+      return;
+    }
+
+    openChannelFeed(channelId);
+  }
+
   function onOpenArticle(article: FeedArticle) {
     void selectArticle(article);
   }
 
   function onOpenChannel(channelId: number) {
+    const fromArticles =
+      articles.find((a) => a.channel?.id === channelId)?.channel
+      ?? searchArticles.find((a) => a.channel?.id === channelId)?.channel
+      ?? moreArticles.find((a) => a.channel?.id === channelId)?.channel
+      ?? null;
+    const ch =
+      fromArticles
+      ?? (focusChannel?.id === channelId ? focusChannel : null)
+      ?? (sidebarChannel?.id === channelId ? sidebarChannel : null)
+      ?? subscriptions.find((c) => c.id === channelId)
+      ?? searchChannels.find((c) => c.id === channelId)
+      ?? searchBlogs.find((c) => c.id === channelId)
+      ?? null;
+    if (ch) {
+      void openChannelDestination(ch);
+      return;
+    }
     openChannelFeed(channelId);
   }
 
@@ -1244,8 +1398,6 @@
     const prevSearchChannels = searchChannels;
     const prevSearchBlogs = searchBlogs;
     const prevSubs = subscriptions;
-    const prevRecChannels = recommendChannels;
-    const prevRecBlogs = recommendBlogs;
     const prevFocus = focusChannel;
     const prevSidebar = sidebarChannel;
     const prevMore = moreArticles;
@@ -1270,8 +1422,6 @@
     if (spotlightArticle) spotlightArticle = patchArticleChannel(spotlightArticle);
     searchChannels = patchChannelSubscribe(searchChannels, channelId, nextSubscribed);
     searchBlogs = patchChannelSubscribe(searchBlogs, channelId, nextSubscribed);
-    recommendChannels = patchChannelSubscribe(recommendChannels, channelId, nextSubscribed);
-    recommendBlogs = patchChannelSubscribe(recommendBlogs, channelId, nextSubscribed);
     if (sidebarChannel?.id === channelId) {
       sidebarChannel = { ...sidebarChannel, is_subscribed: nextSubscribed };
     }
@@ -1285,9 +1435,7 @@
         ?? moreArticles.find((a) => a.channel?.id === channelId)?.channel
         ?? focusChannel
         ?? searchChannels.find((c) => c.id === channelId)
-        ?? searchBlogs.find((c) => c.id === channelId)
-        ?? recommendChannels.find((c) => c.id === channelId)
-        ?? recommendBlogs.find((c) => c.id === channelId);
+        ?? searchBlogs.find((c) => c.id === channelId);
       if (fromArticle && !subscriptions.some((c) => c.id === channelId)) {
         subscriptions = [...subscriptions, { ...fromArticle, is_subscribed: true }];
       } else {
@@ -1319,9 +1467,7 @@
           articles.find((a) => a.channel?.id === channelId)?.channel
           ?? moreArticles.find((a) => a.channel?.id === channelId)?.channel
           ?? focusChannel
-          ?? subscriptions.find((c) => c.id === channelId)
-          ?? recommendBlogs.find((c) => c.id === channelId)
-          ?? recommendChannels.find((c) => c.id === channelId);
+          ?? subscriptions.find((c) => c.id === channelId);
         const isBlog = !!target?.is_blog;
         let msg: string;
         if (nextSubscribed) {
@@ -1339,8 +1485,6 @@
         throw new Error(msg);
       }
       if (nextSubscribed) {
-        recommendChannels = recommendChannels.filter((c) => c.id !== channelId);
-        recommendBlogs = recommendBlogs.filter((c) => c.id !== channelId);
         void loadSubscriptions();
       }
     } catch (err) {
@@ -1349,8 +1493,6 @@
       searchChannels = prevSearchChannels;
       searchBlogs = prevSearchBlogs;
       subscriptions = prevSubs;
-      recommendChannels = prevRecChannels;
-      recommendBlogs = prevRecBlogs;
       focusChannel = prevFocus;
       sidebarChannel = prevSidebar;
       moreArticles = prevMore;
@@ -1384,6 +1526,138 @@
     if (focusArticle?.id === next.id) focusArticle = next;
   }
 
+  async function ensureManagedLoaded(): Promise<void> {
+    if (!authed || managed.length > 0 || managedBusy) return;
+    managedBusy = true;
+    try {
+      const res = await window.anixApi?.channel?.editorAll?.();
+      const list = Array.isArray(res?.channels) ? res.channels : [];
+      managed = list.filter((c): c is EditorChannel => !!c && Number(c.id) > 0);
+    } catch {
+      /* ignore — композер покажет empty */
+    } finally {
+      managedBusy = false;
+    }
+  }
+
+  async function loadSelfAvatar(): Promise<void> {
+    if (!authed || !window.anixApi?.profile?.self) {
+      selfAvatarUrl = '';
+      return;
+    }
+    try {
+      const res = await window.anixApi.profile.self();
+      const avatar = String(res?.profile?.avatar ?? '').trim();
+      selfAvatarUrl = avatar ? (resolveCdnAssetUrl(avatar) || avatar) : '';
+    } catch {
+      selfAvatarUrl = '';
+    }
+  }
+
+  function refreshDrafts() {
+    drafts = loadFeedDrafts();
+    if (tab === 'drafts') {
+      loadState = drafts.length === 0 ? 'empty' : 'ready';
+    }
+  }
+
+  async function openComposer(
+    preferredChannelId?: number | null,
+    repost?: FeedArticle | null,
+    draftId?: string | null,
+    opts?: { isSuggestion?: boolean },
+  ) {
+    if (!authed && !requireAuth()) return;
+    const suggestion = !!opts?.isSuggestion;
+    composerIsSuggestion = suggestion;
+    if (!suggestion) await ensureManagedLoaded();
+
+    let targetId = preferredChannelId
+      ?? channelFilterId
+      ?? (managed[0]?.id ?? null);
+
+    let channelsForComposer = composerChannels;
+    if (suggestion) {
+      const ch = asideChannel
+        ?? subscriptions.find((c) => c.id === targetId)
+        ?? null;
+      const id = Number(ch?.id ?? targetId ?? 0);
+      if (!(id > 0) || !ch || ch.is_blog || !ch.is_article_suggestion_enabled) {
+        showToast('Предложения записей недоступны в этом канале', 'err');
+        composerIsSuggestion = false;
+        return;
+      }
+      targetId = id;
+      channelsForComposer = [{
+        id,
+        title: ch.title || `Канал #${id}`,
+        avatar: ch.avatar,
+        is_blog: false,
+      }];
+    }
+
+    composerChannelId = targetId;
+    composerRepost = suggestion ? null : (repost ?? null);
+    composerDraftId = draftId ?? null;
+    composerDraft = draftId ? getFeedDraft(draftId) : null;
+    if (composerDraft && composerChannelId == null) {
+      composerChannelId = composerDraft.channelId;
+    }
+    const opened = await openFeedComposerWindow({
+      channelId: composerChannelId,
+      draftId: composerDraftId,
+      repostArticle: composerRepost,
+      channels: channelsForComposer,
+      isSuggestion: suggestion,
+    });
+    if (opened) {
+      composerOpen = false;
+      return;
+    }
+    composerOpen = true;
+  }
+
+  function closeComposer() {
+    composerOpen = false;
+    composerRepost = null;
+    composerDraftId = null;
+    composerDraft = null;
+    composerIsSuggestion = false;
+  }
+
+  async function resumeDraft(id: string) {
+    const draft = getFeedDraft(id);
+    if (!draft) {
+      refreshDrafts();
+      return;
+    }
+    await openComposer(draft.channelId, draft.repostArticle, draft.id);
+  }
+
+  function removeDraft(id: string) {
+    deleteFeedDraft(id);
+    refreshDrafts();
+  }
+
+  async function onArticlePublished(articleId: number, channelId: number) {
+    const wasSuggestion = composerIsSuggestion;
+    composerIsSuggestion = false;
+    if (wasSuggestion) {
+      if (channelId > 0) void loadSidebarChannel(channelId);
+      if (channelFilterId === channelId) {
+        void reload();
+      } else {
+        openChannelFeed(channelId);
+      }
+      return;
+    }
+    if (articleId > 0) {
+      await selectArticleById(articleId);
+      return;
+    }
+    openChannelFeed(channelId);
+  }
+
   async function createChannel() {
     if (!authed && !requireAuth()) return;
     const api = window.anixApi?.channel;
@@ -1393,10 +1667,21 @@
     try {
       const res = await api.createBlog();
       const newId = Number(res?.channel?.id ?? 0);
-      await reload();
-      if (newId > 0) openChannelFeed(newId);
+      await ensureManagedLoaded();
+      if (tab === 'managed') await reload();
+      else {
+        const resAll = await window.anixApi?.channel?.editorAll?.();
+        const list = Array.isArray(resAll?.channels) ? resAll.channels : [];
+        managed = list.filter((c): c is EditorChannel => !!c && Number(c.id) > 0);
+      }
+      if (newId > 0) {
+        showToast('Блог создан', 'ok');
+        openChannelFeed(newId);
+        void openComposer(newId);
+      }
     } catch (err) {
       errorMsg = String(err);
+      showToast(errorMsg || 'Не удалось создать блог', 'err');
     } finally {
       createBusy = false;
     }
@@ -1453,6 +1738,7 @@
 
   onMount(() => {
     applyFeedSearchFromRoute();
+    refreshDrafts();
     unregisterScrollKey = registerActiveScrollKey(() => FEED_VIEW_KEY());
 
     const onFeedSearch = ((e: CustomEvent<{ q?: string }>) => {
@@ -1478,15 +1764,43 @@
     window.addEventListener('anix:navigate', onNavigate);
     window.addEventListener('anix:beforeNavigate', onBeforeNavigate);
     window.addEventListener('popstate', onFeedPopState);
+    window.addEventListener('anix:feed-drafts-changed', refreshDrafts);
+    const onComposerPublished = ((e: Event) => {
+      refreshDrafts();
+      const detail = (e as CustomEvent<{ articleId?: number; channelId?: number } | null>).detail;
+      const articleId = Number(detail?.articleId ?? 0);
+      const publishedChannelId = Number(detail?.channelId ?? 0);
+      const wasSuggestion = composerIsSuggestion;
+      composerIsSuggestion = false;
+      if (wasSuggestion) {
+        if (publishedChannelId > 0) {
+          void loadSidebarChannel(publishedChannelId);
+          if (channelFilterId === publishedChannelId) void reload();
+          else openChannelFeed(publishedChannelId);
+        }
+        return;
+      }
+      if (articleId > 0) void selectArticleById(articleId);
+      else if (publishedChannelId > 0) openChannelFeed(publishedChannelId);
+    }) as EventListener;
+    window.addEventListener('anix:composer-published', onComposerPublished);
+    window.addEventListener('storage', refreshDrafts);
 
     const unsub = isAuthenticated.subscribe((v) => {
       authed = v;
       if (v) {
         void loadSubscriptions();
-        void loadRecommendations();
+        void loadSelfAvatar();
+        void ensureManagedLoaded();
       } else {
         subscriptions = [];
-        void loadRecommendations();
+        managed = [];
+        selfAvatarUrl = '';
+        composerOpen = false;
+        composerRepost = null;
+        composerDraftId = null;
+        composerDraft = null;
+        composerIsSuggestion = false;
       }
     });
     const unsubFocus = feedArticleFocusId.subscribe((id) => {
@@ -1508,6 +1822,7 @@
       && (
         cachedData.tab === 'history'
         || cachedData.tab === 'managed'
+        || cachedData.tab === 'drafts'
         || (Array.isArray(cachedData.articles) && cachedData.articles.length > 0)
       );
 
@@ -1537,7 +1852,6 @@
       scrollFeedToTop();
       void reload();
     }
-    void loadRecommendations();
 
     return () => {
       unsub();
@@ -1547,6 +1861,9 @@
       window.removeEventListener('anix:navigate', onNavigate);
       window.removeEventListener('anix:beforeNavigate', onBeforeNavigate);
       window.removeEventListener('popstate', onFeedPopState);
+      window.removeEventListener('anix:feed-drafts-changed', refreshDrafts);
+      window.removeEventListener('anix:composer-published', onComposerPublished);
+      window.removeEventListener('storage', refreshDrafts);
       unregisterScrollKey?.();
       unregisterScrollKey = null;
     };
@@ -1558,21 +1875,37 @@
 </script>
 
 <div class="view view-feed">
-  <div
-    class="view-feed__layout"
-    class:view-feed__layout--no-aside={feedNoAside}
-  >
+  <div class="view-feed__layout" class:view-feed__layout--no-aside={!showGroupAside}>
   <aside class="feed-side" aria-label="Навигация ленты">
     <nav class="feed-side__nav" aria-label="Разделы ленты">
       <button
         type="button"
         class="feed-side__item"
-        class:feed-side__item--active={tab === 'search' && !postViewActive}
-        aria-current={tab === 'search' && !postViewActive ? 'page' : undefined}
-        onclick={() => onTabChange('search')}
+        class:feed-side__item--active={tab === 'my' && !postViewActive}
+        aria-current={tab === 'my' && !postViewActive ? 'page' : undefined}
+        aria-label={feedNavAvatars.length > 0
+          ? `Моя лента, новые записи: ${feedNavAvatars.map((av) => av.title).join(', ')}`
+          : 'Моя лента'}
+        onclick={() => onTabChange('my')}
       >
-        <span class="feed-side__item-icon" aria-hidden="true">{@html iconSearch(18)}</span>
-        <span class="feed-side__item-label">Поиск</span>
+        <span class="feed-side__item-icon" aria-hidden="true">{@html iconNewspaper(18)}</span>
+        <span class="feed-side__item-label">Моя лента</span>
+        {#if feedNavAvatars.length > 0}
+          <span class="feed-side__avatar-stack" aria-hidden="true">
+            {#each feedNavAvatars as av (av.key)}
+              <span
+                class="feed-side__avatar-stack-item"
+                class:feed-side__avatar-stack-item--channel={!av.is_blog}
+                class:feed-side__avatar-stack-item--empty={!channelAvatarUrl(av.avatar)}
+                class:feed-side__avatar-stack-item--fresh={!!av.fresh}
+                style={channelAvatarUrl(av.avatar)
+                  ? `background-image:url('${channelAvatarUrl(av.avatar)}')`
+                  : undefined}
+                title={av.title}
+              ></span>
+            {/each}
+          </span>
+        {/if}
       </button>
       <button
         type="button"
@@ -1593,35 +1926,6 @@
       >
         <span class="feed-side__item-icon" aria-hidden="true">{@html iconUsers(18)}</span>
         <span class="feed-side__item-label">Управляемые</span>
-      </button>
-      <button
-        type="button"
-        class="feed-side__item"
-        class:feed-side__item--active={tab === 'my' && !postViewActive}
-        aria-current={tab === 'my' && !postViewActive ? 'page' : undefined}
-        aria-label={feedNavAvatars.length > 0
-          ? `Лента, новые записи: ${feedNavAvatars.map((av) => av.title).join(', ')}`
-          : 'Лента'}
-        onclick={() => onTabChange('my')}
-      >
-        <span class="feed-side__item-icon" aria-hidden="true">{@html iconNewspaper(18)}</span>
-        <span class="feed-side__item-label">Лента</span>
-        {#if feedNavAvatars.length > 0}
-          <span class="feed-side__avatar-stack" aria-hidden="true">
-            {#each feedNavAvatars as av (av.key)}
-              <span
-                class="feed-side__avatar-stack-item"
-                class:feed-side__avatar-stack-item--channel={!av.is_blog}
-                class:feed-side__avatar-stack-item--empty={!channelAvatarUrl(av.avatar)}
-                class:feed-side__avatar-stack-item--fresh={!!av.fresh}
-                style={channelAvatarUrl(av.avatar)
-                  ? `background-image:url('${channelAvatarUrl(av.avatar)}')`
-                  : undefined}
-                title={av.title}
-              ></span>
-            {/each}
-          </span>
-        {/if}
       </button>
       <button
         type="button"
@@ -1651,6 +1955,29 @@
           </span>
         {/if}
       </button>
+      <button
+        type="button"
+        class="feed-side__item"
+        class:feed-side__item--active={tab === 'drafts' && !postViewActive}
+        aria-current={tab === 'drafts' && !postViewActive ? 'page' : undefined}
+        onclick={() => onTabChange('drafts')}
+      >
+        <span class="feed-side__item-icon" aria-hidden="true">{@html iconClipboardList(18)}</span>
+        <span class="feed-side__item-label">Черновики</span>
+        {#if drafts.length > 0}
+          <span class="feed-side__item-count">{drafts.length}</span>
+        {/if}
+      </button>
+      <button
+        type="button"
+        class="feed-side__item"
+        class:feed-side__item--active={tab === 'search' && !postViewActive}
+        aria-current={tab === 'search' && !postViewActive ? 'page' : undefined}
+        onclick={() => onTabChange('search')}
+      >
+        <span class="feed-side__item-icon" aria-hidden="true">{@html iconSearch(18)}</span>
+        <span class="feed-side__item-label">Поиск</span>
+      </button>
     </nav>
   </aside>
 
@@ -1667,20 +1994,33 @@
             {@html iconArrowLeft(18)}
           </button>
         {/if}
-        <h1 class="feed-page__title">{mainTitle}</h1>
-      </div>
-      <div class="feed-page__toolbar">
-        {#if tab === 'my' && !searchMode && !postViewActive}
+        {#if showDateFilter}
+          <h1 class="feed-page__title feed-page__title--sr">Моя лента</h1>
           <div class="feed-page__date">
             <UiV2Select
-              label="Период"
+              appearance="title"
+              ariaLabel={dateFilterAria}
               options={dateOptions}
               value={String(dateFilter)}
               onChange={onDateChange}
             />
           </div>
+          {#if authed}
+            <button
+              type="button"
+              class="feed-page__all"
+              onclick={openAllSubscriptions}
+              aria-label="Все подписки"
+            >
+              Все
+            </button>
+          {/if}
+        {:else}
+          <h1 class="feed-page__title">{mainTitle}</h1>
         {/if}
-        {#if (tab === 'managed' || tab === 'history') && !postViewActive}
+      </div>
+      <div class="feed-page__toolbar">
+        {#if (tab === 'managed' || tab === 'history' || tab === 'drafts') && !postViewActive}
           <label class="feed-page__search-field feed-page__search-field--compact">
             <span class="feed-page__search-icon" aria-hidden="true">{@html iconSearch(16)}</span>
             <input
@@ -1688,8 +2028,8 @@
               type="search"
               autocomplete="off"
               spellcheck="false"
-              placeholder={tab === 'managed' ? 'Поиск каналов…' : 'Поиск в истории…'}
-              aria-label={tab === 'managed' ? 'Поиск каналов' : 'Поиск в истории'}
+              placeholder={tab === 'managed' ? 'Поиск каналов…' : tab === 'drafts' ? 'Поиск черновиков…' : 'Поиск в истории…'}
+              aria-label={tab === 'managed' ? 'Поиск каналов' : tab === 'drafts' ? 'Поиск черновиков' : 'Поиск в истории'}
               bind:value={listFilterQuery}
             />
             {#if listFilterQuery}
@@ -1703,6 +2043,21 @@
               </button>
             {/if}
           </label>
+        {/if}
+        {#if authed && !postViewActive && (tab === 'my' || tab === 'latest' || tab === 'managed' || tab === 'drafts')}
+          <UiV2Button
+            variant="primary"
+            size="sm"
+            label={canSuggestChannel ? 'Предложить' : 'Написать'}
+            onclick={() => void openComposer(
+              tab === 'managed' ? null : channelFilterId,
+              null,
+              null,
+              { isSuggestion: canSuggestChannel },
+            )}
+          >
+            {#snippet icon()}{@html iconPencil(16)}{/snippet}
+          </UiV2Button>
         {/if}
         <UiV2Button
           variant="ghost"
@@ -1745,24 +2100,137 @@
       </div>
     {/if}
 
-    {#if showFeedStories}
-      <FeedStoriesStrip
-        items={feedStoryItems}
+    {#if showFeedSubs}
+      <FeedSubsStrip
+        items={feedSubsItems}
         selectedId={channelFilterId}
-        loading={storiesLoading}
-        createBusy={createBusy}
+        loading={subsLoading}
         onSelect={selectSubscription}
         onPin={(id) => {
           toggleSubscriptionPin(id);
           pinTick += 1;
         }}
-        onCreate={() => void createChannel()}
-        onManaged={() => onTabChange('managed')}
+      />
+    {/if}
+
+    {#if channelFilterId != null && tab === 'my' && !postViewActive && !searchMode && asideChannel}
+      <div class="feed-channel-bar">
+        <div class="feed-channel-bar__info">
+          <span
+            class="feed-channel-bar__avatar"
+            class:feed-channel-bar__avatar--channel={!asideChannel.is_blog}
+            class:feed-channel-bar__avatar--empty={!channelAvatarUrl(asideChannel.avatar)}
+            style={channelAvatarUrl(asideChannel.avatar)
+              ? `background-image:url('${channelAvatarUrl(asideChannel.avatar)}')`
+              : undefined}
+            aria-hidden="true"
+          ></span>
+          <span class="feed-channel-bar__meta">
+            <span class="feed-channel-bar__title">
+              {asideChannel.title || (asideChannel.is_blog ? 'Блог' : 'Группа')}
+            </span>
+            <span class="feed-channel-bar__sub">
+              {channelSubscriberCount(asideChannel)} подп.
+            </span>
+          </span>
+        </div>
+        {#if asideChannel.is_blog || canWriteChannel || canSuggestChannel}
+        <div class="feed-channel-bar__actions">
+          {#if asideChannel.is_blog}
+            <UiV2Button
+              variant="chrome"
+              size="sm"
+              label="Открыть профиль"
+              onclick={() => void openChannelDestination(asideChannel)}
+            />
+          {/if}
+          {#if canWriteChannel}
+            <UiV2Button
+              variant="primary"
+              size="sm"
+              label="Написать"
+              onclick={() => void openComposer(channelFilterId)}
+            >
+              {#snippet icon()}{@html iconPencil(16)}{/snippet}
+            </UiV2Button>
+          {:else if canSuggestChannel}
+            <UiV2Button
+              variant="primary"
+              size="sm"
+              label="Предложить"
+              onclick={() => void openComposer(channelFilterId, null, null, { isSuggestion: true })}
+            >
+              {#snippet icon()}{@html iconPencil(16)}{/snippet}
+            </UiV2Button>
+          {/if}
+        </div>
+        {/if}
+      </div>
+    {/if}
+
+    {#if showComposePrompt}
+      <FeedComposePrompt
+        avatarUrl={selfAvatarUrl}
+        placeholder={composePromptPlaceholder}
+        onOpen={() => void openComposer(
+          channelFilterId,
+          null,
+          null,
+          { isSuggestion: canSuggestChannel },
+        )}
+      />
+    {/if}
+
+    {#if showSuggestionsNav}
+      <FeedSuggestionsNav
+        count={sidebarSuggestionCount}
+        onOpen={() => { suggestionsModalOpen = true; }}
       />
     {/if}
 
     <div class="feed-page__body">
-      {#if tab === 'managed'}
+      {#if tab === 'drafts'}
+        {#if visibleDrafts.length === 0}
+          <UiV2Card title={listFilterNeedle ? 'Ничего не найдено' : 'Нет черновиков'}>
+            <p class="feed-page__hint">
+              {#if listFilterNeedle}
+                По запросу «{listFilterQuery.trim()}» черновиков нет.
+              {:else}
+                Если закрыть редактор с незаконченным текстом, запись появится здесь.
+              {/if}
+            </p>
+          </UiV2Card>
+        {:else}
+          <ul class="feed-drafts__list">
+            {#each visibleDrafts as draft (draft.id)}
+              <li class="feed-drafts__item">
+                <div class="feed-drafts__body">
+                  <p class="feed-drafts__title">{draft.preview || 'Черновик'}</p>
+                  <p class="feed-drafts__meta">
+                    {formatDraftTime(draft.updatedAt)}
+                    {#if draft.repostArticle} · репост #{draft.repostArticle.id}{/if}
+                    · {draftDestinationTitle(draft)}
+                  </p>
+                </div>
+                <div class="feed-drafts__actions">
+                  <UiV2Button
+                    variant="primary"
+                    size="sm"
+                    label="Продолжить"
+                    onclick={() => void resumeDraft(draft.id)}
+                  />
+                  <UiV2Button
+                    variant="ghost"
+                    size="sm"
+                    label="Удалить"
+                    onclick={() => removeDraft(draft.id)}
+                  />
+                </div>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      {:else if tab === 'managed'}
         {#if loadState === 'need-auth'}
           <UiV2Card title="Нужен вход">
             <p class="feed-page__hint">
@@ -1783,13 +2251,31 @@
           </UiV2Card>
         {:else}
           <div class="feed-managed">
-            <div class="feed-managed__actions">
-              <UiV2Button
-                variant="primary"
-                label={createBusy ? 'Создание…' : 'Создать блог'}
-                disabled={createBusy}
-                onclick={() => void createChannel()}
-              />
+            <div class="feed-managed__intro">
+              <div class="feed-managed__intro-text">
+                <p class="feed-managed__lead">Каналы и блоги, которыми вы управляете</p>
+                <p class="feed-page__hint feed-managed__hint">
+                  Создайте блог или получите права редактора — здесь можно открыть ленту и написать запись.
+                </p>
+              </div>
+              <div class="feed-managed__actions">
+                <UiV2Button
+                  variant="chrome"
+                  label="Написать"
+                  disabled={createBusy || managed.length === 0}
+                  onclick={() => void openComposer(null)}
+                >
+                  {#snippet icon()}{@html iconPencil(16)}{/snippet}
+                </UiV2Button>
+                <UiV2Button
+                  variant="primary"
+                  label={createBusy ? 'Создание…' : 'Создать блог'}
+                  disabled={createBusy}
+                  onclick={() => void createChannel()}
+                >
+                  {#snippet icon()}{@html iconPlus(16)}{/snippet}
+                </UiV2Button>
+              </div>
             </div>
             {#if visibleManaged.length === 0}
               <UiV2Card title={listFilterNeedle ? 'Ничего не найдено' : 'Нет управляемых каналов'}>
@@ -1797,14 +2283,22 @@
                   {#if listFilterNeedle}
                     По запросу «{listFilterQuery.trim()}» каналов нет. Попробуйте другое слово.
                   {:else}
-                    Создайте блог или получите права редактора в канале — они появятся здесь.
+                    Создайте свой первый блог прямо сейчас — он появится здесь.
                   {/if}
                 </p>
+                {#if !listFilterNeedle}
+                  <UiV2Button
+                    variant="primary"
+                    label={createBusy ? 'Создание…' : 'Создать блог'}
+                    disabled={createBusy}
+                    onclick={() => void createChannel()}
+                  />
+                {/if}
               </UiV2Card>
             {:else}
               <ul class="feed-managed__list">
                 {#each visibleManaged as ch (ch.id)}
-                  <li>
+                  <li class="feed-managed__row">
                     <button
                       type="button"
                       class="feed-managed__item"
@@ -1826,6 +2320,22 @@
                         </span>
                       </span>
                     </button>
+                    <div class="feed-managed__item-actions">
+                      <UiV2Button
+                        variant="ghost"
+                        size="sm"
+                        label="Написать"
+                        onclick={() => void openComposer(ch.id)}
+                      >
+                        {#snippet icon()}{@html iconPencil(14)}{/snippet}
+                      </UiV2Button>
+                      <UiV2Button
+                        variant="chrome"
+                        size="sm"
+                        label="Открыть"
+                        onclick={() => openChannelFeed(ch.id)}
+                      />
+                    </div>
                   </li>
                 {/each}
               </ul>
@@ -1842,8 +2352,10 @@
             onChannel={onOpenChannel}
             onVote={onVoteArticle}
             onSubscribe={onSubscribeChannel}
+            hideSubscribe={hidePostSubscribe}
             onArticleRemove={onArticleRemove}
             onArticleChange={onArticleChange}
+            onRepost={(article) => void openComposer(null, article)}
           />
           {#if moreBusy && moreArticles.length === 0}
             <UiV2FeedPostSkeleton count={2} />
@@ -1858,8 +2370,10 @@
                 onChannel={onOpenChannel}
                 onVote={onVoteArticle}
                 onSubscribe={onSubscribeChannel}
+            hideSubscribe={hidePostSubscribe}
                 onArticleRemove={onArticleRemove}
                 onArticleChange={onArticleChange}
+                onRepost={(article) => void openComposer(null, article)}
               />
             {/each}
           {/if}
@@ -1952,8 +2466,10 @@
                     onChannel={onOpenChannel}
                     onVote={onVoteArticle}
                     onSubscribe={onSubscribeChannel}
+            hideSubscribe={hidePostSubscribe}
                     onArticleRemove={onArticleRemove}
                     onArticleChange={onArticleChange}
+                    onRepost={(article) => void openComposer(null, article)}
                   />
                 {/each}
               </div>
@@ -2003,8 +2519,10 @@
                         onChannel={onOpenChannel}
                         onVote={onVoteArticle}
                         onSubscribe={onSubscribeChannel}
+            hideSubscribe={hidePostSubscribe}
                         onArticleRemove={onArticleRemove}
                         onArticleChange={onArticleChange}
+                        onRepost={(article) => void openComposer(null, article)}
                       />
                     {:else if busy}
                       <UiV2FeedPostSkeleton count={1} />
@@ -2056,6 +2574,8 @@
               Подпишитесь на каналы в Anixart — тогда их записи появятся здесь.
             {:else if tab === 'history'}
               Открывайте каналы и записи — они появятся здесь.
+            {:else if tab === 'drafts'}
+              Если закрыть редактор с незаконченным текстом, запись появится здесь.
             {:else}
               В свежей ленте пока пусто. Загляните позже.
             {/if}
@@ -2072,8 +2592,10 @@
               onChannel={onOpenChannel}
               onVote={onVoteArticle}
               onSubscribe={onSubscribeChannel}
+            hideSubscribe={hidePostSubscribe}
               onArticleRemove={onArticleRemove}
               onArticleChange={onArticleChange}
+              onRepost={(article) => void openComposer(null, article)}
             />
           {/each}
         </div>
@@ -2091,46 +2613,70 @@
     </div>
   </div>
 
-  {#if tab !== 'managed' && tab !== 'history' && (postViewActive || asideChannel || hasAsideLists)}
-    <aside class="feed-aside" aria-label={postViewActive ? 'О канале' : 'Каналы и блоги'}>
-      {#if displayAsideChannel && (postViewActive || tab !== 'search')}
-        <UiV2FeedChannelCard
-          data={{
-            id: displayAsideChannel.id,
-            title: displayAsideChannel.title,
-            description: displayAsideChannel.description,
-            avatar: channelAvatarUrl(displayAsideChannel.avatar),
-            cover: displayAsideChannel.cover,
-            isVerified: !!displayAsideChannel.is_verified,
-            isSubscribed: channelIsSubscribed(
-              displayAsideChannel.id,
-              displayAsideChannel.is_subscribed,
-            ),
-            isBlog: !!displayAsideChannel.is_blog,
-            subscriberCount: channelSubscriberCount(displayAsideChannel),
-            articleCount: displayAsideChannel.article_count,
-          }}
-          onOpen={onOpenChannel}
-          onSubscribe={onSubscribeChannel}
-          subscribeBusy={subscribeBusyId === displayAsideChannel.id}
-        />
-      {/if}
-
-      {#if !postViewActive}
-        <UiV2FeedRecommended
-          title="Каналы"
-          avatarShape="channel"
-          items={recommendChannelsMapped}
-          onOpen={onOpenChannel}
-        />
-        <UiV2FeedRecommended
-          title="Блоги"
-          avatarShape="circle"
-          items={recommendBlogsMapped}
-          onOpen={onOpenChannel}
-        />
-      {/if}
+  {#if showGroupAside && groupAsideChannel}
+    <aside class="feed-aside" aria-label="О группе">
+      <FeedChannelPanel
+        channel={groupAsideChannel}
+        canWrite={managed.some((c) => c.id === groupAsideChannel.id)}
+        canSuggest={
+          !groupAsideChannel.is_blog
+          && !!groupAsideChannel.is_article_suggestion_enabled
+          && !managed.some((c) => c.id === groupAsideChannel.id)
+        }
+        subscribeBusy={subscribeBusyId === groupAsideChannel.id}
+        onSubscribe={onSubscribeChannel}
+        onWrite={() => void openComposer(groupAsideChannel.id)}
+        onSuggest={() => void openComposer(groupAsideChannel.id, null, null, { isSuggestion: true })}
+        onMuted={(channelId) => patchChannelMuted(channelId, true)}
+        onUnmuted={(channelId) => patchChannelMuted(channelId, false)}
+      />
     </aside>
   {/if}
+
   </div>
+
+  <FeedDirectoryModal
+    open={allSubsOpen}
+    kind="subscriptions"
+    onClose={closeAllSubscriptions}
+    onSelectChannel={(id) => selectSubscription(id, false)}
+  />
+
+  {#if channelFilterId != null && asideChannel}
+    <FeedSuggestionsModal
+      open={suggestionsModalOpen}
+      channelId={channelFilterId}
+      channelTitle={asideChannel.title || ''}
+      onClose={() => { suggestionsModalOpen = false; }}
+      onDeleted={() => {
+        sidebarSuggestionCount = Math.max(0, sidebarSuggestionCount - 1);
+        if (sidebarSuggestionCount === 0) suggestionsModalOpen = false;
+      }}
+    />
+  {/if}
+
+  <FeedArticleComposer
+    open={composerOpen}
+    channels={composerIsSuggestion && composerChannelId != null
+      ? [{
+          id: composerChannelId,
+          title: asideChannel?.id === composerChannelId
+            ? (asideChannel.title || `Канал #${composerChannelId}`)
+            : (subscriptions.find((c) => c.id === composerChannelId)?.title || `Канал #${composerChannelId}`),
+          avatar: asideChannel?.id === composerChannelId
+            ? asideChannel.avatar
+            : subscriptions.find((c) => c.id === composerChannelId)?.avatar,
+          is_blog: false,
+        }]
+      : composerChannels}
+    initialChannelId={composerChannelId}
+    createBusy={createBusy}
+    repostArticle={composerRepost}
+    draftId={composerDraftId}
+    initialDraft={composerDraft}
+    isSuggestion={composerIsSuggestion}
+    onClose={closeComposer}
+    onPublished={onArticlePublished}
+    onCreateBlog={() => void createChannel()}
+  />
 </div>

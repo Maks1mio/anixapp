@@ -8,13 +8,18 @@ export type FeedDateFilter =
   | 4 // Год
   | 5; // Всё время
 
-export const FEED_DATE_OPTIONS: Array<{ id: FeedDateFilter; label: string }> = [
-  { id: 0, label: 'Последнее' },
-  { id: 1, label: '24 часа' },
-  { id: 2, label: 'Неделя' },
-  { id: 3, label: 'Месяц' },
-  { id: 4, label: 'Год' },
-  { id: 5, label: 'Всё время' },
+export const FEED_DATE_OPTIONS: Array<{
+  id: FeedDateFilter;
+  label: string;
+  /** Огонёк: популярно за этот период. 0 — хронология без огонька. */
+  popular: boolean;
+}> = [
+  { id: 0, label: 'Последнее', popular: false },
+  { id: 1, label: '24 часа', popular: true },
+  { id: 2, label: 'Неделя', popular: true },
+  { id: 3, label: 'Месяц', popular: true },
+  { id: 4, label: 'Год', popular: true },
+  { id: 5, label: 'Всё время', popular: true },
 ];
 
 export interface FeedChannel {
@@ -28,10 +33,14 @@ export interface FeedChannel {
   blog_profile_id?: number;
   is_verified?: boolean;
   is_subscribed?: boolean;
+  is_muted?: boolean;
   is_creator?: boolean;
   is_administrator_or_higher?: boolean;
+  /** Участники могут предлагать записи на модерацию. */
+  is_article_suggestion_enabled?: boolean;
   subscriber_count?: number;
   article_count?: number;
+  creation_date?: number;
   /** Unix-секунды последней статьи (для индикатора «свежее»). */
   last_article_date?: number;
   /** Значок канала / блога (объект badge или URL). */

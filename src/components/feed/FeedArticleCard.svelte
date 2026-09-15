@@ -28,6 +28,7 @@
     onSubscribe?: (channelId: number, nextSubscribed: boolean) => void | Promise<void>;
     onArticleChange?: (article: FeedArticle) => void;
     onArticleRemove?: (articleId: number) => void;
+    onRepost?: (article: FeedArticle) => void;
     /** Скрыть кнопку подписки (напр. страница канала). */
     hideSubscribe?: boolean;
     /** Закрепление в меню (страница канала). */
@@ -46,6 +47,7 @@
     onSubscribe,
     onArticleChange,
     onArticleRemove,
+    onRepost,
     hideSubscribe = false,
     menuPinAvailable = false,
     menuMuteAvailable = true,
@@ -240,6 +242,10 @@
     onNeedMore={loadFullPreview}
     onOpenComments={openComments}
     onShare={async () => {
+      if (onRepost) {
+        onRepost(article);
+        return;
+      }
       showToast('Репост скоро будет доступен', 'info');
     }}
     onVote={async (_data, next) => {

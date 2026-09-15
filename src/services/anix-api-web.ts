@@ -165,6 +165,8 @@ function buildWebAnixApi(): AnixApi {
       profileList: (status, query, page = 0, searchBy = 0) =>
         invoke('anix:searchProfileList', status, query, page, searchBy),
       feed: (query, page = 0, searchBy = 0) => invoke('anix:searchFeed', query, page, searchBy),
+      channelSubscribers: (channelId, page = 0, query = '') =>
+        invoke('anix:searchChannelSubscribers', channelId, page, query),
     },
 
     collection: {
@@ -194,10 +196,15 @@ function buildWebAnixApi(): AnixApi {
       articles: (channelId, page = 0) => invoke('anix:channelArticles', channelId, page),
       subscribe: (channelId) => invoke('anix:channelSubscribe', channelId),
       unsubscribe: (channelId) => invoke('anix:channelUnsubscribe', channelId),
-      subscriptions: (page = 0) => invoke('anix:channelSubscriptions', page),
+      mute: (channelId) => invoke('anix:channelMute', channelId),
+      unmute: (channelId) => invoke('anix:channelUnmute', channelId),
+      subscriptions: (page = 0, opts) => invoke('anix:channelSubscriptions', page, opts ?? {}),
+      all: (page = 0, opts) => invoke('anix:channelAll', page, opts ?? {}),
       recommendations: (page = 0, opts) =>
         invoke('anix:channelRecommendations', page, opts ?? {}),
       editorAll: () => invoke('anix:channelEditorAll'),
+      editorAvailable: (channelId, opts) =>
+        invoke('anix:channelEditorAvailable', channelId, opts ?? {}),
       uploadCover: (channelId, imageBase64, fileName) =>
         invoke('anix:channelUploadCover', channelId, imageBase64, fileName),
       deleteCover: (channelId) => invoke('anix:channelDeleteCover', channelId),
@@ -229,6 +236,20 @@ function buildWebAnixApi(): AnixApi {
     article: {
       info: (id) => invoke('anix:articleById', id),
       vote: (id, vote) => invoke('anix:articleVote', id, vote),
+      create: (channelId, body) => invoke('anix:articleCreate', channelId, body),
+      createSuggestion: (channelId, body) =>
+        invoke('anix:articleSuggestionCreate', channelId, body),
+      suggestions: (page = 0, opts) =>
+        invoke('anix:articleSuggestions', page, opts ?? {}),
+      deleteSuggestion: (suggestionId) =>
+        invoke('anix:articleSuggestionDelete', suggestionId),
+      uploadImage: (mediaToken, imageBase64, fileName, uploadId) =>
+        invoke('anix:articleUploadImage', mediaToken, imageBase64, fileName, uploadId ?? ''),
+      abortUpload: () => {
+        /* прогресс/abort только в Electron main */
+      },
+      generateEmbed: (type, mediaToken, url) =>
+        invoke('anix:articleGenerateEmbed', type, mediaToken, url),
       delete: (id) => invoke('anix:articleDelete', id),
       mute: (id) => invoke('anix:articleMute', id),
       unmute: (id) => invoke('anix:articleUnmute', id),
@@ -243,6 +264,8 @@ function buildWebAnixApi(): AnixApi {
     report: {
       articleReasons: () => invoke('anix:reportArticleReasons'),
       submitArticle: (body) => invoke('anix:reportArticle', body),
+      channelReasons: () => invoke('anix:reportChannelReasons'),
+      submitChannel: (body) => invoke('anix:reportChannel', body),
     },
 
     home: {

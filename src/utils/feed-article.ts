@@ -353,6 +353,7 @@ function mapPayloadBlockToFeedText(block: FeedArticleBlock): FeedTextBlock | nul
       kind: 'list',
       itemsHtml: items.map((x) => x.html),
       itemsPlain: items.map((x) => x.plain),
+      ordered: String(data.style ?? '') === 'ordered',
     };
   }
   if (type === 'delimiter') {

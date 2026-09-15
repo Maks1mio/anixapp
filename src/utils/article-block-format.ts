@@ -252,7 +252,7 @@ export type ArticleFormatBlock =
   | { kind: 'header'; html: string; plain: string; level: number }
   | { kind: 'text'; html: string; plain: string }
   | { kind: 'quote'; html: string; plain: string; captionHtml?: string; captionPlain?: string }
-  | { kind: 'list'; itemsHtml: string[]; itemsPlain: string[] }
+  | { kind: 'list'; itemsHtml: string[]; itemsPlain: string[]; ordered?: boolean }
   | { kind: 'delimiter' };
 
 export function formatInlineField(raw: string | null | undefined): { html: string; plain: string } {

@@ -1,3 +1,5 @@
+const editorMedia = require('./lib/article-editor-media');
+
 /**
  * Anixapi joins absolute paths with `new URL('/x', base)` — path prefixes on base
  * (e.g. https://api.anixapp.com/anixart-api) would be dropped. Rewrite to relative join.
@@ -71,6 +73,19 @@ function attachLegacyEndpoints(client) {
   ep.discover.getRecommendations = (page) => ep.discover.recommendations(page);
 
   ep.channel.getArticle = (id) => ep.article.article(id);
+  ep.article.uploadArticleImage = (mediaToken, file, fileName, opts) =>
+    editorMedia.uploadArticleImage(
+      mediaToken,
+      file,
+      typeof fileName === 'string' ? fileName : 'image.jpg',
+      opts,
+    );
+  ep.article.generateEmbedData = (type, mediaToken, url) =>
+    editorMedia.generateEmbedData(type, mediaToken, url);
+  ep.channel.uploadArticleImage = (mediaToken, file, fileName) =>
+    ep.article.uploadArticleImage(mediaToken, file, fileName);
+  ep.channel.generateEmbedData = (type, mediaToken, url) =>
+    ep.article.generateEmbedData(type, mediaToken, url);
   ep.channel.info = (id) => ep.channel.channel(id);
   ep.channel.getBlog = (id) => ep.channel.blog(id);
   ep.channel.uploadCover = (channelId, imageBase64, fileName = 'image.jpg') => {

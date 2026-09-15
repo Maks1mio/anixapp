@@ -304,6 +304,84 @@ ipcMain.handle('anix:articleVote', async (_, id, vote) => {
   }
 });
 
+ipcMain.handle('anix:articleCreate', async (_, channelId, body) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.article.create(channelId, body);
+  } catch (err) {
+    handleAnixError(err, 'articleCreate');
+  }
+});
+
+ipcMain.handle('anix:articleSuggestionCreate', async (_, channelId, body) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.articleSuggestion.create(channelId, body);
+  } catch (err) {
+    handleAnixError(err, 'articleSuggestionCreate');
+  }
+});
+
+ipcMain.handle('anix:articleSuggestions', async (_, page = 0, opts = {}) => {
+  try {
+    const client = getAnixart();
+    const channelId = Number(opts?.channelId ?? opts?.channel_id ?? 0);
+    return await client.endpoints.articleSuggestion.articleSuggestions(page, {
+      channel_id: channelId > 0 ? channelId : undefined,
+    });
+  } catch (err) {
+    handleAnixError(err, 'articleSuggestions');
+  }
+});
+
+ipcMain.handle('anix:articleSuggestionDelete', async (_, suggestionId) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.articleSuggestion.delete(suggestionId);
+  } catch (err) {
+    handleAnixError(err, 'articleSuggestionDelete');
+  }
+});
+
+ipcMain.handle('anix:articleUploadImage', async (event, mediaToken, imageBase64, fileName = 'image.jpg', uploadId = '') => {
+  try {
+    const client = getAnixart();
+    const base64 = typeof imageBase64 === 'string' ? imageBase64.replace(/^data:[^;]+;base64,/, '') : '';
+    const buffer = Buffer.from(base64, 'base64');
+    return await client.endpoints.article.uploadArticleImage(mediaToken, buffer, fileName, {
+      uploadId,
+      onProgress: (ratio) => {
+        const sender = event?.sender;
+        if (!sender || sender.isDestroyed()) return;
+        sender.send('anix:articleUploadProgress', {
+          uploadId,
+          progress: Math.round(Math.min(100, Math.max(0, Number(ratio) * 100))),
+        });
+      },
+    });
+  } catch (err) {
+    if (err?.name === 'AbortError') return { success: 0, aborted: true };
+    handleAnixError(err, 'articleUploadImage');
+  }
+});
+
+ipcMain.on('anix:articleUploadAbort', (_, uploadId) => {
+  try {
+    require('../lib/article-editor-media').abortUpload(uploadId);
+  } catch {
+    /* ignore */
+  }
+});
+
+ipcMain.handle('anix:articleGenerateEmbed', async (_, type, mediaToken, url) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.article.generateEmbedData(type, mediaToken, url);
+  } catch (err) {
+    handleAnixError(err, 'articleGenerateEmbed');
+  }
+});
+
 loggedHandle('anix:articleCommentsPopular', async (_, id) => {
   try {
     const client = getAnixart();
@@ -394,6 +472,24 @@ ipcMain.handle('anix:reportArticle', async (_, body) => {
   }
 });
 
+ipcMain.handle('anix:reportChannelReasons', async () => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.report.channelReasons();
+  } catch (err) {
+    handleAnixError(err, 'reportChannelReasons');
+  }
+});
+
+ipcMain.handle('anix:reportChannel', async (_, body) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.report.channel(body);
+  } catch (err) {
+    handleAnixError(err, 'reportChannel');
+  }
+});
+
 ipcMain.handle('anix:channelById', async (_, id) => {
   try {
     const client = getAnixart();
@@ -431,12 +527,46 @@ ipcMain.handle('anix:channelUnsubscribe', async (_, channelId) => {
   }
 });
 
-ipcMain.handle('anix:channelSubscriptions', async (_, page = 0) => {
+ipcMain.handle('anix:channelMute', async (_, channelId) => {
   try {
     const client = getAnixart();
-    return await client.endpoints.channel.subscriptions(page);
+    return await client.endpoints.channel.mute(channelId);
+  } catch (err) {
+    handleAnixError(err, 'channelMute');
+  }
+});
+
+ipcMain.handle('anix:channelUnmute', async (_, channelId) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.channel.unmute(channelId);
+  } catch (err) {
+    handleAnixError(err, 'channelUnmute');
+  }
+});
+
+ipcMain.handle('anix:channelSubscriptions', async (_, page = 0, opts = {}) => {
+  try {
+    const client = getAnixart();
+    const query = {};
+    if (typeof opts?.sort === 'number') query.sort = opts.sort;
+    return await client.endpoints.channel.subscriptions(page, query);
   } catch (err) {
     handleAnixError(err, 'channelSubscriptions');
+  }
+});
+
+ipcMain.handle('anix:channelAll', async (_, page = 0, opts = {}) => {
+  try {
+    const client = getAnixart();
+    const body = {};
+    if (typeof opts?.isBlog === 'boolean') body.is_blog = opts.isBlog;
+    if (typeof opts?.isSubscribed === 'boolean') body.is_subscribed = opts.isSubscribed;
+    if (typeof opts?.permission === 'number') body.permission = opts.permission;
+    if (typeof opts?.sort === 'number') body.sort = opts.sort;
+    return await client.endpoints.channel.channels(page, body);
+  } catch (err) {
+    handleAnixError(err, 'channelAll');
   }
 });
 
@@ -458,6 +588,19 @@ ipcMain.handle('anix:channelEditorAll', async () => {
     return await client.endpoints.channel.editorAvailableAll();
   } catch (err) {
     handleAnixError(err, 'channelEditorAll');
+  }
+});
+
+ipcMain.handle('anix:channelEditorAvailable', async (_, channelId, opts = {}) => {
+  try {
+    const client = getAnixart();
+    const query = {
+      is_suggestion: !!opts?.isSuggestion,
+      is_edit_mode: !!opts?.isEditMode,
+    };
+    return await client.endpoints.channel.editorAvailable(channelId, query);
+  } catch (err) {
+    handleAnixError(err, 'channelEditorAvailable');
   }
 });
 
@@ -1127,6 +1270,20 @@ ipcMain.handle('anix:searchCollections', async (_, query, page = 0) => {
     return data;
   } catch (err) {
     handleAnixError(err, 'searchCollections');
+  }
+});
+
+loggedHandle('anix:searchChannelSubscribers', async (_, channelId, page = 0, query = '') => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.search.channelSubscribersSearch(channelId, page, {
+      query: String(query ?? ''),
+      page,
+      searchBy: 0,
+      channel_id: Number(channelId),
+    });
+  } catch (err) {
+    handleAnixError(err, 'searchChannelSubscribers');
   }
 });
 

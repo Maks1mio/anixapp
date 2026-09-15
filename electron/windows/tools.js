@@ -191,6 +191,100 @@ ipcMain.handle('admin:openWindow', () => {
   createAdminPanelWindow();
 });
 
+// ——— Article composer window ———
+
+function createComposerWindow(payload) {
+  state.composerPayload = payload ?? null;
+  if (state.composerWindow && !state.composerWindow.isDestroyed()) {
+    state.composerWindow.webContents.send('composer:setPayload', state.composerPayload);
+    state.composerWindow.focus();
+    return;
+  }
+  const iconPath = getIconPath();
+  state.composerAllowClose = false;
+  state.composerWindow = new BrowserWindow({
+    width: 920,
+    height: 760,
+    minWidth: 720,
+    minHeight: 560,
+    frame: false,
+    titleBarStyle: 'hidden',
+    title: 'AnixApp — Новая запись',
+    backgroundColor: '#121212',
+    show: false,
+    resizable: true,
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(electronDir, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+    ...(iconPath && { icon: iconPath }),
+  });
+  state.composerWindow.on('closed', () => {
+    state.composerWindow = null;
+    state.composerPayload = null;
+    state.composerAllowClose = false;
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      state.mainWindow.webContents.send('composer:closed');
+    }
+  });
+  state.composerWindow.on('close', (e) => {
+    if (state.composerAllowClose) return;
+    e.preventDefault();
+    if (state.composerWindow && !state.composerWindow.isDestroyed()) {
+      state.composerWindow.webContents.send('composer:requestClose');
+    }
+  });
+  state.composerWindow.once('ready-to-show', () => {
+    applyUiZoom(config.getUiZoom());
+    state.composerWindow.show();
+  });
+  state.composerWindow.on('maximize', () => {
+    if (state.composerWindow) state.composerWindow.webContents.send('tool:windowState', { isMaximized: true });
+  });
+  state.composerWindow.on('unmaximize', () => {
+    if (state.composerWindow) state.composerWindow.webContents.send('tool:windowState', { isMaximized: false });
+  });
+
+  if (isDev) {
+    state.composerWindow.loadURL(`${getDevServerOrigin()}/#/feed/composer?standalone=1`);
+  } else {
+    state.composerWindow.loadFile(path.join(electronDir, '../dist/index.html'), {
+      hash: '/feed/composer?standalone=1',
+    });
+  }
+}
+
+ipcMain.handle('composer:open', (_, payload) => {
+  createComposerWindow(payload ?? {});
+});
+
+ipcMain.handle('composer:getPayload', () => state.composerPayload);
+
+ipcMain.handle('composer:isStandaloneWindow', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  return !!(state.composerWindow && win && win.id === state.composerWindow.id);
+});
+
+ipcMain.on('composer:readyToClose', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  state.composerAllowClose = true;
+  if (win && !win.isDestroyed()) win.close();
+});
+
+ipcMain.on('composer:published', (_, data) => {
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    state.mainWindow.webContents.send('composer:published', data ?? null);
+  }
+});
+
+ipcMain.on('composer:draftsChanged', () => {
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    state.mainWindow.webContents.send('composer:draftsChanged');
+  }
+});
+
 ipcMain.handle('admin:isStandaloneWindow', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   return !!(state.adminPanelWindow && win && win.id === state.adminPanelWindow.id);

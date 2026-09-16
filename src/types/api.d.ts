@@ -578,6 +578,19 @@ export interface AnixApi {
       page?: number,
       sort?: number,
     ) => Promise<{ content?: unknown[]; total_count?: number }>;
+    /** 0 = снять, 1 = дизлайк, 2 = лайк */
+    commentVote: (commentId: number, vote: number) => Promise<{ code?: number }>;
+    /** sort: 0 = все, 1 = отрицательные, 2 = положительные */
+    commentVotes: (
+      commentId: number,
+      page?: number,
+      sort?: number,
+    ) => Promise<{ content?: Array<Record<string, unknown> & { vote?: number }> }>;
+    commentEdit: (
+      commentId: number,
+      body: { message: string; isSpoiler?: boolean; spoiler?: boolean },
+    ) => Promise<{ code?: number }>;
+    commentDelete: (commentId: number) => Promise<{ code?: number }>;
   };
 
   report: {
@@ -719,6 +732,22 @@ export interface AnixApi {
       ban_change_avatar_expires?: number;
     }>;
     deleteAvatar: () => Promise<{ code?: number; avatar?: string }>;
+  };
+
+  profileHealth: {
+    status: () => Promise<{
+      code?: number;
+      ban_count?: number;
+      ban_for_3_month_count?: number;
+      last_ban_timestamp?: number;
+      last_ban_expires?: number;
+      blog_suspension_expires?: number;
+      blog_mute_expires?: number;
+    }>;
+    account: (page?: number) => Promise<unknown>;
+    content: (page?: number) => Promise<unknown>;
+    enforcement: (id: number) => Promise<{ code?: number; enforcement?: Record<string, unknown> | null }>;
+    appeal: (id: number, body: { message: string }) => Promise<{ code?: number }>;
   };
 }
 

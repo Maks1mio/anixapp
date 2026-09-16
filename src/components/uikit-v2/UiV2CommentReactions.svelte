@@ -9,6 +9,7 @@
   import { handleUserProfileClick } from '../../stores/user-profile';
 
   export type UiV2ReactionVote = 'up' | 'down';
+  export type UiV2ReactionsSource = 'release' | 'article';
 
   export type UiV2ReactionProfile = {
     id: number;
@@ -23,10 +24,12 @@
 
   type Props = {
     commentId: number | string | null;
+    /** release = комментарии релиза, article = комментарии поста в канале */
+    source?: UiV2ReactionsSource;
     onAuthorClick?: (profile: UiV2ReactionProfile) => void;
   };
 
-  let { commentId, onAuthorClick }: Props = $props();
+  let { commentId, source = 'release', onAuthorClick }: Props = $props();
 
   let filter = $state<Filter>('all');
   let loadState = $state<'idle' | 'loading' | 'ready' | 'error'>('idle');
@@ -41,9 +44,21 @@
     { id: 'down', label: 'Отрицательные' },
   ];
 
-  function mapProfile(raw: Record<string, unknown>, vote: UiV2ReactionVote): UiV2ReactionProfile | null {
+  function voteFromRaw(raw: Record<string, unknown>, fallback?: UiV2ReactionVote): UiV2ReactionVote | null {
+    const v = Number(raw.vote ?? raw.user_vote ?? 0);
+    if (v === 1) return 'down';
+    if (v === 2) return 'up';
+    return fallback ?? null;
+  }
+
+  function mapProfile(
+    raw: Record<string, unknown>,
+    fallback?: UiV2ReactionVote,
+  ): UiV2ReactionProfile | null {
     const id = Number(raw.id ?? 0);
     if (!Number.isFinite(id) || id <= 0) return null;
+    const vote = voteFromRaw(raw, fallback);
+    if (!vote) return null;
     return {
       id,
       login: String(raw.login ?? raw.nickname ?? 'Пользователь'),
@@ -54,32 +69,44 @@
     };
   }
 
-  async function fetchVotes(kind: UiV2ReactionVote): Promise<UiV2ReactionProfile[]> {
+  async function fetchVotesPage(sort: number): Promise<Record<string, unknown>[]> {
     const id = typeof commentId === 'number' ? commentId : Number(commentId);
     if (!Number.isFinite(id) || id <= 0) return [];
-    if (!window.anixApi?.comments?.release?.votes) {
-      throw new Error('API реакций недоступно');
+
+    let data: { content?: unknown[] } | null = null;
+    if (source === 'article') {
+      if (!window.anixApi?.article?.commentVotes) {
+        throw new Error('API реакций недоступно');
+      }
+      data = await window.anixApi.article.commentVotes(id, 0, sort);
+    } else {
+      if (!window.anixApi?.comments?.release?.votes) {
+        throw new Error('API реакций недоступно');
+      }
+      data = await window.anixApi.comments.release.votes(id, 0, sort);
     }
-    const sort = kind === 'up' ? 2 : 1;
-    const data = await window.anixApi.comments.release.votes(id, 0, sort);
+
     const content = Array.isArray(data?.content) ? data.content : [];
-    return content
-      .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
-      .map((item) => mapProfile(item, kind))
-      .filter((item): item is UiV2ReactionProfile => !!item);
+    return content.filter(
+      (item): item is Record<string, unknown> => !!item && typeof item === 'object',
+    );
   }
 
   async function loadAll(force = false) {
     const id = typeof commentId === 'number' ? commentId : Number(commentId);
     if (!Number.isFinite(id) || id <= 0) return;
 
-    if (!window.anixApi?.comments?.release?.votes) {
+    const apiReady =
+      source === 'article'
+        ? !!window.anixApi?.article?.commentVotes
+        : !!window.anixApi?.comments?.release?.votes;
+    if (!apiReady) {
       loadState = 'error';
       errorText = 'API реакций недоступно';
       return;
     }
 
-    const key = String(id);
+    const key = `${source}:${id}`;
     if (!force && loadedFor === key) {
       loadState = 'ready';
       return;
@@ -88,9 +115,25 @@
     loadState = 'loading';
     errorText = '';
     try {
-      const [up, down] = await Promise.all([fetchVotes('up'), fetchVotes('down')]);
-      likes = up;
-      dislikes = down;
+      // Как в Android: один список sort=0 + vote на профиле; fallback — раздельные sort=1/2.
+      const allRaw = await fetchVotesPage(0);
+      let mapped = allRaw
+        .map((item) => mapProfile(item))
+        .filter((item): item is UiV2ReactionProfile => !!item);
+
+      if (mapped.length === 0 && allRaw.length === 0) {
+        const [upRaw, downRaw] = await Promise.all([fetchVotesPage(2), fetchVotesPage(1)]);
+        mapped = [
+          ...upRaw.map((item) => mapProfile(item, 'up')),
+          ...downRaw.map((item) => mapProfile(item, 'down')),
+        ].filter((item): item is UiV2ReactionProfile => !!item);
+      } else if (mapped.length === 0 && allRaw.length > 0) {
+        // API отдал профили без vote — нечего показывать честно
+        mapped = [];
+      }
+
+      likes = mapped.filter((p) => p.vote === 'up');
+      dislikes = mapped.filter((p) => p.vote === 'down');
       loadedFor = key;
       loadState = 'ready';
     } catch (e) {
@@ -101,6 +144,7 @@
 
   $effect(() => {
     void commentId;
+    void source;
     filter = 'all';
     void loadAll(true);
   });

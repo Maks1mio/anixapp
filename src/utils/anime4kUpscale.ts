@@ -4,20 +4,46 @@ import {
   ModeA, ModeB, ModeC, ModeAA, ModeBB, ModeCA,
   render as anime4kRender,
 } from 'anime4k-webgpu';
+import type { Anime4KPipeline } from 'anime4k-webgpu';
 import { hasWebGpuApi, probeWebGpuAvailable } from './webgpu-availability.svelte';
 import { isAnixartCdnUrl, unwrapCdnUrl } from './posterUrl';
+import {
+  buildAnixPlayerPipeline,
+  decodeAnixPlayerMode,
+  isAnixPlayerMode,
+} from './anime4k-anixplayer';
 
-const MODE_MAP: Record<number, new (opts: {
+type PresetModeCtor = new (opts: {
   device: GPUDevice;
   inputTexture: GPUTexture;
   nativeDimensions: { width: number; height: number };
   targetDimensions: { width: number; height: number };
-}) => unknown> = {
-  0: DoG, 1: BilateralMean, 2: CNNM, 3: CNNSoftM, 4: CNNSoftVL,
-  5: CNNVL, 6: CNNUL, 7: GANUUL,
-  8: CNNx2M, 9: CNNx2VL, 10: DenoiseCNNx2VL, 11: CNNx2UL, 12: GANx3L, 13: GANx4UUL,
+}) => Anime4KPipeline;
+
+const MODE_MAP: Record<number, PresetModeCtor> = {
+  0: DoG as never, 1: BilateralMean as never, 2: CNNM as never, 3: CNNSoftM as never, 4: CNNSoftVL as never,
+  5: CNNVL as never, 6: CNNUL as never, 7: GANUUL as never,
+  8: CNNx2M as never, 9: CNNx2VL as never, 10: DenoiseCNNx2VL as never, 11: CNNx2UL as never,
+  12: GANx3L as never, 13: GANx4UUL as never,
   14: ModeA, 15: ModeB, 16: ModeC, 17: ModeAA, 18: ModeBB, 19: ModeCA,
 };
+
+function buildPipelineForMode(
+  mode: number,
+  opts: {
+    device: GPUDevice;
+    inputTexture: GPUTexture;
+    nativeDimensions: { width: number; height: number };
+    targetDimensions: { width: number; height: number };
+  },
+): Anime4KPipeline {
+  if (isAnixPlayerMode(mode)) {
+    const decoded = decodeAnixPlayerMode(mode);
+    if (decoded) return buildAnixPlayerPipeline({ ...opts, ...decoded });
+  }
+  const ModeClass = MODE_MAP[mode] ?? ModeB;
+  return new ModeClass(opts);
+}
 
 export const GPU_AVAILABLE = hasWebGpuApi();
 
@@ -419,9 +445,8 @@ export async function startAnime4kImageUpscale(opts: {
     );
 
     const mode = opts.mode ?? 15;
-    const ModeClass = MODE_MAP[mode] ?? ModeB;
     const pipelines = [
-      new ModeClass({
+      buildPipelineForMode(mode, {
         device,
         inputTexture,
         nativeDimensions: native,
@@ -722,8 +747,6 @@ export async function startAnime4kUpscale(opts: {
       return adapter;
     };
 
-    const ModeClass = MODE_MAP[mode] ?? ModeB;
-
     try {
       await anime4kRender({
         video,
@@ -731,7 +754,7 @@ export async function startAnime4kUpscale(opts: {
         pipelineBuilder: (device: GPUDevice, inputTexture: GPUTexture) => {
           const native = { width: capturedW, height: capturedH };
           const target = { width: canvas.width, height: canvas.height };
-          return [new ModeClass({ device, inputTexture, nativeDimensions: native, targetDimensions: target }) as never];
+          return [buildPipelineForMode(mode, { device, inputTexture, nativeDimensions: native, targetDimensions: target })];
         },
       });
     } catch {

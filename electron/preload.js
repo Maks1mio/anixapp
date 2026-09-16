@@ -600,6 +600,14 @@ contextBridge.exposeInMainWorld('anixApi', {
     commentAdd: (id, body) => ipcRenderer.invoke('anix:articleCommentAdd', id, body),
     commentReplies: (commentId, page = 0, sort = 2) =>
       ipcRenderer.invoke('anix:articleCommentReplies', commentId, page, sort),
+    commentVote: (commentId, vote) =>
+      ipcRenderer.invoke('anix:articleCommentVote', commentId, vote),
+    commentVotes: (commentId, page = 0, sort = 0) =>
+      ipcRenderer.invoke('anix:articleCommentVotes', commentId, page, sort),
+    commentEdit: (commentId, body) =>
+      ipcRenderer.invoke('anix:articleCommentEdit', commentId, body),
+    commentDelete: (commentId) =>
+      ipcRenderer.invoke('anix:articleCommentDelete', commentId),
   },
 
   report: {
@@ -631,5 +639,13 @@ contextBridge.exposeInMainWorld('anixApi', {
     selectTheme: (id) => ipcRenderer.invoke('anix:selectTheme', id),
     setAvatar: (imageBase64, fileName) => ipcRenderer.invoke('anix:setAvatar', imageBase64, fileName),
     deleteAvatar: () => ipcRenderer.invoke('anix:deleteAvatar'),
+  },
+
+  profileHealth: {
+    status: () => ipcRenderer.invoke('anix:profileHealthStatus'),
+    account: (page = 0) => ipcRenderer.invoke('anix:profileHealthAccount', page),
+    content: (page = 0) => ipcRenderer.invoke('anix:profileHealthContent', page),
+    enforcement: (id) => ipcRenderer.invoke('anix:profileHealthEnforcement', id),
+    appeal: (id, body) => ipcRenderer.invoke('anix:profileHealthAppeal', id, body),
   },
 });

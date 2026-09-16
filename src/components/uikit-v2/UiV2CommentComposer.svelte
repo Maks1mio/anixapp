@@ -58,7 +58,8 @@
     if (!autofocus && !replyToLogin) return;
     queueMicrotask(() => {
       const el = document.getElementById(fieldId) as HTMLTextAreaElement | null;
-      el?.focus();
+      // Не даём браузеру самому прокрутить страницу к фокусу — скролл делает тред.
+      el?.focus({ preventScroll: true });
     });
   });
 

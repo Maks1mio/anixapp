@@ -8,11 +8,12 @@
   import UiV2ChoiceSheet from './uikit-v2/UiV2ChoiceSheet.svelte';
   import UiV2OutlinedField from './uikit-v2/UiV2OutlinedField.svelte';
   import UserBadge from './UserBadge.svelte';
+  import ProfilePanelHealthView from './ProfilePanelHealthView.svelte';
   import { resolveBadgeImageUrl, resolveBadgeName, rememberBadgeCatalogEntries, enrichLockedBadgePreviews } from '../utils/badge';
   import { resolveJacksonRefs } from '../utils/jackson-refs';
   import { compressImageForUpload } from '../utils/compressImage';
 
-  type EditScreen = 'menu' | 'status' | 'nickname' | 'social' | 'badge';
+  type EditScreen = 'menu' | 'status' | 'nickname' | 'social' | 'badge' | 'health';
   type MediaPickerKind = 'avatar' | 'cover';
 
   interface LoginHistoryItem {
@@ -41,6 +42,7 @@
     status?: string;
     badgeName?: string | null;
     badgeUrl?: string | null;
+    avatarUrl?: string;
     startScreen?: EditScreen;
     onBack: () => void;
     onProfilePatched?: (patch: Record<string, unknown>) => void;
@@ -52,6 +54,7 @@
     status = '',
     badgeName = null,
     badgeUrl = null,
+    avatarUrl = '',
     startScreen = 'menu',
     onBack,
     onProfilePatched,
@@ -323,6 +326,7 @@
       case 'nickname': return 'Изменить никнейм';
       case 'social': return 'Социальные сети';
       case 'badge': return 'Изменить значок';
+      case 'health': return 'Здоровье аккаунта';
       default: return 'Редактирование';
     }
   });
@@ -1287,7 +1291,7 @@
       <div class="profile-panel__edit-divider" aria-hidden="true"></div>
 
       <h3 class="profile-panel__edit-section">Безопасность</h3>
-      <button type="button" class="profile-panel__edit-row" onclick={soon}>
+      <button type="button" class="profile-panel__edit-row" onclick={() => (screen = 'health')}>
         <span class="profile-panel__edit-row-title">Здоровье аккаунта</span>
         <span class="profile-panel__edit-row-sub">История нарушений и ограничений</span>
       </button>
@@ -1343,6 +1347,8 @@
         <span class="profile-panel__edit-row-sub">Запросить удаление аккаунта или отменить ранее созданный запрос</span>
       </button>
     </div>
+  {:else if screen === 'health'}
+    <ProfilePanelHealthView {avatarUrl} />
   {:else if screen === 'status'}
     <div class="profile-panel__edit-form">
       <UiV2OutlinedField

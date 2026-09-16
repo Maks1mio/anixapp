@@ -259,6 +259,11 @@ function buildWebAnixApi(): AnixApi {
       commentAdd: (id, body) => invoke('anix:articleCommentAdd', id, body),
       commentReplies: (commentId, page = 0, sort = 2) =>
         invoke('anix:articleCommentReplies', commentId, page, sort),
+      commentVote: (commentId, vote) => invoke('anix:articleCommentVote', commentId, vote),
+      commentVotes: (commentId, page = 0, sort = 0) =>
+        invoke('anix:articleCommentVotes', commentId, page, sort),
+      commentEdit: (commentId, body) => invoke('anix:articleCommentEdit', commentId, body),
+      commentDelete: (commentId) => invoke('anix:articleCommentDelete', commentId),
     },
 
     report: {
@@ -290,6 +295,14 @@ function buildWebAnixApi(): AnixApi {
       selectTheme: (id) => invoke('anix:selectTheme', id),
       setAvatar: (imageBase64, fileName) => invoke('anix:setAvatar', imageBase64, fileName),
       deleteAvatar: () => invoke('anix:deleteAvatar'),
+    },
+
+    profileHealth: {
+      status: () => invoke('anix:profileHealthStatus'),
+      account: (page = 0) => invoke('anix:profileHealthAccount', page),
+      content: (page = 0) => invoke('anix:profileHealthContent', page),
+      enforcement: (id) => invoke('anix:profileHealthEnforcement', id),
+      appeal: (id, body) => invoke('anix:profileHealthAppeal', id, body),
     },
   };
 }

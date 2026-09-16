@@ -33,11 +33,9 @@
   type Props = {
     channel: FeedChannel;
     canWrite?: boolean;
-    canSuggest?: boolean;
     subscribeBusy?: boolean;
     onSubscribe?: (channelId: number, next: boolean) => void | Promise<void>;
     onWrite?: () => void;
-    onSuggest?: () => void;
     onMuted?: (channelId: number) => void;
     onUnmuted?: (channelId: number) => void;
   };
@@ -45,11 +43,9 @@
   let {
     channel,
     canWrite = false,
-    canSuggest = false,
     subscribeBusy = false,
     onSubscribe,
     onWrite,
-    onSuggest,
     onMuted,
     onUnmuted,
   }: Props = $props();
@@ -212,15 +208,6 @@
             size="sm"
             label="Написать"
             onclick={() => onWrite?.()}
-          >
-            {#snippet icon()}{@html iconPencil(16)}{/snippet}
-          </UiV2Button>
-        {:else if canSuggest}
-          <UiV2Button
-            variant="chrome"
-            size="sm"
-            label="Предложить"
-            onclick={() => onSuggest?.()}
           >
             {#snippet icon()}{@html iconPencil(16)}{/snippet}
           </UiV2Button>

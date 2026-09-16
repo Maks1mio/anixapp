@@ -15,6 +15,7 @@
     normalizeComment,
     normalizeCommentsFromResponse,
     buildReleaseCommentAddBody,
+    apiVotePayload,
   } from '../utils/comment';
   import { resolveJacksonRefs } from '../utils/jackson-refs';
   import {
@@ -24,7 +25,7 @@
     setUiV2CommentReplies,
     uiV2NodeToCommentData,
   } from '../utils/comment-v2';
-  import type { CommentSort } from '../types/comment';
+  import type { CommentSort, CommentVoteValue } from '../types/comment';
   import { COMMENT_REPLIES_SORT_DEFAULT } from '../types/comment';
 
   interface Props {
@@ -165,7 +166,11 @@
 
     if (!window.anixApi?.comments?.release) return;
     const id = typeof updated.id === 'number' ? updated.id : Number(updated.id);
-    window.anixApi.comments.release.vote(id, updated.userVote ?? 0).catch(() => {
+    const apiVote = apiVotePayload(
+      (prev.userVote ?? 0) as CommentVoteValue,
+      (updated.userVote ?? 0) as CommentVoteValue,
+    );
+    window.anixApi.comments.release.vote(id, apiVote).catch(() => {
       if (isParent) {
         parent = prev;
       } else {

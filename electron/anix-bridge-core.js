@@ -608,6 +608,32 @@ function createAnixBridgeCore(options = {}) {
       c.getClient().endpoints.articleComment.add(id, body)),
     'anix:articleCommentReplies': h((c, commentId, page = 0, sort = 2) =>
       c.getClient().endpoints.articleComment.replies(commentId, page, { sort })),
+    'anix:articleCommentVote': h(async (c, commentId, vote) => {
+      const res = await c.getClient().endpoints.articleComment.vote(commentId, vote);
+      if (res?.code != null && res.code !== DefaultResult.Ok) {
+        throw new Error(String(res.code ?? 'article comment vote failed'));
+      }
+      return res;
+    }),
+    'anix:articleCommentVotes': h((c, commentId, page = 0, sort = 0) =>
+      c.getClient().endpoints.articleComment.votes(commentId, page, { sort })),
+    'anix:articleCommentEdit': h(async (c, commentId, body) => {
+      const res = await c.getClient().endpoints.articleComment.edit(commentId, {
+        message: body.message,
+        spoiler: !!(body.spoiler ?? body.isSpoiler),
+      });
+      if (res?.code != null && res.code !== DefaultResult.Ok) {
+        throw new Error(String(res.code ?? 'article comment edit failed'));
+      }
+      return res;
+    }),
+    'anix:articleCommentDelete': h(async (c, commentId) => {
+      const res = await c.getClient().endpoints.articleComment.delete(commentId);
+      if (res?.code != null && res.code !== DefaultResult.Ok) {
+        throw new Error(String(res.code ?? 'article comment delete failed'));
+      }
+      return res;
+    }),
     'anix:channelById': h((c, id) => c.getClient().endpoints.channel.info(id)),
     'anix:channelArticles': h((c, channelId, page = 0) =>
       c.getClient().endpoints.channel.articles(channelId, page)),
@@ -751,6 +777,11 @@ function createAnixBridgeCore(options = {}) {
     'anix:profileFavoriteVideos': h((c, profileId, page = 0) =>
       c.getClient().endpoints.profile.getFavoriteVideos(profileId, page)),
     'anix:getProfileSettings': h((c) => c.getClient().endpoints.settings.getCurrentProfileSettings()),
+    'anix:profileHealthStatus': h((c) => c.getClient().endpoints.profileHealth.status()),
+    'anix:profileHealthAccount': h((c, page = 0) => c.getClient().endpoints.profileHealth.account(page)),
+    'anix:profileHealthContent': h((c, page = 0) => c.getClient().endpoints.profileHealth.content(page)),
+    'anix:profileHealthEnforcement': h((c, id) => c.getClient().endpoints.profileHealth.enforcement(id)),
+    'anix:profileHealthAppeal': h((c, id, body) => c.getClient().endpoints.profileHealth.appeal(id, body)),
     'anix:setStatus': h((c, status) => c.getClient().endpoints.settings.setStatus(status)),
     'anix:getSocial': h((c) => c.getClient().endpoints.settings.getSocial()),
     'anix:setSocial': h((c, data) => c.getClient().endpoints.settings.setSocial(data)),

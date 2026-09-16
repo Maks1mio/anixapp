@@ -127,18 +127,24 @@ export function normalizeCommentProfile(
 }
 
 export function normalizeComment(raw: Record<string, unknown>, root?: unknown): CommentData {
-  const vote = raw.vote ?? raw.user_vote ?? 0;
+  const voteRaw = raw.vote ?? raw.user_vote ?? 0;
+  const voteNum = Number(voteRaw);
+  const vote = Number.isFinite(voteNum) ? voteNum : 0;
   const profileRaw = resolveJacksonEntity(raw.profile, root ?? raw)
     ?? (raw.profile && typeof raw.profile === 'object' && !Array.isArray(raw.profile)
       ? raw.profile as Record<string, unknown>
       : undefined);
 
+  let timestamp = Number(raw.timestamp ?? 0);
+  // На всякий случай: если пришли миллисекунды
+  if (timestamp > 1e12) timestamp = Math.floor(timestamp / 1000);
+
   return {
     id: raw.id as number,
     message: String(raw.message ?? ''),
-    timestamp: (raw.timestamp as number) ?? 0,
+    timestamp,
     voteCount: Number(raw.vote_count ?? raw.voteCount ?? 0),
-    userVote: (typeof vote === 'number' ? vote : 0) as CommentVoteValue,
+    userVote: (vote === 1 || vote === 2 ? vote : 0) as CommentVoteValue,
     isSpoiler: !!(raw.is_spoiler ?? raw.isSpoiler),
     isEdited: !!(raw.is_edited ?? raw.isEdited),
     isDeleted: !!(raw.is_deleted ?? raw.isDeleted),
@@ -339,6 +345,20 @@ export function formatVoteCountDisplay(count: number): string {
 export function nextVote(current: CommentVoteValue, action: 'up' | 'down'): CommentVoteValue {
   if (action === 'up') return current === 2 ? 0 : 2;
   return current === 1 ? 0 : 1;
+}
+
+/**
+ * Что отправить в `/comment/vote/{id}/{vote}`.
+ * API — тоггл: повторный Like/Dislike снимает голос. Значение `0` не принимается (код 1).
+ */
+export function apiVotePayload(
+  prev: CommentVoteValue,
+  next: CommentVoteValue,
+): 1 | 2 {
+  if (next === 1 || next === 2) return next;
+  // Снятие: шлём прежний голос ещё раз
+  if (prev === 1 || prev === 2) return prev;
+  return 2;
 }
 
 export function applyVoteDelta(

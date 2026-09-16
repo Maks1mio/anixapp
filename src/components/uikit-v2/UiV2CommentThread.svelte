@@ -86,6 +86,8 @@
     onReleaseClick?: (node: UiV2CommentNode) => void;
     /** Клик по телу комментария (например открыть релиз в ленте недели) */
     onCommentClick?: (node: UiV2CommentNode) => void;
+    /** Источник API для «Посмотреть реакции» */
+    reactionsSource?: 'release' | 'article';
     /** Подгрузка ответов, когда API отдал только replyCount */
     onLoadReplies?: (node: UiV2CommentNode) => Promise<void> | void;
     /** Отправка ответа на комментарий */
@@ -117,6 +119,7 @@
     onAuthorClick,
     onReleaseClick,
     onCommentClick,
+    reactionsSource = 'release',
     onLoadReplies,
     onSubmitReply,
     onEdit,
@@ -138,7 +141,8 @@
   let editBusy = $state(false);
 
   function isMine(node: UiV2CommentNode): boolean {
-    return selfProfileId != null && node.profile.id === selfProfileId;
+    if (selfProfileId == null) return false;
+    return Number(node.profile.id) === Number(selfProfileId);
   }
 
   function menuItemsFor(node: UiV2CommentNode): UiV2PopupMenuItem[] {
@@ -200,7 +204,7 @@
       // После скрытия ответов поднимаем к родительскому комментарию
       await tick();
       requestAnimationFrame(() => {
-        scrollCommentIntoView(article);
+        scrollCommentIntoView(article, 'nearest');
       });
       return;
     }
@@ -222,18 +226,39 @@
     }
   }
 
-  function scrollCommentIntoView(el: HTMLElement | null) {
+  function scrollCommentIntoView(
+    el: HTMLElement | null,
+    mode: 'start' | 'nearest' = 'nearest',
+  ) {
     if (!el) return;
-    const scroller = el.closest('.uiv2-scroll-area__viewport, .page__scroll, [data-page-scroll]') as HTMLElement | null;
+    const scroller = el.closest(
+      '.uiv2-scroll-area__viewport, .page__scroll, [data-page-scroll]',
+    ) as HTMLElement | null;
     if (scroller) {
       const er = el.getBoundingClientRect();
       const sr = scroller.getBoundingClientRect();
       const pad = 12;
+
+      if (mode === 'nearest') {
+        const above = er.top < sr.top + pad;
+        const below = er.bottom > sr.bottom - pad;
+        if (!above && !below) return;
+        if (below) {
+          scroller.scrollBy({ top: er.bottom - (sr.bottom - pad), behavior: 'smooth' });
+        } else {
+          scroller.scrollBy({ top: er.top - (sr.top + pad), behavior: 'smooth' });
+        }
+        return;
+      }
+
       const top = scroller.scrollTop + (er.top - sr.top) - pad;
       scroller.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
       return;
     }
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.scrollIntoView({
+      behavior: 'smooth',
+      block: mode === 'nearest' ? 'nearest' : 'start',
+    });
   }
 
   function revealSpoiler(node: UiV2CommentNode) {
@@ -319,8 +344,11 @@
     if (enableInlineReply) {
       replyTargetId = keyOf(node.id);
       void tick().then(() => {
-        const el = document.getElementById(`uiv2-comment-reply-${keyOf(node.id)}`);
-        if (el) scrollCommentIntoView(el);
+        const slot = document.getElementById(`uiv2-comment-reply-${keyOf(node.id)}`);
+        // Крутим весь комментарий (текст + композер), а не только поле — иначе
+        // «Ответить» уезжает за верхний край и кажется, что чат прыгнул вверх.
+        const comment = slot?.closest('.uiv2-comment') as HTMLElement | null;
+        scrollCommentIntoView(comment ?? slot, 'nearest');
       });
     }
     onReply?.(node);
@@ -659,6 +687,7 @@
                 {onAuthorClick}
                 {onReleaseClick}
                 {onCommentClick}
+                {reactionsSource}
                 {onLoadReplies}
                 {onSubmitReply}
                 {onEdit}
@@ -703,7 +732,7 @@
 >
   {#snippet submenuContent(item)}
     {#if item.id === 'reactions' && menuNode}
-      <UiV2CommentReactions commentId={menuNode.id} />
+      <UiV2CommentReactions commentId={menuNode.id} source={reactionsSource} />
     {/if}
   {/snippet}
 </UiV2PopupMenu>

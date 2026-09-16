@@ -418,6 +418,57 @@ loggedHandle('anix:articleCommentReplies', async (_, commentId, page = 0, sort =
   }
 });
 
+loggedHandle('anix:articleCommentVote', async (_, commentId, vote) => {
+  try {
+    const client = getAnixart();
+    const res = await client.endpoints.articleComment.vote(commentId, vote);
+    if (res?.code != null && res.code !== DefaultResult.Ok) {
+      return Promise.reject(new Error(String(res.code ?? 'article comment vote failed')));
+    }
+    return res;
+  } catch (err) {
+    handleAnixError(err, 'articleCommentVote');
+  }
+});
+
+loggedHandle('anix:articleCommentVotes', async (_, commentId, page = 0, sort = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.articleComment.votes(commentId, page, { sort });
+  } catch (err) {
+    handleAnixError(err, 'articleCommentVotes');
+  }
+});
+
+loggedHandle('anix:articleCommentEdit', async (_, commentId, body) => {
+  try {
+    const client = getAnixart();
+    const res = await client.endpoints.articleComment.edit(commentId, {
+      message: body.message,
+      spoiler: !!(body.spoiler ?? body.isSpoiler),
+    });
+    if (res?.code != null && res.code !== DefaultResult.Ok) {
+      return Promise.reject(new Error(String(res.code ?? 'article comment edit failed')));
+    }
+    return res;
+  } catch (err) {
+    handleAnixError(err, 'articleCommentEdit');
+  }
+});
+
+loggedHandle('anix:articleCommentDelete', async (_, commentId) => {
+  try {
+    const client = getAnixart();
+    const res = await client.endpoints.articleComment.delete(commentId);
+    if (res?.code != null && res.code !== DefaultResult.Ok) {
+      return Promise.reject(new Error(String(res.code ?? 'article comment delete failed')));
+    }
+    return res;
+  } catch (err) {
+    handleAnixError(err, 'articleCommentDelete');
+  }
+});
+
 ipcMain.handle('anix:articleDelete', async (_, id) => {
   try {
     const client = getAnixart();
@@ -1044,6 +1095,51 @@ ipcMain.handle('anix:getProfileSettings', async () => {
     return await client.endpoints.settings.getCurrentProfileSettings();
   } catch (err) {
     handleAnixError(err, 'getProfileSettings');
+  }
+});
+
+ipcMain.handle('anix:profileHealthStatus', async () => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileHealth.status();
+  } catch (err) {
+    handleAnixError(err, 'profileHealthStatus');
+  }
+});
+
+ipcMain.handle('anix:profileHealthAccount', async (_, page = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileHealth.account(page);
+  } catch (err) {
+    handleAnixError(err, 'profileHealthAccount');
+  }
+});
+
+ipcMain.handle('anix:profileHealthContent', async (_, page = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileHealth.content(page);
+  } catch (err) {
+    handleAnixError(err, 'profileHealthContent');
+  }
+});
+
+ipcMain.handle('anix:profileHealthEnforcement', async (_, id) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileHealth.enforcement(id);
+  } catch (err) {
+    handleAnixError(err, 'profileHealthEnforcement');
+  }
+});
+
+ipcMain.handle('anix:profileHealthAppeal', async (_, id, body) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileHealth.appeal(id, body);
+  } catch (err) {
+    handleAnixError(err, 'profileHealthAppeal');
   }
 });
 

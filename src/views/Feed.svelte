@@ -2044,21 +2044,6 @@
             {/if}
           </label>
         {/if}
-        {#if authed && !postViewActive && (tab === 'my' || tab === 'latest' || tab === 'managed' || tab === 'drafts')}
-          <UiV2Button
-            variant="primary"
-            size="sm"
-            label={canSuggestChannel ? 'Предложить' : 'Написать'}
-            onclick={() => void openComposer(
-              tab === 'managed' ? null : channelFilterId,
-              null,
-              null,
-              { isSuggestion: canSuggestChannel },
-            )}
-          >
-            {#snippet icon()}{@html iconPencil(16)}{/snippet}
-          </UiV2Button>
-        {/if}
         <UiV2Button
           variant="ghost"
           size="sm"
@@ -2134,7 +2119,7 @@
             </span>
           </span>
         </div>
-        {#if asideChannel.is_blog || canWriteChannel || canSuggestChannel}
+        {#if asideChannel.is_blog || canWriteChannel}
         <div class="feed-channel-bar__actions">
           {#if asideChannel.is_blog}
             <UiV2Button
@@ -2150,15 +2135,6 @@
               size="sm"
               label="Написать"
               onclick={() => void openComposer(channelFilterId)}
-            >
-              {#snippet icon()}{@html iconPencil(16)}{/snippet}
-            </UiV2Button>
-          {:else if canSuggestChannel}
-            <UiV2Button
-              variant="primary"
-              size="sm"
-              label="Предложить"
-              onclick={() => void openComposer(channelFilterId, null, null, { isSuggestion: true })}
             >
               {#snippet icon()}{@html iconPencil(16)}{/snippet}
             </UiV2Button>
@@ -2618,15 +2594,9 @@
       <FeedChannelPanel
         channel={groupAsideChannel}
         canWrite={managed.some((c) => c.id === groupAsideChannel.id)}
-        canSuggest={
-          !groupAsideChannel.is_blog
-          && !!groupAsideChannel.is_article_suggestion_enabled
-          && !managed.some((c) => c.id === groupAsideChannel.id)
-        }
         subscribeBusy={subscribeBusyId === groupAsideChannel.id}
         onSubscribe={onSubscribeChannel}
         onWrite={() => void openComposer(groupAsideChannel.id)}
-        onSuggest={() => void openComposer(groupAsideChannel.id, null, null, { isSuggestion: true })}
         onMuted={(channelId) => patchChannelMuted(channelId, true)}
         onUnmuted={(channelId) => patchChannelMuted(channelId, false)}
       />

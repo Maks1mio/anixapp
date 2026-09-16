@@ -12,10 +12,13 @@
     buildReleaseCommentAddBody,
     normalizeComment,
     normalizeCommentsFromResponse,
+    apiVotePayload,
   } from '../../utils/comment';
+  import type { CommentVoteValue } from '../../types/comment';
   import {
     appendUiV2CommentReply,
     commentDataToUiV2Node,
+    patchUiV2CommentNode,
     setUiV2CommentReplies,
     uiV2NodeToCommentData,
   } from '../../utils/comment-v2';
@@ -152,6 +155,95 @@
     if (id > 0) handleUserProfileClick(id);
   }
 
+  function findNode(list: UiV2CommentNode[], id: number | string): UiV2CommentNode | null {
+    for (const n of list) {
+      if (n.id === id) return n;
+      if (n.replies?.length) {
+        const found = findNode(n.replies, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  function handleVote(updated: UiV2CommentNode) {
+    if (!requireAuth()) return;
+    const prev = findNode(nodes, updated.id);
+    nodes = patchUiV2CommentNode(nodes, updated.id, {
+      userVote: updated.userVote,
+      voteCount: updated.voteCount,
+    });
+    emitPreview(nodes);
+    if (!window.anixApi?.article?.commentVote || !prev) return;
+    const id = typeof updated.id === 'number' ? updated.id : Number(updated.id);
+    const apiVote = apiVotePayload(
+      (prev.userVote ?? 0) as CommentVoteValue,
+      (updated.userVote ?? 0) as CommentVoteValue,
+    );
+    window.anixApi.article.commentVote(id, apiVote).catch(() => {
+      nodes = patchUiV2CommentNode(nodes, updated.id, {
+        userVote: prev.userVote,
+        voteCount: prev.voteCount,
+      });
+      emitPreview(nodes);
+    });
+  }
+
+  async function handleEdit(node: UiV2CommentNode, payload: UiV2CommentComposerPayload) {
+    if (!requireAuth() || !window.anixApi?.article?.commentEdit) return;
+    const prev = findNode(nodes, node.id);
+    if (!prev) return;
+    const id = typeof node.id === 'number' ? node.id : Number(node.id);
+
+    nodes = patchUiV2CommentNode(nodes, node.id, {
+      message: payload.message,
+      isSpoiler: payload.isSpoiler,
+      isEdited: true,
+    });
+    emitPreview(nodes);
+
+    try {
+      await window.anixApi.article.commentEdit(id, {
+        message: payload.message,
+        isSpoiler: payload.isSpoiler,
+      });
+    } catch {
+      nodes = patchUiV2CommentNode(nodes, node.id, {
+        message: prev.message,
+        isSpoiler: prev.isSpoiler,
+        isEdited: prev.isEdited,
+      });
+      emitPreview(nodes);
+    }
+  }
+
+  async function handleDelete(node: UiV2CommentNode) {
+    if (!requireAuth() || !window.anixApi?.article?.commentDelete) return;
+    const prev = findNode(nodes, node.id);
+    if (!prev) return;
+    const id = typeof node.id === 'number' ? node.id : Number(node.id);
+
+    nodes = patchUiV2CommentNode(nodes, node.id, {
+      isDeleted: true,
+      message: '',
+    });
+    knownTotal = Math.max(0, knownTotal - 1);
+    onCountChange?.(knownTotal);
+    emitPreview(nodes);
+
+    try {
+      await window.anixApi.article.commentDelete(id);
+    } catch {
+      nodes = patchUiV2CommentNode(nodes, node.id, {
+        isDeleted: prev.isDeleted,
+        message: prev.message,
+      });
+      knownTotal += 1;
+      onCountChange?.(knownTotal);
+      emitPreview(nodes);
+    }
+  }
+
   onMount(() => {
     void loadComments();
     void window.anixApi?.profile?.self?.().then((data: { profile?: { id?: number } }) => {
@@ -208,9 +300,13 @@
       {nodes}
       {selfProfileId}
       enableInlineReply={true}
+      reactionsSource="article"
       onAuthorClick={openAuthor}
       onLoadReplies={loadReplies}
       onSubmitReply={submitReply}
+      onVote={handleVote}
+      onEdit={handleEdit}
+      onDelete={handleDelete}
     />
   {/if}
 </section>

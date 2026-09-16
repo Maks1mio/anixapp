@@ -885,6 +885,7 @@
                 status={statusText}
                 badgeName={badge?.name ?? null}
                 badgeUrl={badge?.image_url ?? null}
+                avatarUrl={avatarUrl}
                 startScreen={editStartScreen}
                 onBack={closeEditView}
                 onProfilePatched={onProfilePatched}

@@ -12,7 +12,16 @@ let installed = false;
 let rawFetch = null;
 
 function getProxyAppKey() {
-  return String(process.env.ANIXART_PROXY_APP_KEY || process.env.ANIXAPP_PROXY_KEY || '').trim();
+  const fromEnv = String(process.env.ANIXART_PROXY_APP_KEY || process.env.ANIXAPP_PROXY_KEY || '').trim();
+  if (fromEnv) return fromEnv;
+  try {
+    const generated = require('./oauth-env.generated');
+    return String(
+      (generated && (generated.ANIXART_PROXY_APP_KEY || generated.ANIXAPP_PROXY_KEY)) || '',
+    ).trim();
+  } catch {
+    return '';
+  }
 }
 
 function urlOf(input) {

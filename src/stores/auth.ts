@@ -8,6 +8,12 @@ export const appScreen = writable<AppScreen>('main');
 /** Есть сохранённый токен Anixart */
 export const isAuthenticated = writable(false);
 
+/**
+ * false, пока getStatus не завершился.
+ * До этого isAuthenticated=false не значит «гость» — страницы не должны рисовать «нужен вход».
+ */
+export const authReady = writable(false);
+
 /** Модалка входа поверх приложения (гость открыл защищённый раздел) */
 export const loginPromptOpen = writable(false);
 
@@ -27,6 +33,30 @@ export async function syncAuthStatus(): Promise<boolean> {
   }
 }
 
+/** Первый boot: узнать токен и разрешить монтирование маршрутов. */
+export async function resolveAuth(): Promise<{ known: boolean; hasToken: boolean }> {
+  let known = false;
+  let hasToken = false;
+  try {
+    if (typeof window === 'undefined' || !window.anixApi?.auth?.getStatus) {
+      isAuthenticated.set(false);
+      known = true;
+      hasToken = false;
+    } else {
+      const status = await window.anixApi.auth.getStatus();
+      hasToken = !!status?.hasToken;
+      isAuthenticated.set(hasToken);
+      known = true;
+    }
+  } catch {
+    known = false;
+    hasToken = get(isAuthenticated);
+  } finally {
+    authReady.set(true);
+  }
+  return { known, hasToken };
+}
+
 export function openLoginPrompt(): void {
   loginPromptOpen.set(true);
 }
@@ -35,8 +65,9 @@ export function closeLoginPrompt(): void {
   loginPromptOpen.set(false);
 }
 
-/** true — можно продолжать; false — показан логин */
+/** true — можно продолжать; false — показан логин (или сессия ещё не известна) */
 export function requireAuth(): boolean {
+  if (!get(authReady)) return false;
   if (get(isAuthenticated)) return true;
   openLoginPrompt();
   return false;

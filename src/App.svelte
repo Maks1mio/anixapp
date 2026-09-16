@@ -4,6 +4,8 @@
   import {
     appScreen,
     syncAuthStatus,
+    resolveAuth,
+    authReady,
     isAuthenticated,
     loginPromptOpen,
     closeLoginPrompt,
@@ -204,6 +206,7 @@
 
   // Гость открыл раздел, которому нужен аккаунт
   $effect(() => {
+    if (!$authReady) return;
     if ($appScreen !== 'main') return;
     if ($isAuthenticated) return;
     if (!pathRequiresAuth(path)) return;
@@ -265,31 +268,19 @@
     if (!window.anixApi) return;
     setConnectionChecking();
     try {
+      const auth = await resolveAuth();
       await window.anixApi.client.checkConnection();
-      let hasToken = false;
-      let authKnown = false;
-      try {
-        const status = await window.anixApi.auth.getStatus();
-        hasToken = !!status?.hasToken;
-        isAuthenticated.set(hasToken);
-        authKnown = true;
-      } catch {
-        // Аккаунт не удалось определить — не открываем логин
-        authKnown = false;
-      }
       clearRetry();
       setConnectionOk();
       notifyAuthChanged();
       appScreen.set('main');
-      // Логин только если точно нет токена, не при сбое определения сессии
-      if (authKnown && !hasToken) openLoginPrompt();
+      if (auth.known && !auth.hasToken) openLoginPrompt();
     } catch {
       setConnectionProblem();
       // Плохое соединение — без окна входа; сессию читаем локально
       try {
-        const status = await window.anixApi.auth.getStatus();
-        isAuthenticated.set(!!status?.hasToken);
-        if (status?.hasToken) notifyAuthChanged();
+        const auth = await resolveAuth();
+        if (auth.hasToken) notifyAuthChanged();
       } catch {
         /* ignore */
       }
@@ -312,12 +303,9 @@
     if (getPath() === '/feed/composer') {
       initTooltipSystem();
       appScreen.set('main');
-      void window.anixApi?.auth?.getStatus?.()
-        .then((status) => {
-          isAuthenticated.set(!!status?.hasToken);
-          if (status?.hasToken) notifyAuthChanged();
-        })
-        .catch(() => {});
+      void resolveAuth().then((auth) => {
+        if (auth.hasToken) notifyAuthChanged();
+      });
       return;
     }
 
@@ -326,6 +314,7 @@
     void initAnixbackEndpoint();
 
     if (!window.anixApi) {
+      authReady.set(true);
       appScreen.set('login');
       return () => stopBookmarksSync();
     }
@@ -789,40 +778,23 @@
 
     window.addEventListener('keydown', handleZoomKeydown);
 
-    // Initial boot — UI сразу main, проблемы сети только баннером
+    // Auth сначала (локальный токен), потом сеть — страницы ждут authReady
     setConnectionChecking();
-    window.anixApi.client.checkConnection()
-      .then(async () => {
-        let hasToken = false;
-        let authKnown = false;
-        try {
-          const status = await window.anixApi!.auth.getStatus();
-          hasToken = !!status?.hasToken;
-          isAuthenticated.set(hasToken);
-          authKnown = true;
-        } catch {
-          authKnown = false;
-        }
+    void (async () => {
+      const auth = await resolveAuth();
+      if (auth.hasToken) notifyAuthChanged();
+
+      try {
+        await window.anixApi!.client.checkConnection();
         setConnectionOk();
-        notifyAuthChanged();
-        appScreen.set('main');
-        if (authKnown && !hasToken) openLoginPrompt();
-      })
-      .catch(async () => {
+        if (auth.known && !auth.hasToken) openLoginPrompt();
+      } catch {
         setConnectionProblem();
-        appScreen.set('main');
-        // Плохое соединение — не показываем окно входа, сессию читаем локально
-        try {
-          const status = await window.anixApi!.auth.getStatus();
-          isAuthenticated.set(!!status?.hasToken);
-          if (status?.hasToken) notifyAuthChanged();
-        } catch {
-          /* ignore */
-        }
         if (offlineRetryTimer === null) {
           offlineRetryTimer = window.setInterval(checkAndShow, 7000);
         }
-      });
+      }
+    })();
 
     const onBrowserOffline = () => setConnectionProblem();
     const onBrowserOnline = () => {
@@ -1033,6 +1005,11 @@
 {#if isComposerWindow}
   <FeedComposerWindow />
 
+{:else if !$authReady}
+  <div class="app-auth-boot" aria-busy="true" aria-live="polite">
+    <p class="app-auth-boot__label">Загрузка…</p>
+  </div>
+
 {:else if $appScreen === 'login'}
   <!-- Нет anixApi (браузер без моста) -->
   <Login
@@ -1088,3 +1065,19 @@
 {#if isTvMode()}
   <TvDebugMetrics />
 {/if}
+
+<style>
+  .app-auth-boot {
+    display: grid;
+    place-items: center;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: #0a0a0a;
+    color: #9a9a9a;
+    font: 500 0.95rem/1.4 system-ui, sans-serif;
+  }
+
+  .app-auth-boot__label {
+    margin: 0;
+  }
+</style>

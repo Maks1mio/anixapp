@@ -5,7 +5,8 @@
   import UiV2Select, { type UiV2SelectOption } from '../components/uikit-v2/UiV2Select.svelte';
   import FeedArticleCard from '../components/feed/FeedArticleCard.svelte';
   import UiV2FeedPostSkeleton from '../components/uikit-v2/UiV2FeedPostSkeleton.svelte';
-  import { isAuthenticated, requireAuth } from '../stores/auth';
+  import { get } from 'svelte/store';
+  import { isAuthenticated, authReady, requireAuth } from '../stores/auth';
   import { feedArticleFocusId, feedChannelFocusId, takeFeedArticleFocus, takeFeedChannelFocus } from '../stores/feed-focus';
   import { showToast } from '../stores/toast';
   import {
@@ -1074,6 +1075,10 @@
     }
 
     if (tab === 'managed') {
+      if (!get(authReady)) {
+        loadState = 'loading';
+        return;
+      }
       if (!authed) {
         loadState = 'need-auth';
         managed = [];
@@ -1098,11 +1103,17 @@
       return;
     }
 
-    if (tab === 'my' && !authed && channelFilterId == null) {
-      loadState = 'need-auth';
-      articles = [];
-      hasMore = false;
-      return;
+    if (tab === 'my' && channelFilterId == null) {
+      if (!get(authReady)) {
+        loadState = 'loading';
+        return;
+      }
+      if (!authed) {
+        loadState = 'need-auth';
+        articles = [];
+        hasMore = false;
+        return;
+      }
     }
 
     if (append) loadingMore = true;
@@ -1787,11 +1798,15 @@
     window.addEventListener('storage', refreshDrafts);
 
     const unsub = isAuthenticated.subscribe((v) => {
+      const wasAuthed = authed;
       authed = v;
       if (v) {
         void loadSubscriptions();
         void loadSelfAvatar();
         void ensureManagedLoaded();
+        if (!wasAuthed && (loadState === 'need-auth' || tab === 'my' || tab === 'managed')) {
+          void reload();
+        }
       } else {
         subscriptions = [];
         managed = [];

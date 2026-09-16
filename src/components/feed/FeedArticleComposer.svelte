@@ -367,7 +367,7 @@
     const preferred = source?.channelId
       ?? (initialChannelId != null
         && (isSuggestion || channels.some((c) => c.id === initialChannelId))
-        ? initialChannelId
+      ? initialChannelId
         : (channels[0]?.id ?? null));
     channelId = preferred;
     const preferredChannel = channels.find((c) => c.id === preferred);
@@ -1246,7 +1246,7 @@
       }
     }
     if (!imageFiles.length) return;
-    e.preventDefault();
+      e.preventDefault();
     e.stopPropagation();
     await addImages(imageFiles);
   }
@@ -1651,14 +1651,14 @@
       <header class="feed-composer__bar">
         {#if !isWindow || step === 'preview'}
           <UiV2Tooltip text={step === 'preview' ? 'Назад к редактору' : 'Закрыть'} placement="bottom">
-            <button
-              type="button"
+        <button
+          type="button"
               class="feed-composer__icon-btn"
               aria-label={step === 'preview' ? 'Назад к редактору' : 'Закрыть'}
               onclick={() => (step === 'preview' ? (step = 'edit') : requestClose())}
             >
               {@html iconArrowLeft(22)}
-            </button>
+        </button>
           </UiV2Tooltip>
         {/if}
 
@@ -1988,13 +1988,13 @@
         </div>
       {/if}
 
-      {#if channels.length === 0}
+        {#if channels.length === 0}
         <div class="feed-composer__empty">
           <p>
             {#if isSuggestion}
               Не удалось открыть предложение для этого канала.
             {:else}
-              Чтобы писать записи, создайте блог или получите права редактора в канале.
+            Чтобы писать записи, создайте блог или получите права редактора в канале.
             {/if}
           </p>
           {#if !isSuggestion && onCreateBlog}
@@ -2027,8 +2027,8 @@
             ></textarea>
             {#if codeError}
               <p id="feed-composer-code-error" class="feed-composer__error" role="alert">{codeError}</p>
-            {/if}
-          {:else}
+          {/if}
+        {:else}
           <div class="feed-composer__canvas">
             {#each blocks as block, index (block.id)}
               <div
@@ -2280,18 +2280,18 @@
             {#if repostArticle && !isSuggestion}
               <p class="feed-composer__repost-hint">Будет опубликован как репост записи #{repostArticle.id}</p>
             {/if}
-          </div>
+            </div>
           {#if previewPost}
             <div class="feed-composer__preview-card">
               <UiV2FeedPost data={previewPost} staticPreview />
-            </div>
+          </div>
           {/if}
           {#if errorMsg}
             <p class="feed-composer__error" role="alert">{errorMsg}</p>
           {/if}
         </UiV2ScrollArea>
-      {/if}
-    </div>
+        {/if}
+      </div>
 
     {#if inlineOpen && step === 'edit' && editView === 'block'}
       <div
@@ -2346,8 +2346,8 @@
         >
           {@html iconX(16)}
         </button>
-      </div>
-    {/if}
+          </div>
+      {/if}
 
     <input
       bind:this={fileInput}

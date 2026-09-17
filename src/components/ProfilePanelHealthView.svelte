@@ -4,7 +4,7 @@
   import { cubicOut } from 'svelte/easing';
   import { portal } from '../actions/portal';
   import UiV2Button from './uikit-v2/UiV2Button.svelte';
-  import { iconTrash2, iconBan } from './icons';
+  import { iconTrash2, iconBan, iconClock } from './icons';
   import {
     PROFILE_HEALTH_INFO_HTML,
     COMMENT_RULES_URL,
@@ -16,16 +16,22 @@
     blogSuspensionLine,
     blogMuteLine,
     isCurrentlyBanned,
+    isAdjustmentRequired,
     enforcementListTitle,
+    enforcementListHint,
     enforcementTimeLabel,
     enforcementDetailTitle,
     enforcementDetailBody,
+    enforcementTargetPath,
+    enforcementGoTargetLabel,
     formatEnforcementContentHtml,
     type HealthTab,
     type ProfileHealthStatus,
     type ProfileEnforcementItem,
   } from '../utils/profile-health';
   import { requestOpenExternal } from '../utils/external-link';
+  import { navigate } from '../stores/navigation';
+  import { closeProfilePanel } from '../stores/profile-panel';
 
   type Props = {
     avatarUrl?: string;
@@ -122,6 +128,14 @@
   function closeDetails() {
     detailOpen = false;
     detailItem = null;
+  }
+
+  function goToEnforcementTarget(item: ProfileEnforcementItem) {
+    const path = enforcementTargetPath(item);
+    if (!path) return;
+    closeDetails();
+    closeProfilePanel();
+    navigate(path);
   }
 
   function openRules(e: MouseEvent) {
@@ -239,29 +253,44 @@
     {:else}
       <ul class="pp-health__items">
         {#each items as item (item.id)}
+          {@const needsAction = isAdjustmentRequired(item)}
           {@const isBan =
             item.type === 'profile_ban'
             || item.type === 'channel_suspension'
             || item.type === 'channel_mute'}
-          <li class="pp-health__item">
-            <span class="pp-health__item-icon" aria-hidden="true">
-              {@html isBan ? iconBan(18) : iconTrash2(18)}
+          {@const hint = enforcementListHint(item)}
+          <li class="pp-health__item" class:pp-health__item--action={needsAction}>
+            <span
+              class="pp-health__item-icon"
+              class:pp-health__item-icon--action={needsAction}
+              aria-hidden="true"
+            >
+              {@html needsAction ? iconClock(18) : isBan ? iconBan(18) : iconTrash2(18)}
             </span>
             <div class="pp-health__item-body">
               <p class="pp-health__item-title">{enforcementListTitle(item)}</p>
               {#if enforcementTimeLabel(item)}
                 <p class="pp-health__item-time">{enforcementTimeLabel(item)}</p>
               {/if}
-              {#if item.reason}
-                <p class="pp-health__item-reason">{item.reason}</p>
+              {#if hint}
+                <p class="pp-health__item-reason">{hint}</p>
               {/if}
               <div class="pp-health__more-wrap">
-                <UiV2Button
-                  label="Подробнее"
-                  size="sm"
-                  variant="chrome"
-                  onclick={() => void openDetails(item)}
-                />
+                {#if needsAction}
+                  <UiV2Button
+                    label="Принять действие"
+                    size="sm"
+                    variant="light"
+                    onclick={() => void openDetails(item)}
+                  />
+                {:else}
+                  <UiV2Button
+                    label="Подробнее"
+                    size="sm"
+                    variant="chrome"
+                    onclick={() => void openDetails(item)}
+                  />
+                {/if}
               </div>
             </div>
           </li>
@@ -301,6 +330,9 @@
 
 {#if detailOpen && detailItem}
   {@const detail = enforcementDetailBody(detailItem)}
+  {@const needsAction = isAdjustmentRequired(detailItem)}
+  {@const goLabel = enforcementGoTargetLabel(detailItem)}
+  {@const canGo = !!enforcementTargetPath(detailItem)}
   <div class="pp-health-sheet" role="dialog" aria-modal="true" aria-labelledby="pp-health-detail-title" use:portal>
     <button
       type="button"
@@ -321,11 +353,15 @@
           <p>Загрузка…</p>
         {:else}
           <p>{detail.lead}</p>
+          {#if detail.moderatorLabel && detail.moderatorMessage}
+            <p class="pp-health-sheet__content-label">{detail.moderatorLabel}</p>
+            <div class="pp-health-sheet__content">{@html formatEnforcementContentHtml(detail.moderatorMessage)}</div>
+          {/if}
           {#if detail.contentLabel && detail.content}
             <p class="pp-health-sheet__content-label">{detail.contentLabel}</p>
             <div class="pp-health-sheet__content">{@html formatEnforcementContentHtml(detail.content)}</div>
           {/if}
-          {#if detailItem.reason}
+          {#if !needsAction && detailItem.reason && !detail.moderatorMessage}
             <p class="pp-health-sheet__reason">{detailItem.reason}</p>
           {/if}
           <p class="pp-health-sheet__tip">
@@ -334,13 +370,31 @@
           </p>
         {/if}
       </div>
-      <UiV2Button
-        label="Закрыть"
-        size="lg"
-        block
-        variant="chrome"
-        onclick={closeDetails}
-      />
+      {#if needsAction}
+        <div class="pp-health-sheet__actions">
+          <UiV2Button
+            label="Закрыть"
+            size="lg"
+            variant="chrome"
+            onclick={closeDetails}
+          />
+          <UiV2Button
+            label={goLabel}
+            size="lg"
+            variant="light"
+            disabled={!canGo || detailLoading}
+            onclick={() => goToEnforcementTarget(detailItem!)}
+          />
+        </div>
+      {:else}
+        <UiV2Button
+          label="Закрыть"
+          size="lg"
+          block
+          variant="chrome"
+          onclick={closeDetails}
+        />
+      {/if}
     </div>
   </div>
 {/if}
@@ -562,6 +616,11 @@
     color: var(--pp-fg-soft, var(--uiv2-fg-soft));
   }
 
+  .pp-health__item-icon--action {
+    background: color-mix(in srgb, #26a69a 28%, #1a1a1a);
+    color: #80cbc4;
+  }
+
   .pp-health__item-body {
     min-width: 0;
     flex: 1;
@@ -584,6 +643,13 @@
 
   .pp-health__more-wrap {
     margin-top: 0.5rem;
+  }
+
+  .pp-health-sheet__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.65rem;
+    margin-top: 0.25rem;
   }
 
   .pp-health-sheet {

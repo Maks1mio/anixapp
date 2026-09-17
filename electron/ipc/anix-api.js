@@ -313,6 +313,15 @@ ipcMain.handle('anix:articleCreate', async (_, channelId, body) => {
   }
 });
 
+ipcMain.handle('anix:articleEdit', async (_, articleId, body) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.article.edit(articleId, body);
+  } catch (err) {
+    handleAnixError(err, 'articleEdit');
+  }
+});
+
 ipcMain.handle('anix:articleSuggestionCreate', async (_, channelId, body) => {
   try {
     const client = getAnixart();
@@ -593,6 +602,42 @@ ipcMain.handle('anix:channelUnmute', async (_, channelId) => {
     return await client.endpoints.channel.unmute(channelId);
   } catch (err) {
     handleAnixError(err, 'channelUnmute');
+  }
+});
+
+ipcMain.handle('anix:channelMutes', async (_, page = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.channel.mutes(page);
+  } catch (err) {
+    handleAnixError(err, 'channelMutes');
+  }
+});
+
+ipcMain.handle('anix:profileBlockList', async (_, page = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileBlockList.blockList(page);
+  } catch (err) {
+    handleAnixError(err, 'profileBlockList');
+  }
+});
+
+ipcMain.handle('anix:profileBlockListAdd', async (_, profileId) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileBlockList.addToBlockList(profileId);
+  } catch (err) {
+    handleAnixError(err, 'profileBlockListAdd');
+  }
+});
+
+ipcMain.handle('anix:profileBlockListRemove', async (_, profileId) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileBlockList.removeFromBlockList(profileId);
+  } catch (err) {
+    handleAnixError(err, 'profileBlockListRemove');
   }
 });
 

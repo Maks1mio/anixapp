@@ -40,6 +40,7 @@
     fileToDataUrl,
     generateBlockId,
     looksLikeUrl,
+    editorBlocksFromPayload,
     parseEditorPayloadJson,
     sanitizeEditorHtml,
     stringifyEditorPayload,
@@ -73,6 +74,8 @@
     initialChannelId?: number | null;
     createBusy?: boolean;
     repostArticle?: FeedArticle | null;
+    /** Редактирование существующей записи. */
+    editArticle?: FeedArticle | null;
     draftId?: string | null;
     initialDraft?: FeedArticleDraft | null;
     mode?: 'overlay' | 'window';
@@ -89,6 +92,7 @@
     initialChannelId = null,
     createBusy = false,
     repostArticle = null,
+    editArticle = null,
     draftId = null,
     initialDraft = null,
     mode = 'overlay',
@@ -97,6 +101,8 @@
     onPublished,
     onCreateBlog,
   }: Props = $props();
+
+  const isEditMode = $derived(!!editArticle && Number(editArticle.id) > 0 && !isSuggestion);
 
   type Step = 'edit' | 'preview';
   type EditView = 'block' | 'code';
@@ -146,9 +152,19 @@
     if (first != null) channelId = first;
   });
 
-  const selectedChannel = $derived(
-    channels.find((c) => c.id === channelId) ?? null,
-  );
+  const selectedChannel = $derived.by((): FeedComposerChannel | null => {
+    const fromList = channels.find((c) => c.id === channelId) ?? null;
+    if (fromList) return fromList;
+    if (isEditMode && editArticle?.channel && Number(editArticle.channel.id) === Number(channelId)) {
+      return {
+        id: Number(editArticle.channel.id),
+        title: editArticle.channel.title || `Канал #${editArticle.channel.id}`,
+        avatar: editArticle.channel.avatar,
+        is_blog: !!editArticle.channel.is_blog,
+      };
+    }
+    return null;
+  });
   const blogs = $derived(channels.filter((c) => c.is_blog));
   const groups = $derived(channels.filter((c) => !c.is_blog));
 
@@ -200,12 +216,21 @@
     }
   }
 
+  const effectiveRepost = $derived.by((): FeedArticle | null => {
+    if (isSuggestion) return null;
+    if (isEditMode) {
+      const nested = editArticle?.repost_article;
+      return nested && Number(nested.id) > 0 ? nested : null;
+    }
+    return repostArticle && Number(repostArticle.id) > 0 ? repostArticle : null;
+  });
+
   const canGoPreview = $derived(
     !mediaBusy && (
       (editView === 'code'
         ? codeViewCanPreview()
         : editorHasContent(blocks))
-      || (!isSuggestion && !!repostArticle && Number(repostArticle.id) > 0)
+      || (!isSuggestion && !!effectiveRepost && Number(effectiveRepost.id) > 0)
     ),
   );
   const canPublish = $derived(
@@ -218,11 +243,13 @@
   const headerTitle = $derived(
     isSuggestion
       ? (step === 'preview' ? 'Предпросмотр предложения' : 'Предложение записи')
-      : repostArticle
-        ? 'Репост'
-        : step === 'preview'
-          ? 'Предпросмотр'
-          : 'Новая запись',
+      : isEditMode
+        ? (step === 'preview' ? 'Предпросмотр' : 'Редактирование')
+        : repostArticle
+          ? 'Репост'
+          : step === 'preview'
+            ? 'Предпросмотр'
+            : 'Новая запись',
   );
   function wantSigned(): boolean {
     if (selectedChannel?.is_blog) return false;
@@ -234,10 +261,10 @@
     const signed = wantSigned();
     const payload = buildArticlePayload(blocks, {
       isSigned: signed,
-      repostArticleId: isSuggestion ? null : (Number(repostArticle?.id ?? 0) || null),
+      repostArticleId: isSuggestion ? null : (Number(effectiveRepost?.id ?? 0) || null),
     });
     const article: FeedArticle = {
-      id: 0,
+      id: Number(editArticle?.id ?? 0),
       channel: selectedChannel
         ? {
             id: selectedChannel.id,
@@ -256,8 +283,8 @@
       payload: payload.payload,
       creation_date: Math.floor(Date.now() / 1000),
       is_signed: signed,
-      contains_repost_article: !!repostArticle && !isSuggestion,
-      repost_article: !isSuggestion ? (repostArticle ?? null) : null,
+      contains_repost_article: !!effectiveRepost && !isSuggestion,
+      repost_article: !isSuggestion ? (effectiveRepost ?? null) : null,
       comment_count: 0,
       vote_count: 0,
       repost_count: 0,
@@ -362,26 +389,36 @@
     focusedItem = null;
     mediaToken = '';
     mediaTokenChannelId = null;
-    const source = initialDraft;
-    activeDraftId = source?.id || draftId || newDraftId();
-    const preferred = source?.channelId
-      ?? (initialChannelId != null
-        && (isSuggestion || channels.some((c) => c.id === initialChannelId))
-      ? initialChannelId
-        : (channels[0]?.id ?? null));
+    const editing = isEditMode ? editArticle : null;
+    const source = editing ? null : initialDraft;
+    activeDraftId = editing
+      ? ''
+      : (source?.id || draftId || newDraftId());
+    const editChannelId = Number(editing?.channel?.id ?? 0);
+    const preferred = editing && editChannelId > 0
+      ? editChannelId
+      : (source?.channelId
+        ?? (initialChannelId != null
+          && (isSuggestion || channels.some((c) => c.id === initialChannelId))
+          ? initialChannelId
+          : (channels[0]?.id ?? null)));
     channelId = preferred;
     const preferredChannel = channels.find((c) => c.id === preferred);
     if (preferredChannel?.is_blog) {
       isSigned = false;
     } else if (isSuggestion) {
       isSigned = source?.isSigned ?? false;
+    } else if (editing) {
+      isSigned = !!editing.is_signed;
     } else {
       isSigned = source?.isSigned ?? true;
     }
     void loadSelfProfile();
-    const start = source?.blocks?.length
-      ? cloneEditorBlocks(source.blocks)
-      : [emptyParagraph()];
+    const start = editing
+      ? editorBlocksFromPayload(editing.payload)
+      : (source?.blocks?.length
+        ? cloneEditorBlocks(source.blocks)
+        : [emptyParagraph()]);
     blocks = start;
     history = [cloneEditorBlocks(start)];
     historyIndex = 0;
@@ -465,7 +502,7 @@
   }
 
   function persistDraft(): void {
-    if (!activeDraftId || publishBusy) return;
+    if (isEditMode || !activeDraftId || publishBusy) return;
     if (editView === 'code') {
       try {
         const next = parseEditorPayloadJson(codeText);
@@ -579,13 +616,15 @@
     if (!channelId) throw new Error('Сначала выберите канал или блог');
     const api = window.anixApi?.channel?.editorAvailable;
     if (!api) throw new Error('API редактора недоступно');
-    const res = await api(channelId, { isSuggestion, isEditMode: false });
+    const res = await api(channelId, { isSuggestion, isEditMode });
     const token = String(res?.media_upload_token ?? '').trim();
     if (!token) {
       throw new Error(
         isSuggestion
           ? 'Нет прав на загрузку медиа для предложения'
-          : 'Нет прав на загрузку медиа в этот канал',
+          : isEditMode
+            ? 'Нет прав на загрузку медиа при редактировании'
+            : 'Нет прав на загрузку медиа в этот канал',
       );
     }
     mediaToken = token;
@@ -1401,7 +1440,7 @@
     }
     const payload = buildArticlePayload(blocks, {
       isSigned: wantSigned(),
-      repostArticleId: isSuggestion ? null : (Number(repostArticle?.id ?? 0) || null),
+      repostArticleId: isSuggestion ? null : (Number(effectiveRepost?.id ?? 0) || null),
     });
     if (payload.payload.block_count < 1 && !payload.repost_article_id) {
       errorMsg = 'Запись пустая';
@@ -1413,13 +1452,22 @@
 
   async function publish() {
     if (!canPublish || !channelId) return;
+    const editId = Number(editArticle?.id ?? 0);
     const api = isSuggestion
       ? window.anixApi?.article?.createSuggestion
-      : window.anixApi?.article?.create;
+      : isEditMode
+        ? window.anixApi?.article?.edit
+        : window.anixApi?.article?.create;
     if (!api) {
       errorMsg = isSuggestion
         ? 'API предложений недоступно'
-        : 'API публикации недоступно';
+        : isEditMode
+          ? 'API редактирования недоступно'
+          : 'API публикации недоступно';
+      return;
+    }
+    if (isEditMode && !(editId > 0)) {
+      errorMsg = 'Некорректная запись для редактирования';
       return;
     }
     publishBusy = true;
@@ -1428,27 +1476,32 @@
       const signed = wantSigned();
       const payload = buildArticlePayload(blocks, {
         isSigned: signed,
-        repostArticleId: isSuggestion ? null : (Number(repostArticle?.id ?? 0) || null),
+        repostArticleId: isSuggestion ? null : (Number(effectiveRepost?.id ?? 0) || null),
       });
       if (payload.payload.block_count < 1 && !payload.repost_article_id) {
         errorMsg = 'Запись пустая';
         return;
       }
       const res = isSuggestion
-        ? await api(channelId, {
+        ? await window.anixApi!.article!.createSuggestion!(channelId, {
             is_signed: signed,
             payload: payload.payload,
           })
-        : await api(channelId, {
-            ...payload,
-            is_signed: signed,
-          });
+        : isEditMode
+          ? await window.anixApi!.article!.edit!(editId, {
+              ...payload,
+              is_signed: signed,
+            })
+          : await window.anixApi!.article!.create!(channelId, {
+              ...payload,
+              is_signed: signed,
+            });
       const code = Number(res?.code ?? 0);
       if (code !== 0) {
         errorMsg = publishError(code);
         return;
       }
-      const articleId = Number(res?.article?.id ?? 0);
+      const articleId = Number(res?.article?.id ?? editId ?? 0);
       const draftToRemove = activeDraftId;
       activeDraftId = '';
       if (draftToRemove) deleteFeedDraft(draftToRemove);
@@ -1456,7 +1509,9 @@
       showToast(
         isSuggestion
           ? 'Предложение записи успешно отправлено!'
-          : 'Запись опубликована',
+          : isEditMode
+            ? 'Запись сохранена'
+            : 'Запись опубликована',
         'ok',
       );
       onPublished?.(articleId, channelId);
@@ -1483,17 +1538,19 @@
       }
     }
     switch (code) {
-      case 2: return 'Некорректный репост';
+      case 2: return isEditMode ? 'Некорректный репост' : 'Некорректный репост';
       case 3: return 'Некорректное содержимое записи';
       case 4: return 'Некорректные теги';
-      case 5: return 'Публикация временно недоступна';
+      case 5: return isEditMode ? 'Редактирование временно недоступно' : 'Публикация временно недоступна';
       case 6: return 'Достигнут лимит записей';
       case 7: return 'Канал не найден';
-      case 8: return 'Нет прав на публикацию в этот канал';
+      case 8: return isEditMode ? 'Нет прав на редактирование этой записи' : 'Нет прав на публикацию в этот канал';
       case 9: return 'Создатель канала заблокирован';
       case 10: return 'Канал заблокирован';
       case 13: return 'Сначала создайте блог';
-      default: return `Не удалось опубликовать (код ${code})`;
+      default: return isEditMode
+        ? `Не удалось сохранить (код ${code})`
+        : `Не удалось опубликовать (код ${code})`;
     }
   }
 
@@ -1669,9 +1726,9 @@
               class="feed-composer__avatar-btn"
               aria-label={isSuggestion ? 'Канал предложения' : 'Выбрать канал или блог'}
               aria-expanded={channelOpen}
-              disabled={channels.length === 0 || isSuggestion}
+              disabled={channels.length === 0 || isSuggestion || isEditMode}
               onclick={() => {
-                if (isSuggestion) return;
+                if (isSuggestion || isEditMode) return;
                 channelOpen = !channelOpen;
                 addOpen = false;
                 moreOpen = false;
@@ -1719,8 +1776,8 @@
               variant="primary"
               size="sm"
               label={publishBusy
-                ? (isSuggestion ? 'Отправка…' : 'Публикация…')
-                : (isSuggestion ? 'Предложить' : 'Опубликовать')}
+                ? (isSuggestion ? 'Отправка…' : isEditMode ? 'Сохранение…' : 'Публикация…')
+                : (isSuggestion ? 'Предложить' : isEditMode ? 'Сохранить' : 'Опубликовать')}
               disabled={!canPublish}
               onclick={() => void publish()}
             />
@@ -1728,7 +1785,7 @@
         </div>
       </header>
 
-      {#if step === 'edit' && channels.length > 0}
+      {#if step === 'edit' && (channels.length > 0 || isEditMode)}
         <div class="feed-composer__ribbon" role="toolbar" aria-label="Форматирование записи">
           {#if editView === 'block'}
           <div class="feed-composer__ribbon-group">
@@ -1943,7 +2000,7 @@
         </div>
       {/if}
 
-      {#if channelOpen && !isSuggestion && channels.length > 0}
+      {#if channelOpen && !isSuggestion && !isEditMode && channels.length > 0}
         <div class="feed-composer__picker" role="listbox" aria-label="Куда публиковать">
           {#if blogs.length}
             <p class="feed-composer__picker-label">Блоги</p>
@@ -1988,7 +2045,7 @@
         </div>
       {/if}
 
-        {#if channels.length === 0}
+        {#if channels.length === 0 && !isEditMode}
         <div class="feed-composer__empty">
           <p>
             {#if isSuggestion}
@@ -2008,8 +2065,8 @@
         </div>
       {:else if step === 'edit'}
         <UiV2ScrollArea class="feed-composer__scroll" padding="1.1rem 1.35rem 1.75rem">
-          {#if repostArticle && !isSuggestion}
-            <p class="feed-composer__repost-hint">Репост записи #{repostArticle.id}</p>
+          {#if effectiveRepost && !isSuggestion}
+            <p class="feed-composer__repost-hint">Репост записи #{effectiveRepost.id}</p>
           {/if}
           {#if editView === 'code'}
             <label class="feed-composer__code-label" for="feed-composer-code">Код записи</label>
@@ -2277,8 +2334,8 @@
                 <span>Подписать запись</span>
               </label>
             {/if}
-            {#if repostArticle && !isSuggestion}
-              <p class="feed-composer__repost-hint">Будет опубликован как репост записи #{repostArticle.id}</p>
+            {#if effectiveRepost && !isSuggestion}
+              <p class="feed-composer__repost-hint">Будет опубликован как репост записи #{effectiveRepost.id}</p>
             {/if}
             </div>
           {#if previewPost}

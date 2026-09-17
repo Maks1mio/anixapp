@@ -186,6 +186,19 @@ export interface AnixApi {
     getCollectionComments: (profileId: number, page?: number, sort?: number) => Promise<{ content?: Record<string, unknown>[] }>;
     getArticleComments: (profileId: number, page?: number, sort?: number) => Promise<{ content?: Record<string, unknown>[] }>;
     getFavoriteVideos: (profileId: number, page?: number) => Promise<{ content?: Record<string, unknown>[] }>;
+    blockList: (page?: number) => Promise<{
+      content?: Array<{
+        id?: number;
+        login?: string;
+        avatar?: string | null;
+        is_online?: boolean;
+        badge?: unknown;
+      }>;
+      total_page_count?: number;
+      total_count?: number;
+    }>;
+    blockAdd: (profileId: number) => Promise<{ code?: number }>;
+    blockRemove: (profileId: number) => Promise<{ code?: number }>;
   };
 
   release: {
@@ -387,6 +400,18 @@ export interface AnixApi {
     unsubscribe: (channelId: number) => Promise<{ code?: number }>;
     mute: (channelId: number) => Promise<{ code?: number }>;
     unmute: (channelId: number) => Promise<{ code?: number }>;
+    mutes: (page?: number) => Promise<{
+      content?: Array<{
+        id: number;
+        title?: string;
+        avatar?: string | null;
+        is_blog?: boolean;
+        is_verified?: boolean;
+        subscriber_count?: number;
+      }>;
+      total_page_count?: number;
+      total_count?: number;
+    }>;
     subscriptions: (
       page?: number,
       opts?: { sort?: number },
@@ -477,6 +502,24 @@ export interface AnixApi {
     vote: (id: number, vote: number) => Promise<{ code?: number }>;
     create: (
       channelId: number,
+      body: {
+        is_signed: boolean;
+        repost_article_id: number | null;
+        payload: {
+          time: number;
+          version: string;
+          blocks: Array<{
+            id: string;
+            type: string;
+            name: string;
+            data: Record<string, unknown>;
+          }>;
+          block_count: number;
+        };
+      },
+    ) => Promise<{ code?: number; article?: { id?: number } }>;
+    edit: (
+      articleId: number,
       body: {
         is_signed: boolean;
         repost_article_id: number | null;

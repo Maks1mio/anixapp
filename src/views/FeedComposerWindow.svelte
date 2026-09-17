@@ -13,6 +13,7 @@
     channelId?: number | null;
     draftId?: string | null;
     repostArticle?: FeedArticle | null;
+    editArticle?: FeedArticle | null;
     channels?: FeedComposerChannel[];
     isSuggestion?: boolean;
   };
@@ -22,9 +23,20 @@
   let draft = $state<FeedArticleDraft | null>(null);
   let draftId = $state<string | null>(null);
   let repostArticle = $state<FeedArticle | null>(null);
+  let editArticle = $state<FeedArticle | null>(null);
   let isSuggestion = $state(false);
   let ready = $state(false);
   let createBusy = $state(false);
+
+  const windowTitle = $derived(
+    isSuggestion
+      ? 'Предложение записи'
+      : editArticle && Number(editArticle.id) > 0
+        ? 'Редактирование'
+        : repostArticle && Number(repostArticle.id) > 0
+          ? 'Репост'
+          : 'Новая запись',
+  );
 
   function normalizeChannels(raw: unknown): FeedComposerChannel[] {
     if (!Array.isArray(raw)) return [];
@@ -49,13 +61,19 @@
     if (fromPayload.length) channels = fromPayload;
     channelId = Number(next.channelId) > 0 ? Number(next.channelId) : channelId;
     draftId = typeof next.draftId === 'string' && next.draftId ? next.draftId : null;
-    repostArticle = !isSuggestion && next.repostArticle && Number(next.repostArticle.id) > 0
+    editArticle = !isSuggestion && next.editArticle && Number(next.editArticle.id) > 0
+      ? next.editArticle
+      : null;
+    repostArticle = !isSuggestion && !editArticle && next.repostArticle && Number(next.repostArticle.id) > 0
       ? next.repostArticle
       : null;
-    draft = draftId ? getFeedDraft(draftId) : null;
+    draft = editArticle ? null : (draftId ? getFeedDraft(draftId) : null);
     if (draft && !(channelId && channelId > 0)) channelId = draft.channelId;
-    if (draft?.repostArticle && !repostArticle && !isSuggestion) {
+    if (draft?.repostArticle && !repostArticle && !isSuggestion && !editArticle) {
       repostArticle = draft.repostArticle;
+    }
+    if (editArticle?.channel?.id && !(channelId && channelId > 0)) {
+      channelId = Number(editArticle.channel.id);
     }
     if (!(channelId && channelId > 0)) channelId = channels[0]?.id ?? null;
   }
@@ -100,7 +118,7 @@
   }
 
   async function onCreateBlog() {
-    if (isSuggestion) return;
+    if (isSuggestion || editArticle) return;
     const api = window.anixApi?.channel?.createBlog;
     if (!api) return;
     createBusy = true;
@@ -136,7 +154,7 @@
       <span class="titlebar__logo" aria-hidden="true">
         <img src="logo/512x512.png" alt="" class="titlebar__logo-img" />
       </span>
-      <span class="titlebar__title">{isSuggestion ? 'Предложение записи' : 'Новая запись'}</span>
+      <span class="titlebar__title">{windowTitle}</span>
     </div>
     <div class="titlebar__space" aria-hidden="true"></div>
     <div class="titlebar__controls">
@@ -168,7 +186,7 @@
   </header>
 
   {#if ready}
-    {#key `${draftId ?? 'new'}:${repostArticle?.id ?? 0}:${isSuggestion ? 1 : 0}`}
+    {#key `${draftId ?? 'new'}:${repostArticle?.id ?? 0}:${editArticle?.id ?? 0}:${isSuggestion ? 1 : 0}`}
       <FeedArticleComposer
         open={true}
         mode="window"
@@ -176,6 +194,7 @@
         initialChannelId={channelId}
         {createBusy}
         {repostArticle}
+        {editArticle}
         {draftId}
         initialDraft={draft}
         {isSuggestion}

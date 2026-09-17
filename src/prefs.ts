@@ -147,3 +147,18 @@ export function setProfilePanelWidthPx(widthPx: number): number {
   window.localStorage.setItem(PROFILE_PANEL_WIDTH_KEY, String(next));
   return next;
 }
+
+const SCHEDULE_INFO_DISMISSED_KEY = 'anixapp.scheduleInfoDismissed';
+
+export function getScheduleInfoDismissed(): boolean {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+    return false;
+  }
+  return window.localStorage.getItem(SCHEDULE_INFO_DISMISSED_KEY) === '1';
+}
+
+export function setScheduleInfoDismissed(dismissed: boolean): void {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return;
+  if (dismissed) window.localStorage.setItem(SCHEDULE_INFO_DISMISSED_KEY, '1');
+  else window.localStorage.removeItem(SCHEDULE_INFO_DISMISSED_KEY);
+}

@@ -594,6 +594,8 @@ $titlebar-h: 40px;
 }
 
 .sidebar-schedule__head {
+  position: relative;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -647,6 +649,7 @@ $titlebar-h: 40px;
   position: absolute;
   top: 0.4rem;
   right: 0.4rem;
+  z-index: 3;
   display: inline-flex;
   padding: 0.2rem;
   border: none;

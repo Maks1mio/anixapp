@@ -7,7 +7,7 @@
   import FeedComposePrompt from '../components/feed/FeedComposePrompt.svelte';
   import UiV2FeedPostSkeleton from '../components/uikit-v2/UiV2FeedPostSkeleton.svelte';
   import FeedArticleComposer from '../components/feed/FeedArticleComposer.svelte';
-  import { openFeedComposerWindow } from '../utils/feed-composer-open';
+  import { openFeedComposerWindow, resolveFeedArticleForEdit } from '../utils/feed-composer-open';
   import FeedDirectoryModal from '../components/feed/FeedDirectoryModal.svelte';
   import UserAvatar from '../components/UserAvatar.svelte';
   import { navigate } from '../stores/navigation';
@@ -65,6 +65,7 @@
   let selectedArticleId = $state<number | null>(null);
   let composerOpen = $state(false);
   let composerRepost = $state<FeedArticle | null>(null);
+  let composerEdit = $state<FeedArticle | null>(null);
   let canWrite = $state(false);
   let authed = $state(false);
   let selfAvatarUrl = $state('');
@@ -130,21 +131,36 @@
     }
   }
 
-  async function openComposer(repost?: FeedArticle | null) {
+  async function openComposer(
+    repost?: FeedArticle | null,
+    opts?: { editArticle?: FeedArticle | null },
+  ) {
     if (!authed && !requireAuth()) return;
+    let editArticle = opts?.editArticle ?? null;
+    if (editArticle) {
+      editArticle = await resolveFeedArticleForEdit(editArticle);
+    }
+    const channelPayload = channel
+      ? [{ id: channel.id, title, avatar: channel.avatar, is_blog: channel.is_blog }]
+      : [];
     const opened = await openFeedComposerWindow({
-      channelId: id,
-      repostArticle: repost ?? null,
-      channels: channel
-        ? [{ id: channel.id, title, avatar: channel.avatar, is_blog: channel.is_blog }]
-        : [],
+      channelId: editArticle?.channel?.id ?? id,
+      repostArticle: editArticle ? null : (repost ?? null),
+      editArticle,
+      channels: channelPayload,
     });
     if (opened) {
       composerOpen = false;
       composerRepost = null;
+      composerEdit = null;
       return;
     }
-    composerRepost = repost ?? null;
+    if (window.electron?.openComposerWindow) {
+      showToast('Не удалось открыть окно редактора', 'err');
+      return;
+    }
+    composerEdit = editArticle;
+    composerRepost = editArticle ? null : (repost ?? null);
     composerOpen = true;
   }
 
@@ -430,6 +446,7 @@
                 articles = articles.map((a) => (a.id === next.id ? next : a));
               }}
               onRepost={(next) => void openComposer(next)}
+              onEdit={(next) => void openComposer(null, { editArticle: next })}
             />
           {/each}
         </div>
@@ -547,15 +564,18 @@
   channels={channel
     ? [{ id: channel.id, title: title, avatar: channel.avatar, is_blog: channel.is_blog }]
     : []}
-  initialChannelId={id}
+  initialChannelId={composerEdit?.channel?.id ?? id}
   repostArticle={composerRepost}
+  editArticle={composerEdit}
   onClose={() => {
     composerOpen = false;
     composerRepost = null;
+    composerEdit = null;
   }}
   onPublished={() => {
     composerOpen = false;
     composerRepost = null;
+    composerEdit = null;
     void loadArticles(0, false);
   }}
 />

@@ -342,6 +342,7 @@ declare global {
         channelId?: number | null;
         draftId?: string | null;
         repostArticle?: unknown;
+        editArticle?: unknown;
         isSuggestion?: boolean;
         channels?: Array<{
           id: number;
@@ -354,6 +355,7 @@ declare global {
         channelId?: number | null;
         draftId?: string | null;
         repostArticle?: unknown;
+        editArticle?: unknown;
         isSuggestion?: boolean;
         channels?: Array<{
           id: number;

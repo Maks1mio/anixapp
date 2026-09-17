@@ -23,6 +23,9 @@ export type ProfileEnforcementItem = {
   entityId: number | null;
   entity: Record<string, unknown> | null;
   changes: Array<{ type: string; new_value?: unknown }>;
+  appealType: string;
+  appealStatus: string;
+  appealExpiresTimestamp: number | null;
   raw: Record<string, unknown>;
 };
 
@@ -131,18 +134,114 @@ export function normalizeEnforcement(raw: Record<string, unknown>): ProfileEnfor
     raw.entity && typeof raw.entity === 'object' && !Array.isArray(raw.entity)
       ? (raw.entity as Record<string, unknown>)
       : null;
+  const appealExpires = raw.appeal_expires_timestamp ?? raw.appealExpiresTimestamp;
   return {
     id: Number(raw.id ?? 0),
     type: String(raw.type ?? ''),
     reason: typeof raw.reason === 'string' ? raw.reason : raw.reason == null ? null : String(raw.reason),
-    creationTimestamp: asTs(raw.creation_timestamp),
-    expirationTimestamp: raw.expiration_timestamp != null ? asTs(raw.expiration_timestamp) : null,
+    creationTimestamp: asTs(raw.creation_timestamp ?? raw.creationTimestamp),
+    expirationTimestamp: raw.expiration_timestamp != null || raw.expirationTimestamp != null
+      ? asTs(raw.expiration_timestamp ?? raw.expirationTimestamp)
+      : null,
     isRevoked: !!(raw.is_revoked ?? raw.isRevoked),
-    entityId: raw.entity_id != null ? Number(raw.entity_id) : null,
+    entityId: raw.entity_id != null || raw.entityId != null
+      ? Number(raw.entity_id ?? raw.entityId)
+      : null,
     entity,
     changes,
+    appealType: String(raw.appeal_type ?? raw.appealType ?? '').toUpperCase(),
+    appealStatus: String(raw.appeal_status ?? raw.appealStatus ?? '').toUpperCase(),
+    appealExpiresTimestamp: appealExpires != null ? asTs(appealExpires) : null,
     raw,
   };
+}
+
+/** Дедлайн модерации: «24 сент. 00:00» */
+export function formatEnforcementDeadline(timestamp: number): string {
+  if (!timestamp) return '';
+  const ms = timestamp > 1e12 ? timestamp : timestamp * 1000;
+  const d = new Date(ms);
+  const month = d.toLocaleDateString('ru-RU', { month: 'short' }).replace(/\.$/, '');
+  const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  return `${d.getDate()} ${month}. ${time}`;
+}
+
+/** Нужно исправить контент до дедлайна (Android AppealType.ADJUSTMENT). */
+export function isAdjustmentRequired(item: ProfileEnforcementItem): boolean {
+  if (item.isRevoked) return false;
+  if (item.appealType !== 'ADJUSTMENT') return false;
+  if (item.appealStatus !== 'NOT_SUBMITTED') return false;
+  return isActiveExpire(item.appealExpiresTimestamp ?? 0);
+}
+
+export function enforcementTargetPath(item: ProfileEnforcementItem): string | null {
+  const entity = item.entity;
+  const nestedArticleId = (() => {
+    if (!entity) return null;
+    const direct = Number(entity.article_id ?? entity.articleId ?? 0);
+    if (direct > 0) return direct;
+    const article = entity.article;
+    if (article && typeof article === 'object') {
+      const id = Number((article as { id?: unknown }).id ?? 0);
+      if (id > 0) return id;
+    }
+    return null;
+  })();
+
+  switch (item.type) {
+    case 'article_edit': {
+      const id = item.entityId ?? nestedArticleId;
+      return id && id > 0 ? `/article/${id}` : null;
+    }
+    case 'article_comment_edit': {
+      const id = nestedArticleId ?? item.entityId;
+      return id && id > 0 ? `/article/${id}` : null;
+    }
+    case 'collection_edit':
+    case 'collection_comment_edit': {
+      const collectionId = (() => {
+        if (!entity) return item.entityId;
+        const direct = Number(entity.collection_id ?? entity.collectionId ?? 0);
+        if (direct > 0) return direct;
+        const collection = entity.collection;
+        if (collection && typeof collection === 'object') {
+          const id = Number((collection as { id?: unknown }).id ?? 0);
+          if (id > 0) return id;
+        }
+        return item.entityId;
+      })();
+      return collectionId && collectionId > 0 ? `/collection/${collectionId}` : null;
+    }
+    case 'release_comment_edit': {
+      const releaseId = (() => {
+        if (!entity) return item.entityId;
+        const direct = Number(entity.release_id ?? entity.releaseId ?? 0);
+        if (direct > 0) return direct;
+        const release = entity.release;
+        if (release && typeof release === 'object') {
+          const id = Number((release as { id?: unknown }).id ?? 0);
+          if (id > 0) return id;
+        }
+        return item.entityId;
+      })();
+      return releaseId && releaseId > 0 ? `/release/${releaseId}` : null;
+    }
+    default:
+      return null;
+  }
+}
+
+export function enforcementGoTargetLabel(item: ProfileEnforcementItem): string {
+  switch (item.type) {
+    case 'collection_edit':
+      return 'К коллекции';
+    case 'article_comment_edit':
+    case 'collection_comment_edit':
+    case 'release_comment_edit':
+      return 'К комменту';
+    default:
+      return 'К записи';
+  }
 }
 
 function articleAction(item: ProfileEnforcementItem): 'deleted' | 'restored' | 'edited' {
@@ -161,6 +260,25 @@ function entityRef(item: ProfileEnforcementItem): string {
 
 export function enforcementListTitle(item: ProfileEnforcementItem): string {
   const ref = entityRef(item);
+  if (isAdjustmentRequired(item)) {
+    const until = item.appealExpiresTimestamp
+      ? ` до ${formatEnforcementDeadline(item.appealExpiresTimestamp)}`
+      : '';
+    switch (item.type) {
+      case 'article_edit':
+        return `Требуется действие для записи ${ref}${until}`.trim();
+      case 'collection_edit':
+        return `Требуется действие для коллекции ${ref}${until}`.trim();
+      case 'article_comment_edit':
+        return `Требуется действие для комментария к записи ${ref}${until}`.trim();
+      case 'collection_comment_edit':
+        return `Требуется действие для комментария к коллекции ${ref}${until}`.trim();
+      case 'release_comment_edit':
+        return `Требуется действие для комментария к релизу ${ref}${until}`.trim();
+      default:
+        return `Требуется действие ${ref}${until}`.trim();
+    }
+  }
   switch (item.type) {
     case 'article_edit': {
       const a = articleAction(item);
@@ -191,6 +309,24 @@ export function enforcementListTitle(item: ProfileEnforcementItem): string {
     default:
       return item.reason?.trim() || 'Модерационное действие';
   }
+}
+
+export function enforcementListHint(item: ProfileEnforcementItem): string {
+  if (isAdjustmentRequired(item) && item.appealExpiresTimestamp) {
+    const until = formatEnforcementDeadline(item.appealExpiresTimestamp);
+    if (item.type === 'collection_edit') {
+      return `Внесите исправление до ${until}, иначе коллекция будет удалена безвозвратно`;
+    }
+    if (
+      item.type === 'article_comment_edit'
+      || item.type === 'collection_comment_edit'
+      || item.type === 'release_comment_edit'
+    ) {
+      return `Внесите исправление до ${until}, иначе комментарий будет удалён безвозвратно`;
+    }
+    return `Внесите исправление до ${until}, иначе запись будет удалена безвозвратно`;
+  }
+  return item.reason?.trim() || '';
 }
 
 export function enforcementTimeLabel(item: ProfileEnforcementItem): string {
@@ -240,6 +376,7 @@ export function extractChannelLogin(entity: Record<string, unknown> | null): str
 }
 
 export function enforcementDetailTitle(item: ProfileEnforcementItem): string {
+  if (isAdjustmentRequired(item)) return 'Требуется действие';
   if (item.type === 'article_edit') {
     const a = articleAction(item);
     if (a === 'deleted') return 'Удалена запись';
@@ -253,10 +390,30 @@ export function enforcementDetailBody(item: ProfileEnforcementItem): {
   lead: string;
   contentLabel?: string;
   content?: string;
+  moderatorLabel?: string;
+  moderatorMessage?: string;
 } {
   const when = item.creationTimestamp ? formatHistoryViewTime(item.creationTimestamp) : 'недавно';
   const channel = extractChannelLogin(item.entity) || 'канале';
   const text = extractArticleText(item.entity);
+
+  if (isAdjustmentRequired(item)) {
+    const deadline = item.appealExpiresTimestamp
+      ? formatEnforcementDeadline(item.appealExpiresTimestamp)
+      : 'указанного срока';
+    if (item.type === 'collection_edit') {
+      return {
+        lead: `Ваша коллекция нарушает правила сообщества. Требуется принять действия до ${deadline}, иначе коллекция будет удалена навсегда.`,
+        moderatorLabel: item.reason ? 'Сообщение модератора:' : undefined,
+        moderatorMessage: item.reason || undefined,
+      };
+    }
+    return {
+      lead: `Ваша запись на канале «${channel}» нарушает правила сообщества. Требуется принять действия до ${deadline}, иначе запись будет удалена навсегда.`,
+      moderatorLabel: item.reason ? 'Сообщение модератора:' : undefined,
+      moderatorMessage: item.reason || undefined,
+    };
+  }
 
   if (item.type === 'article_edit') {
     const a = articleAction(item);

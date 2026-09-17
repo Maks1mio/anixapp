@@ -435,6 +435,9 @@ contextBridge.exposeInMainWorld('anixApi', {
       ipcRenderer.invoke('anix:profileArticleComments', profileId, page, sort),
     getFavoriteVideos: (profileId, page = 0) =>
       ipcRenderer.invoke('anix:profileFavoriteVideos', profileId, page),
+    blockList: (page = 0) => ipcRenderer.invoke('anix:profileBlockList', page),
+    blockAdd: (profileId) => ipcRenderer.invoke('anix:profileBlockListAdd', profileId),
+    blockRemove: (profileId) => ipcRenderer.invoke('anix:profileBlockListRemove', profileId),
   },
 
   release: {
@@ -543,6 +546,7 @@ contextBridge.exposeInMainWorld('anixApi', {
     unsubscribe: (channelId) => ipcRenderer.invoke('anix:channelUnsubscribe', channelId),
     mute: (channelId) => ipcRenderer.invoke('anix:channelMute', channelId),
     unmute: (channelId) => ipcRenderer.invoke('anix:channelUnmute', channelId),
+    mutes: (page = 0) => ipcRenderer.invoke('anix:channelMutes', page),
     subscriptions: (page = 0, opts) => ipcRenderer.invoke('anix:channelSubscriptions', page, opts ?? {}),
     all: (page = 0, opts) => ipcRenderer.invoke('anix:channelAll', page, opts ?? {}),
     recommendations: (page = 0, opts) =>
@@ -579,6 +583,7 @@ contextBridge.exposeInMainWorld('anixApi', {
     info: (id) => ipcRenderer.invoke('anix:articleById', id),
     vote: (id, vote) => ipcRenderer.invoke('anix:articleVote', id, vote),
     create: (channelId, body) => ipcRenderer.invoke('anix:articleCreate', channelId, body),
+    edit: (articleId, body) => ipcRenderer.invoke('anix:articleEdit', articleId, body),
     createSuggestion: (channelId, body) =>
       ipcRenderer.invoke('anix:articleSuggestionCreate', channelId, body),
     suggestions: (page = 0, opts) =>

@@ -193,9 +193,21 @@ ipcMain.handle('admin:openWindow', () => {
 
 // ——— Article composer window ———
 
+function composerWindowTitle(payload) {
+  if (payload?.isSuggestion) return 'AnixApp — Предложение записи';
+  if (payload?.editArticle?.id) return 'AnixApp — Редактирование';
+  if (payload?.repostArticle?.id) return 'AnixApp — Репост';
+  return 'AnixApp — Новая запись';
+}
+
 function createComposerWindow(payload) {
   state.composerPayload = payload ?? null;
   if (state.composerWindow && !state.composerWindow.isDestroyed()) {
+    try {
+      state.composerWindow.setTitle(composerWindowTitle(state.composerPayload));
+    } catch {
+      /* ignore */
+    }
     state.composerWindow.webContents.send('composer:setPayload', state.composerPayload);
     state.composerWindow.focus();
     return;
@@ -209,7 +221,7 @@ function createComposerWindow(payload) {
     minHeight: 560,
     frame: false,
     titleBarStyle: 'hidden',
-    title: 'AnixApp — Новая запись',
+    title: composerWindowTitle(state.composerPayload),
     backgroundColor: '#121212',
     show: false,
     resizable: true,

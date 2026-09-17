@@ -57,7 +57,7 @@
   import FeedArticleComposer from '../components/feed/FeedArticleComposer.svelte';
   import FeedSuggestionsNav from '../components/feed/FeedSuggestionsNav.svelte';
   import FeedSuggestionsModal from '../components/feed/FeedSuggestionsModal.svelte';
-  import { openFeedComposerWindow } from '../utils/feed-composer-open';
+  import { openFeedComposerWindow, resolveFeedArticleForEdit } from '../utils/feed-composer-open';
   import {
     deleteFeedDraft,
     formatDraftTime,
@@ -144,6 +144,7 @@
   let composerOpen = $state(false);
   let composerChannelId = $state<number | null>(null);
   let composerRepost = $state<FeedArticle | null>(null);
+  let composerEdit = $state<FeedArticle | null>(null);
   let composerDraftId = $state<string | null>(null);
   let composerDraft = $state<FeedArticleDraft | null>(null);
   let composerIsSuggestion = $state(false);
@@ -1576,14 +1577,19 @@
     preferredChannelId?: number | null,
     repost?: FeedArticle | null,
     draftId?: string | null,
-    opts?: { isSuggestion?: boolean },
+    opts?: { isSuggestion?: boolean; editArticle?: FeedArticle | null },
   ) {
     if (!authed && !requireAuth()) return;
     const suggestion = !!opts?.isSuggestion;
+    let editArticle = opts?.editArticle ?? null;
+    if (editArticle) {
+      editArticle = await resolveFeedArticleForEdit(editArticle);
+    }
     composerIsSuggestion = suggestion;
-    if (!suggestion) await ensureManagedLoaded();
+    if (!suggestion && !editArticle) await ensureManagedLoaded();
 
     let targetId = preferredChannelId
+      ?? (editArticle ? Number(editArticle.channel?.id ?? 0) || null : null)
       ?? channelFilterId
       ?? (managed[0]?.id ?? null);
 
@@ -1605,12 +1611,28 @@
         avatar: ch.avatar,
         is_blog: false,
       }];
+    } else if (editArticle?.channel?.id) {
+      const chId = Number(editArticle.channel.id);
+      const existing = channelsForComposer.find((c) => c.id === chId);
+      if (!existing) {
+        channelsForComposer = [
+          {
+            id: chId,
+            title: editArticle.channel.title || `Канал #${chId}`,
+            avatar: editArticle.channel.avatar,
+            is_blog: !!editArticle.channel.is_blog,
+          },
+          ...channelsForComposer,
+        ];
+      }
+      targetId = chId;
     }
 
     composerChannelId = targetId;
-    composerRepost = suggestion ? null : (repost ?? null);
-    composerDraftId = draftId ?? null;
-    composerDraft = draftId ? getFeedDraft(draftId) : null;
+    composerEdit = suggestion ? null : editArticle;
+    composerRepost = suggestion || editArticle ? null : (repost ?? null);
+    composerDraftId = editArticle ? null : (draftId ?? null);
+    composerDraft = editArticle ? null : (draftId ? getFeedDraft(draftId) : null);
     if (composerDraft && composerChannelId == null) {
       composerChannelId = composerDraft.channelId;
     }
@@ -1618,11 +1640,17 @@
       channelId: composerChannelId,
       draftId: composerDraftId,
       repostArticle: composerRepost,
+      editArticle: composerEdit,
       channels: channelsForComposer,
       isSuggestion: suggestion,
     });
     if (opened) {
       composerOpen = false;
+      return;
+    }
+    // В Electron всегда отдельное окно; overlay — только без IPC (веб).
+    if (window.electron?.openComposerWindow) {
+      showToast('Не удалось открыть окно редактора', 'err');
       return;
     }
     composerOpen = true;
@@ -1631,6 +1659,7 @@
   function closeComposer() {
     composerOpen = false;
     composerRepost = null;
+    composerEdit = null;
     composerDraftId = null;
     composerDraft = null;
     composerIsSuggestion = false;
@@ -1813,6 +1842,7 @@
         selfAvatarUrl = '';
         composerOpen = false;
         composerRepost = null;
+        composerEdit = null;
         composerDraftId = null;
         composerDraft = null;
         composerIsSuggestion = false;
@@ -2347,6 +2377,7 @@
             onArticleRemove={onArticleRemove}
             onArticleChange={onArticleChange}
             onRepost={(article) => void openComposer(null, article)}
+            onEdit={(article) => void openComposer(null, null, null, { editArticle: article })}
           />
           {#if moreBusy && moreArticles.length === 0}
             <UiV2FeedPostSkeleton count={2} />
@@ -2365,6 +2396,7 @@
                 onArticleRemove={onArticleRemove}
                 onArticleChange={onArticleChange}
                 onRepost={(article) => void openComposer(null, article)}
+            onEdit={(article) => void openComposer(null, null, null, { editArticle: article })}
               />
             {/each}
           {/if}
@@ -2461,6 +2493,7 @@
                     onArticleRemove={onArticleRemove}
                     onArticleChange={onArticleChange}
                     onRepost={(article) => void openComposer(null, article)}
+            onEdit={(article) => void openComposer(null, null, null, { editArticle: article })}
                   />
                 {/each}
               </div>
@@ -2514,6 +2547,7 @@
                         onArticleRemove={onArticleRemove}
                         onArticleChange={onArticleChange}
                         onRepost={(article) => void openComposer(null, article)}
+            onEdit={(article) => void openComposer(null, null, null, { editArticle: article })}
                       />
                     {:else if busy}
                       <UiV2FeedPostSkeleton count={1} />
@@ -2587,6 +2621,7 @@
               onArticleRemove={onArticleRemove}
               onArticleChange={onArticleChange}
               onRepost={(article) => void openComposer(null, article)}
+            onEdit={(article) => void openComposer(null, null, null, { editArticle: article })}
             />
           {/each}
         </div>
@@ -2657,6 +2692,7 @@
     initialChannelId={composerChannelId}
     createBusy={createBusy}
     repostArticle={composerRepost}
+    editArticle={composerEdit}
     draftId={composerDraftId}
     initialDraft={composerDraft}
     isSuggestion={composerIsSuggestion}

@@ -90,6 +90,9 @@ function buildWebAnixApi(): AnixApi {
         invoke('anix:profileArticleComments', profileId, page, sort),
       getFavoriteVideos: (profileId, page = 0) =>
         invoke('anix:profileFavoriteVideos', profileId, page),
+      blockList: (page = 0) => invoke('anix:profileBlockList', page),
+      blockAdd: (profileId) => invoke('anix:profileBlockListAdd', profileId),
+      blockRemove: (profileId) => invoke('anix:profileBlockListRemove', profileId),
     },
 
     release: {
@@ -198,6 +201,7 @@ function buildWebAnixApi(): AnixApi {
       unsubscribe: (channelId) => invoke('anix:channelUnsubscribe', channelId),
       mute: (channelId) => invoke('anix:channelMute', channelId),
       unmute: (channelId) => invoke('anix:channelUnmute', channelId),
+      mutes: (page = 0) => invoke('anix:channelMutes', page),
       subscriptions: (page = 0, opts) => invoke('anix:channelSubscriptions', page, opts ?? {}),
       all: (page = 0, opts) => invoke('anix:channelAll', page, opts ?? {}),
       recommendations: (page = 0, opts) =>
@@ -237,6 +241,7 @@ function buildWebAnixApi(): AnixApi {
       info: (id) => invoke('anix:articleById', id),
       vote: (id, vote) => invoke('anix:articleVote', id, vote),
       create: (channelId, body) => invoke('anix:articleCreate', channelId, body),
+      edit: (articleId, body) => invoke('anix:articleEdit', articleId, body),
       createSuggestion: (channelId, body) =>
         invoke('anix:articleSuggestionCreate', channelId, body),
       suggestions: (page = 0, opts) =>

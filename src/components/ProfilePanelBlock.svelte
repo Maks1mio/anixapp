@@ -81,6 +81,9 @@
   let socialPages = $state<ProfileSocialPages | null>(null);
   let socialBusy = $state(false);
   let moreSheetOpen = $state(false);
+  let blogChannelId = $state<number | null>(null);
+  let blogMuted = $state(false);
+  let blogMuteBusy = $state(false);
   let editStartScreen = $state<'menu' | 'status' | 'nickname' | 'social'>('menu');
 
   let badgeLottieEl = $state<HTMLElement | undefined>();
@@ -291,14 +294,42 @@
       const ch = window.anixApi?.channel?.getBlog
         ? await window.anixApi.channel.getBlog(id)
         : await window.anixApi?.channel?.info?.(id);
-      const cover =
-        (ch as { channel?: { cover?: string } } | undefined)?.channel?.cover
-        || (ch as { blogInfo?: { channel?: { cover?: string } } } | undefined)?.blogInfo?.channel?.cover
-        || null;
-      coverUrl = cover ? String(cover) : null;
+      const channel = (ch as { channel?: Record<string, unknown> } | undefined)?.channel
+        ?? (ch as { blogInfo?: { channel?: Record<string, unknown> } } | undefined)?.blogInfo?.channel
+        ?? null;
+      const cover = channel?.cover ? String(channel.cover) : null;
+      coverUrl = cover;
+      const channelId = Number(channel?.id ?? 0);
+      blogChannelId = channelId > 0 ? channelId : null;
+      blogMuted = !!channel?.is_muted;
     } catch {
       coverUrl = null;
+      blogChannelId = null;
+      blogMuted = false;
     }
+  }
+
+  async function resolveBlogChannelId(): Promise<number | null> {
+    if (blogChannelId && blogChannelId > 0) return blogChannelId;
+    const id = Number(profile?.id ?? userId ?? 0);
+    if (!(id > 0)) return null;
+    try {
+      const ch = window.anixApi?.channel?.getBlog
+        ? await window.anixApi.channel.getBlog(id)
+        : await window.anixApi?.channel?.info?.(id);
+      const channel = (ch as { channel?: Record<string, unknown> } | undefined)?.channel
+        ?? (ch as { blogInfo?: { channel?: Record<string, unknown> } } | undefined)?.blogInfo?.channel
+        ?? null;
+      const channelId = Number(channel?.id ?? 0);
+      if (channelId > 0) {
+        blogChannelId = channelId;
+        blogMuted = !!channel?.is_muted;
+        return channelId;
+      }
+    } catch {
+      /* ignore */
+    }
+    return null;
   }
 
   async function loadProfile() {
@@ -507,7 +538,63 @@
     if (id === 'loginHistory') openLoginHistoryView();
     else if (id === 'share') void shareProfile();
     else if (id === 'copyLink') void copyProfileLink();
+    else if (id === 'block') void blockProfile();
+    else if (id === 'muteBlog') void toggleMuteBlog();
     else showToast('Скоро', 'err');
+  }
+
+  async function toggleMuteBlog() {
+    if (isMyProfile || blogMuteBusy) return;
+    const api = window.anixApi?.channel;
+    if (!api?.mute || !api?.unmute) {
+      showToast('API недоступно', 'err');
+      return;
+    }
+    blogMuteBusy = true;
+    try {
+      const channelId = await resolveBlogChannelId();
+      if (!(channelId && channelId > 0)) {
+        showToast('У пользователя нет блога', 'err');
+        return;
+      }
+      if (blogMuted) {
+        await api.unmute(channelId);
+        blogMuted = false;
+        showToast('Скрытие блога отменено, он снова будет в ленте', 'ok');
+      } else {
+        const ok = window.confirm(
+          'Скрыть блог из ленты?\n\nЗаписи этого блога перестанут отображаться в ленте и поиске. Отменить можно в настройках профиля → Скрытые каналы.',
+        );
+        if (!ok) return;
+        await api.mute(channelId);
+        blogMuted = true;
+        showToast('Блог скрыт из ленты', 'ok');
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : String(err), 'err');
+    } finally {
+      blogMuteBusy = false;
+    }
+  }
+
+  async function blockProfile() {
+    const id = Number(profile?.id ?? 0);
+    if (!(id > 0) || isMyProfile) return;
+    const api = window.anixApi?.profile?.blockAdd;
+    if (!api) {
+      showToast('API недоступно', 'err');
+      return;
+    }
+    const loginName = String(profile?.login ?? 'пользователя');
+    const ok = window.confirm(`Заблокировать ${loginName}?\n\nОн не сможет просматривать вашу страницу.`);
+    if (!ok) return;
+    try {
+      await api(id);
+      if (profile) profile = { ...profile, is_blocked: true };
+      showToast('Пользователь заблокирован', 'ok');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : String(err), 'err');
+    }
   }
 
   function openFriend(id: number, friendLogin?: string) {
@@ -912,6 +999,7 @@
   {#if moreSheetOpen}
     <ProfilePanelMoreSheet
       {isMyProfile}
+      {blogMuted}
       onClose={closeMoreSheet}
       onAction={onMoreAction}
     />

@@ -95,7 +95,6 @@ export function uiv2CustomScroll(
     if (!scrollEl || !vTrack || !vThumb || !axisAllowsV()) {
       if (vThumb) vThumb.style.display = 'none';
       vVisible = false;
-      if (vTrack) vTrack.style.pointerEvents = 'none';
       return;
     }
 
@@ -104,13 +103,11 @@ export function uiv2CustomScroll(
     if (scrollHeight <= clientHeight + 1) {
       vThumb.style.display = 'none';
       vVisible = false;
-      vTrack.style.pointerEvents = 'none';
       return;
     }
 
     vVisible = true;
     vThumb.style.display = 'block';
-    vTrack.style.pointerEvents = 'auto';
     const ratio = clientHeight / scrollHeight;
     const thumbHeight = Math.max(THUMB_MIN, Math.round(trackHeight * ratio));
     const maxTop = trackHeight - thumbHeight;
@@ -123,7 +120,6 @@ export function uiv2CustomScroll(
     if (!scrollEl || !hTrack || !hThumb || !axisAllowsH()) {
       if (hThumb) hThumb.style.display = 'none';
       hVisible = false;
-      if (hTrack) hTrack.style.pointerEvents = 'none';
       return;
     }
 
@@ -133,13 +129,11 @@ export function uiv2CustomScroll(
     if (overflowX === 'hidden' || overflowX === 'clip' || scrollWidth <= clientWidth + 1) {
       hThumb.style.display = 'none';
       hVisible = false;
-      hTrack.style.pointerEvents = 'none';
       return;
     }
 
     hVisible = true;
     hThumb.style.display = 'block';
-    hTrack.style.pointerEvents = 'auto';
     const ratio = clientWidth / scrollWidth;
     const thumbWidth = Math.max(THUMB_MIN, Math.round(trackWidth * ratio));
     const maxLeft = trackWidth - thumbWidth;

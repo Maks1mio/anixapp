@@ -1460,6 +1460,56 @@ $pp-btn-bg-hover: var(--pp-btn-bg-hover);
   }
 }
 
+.profile-panel__settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem 1.1rem 1.5rem;
+
+  .profile-panel__friend-rows {
+    margin: 0 -0.15rem;
+  }
+
+  .profile-panel__friend-row {
+    padding-left: 0.15rem;
+    padding-right: 0.15rem;
+  }
+
+  .profile-panel__state {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+.profile-panel__settings-hint {
+  margin: 0;
+  padding: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: $color-text-muted;
+}
+
+.profile-panel__settings-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-right: 0;
+
+  .profile-panel__friend-row-main {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .profile-panel__request-btn {
+    flex: 0 0 auto;
+    max-width: none;
+  }
+}
+
+.profile-panel__friend-row-av--channel {
+  border-radius: 0.55rem;
+}
+
 .profile-panel__edit-badge {
   flex-shrink: 0;
 

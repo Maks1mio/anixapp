@@ -4,6 +4,7 @@
   import {
     iconBan,
     iconCopy,
+    iconEye,
     iconEyeOff,
     iconInfo,
     iconLoginHistory,
@@ -20,11 +21,13 @@
 
   interface Props {
     isMyProfile: boolean;
+    /** Блог профиля уже скрыт из ленты. */
+    blogMuted?: boolean;
     onClose: () => void;
     onAction: (id: ProfileMoreAction) => void;
   }
 
-  let { isMyProfile, onClose, onAction }: Props = $props();
+  let { isMyProfile, blogMuted = false, onClose, onAction }: Props = $props();
 
   type Item = {
     id: ProfileMoreAction;
@@ -42,7 +45,11 @@
     if (isMyProfile) return base;
     return [
       ...base,
-      { id: 'muteBlog', label: 'Скрыть блог из ленты', icon: iconEyeOff(22) },
+      {
+        id: 'muteBlog',
+        label: blogMuted ? 'Отменить скрытие блога' : 'Скрыть блог из ленты',
+        icon: blogMuted ? iconEye(22) : iconEyeOff(22),
+      },
       { id: 'report', label: 'Пожаловаться', icon: iconInfo(22), danger: true },
       { id: 'block', label: 'Заблокировать', icon: iconBan(22), danger: true },
     ];

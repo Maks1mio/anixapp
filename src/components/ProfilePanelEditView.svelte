@@ -9,11 +9,13 @@
   import UiV2OutlinedField from './uikit-v2/UiV2OutlinedField.svelte';
   import UserBadge from './UserBadge.svelte';
   import ProfilePanelHealthView from './ProfilePanelHealthView.svelte';
+  import ProfilePanelHiddenChannelsView from './ProfilePanelHiddenChannelsView.svelte';
+  import ProfilePanelBlocklistView from './ProfilePanelBlocklistView.svelte';
   import { resolveBadgeImageUrl, resolveBadgeName, rememberBadgeCatalogEntries, enrichLockedBadgePreviews } from '../utils/badge';
   import { resolveJacksonRefs } from '../utils/jackson-refs';
   import { compressImageForUpload } from '../utils/compressImage';
 
-  type EditScreen = 'menu' | 'status' | 'nickname' | 'social' | 'badge' | 'health';
+  type EditScreen = 'menu' | 'status' | 'nickname' | 'social' | 'badge' | 'health' | 'hiddenChannels' | 'blocklist';
   type MediaPickerKind = 'avatar' | 'cover';
 
   interface LoginHistoryItem {
@@ -327,6 +329,8 @@
       case 'social': return 'Социальные сети';
       case 'badge': return 'Изменить значок';
       case 'health': return 'Здоровье аккаунта';
+      case 'hiddenChannels': return 'Скрытые каналы';
+      case 'blocklist': return 'Блоклист';
       default: return 'Редактирование';
     }
   });
@@ -1262,11 +1266,10 @@
 
       <div class="profile-panel__edit-divider" aria-hidden="true"></div>
 
-      <button type="button" class="profile-panel__edit-row" onclick={soon}>
-        <span class="profile-panel__edit-row-title">Лента</span>
-      </button>
-      <button type="button" class="profile-panel__edit-row" onclick={soon}>
+      <h3 class="profile-panel__edit-section">Лента</h3>
+      <button type="button" class="profile-panel__edit-row" onclick={() => { screen = 'hiddenChannels'; }}>
         <span class="profile-panel__edit-row-title">Скрытые каналы</span>
+        <span class="profile-panel__edit-row-sub">Каналы и блоги, скрытые из ленты</span>
       </button>
 
       <div class="profile-panel__edit-divider" aria-hidden="true"></div>
@@ -1283,9 +1286,9 @@
           <span class="profile-panel__edit-row-sub">{privacyValueLabel(row.kind)}</span>
         </button>
       {/each}
-      <button type="button" class="profile-panel__edit-row" onclick={soon}>
+      <button type="button" class="profile-panel__edit-row" onclick={() => { screen = 'blocklist'; }}>
         <span class="profile-panel__edit-row-title">Блоклист</span>
-        <span class="profile-panel__edit-row-sub">Список пользователей, которым запрещен доступ к Вашей странице</span>
+        <span class="profile-panel__edit-row-sub">Список пользователей, которым запрещён доступ к Вашей странице</span>
       </button>
 
       <div class="profile-panel__edit-divider" aria-hidden="true"></div>
@@ -1349,6 +1352,10 @@
     </div>
   {:else if screen === 'health'}
     <ProfilePanelHealthView {avatarUrl} />
+  {:else if screen === 'hiddenChannels'}
+    <ProfilePanelHiddenChannelsView />
+  {:else if screen === 'blocklist'}
+    <ProfilePanelBlocklistView />
   {:else if screen === 'status'}
     <div class="profile-panel__edit-form">
       <UiV2OutlinedField

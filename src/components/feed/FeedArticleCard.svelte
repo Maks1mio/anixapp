@@ -29,6 +29,7 @@
     onArticleChange?: (article: FeedArticle) => void;
     onArticleRemove?: (articleId: number) => void;
     onRepost?: (article: FeedArticle) => void;
+    onEdit?: (article: FeedArticle) => void;
     /** Скрыть кнопку подписки (напр. страница канала). */
     hideSubscribe?: boolean;
     /** Закрепление в меню (страница канала). */
@@ -48,6 +49,7 @@
     onArticleChange,
     onArticleRemove,
     onRepost,
+    onEdit,
     hideSubscribe = false,
     menuPinAvailable = false,
     menuMuteAvailable = true,
@@ -213,6 +215,14 @@
     }
     if (result.kind === 'updated') {
       onArticleChange?.(result.article);
+      return;
+    }
+    if (result.kind === 'edit') {
+      onEdit?.(result.article);
+      return;
+    }
+    if (result.kind === 'repost') {
+      onRepost?.(result.article);
     }
   }
 </script>

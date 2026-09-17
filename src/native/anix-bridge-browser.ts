@@ -374,6 +374,13 @@ export function createBrowserAnixBridge() {
     'anix:channelUnsubscribe': h((c, channelId) => c.getClient().endpoints.channel.unsubscribe(channelId)),
     'anix:channelMute': h((c, channelId) => c.getClient().endpoints.channel.mute(channelId)),
     'anix:channelUnmute': h((c, channelId) => c.getClient().endpoints.channel.unmute(channelId)),
+    'anix:channelMutes': h((c, page = 0) => c.getClient().endpoints.channel.mutes(page)),
+    'anix:profileBlockList': h((c, page = 0) =>
+      c.getClient().endpoints.profileBlockList.blockList(page)),
+    'anix:profileBlockListAdd': h((c, profileId) =>
+      c.getClient().endpoints.profileBlockList.addToBlockList(profileId)),
+    'anix:profileBlockListRemove': h((c, profileId) =>
+      c.getClient().endpoints.profileBlockList.removeFromBlockList(profileId)),
     'anix:reportArticleReasons': h((c) => c.getClient().endpoints.report.articleReasons()),
     'anix:reportArticle': h((c, body) => c.getClient().endpoints.report.article(body)),
     'anix:reportChannelReasons': h((c) => c.getClient().endpoints.report.channelReasons()),

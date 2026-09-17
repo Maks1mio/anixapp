@@ -12,6 +12,7 @@
     formatScheduleEpisodes,
   } from '../utils/schedule';
   import type { ReleaseCardData } from '../types/release';
+  import { getScheduleInfoDismissed, setScheduleInfoDismissed } from '../prefs';
 
   interface Props {
     onClose: () => void;
@@ -22,9 +23,14 @@
   let loadState = $state<'loading' | 'error' | 'empty' | 'ready'>('loading');
   let errorMsg = $state('');
   let scheduleByDay = $state<Record<string, ReleaseCardData[]>>({});
-  let infoDismissed = $state(false);
+  let infoDismissed = $state(getScheduleInfoDismissed());
 
   const todayKey = getTodayScheduleKey();
+
+  function dismissInfo() {
+    infoDismissed = true;
+    setScheduleInfoDismissed(true);
+  }
 
   async function loadSchedule() {
     loadState = 'loading';
@@ -63,7 +69,7 @@
         <p>
           Дни недели, когда выходят новые серии в Японии и Китае. Озвученные релизы появляются позже.
         </p>
-        <button type="button" class="sidebar-schedule__info-dismiss" onclick={() => { infoDismissed = true; }} aria-label="Скрыть">
+        <button type="button" class="sidebar-schedule__info-dismiss" onclick={dismissInfo} aria-label="Скрыть">
           {@html iconX(14)}
         </button>
       </div>

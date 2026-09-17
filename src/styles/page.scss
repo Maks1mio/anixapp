@@ -38,13 +38,18 @@
   --page-scroll-padding: 1.5rem;
 }
 
+/* Лента сама задаёт боковые gutter — сверху как у остальных страниц */
 .page--feed {
-  --page-scroll-padding: 0;
+  --page-scroll-padding: 1.5rem 0 0;
 }
 
 @media (max-width: 768px) {
   .page--padded {
     --page-scroll-padding: 1rem;
+  }
+
+  .page--feed {
+    --page-scroll-padding: 1rem 0 0;
   }
 }
 
@@ -70,8 +75,8 @@
   overflow: hidden;
 }
 
-// Скроллбары страницы — UI Kit V2 (поверх контента)
+// Скроллбары страницы — над контентом страницы, но ниже оверлеев/панелей (70+)
 .page.uiv2-scroll-area > .uiv2-scroll-area__v-track,
 .page.uiv2-scroll-area > .uiv2-scroll-area__h-track {
-  z-index: 100;
+  z-index: 4;
 }

@@ -1,6 +1,8 @@
 <script lang="ts">
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import ReleaseCardsGridSkeleton from '../components/ReleaseCardsGridSkeleton.svelte';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
   import UiV2CollectionCardSkeleton from '../components/uikit-v2/UiV2CollectionCardSkeleton.svelte';
   import CollectionCard from '../components/CollectionCard.svelte';
   import BookmarksToolbar from '../components/BookmarksToolbar.svelte';
@@ -728,6 +730,7 @@
       saveViewStateWithScroll(BOOKMARKS_VIEW_KEY(), bookmarksSnapshot());
     }
 
+    const keepErrorOverlay = tabId === activeTab && loadState === 'error';
     activeTab = tabId;
     syncTabToUrl(tabId);
 
@@ -759,8 +762,10 @@
     collectionItems = [];
     showEnd = false;
     totalCount = 0;
-    loadState = 'loading';
-    errorMsg = '';
+    if (!keepErrorOverlay) {
+      loadState = 'loading';
+      errorMsg = '';
+    }
 
     if (!window.anixApi) {
       errorMsg = 'API недоступно (только в Electron).';
@@ -794,7 +799,7 @@
       loadState = 'ready';
       tryLoadMoreIfNeeded();
     } catch (err) {
-      errorMsg = String(err);
+      errorMsg = headlineFromLoadError(err);
       loadState = 'error';
     }
   }
@@ -1065,7 +1070,7 @@
           <ReleaseCardsGridSkeleton />
         {/if}
       {:else if loadState === 'error'}
-        <p class="bookmarks__error">{errorMsg}</p>
+        <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadTab(activeTab)} />
       {:else if loadState === 'empty'}
         <p class="bookmarks__empty">{searchQuery ? 'Ничего не найдено.' : 'Здесь пока ничего нет.'}</p>
       {:else if isHistoryTab}

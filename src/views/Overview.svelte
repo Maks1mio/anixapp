@@ -8,6 +8,8 @@
   import OverviewCollectionsWeek from '../components/overview/OverviewCollectionsWeek.svelte';
   import OverviewCommentsWeek from '../components/overview/OverviewCommentsWeek.svelte';
   import OverviewSkeleton from '../components/overview/OverviewSkeleton.svelte';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
   import { mapCardData } from './Release/_utils';
   import {
     mapOverviewBanner,
@@ -181,14 +183,14 @@
           applyCache(await pending);
           void loadHeroOverrides();
         } catch (err) {
-          errorMsg = String(err);
+          errorMsg = headlineFromLoadError(err);
           loadState = 'error';
         }
         return;
       }
     }
 
-    loadState = 'loading';
+    if (loadState !== 'error') loadState = 'loading';
 
     const request = fetchOverviewPayload()
       .then((payload) => setOverviewCache(payload))
@@ -201,7 +203,7 @@
       applyCache(data);
       void loadHeroOverrides(data.banners);
     } catch (err) {
-      errorMsg = String(err);
+      errorMsg = headlineFromLoadError(err);
       loadState = 'error';
     }
   }
@@ -236,12 +238,7 @@
     {#if loadState === 'loading'}
       <OverviewSkeleton />
     {:else if loadState === 'error'}
-      <div class="overview-page__error">
-        <p>{errorMsg || 'Не удалось загрузить обзор'}</p>
-        <button type="button" class="overview-page__retry" onclick={() => void loadOverview(true)}>
-          Повторить
-        </button>
-      </div>
+      <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadOverview(true)} />
     {:else}
       <OverviewSteamCarousel
         items={banners}

@@ -394,6 +394,7 @@ function createAnixBridgeCore(options = {}) {
     },
     'anix:pingBaseUrl': async (c, [baseUrl]) => {
       if (typeof baseUrl !== 'string' || !baseUrl) return { ok: false, latencyMs: null };
+      if (baseUrl.includes('.invalid')) return { ok: false, latencyMs: null };
       try {
         const started = Date.now();
         const client = c.createClient({ baseUrl, token: undefined, backupFailover: false });

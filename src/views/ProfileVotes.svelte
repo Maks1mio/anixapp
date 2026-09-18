@@ -6,6 +6,8 @@
   import type { ReleaseCardData } from '../types/release';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import { mapReleaseRawToCard } from '../utils/release-card';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
   import { setDiscordContext, refreshDiscordPresence } from '../services/discord-presence';
 
   interface Props {
@@ -102,7 +104,7 @@
     if (isLoading || (!hasMore && append)) return;
     isLoading = true;
     if (!append) {
-      loadState = 'loading';
+      if (loadState !== 'error') loadState = 'loading';
       currentPage = 0;
       hasMore = true;
       items = [];
@@ -133,7 +135,7 @@
       isLoading = false;
       attachInfiniteScroll();
     } catch (err) {
-      errorMsg = String(err);
+      errorMsg = headlineFromLoadError(err);
       loadState = 'error';
       isLoading = false;
     }
@@ -177,7 +179,7 @@
       {#if loadState === 'loading'}
         <div class="search-page__loading">Загрузка…</div>
       {:else if loadState === 'error'}
-        <p class="search-page__error">Ошибка: {errorMsg}</p>
+        <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void load(false)} />
       {:else if loadState === 'empty'}
         <p class="search-page__empty">Ничего не найдено</p>
       {:else}

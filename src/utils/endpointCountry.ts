@@ -14,6 +14,7 @@ const STATIC_ENDPOINT_COUNTRY: Record<string, EndpointCountryInfo> = {
   'api-s.anixsekai.com': { countryCode: 'BZ', countryName: 'Белиз' },
   'api.anixart.app': { countryCode: 'BZ', countryName: 'Белиз' },
   'api.anixart.tv': { countryCode: 'BZ', countryName: 'Белиз' },
+  'api-down.anixart.invalid': { countryCode: null, countryName: 'тест' },
 };
 
 export function endpointHostname(baseUrl: string): string {

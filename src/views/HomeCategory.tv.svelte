@@ -11,6 +11,8 @@
   } from '../data/homeTabs';
   import type { ReleaseCardData } from '../types/release';
   import { mapReleaseRawToCard } from '../utils/release-card';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
   import {
     getMyTabLabel,
     isHomeCustomTabConfigured,
@@ -67,7 +69,7 @@
 
     isLoading = true;
     const nextPage = page;
-    if (nextPage === 0) loadState = 'loading';
+    if (nextPage === 0 && loadState !== 'error') loadState = 'loading';
 
     try {
       const tab = await resolveTab();
@@ -97,7 +99,7 @@
       requestAnimationFrame(checkIfNeedsMore);
     } catch (err) {
       if (nextPage === 0) {
-        errorMsg = String(err);
+        errorMsg = headlineFromLoadError(err);
         loadState = 'error';
       }
     } finally {
@@ -149,7 +151,7 @@
     {#if loadState === 'loading' && items.length === 0}
       <ReleaseCardsGridSkeleton count={12} layout="mini" className="tv-category-page__grid" />
     {:else if loadState === 'error'}
-      <p class="tv-page__status">Ошибка: {errorMsg}</p>
+      <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadPage()} />
     {:else if loadState === 'empty'}
       <p class="tv-page__status">Здесь пока ничего нет.</p>
     {:else}

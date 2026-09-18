@@ -733,6 +733,7 @@ ipcMain.handle('anix:setBackupProxyEnabled', (_, enabled) => {
 // Пинг произвольного эндпоинта без изменения глобального baseUrl и без оффлайн‑экрана.
 ipcMain.handle('anix:pingBaseUrl', async (_, baseUrl) => {
   if (typeof baseUrl !== 'string' || !baseUrl) return { ok: false, latencyMs: null };
+  if (baseUrl.includes('.invalid')) return { ok: false, latencyMs: null };
   try {
     const started = Date.now();
     // Без failover — иначе мёртвый primary будет «зелёным» через прокси

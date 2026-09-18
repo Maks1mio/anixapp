@@ -13,6 +13,8 @@
   import { notifyFavoritesChanged } from '../utils/favorites-events';
   import { enrichBlockedRelease } from '../services/release-geo-bypass';
   import { extractHistoryEpisodeInfo } from '../utils/historyFormat';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
   import { isReleaseAnnounce } from '../utils/release-card';
   import { applyReleaseListStatus } from '../utils/release-list-status';
   import { isCapacitorNative } from '../native/anix-api-native';
@@ -323,23 +325,13 @@
     void refreshReleaseData();
   }
 
-  onMount(async () => {
-    window.addEventListener('anix:bookmarksChanged', onBookmarksChanged);
-    window.addEventListener('keydown', onOverlayKeys, true);
-
-    if (tvOpenTarget) {
-      void tick().then(async () => {
-        await runTvReleaseOpenAnimation(id);
-        focusTvReleasePage();
-      });
-    }
-
+  async function loadRelease() {
     if (!window.anixApi) {
       errorMsg = 'API недоступно.';
       loadState = 'error';
       return;
     }
-
+    if (loadState !== 'error') loadState = 'loading';
     try {
       const historyResumePromise = loadHistoryResume(id).catch(() => null);
       const data = await window.anixApi.release.info(id, true) as { release?: Record<string, unknown> } | Record<string, unknown>;
@@ -363,9 +355,23 @@
         if (resume?.episode || resume?.dubber) historyResume = resume;
       });
     } catch (err) {
-      errorMsg = String(err);
+      errorMsg = headlineFromLoadError(err);
       loadState = 'error';
     }
+  }
+
+  onMount(() => {
+    window.addEventListener('anix:bookmarksChanged', onBookmarksChanged);
+    window.addEventListener('keydown', onOverlayKeys, true);
+
+    if (tvOpenTarget) {
+      void tick().then(async () => {
+        await runTvReleaseOpenAnimation(id);
+        focusTvReleasePage();
+      });
+    }
+
+    void loadRelease();
   });
 
   onDestroy(() => {
@@ -395,7 +401,7 @@
 
   {:else if loadState === 'error'}
     <div class="tv-release-page__shell">
-      <p class="tv-page__status">Ошибка: {errorMsg}</p>
+      <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadRelease()} />
     </div>
 
   {:else if release}

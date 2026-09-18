@@ -5,6 +5,8 @@
   import UiV2Select, { type UiV2SelectOption } from '../components/uikit-v2/UiV2Select.svelte';
   import FeedArticleCard from '../components/feed/FeedArticleCard.svelte';
   import UiV2FeedPostSkeleton from '../components/uikit-v2/UiV2FeedPostSkeleton.svelte';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
   import UserAvatar from '../components/UserAvatar.svelte';
   import { get } from 'svelte/store';
   import { isAuthenticated, authReady, requireAuth } from '../stores/auth';
@@ -421,8 +423,8 @@
     const requestId = ++searchRequestId;
     if (append) searchBusy = true;
     else {
-      searchLoadState = 'loading';
-      searchError = '';
+      if (searchLoadState !== 'error') searchLoadState = 'loading';
+      searchError = searchLoadState === 'error' ? searchError : '';
     }
 
     try {
@@ -444,7 +446,7 @@
       searchLoadState = empty ? 'empty' : 'ready';
     } catch (err) {
       if (requestId !== searchRequestId) return;
-      searchError = String(err);
+      searchError = headlineFromLoadError(err);
       if (!append) {
         searchArticles = [];
         searchChannels = [];
@@ -1099,8 +1101,8 @@
         return;
       }
       if (append) return;
-      loadState = 'loading';
-      errorMsg = '';
+      if (loadState !== 'error') loadState = 'loading';
+      errorMsg = loadState === 'error' ? errorMsg : '';
       managedBusy = true;
       try {
         const res = await window.anixApi?.channel?.editorAll?.();
@@ -1108,7 +1110,7 @@
         managed = list.filter((c): c is EditorChannel => !!c && Number(c.id) > 0);
         loadState = managed.length === 0 ? 'empty' : 'ready';
       } catch (err) {
-        errorMsg = String(err);
+        errorMsg = headlineFromLoadError(err);
         managed = [];
         loadState = 'error';
       } finally {
@@ -1131,7 +1133,7 @@
     }
 
     if (append) loadingMore = true;
-    else {
+    else if (loadState !== 'error') {
       loadState = 'loading';
       errorMsg = '';
     }
@@ -1162,7 +1164,7 @@
         : list.length >= 10;
       loadState = articles.length === 0 ? 'empty' : 'ready';
     } catch (err) {
-      errorMsg = String(err);
+      errorMsg = headlineFromLoadError(err);
       if (!append) {
         articles = [];
         loadState = 'error';
@@ -2418,10 +2420,7 @@
             {/each}
           </div>
         {:else if loadState === 'error'}
-          <UiV2Card title="Не удалось загрузить">
-            <p class="feed-page__hint">{errorMsg || 'Попробуйте ещё раз.'}</p>
-            <UiV2Button variant="primary" label="Повторить" onclick={() => void reload()} />
-          </UiV2Card>
+          <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void reload()} />
         {:else}
           <div class="feed-managed">
             <div class="feed-managed__intro">
@@ -2570,10 +2569,7 @@
             </p>
           </UiV2Card>
         {:else if searchLoadState === 'error' && searchArticles.length === 0 && searchChannels.length === 0}
-          <UiV2Card title="Не удалось найти">
-            <p class="feed-page__hint">{searchError || 'Попробуйте ещё раз.'}</p>
-            <UiV2Button variant="primary" label="Повторить" onclick={() => void reload()} />
-          </UiV2Card>
+          <UiV2ContentRetryOverlay message={searchError} onRetry={() => void reload()} />
         {:else if (searchLoadState === 'loading' || searchLoadState === 'idle') && searchArticles.length === 0 && searchChannels.length === 0 && searchBlogs.length === 0 && searchTags.length === 0}
           <UiV2FeedPostSkeleton count={4} />
         {:else if searchLoadState === 'empty'}
@@ -2739,10 +2735,7 @@
       {:else if loadState === 'loading'}
         <UiV2FeedPostSkeleton count={4} />
       {:else if loadState === 'error'}
-        <UiV2Card title="Не удалось загрузить">
-          <p class="feed-page__hint">{errorMsg || 'Попробуйте ещё раз.'}</p>
-          <UiV2Button variant="primary" label="Повторить" onclick={() => void reload()} />
-        </UiV2Card>
+        <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void reload()} />
       {:else if loadState === 'empty'}
         <UiV2Card title={tab === 'my' ? 'Ой, а подписок-то нет!' : 'Похоже, нет ни одной записи'}>
           <p class="feed-page__hint">

@@ -3,7 +3,6 @@
   import UiV2Select, { type UiV2SelectOption } from './UiV2Select.svelte';
   import UiV2CrtAdBanner from './UiV2CrtAdBanner.svelte';
   import {
-    API_ENDPOINT_OPTIONS,
     BACKUP_API_PROXY,
     BACKUP_API_PROXY_LABEL,
     SELECTABLE_API_ENDPOINTS,
@@ -145,8 +144,7 @@
     }
   }
 
-  const endpointUrls = API_ENDPOINT_OPTIONS.map((o) => o.value);
-  const allPingUrls = [...endpointUrls, BACKUP_API_PROXY];
+  const allPingUrls = SELECTABLE_API_ENDPOINTS.map((o) => o.value);
   const backupSelected = $derived(isBackupApiProxy(value));
 
   function geoFor(url: string): EndpointCountryInfo {
@@ -454,7 +452,7 @@
       return;
     }
     await resolveEndpointCountries(
-      endpointUrls,
+      allPingUrls,
       async (url) => {
         const res = await window.anixApi!.client.endpointGeo(url);
         return {
@@ -464,7 +462,6 @@
       },
       applyGeoResult,
     );
-    applyGeoResult(BACKUP_API_PROXY, staticEndpointCountry(BACKUP_API_PROXY));
   }
 
   async function pingOnce() {

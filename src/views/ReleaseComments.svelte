@@ -8,6 +8,8 @@
   import type { CommentData, CommentSort } from '../types/comment';
   import { COMMENT_SORT_DEFAULT } from '../types/comment';
   import { setDiscordContext, refreshDiscordPresence } from '../services/discord-presence';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
 
   interface Props {
     releaseId: number;
@@ -42,7 +44,7 @@
     }
 
     if (append) loadingMore = true;
-    else if (nextPage === 0) loadState = 'loading';
+    else if (nextPage === 0 && loadState !== 'error') loadState = 'loading';
 
     try {
       const data = await window.anixApi.comments.release.list(releaseId, nextPage, sort) as {
@@ -61,7 +63,7 @@
     } catch (err) {
       if (!append) {
         loadState = 'error';
-        errorMsg = String(err);
+        errorMsg = headlineFromLoadError(err);
       }
     } finally {
       loadingMore = false;
@@ -126,7 +128,7 @@
     <div class="anix-comments--dock-layout anix-comments-page--dock-fallback">
       <div class="anix-comments__scroll-body">
         {@render pageHeader()}
-        <div class="anix-comments__empty">{errorMsg}</div>
+        <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadPage(0)} />
       </div>
     </div>
   {:else}

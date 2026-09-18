@@ -12,6 +12,8 @@
   import type { ReleaseCardData } from '../types/release';
   import { buildPosterUrl } from '../utils/posterUrl';
   import { mapReleaseRawToCard } from '../utils/release-card';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
   import { notifyBookmarksChanged } from '../utils/favorites-events';
 
   interface Props {
@@ -157,13 +159,14 @@
     }
   }
 
-  onMount(async () => {
+  async function loadCollection() {
     if (!window.anixApi) {
       errorMsg = 'API недоступно.';
       loadState = 'error';
       return;
     }
 
+    if (loadState !== 'error') loadState = 'loading';
     try {
       const [infoRes, releasesRes] = await Promise.all([
         window.anixApi.collection.info(id),
@@ -223,10 +226,14 @@
 
       loadState = 'ready';
       requestAnimationFrame(attachScroll);
-    } catch {
-      errorMsg = 'Ошибка загрузки.';
+    } catch (err) {
+      errorMsg = headlineFromLoadError(err);
       loadState = 'error';
     }
+  }
+
+  onMount(() => {
+    void loadCollection();
 
     window.addEventListener('anix:cardLayoutChanged', onLayoutChanged);
   });
@@ -243,9 +250,7 @@
         <div class="collection-page__loading">Загрузка…</div>
       </div>
     {:else if loadState === 'error'}
-      <div class="collection-page__head">
-        <div class="collection-page__loading">{errorMsg}</div>
-      </div>
+      <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadCollection()} />
     {:else}
       <div class="collection-page__body">
         <!-- Banner -->

@@ -37,9 +37,32 @@ function withPath(text: string, path: string): string {
   return path ? `${text} (${path})` : text;
 }
 
+export function unwrapIpcErrorMessage(raw: string): string {
+  let s = String(raw || '').trim();
+  for (let i = 0; i < 6; i++) {
+    const next = s
+      .replace(/^Error:\s*/i, '')
+      .replace(/^Error invoking remote method '[^']+':\s*/i, '')
+      .replace(/^(HttpError|AnixartError|AnixApiError|TimeoutError):\s*/i, '')
+      .trim();
+    if (next === s) break;
+    s = next;
+  }
+  return s;
+}
+
+export function stripErrorPathSuffix(text: string): string {
+  return String(text || '').replace(/\s*\(\/[^)]+\)\s*$/, '').trim();
+}
+
+function pathFromMessage(raw: string): string {
+  const m = String(raw || '').match(/\((\/[^)]+)\)\s*$/);
+  return m?.[1] || '';
+}
+
 function isHttpLike(err: AnixErr, raw: string, orig: unknown): boolean {
   if (orig instanceof HttpError || err.name === 'HttpError') return true;
-  return /\[AnixApi\]|HTTP \d{3}|network error|empty response|invalid JSON/i.test(raw);
+  return /\[AnixApi\]|HTTP \d{3}|HttpError|network error|empty response|invalid JSON|временно недоступен|не ответил|fetch failed/i.test(raw);
 }
 
 function isAnixartLike(err: AnixErr, orig: unknown): boolean {
@@ -57,11 +80,13 @@ export function formatAnixError(err: unknown): string {
   if (!parsed) return 'Неизвестная ошибка API';
 
   const name = parsed.name || '';
-  const raw = parsed.message ? String(parsed.message) : String(err);
+  const raw = unwrapIpcErrorMessage(parsed.message ? String(parsed.message) : String(err));
   const status = typeof parsed.status === 'number'
     ? parsed.status
     : (typeof parsed.httpStatus === 'number' ? parsed.httpStatus : null);
-  const path = typeof parsed.path === 'string' ? parsed.path : '';
+  const path = typeof parsed.path === 'string' && parsed.path
+    ? parsed.path
+    : pathFromMessage(raw);
 
   if (name === 'TimeoutError') return 'Превышено время ожидания ответа сервера';
   if (name === 'AbortError') return 'Запрос отменён';
@@ -100,7 +125,15 @@ export function formatAnixError(err: unknown): string {
     }
   }
 
-  return raw;
+  const stripped = stripErrorPathSuffix(raw);
+  if (/временно недоступен/i.test(stripped)) {
+    return withPath(HTTP_LABELS[503], path);
+  }
+  if (/не ответил вовремя|timeout/i.test(stripped)) {
+    return withPath(HTTP_LABELS[504], path);
+  }
+
+  return stripped || raw;
 }
 
 export function enrichAnixError(err: unknown): unknown {

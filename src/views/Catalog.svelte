@@ -1,21 +1,23 @@
 <script lang="ts">
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
-  import { onMount, onDestroy } from 'svelte';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { onMount } from 'svelte';
   import type { ReleaseCardData } from '../types/release';
   import { mapReleaseRawToCard } from '../utils/release-card';
+  import { headlineFromLoadError } from '../utils/content-load-error';
 
   let loadState = $state<'loading' | 'error' | 'empty' | 'ready'>('loading');
   let errorMsg = $state('');
   let items = $state<ReleaseCardData[]>([]);
 
-
-  onMount(async () => {
+  async function loadCatalog() {
     if (!window.anixApi) {
       errorMsg = 'API доступно только в Electron.';
       loadState = 'error';
       return;
     }
 
+    if (loadState !== 'error') loadState = 'loading';
     try {
       const data = await window.anixApi.discover.recommendations(0) as any;
       const content = (data?.content ?? []) as Record<string, unknown>[];
@@ -26,9 +28,13 @@
       }
       loadState = 'empty';
     } catch (err) {
-      errorMsg = String(err);
+      errorMsg = headlineFromLoadError(err);
       loadState = 'error';
     }
+  }
+
+  onMount(() => {
+    void loadCatalog();
   });
 </script>
 
@@ -42,7 +48,7 @@
     {#if loadState === 'loading'}
       <div class="catalog-loading">Загрузка…</div>
     {:else if loadState === 'error'}
-      <p class="feed-error">Ошибка: {errorMsg}</p>
+      <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadCatalog()} />
     {:else if loadState === 'empty'}
       <p class="feed-empty">Нет записей в каталоге.</p>
     {:else}

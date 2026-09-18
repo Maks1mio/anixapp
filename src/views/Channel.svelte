@@ -6,6 +6,8 @@
   import FeedArticleCard from '../components/feed/FeedArticleCard.svelte';
   import FeedComposePrompt from '../components/feed/FeedComposePrompt.svelte';
   import UiV2FeedPostSkeleton from '../components/uikit-v2/UiV2FeedPostSkeleton.svelte';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
   import FeedArticleComposer from '../components/feed/FeedArticleComposer.svelte';
   import { openFeedComposerWindow, resolveFeedArticleForEdit } from '../utils/feed-composer-open';
   import FeedDirectoryModal from '../components/feed/FeedDirectoryModal.svelte';
@@ -199,7 +201,7 @@
       return;
     }
     if (append) loadingMore = true;
-    else {
+    else if (loadState !== 'error') {
       loadState = 'loading';
       errorMsg = '';
     }
@@ -219,7 +221,7 @@
       hasMore = totalPages > 0 ? nextPage + 1 < totalPages : list.length >= 10;
       loadState = articles.length === 0 ? 'empty' : 'ready';
     } catch (err) {
-      errorMsg = String(err);
+      errorMsg = headlineFromLoadError(err);
       if (!append) {
         articles = [];
         loadState = 'error';
@@ -420,10 +422,7 @@
       {#if loadState === 'loading'}
         <UiV2FeedPostSkeleton count={3} />
       {:else if loadState === 'error'}
-        <UiV2Card title="Не удалось загрузить">
-          <p class="feed-page__hint">{errorMsg || 'Попробуйте ещё раз.'}</p>
-          <UiV2Button variant="primary" label="Повторить" onclick={() => void reload()} />
-        </UiV2Card>
+        <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void reload()} />
       {:else if loadState === 'empty'}
         <UiV2Card title="Пока нет записей">
           <p class="feed-page__hint">В этой группе ещё ничего не публиковали.</p>

@@ -1,8 +1,10 @@
 <script lang="ts">
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import ReleaseCardsGridSkeleton from '../components/ReleaseCardsGridSkeleton.svelte';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import HomeCustomFilterView from '../components/HomeCustomFilterView.svelte';
   import HomeTabRenameModal from '../components/HomeTabRenameModal.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
   import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../stores/navigation';
   import { requireAuth } from '../stores/auth';
@@ -243,7 +245,7 @@
 
     isLoading = true;
     const nextPage = page;
-    if (nextPage === 0) loadState = 'loading';
+    if (nextPage === 0 && loadState !== 'error') loadState = 'loading';
 
     try {
       const data = await window.anixApi.release.filter(nextPage, getFilterArgs(activeTab), true) as any;
@@ -259,7 +261,7 @@
       requestAnimationFrame(checkIfNeedsMore);
     } catch (err) {
       if (nextPage === 0) {
-        errorMsg = String(err);
+        errorMsg = headlineFromLoadError(err);
         loadState = 'error';
       }
     } finally {
@@ -531,7 +533,7 @@
           <ReleaseCardsGridSkeleton />
         </div>
       {:else if loadState === 'error'}
-        <p class="home-list__error">Ошибка: {errorMsg}</p>
+        <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadPage()} />
       {:else if loadState === 'empty'}
         <p class="home-list__empty">Здесь пока ничего нет.</p>
       {:else}

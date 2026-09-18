@@ -44,10 +44,33 @@ function withPath(text, path) {
   return path ? `${text} (${path})` : text;
 }
 
+function unwrapIpcErrorMessage(raw) {
+  let s = String(raw || '').trim();
+  for (let i = 0; i < 6; i++) {
+    const next = s
+      .replace(/^Error:\s*/i, '')
+      .replace(/^Error invoking remote method '[^']+':\s*/i, '')
+      .replace(/^(HttpError|AnixartError|AnixApiError|TimeoutError):\s*/i, '')
+      .trim();
+    if (next === s) break;
+    s = next;
+  }
+  return s;
+}
+
+function stripErrorPathSuffix(text) {
+  return String(text || '').replace(/\s*\(\/[^)]+\)\s*$/, '').trim();
+}
+
+function pathFromMessage(raw) {
+  const m = String(raw || '').match(/\((\/[^)]+)\)\s*$/);
+  return m && m[1] ? m[1] : '';
+}
+
 function isHttpLike(err, raw) {
   const name = errName(err);
   if (name === 'HttpError' || isA(err, HttpError)) return true;
-  return /\[AnixApi\]|HTTP \d{3}|network error|empty response|invalid JSON/i.test(raw);
+  return /\[AnixApi\]|HTTP \d{3}|HttpError|network error|empty response|invalid JSON|временно недоступен|не ответил|fetch failed/i.test(raw);
 }
 
 function isAnixartLike(err) {
@@ -67,9 +90,9 @@ function formatAnixError(err) {
   }
 
   const name = errName(err);
-  const raw = err && err.message ? String(err.message) : String(err);
+  const raw = unwrapIpcErrorMessage(err && err.message ? String(err.message) : String(err));
   const status = errStatus(err);
-  const path = errPath(err);
+  const path = errPath(err) || pathFromMessage(raw);
 
   if (name === 'TimeoutError') return 'Превышено время ожидания ответа сервера';
   if (name === 'AbortError') return 'Запрос отменён';
@@ -108,7 +131,15 @@ function formatAnixError(err) {
     }
   }
 
-  return raw;
+  const stripped = stripErrorPathSuffix(raw);
+  if (/временно недоступен/i.test(stripped)) {
+    return withPath(HTTP_LABELS[503], path);
+  }
+  if (/не ответил вовремя|timeout/i.test(stripped)) {
+    return withPath(HTTP_LABELS[504], path);
+  }
+
+  return stripped || raw;
 }
 
 function enrichAnixError(err) {
@@ -155,6 +186,8 @@ function anixErrorLogMeta(err) {
 
 module.exports = {
   formatAnixError,
+  unwrapIpcErrorMessage,
+  stripErrorPathSuffix,
   enrichAnixError,
   attachAnixErrorMessages,
   anixErrorLogMeta,

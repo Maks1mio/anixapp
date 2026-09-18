@@ -3423,10 +3423,16 @@
   background: var(--uikit-v2-elevated, #{$color-surface-hover});
   transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
 
-  img {
+  img,
+  .poster-image__fallback,
+  .uiv2-anime-card__poster-fallback {
+    position: absolute;
+    inset: 0;
     display: block;
     width: 100%;
     height: 100%;
+    max-width: none;
+    max-height: none;
     object-fit: cover;
     image-rendering: auto;
   }
@@ -3454,9 +3460,6 @@
 }
 
 .uiv2-anime-card__poster-fallback {
-  display: block;
-  width: 100%;
-  height: 100%;
   background:
     linear-gradient(145deg, var(--uiv2-hover-bg), transparent 42%),
     linear-gradient(160deg, #2a2a32, #16161a);
@@ -9894,4 +9897,124 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.uiv2-content-retry {
+  --uiv2-retry-fg: var(--uiv2-retry-warn-fg, #ead56a);
+  --uiv2-retry-bg: var(--uiv2-retry-warn-bg, #3a3618);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: min(22rem, calc(100dvh - 12rem));
+  padding: 3.25rem 1.25rem 4rem;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.uiv2-content-retry--warn {
+  --uiv2-retry-fg: var(--uiv2-retry-warn-fg);
+  --uiv2-retry-bg: var(--uiv2-retry-warn-bg);
+}
+
+.uiv2-content-retry--danger {
+  --uiv2-retry-fg: var(--uiv2-retry-danger-fg);
+  --uiv2-retry-bg: var(--uiv2-retry-danger-bg);
+}
+
+.uiv2-content-retry--compact {
+  min-height: 0;
+  padding: 2.25rem 0.75rem 1.25rem;
+}
+
+.uiv2-content-retry__badge {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: calc(var(--uiv2-retry-knob) / 2);
+  padding: 0 clamp(0.9rem, 0.2vw, 0.5rem) 1rem;
+  overflow: visible;
+  border-radius: 1.25rem;
+  background: var(--uiv2-retry-bg);
+  color: var(--uiv2-retry-fg);
+}
+
+.uiv2-content-retry__knob {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: var(--uiv2-retry-knob);
+  height: var(--uiv2-retry-knob);
+  margin: calc(var(--uiv2-retry-knob) / -1.3) 0 0.2rem;
+  border-radius: 30%;
+  background: var(--uiv2-retry-bg);
+}
+
+.uiv2-content-retry__spinner,
+.uiv2-content-retry__ring {
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 3px solid color-mix(in srgb, var(--uiv2-retry-fg) 28%, transparent);
+  border-top-color: var(--uiv2-retry-fg);
+}
+
+.uiv2-content-retry__spinner {
+  animation: uiv2-content-retry-spin 0.85s linear infinite;
+}
+
+.uiv2-content-retry__text {
+  margin: 0;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.2rem 0 0.05rem;
+  color: var(--uiv2-retry-fg);
+  font-family: var(--uikit-v2-font);
+  font-size: clamp(0.8rem, 1.45vw, 1.02rem);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.35;
+  text-align: center;
+  text-transform: uppercase;
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+
+.uiv2-content-retry__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.uikit-v2-retry-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+@keyframes uiv2-content-retry-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uiv2-content-retry__spinner {
+    animation: none;
+    border-color: var(--uiv2-retry-fg);
+  }
 }

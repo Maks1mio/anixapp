@@ -7,6 +7,8 @@
   import { setDiscordContext, refreshDiscordPresence } from '../services/discord-presence';
   import Tabs from '../components/Tabs.svelte';
   import UserBadge from '../components/UserBadge.svelte';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
 
   interface Props {
     id?: number;
@@ -90,7 +92,7 @@
     if (isLoading || (!hasMore && append)) return;
     isLoading = true;
     if (!append) {
-      loadState = 'loading';
+      if (loadState !== 'error') loadState = 'loading';
       currentPage = 0;
       hasMore = true;
       friends = [];
@@ -119,7 +121,7 @@
       isLoading = false;
       attachInfiniteScroll();
     } catch (err) {
-      errorMsg = String(err);
+      errorMsg = headlineFromLoadError(err);
       loadState = 'error';
       isLoading = false;
     }
@@ -190,7 +192,7 @@
       {#if loadState === 'loading'}
         <div class="search-page__loading">Загрузка…</div>
       {:else if loadState === 'error'}
-        <p class="search-page__error">Ошибка: {errorMsg}</p>
+        <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void load(false)} />
       {:else if loadState === 'empty'}
         <p class="search-page__empty">Ничего не найдено</p>
       {:else}

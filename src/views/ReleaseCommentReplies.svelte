@@ -11,6 +11,8 @@
   } from '../components/uikit-v2/UiV2CommentComposer.svelte';
   import CommentsLoadSentinel from '../components/comments/CommentsLoadSentinel.svelte';
   import CommentsPageHeader from '../components/comments/CommentsPageHeader.svelte';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
   import {
     normalizeComment,
     normalizeCommentsFromResponse,
@@ -72,7 +74,7 @@
     }
 
     if (append) loadingMore = true;
-    else if (nextPage === 0) loadState = 'loading';
+    else if (nextPage === 0 && loadState !== 'error') loadState = 'loading';
 
     try {
       const data = (await window.anixApi.comments.release.replies(commentId, nextPage, sort)) as {
@@ -97,7 +99,7 @@
     } catch (err) {
       if (!append) {
         loadState = 'error';
-        errorMsg = String(err);
+        errorMsg = headlineFromLoadError(err);
       }
     } finally {
       loadingMore = false;
@@ -351,7 +353,7 @@
       {#if loadState === 'loading' && !parent}
         <div class="anix-comments__empty">Загрузка…</div>
       {:else if loadState === 'error'}
-        <div class="anix-comments__empty">{errorMsg}</div>
+        <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void reloadAll()} />
       {:else}
         {#if parent}
           <div class="anix-comments-replies-page__parent">

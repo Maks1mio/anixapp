@@ -23,9 +23,10 @@
   import { parseAltTitles } from '../../utils/titleInfo';
   import { formatHistoryViewTime } from '../../utils/historyFormat';
   import { isReleaseAnnounce } from '../../utils/release-card';
-  import { toPosterDisplayUrl } from '../../utils/posterUrl';
+  import { toPosterDisplayUrl, type PosterThumbPreset } from '../../utils/posterUrl';
   import { isTvMode } from '../../platform/tv';
   import { tvLazyPoster } from '../../actions/tvLazyPoster';
+  import PosterImage from '../PosterImage.svelte';
 
   export type UiV2AnimeCardVariant = 'vertical' | 'horizontal';
 
@@ -278,13 +279,11 @@
   const rate = $derived(ratingLabel(rating));
   const dur = $derived(durationLabel(duration));
   const descriptionText = $derived(description ? withEllipsis(description) : null);
+  const posterThumb = $derived<PosterThumbPreset>(
+    variant === 'horizontal' ? 'cardHorizontal' : 'cardVertical',
+  );
   const displayPosterUrl = $derived(
-    posterUrl
-      ? toPosterDisplayUrl(
-          posterUrl,
-          variant === 'horizontal' ? 'cardHorizontal' : 'cardVertical',
-        )
-      : null,
+    posterUrl ? toPosterDisplayUrl(posterUrl, posterThumb) : null,
   );
   const deferPoster = isTvMode();
   const myVoteValue = $derived(
@@ -494,7 +493,7 @@
         {#if deferPoster}
           <img alt="" decoding="async" use:tvLazyPoster={displayPosterUrl} />
         {:else}
-          <img src={displayPosterUrl} alt="" loading="lazy" decoding="async" />
+          <PosterImage src={posterUrl} thumb={posterThumb} alt="" loading="lazy" />
         {/if}
       {:else}
         <span class="uiv2-anime-card__poster-fallback" aria-hidden="true"></span>
@@ -593,7 +592,7 @@
           {#if deferPoster}
             <img alt="" decoding="async" use:tvLazyPoster={displayPosterUrl} />
           {:else}
-            <img src={displayPosterUrl} alt="" loading="lazy" decoding="async" />
+            <PosterImage src={posterUrl} thumb={posterThumb} alt="" loading="lazy" />
           {/if}
         {:else}
           <span class="uiv2-anime-card__poster-fallback" aria-hidden="true"></span>

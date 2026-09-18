@@ -198,6 +198,7 @@ export function createBrowserAnixBridge() {
     }),
     'anix:pingBaseUrl': async (_c, [baseUrl]) => {
       const url = String(baseUrl || DEFAULT_BASE_URL).replace(/\/$/, '');
+      if (url.includes('.invalid')) return { ok: false, latencyMs: null };
       const res = await fetch(`${url}/`);
       return { ok: res.ok, status: res.status };
     },

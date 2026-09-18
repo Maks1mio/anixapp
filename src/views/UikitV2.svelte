@@ -60,6 +60,7 @@
   import UiV2ReleaseFriends, {
     type UiV2ReleaseFriend,
   } from '../components/uikit-v2/UiV2ReleaseFriends.svelte';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import { UIV2_FEED_POST_DEMO } from '../utils/uikit-v2-feed-post';
   import {
     ARTICLE_VOTE_PLUS,
@@ -92,7 +93,7 @@
     { id: 'tokens', title: 'Токены', desc: 'Цвета, радиусы, тени — основа V2' },
     { id: 'type', title: 'Типографика', desc: 'Иерархия заголовков и текста' },
     { id: 'controls', title: 'Контролы', desc: 'Кнопки, pill-навигация, вкладки, поля' },
-    { id: 'surfaces', title: 'Поверхности', desc: 'Панели, модалки, карточки взаимодействия' },
+    { id: 'surfaces', title: 'Поверхности', desc: 'Панели, модалки, ошибка загрузки, карточки' },
     { id: 'cards', title: 'Карточки', desc: 'Аниме, карусель, обсуждения, коллекции, франшиза' },
     { id: 'posts', title: 'Посты', desc: 'Карточки ленты, репосты, медиа, боковая навигация' },
     { id: 'comments', title: 'Комментарии', desc: 'Треды, спойлеры, голоса, глубокая вложенность' },
@@ -1434,6 +1435,28 @@
             </div>
           </div>
         {:else if s.id === 'surfaces'}
+          <div class="uikit-v2-demo-block">
+            <h3 class="uikit-v2-demo-block__title">Ошибка загрузки</h3>
+            <p class="uikit-v2-demo-block__desc">
+              Пилюля по центру контента: warn — сервер недоступен, danger — нет связи.
+              Пока ошибка retryable, спиннер крутится и загрузка повторяется сама.
+            </p>
+            <div class="uikit-v2-retry-demo">
+              <UiV2ContentRetryOverlay
+                compact
+                headline="Ошибка: сервера Anixart временно недоступен"
+                tone="warn"
+                retryable
+              />
+              <UiV2ContentRetryOverlay
+                compact
+                headline="Ошибка: нет связи с сервером Anixart"
+                tone="danger"
+                retryable
+              />
+            </div>
+          </div>
+
           <div class="uikit-v2-demo-block">
             <h3 class="uikit-v2-demo-block__title">Choice Sheet</h3>
             <p class="uikit-v2-demo-block__desc">

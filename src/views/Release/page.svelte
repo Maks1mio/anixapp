@@ -29,6 +29,8 @@
   import { applyReleaseListStatus } from '../../utils/release-list-status';
   import { enrichBlockedRelease } from '../../services/release-geo-bypass';
   import { extractHistoryEpisodeInfo } from '../../utils/historyFormat';
+  import UiV2ContentRetryOverlay from '../../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../../utils/content-load-error';
 
   interface Props { id: number; }
   let { id }: Props = $props();
@@ -334,18 +336,13 @@
     void syncListStateFromApi();
   }
 
-  // ── Load ──────────────────────────────────────────────────────────────────
-  onMount(async () => {
-    if (tvOpenTarget) {
-      void tick().then(() => runTvReleaseOpenAnimation(id));
-    }
-
-    window.addEventListener('anix:bookmarksChanged', onBookmarksChanged);
+  async function loadRelease() {
     if (!window.anixApi) {
       errorMsg  = 'API недоступно (только в Electron).';
       loadState = 'error';
       return;
     }
+    if (loadState !== 'error') loadState = 'loading';
     try {
       const historyResumePromise = loadHistoryResume(id).catch(() => null);
       const data = await window.anixApi.release.info(id, true) as any;
@@ -376,9 +373,19 @@
         if (resume?.episode || resume?.dubber) historyResume = resume;
       });
     } catch (err) {
-      errorMsg  = String(err);
+      errorMsg  = headlineFromLoadError(err);
       loadState = 'error';
     }
+  }
+
+  // ── Load ──────────────────────────────────────────────────────────────────
+  onMount(() => {
+    if (tvOpenTarget) {
+      void tick().then(() => runTvReleaseOpenAnimation(id));
+    }
+
+    window.addEventListener('anix:bookmarksChanged', onBookmarksChanged);
+    void loadRelease();
   });
 
   onDestroy(() => {
@@ -408,7 +415,7 @@
     <div class="release-loading">Загрузка…</div>
 
   {:else if loadState === 'error'}
-    <div class="release-loading">{errorMsg}</div>
+    <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadRelease()} />
 
   {:else if release}
     <section class="release-page" class:release-page--tv-enter={!!tvOpenTarget}>

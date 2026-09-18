@@ -1,9 +1,11 @@
 <script lang="ts">
   import RelatedReleaseRow from "../components/RelatedReleaseRow.svelte";
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import { onMount, onDestroy } from 'svelte';
   import { getSearchParams } from '../router';
   import type { ReleaseCardData } from '../types/release';
   import { mapReleaseRawToCard } from '../utils/release-card';
+  import { headlineFromLoadError } from '../utils/content-load-error';
 
   interface Props {
     /** Franchise related id (GET /related/{id}/{page}) */
@@ -114,7 +116,7 @@
   async function loadPage() {
     if (loading || !hasMore) return;
     loading = true;
-    if (page === 0) loadState = 'loading';
+    if (page === 0 && loadState !== 'error') loadState = 'loading';
 
     try {
       const data = await window.anixApi!.release.related(id, page) as any;
@@ -132,7 +134,7 @@
       hasMore = !!content.length;
       loadState = 'ready';
     } catch (err) {
-      errorMsg = String(err);
+      errorMsg = headlineFromLoadError(err);
       loadState = 'error';
     } finally {
       loading = false;
@@ -187,7 +189,7 @@
       {#if loadState === 'loading'}
         <div class="related__loading">Загрузка…</div>
       {:else if loadState === 'error'}
-        <p class="related__error">Ошибка загрузки: {errorMsg}</p>
+        <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadPage()} />
       {:else if loadState === 'empty'}
         <p class="related__empty">Связанных релизов не найдено.</p>
       {:else}

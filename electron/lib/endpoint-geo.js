@@ -43,6 +43,7 @@ const STATIC_HOST_GEO = {
   'api-s.anixsekai.com': { countryCode: 'BZ', countryName: 'Белиз' },
   'api.anixart.app': { countryCode: 'BZ', countryName: 'Белиз' },
   'api.anixart.tv': { countryCode: 'BZ', countryName: 'Белиз' },
+  'api-down.anixart.invalid': { countryCode: null, countryName: 'тест' },
 };
 
 /** DoH по IP-литералу — не зависит от системного DNS (Clash fake-IP). */
@@ -140,6 +141,11 @@ async function resolvePublicIp(host) {
 async function resolveEndpointGeo(baseUrl) {
   const host = hostFromBaseUrl(baseUrl);
   if (!host) return { countryCode: null, countryName: null, ip: null };
+
+  if (host.endsWith('.invalid')) {
+    const staticHit = STATIC_HOST_GEO[host] || { countryCode: null, countryName: 'тест' };
+    return { countryCode: staticHit.countryCode, countryName: staticHit.countryName, ip: null };
+  }
 
   const cached = cache.get(host);
   if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {

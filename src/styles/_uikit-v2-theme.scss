@@ -99,6 +99,13 @@
   --uiv2-status-bad: #f97316;
   --uiv2-status-offline: var(--uikit-v2-danger);
 
+  // Content retry overlay (пилюля ошибки загрузки — цвета как в макете, не от темы)
+  --uiv2-retry-knob: 2.9rem;
+  --uiv2-retry-warn-fg: #ead56a;
+  --uiv2-retry-warn-bg: #3a3618;
+  --uiv2-retry-danger-fg: #f09080;
+  --uiv2-retry-danger-bg: #3a221e;
+
   // Floating controls on posters / cover images (контраст не зависит от темы)
   --uiv2-media-control-bg: color-mix(in srgb, #0a0a0c 78%, transparent);
   --uiv2-media-control-bg-hover: color-mix(in srgb, #0a0a0c 90%, transparent);

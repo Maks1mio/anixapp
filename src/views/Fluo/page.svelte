@@ -31,6 +31,7 @@
   import UiV2PillField from '../../components/uikit-v2/UiV2PillField.svelte';
   import UiV2Tooltip from '../../components/uikit-v2/UiV2Tooltip.svelte';
   import FluoCreateRoomModal from '../../components/FluoCreateRoomModal.svelte';
+  import UiV2ContentRetryOverlay from '../../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
 
   let rooms = $state<FluoRoomListItem[]>([]);
   let loadState = $state<'loading' | 'ready' | 'error'>('loading');
@@ -62,7 +63,7 @@
   }
 
   async function refreshRooms(silent = false) {
-    if (!silent && rooms.length === 0) loadState = 'loading';
+    if (!silent && rooms.length === 0 && loadState !== 'error') loadState = 'loading';
     try {
       applyRooms(await listFluoRooms(), 'http');
     } catch {
@@ -352,12 +353,7 @@
       <p class="fluo-page__state-sub">Загрузка комнат…</p>
     </div>
   {:else if loadState === 'error'}
-    <div class="fluo-page__state fluo-page__state--error" transition:fade={{ duration: 160 }} role="alert">
-      <div class="fluo-page__state-icon" aria-hidden="true">{@html iconSignal(36)}</div>
-      <p class="fluo-page__state-title">{errorMsg || 'Не удалось загрузить комнаты'}</p>
-      <p class="fluo-page__state-sub">Проверьте соединение и попробуйте снова</p>
-      <UiV2Button label="Повторить" variant="chrome" onclick={() => void refreshRooms()} />
-    </div>
+    <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void refreshRooms(true)} />
   {:else if rooms.length === 0}
     <div class="fluo-page__state" transition:fade={{ duration: 180 }}>
       <div class="fluo-page__state-icon" aria-hidden="true">{@html iconSignal(36)}</div>
@@ -702,10 +698,6 @@
     margin: 0 0 0.65rem;
     font-size: 0.82rem;
     color: var(--uiv2-fg-muted, rgba(255, 255, 255, 0.55));
-  }
-
-  .fluo-page__state--error .fluo-page__state-title {
-    color: var(--uikit-v2-danger, var(--color-error, #f07178));
   }
 
   .fluo-page__skeleton-grid {

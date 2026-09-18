@@ -8,6 +8,8 @@ const DEFAULT_BASE_URL = 'https://api-s.anixsekai.com';
 const EDITOR_ORIGIN = 'https://editor.anixsekai.com';
 /** Резервный прокси AnixApp (не выбирать как основной эндпоинт). */
 const BACKUP_API_PROXY = 'https://api.anixapp.com/anixart-api';
+/** Нерезолвящийся хост — только dev, не сохранять в проде. */
+const DEV_DOWN_API_ENDPOINT = 'https://api-down.anixart.invalid';
 const LOG_DIR = 'logs';
 
 /** Anixart 10.0. В anixapi по умолчанию всё ещё 9.0 — передаём явно при new Anixart(...). */
@@ -53,6 +55,7 @@ module.exports = {
   DEFAULT_BASE_URL,
   EDITOR_ORIGIN,
   BACKUP_API_PROXY,
+  DEV_DOWN_API_ENDPOINT,
   LOG_DIR,
   ANIXART_UA,
   VIDEO_HOSTS,

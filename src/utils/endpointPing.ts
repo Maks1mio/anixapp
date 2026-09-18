@@ -1,4 +1,5 @@
 import type { UiV2SelectStatus } from '../components/uikit-v2/UiV2Select.svelte';
+import { isDevDownApiEndpoint } from '../constants/apiEndpoints';
 import {
   endpointHostname,
   staticEndpointCountry,
@@ -15,9 +16,11 @@ export type { EndpointCountryInfo };
 const GOOD_MS = 150;
 const MEDIUM_MS = 300;
 
-/** Хост для проверки резервного прокси (DNS не резолвится). */
+export { isDevDownApiEndpoint };
+
+/** @deprecated используйте isDevDownApiEndpoint */
 export function isBackupTestEndpoint(value: string): boolean {
-  return value.includes('anixart.invalid');
+  return isDevDownApiEndpoint(value);
 }
 
 /** Хосты, которые часто режут в РФ (показываем спец. текст только если пинг упал). */
@@ -29,7 +32,7 @@ export function endpointCountryLabel(
   value: string,
   geo?: EndpointCountryInfo | null,
 ): string | undefined {
-  if (isBackupTestEndpoint(value)) return 'тест резерва';
+  if (isDevDownApiEndpoint(value)) return 'тест';
   const name = geo?.countryName || staticEndpointCountry(value).countryName;
   return name || undefined;
 }
@@ -42,10 +45,9 @@ export function endpointStatusDesc(
 ): string | undefined {
   const country = endpointCountryLabel(value, geo);
 
-  if (isBackupTestEndpoint(value)) {
-    if (!state) return 'DNS fail · проверка прокси';
-    if (state.ok) return 'неожиданно онлайн';
-    return 'недоступен · ждём failover';
+  if (isDevDownApiEndpoint(value)) {
+    if (state?.ok) return 'неожиданно онлайн';
+    return 'тест · не работает';
   }
 
   if (!state) return country ? `${country} · …` : '…';

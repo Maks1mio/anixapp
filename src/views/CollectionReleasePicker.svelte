@@ -21,6 +21,8 @@
     releaseRawToStored,
   } from '../utils/release-card';
   import { toPosterDisplayUrl } from '../utils/posterUrl';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
 
   interface Props {
     returnPath?: string;
@@ -34,6 +36,7 @@
   let hasMore = $state(true);
   let isLoading = $state(false);
   let loadState = $state<'hint' | 'loading' | 'error' | 'empty' | 'ready'>('hint');
+  let errorMsg = $state('');
   let history = $state<string[]>([]);
 
   let wrapEl: HTMLElement | undefined = $state();
@@ -78,7 +81,7 @@
 
     isLoading = true;
     if (!append) {
-      loadState = 'loading';
+      if (loadState !== 'error') loadState = 'loading';
       page = 0;
       hasMore = true;
       results = [];
@@ -98,8 +101,11 @@
       page += 1;
       if (content.length < 25) hasMore = false;
       loadState = 'ready';
-    } catch {
-      if (!append) loadState = 'error';
+    } catch (err) {
+      if (!append) {
+        errorMsg = headlineFromLoadError(err);
+        loadState = 'error';
+      }
     } finally {
       isLoading = false;
     }
@@ -191,7 +197,7 @@
   {:else if loadState === 'empty'}
     <div class="discover-page__empty">Ничего не найдено</div>
   {:else if loadState === 'error'}
-    <div class="discover-page__error"><p>Ошибка поиска</p></div>
+    <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void search(false)} />
   {:else if results.length > 0}
     {#each results as raw (raw.id)}
       {@const card = mapReleaseRawToCard(raw)}

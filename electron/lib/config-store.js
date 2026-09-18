@@ -9,6 +9,7 @@ const {
   AUTH_FILE,
   DEFAULT_BASE_URL,
   BACKUP_API_PROXY,
+  DEV_DOWN_API_ENDPOINT,
   LOG_DIR,
   UI_ZOOM_LEVELS,
   DISCORD_RPC_PAGE_KEYS,
@@ -126,6 +127,15 @@ function appendLog(name, payload, isDev) {
   }
 }
 
+function isDevDownApiEndpointUrl(url) {
+  const n = String(url || '').trim().replace(/\/$/, '');
+  return n === String(DEV_DOWN_API_ENDPOINT).replace(/\/$/, '') || n.includes('anixart.invalid');
+}
+
+function isDevBuild() {
+  return process.env.NODE_ENV === 'development' || !app.isPackaged;
+}
+
 function isBackupApiProxyUrl(url) {
   const n = String(url || '')
     .trim()
@@ -136,6 +146,7 @@ function isBackupApiProxyUrl(url) {
 function normalizeBaseUrl(url) {
   if (!url) return DEFAULT_BASE_URL;
   const n = String(url).trim().replace(/\/$/, '');
+  if (isDevDownApiEndpointUrl(n) && !isDevBuild()) return DEFAULT_BASE_URL;
   if (isBackupApiProxyUrl(n)) return String(BACKUP_API_PROXY).replace(/\/$/, '');
   return n || DEFAULT_BASE_URL;
 }

@@ -560,6 +560,60 @@ $titlebar-h: 40px;
   }
 }
 
+.schedule-panel-backdrop--flush-top,
+.schedule-panel-wrap--flush-top {
+  top: 0;
+}
+
+.settings-panel__page {
+  padding: 0.15rem 1.1rem 1.75rem;
+}
+
+.settings-panel__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.35rem 1.1rem 0.4rem;
+  color: $color-text-muted;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.settings-panel__meta-link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: $color-text-muted;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+
+  &:hover {
+    color: $color-text;
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, #{$color-accent} 50%, transparent);
+    outline-offset: 2px;
+  }
+}
+
+.settings-panel__meta-components {
+  margin: 0.15rem 0 0;
+  opacity: 0.8;
+}
+
+.profile-panel .settings-modal-content {
+  padding: 0;
+}
+
+.profile-panel .settings-card-layout-toggle {
+  flex-wrap: wrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .schedule-panel-backdrop,
   .schedule-panel-shell {

@@ -4,7 +4,7 @@
   import { navigate, navigateSearchTab, navigateSidebarTab } from '../stores/navigation';
   import { activeSidebarTab, isSidebarTabActive } from '../stores/tab-navigation';
   import { openAdminArea, restoreAdminSession, checkTeamMembership, isTeamMember } from '../stores/admin';
-  import { openNotificationsModal, openSettingsModal } from '../stores/modals';
+  import { openNotificationsModal, openSettingsModal, settingsModalOpen } from '../stores/modals';
   import { isAuthenticated, requireAuth } from '../stores/auth';
   import { ensureProfileId } from '../utils/profile';
   import { bindSearchHotkeys } from '../search-controller';
@@ -16,6 +16,7 @@
   import LobbyNowWatching from '../components/LobbyNowWatching.svelte';
   import SidebarSchedulePanel from '../components/SidebarSchedulePanel.svelte';
   import SidebarProfilePanel from '../components/SidebarProfilePanel.svelte';
+  import SettingsModal from '../components/SettingsModal.svelte';
   import SidebarPanelResizeHandle from '../components/SidebarPanelResizeHandle.svelte';
   import SidebarPins from '../components/SidebarPins.svelte';
   import Page from '../components/Page.svelte';
@@ -81,10 +82,17 @@
   let profileActive = $state(false);
   let profileCloseTimer: ReturnType<typeof setTimeout> | null = null;
   let panelUserId = $state<number | null>(null);
+  let settingsVisible = $state(false);
+  let settingsActive = $state(false);
+  let settingsCloseTimer: ReturnType<typeof setTimeout> | null = null;
   /** После анимации закрытия профиля открыть расписание */
   let openScheduleAfterProfileClose = $state(false);
   /** После анимации закрытия расписания открыть профиль */
   let openProfileAfterScheduleClose = $state<number | null>(null);
+  let openSettingsAfterProfileClose = $state(false);
+  let openSettingsAfterScheduleClose = $state(false);
+  let openScheduleAfterSettingsClose = $state(false);
+  let openProfileAfterSettingsClose = $state<number | null>(null);
 
   let schedulePanelWidthPx = $state(getSchedulePanelWidthPx());
   let profilePanelWidthPx = $state(getProfilePanelWidthPx());
@@ -103,9 +111,21 @@
     }
   }
 
+  function clearSettingsCloseTimer() {
+    if (settingsCloseTimer != null) {
+      clearTimeout(settingsCloseTimer);
+      settingsCloseTimer = null;
+    }
+  }
+
   function finishScheduleClose() {
     if (!scheduleActive) scheduleVisible = false;
     clearScheduleCloseTimer();
+    if (openSettingsAfterScheduleClose) {
+      openSettingsAfterScheduleClose = false;
+      actuallyOpenSettings();
+      return;
+    }
     const pendingId = openProfileAfterScheduleClose;
     if (pendingId != null) {
       openProfileAfterScheduleClose = null;
@@ -121,9 +141,29 @@
       resetProfilePanelHistory();
     }
     clearProfileCloseTimer();
+    if (openSettingsAfterProfileClose) {
+      openSettingsAfterProfileClose = false;
+      actuallyOpenSettings();
+      return;
+    }
     if (openScheduleAfterProfileClose) {
       openScheduleAfterProfileClose = false;
       actuallyOpenSchedule();
+    }
+  }
+
+  function finishSettingsClose() {
+    if (!settingsActive) settingsVisible = false;
+    clearSettingsCloseTimer();
+    if (openScheduleAfterSettingsClose) {
+      openScheduleAfterSettingsClose = false;
+      actuallyOpenSchedule();
+      return;
+    }
+    const pendingId = openProfileAfterSettingsClose;
+    if (pendingId != null) {
+      openProfileAfterSettingsClose = null;
+      actuallyOpenProfile(pendingId);
     }
   }
 
@@ -139,6 +179,14 @@
   }
 
   function openSchedule() {
+    openSettingsAfterProfileClose = false;
+    openSettingsAfterScheduleClose = false;
+    openProfileAfterSettingsClose = null;
+    if (settingsVisible) {
+      openScheduleAfterSettingsClose = true;
+      closeSettings(false);
+      return;
+    }
     if (profileVisible) {
       // Сначала анимация закрытия профиля, потом расписание
       openScheduleAfterProfileClose = true;
@@ -181,6 +229,14 @@
 
   function openProfile(userId: number) {
     openScheduleAfterProfileClose = false;
+    openSettingsAfterProfileClose = false;
+    openSettingsAfterScheduleClose = false;
+    openScheduleAfterSettingsClose = false;
+    if (settingsVisible) {
+      openProfileAfterSettingsClose = userId;
+      closeSettings(false);
+      return;
+    }
     if (scheduleVisible) {
       // Сначала анимация закрытия расписания, потом профиль
       openProfileAfterScheduleClose = userId;
@@ -212,6 +268,58 @@
     profileCloseTimer = setTimeout(finishProfileClose, SCHEDULE_ANIM_MS + 50);
   }
 
+  function actuallyOpenSettings() {
+    clearSettingsCloseTimer();
+    settingsModalOpen.set(true);
+    if (settingsVisible && settingsActive) return;
+    settingsVisible = true;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        settingsActive = true;
+      });
+    });
+  }
+
+  function openSettings() {
+    openScheduleAfterProfileClose = false;
+    openProfileAfterScheduleClose = null;
+    openScheduleAfterSettingsClose = false;
+    openProfileAfterSettingsClose = null;
+    if (settingsVisible && settingsActive) return;
+    if (profileVisible) {
+      openSettingsAfterProfileClose = true;
+      openSettingsAfterScheduleClose = false;
+      closeProfile(false);
+      return;
+    }
+    if (scheduleVisible) {
+      openSettingsAfterScheduleClose = true;
+      openSettingsAfterProfileClose = false;
+      closeSchedule(false);
+      return;
+    }
+    actuallyOpenSettings();
+  }
+
+  function closeSettings(immediate = false) {
+    if (!settingsVisible) return;
+    if (!settingsActive && !immediate) return;
+    settingsActive = false;
+    settingsModalOpen.set(false);
+    clearSettingsCloseTimer();
+    if (immediate) {
+      settingsVisible = false;
+      const pendingSchedule = openScheduleAfterSettingsClose;
+      const pendingProfile = openProfileAfterSettingsClose;
+      openScheduleAfterSettingsClose = false;
+      openProfileAfterSettingsClose = null;
+      if (pendingSchedule) actuallyOpenSchedule();
+      else if (pendingProfile != null) actuallyOpenProfile(pendingProfile);
+      return;
+    }
+    settingsCloseTimer = setTimeout(finishSettingsClose, SCHEDULE_ANIM_MS + 50);
+  }
+
   function toggleSchedule() {
     if (scheduleVisible && scheduleActive) closeSchedule();
     else openSchedule();
@@ -227,6 +335,12 @@
     if (e.target !== e.currentTarget) return;
     if (e.propertyName !== 'width') return;
     if (!profileActive) finishProfileClose();
+  }
+
+  function onSettingsTransitionEnd(e: TransitionEvent) {
+    if (e.target !== e.currentTarget) return;
+    if (e.propertyName !== 'width') return;
+    if (!settingsActive) finishSettingsClose();
   }
 
   const sidebarContextTab = $derived($activeSidebarTab);
@@ -253,10 +367,16 @@
     }
   });
 
+  $effect(() => {
+    if ($settingsModalOpen) openSettings();
+    else if (settingsVisible && settingsActive) closeSettings();
+  });
+
   onMount(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       // Профиль закрывается только крестиком или расписанием — Esc только для расписания
       if (e.key === 'Escape' && mediaPreviewOpen) return;
+      if (e.key === 'Escape' && settingsVisible && settingsActive) closeSettings();
       if (e.key === 'Escape' && scheduleVisible && scheduleActive) closeSchedule();
     };
     window.addEventListener('keydown', onKeyDown);
@@ -333,6 +453,7 @@
       openNotificationsModal();
     }}
     onSettings={() => openSettingsModal()}
+    settingsOpen={settingsActive}
     onProfile={onProfileClick}
     onSearchTab={navigateSearchTab}
     {searchTabActive}
@@ -461,15 +582,16 @@
     </main>
   </div>
 
-  {#if scheduleVisible || (profileVisible && panelUserId)}
+  {#if scheduleVisible || (profileVisible && panelUserId) || settingsVisible}
     <button
       type="button"
       class="schedule-panel-backdrop"
-      class:schedule-panel-backdrop--open={scheduleActive || profileActive}
+      class:schedule-panel-backdrop--open={scheduleActive || profileActive || settingsActive}
       aria-label="Закрыть панель"
       onclick={() => {
         if (scheduleActive) closeSchedule();
         else if (profileActive) closeProfile();
+        else if (settingsActive) closeSettings();
       }}
     ></button>
   {/if}
@@ -513,6 +635,30 @@
         <SidebarPanelResizeHandle
           widthPx={profilePanelWidthPx}
           label="Ширина профиля"
+          onWidthChange={(w) => {
+            profilePanelWidthPx = w;
+          }}
+          onWidthCommit={(w) => {
+            profilePanelWidthPx = setProfilePanelWidthPx(w);
+          }}
+        />
+      </div>
+    </aside>
+  {:else if settingsVisible}
+    <aside
+      class="schedule-panel-wrap schedule-panel-wrap--profile"
+      class:schedule-panel-wrap--open={settingsActive}
+      aria-label="Настройки"
+      aria-hidden={!settingsActive}
+      ontransitionend={onSettingsTransitionEnd}
+    >
+      <div class="schedule-panel-shell schedule-panel-shell--profile" style={`width: ${profilePanelWidthPx}px`}>
+        <div class="schedule-panel-shell__body">
+          <SettingsModal onClose={() => closeSettings()} />
+        </div>
+        <SidebarPanelResizeHandle
+          widthPx={profilePanelWidthPx}
+          label="Ширина настроек"
           onWidthChange={(w) => {
             profilePanelWidthPx = w;
           }}

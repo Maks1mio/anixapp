@@ -3,271 +3,272 @@
   import { get } from 'svelte/store';
   import Page from './Page.svelte';
   import { settingsModalInitialTab, settingsModalLastTab } from '../stores/modals';
-  import { isAuthenticated, openLoginPrompt } from '../stores/auth';
-  import AccountPage    from '../views/Settings/pages/AccountPage.svelte';
+  import AccountPage from '../views/Settings/pages/AccountPage.svelte';
   import AppearancePage from '../views/Settings/pages/AppearancePage.svelte';
   import ConnectionPage from '../views/Settings/pages/ConnectionPage.svelte';
-  import BehaviorPage   from '../views/Settings/pages/BehaviorPage.svelte';
-  import PlaybackPage   from '../views/Settings/pages/PlaybackPage.svelte';
+  import BehaviorPage from '../views/Settings/pages/BehaviorPage.svelte';
+  import PlaybackPage from '../views/Settings/pages/PlaybackPage.svelte';
   import DiscordRpcPage from '../views/Settings/pages/DiscordRpcPage.svelte';
-  import AboutPage      from '../views/Settings/pages/AboutPage.svelte';
-  import DeveloperPage  from '../views/Settings/pages/DeveloperPage.svelte';
-  import {
-    createIcons,
-    User,
-    Palette,
-    Globe,
-    SlidersHorizontal,
-    Info,
-    LayoutGrid,
-    LogOut,
-    Star,
-    ExternalLink,
-    Tv,
-    ScrollText,
-    Activity,
-    Code2,
-  } from 'lucide';
+  import AboutPage from '../views/Settings/pages/AboutPage.svelte';
+  import DeveloperPage from '../views/Settings/pages/DeveloperPage.svelte';
+  import UiV2BackBar from './uikit-v2/UiV2BackBar.svelte';
+  import UiV2RoundButton from './uikit-v2/UiV2RoundButton.svelte';
+  import SidebarPanelResizeHandle from './SidebarPanelResizeHandle.svelte';
+  import { iconX } from './icons';
+  import { getProfilePanelWidthPx, setProfilePanelWidthPx } from '../prefs';
 
   interface Props {
     onClose: () => void;
+    /** Свой wrap/backdrop — экран входа без Layout. */
+    standalone?: boolean;
+    /** Экран входа без titlebar — панель от верхнего края. */
+    flushTop?: boolean;
   }
 
-  const { onClose }: Props = $props();
+  const { onClose, standalone = false, flushTop = false }: Props = $props();
 
-  export type SettingsTab = 'account' | 'appearance' | 'connection' | 'behavior' | 'playback' | 'discord' | 'developer' | 'about';
+  export type SettingsTab =
+    | 'account'
+    | 'appearance'
+    | 'connection'
+    | 'behavior'
+    | 'playback'
+    | 'discord'
+    | 'developer'
+    | 'about';
 
   const TAB_TITLES: Record<SettingsTab, string> = {
-    account:    'Моя учётная запись',
+    account: 'Моя учётная запись',
     appearance: 'Внешний вид',
     connection: 'Соединение',
-    behavior:   'Поведение',
-    playback:   'Воспроизведение',
-    discord:    'Discord RPC',
-    developer:  'Разработчик',
-    about:      'О программе',
+    behavior: 'Поведение',
+    playback: 'Воспроизведение',
+    discord: 'Discord RPC',
+    developer: 'Разработчик',
+    about: 'О программе',
   };
 
+  const MENU_ROWS: { tab: SettingsTab; title: string; sub: string; section?: string }[] = [
+    { tab: 'appearance', title: 'Внешний вид', sub: 'Тема, масштаб и карточки', section: 'Настройки приложения' },
+    { tab: 'connection', title: 'Соединение', sub: 'Эндпоинт API' },
+    { tab: 'behavior', title: 'Поведение', sub: 'Трей, ускорение, диагностика' },
+    { tab: 'playback', title: 'Воспроизведение', sub: 'Апскейл, звук и горячие клавиши' },
+    { tab: 'discord', title: 'Discord RPC', sub: 'Статус в Discord' },
+  ];
+
   const isDev = import.meta.env.DEV;
+  const PANEL_ANIM_MS = 340;
 
   const initialTab = get(settingsModalInitialTab) as SettingsTab | null;
-  let activeTab = $state<SettingsTab>(initialTab ?? 'appearance');
-  let overlayEl = $state<HTMLElement | null>(null);
-  let sidebarScrollEl = $state<HTMLElement | null>(null);
+  let screen = $state<SettingsTab | 'menu'>(
+    initialTab && initialTab in TAB_TITLES ? initialTab : 'menu',
+  );
+  let sheetOpen = $state(false);
+  let closing = $state(false);
+  let panelWidthPx = $state(getProfilePanelWidthPx());
+  let appVersion = $state('AnixApp');
+  let componentsLine = $state('');
+  let closeTimer: ReturnType<typeof setTimeout> | null = null;
 
-  function initIcons(root: HTMLElement): void {
-    createIcons({
-      icons: { User, Palette, Globe, SlidersHorizontal, Info, LogOut, Star, ExternalLink, Tv, ScrollText, Activity, Code2 },
-      root,
-    });
-  }
+  const backSegments = $derived(
+    screen === 'menu'
+      ? [{ label: 'Настройки', active: true }]
+      : [{ label: TAB_TITLES[screen], active: true }, { label: 'Настройки' }],
+  );
 
-  // Tab switching is now handled by Svelte {#if} blocks in the template.
-  // Each tab is a separate component in views/Settings/pages/.
+  $effect(() => {
+    const next = $settingsModalInitialTab;
+    if (next && next in TAB_TITLES) screen = next as SettingsTab;
+  });
 
-  // ── close / keyboard ──────────────────────────────────────────────────────────
   function close() {
+    if (standalone) {
+      if (closing) return;
+      closing = true;
+      sheetOpen = false;
+      if (closeTimer != null) clearTimeout(closeTimer);
+      closeTimer = setTimeout(onClose, PANEL_ANIM_MS + 50);
+      return;
+    }
     onClose();
   }
 
+  function goMenu() {
+    screen = 'menu';
+  }
+
+  function openTab(tab: SettingsTab) {
+    screen = tab;
+  }
+
+  function onHeadBack() {
+    if (screen === 'menu') close();
+    else goMenu();
+  }
+
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') close();
-  }
-
-  function handleOverlayClick(e: MouseEvent) {
-    if (e.target === overlayEl) close();
-  }
-
-  onMount(() => {
-    document.addEventListener('keydown', handleKeydown);
-
-    // Version in sidebar footer
-    const versionEl = overlayEl?.querySelector('#s-version') as HTMLElement | null;
-    const compEl = overlayEl?.querySelector('#s-components') as HTMLElement | null;
-
-    if (typeof window.electron?.getVersions === 'function') {
-      window.electron.getVersions().then((v: any) => {
-        if (v.app && versionEl) versionEl.textContent = `AnixApp v${v.app}`;
-        if (compEl) {
-          const parts: string[] = [];
-          if (v.electron) parts.push(`Electron ${v.electron}`);
-          if (v.chrome) parts.push(`Chrome ${v.chrome}`);
-          if (v.node) parts.push(`Node ${v.node}`);
-          const apiVer = v.anixapi || v.anixartjs;
-          if (apiVer) parts.push(`<a href="#" class="settings-sidebar__meta-link" data-url="https://github.com/Maks1mio/anixapi">AnixApi ${apiVer}</a>`);
-          compEl.innerHTML = parts.join(' · ');
-          compEl.querySelectorAll<HTMLAnchorElement>('.settings-sidebar__meta-link').forEach((a) => {
-            a.addEventListener('click', (e) => {
-              e.preventDefault();
-              const url = a.dataset.url;
-              if (url) window.electron?.openExternal?.(url);
-            });
-          });
-        }
-      }).catch(() => {});
-    } else if (typeof window.electron?.getAppVersion === 'function') {
-      window.electron.getAppVersion().then((v: string) => {
-        if (versionEl) versionEl.textContent = `AnixApp v${v}`;
-      }).catch(() => {});
+    if (!standalone) return;
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      close();
     }
-
-    // Lucide icons in sidebar
-    if (overlayEl) initIcons(overlayEl);
-  });
-
-  onDestroy(() => {
-    settingsModalLastTab.set(activeTab);
-    document.removeEventListener('keydown', handleKeydown);
-  });
-
-  async function handleLogout() {
-    if (!window.anixApi) return;
-    if (!confirm('Выйти из аккаунта и убрать его из списка быстрой смены?')) return;
-    close();
-    try {
-      await window.anixApi.auth.logout();
-    } catch { /* ignore */ }
-    const { applyAccountSessionChange } = await import('../stores/auth');
-    await applyAccountSessionChange();
   }
 
   function handleGithubLink(e: Event) {
     e.preventDefault();
     window.electron?.openExternal?.('https://github.com/Maks1mio/anixapp');
   }
+
+  onMount(() => {
+    if (standalone) {
+      document.addEventListener('keydown', handleKeydown);
+      window.addEventListener('anix:settingsPanelRequestClose', close);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!closing) sheetOpen = true;
+        });
+      });
+    }
+
+    if (typeof window.electron?.getVersions === 'function') {
+      void window.electron.getVersions().then((v) => {
+        if (v.app) appVersion = `AnixApp v${v.app}`;
+        const parts: string[] = [];
+        if (v.electron) parts.push(`Electron ${v.electron}`);
+        if (v.chrome) parts.push(`Chrome ${v.chrome}`);
+        if (v.node) parts.push(`Node ${v.node}`);
+        const apiVer = v.anixapi || v.anixartjs;
+        if (apiVer) parts.push(`AnixApi ${apiVer}`);
+        componentsLine = parts.join(' · ');
+      }).catch(() => {});
+    } else if (typeof window.electron?.getAppVersion === 'function') {
+      void window.electron.getAppVersion().then((v: string) => {
+        if (v) appVersion = `AnixApp v${v}`;
+      }).catch(() => {});
+    }
+  });
+
+  onDestroy(() => {
+    if (screen !== 'menu') settingsModalLastTab.set(screen);
+    document.removeEventListener('keydown', handleKeydown);
+    window.removeEventListener('anix:settingsPanelRequestClose', close);
+    if (closeTimer != null) clearTimeout(closeTimer);
+  });
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-<div
-  class="settings-overlay settings-overlay--open"
-  role="dialog"
-  aria-modal="true"
-  aria-label="Настройки"
-  tabindex="-1"
-  bind:this={overlayEl}
-  onclick={handleOverlayClick}
->
-  <div class="settings-panel">
-
-    <aside class="settings-sidebar">
-      <div class="settings-sidebar__scroll" bind:this={sidebarScrollEl}>
-
-        <p class="settings-nav__section">Настройки приложения</p>
-        <button
-          class="settings-nav__item settings-nav__item--icon"
-          class:settings-nav__item--active={activeTab === 'appearance'}
-          onclick={() => { activeTab = 'appearance'; }}
-        >
-          <i data-lucide="palette"></i><span>Внешний вид</span>
-        </button>
-        <button
-          class="settings-nav__item settings-nav__item--icon"
-          class:settings-nav__item--active={activeTab === 'connection'}
-          onclick={() => { activeTab = 'connection'; }}
-        >
-          <i data-lucide="globe"></i><span>Соединение</span>
-        </button>
-        <button
-          class="settings-nav__item settings-nav__item--icon"
-          class:settings-nav__item--active={activeTab === 'behavior'}
-          onclick={() => { activeTab = 'behavior'; }}
-        >
-          <i data-lucide="sliders-horizontal"></i><span>Поведение</span>
-        </button>
-        <button
-          class="settings-nav__item settings-nav__item--icon"
-          class:settings-nav__item--active={activeTab === 'playback'}
-          onclick={() => { activeTab = 'playback'; }}
-        >
-          <i data-lucide="tv"></i><span>Воспроизведение</span>
-        </button>
-        <button
-          class="settings-nav__item settings-nav__item--icon"
-          class:settings-nav__item--active={activeTab === 'discord'}
-          onclick={() => { activeTab = 'discord'; }}
-        >
-          <i data-lucide="activity"></i><span>Discord RPC</span>
-        </button>
-
-        {#if isDev}
-          <div class="settings-nav__sep"></div>
-          <p class="settings-nav__section">Разработчик</p>
-          <button
-            class="settings-nav__item settings-nav__item--icon"
-            class:settings-nav__item--active={activeTab === 'developer'}
-            onclick={() => { activeTab = 'developer'; }}
-          >
-            <i data-lucide="code-2"></i><span>Разработчик</span>
-          </button>
-        {/if}
-
-        <div class="settings-nav__sep"></div>
-
-        <button
-          class="settings-nav__item settings-nav__item--icon"
-          class:settings-nav__item--active={activeTab === 'about'}
-          onclick={() => { activeTab = 'about'; }}
-        >
-          <i data-lucide="info"></i><span>О программе</span>
-        </button>
-
+{#snippet panelBody()}
+  <div class="profile-panel" role="dialog" aria-modal="true" aria-label="Настройки приложения">
+    <header class="profile-panel__chrome">
+      <div class="profile-panel__close">
+        <UiV2RoundButton label="Закрыть" onclick={close}>
+          {@html iconX(18)}
+        </UiV2RoundButton>
       </div>
+    </header>
 
-      <div class="settings-sidebar__footer-section">
-        {#if $isAuthenticated}
-          <button class="settings-nav__item settings-nav__item--logout" id="s-logout" onclick={handleLogout}>
-            <i data-lucide="log-out"></i>
-            <span>Выйти</span>
-          </button>
+    <Page scrollId="settings-panel" extraClass="profile-panel__page" noPadding>
+      <div class="profile-panel__edit-view">
+        <header class="profile-panel__friends-head">
+          <UiV2BackBar segments={backSegments} onBack={onHeadBack} />
+        </header>
+
+        {#if screen === 'menu'}
+          <div class="profile-panel__edit-menu">
+            {#each MENU_ROWS as row (row.tab)}
+              {#if row.section}
+                <h3 class="profile-panel__edit-section">{row.section}</h3>
+              {/if}
+              <button type="button" class="profile-panel__edit-row" onclick={() => openTab(row.tab)}>
+                <span class="profile-panel__edit-row-title">{row.title}</span>
+                <span class="profile-panel__edit-row-sub">{row.sub}</span>
+              </button>
+            {/each}
+
+            {#if isDev}
+              <div class="profile-panel__edit-divider" aria-hidden="true"></div>
+              <h3 class="profile-panel__edit-section">Разработчик</h3>
+              <button type="button" class="profile-panel__edit-row" onclick={() => openTab('developer')}>
+                <span class="profile-panel__edit-row-title">Разработчик</span>
+                <span class="profile-panel__edit-row-sub">Мосты, логи и UI Kit</span>
+              </button>
+            {/if}
+
+            <div class="profile-panel__edit-divider" aria-hidden="true"></div>
+            <button type="button" class="profile-panel__edit-row" onclick={() => openTab('about')}>
+              <span class="profile-panel__edit-row-title">О программе</span>
+              <span class="profile-panel__edit-row-sub">{appVersion}</span>
+            </button>
+
+            <div class="profile-panel__edit-divider" aria-hidden="true"></div>
+            <div class="settings-panel__meta">
+              <span>{appVersion}</span>
+              <button type="button" class="settings-panel__meta-link" onclick={handleGithubLink}>
+                GitHub
+              </button>
+              {#if componentsLine}
+                <p class="settings-panel__meta-components">{componentsLine}</p>
+              {/if}
+            </div>
+          </div>
         {:else}
-          <button
-            type="button"
-            class="settings-nav__item settings-nav__item--logout"
-            onclick={() => { close(); openLoginPrompt(); }}
-          >
-            <i data-lucide="user"></i>
-            <span>Войти</span>
-          </button>
+          <div class="settings-panel__page">
+            {#if screen === 'account'}
+              <AccountPage />
+            {:else if screen === 'appearance'}
+              <AppearancePage />
+            {:else if screen === 'connection'}
+              <ConnectionPage />
+            {:else if screen === 'behavior'}
+              <BehaviorPage />
+            {:else if screen === 'playback'}
+              <PlaybackPage />
+            {:else if screen === 'discord'}
+              <DiscordRpcPage />
+            {:else if screen === 'developer'}
+              <DeveloperPage />
+            {:else}
+              <AboutPage />
+            {/if}
+          </div>
         {/if}
-        <div class="settings-sidebar__meta">
-          <span class="settings-sidebar__meta-version" id="s-version">AnixApp</span>
-          <button type="button" class="settings-sidebar__meta-icon" id="s-github-link" title="GitHub" onclick={handleGithubLink}>
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
-              <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2z"/>
-            </svg>
-          </button>
-        </div>
-        <div class="settings-sidebar__meta-components" id="s-components"></div>
       </div>
-    </aside>
-
-    <div class="settings-content">
-      <div class="settings-content__header">
-        <h1 class="settings-content__title">{TAB_TITLES[activeTab]}</h1>
-        <button class="settings-close-btn" aria-label="Закрыть" onclick={close}></button>
-      </div>
-      <div class="settings-content__page-wrap">
-        <Page scrollId="settings-scroll" noPadding={true} extraClass="settings-page">
-          {#if activeTab === 'account'}
-            <AccountPage />
-          {:else if activeTab === 'appearance'}
-            <AppearancePage />
-          {:else if activeTab === 'connection'}
-            <ConnectionPage />
-          {:else if activeTab === 'behavior'}
-            <BehaviorPage />
-          {:else if activeTab === 'playback'}
-            <PlaybackPage />
-          {:else if activeTab === 'discord'}
-            <DiscordRpcPage />
-          {:else if activeTab === 'developer'}
-            <DeveloperPage />
-          {:else if activeTab === 'about'}
-            <AboutPage />
-          {/if}
-        </Page>
-      </div>
-    </div>
-
+    </Page>
   </div>
-</div>
+{/snippet}
+
+{#if standalone}
+  <button
+    type="button"
+    class="schedule-panel-backdrop"
+    class:schedule-panel-backdrop--open={sheetOpen}
+    class:schedule-panel-backdrop--flush-top={flushTop}
+    aria-label="Закрыть настройки"
+    onclick={close}
+  ></button>
+
+  <aside
+    class="schedule-panel-wrap schedule-panel-wrap--profile schedule-panel-wrap--settings"
+    class:schedule-panel-wrap--open={sheetOpen}
+    class:schedule-panel-wrap--flush-top={flushTop}
+    aria-label="Настройки"
+    aria-hidden={!sheetOpen}
+  >
+    <div class="schedule-panel-shell schedule-panel-shell--profile" style={`width: ${panelWidthPx}px`}>
+      <div class="schedule-panel-shell__body">
+        {@render panelBody()}
+      </div>
+      <SidebarPanelResizeHandle
+        widthPx={panelWidthPx}
+        label="Ширина настроек"
+        onWidthChange={(w) => {
+          panelWidthPx = w;
+        }}
+        onWidthCommit={(w) => {
+          panelWidthPx = setProfilePanelWidthPx(w);
+        }}
+      />
+    </div>
+  </aside>
+{:else}
+  {@render panelBody()}
+{/if}

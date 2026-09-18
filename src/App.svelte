@@ -1019,7 +1019,7 @@
     onConnectionRetry={checkAndShow}
   />
   {#if $settingsModalOpen}
-    <SettingsModal onClose={() => settingsModalOpen.set(false)} />
+    <SettingsModal onClose={() => settingsModalOpen.set(false)} standalone flushTop />
   {/if}
 
 {:else if isWatchRoute && !isTvMode()}
@@ -1036,9 +1036,6 @@
     </Layout>
   {/if}
 
-  {#if $settingsModalOpen}
-    <SettingsModal onClose={() => settingsModalOpen.set(false)} />
-  {/if}
   {#if $notificationsModalOpen}
     <NotificationsModal onClose={() => notificationsModalOpen.set(false)} />
   {/if}

@@ -20,6 +20,7 @@
     onSchedule?: () => void;
     scheduleOpen?: boolean;
     onSettings?: () => void;
+    settingsOpen?: boolean;
     onProfile?: (event: MouseEvent) => void;
     onSearchTab?: () => void;
     searchTabActive?: boolean;
@@ -31,6 +32,7 @@
     onSchedule,
     scheduleOpen = false,
     onSettings,
+    settingsOpen = false,
     onProfile,
     onSearchTab: _onSearchTab,
     searchTabActive = false,
@@ -480,7 +482,9 @@
         type="button"
         class="titlebar__menu-item"
         id="titlebar-settings"
+        class:titlebar__menu-item--active={settingsOpen}
         aria-label="Настройки"
+        aria-expanded={settingsOpen}
         onclick={onSettings}
       >
         {@html iconSettings(18)}

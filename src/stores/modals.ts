@@ -42,8 +42,11 @@ const watchModalStateCache = new Map<number, WatchModalCachedState>();
 export const settingsModalLastTab = writable<string | null>(null);
 
 export function openSettingsModal(tab?: string): void {
-  const cached = get(settingsModalLastTab);
-  settingsModalInitialTab.set(tab ?? cached ?? null);
+  if (get(settingsModalOpen) && !tab) {
+    closeSettingsModal();
+    return;
+  }
+  settingsModalInitialTab.set(tab?.trim() || null);
   settingsModalOpen.set(true);
 }
 export function closeSettingsModal(): void {

@@ -12,10 +12,21 @@ import java.io.FilterInputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.security.KeyStore;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateExpiredException;
+import java.security.cert.CertificateNotYetValidException;
+import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
 
 /**
  * Anixart CDN режет картинки без Referer. Electron делает это через anix-cdn://,
@@ -196,26 +207,27 @@ public class CdnBridgeWebViewClient extends BridgeWebViewClient {
             }
         }
 
+        String mirror = toMirror(url);
+        String[] order = (mirror != null && !mirror.equals(url))
+            ? new String[] { url, mirror }
+            : new String[] { url };
+
         HttpURLConnection conn = null;
         try {
-            conn = open(url);
-            int code = conn.getResponseCode();
+            int code = 400;
             byte[] body = null;
-            String mime = conn.getContentType();
-            if (code < 400) {
-                InputStream in = conn.getInputStream();
-                body = readAll(in);
-            }
-            if (code >= 400 || body == null || body.length < 400) {
-                String mirror = toMirror(url);
-                if (mirror != null && !mirror.equals(url)) {
-                    conn.disconnect();
-                    conn = open(mirror);
-                    code = conn.getResponseCode();
-                    if (code < 400) {
-                        body = readAll(conn.getInputStream());
-                        mime = conn.getContentType();
-                    }
+            String mime = null;
+            for (String candidate : order) {
+                if (conn != null) conn.disconnect();
+                conn = open(candidate);
+                code = conn.getResponseCode();
+                mime = conn.getContentType();
+                body = null;
+                if (code < 400) {
+                    body = readAll(conn.getInputStream());
+                }
+                if (code < 400 && body != null && body.length >= 400) {
+                    break;
                 }
             }
             if (code >= 400 || body == null || body.length < 400) return null;
@@ -238,11 +250,77 @@ public class CdnBridgeWebViewClient extends BridgeWebViewClient {
         }
     }
 
+    private static volatile SSLSocketFactory cdnSslFactory;
+
+    private static X509TrustManager systemTrustManager() throws Exception {
+        TrustManagerFactory factory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        factory.init((KeyStore) null);
+        for (TrustManager tm : factory.getTrustManagers()) {
+            if (tm instanceof X509TrustManager) return (X509TrustManager) tm;
+        }
+        throw new IllegalStateException("no X509TrustManager");
+    }
+
+    private static boolean isDateOnlyCertFailure(Throwable error) {
+        for (Throwable cur = error; cur != null; cur = cur.getCause()) {
+            if (cur instanceof CertificateExpiredException || cur instanceof CertificateNotYetValidException) {
+                return true;
+            }
+            String msg = cur.getMessage();
+            if (msg == null) continue;
+            String lower = msg.toLowerCase(Locale.ROOT);
+            if (lower.contains("expired") || lower.contains("notyetvalid") || lower.contains("not yet valid")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static SSLSocketFactory cdnSslFactory() {
+        SSLSocketFactory cached = cdnSslFactory;
+        if (cached != null) return cached;
+        synchronized (CdnBridgeWebViewClient.class) {
+            if (cdnSslFactory != null) return cdnSslFactory;
+            try {
+                final X509TrustManager system = systemTrustManager();
+                TrustManager wrapping = new X509TrustManager() {
+                    @Override
+                    public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                        system.checkClientTrusted(chain, authType);
+                    }
+
+                    @Override
+                    public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                        try {
+                            system.checkServerTrusted(chain, authType);
+                        } catch (CertificateException e) {
+                            if (!isDateOnlyCertFailure(e)) throw e;
+                        }
+                    }
+
+                    @Override
+                    public X509Certificate[] getAcceptedIssuers() {
+                        return system.getAcceptedIssuers();
+                    }
+                };
+                SSLContext ctx = SSLContext.getInstance("TLS");
+                ctx.init(null, new TrustManager[] { wrapping }, null);
+                cdnSslFactory = ctx.getSocketFactory();
+            } catch (Exception e) {
+                cdnSslFactory = HttpsURLConnection.getDefaultSSLSocketFactory();
+            }
+            return cdnSslFactory;
+        }
+    }
+
     private static HttpURLConnection open(String url) throws Exception {
         HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
         conn.setInstanceFollowRedirects(true);
         conn.setConnectTimeout(8000);
         conn.setReadTimeout(12000);
+        if (conn instanceof HttpsURLConnection) {
+            ((HttpsURLConnection) conn).setSSLSocketFactory(cdnSslFactory());
+        }
         conn.setRequestProperty("Referer", REFERER);
         conn.setRequestProperty("Origin", ORIGIN);
         conn.setRequestProperty("User-Agent", UA);

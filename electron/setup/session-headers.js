@@ -41,11 +41,28 @@ function hostUrlPatterns(hosts) {
   return hosts.flatMap((h) => [`*://*.${h}/*`, `*://${h}/*`]);
 }
 
+/** Chromium net::ERR_CERT_DATE_INVALID — просроченный/ещё не начавшийся сертификат. */
+const CERT_DATE_INVALID = -201;
+
+function allowExpiredAnixartCdnCerts(ses) {
+  ses.setCertificateVerifyProc((request, callback) => {
+    const host = String(request?.hostname || '').replace(/^www\./, '').toLowerCase();
+    const dateInvalid = Number(request?.errorCode) === CERT_DATE_INVALID
+      || /CERT_DATE_INVALID/i.test(String(request?.verificationResult || ''));
+    if (dateInvalid && hostMatchesList(host, ANIXART_CDN_HOSTS)) {
+      callback(0);
+      return;
+    }
+    callback(-3);
+  });
+}
+
 function setupSessionRequestHeaders() {
   const { loadExtraVideoHostsFromConfig } = require('../lib/extra-video-hosts');
   loadExtraVideoHostsFromConfig();
 
   const ses = session.defaultSession;
+  allowExpiredAnixartCdnCerts(ses);
   const cdnPatterns = hostUrlPatterns(ANIXART_CDN_HOSTS);
   const videoPatterns = hostUrlPatterns(VIDEO_HOSTS);
 

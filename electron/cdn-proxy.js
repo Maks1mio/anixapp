@@ -11,17 +11,24 @@ const ANIXART_CDN_HOSTS = ['anixmirai.com', 'anixart.tv', 'anixsekai.com'];
 
 const CACHE_MAX = 256;
 const CACHE_TTL_MS = 60 * 60 * 1000;
-/** Сколько раз пробовать оригинал + mirror при сбоях CDN / сети. */
-const CDN_FETCH_ATTEMPTS = 10;
-const CDN_FETCH_BASE_MS = 350;
-/** После сбоя прямого CDN — тянуть через api.anixapp.com (обход zapret/DPI на клиенте). */
-const CDN_RELAY_STICKY_MS = 15 * 60 * 1000;
+/** Сколько раз пробовать зеркало / origin / relay при полном провале. */
+const CDN_FETCH_ATTEMPTS = 6;
+const CDN_FETCH_BASE_MS = 280;
+/** После сбоя прямого CDN — не долбить заблокированный хост (zapret/DPI). */
+const CDN_ROUTE_TTL_MS = 15 * 60 * 1000;
+/** Пустышка hotlink-защиты / оборванный ответ — как в Android CdnBridge. */
+const CDN_DUMMY_MIN_BYTES = 400;
+const CDN_MIRROR_TIMEOUT_MS = 8_000;
+const CDN_ORIGIN_TIMEOUT_MS = 5_000;
 /** @type {Map<string, { buffer: Buffer, mimeType: string, ts: number }>} */
 const cache = new Map();
 /** @type {Map<string, { buffer: Buffer, mimeType: string, ts: number }>} */
 const thumbnailCache = new Map();
-/** @type {number} */
-let preferRelayUntil = 0;
+/** @type {'auto' | 'mirror' | 'direct' | 'relay'} */
+let cdnRoute = 'auto';
+let cdnRouteUntil = 0;
+/** @type {{ info?: Function, warn?: Function, error?: Function } | null} */
+let cdnLogger = null;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -39,8 +46,56 @@ function getHttpFetcher() {
   return fetch;
 }
 
-function isRetryableHttpStatus(status) {
-  return status === 408 || status === 425 || status === 429 || status >= 500;
+/**
+ * Chromium session.fetch падает на просроченном LE (CERT_DATE / ERR_FAILED).
+ * Node https с rejectUnauthorized:false для CDN — как рабочий /__cdn в Vite.
+ */
+function nodeCdnGet(url, headers, timeoutMs, redirectsLeft = 5) {
+  return new Promise((resolve, reject) => {
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch (err) {
+      reject(err);
+      return;
+    }
+    const lib = parsed.protocol === 'http:' ? require('http') : require('https');
+    const req = lib.get(url, {
+      headers,
+      timeout: timeoutMs,
+      rejectUnauthorized: false,
+    }, (res) => {
+      const loc = res.headers.location;
+      if (res.statusCode >= 300 && res.statusCode < 400 && loc && redirectsLeft > 0) {
+        res.resume();
+        const next = new URL(loc, url).toString();
+        nodeCdnGet(next, headers, timeoutMs, redirectsLeft - 1).then(resolve, reject);
+        return;
+      }
+      if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {
+        res.resume();
+        reject(new Error(`CDN HTTP ${res.statusCode} for ${url}`));
+        return;
+      }
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => {
+        resolve({
+          status: res.statusCode,
+          mimeType: String(res.headers['content-type'] || '').split(';')[0].trim() || guessMime(url),
+          buffer: Buffer.concat(chunks),
+        });
+      });
+      res.on('error', reject);
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      const err = new Error(`timeout after ${timeoutMs}ms`);
+      err.name = 'TimeoutError';
+      reject(err);
+    });
+    req.on('error', reject);
+  });
 }
 
 function hostMatchesList(host, list) {
@@ -136,6 +191,62 @@ function cacheEntry(url, buffer, mimeType) {
   return entry;
 }
 
+function isDummyCdnBody(buffer) {
+  return !buffer || buffer.length < CDN_DUMMY_MIN_BYTES;
+}
+
+function isTimeoutErr(err) {
+  const name = err && typeof err === 'object' ? String(err.name || '') : '';
+  const msg = String(err?.message || err || '');
+  return name === 'TimeoutError' || name === 'AbortError' || /timeout|aborted|abort/i.test(msg);
+}
+
+function readPersistedCdnRoute() {
+  try {
+    const { getRawConfig } = require('./lib/config-store');
+    const r = getRawConfig()?.cdnRoute;
+    // relay больше не sticky: бэкап часто висит, а прямой CDN у нас живой.
+    if (r === 'mirror' || r === 'direct') return r;
+  } catch {
+    /* app not ready */
+  }
+  return 'auto';
+}
+
+function persistCdnRoute(route) {
+  if (route === 'relay') {
+    cdnRoute = 'auto';
+    cdnRouteUntil = 0;
+    return;
+  }
+  if (route !== 'mirror' && route !== 'direct') return;
+  const changed = cdnRoute !== route;
+  cdnRoute = route;
+  cdnRouteUntil = Date.now() + CDN_ROUTE_TTL_MS;
+  if (!changed) return;
+  try {
+    const { saveConfig } = require('./lib/config-store');
+    saveConfig({ cdnRoute: route });
+  } catch {
+    /* ignore */
+  }
+  cdnLogger?.info?.('cdn', `using ${route} route`);
+}
+
+function currentCdnRoute() {
+  if ((cdnRoute === 'mirror' || cdnRoute === 'direct' || cdnRoute === 'relay')
+    && Date.now() < cdnRouteUntil) {
+    return cdnRoute;
+  }
+  const persisted = readPersistedCdnRoute();
+  cdnRoute = persisted;
+  if (persisted !== 'auto') cdnRouteUntil = Date.now() + CDN_ROUTE_TTL_MS;
+  return persisted;
+}
+
+let originBlockedUntil = 0;
+let mirrorBlockedUntil = 0;
+
 /**
  * Server-side CDN relay via AnixApp backup API.
  * Client only talks to api.anixapp.com — avoids zapret/WinDivert breaking s3.anixmirai.com TLS.
@@ -148,7 +259,7 @@ async function fetchCdnAssetViaRelay(url) {
   const response = await fetchAnixartProxy(path, {
     method: 'GET',
     redirect: 'follow',
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(20_000),
     headers: {
       Accept: 'image/*,application/octet-stream,*/*',
     },
@@ -156,44 +267,21 @@ async function fetchCdnAssetViaRelay(url) {
   if (!response.ok) {
     throw new Error(`CDN relay HTTP ${response.status}`);
   }
-  const buffer = Buffer.from(await response.arrayBuffer());
-  if (!buffer.length) throw new Error('Empty CDN relay body');
   const mimeType = response.headers.get('content-type')?.split(';')[0]?.trim() || guessMime(url);
+  if (/json|html|text\/plain/i.test(mimeType)) {
+    throw new Error(`CDN relay returned ${mimeType}`);
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (isDummyCdnBody(buffer)) throw new Error('Empty CDN relay body');
   return cacheEntry(url, buffer, mimeType);
 }
 
-async function fetchCdnAssetDirect(url, httpFetch, headers) {
-  const candidates = [url];
-  const mirror = buildMirrorUrl(url);
-  if (mirror && mirror !== url) candidates.push(mirror);
-
-  let lastError = null;
-  for (const candidate of candidates) {
-    try {
-      const response = await httpFetch(candidate, {
-        headers,
-        redirect: 'follow',
-        signal: AbortSignal.timeout(20_000),
-      });
-      if (!response.ok) {
-        lastError = new Error(`CDN HTTP ${response.status} for ${candidate}`);
-        if (!isRetryableHttpStatus(response.status) && response.status !== 404) {
-          continue;
-        }
-        continue;
-      }
-      const buffer = Buffer.from(await response.arrayBuffer());
-      if (!buffer.length) {
-        lastError = new Error(`Empty CDN body for ${candidate}`);
-        continue;
-      }
-      const mimeType = response.headers.get('content-type')?.split(';')[0]?.trim() || guessMime(url);
-      return cacheEntry(url, buffer, mimeType);
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-    }
+async function fetchCdnAssetDirect(url, _httpFetch, headers, timeoutMs) {
+  const response = await nodeCdnGet(url, headers, timeoutMs);
+  if (isDummyCdnBody(response.buffer)) {
+    throw new Error(`CDN dummy/empty body (${response.buffer.length}b) for ${url}`);
   }
-  throw lastError || new Error(`CDN fetch failed for ${url}`);
+  return cacheEntry(url, response.buffer, response.mimeType || guessMime(url));
 }
 
 async function fetchCdnAsset(url) {
@@ -211,54 +299,94 @@ async function fetchCdnAsset(url) {
   };
 
   const httpFetch = getHttpFetcher();
+  const mirror = buildMirrorUrl(url);
+  const hasMirror = Boolean(mirror && mirror !== url);
   let lastError = null;
-  const stickyRelay = Date.now() < preferRelayUntil;
+
+  const loadDirect = (target, timeoutMs) => fetchCdnAssetDirect(target, httpFetch, headers, timeoutMs);
 
   for (let attempt = 0; attempt < CDN_FETCH_ATTEMPTS; attempt += 1) {
     if (attempt > 0) {
-      const delay = Math.min(8_000, CDN_FETCH_BASE_MS * 2 ** (attempt - 1));
-      await sleep(delay);
+      await sleep(Math.min(4_000, CDN_FETCH_BASE_MS * 2 ** (attempt - 1)));
     }
 
-    // Race direct S3 vs server relay so zapret/WinDivert users don't wait for TLS timeouts.
-    if (stickyRelay || attempt >= 1) {
-      try {
-        const entry = await fetchCdnAssetViaRelay(url);
-        preferRelayUntil = Date.now() + CDN_RELAY_STICKY_MS;
-        return entry;
-      } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err));
-      }
-      try {
-        const entry = await fetchCdnAssetDirect(url, httpFetch, headers);
-        return entry;
-      } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err));
-        preferRelayUntil = Date.now() + CDN_RELAY_STICKY_MS;
-      }
-      continue;
+    const route = currentCdnRoute();
+    /** @type {Promise<{ via: 'mirror' | 'direct' | 'relay', value: { buffer: Buffer, mimeType: string, ts: number } }>[]} */
+    const raced = [];
+
+    const originBlocked = Date.now() < originBlockedUntil;
+    const mirrorBlocked = Date.now() < mirrorBlockedUntil;
+
+    const pushRelay = () => {
+      if (!getProxyAppKey()) return;
+      raced.push(fetchCdnAssetViaRelay(url).then((value) => ({ via: 'relay', value })));
+    };
+    const pushMirror = () => {
+      if (!hasMirror || mirrorBlocked) return;
+      raced.push(
+        loadDirect(mirror, CDN_MIRROR_TIMEOUT_MS)
+          .then((value) => {
+            mirrorBlockedUntil = 0;
+            return { via: 'mirror', value };
+          })
+          .catch((err) => {
+            if (isTimeoutErr(err)) mirrorBlockedUntil = Date.now() + CDN_ROUTE_TTL_MS;
+            throw err;
+          }),
+      );
+    };
+    const pushOrigin = () => {
+      if (originBlocked) return;
+      raced.push(
+        loadDirect(url, CDN_ORIGIN_TIMEOUT_MS)
+          .then((value) => {
+            originBlockedUntil = 0;
+            return { via: 'direct', value };
+          })
+          .catch((err) => {
+            if (isTimeoutErr(err)) originBlockedUntil = Date.now() + CDN_ROUTE_TTL_MS;
+            throw err;
+          }),
+      );
+    };
+
+    // Прямой CDN — основной путь. Зеркало/relay не стартуем параллельно:
+    // у части сетей они висят и забивают пул, из‑за этого обложки остаются пустыми.
+    if (route === 'mirror' && !mirrorBlocked) {
+      pushMirror();
+      pushOrigin();
+    } else {
+      pushOrigin();
+    }
+    if (originBlocked || route === 'mirror') {
+      pushRelay();
+      if (route !== 'mirror') pushMirror();
+    }
+
+    if (!raced.length) {
+      originBlockedUntil = 0;
+      mirrorBlockedUntil = 0;
+      pushOrigin();
+      pushRelay();
+      pushMirror();
     }
 
     try {
-      const entry = await Promise.any([
-        fetchCdnAssetDirect(url, httpFetch, headers).then((value) => ({ via: 'direct', value })),
-        fetchCdnAssetViaRelay(url).then((value) => ({ via: 'relay', value })),
-      ]);
-      if (entry.via === 'relay') {
-        preferRelayUntil = Date.now() + CDN_RELAY_STICKY_MS;
-      } else {
-        preferRelayUntil = 0;
-      }
-      return entry.value;
+      const winner = await Promise.any(raced);
+      persistCdnRoute(winner.via);
+      return winner.value;
     } catch (err) {
-      // Promise.any → AggregateError
       const nested = err && typeof err === 'object' && Array.isArray(err.errors) ? err.errors : null;
       lastError = nested?.[0] instanceof Error
         ? nested[0]
         : err instanceof Error
           ? err
           : new Error(String(err));
-      preferRelayUntil = Date.now() + CDN_RELAY_STICKY_MS;
+    }
+
+    if (route !== 'auto') {
+      cdnRoute = 'auto';
+      cdnRouteUntil = 0;
     }
   }
 
@@ -344,6 +472,9 @@ function registerCdnScheme() {
 }
 
 function setupCdnProtocol(logger) {
+  cdnLogger = logger || null;
+  cdnRoute = readPersistedCdnRoute();
+  if (cdnRoute !== 'auto') cdnRouteUntil = Date.now() + CDN_ROUTE_TTL_MS;
   protocol.handle('anix-cdn', async (request) => {
     try {
       const reqUrl = new URL(request.url);

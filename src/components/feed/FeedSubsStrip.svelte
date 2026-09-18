@@ -1,7 +1,7 @@
 <script lang="ts">
   import { flip } from 'svelte/animate';
   import { cubicOut } from 'svelte/easing';
-  import UserAvatar from '../UserAvatar.svelte';
+  import UiV2FeedPersonTile from '../uikit-v2/UiV2FeedPersonTile.svelte';
   import { iconChevronLeft, iconChevronRight, iconPin } from '../icons';
 
   export type FeedSubsItem = {
@@ -196,37 +196,18 @@
           {@const active = selectedId === item.id}
           <li class="feed-subs__cell" animate:subsFlip>
             <div class="feed-subs__frame">
-              <button
-                type="button"
-                class="feed-subs__item"
-                class:feed-subs__item--active={active}
-                class:feed-subs__item--dimmed={hasSelection && !active}
-                class:feed-subs__item--fresh={item.fresh && !active}
-                class:feed-subs__item--pinned={!!item.pinned}
-                onclick={() => onSelect(item.id)}
+              <UiV2FeedPersonTile
                 title={item.title}
-                aria-pressed={active}
-                aria-label={item.fresh
-                  ? `${item.title}, есть новое`
-                  : item.title}
-              >
-                <span class="feed-subs__avatar-wrap" aria-hidden="true">
-                  <span
-                    class="feed-subs__avatar"
-                    class:feed-subs__avatar--channel={!item.isBlog}
-                  >
-                    <UserAvatar
-                      src={item.avatar}
-                      label={item.title}
-                      shape={item.isBlog ? 'circle' : 'channel'}
-                    />
-                  </span>
-                  {#if item.fresh && !active}
-                    <span class="feed-subs__dot"></span>
-                  {/if}
-                </span>
-                <span class="feed-subs__name">{item.title}</span>
-              </button>
+                avatar={item.avatar}
+                shape={item.isBlog ? 'circle' : 'channel'}
+                showDot={!!item.fresh && !active}
+                {active}
+                dimmed={hasSelection && !active}
+                pinned={!!item.pinned}
+                ariaLabel={item.fresh ? `${item.title}, есть новое` : item.title}
+                ariaPressed={active}
+                onclick={() => onSelect(item.id)}
+              />
               {#if onPin}
                 <button
                   type="button"

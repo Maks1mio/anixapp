@@ -92,13 +92,486 @@
   -webkit-app-region: no-drag;
 }
 
-/* Пустая середина titlebar — зона перетаскивания окна */
+/* Пустая середина titlebar — зона перетаскивания + островок поиска */
 .titlebar__space {
   flex: 1 1 auto;
   align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-width: 1.5rem;
   min-height: 100%;
+  padding: 0 0.75rem;
   -webkit-app-region: drag;
+}
+
+// ——— Search island ———
+
+.titlebar-island {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(100%, 28rem);
+  max-width: 420px;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-island__pill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  height: 28px;
+  padding: 0 0.55rem 0 0.65rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+  color: $color-text-muted;
+  font: inherit;
+  cursor: text;
+  transition:
+    background 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 260ms cubic-bezier(0.22, 1, 0.36, 1);
+
+  &:hover {
+    background: color-mix(in srgb, var(--color-text) 9%, transparent);
+    border-color: color-mix(in srgb, var(--color-text) 8%, transparent);
+    color: $color-text;
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, $color-accent 55%, transparent);
+    outline-offset: 2px;
+  }
+
+  &--hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+.titlebar-island__pill-icon {
+  display: flex;
+  flex-shrink: 0;
+  opacity: 0.55;
+}
+
+.titlebar-island__pill-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  text-align: left;
+  color: inherit;
+
+  &--query {
+    color: $color-text;
+  }
+}
+
+.titlebar-island__pill-kbd {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-family: inherit;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
+  color: $color-text-muted;
+  border: 1px solid color-mix(in srgb, var(--color-text) 6%, transparent);
+  line-height: 1.5;
+}
+
+.titlebar-island__layer {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem 1rem;
+  pointer-events: none;
+  opacity: 1;
+}
+
+.titlebar-island__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: color-mix(in srgb, #000 48%, transparent);
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
+  cursor: default;
+  pointer-events: auto;
+  opacity: 0;
+  transition:
+    opacity 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    backdrop-filter 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    -webkit-backdrop-filter 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.titlebar-island__layer--visible .titlebar-island__backdrop {
+  opacity: 1;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.titlebar-island__layer--closing .titlebar-island__backdrop {
+  opacity: 0;
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
+}
+
+.titlebar-island__panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: min(52rem, calc(100vw - 2rem));
+  max-height: min(78vh, 44rem);
+  margin: 0;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--color-text) 10%, transparent);
+  background: color-mix(in srgb, $color-surface 94%, #000);
+  --uikit-v2-bg: color-mix(in srgb, #{$color-surface} 94%, #000);
+  --uikit-v2-surface: #{$color-surface};
+  --uikit-v2-text: #{$color-text};
+  --uikit-v2-accent: #{$color-accent};
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.45),
+    0 2px 0 color-mix(in srgb, var(--color-text) 6%, transparent) inset;
+  overflow: hidden;
+  pointer-events: auto;
+  opacity: 0;
+  transition: opacity 260ms cubic-bezier(0.22, 1, 0.36, 1);
+
+  &--ready {
+    opacity: 1;
+  }
+}
+
+.titlebar-island__bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  flex-shrink: 0;
+  min-height: 3.1rem;
+  padding: 0.55rem 0.75rem 0.55rem 0.95rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent);
+  background: color-mix(in srgb, $color-surface 88%, transparent);
+}
+
+.titlebar-island__bar-icon {
+  display: flex;
+  flex-shrink: 0;
+  color: $color-text-muted;
+  opacity: 0.7;
+}
+
+.titlebar-island__input {
+  flex: 1;
+  min-width: 0;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: $color-text;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 500;
+  outline: none;
+  text-align: center;
+
+  &::placeholder {
+    color: $color-text-muted;
+    font-weight: 400;
+  }
+
+  &::-webkit-search-cancel-button {
+    display: none;
+  }
+}
+
+.titlebar-island__close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+  color: $color-text-muted;
+  cursor: pointer;
+  font: inherit;
+  transition: background $transition, color $transition;
+
+  &:hover {
+    background: color-mix(in srgb, var(--color-text) 12%, transparent);
+    color: $color-text;
+  }
+}
+
+.titlebar-island__bar-end {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.titlebar-island__esc-hint {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  color: $color-text-muted;
+  opacity: 0.72;
+  user-select: none;
+  pointer-events: none;
+}
+
+.titlebar-island__body {
+  box-sizing: border-box;
+}
+
+.titlebar-island__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  // Не height:0 — у панели только max-height, иначе тело схлопывается
+  max-height: min(calc(78vh - 5.5rem), 40rem);
+  overflow: hidden;
+
+  .uiv2-scroll-area__viewport {
+    max-height: inherit;
+  }
+
+  > .uiv2-scroll-area__v-track {
+    top: 0.45rem;
+    right: 0.28rem;
+    bottom: 0.45rem;
+  }
+}
+
+.titlebar-island__view {
+  display: flex;
+  flex-direction: column;
+}
+
+.titlebar-island__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-bottom: 1.15rem;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.titlebar-island__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.titlebar-island__section-title {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: $color-text-muted;
+}
+
+.titlebar-island__more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.2rem 0.35rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: $color-text-muted;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: $color-text;
+    background: color-mix(in srgb, var(--color-text) 7%, transparent);
+  }
+}
+
+.titlebar-island__carousel {
+  display: flex;
+  gap: 0.65rem;
+  overflow-x: auto;
+  padding: 0.15rem 0 0.4rem;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+
+  &::-webkit-scrollbar {
+    height: 4px;
+  }
+}
+
+.titlebar-island__carousel-card {
+  flex: 0 0 9.5rem;
+  width: 9.5rem;
+  scroll-snap-align: start;
+
+  .uiv2-collection {
+    width: 100%;
+  }
+}
+
+.titlebar-island__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.titlebar-island__chip {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--color-text) 10%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
+  color: $color-text;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background $transition, border-color $transition;
+
+  &:hover {
+    background: color-mix(in srgb, var(--color-text) 10%, transparent);
+    border-color: color-mix(in srgb, var(--color-text) 16%, transparent);
+  }
+}
+
+.titlebar-island__state {
+  margin: 1.5rem 0;
+  text-align: center;
+  font-size: 0.88rem;
+  color: $color-text-muted;
+
+  &--err {
+    color: $color-error;
+  }
+}
+
+.titlebar-island__empty {
+  margin: 0.15rem 0 0.25rem;
+  padding: 0.55rem 0.15rem;
+  font-size: 0.82rem;
+  color: $color-text-muted;
+}
+
+.island-hcarousel {
+  position: relative;
+  min-width: 0;
+  // Чуть шире области, чтобы fade не резался padding секции
+  margin-inline: -0.15rem;
+}
+
+.island-hcarousel__scroll {
+  gap: 0.75rem;
+  padding-top: 0.35rem;
+  padding-bottom: 0.25rem;
+}
+
+.island-hcarousel__person {
+  flex: 0 0 auto;
+}
+
+.island-hcarousel__person .feed-subs__avatar,
+.island-people-grid__item .feed-subs__avatar {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: transparent;
+
+  :global(.user-avatar) {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.island-people-grid__item :global(.user-avatar__fallback) {
+  font-size: 1.35rem;
+}
+
+.island-hcarousel__card {
+  flex: 0 0 9.5rem;
+  width: 9.5rem;
+
+  .uiv2-collection {
+    width: 100%;
+  }
+}
+
+.island-related {
+  width: 100%;
+  min-width: 0;
+
+  .uiv2-franchise {
+    width: 100%;
+  }
+}
+
+.island-people-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(4.85rem, 1fr));
+  gap: 0.75rem 0.55rem;
+  justify-items: center;
+  padding: 0.2rem 0 0.35rem;
+}
+
+.island-people-grid__item {
+  width: 100%;
+  max-width: 5.25rem;
+}
+
+.island-collections-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.25rem, 1fr));
+  gap: 0.85rem 0.75rem;
+  padding: 0.2rem 0 0.35rem;
+}
+
+.island-collections-grid__card {
+  min-width: 0;
+
+  .uiv2-collection {
+    width: 100%;
+  }
+}
+
+.titlebar-island__grid {
+  margin-top: 0.15rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .titlebar-island__pill,
+  .titlebar-island__layer,
+  .titlebar-island__backdrop,
+  .titlebar-island__panel {
+    transition: none !important;
+  }
 }
 
 .titlebar__nav-btn {

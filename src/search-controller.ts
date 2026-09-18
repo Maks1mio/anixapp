@@ -1,24 +1,31 @@
 import { navigate } from './stores/navigation';
 import { getPath } from './router';
 
+const TITLEBAR_INPUT_ID = 'titlebar-search-input';
+const SEARCH_PAGE_INPUT_ID = 'search-page-input';
+
 export function openSearch(): void {
-  if (getPath() === '/search') {
-    focusSearch();
-    return;
-  }
-  navigate('/search');
+  window.dispatchEvent(new CustomEvent('anix:openSearchIsland'));
   requestAnimationFrame(() => {
     requestAnimationFrame(() => focusSearch());
   });
 }
 
-const SEARCH_PAGE_INPUT_ID = 'search-page-input';
-
 export function focusSearch(): void {
-  const input = document.getElementById(SEARCH_PAGE_INPUT_ID) as HTMLInputElement | null;
-  if (input) {
-    input.focus();
-    input.setSelectionRange(0, input.value.length);
+  const titlebar = document.getElementById(TITLEBAR_INPUT_ID) as HTMLInputElement | null;
+  if (titlebar) {
+    titlebar.focus();
+    titlebar.setSelectionRange(0, titlebar.value.length);
+    return;
+  }
+  const page = document.getElementById(SEARCH_PAGE_INPUT_ID) as HTMLInputElement | null;
+  if (page) {
+    page.focus();
+    page.setSelectionRange(0, page.value.length);
+    return;
+  }
+  if (getPath() !== '/search') {
+    navigate('/search');
   }
 }
 

@@ -61,6 +61,8 @@
   let metaH = $state('auto');
   let metaAr = $state('16 / 11');
   let title = $state('Реклама');
+  /** null = ещё проверяем; false = слота нет / скрыто — блок не рисуем */
+  let adReady = $state<boolean | null>(null);
 
   const boxStyle = $derived.by(() => {
     const w = width || creative?.width || metaW || '100%';
@@ -73,17 +75,46 @@
   });
 
   $effect(() => {
-    if (useEditor || !slotId || adId) return;
+    if (useEditor) {
+      adReady = true;
+      return;
+    }
+    if (creative) {
+      adReady = true;
+      metaW = creative.width || '100%';
+      metaH = creative.height || 'auto';
+      metaAr = creative.aspectRatio || '16 / 11';
+      title = (creative as { title?: string }).title || 'Реклама';
+      return;
+    }
+    if (adId) {
+      // Конкретный id — показываем iframe; пустой ответ спрячет через postMessage
+      adReady = true;
+      return;
+    }
+    if (!slotId) {
+      adReady = false;
+      return;
+    }
+
     let cancelled = false;
+    adReady = null;
     void fetchAdEmbed(slotId)
       .then((row) => {
-        if (cancelled || !row) return;
+        if (cancelled) return;
+        if (!row) {
+          adReady = false;
+          return;
+        }
         metaW = row.width || '100%';
         metaH = row.height || 'auto';
         metaAr = row.aspectRatio || '16 / 11';
         title = row.title || 'Реклама';
+        adReady = true;
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) adReady = false;
+      });
     return () => {
       cancelled = true;
     };
@@ -93,10 +124,16 @@
     const onMessage = (e: MessageEvent) => {
       const data = e.data;
       if (!data || typeof data !== 'object') return;
-      if ((data as { type?: string }).type !== 'anix-ad-click') return;
-      const link = String((data as { href?: string }).href ?? '').trim();
-      if (!link) return;
-      requestOpenExternal(link);
+      const type = (data as { type?: string }).type;
+      if (type === 'anix-ad-empty') {
+        adReady = false;
+        return;
+      }
+      if (type === 'anix-ad-click') {
+        const link = String((data as { href?: string }).href ?? '').trim();
+        if (!link) return;
+        requestOpenExternal(link);
+      }
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
@@ -118,7 +155,7 @@
     bind:editHover
     {onCreativeChange}
   />
-{:else if embedSrc}
+{:else if adReady && embedSrc}
   <div class="uiv2-crt-ad-iframe-wrap {className}" style={boxStyle}>
     <iframe
       class="uiv2-crt-ad-iframe"
@@ -129,7 +166,7 @@
       allow="autoplay"
     ></iframe>
   </div>
-{:else}
+{:else if adReady && !embedSrc && (creative || imageUrl)}
   <UiV2VpnCrtBanner
     {href}
     class={className}

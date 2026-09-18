@@ -1355,6 +1355,36 @@ ipcMain.handle('anix:channelCreateBlog', async () => {
   }
 });
 
+ipcMain.handle('anix:channelCreate', async (_, body) => {
+  try {
+    const client = getAnixart();
+    const payload = {
+      title: String(body?.title ?? '').trim(),
+      description: String(body?.description ?? '').trim(),
+      is_commenting_enabled: body?.is_commenting_enabled !== false,
+      is_article_suggestion_enabled: body?.is_article_suggestion_enabled !== false,
+    };
+    return await client.endpoints.channel.create(payload);
+  } catch (err) {
+    handleAnixError(err, 'channelCreate');
+  }
+});
+
+ipcMain.handle('anix:configToggles', async () => {
+  try {
+    const client = getAnixart();
+    // Android: version_code + is_beta + is_api_alt — без них сервер отдаёт пустое тело.
+    return await client.endpoints.config.toggles({
+      version_code: 26080522,
+      is_beta: true,
+      is_api_alt: false,
+    });
+  } catch (err) {
+    appendLog('configToggles', { error: String(err) });
+    return null;
+  }
+});
+
 ipcMain.handle('anix:loginHistory', async (_, profileId, page = 0) => {
   try {
     const client = getAnixart();

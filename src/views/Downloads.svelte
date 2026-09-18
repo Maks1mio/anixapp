@@ -12,6 +12,7 @@
     type DownloadLibraryGroup,
     type DownloadLibraryFile,
   } from '../stores/downloads';
+  import { ffmpegInstall } from '../stores/ffmpeg-install';
   import { formatDownloadErrorMessage } from '../utils/download-errors';
   import { queueMissingEpisodes } from '../utils/download-queue-client';
   import { navigate } from '../stores/navigation';
@@ -134,62 +135,24 @@
   let playBlockedMsg = $state('');
   let playBlockedTimer: ReturnType<typeof setTimeout> | null = null;
   let unregisterScrollKey: (() => void) | null = null;
-  let ffmpegAvailable = $state(true);
-  let ffmpegPath = $state('');
-  let ffmpegSource = $state('');
-  let ffmpegBusy = $state(false);
-  let ffmpegProgress = $state<{ received: number; total: number } | null>(null);
-  let ffmpegMsg = $state('');
   let libQuery = $state('');
   let libSort = $state<LibSort>('name');
   let libSource = $state('');
   let libDubber = $state('');
 
-  async function refreshFfmpegStatus() {
-    try {
-      const st = await window.electron?.getFfmpegStatus?.();
-      ffmpegAvailable = !!st?.available;
-      ffmpegPath = st?.path || '';
-      ffmpegSource = st?.source || '';
-    } catch {
-      ffmpegAvailable = false;
-      ffmpegPath = '';
-      ffmpegSource = '';
-    }
-  }
-
-  async function installFfmpeg() {
-    ffmpegBusy = true;
-    ffmpegMsg = '';
-    ffmpegProgress = { received: 0, total: 0 };
-    const onProgress = (e: Event) => {
-      const detail = (e as CustomEvent<{ received: number; total: number }>).detail;
-      if (detail) ffmpegProgress = detail;
-    };
-    window.addEventListener('downloads:ffmpeg-install-progress', onProgress as EventListener);
-    try {
-      const res = await window.electron?.installFfmpeg?.();
-      if (res?.ok) {
-        ffmpegAvailable = true;
-        ffmpegMsg = 'FFmpeg установлен';
-        await refreshFfmpegStatus();
-      } else {
-        ffmpegMsg = res?.error || 'Не удалось установить FFmpeg';
-        await refreshFfmpegStatus();
-      }
-    } catch (e) {
-      ffmpegMsg = e instanceof Error ? e.message : 'Ошибка установки FFmpeg';
-    } finally {
-      window.removeEventListener('downloads:ffmpeg-install-progress', onProgress as EventListener);
-      ffmpegBusy = false;
-      ffmpegProgress = null;
-    }
-  }
+  const ffmpegAvailable = $derived($ffmpegInstall.available ?? true);
+  const ffmpegPath = $derived($ffmpegInstall.path);
+  const ffmpegSource = $derived($ffmpegInstall.source);
+  const ffmpegBusy = $derived($ffmpegInstall.busy);
+  const ffmpegProgress = $derived($ffmpegInstall.progress);
+  const ffmpegMsg = $derived($ffmpegInstall.message);
+  const ffmpegPercent = $derived(ffmpegProgress?.percent ?? null);
 
   onMount(() => {
     unregisterScrollKey = registerActiveScrollKey(() => DOWNLOADS_VIEW_KEY());
     downloads.init();
-    void refreshFfmpegStatus();
+    ffmpegInstall.init();
+    void ffmpegInstall.refreshStatus();
     const cached = getViewState<DownloadsViewState>(DOWNLOADS_VIEW_KEY());
     if (cached?.data?.expandedGroups) {
       expandedGroups = { ...cached.data.expandedGroups };
@@ -1062,13 +1025,23 @@
     class="dl-v2-tabs"
   />
 
-  {#if !ffmpegAvailable && activeTab !== 'settings'}
+  {#if (!ffmpegAvailable || ffmpegBusy) && activeTab !== 'settings'}
     <div class="dl-v2-banner" role="status" aria-live="polite">
       <div class="dl-v2-banner__icon" aria-hidden="true">{@html iconTriangleAlert(18)}</div>
       <div class="dl-v2-banner__body">
-        <p class="dl-v2-banner__title">FFmpeg не найден</p>
+        <p class="dl-v2-banner__title">
+          {#if ffmpegBusy}
+            Скачивание FFmpeg{#if ffmpegPercent != null} · {ffmpegPercent}%{/if}
+          {:else}
+            FFmpeg не найден
+          {/if}
+        </p>
         <p class="dl-v2-banner__text">
-          Нужен для быстрой сборки HLS. Установите во вкладке «Настройки».
+          {#if ffmpegBusy}
+            Установка продолжается в фоне. Можно оставаться на любой вкладке.
+          {:else}
+            Нужен для быстрой сборки HLS. Установите во вкладке «Настройки».
+          {/if}
         </p>
       </div>
       <UiV2Button
@@ -1852,31 +1825,33 @@
         {#if ffmpegMsg}
           <p class="dl-v2-ffmpeg-msg">{ffmpegMsg}</p>
         {/if}
-        {#if ffmpegBusy && ffmpegProgress}
+        {#if ffmpegBusy}
           <p class="dl-v2-ffmpeg-msg">
             Скачивание…
-            {#if ffmpegProgress.total > 0}
-              {Math.min(99, Math.round((ffmpegProgress.received / ffmpegProgress.total) * 100))}%
+            {#if ffmpegPercent != null}
+              {ffmpegPercent}%
             {/if}
           </p>
-          <div class="dl-v2-job__track" aria-hidden="true">
+          <div
+            class="dl-v2-ffmpeg-track"
+            class:dl-v2-ffmpeg-track--indeterminate={ffmpegPercent == null}
+            aria-hidden="true"
+          >
             <div
-              class="dl-v2-job__fill"
-              style="width: {ffmpegProgress.total > 0
-                ? Math.min(99, Math.round((ffmpegProgress.received / ffmpegProgress.total) * 100))
-                : 12}%"
+              class="dl-v2-ffmpeg-fill"
+              style={ffmpegPercent != null ? `width:${ffmpegPercent}%` : undefined}
             ></div>
           </div>
         {/if}
 
         <div class="dl-v2-row-actions">
-          {#if !ffmpegAvailable}
+          {#if !ffmpegAvailable || ffmpegBusy}
             <UiV2Button
               label={ffmpegBusy ? 'Скачивание…' : 'Скачать FFmpeg'}
               size="sm"
               variant="primary"
               disabled={ffmpegBusy}
-              onclick={() => void installFfmpeg()}
+              onclick={() => void ffmpegInstall.install()}
             />
           {/if}
           <UiV2Button
@@ -1891,7 +1866,7 @@
             size="sm"
             variant="ghost"
             disabled={ffmpegBusy}
-            onclick={() => void refreshFfmpegStatus()}
+            onclick={() => void ffmpegInstall.refreshStatus()}
           />
         </div>
       </UiV2Card>

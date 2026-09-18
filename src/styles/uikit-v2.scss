@@ -1314,7 +1314,7 @@
   gap: 0.65rem;
 }
 
-// ── UI Kit V2 components ─────────────────────────────────────────────────────
+// ââ UI Kit V2 components âââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 .uiv2-btn {
   --uiv2-btn-icon: 1rem;
@@ -1580,7 +1580,7 @@
     height: 2.6rem;
   }
 
-  // В pill-bar стрелки по умолчанию свёрнуты, появляются на hover / alwaysShowArrows
+  // Ð pill-bar ÑÑÑÐµÐ»ÐºÐ¸ Ð¿Ð¾ ÑÐ¼Ð¾Ð»ÑÐ°Ð½Ð¸Ñ ÑÐ²ÑÑÐ½ÑÑÑ, Ð¿Ð¾ÑÐ²Ð»ÑÑÑÑÑ Ð½Ð° hover / alwaysShowArrows
   .uiv2-pill-bar:not(.uiv2-pill-bar--arrows) & {
     width: 0;
     margin: 0;
@@ -1682,7 +1682,7 @@
   user-select: none;
 }
 
-// ── Horizontal scroll tabs (bookmarks, home, search) ─────────────────────────
+// ââ Horizontal scroll tabs (bookmarks, home, search) âââââââââââââââââââââââââ
 
 .uiv2-tabs {
   position: sticky;
@@ -1984,7 +1984,7 @@
   }
 }
 
-// ── Back Bar: назад + где сейчас / наследование ──────────────────────────────
+// ââ Back Bar: Ð½Ð°Ð·Ð°Ð´ + Ð³Ð´Ðµ ÑÐµÐ¹ÑÐ°Ñ / Ð½Ð°ÑÐ»ÐµÐ´Ð¾Ð²Ð°Ð½Ð¸Ðµ ââââââââââââââââââââââââââââââ
 
 .uiv2-back-bar {
   display: inline-flex;
@@ -2054,7 +2054,7 @@
   user-select: none;
 }
 
-// ── Card: контент-панель профиля ─────────────────────────────────────────────
+// ââ Card: ÐºÐ¾Ð½ÑÐµÐ½Ñ-Ð¿Ð°Ð½ÐµÐ»Ñ Ð¿ÑÐ¾ÑÐ¸Ð»Ñ âââââââââââââââââââââââââââââââââââââââââââââ
 
 .uiv2-card {
   margin: 0;
@@ -2065,7 +2065,7 @@
   box-shadow: var(--uiv2-chrome-shadow);
   font-family: $font-sans;
   color: $color-text;
-  // Одинаковый AA и в UI Kit, и внутри profile-panel (transform-слой)
+  // ÐÐ´Ð¸Ð½Ð°ÐºÐ¾Ð²ÑÐ¹ AA Ð¸ Ð² UI Kit, Ð¸ Ð²Ð½ÑÑÑÐ¸ profile-panel (transform-ÑÐ»Ð¾Ð¹)
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
@@ -2120,7 +2120,7 @@
   min-width: 0;
 }
 
-// ── Choice Sheet: выбор одной опции (радио) ──────────────────────────────────
+// ââ Choice Sheet: Ð²ÑÐ±Ð¾Ñ Ð¾Ð´Ð½Ð¾Ð¹ Ð¾Ð¿ÑÐ¸Ð¸ (ÑÐ°Ð´Ð¸Ð¾) ââââââââââââââââââââââââââââââââââ
 
 .uiv2-ext-link {
   position: fixed;
@@ -2324,7 +2324,7 @@
   line-height: 1.35;
 }
 
-// ── Pill field (matches UiV2Button height + 999px radius) ─────────────────────
+// ââ Pill field (matches UiV2Button height + 999px radius) âââââââââââââââââââââ
 
 .uiv2-pill-field {
   --uiv2-pill-field-icon: 1rem;
@@ -2450,7 +2450,7 @@
   }
 }
 
-// ── Outlined field (floating label) ──────────────────────────────────────────
+// ââ Outlined field (floating label) ââââââââââââââââââââââââââââââââââââââââââ
 
 .uiv2-outlined-field {
   --uiv2-field-ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -2675,7 +2675,7 @@
   }
 }
 
-// ── Status dot (tooltip, select) ──────────────────────────────────────────────
+// ââ Status dot (tooltip, select) ââââââââââââââââââââââââââââââââââââââââââââââ
 
 .uiv2-status-dot {
   flex-shrink: 0;
@@ -2705,7 +2705,7 @@
   }
 }
 
-// ── Tooltip ───────────────────────────────────────────────────────────────────
+// ââ Tooltip âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 .uiv2-tooltip__trigger {
   display: inline-flex;
@@ -2888,7 +2888,7 @@
   }
 }
 
-// ── Select ────────────────────────────────────────────────────────────────────
+// ââ Select ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 .uiv2-select {
   display: block;
@@ -3367,7 +3367,7 @@
   }
 }
 
-// ── Anime Card (каталог): vertical grid + horizontal list ────────────────────
+// ââ Anime Card (ÐºÐ°ÑÐ°Ð»Ð¾Ð³): vertical grid + horizontal list ââââââââââââââââââââ
 
 .uiv2-anime-card {
   --uiv2-anime-radius: 12px;
@@ -3684,7 +3684,7 @@
   line-height: 1;
 }
 
-// Рейтинг: просто золотой текст + звезда, без чипа
+// Ð ÐµÐ¹ÑÐ¸Ð½Ð³: Ð¿ÑÐ¾ÑÑÐ¾ Ð·Ð¾Ð»Ð¾ÑÐ¾Ð¹ ÑÐµÐºÑÑ + Ð·Ð²ÐµÐ·Ð´Ð°, Ð±ÐµÐ· ÑÐ¸Ð¿Ð°
 .uiv2-anime-card__score {
   display: inline-flex;
   align-items: center;
@@ -3738,7 +3738,7 @@
   font-variant-numeric: tabular-nums;
 
   &::before {
-    content: '·';
+    content: 'Â·';
     margin-right: 0.2rem;
     opacity: 0.7;
   }
@@ -3963,7 +3963,7 @@
   white-space: pre-line;
 }
 
-// ── Popup menu (Yandex Music–like glass) ─────────────────────────────────────
+// ââ Popup menu (Yandex Musicâlike glass) âââââââââââââââââââââââââââââââââââââ
 
 .uiv2-popup-menu {
   position: fixed;
@@ -3989,7 +3989,7 @@
   backdrop-filter: blur(28px) saturate(1.35);
   color: var(--uiv2-popup-fg);
 
-  /* Невидимый мост к кнопке-триггеру — курсор не «теряется» в зазоре */
+  /* ÐÐµÐ²Ð¸Ð´Ð¸Ð¼ÑÐ¹ Ð¼Ð¾ÑÑ Ðº ÐºÐ½Ð¾Ð¿ÐºÐµ-ÑÑÐ¸Ð³Ð³ÐµÑÑ â ÐºÑÑÑÐ¾Ñ Ð½Ðµ Â«ÑÐµÑÑÐµÑÑÑÂ» Ð² Ð·Ð°Ð·Ð¾ÑÐµ */
   &:not(.uiv2-popup-menu__panel--sub)::before {
     content: '';
     position: absolute;
@@ -4657,7 +4657,7 @@
   overflow: visible;
   transform-origin: left center;
 
-  /* Мост к родителю — курсор не «теряет» submenu в зазоре */
+  /* ÐÐ¾ÑÑ Ðº ÑÐ¾Ð´Ð¸ÑÐµÐ»Ñ â ÐºÑÑÑÐ¾Ñ Ð½Ðµ Â«ÑÐµÑÑÐµÑÂ» submenu Ð² Ð·Ð°Ð·Ð¾ÑÐµ */
   &::before {
     content: '';
     position: absolute;
@@ -4840,7 +4840,7 @@
   }
 }
 
-// ── Custom scroll area ───────────────────────────────────────────────────────
+// ââ Custom scroll area âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 .uiv2-scroll-area {
   position: relative;
@@ -5007,7 +5007,7 @@ body.uiv2-scroll-dragging * {
   }
 }
 
-// ── Skeleton loaders ─────────────────────────────────────────────────────────
+// ââ Skeleton loaders âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 @keyframes uiv2-skeleton-shimmer {
   0% {
@@ -5403,7 +5403,7 @@ body.uiv2-scroll-dragging * {
   color: var(--uikit-v2-text);
 }
 
-/* ——— V2 section header ——— */
+/* âââ V2 section header âââ */
 .uiv2-section-head {
   display: flex;
   align-items: flex-end;
@@ -5456,7 +5456,7 @@ body.uiv2-scroll-dragging * {
   }
 }
 
-/* ——— V2 release carousel ——— */
+/* âââ V2 release carousel âââ */
 .uiv2-carousel {
   position: relative;
   width: 100%;
@@ -5513,7 +5513,7 @@ body.uiv2-scroll-dragging * {
   }
 }
 
-/* ——— V2 discuss list (compact horizontal, без фона-карточки) ——— */
+/* âââ V2 discuss list (compact horizontal, Ð±ÐµÐ· ÑÐ¾Ð½Ð°-ÐºÐ°ÑÑÐ¾ÑÐºÐ¸) âââ */
 .uiv2-discuss {
   display: flex;
   flex-direction: column;
@@ -5688,7 +5688,7 @@ body.uiv2-scroll-dragging * {
   font-variant-numeric: tabular-nums;
 
   &::before {
-    content: '·';
+    content: 'Â·';
     margin-right: 0.2rem;
     opacity: 0.7;
   }
@@ -5761,7 +5761,7 @@ body.uiv2-scroll-dragging * {
   font-variant-numeric: tabular-nums;
 }
 
-/* ——— V2 search franchise card ——— */
+/* âââ V2 search franchise card âââ */
 .uiv2-franchise {
   display: flex;
   align-items: center;
@@ -5927,7 +5927,7 @@ body.uiv2-scroll-dragging * {
   }
 }
 
-/* ——— V2 collection card ——— */
+/* âââ V2 collection card âââ */
 .uiv2-collection {
   position: relative;
   display: flex;
@@ -6327,7 +6327,7 @@ body.uiv2-scroll-dragging * {
   }
 }
 
-/* ——— V2 feed posts (official-site card) ——— */
+/* âââ V2 feed posts (official-site card) âââ */
 .uiv2-feed-post {
   display: flex;
   flex-direction: column;
@@ -8013,7 +8013,7 @@ body.uiv2-scroll-dragging * {
 }
 
 .uiv2-media-lightbox__source--hidden {
-  /* оставляем место в layout, чтобы stage не схлопнулся */
+  /* Ð¾ÑÑÐ°Ð²Ð»ÑÐµÐ¼ Ð¼ÐµÑÑÐ¾ Ð² layout, ÑÑÐ¾Ð±Ñ stage Ð½Ðµ ÑÑÐ»Ð¾Ð¿Ð½ÑÐ»ÑÑ */
   visibility: hidden;
   pointer-events: none;
 }
@@ -8024,7 +8024,7 @@ body.uiv2-scroll-dragging * {
   top: 50%;
   transform: translate(-50%, -50%);
   display: block;
-  /* размер задаёт JS (пропорции буфера) — max-* здесь сплющивают canvas */
+  /* ÑÐ°Ð·Ð¼ÐµÑ Ð·Ð°Ð´Ð°ÑÑ JS (Ð¿ÑÐ¾Ð¿Ð¾ÑÑÐ¸Ð¸ Ð±ÑÑÐµÑÐ°) â max-* Ð·Ð´ÐµÑÑ ÑÐ¿Ð»ÑÑÐ¸Ð²Ð°ÑÑ canvas */
   max-width: none;
   max-height: none;
   background: #000;
@@ -8622,7 +8622,7 @@ body.uiv2-scroll-dragging * {
   }
 }
 
-/* ——— V2 comments (threaded) ——— */
+/* âââ V2 comments (threaded) âââ */
 $uiv2-thread-w: 2px;
 $uiv2-thread-r: 12px;
 $uiv2-thread-gap: 0.35rem;
@@ -8840,7 +8840,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
     }
   }
 
-  // Elbow from parent stem → reply avatar center
+  // Elbow from parent stem â reply avatar center
   &::before {
     content: '';
     position: absolute;
@@ -9470,7 +9470,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
 }
 
 
-/* ——— V2 comment reactions (submenu panel content) ——— */
+/* âââ V2 comment reactions (submenu panel content) âââ */
 .uiv2-reactions {
   display: flex;
   flex-direction: column;
@@ -9648,7 +9648,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
   }
 }
 
-/* ——— V2 comment composer (inline reply) ——— */
+/* âââ V2 comment composer (inline reply) âââ */
 .uiv2-comment__composer-slot {
   margin: 0.45rem 0 0.65rem;
   width: 100%;
@@ -9821,7 +9821,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
     letter-spacing: -0.01em;
 
     &::before {
-      content: '–';
+      content: 'â';
       position: absolute;
       left: 0.35rem;
       opacity: 0.55;
@@ -9876,4 +9876,22 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
     box-shadow: var(--uiv2-chrome-shadow) !important;
     cursor: default;
   }
+}
+
+/* ——— V2 feed person tile (feed strip + search) ——— */
+.uiv2-feed-person__name.feed-subs__name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.uiv2-feed-person__label {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

@@ -477,6 +477,25 @@ export interface AnixApi {
     ) => Promise<{ code?: number; url?: string }>;
     deleteCover: (channelId: number) => Promise<{ code?: number; url?: string }>;
     createBlog: () => Promise<{ code?: number; channel?: { id?: number; cover?: string } }>;
+    create: (body: {
+      title: string;
+      description: string;
+      is_commenting_enabled?: boolean;
+      is_article_suggestion_enabled?: boolean;
+    }) => Promise<{
+      code?: number;
+      channel?: { id?: number; title?: string; avatar?: string | null; is_blog?: boolean };
+    }>;
+  };
+
+  config: {
+    /** GET config/toggles — в т.ч. minBlogCreateRatingScore */
+    toggles: () => Promise<{
+      code?: number;
+      minBlogCreateRatingScore?: number;
+      min_blog_create_rating_score?: number;
+      [key: string]: unknown;
+    }>;
   };
 
   notification: {

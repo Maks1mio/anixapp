@@ -121,6 +121,13 @@ function openHref(href: string) {
 
 function showEmpty(root: HTMLElement, text: string) {
   root.innerHTML = `<div class="empty">${text}</div>`;
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'anix-ad-empty' }, '*');
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 async function start() {

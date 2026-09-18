@@ -213,6 +213,11 @@ function buildWebAnixApi(): AnixApi {
         invoke('anix:channelUploadCover', channelId, imageBase64, fileName),
       deleteCover: (channelId) => invoke('anix:channelDeleteCover', channelId),
       createBlog: () => invoke('anix:channelCreateBlog'),
+      create: (body) => invoke('anix:channelCreate', body),
+    },
+
+    config: {
+      toggles: () => invoke('anix:configToggles'),
     },
 
     notification: {

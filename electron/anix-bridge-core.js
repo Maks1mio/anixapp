@@ -813,6 +813,17 @@ function createAnixBridgeCore(options = {}) {
     'anix:channelDeleteCover': h((c, channelId) =>
       c.getClient().endpoints.channel.deleteCover(channelId)),
     'anix:channelCreateBlog': h((c) => c.getClient().endpoints.channel.createBlog()),
+    'anix:channelCreate': h((c, body) => c.getClient().endpoints.channel.create({
+      title: String(body?.title ?? '').trim(),
+      description: String(body?.description ?? '').trim(),
+      is_commenting_enabled: body?.is_commenting_enabled !== false,
+      is_article_suggestion_enabled: body?.is_article_suggestion_enabled !== false,
+    })),
+    'anix:configToggles': h((c) => c.getClient().endpoints.config.toggles({
+      version_code: 26080522,
+      is_beta: true,
+      is_api_alt: false,
+    })),
     'anix:loginHistory': h((c, profileId, page = 0) =>
       c.getClient().endpoints.profile.changeLoginHistory(profileId, page)),
     'anix:searchReleases': h((c, query, page = 0, searchBy = 0) =>

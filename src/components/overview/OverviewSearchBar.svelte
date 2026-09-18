@@ -2,13 +2,7 @@
   import { iconSearch } from '../icons';
 
   function focusGlobalSearch() {
-    const input = document.getElementById('titlebar-search-input') as HTMLInputElement | null;
-    if (input) {
-      input.focus();
-      input.select();
-      return;
-    }
-    window.dispatchEvent(new CustomEvent('anix:focusSearch'));
+    window.dispatchEvent(new CustomEvent('anix:openSearchIsland'));
   }
 </script>
 

@@ -14,6 +14,7 @@
   import { resolveBadgeImageUrl, resolveBadgeName, rememberBadgeCatalogEntries, enrichLockedBadgePreviews } from '../utils/badge';
   import { resolveJacksonRefs } from '../utils/jackson-refs';
   import { compressImageForUpload } from '../utils/compressImage';
+  import BlogCreateModal from './feed/BlogCreateModal.svelte';
 
   type EditScreen = 'menu' | 'status' | 'nickname' | 'social' | 'badge' | 'health' | 'hiddenChannels' | 'blocklist';
   type MediaPickerKind = 'avatar' | 'cover';
@@ -137,6 +138,8 @@
   let privacyPicker = $state<{ kind: PrivacyKind; title: string } | null>(null);
   let showcasePickerOpen = $state(false);
   let mediaPicker = $state<MediaPickerKind | null>(null);
+  let blogCreateOpen = $state(false);
+  let blogCreateForCover = $state(false);
 
   let channelId = $state<number | null>(null);
   let hasCover = $state(false);
@@ -386,6 +389,38 @@
     themes.map((theme) => ({ value: theme.id, label: theme.name })),
   );
 
+  async function resolveBlogChannelId(): Promise<number | null> {
+    if (channelId && channelId > 0) return channelId;
+    const api = window.anixApi?.channel;
+    if (!api) return null;
+    try {
+      const blog = api.getBlog ? await api.getBlog(profileId) : await api.info(profileId);
+      const fromBlog = Number(
+        (blog as { channel?: { id?: number } })?.channel?.id
+        ?? (blog as { blogInfo?: { channel?: { id?: number } } })?.blogInfo?.channel?.id
+        ?? 0,
+      );
+      if (fromBlog > 0) {
+        channelId = fromBlog;
+        return fromBlog;
+      }
+    } catch {
+      /* no blog yet */
+    }
+    return null;
+  }
+
+  async function openCoverPicker() {
+    if (mediaBusy) return;
+    const id = await resolveBlogChannelId();
+    if (!id) {
+      blogCreateForCover = true;
+      blogCreateOpen = true;
+      return;
+    }
+    mediaPicker = 'cover';
+  }
+
   function openAvatarPicker() {
     if (mediaBusy) return;
     if (avatarBanned) {
@@ -395,9 +430,13 @@
     mediaPicker = 'avatar';
   }
 
-  function openCoverPicker() {
-    if (mediaBusy) return;
-    mediaPicker = 'cover';
+  async function onBlogCreatedFromSettings(newId: number) {
+    if (newId > 0) channelId = newId;
+    blogCreateOpen = false;
+    if (blogCreateForCover) {
+      blogCreateForCover = false;
+      mediaPicker = 'cover';
+    }
   }
 
   function closeMediaPicker() {
@@ -488,37 +527,10 @@
   }
 
   async function ensureBlogChannelId(): Promise<number | null> {
-    if (channelId && channelId > 0) return channelId;
-    const api = window.anixApi?.channel;
-    if (!api) return null;
-
-    try {
-      const blog = api.getBlog ? await api.getBlog(profileId) : await api.info(profileId);
-      const fromBlog = Number(
-        (blog as { channel?: { id?: number } })?.channel?.id
-        ?? (blog as { blogInfo?: { channel?: { id?: number } } })?.blogInfo?.channel?.id
-        ?? 0,
-      );
-      if (fromBlog > 0) {
-        channelId = fromBlog;
-        return fromBlog;
-      }
-    } catch {
-      /* create below */
-    }
-
-    if (!api.createBlog) return null;
-    try {
-      const created = await api.createBlog();
-      if (created?.code != null && created.code !== 0) return null;
-      const id = Number(created?.channel?.id ?? 0);
-      if (id > 0) {
-        channelId = id;
-        return id;
-      }
-    } catch {
-      return null;
-    }
+    const existing = await resolveBlogChannelId();
+    if (existing) return existing;
+    blogCreateForCover = true;
+    blogCreateOpen = true;
     return null;
   }
 
@@ -552,7 +564,7 @@
     try {
       const id = await ensureBlogChannelId();
       if (!id) {
-        showToast('Не удалось подготовить канал для обложки', 'err');
+        /* диалог улучшения профиля уже открыт, либо API недоступен */
         return;
       }
       const { dataUrl, name } = await fileToDataUrl(file, 1920);
@@ -1226,7 +1238,7 @@
           {/if}
         </span>
       </button>
-      <button type="button" class="profile-panel__edit-row" onclick={openCoverPicker} disabled={mediaBusy}>
+      <button type="button" class="profile-panel__edit-row" onclick={() => void openCoverPicker()} disabled={mediaBusy}>
         <span class="profile-panel__edit-row-title">Изменить обложку</span>
         <span class="profile-panel__edit-row-sub">{mediaBusy ? 'Загрузка…' : 'Загрузить с устройства'}</span>
       </button>
@@ -1579,6 +1591,15 @@
       onSelect={(v) => void onMediaPickerSelect(v)}
     />
   {/if}
+
+  <BlogCreateModal
+    open={blogCreateOpen}
+    onClose={() => {
+      blogCreateOpen = false;
+      blogCreateForCover = false;
+    }}
+    onCreated={onBlogCreatedFromSettings}
+  />
 
   <input
     bind:this={avatarInputEl}

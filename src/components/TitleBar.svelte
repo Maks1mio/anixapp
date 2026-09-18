@@ -7,6 +7,7 @@
   import { isAuthenticated, openLoginPrompt, applyAccountSessionChange } from '../stores/auth';
   import { notificationUnreadCount, refreshNotificationUnreadCount } from '../stores/notifications';
   import ConnectionBanner from './ConnectionBanner.svelte';
+  import TitleBarSearchIsland from './TitleBarSearchIsland.svelte';
   import UiV2Tooltip from './uikit-v2/UiV2Tooltip.svelte';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from './uikit-v2/UiV2PopupMenu.svelte';
 
@@ -31,7 +32,7 @@
     scheduleOpen = false,
     onSettings,
     onProfile,
-    onSearchTab,
+    onSearchTab: _onSearchTab,
     searchTabActive = false,
     onConnectionRetry,
   }: Props = $props();
@@ -341,7 +342,9 @@
   </div>
 
   <!-- Явная зона drag / dblclick между навигацией и меню -->
-  <div class="titlebar__space" aria-hidden="true"></div>
+  <div class="titlebar__space">
+    <TitleBarSearchIsland />
+  </div>
 
   <div class="titlebar__menu" id="titlebar-menu">
     <ConnectionBanner onRetry={onConnectionRetry} />
@@ -491,7 +494,9 @@
         class:titlebar__menu-item--active={searchTabActive}
         aria-label="Поиск"
         aria-current={searchTabActive ? 'page' : undefined}
-        onclick={onSearchTab}
+        onclick={() => {
+          window.dispatchEvent(new CustomEvent('anix:openSearchIsland'));
+        }}
       >
         {@html iconSearch(18)}
       </button>

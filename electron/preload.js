@@ -192,6 +192,7 @@ contextBridge.exposeInMainWorld('electron', {
   saveDownloadSettings: (payload) => ipcRenderer.invoke('downloads:saveSettings', payload),
   resetDownloadDirectory: () => ipcRenderer.invoke('downloads:resetDirectory'),
   getFfmpegStatus: () => ipcRenderer.invoke('downloads:getFfmpegStatus'),
+  getFfmpegInstallState: () => ipcRenderer.invoke('downloads:getFfmpegInstallState'),
   installFfmpeg: () => ipcRenderer.invoke('downloads:installFfmpeg'),
   openFfmpegPage: () => ipcRenderer.invoke('downloads:openFfmpegPage'),
   pickDownloadDirectory: () => ipcRenderer.invoke('downloads:pickDirectory'),
@@ -558,6 +559,11 @@ contextBridge.exposeInMainWorld('anixApi', {
       ipcRenderer.invoke('anix:channelUploadCover', channelId, imageBase64, fileName),
     deleteCover: (channelId) => ipcRenderer.invoke('anix:channelDeleteCover', channelId),
     createBlog: () => ipcRenderer.invoke('anix:channelCreateBlog'),
+    create: (body) => ipcRenderer.invoke('anix:channelCreate', body),
+  },
+
+  config: {
+    toggles: () => ipcRenderer.invoke('anix:configToggles'),
   },
 
   notification: {

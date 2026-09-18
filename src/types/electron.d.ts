@@ -145,8 +145,14 @@ declare global {
         installDir?: string;
         downloadPage?: string;
       }>;
+      getFfmpegInstallState?: () => Promise<{
+        busy: boolean;
+        received: number;
+        total: number;
+      }>;
       installFfmpeg?: () => Promise<{
         ok: boolean;
+        busy?: boolean;
         path?: string;
         source?: string;
         openedPage?: boolean;

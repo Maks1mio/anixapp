@@ -5,6 +5,7 @@
   import UiV2Select, { type UiV2SelectOption } from '../components/uikit-v2/UiV2Select.svelte';
   import FeedArticleCard from '../components/feed/FeedArticleCard.svelte';
   import UiV2FeedPostSkeleton from '../components/uikit-v2/UiV2FeedPostSkeleton.svelte';
+  import UserAvatar from '../components/UserAvatar.svelte';
   import { get } from 'svelte/store';
   import { isAuthenticated, authReady, requireAuth } from '../stores/auth';
   import { feedArticleFocusId, feedChannelFocusId, takeFeedArticleFocus, takeFeedChannelFocus } from '../stores/feed-focus';
@@ -12,6 +13,7 @@
   import {
     beginScrollRestore,
     buildViewStateKey,
+    getScrollContainer,
     getViewState,
     logViewStateMiss,
     logViewStateRestore,
@@ -69,9 +71,15 @@
   import FeedHistoryMoment from '../components/feed/FeedHistoryMoment.svelte';
   import FeedChannelPanel from '../components/feed/FeedChannelPanel.svelte';
   import FeedDirectoryModal from '../components/feed/FeedDirectoryModal.svelte';
+  import {
+    findSelfBlogChannelId,
+  } from '../utils/blog-create-gate';
+  import BlogCreateModal from '../components/feed/BlogCreateModal.svelte';
+  import ChannelCreateModal from '../components/feed/ChannelCreateModal.svelte';
   import { openProfilePanel } from '../stores/profile-panel';
   import {
     iconArrowLeft,
+    iconChevronRight,
     iconClock,
     iconClipboardList,
     iconFlame,
@@ -79,7 +87,6 @@
     iconPencil,
     iconPlus,
     iconPopular,
-    iconRefreshCw,
     iconSearch,
     iconUsers,
     iconX,
@@ -114,6 +121,8 @@
   };
 
   const FEED_HISTORY_POST_KEY = 'anixFeedPostId';
+  /** Тихое автообновление ленты: только новые посты сверху, без reload. */
+  const FEED_AUTO_REFRESH_MS = 45_000;
 
   function FEED_VIEW_KEY() {
     return buildViewStateKey('/feed');
@@ -141,6 +150,10 @@
   let managed = $state<EditorChannel[]>([]);
   let managedBusy = $state(false);
   let createBusy = $state(false);
+  let blogCreateOpen = $state(false);
+  let channelCreateOpen = $state(false);
+  let autoRefreshBusy = false;
+  let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
   let composerOpen = $state(false);
   let composerChannelId = $state<number | null>(null);
   let composerRepost = $state<FeedArticle | null>(null);
@@ -1206,6 +1219,98 @@
     await fetchPage(0, false);
   }
 
+  function canSoftRefreshFeed(): boolean {
+    if (typeof document !== 'undefined' && document.hidden) return false;
+    if (postViewActive) return false;
+    if (tab !== 'my' && tab !== 'latest') return false;
+    if (loadState !== 'ready' && loadState !== 'empty') return false;
+    if (loadingMore || autoRefreshBusy) return false;
+    if (tab === 'my' && channelFilterId == null && !authed) return false;
+    return !!window.anixApi?.feed;
+  }
+
+  /** Подтянуть первую страницу и вставить только новые записи сверху — без сброса списка/скролла. */
+  async function softRefreshFeed(): Promise<void> {
+    if (!canSoftRefreshFeed()) return;
+    const api = window.anixApi?.feed;
+    if (!api) return;
+
+    const refreshTab = tab;
+    const refreshChannelId = channelFilterId;
+    const refreshDate = dateFilter;
+    autoRefreshBusy = true;
+    try {
+      const res = refreshTab === 'my'
+        ? await api.my(0, {
+            date: refreshDate,
+            ...(refreshChannelId != null ? { channelId: refreshChannelId } : {}),
+          })
+        : await api.latest(0);
+
+      if (tab !== refreshTab || channelFilterId !== refreshChannelId || dateFilter !== refreshDate) {
+        return;
+      }
+      if (postViewActive || (loadState !== 'ready' && loadState !== 'empty')) return;
+
+      const list = withLocalSubscribeFlags(normalizeArticles(res?.content)).map((a) => (
+        refreshChannelId != null
+          ? {
+              ...a,
+              channel: a.channel
+                ? { ...a.channel, id: a.channel.id || refreshChannelId }
+                : a.channel,
+            }
+          : a
+      ));
+
+      if (articles.length === 0) {
+        if (list.length === 0) return;
+        articles = list;
+        page = 0;
+        const totalPages = Number(res?.total_page_count ?? 0);
+        hasMore = totalPages > 0 ? 1 < totalPages : list.length >= 10;
+        loadState = 'ready';
+        return;
+      }
+
+      const known = new Set(articles.map((a) => a.id));
+      const fresh = list.filter((a) => !known.has(a.id));
+      if (fresh.length === 0) return;
+
+      const scrollEl = getScrollContainer();
+      const prevTop = scrollEl?.scrollTop ?? 0;
+      const prevHeight = scrollEl?.scrollHeight ?? 0;
+      const pinScroll = prevTop > 32;
+
+      articles = [...fresh, ...articles];
+      if (loadState === 'empty') loadState = 'ready';
+
+      if (pinScroll && scrollEl) {
+        await tick();
+        const delta = scrollEl.scrollHeight - prevHeight;
+        if (delta > 0) scrollEl.scrollTop = prevTop + delta;
+      }
+    } catch {
+      /* тихо: автообновление не должно шуметь ошибками */
+    } finally {
+      autoRefreshBusy = false;
+    }
+  }
+
+  function startFeedAutoRefresh() {
+    stopFeedAutoRefresh();
+    autoRefreshTimer = setInterval(() => {
+      void softRefreshFeed();
+    }, FEED_AUTO_REFRESH_MS);
+  }
+
+  function stopFeedAutoRefresh() {
+    if (autoRefreshTimer) {
+      clearInterval(autoRefreshTimer);
+      autoRefreshTimer = null;
+    }
+  }
+
   function onTabChange(id: FeedTab) {
     if (id === 'my' && !authed && !requireAuth()) return;
     if (id === 'managed' && !authed && !requireAuth()) return;
@@ -1698,15 +1803,44 @@
     openChannelFeed(channelId);
   }
 
-  async function createChannel() {
+  const managedBlog = $derived(managed.find((c) => !!c.is_blog) ?? null);
+
+  function openBlogCreate() {
+    void openBlogCreateAsync();
+  }
+
+  async function openBlogCreateAsync() {
     if (!authed && !requireAuth()) return;
-    const api = window.anixApi?.channel;
-    if (!api?.createBlog) return;
     createBusy = true;
-    errorMsg = '';
     try {
-      const res = await api.createBlog();
-      const newId = Number(res?.channel?.id ?? 0);
+      await ensureManagedLoaded();
+      const existingId = await findSelfBlogChannelId(managed);
+      if (existingId != null) {
+        showToast('Профиль уже улучшен', 'ok');
+        if (!managed.some((c) => c.id === existingId)) {
+          await ensureManagedLoaded();
+        }
+        openChannelFeed(existingId);
+        return;
+      }
+      blogCreateOpen = true;
+    } finally {
+      createBusy = false;
+    }
+  }
+
+  function openChannelCreate() {
+    if (!authed && !requireAuth()) return;
+    if (!managedBlog) {
+      openBlogCreate();
+      return;
+    }
+    channelCreateOpen = true;
+  }
+
+  async function onChannelCreated(newId: number) {
+    createBusy = true;
+    try {
       await ensureManagedLoaded();
       if (tab === 'managed') await reload();
       else {
@@ -1715,13 +1849,31 @@
         managed = list.filter((c): c is EditorChannel => !!c && Number(c.id) > 0);
       }
       if (newId > 0) {
-        showToast('Блог создан', 'ok');
+        openChannelFeed(newId);
+        void openComposer(newId);
+      }
+    } finally {
+      createBusy = false;
+    }
+  }
+
+  async function onBlogCreated(newId: number) {
+    createBusy = true;
+    errorMsg = '';
+    try {
+      await ensureManagedLoaded();
+      if (tab === 'managed') await reload();
+      else {
+        const resAll = await window.anixApi?.channel?.editorAll?.();
+        const list = Array.isArray(resAll?.channels) ? resAll.channels : [];
+        managed = list.filter((c): c is EditorChannel => !!c && Number(c.id) > 0);
+      }
+      if (newId > 0) {
         openChannelFeed(newId);
         void openComposer(newId);
       }
     } catch (err) {
       errorMsg = String(err);
-      showToast(errorMsg || 'Не удалось создать блог', 'err');
     } finally {
       createBusy = false;
     }
@@ -1826,6 +1978,13 @@
     window.addEventListener('anix:composer-published', onComposerPublished);
     window.addEventListener('storage', refreshDrafts);
 
+    const onVisibility = () => {
+      if (!document.hidden) void softRefreshFeed();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    startFeedAutoRefresh();
+
+
     const unsub = isAuthenticated.subscribe((v) => {
       const wasAuthed = authed;
       authed = v;
@@ -1909,6 +2068,8 @@
       window.removeEventListener('anix:feed-drafts-changed', refreshDrafts);
       window.removeEventListener('anix:composer-published', onComposerPublished);
       window.removeEventListener('storage', refreshDrafts);
+      document.removeEventListener('visibilitychange', onVisibility);
+      stopFeedAutoRefresh();
       unregisterScrollKey?.();
       unregisterScrollKey = null;
     };
@@ -2064,8 +2225,8 @@
           <h1 class="feed-page__title">{mainTitle}</h1>
         {/if}
       </div>
-      <div class="feed-page__toolbar">
-        {#if (tab === 'managed' || tab === 'history' || tab === 'drafts') && !postViewActive}
+      {#if (tab === 'managed' || tab === 'history' || tab === 'drafts') && !postViewActive}
+        <div class="feed-page__toolbar">
           <label class="feed-page__search-field feed-page__search-field--compact">
             <span class="feed-page__search-icon" aria-hidden="true">{@html iconSearch(16)}</span>
             <input
@@ -2088,17 +2249,8 @@
               </button>
             {/if}
           </label>
-        {/if}
-        <UiV2Button
-          variant="ghost"
-          size="sm"
-          label="Обновить"
-          disabled={loadState === 'loading' || managedBusy || searchBusy || searchLoadState === 'loading' || moreBusy}
-          onclick={() => void reload()}
-        >
-          {#snippet icon()}{@html iconRefreshCw(16)}{/snippet}
-        </UiV2Button>
-      </div>
+        </div>
+      {/if}
     </header>
 
     {#if searchMode && !postViewActive}
@@ -2274,28 +2426,31 @@
           <div class="feed-managed">
             <div class="feed-managed__intro">
               <div class="feed-managed__intro-text">
-                <p class="feed-managed__lead">Каналы и блоги, которыми вы управляете</p>
+                <p class="feed-managed__lead">Каналы и блоги под вашим управлением</p>
                 <p class="feed-page__hint feed-managed__hint">
-                  Создайте блог или получите права редактора — здесь можно открыть ленту и написать запись.
+                  Нажмите на канал, чтобы открыть ленту. Кнопка с карандашом — сразу написать запись.
                 </p>
               </div>
               <div class="feed-managed__actions">
-                <UiV2Button
-                  variant="chrome"
-                  label="Написать"
-                  disabled={createBusy || managed.length === 0}
-                  onclick={() => void openComposer(null)}
-                >
-                  {#snippet icon()}{@html iconPencil(16)}{/snippet}
-                </UiV2Button>
-                <UiV2Button
-                  variant="primary"
-                  label={createBusy ? 'Создание…' : 'Создать блог'}
-                  disabled={createBusy}
-                  onclick={() => void createChannel()}
-                >
-                  {#snippet icon()}{@html iconPlus(16)}{/snippet}
-                </UiV2Button>
+                {#if managedBlog}
+                  <UiV2Button
+                    variant="primary"
+                    label={createBusy ? 'Создание…' : 'Создать канал'}
+                    disabled={createBusy}
+                    onclick={openChannelCreate}
+                  >
+                    {#snippet icon()}{@html iconPlus(16)}{/snippet}
+                  </UiV2Button>
+                {:else}
+                  <UiV2Button
+                    variant="primary"
+                    label={createBusy ? 'Проверка…' : 'Создать блог'}
+                    disabled={createBusy}
+                    onclick={openBlogCreate}
+                  >
+                    {#snippet icon()}{@html iconPlus(16)}{/snippet}
+                  </UiV2Button>
+                {/if}
               </div>
             </div>
             {#if visibleManaged.length === 0}
@@ -2304,15 +2459,15 @@
                   {#if listFilterNeedle}
                     По запросу «{listFilterQuery.trim()}» каналов нет. Попробуйте другое слово.
                   {:else}
-                    Создайте свой первый блог прямо сейчас — он появится здесь.
+                    Создайте свой первый блог — он появится в этом списке.
                   {/if}
                 </p>
-                {#if !listFilterNeedle}
+                {#if !listFilterNeedle && !managedBlog}
                   <UiV2Button
                     variant="primary"
-                    label={createBusy ? 'Создание…' : 'Создать блог'}
+                    label={createBusy ? 'Проверка…' : 'Создать блог'}
                     disabled={createBusy}
-                    onclick={() => void createChannel()}
+                    onclick={openBlogCreate}
                   />
                 {/if}
               </UiV2Card>
@@ -2326,37 +2481,33 @@
                       onclick={() => openChannelFeed(ch.id)}
                     >
                       <span
-                        class="feed-article__avatar"
-                        class:feed-article__avatar--channel={!ch.is_blog}
-                        class:feed-article__avatar--empty={!channelAvatarUrl(ch.avatar)}
-                        style={channelAvatarUrl(ch.avatar)
-                          ? `background-image:url('${channelAvatarUrl(ch.avatar)}')`
-                          : undefined}
+                        class="feed-managed__avatar"
+                        class:feed-managed__avatar--channel={!ch.is_blog}
                         aria-hidden="true"
-                      ></span>
+                      >
+                        <UserAvatar
+                          src={channelAvatarUrl(ch.avatar)}
+                          label={ch.title || `Канал #${ch.id}`}
+                          shape={ch.is_blog ? 'circle' : 'channel'}
+                        />
+                      </span>
                       <span class="feed-managed__meta">
                         <span class="feed-managed__title">{ch.title || `Канал #${ch.id}`}</span>
                         <span class="feed-managed__sub">
                           {ch.is_blog ? 'Блог' : 'Канал'} · {ch.subscriber_count ?? 0} подп.
                         </span>
                       </span>
+                      <span class="feed-managed__chevron" aria-hidden="true">{@html iconChevronRight(16)}</span>
                     </button>
-                    <div class="feed-managed__item-actions">
-                      <UiV2Button
-                        variant="ghost"
-                        size="sm"
-                        label="Написать"
-                        onclick={() => void openComposer(ch.id)}
-                      >
-                        {#snippet icon()}{@html iconPencil(14)}{/snippet}
-                      </UiV2Button>
-                      <UiV2Button
-                        variant="chrome"
-                        size="sm"
-                        label="Открыть"
-                        onclick={() => openChannelFeed(ch.id)}
-                      />
-                    </div>
+                    <button
+                      type="button"
+                      class="feed-managed__write"
+                      title={`Написать в «${ch.title || `Канал #${ch.id}`}»`}
+                      aria-label={`Написать в «${ch.title || `Канал #${ch.id}`}»`}
+                      onclick={() => void openComposer(ch.id)}
+                    >
+                      {@html iconPencil(16)}
+                    </button>
                   </li>
                 {/each}
               </ul>
@@ -2698,6 +2849,19 @@
     isSuggestion={composerIsSuggestion}
     onClose={closeComposer}
     onPublished={onArticlePublished}
-    onCreateBlog={() => void createChannel()}
+    onCreateBlog={openBlogCreate}
+  />
+
+  <BlogCreateModal
+    open={blogCreateOpen}
+    knownManaged={managed}
+    onClose={() => { blogCreateOpen = false; }}
+    onCreated={onBlogCreated}
+  />
+
+  <ChannelCreateModal
+    open={channelCreateOpen}
+    onClose={() => { channelCreateOpen = false; }}
+    onCreated={onChannelCreated}
   />
 </div>

@@ -731,16 +731,49 @@ ipcMain.handle('downloads:getFfmpegStatus', async () => {
   return ffmpegInstall.getFfmpegStatus(ffmpegCacheRef);
 });
 
-ipcMain.handle('downloads:installFfmpeg', async (event) => {
-  const sendProgress = (received, total) => {
-    try {
-      event.sender.send('downloads:ffmpeg-install-progress', { received, total });
-    } catch (_) {}
-  };
+const ffmpegInstallRuntime = {
+  busy: false,
+  received: 0,
+  total: 0,
+};
+
+function broadcastFfmpegProgress(received, total) {
+  ffmpegInstallRuntime.received = received;
+  ffmpegInstallRuntime.total = total;
+  try {
+    const { BrowserWindow } = require('electron');
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (win.isDestroyed()) continue;
+      try {
+        win.webContents.send('downloads:ffmpeg-install-progress', { received, total });
+      } catch (_) {}
+    }
+  } catch (_) {}
+}
+
+ipcMain.handle('downloads:getFfmpegInstallState', async () => ({
+  busy: ffmpegInstallRuntime.busy,
+  received: ffmpegInstallRuntime.received,
+  total: ffmpegInstallRuntime.total,
+}));
+
+ipcMain.handle('downloads:installFfmpeg', async () => {
+  if (ffmpegInstallRuntime.busy) {
+    return { ok: false, busy: true, error: 'FFmpeg уже скачивается' };
+  }
+  ffmpegInstallRuntime.busy = true;
+  ffmpegInstallRuntime.received = 0;
+  ffmpegInstallRuntime.total = 0;
   ffmpegCacheRef.value = undefined;
-  const result = await ffmpegInstall.installFfmpeg(ffmpegCacheRef, sendProgress);
-  state.ffmpegPathCache = result.path ?? null;
-  return result;
+  try {
+    const result = await ffmpegInstall.installFfmpeg(ffmpegCacheRef, broadcastFfmpegProgress);
+    state.ffmpegPathCache = result.path ?? null;
+    return result;
+  } finally {
+    ffmpegInstallRuntime.busy = false;
+    ffmpegInstallRuntime.received = 0;
+    ffmpegInstallRuntime.total = 0;
+  }
 });
 
 ipcMain.handle('downloads:openFfmpegPage', async () => {

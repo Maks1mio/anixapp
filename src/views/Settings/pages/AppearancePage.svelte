@@ -88,17 +88,18 @@
   });
 </script>
 
-<div class="settings-modal-content">
-  <!-- Card layout -->
-  <div class="settings-section">
-    <p class="settings-section__label">Отображение карточек</p>
-    <div class="settings-card-layout-toggle">
+<div class="uiv2-settings">
+  <section class="uiv2-settings__block">
+    <h3 class="uiv2-settings__title">Отображение карточек</h3>
+    <div class="uiv2-settings__choice-grid">
       <button
         type="button"
-        class="settings-card-layout-btn{cardLayout === 'wide' ? ' settings-card-layout-btn--active' : ''}"
+        class="uiv2-settings__choice"
+        class:uiv2-settings__choice--on={cardLayout === 'wide'}
+        aria-pressed={cardLayout === 'wide'}
         onclick={() => selectLayout('wide')}
       >
-        <div class="settings-card-layout-btn__preview">
+        <div class="uiv2-settings__choice-preview">
           <svg viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="8" y="10" width="28" height="6" rx="2" fill="currentColor" opacity="0.7" />
             <rect x="8" y="20" width="28" height="6" rx="2" fill="currentColor" opacity="0.7" />
@@ -109,10 +110,12 @@
       </button>
       <button
         type="button"
-        class="settings-card-layout-btn{cardLayout === 'mini' ? ' settings-card-layout-btn--active' : ''}"
+        class="uiv2-settings__choice"
+        class:uiv2-settings__choice--on={cardLayout === 'mini'}
+        aria-pressed={cardLayout === 'mini'}
         onclick={() => selectLayout('mini')}
       >
-        <div class="settings-card-layout-btn__preview">
+        <div class="uiv2-settings__choice-preview">
           <svg viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="7" y="7" width="13" height="13" rx="2" fill="currentColor" opacity="0.7" />
             <rect x="24" y="7" width="13" height="13" rx="2" fill="currentColor" opacity="0.7" />
@@ -123,92 +126,94 @@
         <span>Карточками</span>
       </button>
     </div>
-  </div>
+  </section>
 
-  <!-- UI zoom -->
-  <div class="settings-section">
-    <p class="settings-section__label">Уровень масштабирования</p>
-    <div class="settings-section__body">
-      <p class="settings-zoom-hint">Измените масштаб интерфейса. Также можно использовать Ctrl + / Ctrl −.</p>
+  <section class="uiv2-settings__block">
+    <h3 class="uiv2-settings__title">Уровень масштабирования</h3>
+    <div class="uiv2-settings__group uiv2-settings__group--pad">
+      <p class="uiv2-settings__hint">Измените масштаб интерфейса. Также можно использовать Ctrl + / Ctrl −.</p>
       {#if zoomLoaded}
         <ZoomScaleSlider value={uiZoom} onChange={saveZoom} />
       {:else}
-        <div class="settings-zoom-loading">Загрузка…</div>
+        <p class="uiv2-settings__status">Загрузка…</p>
       {/if}
     </div>
-  </div>
+  </section>
 
-  <!-- Built-in themes -->
-  <div class="settings-section">
-    <p class="settings-section__label">Тема оформления</p>
-    <div class="settings-theme-grid">
+  <section class="uiv2-settings__block">
+    <h3 class="uiv2-settings__title">Тема оформления</h3>
+    <div class="uiv2-settings__theme-grid">
       {#each BUILT_IN_THEMES as theme}
         <button
           type="button"
-          class="settings-theme-tile{activeThemeId === theme.id ? ' settings-theme-tile--active' : ''}"
+          class="uiv2-settings__theme"
+          class:uiv2-settings__theme--on={activeThemeId === theme.id}
           data-theme-id={theme.id}
+          aria-pressed={activeThemeId === theme.id}
           onclick={() => selectTheme(theme.id)}
         >
           <div
-            class="settings-theme-tile__preview"
+            class="uiv2-settings__theme-preview"
             style={theme.id === 'auto'
               ? 'background:linear-gradient(to right, #1a1a1a 50%, #f0f0f0 50%);border:1px solid #888'
               : `background:${theme.vars.colorSurface};border:1px solid ${theme.vars.colorBorder}`}
           >
             {#if theme.id === 'auto'}
-              <svg class="settings-theme-tile__auto-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <svg class="uiv2-settings__theme-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
                 <circle cx="12" cy="12" r="4" />
                 <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
               </svg>
             {:else}
-              <div class="settings-theme-tile__accent" style="background:{theme.vars.colorAccent}"></div>
-              <div class="settings-theme-tile__bar" style="background:{theme.vars.colorText}"></div>
-              <div class="settings-theme-tile__bar settings-theme-tile__bar--short" style="background:{theme.vars.colorTextMuted}"></div>
+              <div class="uiv2-settings__theme-accent" style="background:{theme.vars.colorAccent}"></div>
+              <div class="uiv2-settings__theme-bar" style="background:{theme.vars.colorText}"></div>
+              <div class="uiv2-settings__theme-bar uiv2-settings__theme-bar--short" style="background:{theme.vars.colorTextMuted}"></div>
             {/if}
           </div>
-          <div class="settings-theme-tile__check">
+          <div class="uiv2-settings__theme-check">
             <svg viewBox="0 0 16 16" fill="none">
               <polyline points="3,8 6.5,11.5 13,5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </div>
-          <span class="settings-theme-tile__name">{theme.name}</span>
+          <span class="uiv2-settings__theme-name">{theme.name}</span>
         </button>
       {/each}
     </div>
-  </div>
+  </section>
 
-  <!-- Custom themes -->
-  <div class="settings-section">
-    <p class="settings-section__label">Пользовательские темы</p>
-    <div class="settings-theme-grid">
+  <section class="uiv2-settings__block">
+    <h3 class="uiv2-settings__title">Пользовательские темы</h3>
+    <div class="uiv2-settings__theme-grid">
       {#each customThemes as theme}
         <div
           role="button"
           tabindex="0"
-          class="settings-theme-tile{activeThemeId === theme.id ? ' settings-theme-tile--active' : ''}"
+          class="uiv2-settings__theme"
+          class:uiv2-settings__theme--on={activeThemeId === theme.id}
           data-theme-id={theme.id}
+          aria-pressed={activeThemeId === theme.id}
           onclick={() => selectTheme(theme.id)}
           onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), selectTheme(theme.id))}
         >
           <div
-            class="settings-theme-tile__preview"
+            class="uiv2-settings__theme-preview"
             style="background:{theme.vars.colorSurface};border:1px solid {theme.vars.colorBorder}"
           >
-            <div class="settings-theme-tile__accent" style="background:{theme.vars.colorAccent}"></div>
-            <div class="settings-theme-tile__bar" style="background:{theme.vars.colorText}"></div>
-            <div class="settings-theme-tile__bar settings-theme-tile__bar--short" style="background:{theme.vars.colorTextMuted}"></div>
+            <div class="uiv2-settings__theme-accent" style="background:{theme.vars.colorAccent}"></div>
+            <div class="uiv2-settings__theme-bar" style="background:{theme.vars.colorText}"></div>
+            <div class="uiv2-settings__theme-bar uiv2-settings__theme-bar--short" style="background:{theme.vars.colorTextMuted}"></div>
           </div>
-          <div class="settings-theme-tile__check">
+          <div class="uiv2-settings__theme-check">
             <svg viewBox="0 0 16 16" fill="none">
               <polyline points="3,8 6.5,11.5 13,5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </div>
-          <span class="settings-theme-tile__name">{theme.name}</span>
-          <div class="settings-theme-tile__actions">
+          <span class="uiv2-settings__theme-name">{theme.name}</span>
+          <div class="uiv2-settings__theme-actions">
             <button
               type="button"
-              class="settings-theme-tile__action-btn"
+              class="uiv2-settings__theme-edit"
               title="Редактировать"
+              aria-label="Редактировать тему {theme.name}"
               onclick={(e) => {
                 e.stopPropagation();
                 openThemeEditor(theme.id, false);
@@ -221,10 +226,10 @@
           </div>
         </div>
       {/each}
-      <button type="button" class="settings-theme-tile settings-theme-tile--add" onclick={addCustomTheme}>
-        <span class="settings-theme-tile__plus">+</span>
+      <button type="button" class="uiv2-settings__theme uiv2-settings__theme--add" onclick={addCustomTheme}>
+        <span class="uiv2-settings__theme-plus">+</span>
         <span>Создать тему</span>
       </button>
     </div>
-  </div>
+  </section>
 </div>

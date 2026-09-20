@@ -6,16 +6,16 @@
   }
 </script>
 
-<div class="settings-modal-content">
+<div class="uiv2-settings">
   {#if typeof window !== 'undefined' && typeof window.anixApi === 'undefined'}
-    <p class="settings-account-coming-soon">API доступно только в приложении Electron.</p>
+    <p class="uiv2-settings__status">API доступно только в приложении Electron.</p>
   {:else}
-    <div class="settings-section">
-      <p class="settings-section__label">Эндпоинт API</p>
-      <p class="settings-section__desc">
+    <section class="uiv2-settings__block">
+      <h3 class="uiv2-settings__title">Эндпоинт API</h3>
+      <p class="uiv2-settings__desc">
         Прямые Anixart-хосты или резерв AnixApp proxy (backend → туннель → Anixart).
       </p>
-      <UiV2EndpointSelect label="" placeholder="Выберите эндпоинт" onChange={onEndpointChange} />
-    </div>
+      <UiV2EndpointSelect label="" ariaLabel="Эндпоинт API" onChange={onEndpointChange} />
+    </section>
   {/if}
 </div>

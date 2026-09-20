@@ -39,6 +39,8 @@
     showVpnAd?: boolean;
     /** Слот embed с админки (`connection` / `uikit` / свой). Off не имеет слота. */
     adSlot?: string;
+    /** Доступное имя, если видимый label пустой */
+    ariaLabel?: string;
     onChange?: (value: string) => void | Promise<void>;
   };
 
@@ -51,6 +53,7 @@
     showAd,
     showVpnAd = true,
     adSlot = 'connection',
+    ariaLabel,
     onChange,
   }: Props = $props();
 
@@ -566,6 +569,7 @@
     </p>
     <UiV2Select
       {label}
+      {ariaLabel}
       options={SELECTABLE_API_ENDPOINTS.map((opt) => {
         const geo = geoFor(opt.value);
         const blocked = isBlockedRfEndpoint(opt.value);
@@ -587,6 +591,7 @@
   {:else}
     <UiV2Select
       {label}
+      {ariaLabel}
       {options}
       bind:value
       {disabled}

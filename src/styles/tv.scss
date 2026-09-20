@@ -727,6 +727,7 @@ html.tv-mode .tv-release-page .tv-release-carousel .uiv2-anime-card__title {
   font-size: #{0.98 * $tv-card-scale}rem;
   line-height: 1.25;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   opacity: calc((1 - var(--tv-rail-dim) * 0.91) * var(--tv-peer-opacity, 1));
   color: color-mix(
     in srgb,

@@ -6,6 +6,7 @@ import type { ReleaseCardData } from '../types/release';
 import type { CollectionCardData } from '../components/CollectionCard.svelte';
 import { mapCollectionCard } from './collection';
 import { mapCardData } from '../views/Release/_utils';
+import { formatReleaseEpisodes } from './release-card';
 
 export interface OverviewBanner {
   id: number;
@@ -120,8 +121,5 @@ export function formatCommentWeekTime(ts: number): string {
 }
 
 export function episodesLabel(released?: number, total?: number): string {
-  if (released == null && total == null) return '';
-  if (total != null && total > 0) return `${released ?? 0} / ${total} эп.`;
-  if (released != null) return `${released} эп.`;
-  return '';
+  return formatReleaseEpisodes(released, total);
 }

@@ -532,21 +532,24 @@
       <h3 class="uiv2-anime-card__title">{title}</h3>
       {#if isAnnounce}
         <p class="uiv2-anime-card__meta">
-          <span class="uiv2-anime-card__meta-text">Анонс{seasonLabel ? ` ${seasonLabel}` : ''}</span>
+          <span class="uiv2-anime-card__meta-left">
+            <span class="uiv2-anime-card__meta-text">Анонс{seasonLabel ? ` ${seasonLabel}` : ''}</span>
+          </span>
           {#if localFavorite}
             <span class="uiv2-anime-card__favorite" aria-label="В избранном">{@html iconFlag(12, true)}</span>
           {/if}
         </p>
       {:else if verticalMetaLeft.length || showSiteRating || myVoteValue != null || localFavorite}
         <p class="uiv2-anime-card__meta">
-          {#each verticalMetaLeft as part, i (part)}
-            {#if i > 0}<span class="uiv2-anime-card__meta-sep" aria-hidden="true">·</span>{/if}
-            <span class="uiv2-anime-card__meta-text">{part}</span>
-          {/each}
+          {#if verticalMetaLeft.length}
+            <span class="uiv2-anime-card__meta-left">
+              {#each verticalMetaLeft as part, i (part)}
+                {#if i > 0}<span class="uiv2-anime-card__meta-sep" aria-hidden="true">·</span>{/if}
+                <span class="uiv2-anime-card__meta-text">{part}</span>
+              {/each}
+            </span>
+          {/if}
           {#if myVoteValue != null}
-            {#if verticalMetaLeft.length}
-              <span class="uiv2-anime-card__meta-sep" aria-hidden="true">·</span>
-            {/if}
             <span class="uiv2-anime-card__my-vote" title="Моя оценка" aria-label="Оценка {myVoteValue} из 5">
               <span class="uiv2-anime-card__my-vote-stars">
                 {#each [1, 2, 3, 4, 5] as n (n)}
@@ -559,9 +562,6 @@
               </span>
             </span>
           {:else if showSiteRating && rate}
-            {#if verticalMetaLeft.length}
-              <span class="uiv2-anime-card__meta-sep" aria-hidden="true">·</span>
-            {/if}
             <span class="uiv2-anime-card__score uiv2-anime-card__score--inline">
               <span class="uiv2-anime-card__score-star" aria-hidden="true">{@html iconStar(11)}</span>
               <span class="uiv2-anime-card__score-value">{rate}</span>

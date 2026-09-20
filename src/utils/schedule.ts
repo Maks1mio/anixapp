@@ -1,5 +1,6 @@
 import { mapCardData } from '../views/Release/_utils';
 import type { ReleaseCardData } from '../types/release';
+import { formatReleaseEpisodes } from './release-card';
 
 export interface ScheduleDay {
   key: string;
@@ -50,10 +51,5 @@ export function scheduleHasReleases(byDay: Record<string, ReleaseCardData[]>): b
 }
 
 export function formatScheduleEpisodes(item: ReleaseCardData): string {
-  const released = item.episodesReleased;
-  const total = item.episodesTotal;
-  if (released != null && total != null && total > 0) return `${released} из ${total} эп`;
-  if (released != null) return `${released} эп`;
-  if (total != null && total > 0) return `${total} эп`;
-  return '';
+  return formatReleaseEpisodes(item.episodesReleased, item.episodesTotal);
 }

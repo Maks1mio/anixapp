@@ -23,7 +23,7 @@
     getAgeRateText, getSeasonName, stripHtmlToText, sanitizeRichHtml,
     numToStatusId, ratingHue, mapCardData, formatEpisodeAdded,
   } from './_utils';
-  import { isReleaseAnnounce } from '../../utils/release-card';
+  import { isReleaseAnnounce, formatReleaseEpisodes } from '../../utils/release-card';
   import { ReleaseHead, ReleaseVideos, ReleaseRating, ReleaseFriends, ReleaseRelated, ReleaseRecommendations, ReleaseScreenshots, ReleaseComments } from './components';
   import { notifyFavoritesChanged } from '../../utils/favorites-events';
   import { applyReleaseListStatus } from '../../utils/release-list-status';
@@ -224,10 +224,7 @@
       });
     }
 
-    let epText = '';
-    if (episodesReleased != null && episodesTotal != null && episodesTotal > 0) epText = `${episodesReleased} из ${episodesTotal} эп.`;
-    else if (episodesReleased != null) epText = `${episodesReleased} эп.`;
-    else if (episodesTotal    != null) epText = `${episodesTotal} эп.`;
+    let epText = formatReleaseEpisodes(episodesReleased, episodesTotal);
     if (duration && duration > 0) epText += epText ? ` по ~${duration} мин.` : `~${duration} мин.`;
     if (epText) rows.push({ kind: 'episodes', segments: plainMetaSegments(epText) });
 

@@ -6,6 +6,7 @@
   import { navigateIndependentTab } from '../stores/navigation';
   import { sidebarPins, sidebarPinsLoading, releaseListStatusLabel, type SidebarPin } from '../stores/sidebar-pins';
   import { toCdnThumbnailUrl } from '../utils/posterUrl';
+  import { formatReleaseEpisodes } from '../utils/release-card';
   interface Props {
     currentPath?: string;
   }
@@ -83,8 +84,8 @@
   function pinMeta(pin: SidebarPin): string {
     const parts: string[] = [];
     if (pin.year) parts.push(pin.year);
-    const ep = pin.episodesReleased ?? pin.episodesTotal;
-    if (ep != null) parts.push(`${ep} эп.`);
+    const ep = formatReleaseEpisodes(pin.episodesReleased, pin.episodesTotal);
+    if (ep) parts.push(ep);
     if (typeof pin.rating === 'number' && pin.rating > 0) parts.push(`${pin.rating.toFixed(1)} ★`);
     return parts.join(' · ');
   }

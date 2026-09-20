@@ -5,6 +5,7 @@
     iconMoreHorizontal,
     iconMessageCircle,
     iconMessageSquareX,
+    iconBan,
     iconPlus,
   } from './icons';
   import {
@@ -25,6 +26,8 @@
   import { resolveJacksonRefs } from '../utils/jackson-refs';
   import {
     hasProfilePrivacyRestrictions,
+    isBlockedByProfile,
+    PROFILE_BLOCKED_BY_USER_NOTICE,
     PROFILE_PRIVACY_NOTICE,
   } from '../views/Profile/v2/profile-privacy';
   import ProfileStatsSection from '../views/Profile/v2/components/ProfileStatsSection.svelte';
@@ -186,7 +189,10 @@
   );
   const badge = $derived((profile?.badge as { image_url?: string; name?: string } | null) ?? null);
   const friendCount = $derived(Number(profile?.friend_count ?? 0));
-  const showPrivacy = $derived(profile ? hasProfilePrivacyRestrictions(profile, isMyProfile) : false);
+  const blockedByUser = $derived(isBlockedByProfile(profile));
+  const showPrivacy = $derived(
+    profile && !blockedByUser ? hasProfilePrivacyRestrictions(profile, isMyProfile) : false,
+  );
   const banNotice = $derived(getProfileBanNotice(profile));
   const friendNamesPreview = $derived.by(() => {
     const names = friends
@@ -244,6 +250,7 @@
     {
       requestsDisallowed: !!profile?.is_friend_requests_disallowed,
       isBlocked: !!profile?.is_blocked,
+      isMeBlocked: blockedByUser,
     },
   ));
 
@@ -366,7 +373,7 @@
   }
 
   async function loadFriendsPreview() {
-    if (!window.anixApi?.profile || !userId || profile?.is_counts_hidden) return;
+    if (!window.anixApi?.profile || !userId || profile?.is_counts_hidden || profile?.is_me_blocked) return;
     try {
       const data = await window.anixApi.profile.getFriends(userId, 0) as { content?: Record<string, unknown>[] };
       friends = (data?.content ?? []).slice(0, 12);
@@ -829,7 +836,14 @@
                     </span>
                   {:else if friendButton.disabled}
                     <span class="profile-panel__cta-primary">
-                      <UiV2Button label={friendButton.label} size="lg" block disabled />
+                      <UiV2Button
+                        label={friendButton.label}
+                        size="lg"
+                        block
+                        variant="light"
+                        disabled
+                        title={blockedByUser ? PROFILE_BLOCKED_BY_USER_NOTICE : friendButton.label}
+                      />
                     </span>
                   {/if}
                   {#if !isMyProfile}
@@ -879,7 +893,7 @@
                 </div>
               {/if}
 
-              {#if !profile.is_counts_hidden && (friendCount > 0 || isMyProfile)}
+              {#if !blockedByUser && !profile.is_counts_hidden && (friendCount > 0 || isMyProfile)}
                 <button type="button" class="profile-panel__friends-row" onclick={openFriendsView}>
                   <div class="profile-panel__friends-copy">
                     <span class="profile-panel__friends-count">{friendCount} {friendWord(friendCount)}</span>
@@ -901,13 +915,20 @@
                 </button>
               {/if}
 
-              {#if showPrivacy}
+              {#if blockedByUser}
+                <div class="profile-panel__block-hint" role="status">
+                  <span class="profile-panel__block-hint-icon" aria-hidden="true">
+                    {@html iconBan(22)}
+                  </span>
+                  <p class="profile-panel__block-hint-text">{PROFILE_BLOCKED_BY_USER_NOTICE}</p>
+                </div>
+              {:else if showPrivacy}
                 <p class="profile-panel__privacy">{PROFILE_PRIVACY_NOTICE}</p>
               {/if}
             </section>
 
             <div class="profile-panel__tab-body">
-              {#if !profile.is_stats_hidden}
+              {#if !blockedByUser && !profile.is_stats_hidden}
                 <UiV2Card title="Статистика">
                   <div class="profile-panel__stats">
                     <ProfileStatsSection
@@ -939,7 +960,7 @@
                     </div>
                   </UiV2Card>
                 {/if}
-              {:else if !isMyProfile}
+              {:else if !blockedByUser && !isMyProfile}
                 <p class="profile-panel__hint">Статистика скрыта настройками приватности.</p>
               {/if}
             </div>

@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import type { Snippet } from 'svelte';
-  import { navigate, navigateSearchTab, navigateSidebarTab } from '../stores/navigation';
+  import { navigate, navigateSidebarTab } from '../stores/navigation';
   import { activeSidebarTab, isSidebarTabActive } from '../stores/tab-navigation';
   import { openAdminArea, restoreAdminSession, checkTeamMembership, isTeamMember } from '../stores/admin';
-  import { openNotificationsModal, openSettingsModal, settingsModalOpen } from '../stores/modals';
+  import { toggleNotificationsModal, openSettingsModal, settingsModalOpen } from '../stores/modals';
   import { isAuthenticated, requireAuth } from '../stores/auth';
   import { ensureProfileId } from '../utils/profile';
   import { bindSearchHotkeys } from '../search-controller';
@@ -344,7 +344,6 @@
   }
 
   const sidebarContextTab = $derived($activeSidebarTab);
-  const searchTabActive = $derived(sidebarContextTab === 'search');
 
   function isActive(href: string): boolean {
     void sidebarContextTab;
@@ -450,13 +449,11 @@
     scheduleOpen={scheduleActive}
     onNotifications={() => {
       if (!requireAuth()) return;
-      openNotificationsModal();
+      toggleNotificationsModal();
     }}
     onSettings={() => openSettingsModal()}
     settingsOpen={settingsActive}
     onProfile={onProfileClick}
-    onSearchTab={navigateSearchTab}
-    {searchTabActive}
     {onConnectionRetry}
   />
 

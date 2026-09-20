@@ -177,6 +177,23 @@
       window.removeEventListener('resize', update);
     };
   });
+
+  $effect(() => {
+    const id = selectedId;
+    const count = items.length;
+    const el = scrollEl;
+    if (id == null || !el || count === 0) return;
+    const active = el.querySelector('.feed-subs__item--active');
+    if (!(active instanceof HTMLElement)) return;
+    const instant = prefersReducedMotion();
+    requestAnimationFrame(() => {
+      active.scrollIntoView({
+        inline: 'center',
+        block: 'nearest',
+        behavior: instant ? 'auto' : 'smooth',
+      });
+    });
+  });
 </script>
 
 {#if hasStrip}

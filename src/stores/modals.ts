@@ -73,6 +73,9 @@ export function openNotificationsModal(): void {
 export function closeNotificationsModal(): void {
   notificationsModalOpen.set(false);
 }
+export function toggleNotificationsModal(): void {
+  notificationsModalOpen.update((open) => !open);
+}
 
 export function openWatchModal(releaseId: number, releaseTitle: string): void {
   watchModalReleaseId.set(releaseId);

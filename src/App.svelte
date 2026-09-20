@@ -18,7 +18,7 @@
     setConnectionOk,
     setConnectionProblem,
   } from './stores/connection';
-  import { currentPath, navigate, replacePath } from './stores/navigation';
+  import { currentPath, navigate, replacePath, seedAnixHistory } from './stores/navigation';
   import { focusFeedArticle, focusFeedChannel } from './stores/feed-focus';
   import { settingsModalOpen, notificationsModalOpen, watchModalOpen, watchModalReleaseId, watchModalReleaseTitle, lobbyCurrentPlayback, isPlayerWindowOpen, lobbyWatchingPeerIds } from './stores/modals';
   import { sendPlayerViewActive } from './services/lobby-ws';
@@ -310,6 +310,7 @@
     }
 
     initTooltipSystem();
+    seedAnixHistory();
     const stopBookmarksSync = initBookmarksChangeSync();
     void initAnixbackEndpoint();
 
@@ -321,13 +322,17 @@
 
     // Routing listeners
     const onNav = () => {
-      window.dispatchEvent(new CustomEvent('anix:beforeNavigate', { detail: { to: getPath() } }));
-      captureActiveScroll();
-      path = getPath();
+      const nextPath = getPath();
+      const pathChanged = nextPath !== path;
+      if (pathChanged) {
+        window.dispatchEvent(new CustomEvent('anix:beforeNavigate', { detail: { to: nextPath } }));
+        captureActiveScroll();
+      }
+      path = nextPath;
       recordTabNavigation(path);
       currentPath.set(path);
       syncSearchParams();
-      resetScrollAfterRouteChange();
+      if (pathChanged) resetScrollAfterRouteChange();
       window.dispatchEvent(new CustomEvent('anix:navigate', { detail: path }));
     };
     const onAnixNavigate = (e: Event) => {

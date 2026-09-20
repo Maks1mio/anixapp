@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
-  import { iconArrowLeft, iconArrowRight, iconSearch, iconBell, iconCalendar, iconUser, iconSettings, iconDownload, iconChevronDown, iconPlus, iconX } from './icons';
+  import { iconArrowLeft, iconArrowRight, iconBell, iconCalendar, iconUser, iconSettings, iconDownload, iconChevronDown, iconPlus, iconX } from './icons';
   import { checkForUpdate, type UpdateInfo } from '../services/update-checker';
   import type { AppUpdateProgress } from '../types/electron';
   import { isAuthenticated, openLoginPrompt, applyAccountSessionChange } from '../stores/auth';
+  import { goBack, goForward } from '../stores/navigation';
   import { notificationUnreadCount, refreshNotificationUnreadCount } from '../stores/notifications';
   import ConnectionBanner from './ConnectionBanner.svelte';
   import TitleBarSearchIsland from './TitleBarSearchIsland.svelte';
@@ -22,8 +23,6 @@
     onSettings?: () => void;
     settingsOpen?: boolean;
     onProfile?: (event: MouseEvent) => void;
-    onSearchTab?: () => void;
-    searchTabActive?: boolean;
     onConnectionRetry?: () => void | Promise<void>;
   }
 
@@ -34,8 +33,6 @@
     onSettings,
     settingsOpen = false,
     onProfile,
-    onSearchTab: _onSearchTab,
-    searchTabActive = false,
     onConnectionRetry,
   }: Props = $props();
 
@@ -293,8 +290,8 @@
     });
   }
 
-  function handleBack() { window.history.back(); }
-  function handleForward() { window.history.forward(); }
+  function handleBack() { goBack(); }
+  function handleForward() { goForward(); }
   function handleMinimize() { (window as any).electron?.window?.minimize(); }
   function handleMaximize() { (window as any).electron?.window?.maximize(); }
   function handleClose() { (window as any).electron?.window?.close(); }
@@ -488,21 +485,6 @@
         onclick={onSettings}
       >
         {@html iconSettings(18)}
-      </button>
-    </UiV2Tooltip>
-
-    <UiV2Tooltip text="Поиск">
-      <button
-        type="button"
-        class="titlebar__menu-item"
-        class:titlebar__menu-item--active={searchTabActive}
-        aria-label="Поиск"
-        aria-current={searchTabActive ? 'page' : undefined}
-        onclick={() => {
-          window.dispatchEvent(new CustomEvent('anix:openSearchIsland'));
-        }}
-      >
-        {@html iconSearch(18)}
       </button>
     </UiV2Tooltip>
   </div>

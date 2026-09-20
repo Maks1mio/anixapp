@@ -17,6 +17,7 @@
     buildViewStateKey,
     getScrollContainer,
     getViewState,
+    isScrollRestorePending,
     logViewStateMiss,
     logViewStateRestore,
     readScrollTop,
@@ -39,7 +40,15 @@
     formatFeedRelativeTime,
     normalizeArticleVote,
   } from '../utils/feed-article';
-  import { getSearchParams } from '../router';
+  import { getPath, getSearchParams } from '../router';
+  import {
+    goBack,
+    pushFeedHistory,
+    replaceFeedHistory,
+    readFeedHistoryView,
+    feedHistoryViewEquals,
+    type FeedHistoryView,
+  } from '../stores/navigation';
   import {
     channelHasNewArticles,
     markChannelArticlesSeen,
@@ -122,7 +131,6 @@
     postView?: FeedPostViewSnapshot | null;
   };
 
-  const FEED_HISTORY_POST_KEY = 'anixFeedPostId';
   /** Тихое автообновление ленты: только новые посты сверху, без reload. */
   const FEED_AUTO_REFRESH_MS = 45_000;
 
@@ -181,6 +189,7 @@
   let searchLoadState = $state<LoadState>('idle');
   let searchError = $state('');
   let searchRequestId = 0;
+  let lastSearchFetchedQuery = '';
   /** Инкремент после mark-seen — чтобы точки обновились. */
   let lastSeenTick = $state(0);
   /** Инкремент после pin/unpin. */
@@ -204,8 +213,63 @@
   let moreRequestId = 0;
   /** Скролл ленты до открытия поста — восстанавливаем по «назад». */
   let listScrollBeforePost = 0;
-  let postViewHistoryPushed = false;
+  let feedHistoryApplying = false;
+  let feedScrollStampTimer: ReturnType<typeof setTimeout> | null = null;
   let unregisterScrollKey: (() => void) | null = null;
+
+  function currentFeedView(): FeedHistoryView {
+    return {
+      tab,
+      channelId: channelFilterId,
+      postId: focusArticle?.id ?? null,
+      searchQuery: tab === 'search' ? searchQuery.trim() : '',
+      scrollTop: readScrollTop(),
+    };
+  }
+
+  /** Запомнить скролл текущего шага, прежде чем уйти на вкладку/канал/запись. */
+  function stampCurrentFeedScroll() {
+    if (feedHistoryApplying || isScrollRestorePending()) return;
+    const existing = readFeedHistoryView();
+    replaceFeedHistory({
+      ...(existing ?? currentFeedView()),
+      scrollTop: readScrollTop(),
+    });
+  }
+
+  function scheduleFeedScrollStamp() {
+    if (feedHistoryApplying || isScrollRestorePending()) return;
+    if (feedScrollStampTimer) return;
+    feedScrollStampTimer = setTimeout(() => {
+      feedScrollStampTimer = null;
+      stampCurrentFeedScroll();
+    }, 120);
+  }
+
+  function restoreFeedScroll(top: number | null | undefined) {
+    const scroll = Number(top ?? 0);
+    if (scroll > 0) beginScrollRestore();
+    void tick().then(() => {
+      if (scroll > 0) {
+        void restoreScrollTop(scroll, { maxWaitMs: 5000 });
+      } else {
+        scrollFeedToTop();
+      }
+    });
+  }
+
+  function commitFeedHistory(mode: 'push' | 'replace') {
+    if (feedHistoryApplying) return;
+    const view = currentFeedView();
+    if (mode === 'replace') {
+      replaceFeedHistory(view);
+      return;
+    }
+    const existing = readFeedHistoryView();
+    const next = { ...view, scrollTop: 0 };
+    if (existing && feedHistoryViewEquals(existing, next)) return;
+    pushFeedHistory(next);
+  }
 
   function feedListSnapshot(): FeedListSnapshot {
     const postView: FeedPostViewSnapshot | null =
@@ -281,7 +345,7 @@
     managed = s.managed;
   }
 
-  /** Восстановить открытый пост без нового pushState (возврат на /feed). */
+  /** Восстановить открытый пост. Если в истории ещё нет записи поста — push, чтобы «назад» вернул к списку. */
   function restorePostViewFromSnapshot(post: FeedPostViewSnapshot) {
     focusArticle = post.article;
     focusChannel = post.channel;
@@ -292,24 +356,16 @@
     listScrollBeforePost = post.listScrollBeforePost ?? 0;
     spotlightArticle = null;
     moreBusy = false;
-    const prev = history.state && typeof history.state === 'object'
-      ? (history.state as Record<string, unknown>)
-      : {};
-    history.replaceState({ ...prev, [FEED_HISTORY_POST_KEY]: post.article.id }, '');
-    postViewHistoryPushed = true;
+    const existingId = readFeedPostIdFromHistory();
+    if (existingId === post.article.id) {
+      return;
+    }
+    commitFeedHistory('push');
   }
 
-  function historyHasFeedPost(): boolean {
-    const st = history.state;
-    return !!st && typeof st === 'object' && FEED_HISTORY_POST_KEY in st;
-  }
-
-  function stripFeedPostHistoryState() {
-    if (!historyHasFeedPost()) return;
-    const st = { ...(history.state as Record<string, unknown>) };
-    delete st[FEED_HISTORY_POST_KEY];
-    history.replaceState(Object.keys(st).length ? st : null, '');
-    postViewHistoryPushed = false;
+  function readFeedPostIdFromHistory(): number | null {
+    const id = readFeedHistoryView()?.postId;
+    return id != null && id > 0 ? id : null;
   }
 
   function scrollFeedToTop() {
@@ -431,6 +487,7 @@
       const res = await api(query, nextPage, 0);
       if (requestId !== searchRequestId) return;
       const list = withLocalSubscribeFlags(normalizeArticles(pageableContent(res?.articles)));
+      if (!append) lastSearchFetchedQuery = query;
       searchArticles = append ? [...searchArticles, ...list] : list;
       searchChannels = nextPage === 0 ? normalizeChannels(pageableContent(res?.channels)) : searchChannels;
       searchBlogs = nextPage === 0 ? normalizeChannels(pageableContent(res?.blogs)) : searchBlogs;
@@ -470,6 +527,7 @@
     searchBusy = false;
     searchLoadState = 'idle';
     searchError = '';
+    lastSearchFetchedQuery = '';
   }
 
   const visibleArticles = $derived.by(() => {
@@ -870,7 +928,6 @@
     morePage = 0;
     moreHasMore = false;
     spotlightArticle = null;
-    postViewHistoryPushed = false;
   }
 
   function persistFeedSnapshot() {
@@ -878,62 +935,131 @@
   }
 
   function restoreListScrollAfterPost() {
-    const scroll = listScrollBeforePost;
-    void tick().then(() => {
-      if (scroll > 0) {
-        beginScrollRestore();
-        void restoreScrollTop(scroll, { maxWaitMs: 5000 });
-      } else {
-        scrollFeedToTop();
-      }
-    });
+    restoreFeedScroll(listScrollBeforePost);
   }
 
-  /** Выход из поста в ленту с восстановлением позиции (кнопка «назад» / history.back). */
+  /** Выход из поста — те же кнопки «Назад»/«Вперёд», что и для страниц. */
   function exitPostViewToFeed() {
-    if (historyHasFeedPost()) {
-      history.back();
-      return;
+    goBack();
+  }
+
+  async function applyFeedHistoryView(view: FeedHistoryView) {
+    feedHistoryApplying = true;
+    try {
+      const nextTab = isFeedTab(view.tab) ? view.tab : 'my';
+      const nextChannel = nextTab === 'my' && view.channelId != null && view.channelId > 0
+        ? view.channelId
+        : null;
+      const nextPost = view.postId != null && view.postId > 0 ? view.postId : null;
+      const nextSearch = nextTab === 'search' ? String(view.searchQuery ?? '').trim() : '';
+      const tabChanged = tab !== nextTab;
+      const channelChanged = (channelFilterId ?? null) !== nextChannel;
+      const searchChanged = (tab === 'search' ? searchQuery.trim() : '') !== nextSearch;
+      const storedScroll = Number(view.scrollTop ?? 0);
+      const closingPost = !nextPost && postViewActive && !tabChanged && !channelChanged && !searchChanged;
+      const targetScroll = storedScroll > 0
+        ? storedScroll
+        : (closingPost ? listScrollBeforePost : 0);
+
+      if (tabChanged || channelChanged || searchChanged) {
+        allSubsOpen = false;
+        if (!nextPost) discardPostView();
+        tab = nextTab;
+        channelFilterId = nextChannel;
+        if (nextTab === 'history') historyVisibleCount = 10;
+        if (nextTab === 'search') {
+          searchQuery = nextSearch;
+        } else {
+          searchQuery = '';
+          clearSearchResults();
+        }
+        if (nextTab !== 'managed' && nextTab !== 'history' && nextTab !== 'drafts') {
+          listFilterQuery = '';
+        }
+        void loadSidebarChannel(nextChannel);
+        await reload();
+      } else if (!nextPost && postViewActive) {
+        discardPostView();
+        persistFeedSnapshot();
+      }
+
+      if (nextPost && focusArticle?.id !== nextPost) {
+        await selectArticleById(nextPost, 'none');
+      }
+      restoreFeedScroll(nextPost ? (view.scrollTop ?? 0) : targetScroll);
+    } finally {
+      feedHistoryApplying = false;
     }
-    discardPostView();
-    persistFeedSnapshot();
-    restoreListScrollAfterPost();
   }
 
   function onFeedPopState() {
+    if (getPath() !== '/feed') return;
+    const view = readFeedHistoryView();
+    if (!view) {
+      if (postViewActive) {
+        discardPostView();
+        persistFeedSnapshot();
+        restoreListScrollAfterPost();
+      }
+      return;
+    }
+    void applyFeedHistoryView(view);
+  }
+
+  function clearArticleFocus() {
     if (!postViewActive) return;
-    if (historyHasFeedPost()) return;
+    discardPostView();
+    persistFeedSnapshot();
+    replaceFeedHistory(currentFeedView());
+  }
+
+  function onHistoryBack(e: Event) {
+    if (!postViewActive) return;
+    if (readFeedHistoryView()?.postId) return;
+    e.preventDefault();
     discardPostView();
     persistFeedSnapshot();
     restoreListScrollAfterPost();
   }
 
-  function clearArticleFocus() {
-    stripFeedPostHistoryState();
-    discardPostView();
-    persistFeedSnapshot();
+  /** Повторный клик по «Лента» в сайдбаре: список «Моя лента», без открытого поста. */
+  function resetFeedToHome() {
+    allSubsOpen = false;
+    stampCurrentFeedScroll();
+    if (postViewActive) {
+      discardPostView();
+      persistFeedSnapshot();
+    }
+    const needReload = tab !== 'my' || channelFilterId != null;
+    tab = 'my';
+    channelFilterId = null;
+    listFilterQuery = '';
+    if (searchQuery) {
+      searchQuery = '';
+      clearSearchResults();
+    }
+    void loadSidebarChannel(null);
+    scrollFeedToTop();
+    if (needReload) void reload();
+    commitFeedHistory('push');
   }
 
   function collapseSelectedComments() {
     selectedArticleId = null;
   }
 
-  async function selectArticle(article: FeedArticle) {
+  async function selectArticle(article: FeedArticle, historyMode?: 'push' | 'replace' | 'none') {
     const id = Number(article.id);
     if (!(id > 0)) return;
 
     const entering = !postViewActive;
     const samePost = focusArticle?.id === id;
+    const mode = historyMode ?? (entering ? 'push' : (samePost ? 'none' : 'replace'));
 
-    if (entering) {
+    if (entering && mode !== 'none') {
+      stampCurrentFeedScroll();
       listScrollBeforePost = readScrollTop();
       saveViewStateWithScroll(FEED_VIEW_KEY(), feedListSnapshot());
-      const prev = history.state && typeof history.state === 'object' ? history.state as Record<string, unknown> : {};
-      history.pushState({ ...prev, [FEED_HISTORY_POST_KEY]: id }, '');
-      postViewHistoryPushed = true;
-    } else if (!samePost && historyHasFeedPost()) {
-      const prev = history.state && typeof history.state === 'object' ? history.state as Record<string, unknown> : {};
-      history.replaceState({ ...prev, [FEED_HISTORY_POST_KEY]: id }, '');
     }
 
     focusArticle = article;
@@ -962,11 +1088,17 @@
       void loadMoreFromChannel(channelId, id, 0, false);
     }
 
+    if (mode === 'push') {
+      commitFeedHistory(entering && !readFeedHistoryView()?.postId ? 'push' : 'replace');
+    } else if (mode === 'replace') {
+      commitFeedHistory('replace');
+    }
+
     await tick();
     scrollFeedToTop();
   }
 
-  async function selectArticleById(articleId: number) {
+  async function selectArticleById(articleId: number, historyMode?: 'push' | 'replace' | 'none') {
     const id = Number(articleId);
     if (!(id > 0)) return;
     const existing =
@@ -978,13 +1110,13 @@
           ?? historyArticles[id]
           ?? (spotlightArticle?.id === id ? spotlightArticle : null);
     if (existing) {
-      await selectArticle(existing);
+      await selectArticle(existing, historyMode);
       return;
     }
     try {
       const res = await window.anixApi?.article?.info?.(id);
       const full = (res?.article ?? null) as FeedArticle | null;
-      if (full?.id) await selectArticle(full);
+      if (full?.id) await selectArticle(full, historyMode);
     } catch {
       /* deep link без записи — игнор */
     }
@@ -1317,12 +1449,20 @@
     if (id === 'my' && !authed && !requireAuth()) return;
     if (id === 'managed' && !authed && !requireAuth()) return;
     if (allSubsOpen) allSubsOpen = false;
+    if (id === tab && postViewActive) {
+      exitPostViewToFeed();
+      return;
+    }
     if (id === tab && !postViewActive && (id !== 'my' || channelFilterId == null)) {
       scrollFeedToTop();
       if (id === 'search') focusSearchInput();
       return;
     }
-    clearArticleFocus();
+    stampCurrentFeedScroll();
+    if (postViewActive) {
+      discardPostView();
+      persistFeedSnapshot();
+    }
     const leavingSearch = tab === 'search' && id !== 'search';
     tab = id;
     channelFilterId = null;
@@ -1340,6 +1480,7 @@
     if (id === 'search') {
       void tick().then(() => focusSearchInput());
     }
+    commitFeedHistory('push');
   }
 
   function focusSearchInput() {
@@ -1351,12 +1492,17 @@
       focusSearchInput();
       return;
     }
-    clearArticleFocus();
+    stampCurrentFeedScroll();
+    if (postViewActive) {
+      discardPostView();
+      persistFeedSnapshot();
+    }
     tab = 'search';
     channelFilterId = null;
     void loadSidebarChannel(null);
     scrollFeedToTop();
     void tick().then(() => focusSearchInput());
+    commitFeedHistory('push');
   }
 
   function onDateChange(value: string) {
@@ -1380,7 +1526,11 @@
 
   function selectSubscription(channelId: number | null, toggle = true) {
     if (!authed && !requireAuth()) return;
-    clearArticleFocus();
+    stampCurrentFeedScroll();
+    if (postViewActive) {
+      discardPostView();
+      persistFeedSnapshot();
+    }
     allSubsOpen = false;
     tab = 'my';
     if (channelId == null) {
@@ -1388,6 +1538,7 @@
       void loadSidebarChannel(null);
       scrollFeedToTop();
       void reload();
+      commitFeedHistory('push');
       return;
     }
     const nextId = toggle && channelFilterId === channelId ? null : channelId;
@@ -1405,12 +1556,17 @@
     void loadSidebarChannel(nextId);
     scrollFeedToTop();
     void reload();
+    commitFeedHistory('push');
   }
 
   /** Открыть ленту канала/блога на этой же странице (без /channel/:id). */
   function openChannelFeed(channelId: number) {
     if (!(channelId > 0)) return;
-    clearArticleFocus();
+    if (!feedHistoryApplying) stampCurrentFeedScroll();
+    if (postViewActive) {
+      discardPostView();
+      persistFeedSnapshot();
+    }
     tab = 'my';
     channelFilterId = channelId;
     markSubscriptionSeen(subscriptions.find((c) => c.id === channelId));
@@ -1426,6 +1582,7 @@
     });
     scrollFeedToTop();
     void reload();
+    commitFeedHistory('push');
   }
 
   async function openChannelDestination(ch: FeedChannel) {
@@ -1564,7 +1721,10 @@
       }
     } else {
       subscriptions = subscriptions.filter((c) => c.id !== channelId);
-      if (channelFilterId === channelId) channelFilterId = null;
+      if (channelFilterId === channelId) {
+        channelFilterId = null;
+        commitFeedHistory('replace');
+      }
       const fromContext =
         sidebarChannel?.id === channelId
           ? sidebarChannel
@@ -1882,25 +2042,31 @@
   }
 
   function applySearchTag(tag: string) {
-    searchQuery = tag.replace(/^#/, '').trim();
+    const q = tag.replace(/^#/, '').trim();
+    stampCurrentFeedScroll();
+    searchQuery = q;
     if (tab !== 'search') enterSearchTab();
+    else commitFeedHistory('push');
   }
 
   function applyFeedSearchFromRoute(detailQ?: string) {
     const q = String(detailQ ?? getSearchParams().get('q') ?? '').trim();
     if (!q) return;
     const wasSearch = tab === 'search';
-    if (!wasSearch) {
-      clearArticleFocus();
-      tab = 'search';
-      channelFilterId = null;
-      void loadSidebarChannel(null);
+    const sameQuery = searchQuery.trim() === q;
+    if (wasSearch && sameQuery) return;
+    stampCurrentFeedScroll();
+    if (postViewActive) {
+      discardPostView();
+      persistFeedSnapshot();
     }
-    if (searchQuery.trim() === q) {
-      if (!wasSearch) void fetchSearch(q, 0, false);
-      return;
-    }
+    tab = 'search';
+    channelFilterId = null;
     searchQuery = q;
+    void loadSidebarChannel(null);
+    scrollFeedToTop();
+    const urlQ = String(getSearchParams().get('q') ?? '').trim();
+    commitFeedHistory(urlQ === q ? 'replace' : 'push');
   }
 
   $effect(() => {
@@ -1916,7 +2082,13 @@
       loadState = 'idle';
       return;
     }
+    if (q === lastSearchFetchedQuery && (searchLoadState === 'ready' || searchLoadState === 'empty')) {
+      return;
+    }
     const handle = setTimeout(() => {
+      if (q === lastSearchFetchedQuery && (searchLoadState === 'ready' || searchLoadState === 'empty')) {
+        return;
+      }
       void fetchSearch(q, 0, false);
     }, 320);
     return () => clearTimeout(handle);
@@ -1931,9 +2103,12 @@
   });
 
   onMount(() => {
-    applyFeedSearchFromRoute();
     refreshDrafts();
     unregisterScrollKey = registerActiveScrollKey(() => FEED_VIEW_KEY());
+
+    const scrollEl = getScrollContainer();
+    const onFeedScroll = () => scheduleFeedScrollStamp();
+    scrollEl?.addEventListener('scroll', onFeedScroll, { passive: true });
 
     const onFeedSearch = ((e: CustomEvent<{ q?: string }>) => {
       applyFeedSearchFromRoute(e.detail?.q);
@@ -1941,22 +2116,25 @@
     }) as EventListener;
     const onNavigate = ((e: CustomEvent<string>) => {
       const route = String(e.detail ?? '');
-      if (!route.startsWith('/feed')) return;
-      const q = route.includes('?')
-        ? new URLSearchParams(route.slice(route.indexOf('?') + 1)).get('q')
-        : getSearchParams().get('q');
+      if (!route.startsWith('/feed') || !route.includes('?')) return;
+      const q = new URLSearchParams(route.slice(route.indexOf('?') + 1)).get('q');
       applyFeedSearchFromRoute(q ?? undefined);
     }) as EventListener;
     const onBeforeNavigate = ((e: Event) => {
       const to = String((e as CustomEvent<{ to?: string }>).detail?.to ?? '');
       if (to.startsWith('/feed')) return;
-      // Сохраняем и ленту, и открытый пост — при «назад» вернёмся в пост.
       saveViewStateWithScroll(FEED_VIEW_KEY(), feedListSnapshot());
+      // Пока URL ещё /feed — записываем вкладку/канал/пост и скролл в текущий слот истории.
+      if (getPath() === '/feed') replaceFeedHistory(currentFeedView());
     }) as EventListener;
+    const onBeforeHistoryTravel = () => {
+      stampCurrentFeedScroll();
+    };
 
     window.addEventListener('anix:feed-search', onFeedSearch);
     window.addEventListener('anix:navigate', onNavigate);
     window.addEventListener('anix:beforeNavigate', onBeforeNavigate);
+    window.addEventListener('anix:beforeHistoryTravel', onBeforeHistoryTravel);
     window.addEventListener('popstate', onFeedPopState);
     window.addEventListener('anix:feed-drafts-changed', refreshDrafts);
     const onComposerPublished = ((e: Event) => {
@@ -2009,6 +2187,13 @@
         composerIsSuggestion = false;
       }
     });
+    const pendingArticle = takeFeedArticleFocus();
+    const pendingChannel = takeFeedChannelFocus();
+    const historyView = (!pendingArticle && !pendingChannel) ? readFeedHistoryView() : null;
+    const historyPostId = historyView?.postId ?? (
+      (!pendingArticle && !pendingChannel) ? readFeedPostIdFromHistory() : null
+    );
+
     const unsubFocus = feedArticleFocusId.subscribe((id) => {
       if (id == null || !(id > 0)) return;
       takeFeedArticleFocus();
@@ -2020,8 +2205,20 @@
       openChannelFeed(id);
     });
 
+    const onSidebarTabReset = ((e: Event) => {
+      const tabId = (e as CustomEvent<{ tab?: string }>).detail?.tab;
+      if (tabId !== 'feed') return;
+      resetFeedToHome();
+    }) as EventListener;
+    window.addEventListener('anix:sidebarTabReset', onSidebarTabReset);
+    window.addEventListener('anix:historyBack', onHistoryBack);
+
     const cached = getViewState<FeedListSnapshot>(FEED_VIEW_KEY());
     const cachedData = cached?.data;
+    const cachedPost = cachedData?.postView;
+    if (cachedPost?.listScrollBeforePost) {
+      listScrollBeforePost = cachedPost.listScrollBeforePost;
+    }
     const canRestore =
       !!cachedData
       && (cachedData.loadState === 'ready' || cachedData.loadState === 'empty')
@@ -2032,41 +2229,105 @@
         || (Array.isArray(cachedData.articles) && cachedData.articles.length > 0)
       );
 
+    const applyHistorySelection = (): boolean => {
+      if (!historyView) return false;
+      const histTab = isFeedTab(historyView.tab) ? historyView.tab : 'my';
+      const histChannel = histTab === 'my' && historyView.channelId != null && historyView.channelId > 0
+        ? historyView.channelId
+        : null;
+      const histSearch = histTab === 'search' ? String(historyView.searchQuery ?? '').trim() : '';
+      const mismatch = tab !== histTab
+        || (channelFilterId ?? null) !== histChannel
+        || (tab === 'search' ? searchQuery.trim() : '') !== histSearch;
+      tab = histTab;
+      channelFilterId = histChannel;
+      if (histTab === 'history') historyVisibleCount = 10;
+      if (histTab === 'search') {
+        searchQuery = histSearch;
+      } else {
+        searchQuery = '';
+        clearSearchResults();
+      }
+      if (histChannel != null) void loadSidebarChannel(histChannel);
+      else void loadSidebarChannel(null);
+      return mismatch;
+    };
+
+    const openPendingOrHistoryPost = (): boolean => {
+      if (pendingArticle) {
+        void selectArticleById(pendingArticle);
+        return true;
+      }
+      if (pendingChannel) {
+        openChannelFeed(pendingChannel);
+        return true;
+      }
+      const wantPost = historyView?.postId ?? historyPostId;
+      if (wantPost) {
+        if (cachedPost?.article?.id === wantPost) {
+          restorePostViewFromSnapshot(cachedPost);
+        } else {
+          void selectArticleById(wantPost, 'none');
+        }
+        return true;
+      }
+      return false;
+    };
+
+    const histScroll = Number(historyView?.scrollTop ?? 0);
+    const fallbackScroll = Number(cached?.scrollTop ?? 0);
+    if ((historyView ? histScroll : fallbackScroll) > 0) beginScrollRestore();
+
     if (canRestore && cached?.data) {
       applyFeedListSnapshot(cached.data);
       logViewStateRestore(FEED_VIEW_KEY(), cached.scrollTop, cached.data);
-      if (cached.data.channelFilterId != null) {
+      const needReload = applyHistorySelection();
+      if (!historyView && cached.data.channelFilterId != null && !pendingChannel) {
         void loadSidebarChannel(cached.data.channelFilterId);
       }
 
-      const post = cached.data.postView;
-      if (post?.article?.id) {
-        restorePostViewFromSnapshot(post);
-        requestAnimationFrame(() => {
-          scrollFeedToTop();
-        });
-      } else if (cached.scrollTop > 0) {
-        beginScrollRestore();
-        requestAnimationFrame(() => {
-          void restoreScrollTop(cached.scrollTop, { maxWaitMs: 6000 });
-        });
+      const openedPost = openPendingOrHistoryPost();
+      const scrollTo = historyView ? histScroll : fallbackScroll;
+      if (openedPost) {
+        restoreFeedScroll(historyView?.postId && !pendingArticle ? scrollTo : 0);
+      } else if (needReload) {
+        void reload().then(() => restoreFeedScroll(scrollTo));
       } else {
-        scrollFeedToTop();
+        if (!historyView) replaceFeedHistory(currentFeedView());
+        restoreFeedScroll(scrollTo);
       }
     } else {
       logViewStateMiss(FEED_VIEW_KEY(), 'empty-or-missing');
-      scrollFeedToTop();
-      void reload();
+      applyHistorySelection();
+      const openedPost = openPendingOrHistoryPost();
+      if (openedPost) {
+        restoreFeedScroll(historyView?.postId && !pendingArticle ? histScroll : 0);
+      } else {
+        void reload().then(() => {
+          if (!historyView) replaceFeedHistory(currentFeedView());
+          restoreFeedScroll(histScroll);
+        });
+      }
     }
+
+    applyFeedSearchFromRoute();
 
     return () => {
       unsub();
       unsubFocus();
       unsubChannelFocus();
+      scrollEl?.removeEventListener('scroll', onFeedScroll);
+      if (feedScrollStampTimer) {
+        clearTimeout(feedScrollStampTimer);
+        feedScrollStampTimer = null;
+      }
       window.removeEventListener('anix:feed-search', onFeedSearch);
       window.removeEventListener('anix:navigate', onNavigate);
       window.removeEventListener('anix:beforeNavigate', onBeforeNavigate);
+      window.removeEventListener('anix:beforeHistoryTravel', onBeforeHistoryTravel);
       window.removeEventListener('popstate', onFeedPopState);
+      window.removeEventListener('anix:sidebarTabReset', onSidebarTabReset);
+      window.removeEventListener('anix:historyBack', onHistoryBack);
       window.removeEventListener('anix:feed-drafts-changed', refreshDrafts);
       window.removeEventListener('anix:composer-published', onComposerPublished);
       window.removeEventListener('storage', refreshDrafts);
@@ -2089,8 +2350,8 @@
       <button
         type="button"
         class="feed-side__item"
-        class:feed-side__item--active={tab === 'my' && !postViewActive}
-        aria-current={tab === 'my' && !postViewActive ? 'page' : undefined}
+        class:feed-side__item--active={tab === 'my'}
+        aria-current={tab === 'my' ? 'page' : undefined}
         aria-label={feedNavAvatars.length > 0
           ? `Моя лента, новые записи: ${feedNavAvatars.map((av) => av.title).join(', ')}`
           : 'Моя лента'}
@@ -2138,8 +2399,8 @@
       <button
         type="button"
         class="feed-side__item"
-        class:feed-side__item--active={tab === 'history' && !postViewActive}
-        aria-current={tab === 'history' && !postViewActive ? 'page' : undefined}
+        class:feed-side__item--active={tab === 'history'}
+        aria-current={tab === 'history' ? 'page' : undefined}
         aria-label={historyNavAvatars.length > 0
           ? `История, недавно: ${historyNavAvatars.map((av) => av.title).join(', ')}`
           : 'История'}
@@ -2166,8 +2427,8 @@
       <button
         type="button"
         class="feed-side__item"
-        class:feed-side__item--active={tab === 'drafts' && !postViewActive}
-        aria-current={tab === 'drafts' && !postViewActive ? 'page' : undefined}
+        class:feed-side__item--active={tab === 'drafts'}
+        aria-current={tab === 'drafts' ? 'page' : undefined}
         onclick={() => onTabChange('drafts')}
       >
         <span class="feed-side__item-icon" aria-hidden="true">{@html iconClipboardList(18)}</span>
@@ -2179,8 +2440,8 @@
       <button
         type="button"
         class="feed-side__item"
-        class:feed-side__item--active={tab === 'search' && !postViewActive}
-        aria-current={tab === 'search' && !postViewActive ? 'page' : undefined}
+        class:feed-side__item--active={tab === 'search'}
+        aria-current={tab === 'search' ? 'page' : undefined}
         onclick={() => onTabChange('search')}
       >
         <span class="feed-side__item-icon" aria-hidden="true">{@html iconSearch(18)}</span>

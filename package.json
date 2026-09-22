@@ -1,5 +1,6 @@
 {
     "name": "anixapp",
+    "desktopName": "anixapp.desktop",
     "version": "0.1.56-beta-4",
     "description": "Быстрый клиент для просмотра аниме на базе Anixart API",
     "repository": "github:Maks1mio/anixapp",
@@ -10,9 +11,9 @@
         "build:icon": "node scripts/build-icon.js",
         "build": "vite build && yarn build:icon && node scripts/inject-oauth-env.js && electron-builder --publish=never",
         "build:win": "vite build && yarn build:icon && node scripts/inject-oauth-env.js && electron-builder --win --publish=never",
-        "build:linux-deb": "vite build && yarn build:icon && node scripts/inject-oauth-env.js && electron-builder --linux deb --publish=never",
-        "build:linux-arch": "vite build && yarn build:icon && node scripts/inject-oauth-env.js && electron-builder --linux pacman --publish=never",
-        "build:linux-appimage": "vite build && yarn build:icon && node scripts/inject-oauth-env.js && electron-builder --linux AppImage --publish=never",
+        "build:linux-deb": "node scripts/ensure-linux-host.mjs deb && vite build && yarn build:icon && node scripts/inject-oauth-env.js && electron-builder --linux deb --publish=never",
+        "build:linux-arch": "node scripts/ensure-linux-host.mjs pacman && vite build && yarn build:icon && node scripts/inject-oauth-env.js && electron-builder --linux pacman --publish=never",
+        "build:linux-appimage": "node scripts/ensure-linux-host.mjs AppImage && vite build && yarn build:icon && node scripts/inject-oauth-env.js && electron-builder --linux AppImage --publish=never",
         "build:vite": "vite build",
         "build:ads-embed": "node scripts/build-ads-embed.mjs",
         "electron:build": "vite build && yarn build:icon && node scripts/inject-oauth-env.js && electron-builder --publish=never",
@@ -127,7 +128,8 @@
             "icon": "public/logo",
             "category": "Network",
             "maintainer": "Maks1mio",
-            "executableName": "anixapp"
+            "executableName": "anixapp",
+            "syncDesktopName": true
         },
         "deb": {
             "depends": [

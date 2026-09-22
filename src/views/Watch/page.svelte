@@ -6,6 +6,7 @@
   import { getFluoPlayer, installWindowFluo, sendFluoPreviewFrame } from '../../fluo';
   import type { WatchState, EpisodeItem, DubberItem, LobbyActivityEntry, LobbyChatMessage, PopoverType, NextEpAltDub, DownloadedEpisodeItem, PlaybackAlt, SourceItem } from './_types';
   import { isHlsUrl, isDubberBlacklisted, lobbyActionText, allowsIframeFallback, userPlaybackError } from './_utils';
+  import { createClickOrDblclick } from './_clickGate';
   import { setEmbedMediaContext } from './core/hls-media-context';
   import { normalizeSkipMarks, mergeSkipMarks, clampSkipMarksToDuration, skipMarkActive, endingIsAtEpisodeEnd, buildTimelineSausages, type SkipMarkKind, type SkipMarks } from './_skipMarks';
   import { getSkipAutoPref, setSkipAutoPref } from './_skipPrefs';
@@ -2320,6 +2321,16 @@
     })();
   }
 
+  const hotspotClicks = createClickOrDblclick({
+    onSingle: () => {
+      showAndSchedule();
+      togglePlay();
+    },
+    onDouble: () => toggleFullscreen({ osd: true }),
+  });
+
+  $effect(() => () => hotspotClicks.dispose());
+
   async function toggleAlwaysOnTop(opts?: { osd?: boolean }) {
     const next = await (window as any).electron?.togglePlayerAlwaysOnTop?.();
     const pinned = !!next;
@@ -4455,7 +4466,8 @@
       <div
         class="watch-page__chrome-hotspot"
         aria-hidden="true"
-        onclick={() => { showAndSchedule(); togglePlay(); }}
+        onclick={(e) => hotspotClicks.handle(e)}
+        ondblclick={(e) => e.preventDefault()}
       ></div>
     </div>
 

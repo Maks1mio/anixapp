@@ -1,4 +1,5 @@
 export { default as ReleaseHead        } from './ReleaseHead.svelte';
+export { default as ReleaseAirCalendar } from './ReleaseAirCalendar.svelte';
 export { default as ReleaseVideos      } from './ReleaseVideos.svelte';
 export { default as ReleaseRating      } from './ReleaseRating.svelte';
 export { default as ReleaseFriends     } from './ReleaseFriends.svelte';

@@ -339,6 +339,14 @@
   text-overflow: ellipsis;
 }
 
+.search-page__profile-ban {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: $color-error;
+  white-space: nowrap;
+}
+
 .search-page__profile-status {
   font-size: 0.75rem;
   color: $color-text-muted;

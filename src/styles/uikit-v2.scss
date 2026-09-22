@@ -5505,6 +5505,231 @@ body.uiv2-scroll-dragging * {
   }
 }
 
+.uiv2-air-cal {
+  display: inline;
+}
+
+.uiv2-air-cal__trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 55%, transparent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.uiv2-air-cal__panel {
+  position: fixed;
+  z-index: 12050;
+  box-sizing: border-box;
+  width: 17.75rem;
+  padding: 0.7rem 0.75rem 0.8rem;
+  border-radius: 12px;
+  background: var(--uiv2-tooltip-bg, var(--uikit-v2-elevated, #{$color-surface-hover}));
+  box-shadow: var(--uiv2-chrome-shadow, 0 12px 32px rgba(0, 0, 0, 0.4));
+  color: var(--uikit-v2-text, #{$color-text});
+}
+
+.uiv2-air-cal__panel-head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.uiv2-air-cal__month {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.uiv2-air-cal__nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    color: var(--uikit-v2-text, #{$color-text});
+    background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 8%, transparent);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 55%, transparent);
+    outline-offset: 2px;
+  }
+
+  :global(svg) {
+    display: block;
+  }
+}
+
+.uiv2-air-cal__legend {
+  margin: 0.4rem 0 0.15rem;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
+}
+
+.uiv2-air-cal__hint {
+  margin: 0 0 0.45rem;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
+}
+
+.uiv2-air-cal__keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.7rem;
+  margin: 0 0 0.55rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
+}
+
+.uiv2-air-cal__keys li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.uiv2-air-cal__key {
+  display: block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  box-sizing: border-box;
+}
+
+.uiv2-air-cal__key--next {
+  background: var(--uikit-v2-accent, #{$color-accent});
+}
+
+.uiv2-air-cal__key--soon {
+  border: 1.5px solid color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 70%, transparent);
+  background: color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 18%, transparent);
+}
+
+.uiv2-air-cal__key--aired {
+  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 28%, transparent);
+}
+
+.uiv2-air-cal__grid {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+
+  th {
+    padding: 0 0 0.35rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 1;
+    text-transform: lowercase;
+    color: var(--uiv2-fg-muted, #{$color-text-muted});
+    text-align: center;
+  }
+
+  td {
+    padding: 1px;
+    text-align: center;
+    vertical-align: middle;
+  }
+}
+
+.uiv2-air-cal__day-tip.uiv2-tooltip__trigger {
+  display: block;
+  width: 100%;
+}
+
+.uiv2-air-cal__day {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  margin: 0 auto;
+  padding: 0;
+  border: 1.5px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+button.uiv2-air-cal__day {
+  cursor: pointer;
+
+  &:hover {
+    filter: brightness(1.08);
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 55%, transparent);
+    outline-offset: 2px;
+  }
+}
+
+.uiv2-air-cal__day--out {
+  opacity: 0.42;
+}
+
+.uiv2-air-cal__day--empty {
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
+}
+
+.uiv2-air-cal__day--aired {
+  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 22%, transparent);
+  color: var(--uikit-v2-text, #{$color-text});
+}
+
+.uiv2-air-cal__day--upcoming {
+  border-color: color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 55%, transparent);
+  background: color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 16%, transparent);
+  color: var(--uikit-v2-text, #{$color-text});
+}
+
+.uiv2-air-cal__day--late {
+  border-color: color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 70%, transparent);
+  background: color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 12%, transparent);
+  color: var(--uikit-v2-accent, #{$color-accent});
+}
+
+.uiv2-air-cal__day--today,
+.uiv2-air-cal__day--next {
+  border-color: transparent;
+  background: var(--uikit-v2-accent, #{$color-accent});
+  color: var(--uiv2-chrome-on-accent-fg, #fff);
+}
+
+.uiv2-air-cal__day--today.uiv2-air-cal__day--empty {
+  border-color: color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 70%, transparent);
+  background: transparent;
+  color: var(--uikit-v2-text, #{$color-text});
+  box-shadow: none;
+}
+
 /* âââ V2 release carousel âââ */
 .uiv2-carousel {
   position: relative;

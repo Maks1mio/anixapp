@@ -14,6 +14,7 @@
   import { LIST_STATUSES, type ListStatusId } from './_types';
   import type { ReleaseMetaInfoRow } from './_metaInfo';
   import {
+    buildCategorySegments,
     buildCreditsSegments,
     buildGenreSegments,
     buildSourceSegments,
@@ -24,7 +25,7 @@
     numToStatusId, ratingHue, mapCardData, formatEpisodeAdded,
   } from './_utils';
   import { isReleaseAnnounce, formatReleaseEpisodes } from '../../utils/release-card';
-  import { ReleaseHead, ReleaseVideos, ReleaseRating, ReleaseFriends, ReleaseRelated, ReleaseRecommendations, ReleaseScreenshots, ReleaseComments } from './components';
+  import { ReleaseHead, ReleaseAirCalendar, ReleaseVideos, ReleaseRating, ReleaseFriends, ReleaseRelated, ReleaseRecommendations, ReleaseScreenshots, ReleaseComments } from './components';
   import { notifyFavoritesChanged } from '../../utils/favorites-events';
   import { applyReleaseListStatus } from '../../utils/release-list-status';
   import { enrichBlockedRelease } from '../../services/release-geo-bypass';
@@ -171,6 +172,7 @@
   const seasonName   = $derived(getSeasonName(season));
   const releaseDate  = $derived((release?.release_date ?? '') as string);
   const airedOnDate  = $derived(release?.aired_on_date as number | null | undefined);
+  const broadcast    = $derived(typeof release?.broadcast === 'number' ? release.broadcast as number : null);
   const isViewBlocked = $derived(!!(release?.is_view_blocked));
   const hasEpisodesReleased = $derived(typeof episodesReleased === 'number' && episodesReleased > 0);
   const releaseId    = $derived(release?.id as number | undefined);
@@ -228,10 +230,12 @@
     if (duration && duration > 0) epText += epText ? ` по ~${duration} мин.` : `~${duration} мин.`;
     if (epText) rows.push({ kind: 'episodes', segments: plainMetaSegments(epText) });
 
-    const catParts: string[] = [];
-    if (categoryName) catParts.push(categoryName);
-    if (statusName)   catParts.push(statusName);
-    if (catParts.length) rows.push({ kind: 'category', segments: plainMetaSegments(catParts.join(', ')) });
+    const catSegments = buildCategorySegments(
+      categoryName,
+      statusName,
+      statusId === 2 || statusId === 3 || /^выходит$/i.test(statusName),
+    );
+    if (catSegments.length) rows.push({ kind: 'category', segments: catSegments });
 
     const creditSegments = buildCreditsSegments(studio, author, director);
     if (creditSegments.length) rows.push({ kind: 'credits', segments: creditSegments });
@@ -429,7 +433,19 @@
         onWatch={handleWatch}
         onSetStatus={setStatus}
         onToggleDesc={() => { descCollapsed = !descCollapsed; }}
-      />
+      >
+        {#snippet airDate()}
+          <ReleaseAirCalendar
+            releaseId={id}
+            {broadcast}
+            {airedOnDate}
+            {episodesReleased}
+            {episodesTotal}
+            {statusId}
+            fallback={statusName || 'Выходит'}
+          />
+        {/snippet}
+      </ReleaseHead>
 
       <ReleaseVideos releaseId={id} releaseTitle={title} />
 

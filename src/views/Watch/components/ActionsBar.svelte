@@ -49,7 +49,7 @@
     onchangeAnime4kTargetRes: (res: Anime4kTargetRes) => void;
     onopenSettings: () => void;
     onclosePopover: () => void;
-    onfullscreen: () => void;
+    onfullscreen: (opts?: { osd?: boolean }) => void;
     onchangeRate: (r: number) => void;
     onchangeAspect: (a: string) => void;
     onchangeSurround: (mode: SurroundMode) => void;

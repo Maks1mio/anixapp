@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import Select from '../../../components/Select.svelte';
   import type { SelectOption } from '../../../components/select';
   import {
@@ -41,6 +42,7 @@
     onWatch:          () => void;
     onSetStatus:      (v: string) => void;
     onToggleDesc:     () => void;
+    airDate?:          Snippet;
     /** TV: широкая шапка и кнопка статуса вместо Select */
     tvMode?:           boolean;
     statusButtonLabel?: string;
@@ -55,6 +57,7 @@
     metaInfoRows, playBtnText, playBtnDisabled, episodeAddedText,
     currentStatus, selectOptions,
     onToggleFavorite, onWatch, onSetStatus, onToggleDesc,
+    airDate,
     tvMode = false,
     statusButtonLabel = 'В список',
     onOpenStatusPicker,
@@ -227,7 +230,9 @@
             <ReleaseMetaInfoIcon kind={row.kind} country={row.country} />
             <span class="release-page__meta-info-text">
               {#each row.segments as segment, index (index)}
-                {#if segment.query != null && segment.searchBy != null}
+                {#if segment.airCalendar}
+                  {@render airDate?.()}
+                {:else if segment.query != null && segment.searchBy != null}
                   <button
                     type="button"
                     class="release-page__meta-info-link"

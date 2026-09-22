@@ -19,6 +19,10 @@ export const SCHEDULE_DAYS: ScheduleDay[] = [
 
 const JS_DAY_TO_KEY = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
 
+const SCHEDULE_CACHE_TTL_MS = 5 * 60 * 1000;
+let scheduleCache: { at: number; data: Record<string, ReleaseCardData[]> } | null = null;
+let scheduleInflight: Promise<Record<string, ReleaseCardData[]>> | null = null;
+
 export function getTodayScheduleKey(): string {
   return JS_DAY_TO_KEY[new Date().getDay()] ?? 'monday';
 }
@@ -38,12 +42,37 @@ export function mapScheduleResponse(data: Record<string, unknown>): Record<strin
   return result;
 }
 
-export async function fetchSchedule(): Promise<Record<string, ReleaseCardData[]>> {
+export async function fetchSchedule(force = false): Promise<Record<string, ReleaseCardData[]>> {
+  if (!force && scheduleCache && Date.now() - scheduleCache.at < SCHEDULE_CACHE_TTL_MS) {
+    return scheduleCache.data;
+  }
+  if (!force && scheduleInflight) return scheduleInflight;
   if (!window.anixApi?.release?.schedule) {
     throw new Error('API недоступен');
   }
-  const data = await window.anixApi.release.schedule() as Record<string, unknown>;
-  return mapScheduleResponse(data);
+  scheduleInflight = (async () => {
+    const data = await window.anixApi.release.schedule() as Record<string, unknown>;
+    const mapped = mapScheduleResponse(data);
+    scheduleCache = { at: Date.now(), data: mapped };
+    return mapped;
+  })();
+  try {
+    return await scheduleInflight;
+  } finally {
+    scheduleInflight = null;
+  }
+}
+
+export function findReleaseScheduleDay(
+  releaseId: number,
+  byDay: Record<string, ReleaseCardData[]>,
+): { day: ScheduleDay; item: ReleaseCardData } | null {
+  if (!Number.isFinite(releaseId) || releaseId <= 0) return null;
+  for (const day of SCHEDULE_DAYS) {
+    const item = byDay[day.key]?.find((release) => release.id === releaseId);
+    if (item) return { day, item };
+  }
+  return null;
 }
 
 export function scheduleHasReleases(byDay: Record<string, ReleaseCardData[]>): boolean {

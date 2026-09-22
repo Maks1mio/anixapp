@@ -8,6 +8,7 @@
   import ActionsBar from '../components/ActionsBar.svelte';
   import TopBar from '../components/TopBar.svelte';
   import CenterPlay from '../components/CenterPlay.svelte';
+  import { createClickOrDblclick } from '../_clickGate';
 
   export interface PlayerChromeProps {
     overlayVisible: boolean;
@@ -86,7 +87,7 @@
     onselectDownloadedDub: (dubberName: string) => void;
     ontogglePinDub: (dub: DubberItem) => void | Promise<void>;
     onclosePopover: () => void;
-    onfullscreen: () => void;
+    onfullscreen: (opts?: { osd?: boolean }) => void;
     onchangeRate: (r: number) => void;
     onchangeAspect: (a: string) => void;
     onchangeSurround: (mode: SurroundMode) => void;
@@ -103,6 +104,22 @@
   }
 
   let { lobby, ...props }: PlayerChromeProps = $props();
+
+  const tapClicks = createClickOrDblclick({
+    onSingle: () => props.ontogglePlay(),
+    onDouble: () => props.onfullscreen({ osd: true }),
+  });
+
+  $effect(() => () => tapClicks.dispose());
+
+  function onTapClick(e: MouseEvent) {
+    tapClicks.handle(e);
+    // Не оставляем фокус на зоне клика — иначе Space срабатывает дважды.
+    const ae = document.activeElement;
+    if (ae instanceof HTMLElement && (ae === e.currentTarget || e.currentTarget.contains(ae))) {
+      ae.blur();
+    }
+  }
 </script>
 
 <div class="watch-page__gui-overlay">
@@ -140,14 +157,8 @@
   <div
     class="watch-page__tap-layer"
     role="presentation"
-    onclick={(e) => {
-      props.ontogglePlay();
-      // Не оставляем фокус на зоне клика — иначе Space срабатывает дважды.
-      const ae = document.activeElement;
-      if (ae instanceof HTMLElement && (ae === e.currentTarget || e.currentTarget.contains(ae))) {
-        ae.blur();
-      }
-    }}
+    onclick={onTapClick}
+    ondblclick={(e) => e.preventDefault()}
   ></div>
 
   {@render lobby?.()}

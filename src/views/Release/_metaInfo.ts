@@ -20,6 +20,8 @@ export interface ReleaseMetaSegment {
   text: string;
   query?: string;
   searchBy?: number;
+  /** Вставить кликабельную дату выхода вместо текста. */
+  airCalendar?: boolean;
 }
 
 export interface ReleaseMetaInfoRow {
@@ -93,4 +95,21 @@ export function buildGenreSegments(genres: string): ReleaseMetaSegment[] {
 
 export function plainMetaSegments(text: string): ReleaseMetaSegment[] {
   return text ? [{ text }] : [];
+}
+
+export function buildCategorySegments(
+  categoryName?: string,
+  statusName?: string,
+  airCalendar = false,
+): ReleaseMetaSegment[] {
+  const segments: ReleaseMetaSegment[] = [];
+  const category = categoryName?.trim() ?? '';
+  const status = statusName?.trim() ?? '';
+  if (category) segments.push({ text: category });
+  if (status || airCalendar) {
+    if (segments.length) segments.push({ text: ', ' });
+    if (airCalendar) segments.push({ text: '', airCalendar: true });
+    else segments.push({ text: status });
+  }
+  return segments;
 }

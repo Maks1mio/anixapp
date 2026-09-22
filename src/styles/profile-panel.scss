@@ -1136,6 +1136,20 @@ $pp-btn-bg-hover: var(--pp-btn-bg-hover);
   }
 }
 
+.profile-panel__friends-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0.85rem 0.9rem 0.55rem;
+
+  .profile-panel__friends-section-title {
+    margin: 0;
+    flex: 1;
+    min-width: 0;
+  }
+}
+
 .profile-panel__friends-section-title {
   display: flex;
   align-items: center;
@@ -1157,6 +1171,24 @@ $pp-btn-bg-hover: var(--pp-btn-bg-hover);
   font-size: 0.72rem;
   font-weight: 600;
   color: $color-text-muted;
+}
+
+.profile-panel__friends-ban-filter {
+  gap: 0.4rem;
+  flex-shrink: 0;
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: $color-text;
+  white-space: nowrap;
+}
+
+.profile-panel__friends-scan {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: $color-text-muted;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .profile-panel__requests {
@@ -1291,14 +1323,29 @@ $pp-btn-bg-hover: var(--pp-btn-bg-hover);
 }
 
 .profile-panel__friend-row-name {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 0.28rem;
+  width: 100%;
   max-width: 100%;
   font-size: 0.9rem;
   font-weight: 600;
   overflow: hidden;
+  white-space: nowrap;
+}
+
+.profile-panel__friend-row-login {
+  overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.profile-panel__friend-row-ban {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: $color-error;
   white-space: nowrap;
 }
 

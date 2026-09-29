@@ -49,7 +49,7 @@
         "@sveltejs/vite-plugin-svelte": "^7.3.0",
         "concurrently": "^10.0.5",
         "cross-env": "^10.1.0",
-        "electron": "43.4.0",
+        "electron": "43.5.0",
         "electron-builder": "^26.15.3",
         "esbuild": "^0.28.2",
         "png2icons": "^2.0.1",

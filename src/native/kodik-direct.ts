@@ -1,7 +1,11 @@
 /**
  * Резолвер прямой ссылки Kodik для Capacitor / browser-bridge.
  * Тот же протокол, что electron/kodik-direct.js — без Node Buffer.
+ * Запросы — через httpGet: иначе на Android теряется Referer страницы плеера.
  */
+import { httpGet } from './native-http';
+import { isPhoneMode } from '../platform/phone';
+import { diagUrl, playDiag } from '../utils/play-diag';
 
 const KODIK_PLAYER_ORIGIN = 'https://kodikplayer.com/';
 const KODIK_PLAIN_SRC = /(?:kodik-storage|solodcdn)\.com\//i;
@@ -103,6 +107,8 @@ function decryptKodikLinks(links: Record<string, Array<{ src?: string }> | undef
 
 function preferPlayableKodikUrl(url: string): string {
   const abs = url.startsWith('http') ? url : url.startsWith('//') ? `https:${url}` : url;
+  // Телефон: прогрессивный MP4 (запросы видит CdnBridgeWebViewClient и ставит Referer).
+  if (isPhoneMode()) return abs.replace(/:hls:(manifest|hls)\.m3u8$/i, '');
   if (/:hls:/i.test(abs)) return abs;
   try {
     const parsed = new URL(abs);
@@ -116,23 +122,62 @@ function preferPlayableKodikUrl(url: string): string {
 }
 
 async function fetchText(url: string, headers: Record<string, string> = {}): Promise<string> {
-  const res = await fetch(url, {
-    headers: { 'User-Agent': BROWSER_UA, ...headers },
-    redirect: 'follow',
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.text();
+  const res = await httpGet(url, { headers: { 'User-Agent': BROWSER_UA, ...headers } });
+  if (!res.ok) {
+    playDiag('kodik:page', { url: diagUrl(url), status: res.status });
+    throw new Error(`HTTP ${res.status}`);
+  }
+  return res.text;
+}
+
+function isKodikManifest(url: string): boolean {
+  return /:hls:(manifest|hls)\.m3u8/i.test(url) || /\.m3u8(\?|$)/i.test(url);
+}
+
+/**
+ * Как probeKodikManifest в Electron: CDN Kodik часто 302 на edge-хосты,
+ * недоступные из части сетей. Недоступен — отдаём iframe вместо чёрного экрана.
+ */
+async function probeKodikManifest(manifestUrl: string, headers: Record<string, string>): Promise<boolean> {
+  try {
+    // Range: у MP4 не качаем файл целиком ради проверки.
+    const res = await httpGet(manifestUrl, {
+      headers: { Accept: '*/*', ...(isKodikManifest(manifestUrl) ? {} : { Range: 'bytes=0-1023' }), ...headers },
+      timeoutMs: 6_000,
+    });
+    const ctype = res.headers['content-type'] || '';
+    const ok = res.ok && (
+      isKodikManifest(res.url)
+      || /mpegurl|video\/|octet-stream/i.test(ctype)
+      || res.text.trimStart().startsWith('#EXTM3U')
+    );
+    playDiag('kodik:probe', { url: diagUrl(res.url), status: res.status, ok });
+    return ok;
+  } catch (err) {
+    playDiag('kodik:probe', { url: diagUrl(manifestUrl), error: String((err as Error)?.message || err) });
+    return false;
+  }
 }
 
 async function fetchKodikFtorLinks(pageUrl: string, videoInfo: { type?: string; hash?: string; id?: string }) {
   const { type, hash, id } = videoInfo;
   if (!type || !hash || !id) return null;
   const ftorUrl = `https://kodikplayer.com/ftor?${new URLSearchParams({ type, hash, id }).toString()}`;
-  const res = await fetch(ftorUrl, {
+  const res = await httpGet(ftorUrl, {
     headers: { Referer: pageUrl, Accept: 'application/json', 'User-Agent': BROWSER_UA },
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const payload = await res.json() as { links?: Record<string, Array<{ src?: string }>> };
+  if (!res.ok) {
+    playDiag('kodik:ftor', { status: res.status });
+    throw new Error(`HTTP ${res.status}`);
+  }
+  let payload: { links?: Record<string, Array<{ src?: string }>> } | null = null;
+  try {
+    payload = JSON.parse(res.text);
+  } catch {
+    payload = null;
+  }
+  const qualities = payload?.links && typeof payload.links === 'object' ? Object.keys(payload.links) : [];
+  playDiag('kodik:ftor', { status: res.status, qualities: qualities.join(',') || 'нет' });
   if (!payload?.links || typeof payload.links !== 'object') return null;
   return decryptKodikLinks(payload.links);
 }
@@ -194,11 +239,17 @@ export async function getDirectVideoLink(embedUrl: string) {
         if (src) qualityMap[key.replace('p', '')] = preferPlayableKodikUrl(src);
       }
       const best = PRIO.find((k) => qualityMap[k]) || Object.keys(qualityMap)[0];
-      const directUrl = best ? qualityMap[best] : null;
-      const dlHeaders = directUrl
+      let directUrl = best ? qualityMap[best] : null;
+      const dlHeaders: Record<string, string> = directUrl
         ? { Referer: 'https://kodikplayer.com/', 'User-Agent': BROWSER_UA }
         : {};
       // На TV не пробиваем CDN заранее — это +4–6 с к старту. Играем сразу.
+      // Телефон — как Electron: недоступный CDN → iframe, а не чёрный экран.
+      if (directUrl && isPhoneMode() && !(await probeKodikManifest(directUrl, dlHeaders))) {
+        directUrl = null;
+        for (const k of Object.keys(qualityMap)) delete qualityMap[k];
+      }
+      playDiag('kodik:direct', { quality: directUrl ? best : 'нет', url: diagUrl(directUrl) });
       if (!directUrl && !isCapacitor()) return { ...EMPTY, skip: skip || null };
       return {
         directUrl,
@@ -209,6 +260,7 @@ export async function getDirectVideoLink(embedUrl: string) {
       };
     }
   } catch (err) {
+    playDiag('kodik:error', { error: String((err as Error)?.message || err) });
     console.error('[kodik-direct]', err);
   }
 

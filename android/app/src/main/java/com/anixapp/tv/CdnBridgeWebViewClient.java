@@ -1,6 +1,7 @@
 package com.anixapp.tv;
 
 import android.net.Uri;
+import android.util.Log;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
@@ -45,6 +46,8 @@ public class CdnBridgeWebViewClient extends BridgeWebViewClient {
         "sibnet.ru", "vkuservideo.net", "okcdn.ru", "userapi.com", "mycdn.me"
     };
     private static final String KODIK_REFERER = "https://kodikplayer.com/";
+    /** Диагностика медиазапросов: adb logcat -s AnixPlay (хост, путь без query, код). */
+    private static final String DIAG_TAG = "AnixPlay";
     private static final int CACHE_MAX = 96;
 
     private static final Map<String, Cached> CACHE = new LinkedHashMap<String, Cached>(CACHE_MAX, 0.75f, true) {
@@ -153,6 +156,9 @@ public class CdnBridgeWebViewClient extends BridgeWebViewClient {
             String range = request.getRequestHeaders() != null ? request.getRequestHeaders().get("Range") : null;
             if (range != null && !range.isEmpty()) conn.setRequestProperty("Range", range);
             int code = conn.getResponseCode();
+            diag("media " + code + " " + shortUrl(request.getUrl())
+                + (range != null ? " range=" + range : "")
+                + " final=" + conn.getURL().getHost());
             if (code >= 400) {
                 conn.disconnect();
                 return null;
@@ -178,10 +184,21 @@ public class CdnBridgeWebViewClient extends BridgeWebViewClient {
             };
             String reason = code == 206 ? "Partial Content" : "OK";
             return new WebResourceResponse(mime, "UTF-8", code, reason, headers, stream);
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            diag("media fail " + shortUrl(request.getUrl()) + " " + e.getClass().getSimpleName());
             if (conn != null) conn.disconnect();
             return null;
         }
+    }
+
+    private static String shortUrl(Uri uri) {
+        String path = uri.getPath() != null ? uri.getPath() : "";
+        if (path.length() > 80) path = path.substring(0, 77) + "...";
+        return uri.getHost() + path;
+    }
+
+    private static void diag(String msg) {
+        try { Log.i(DIAG_TAG, msg); } catch (Throwable ignored) {}
     }
 
     private static String guessMediaMime(String url) {

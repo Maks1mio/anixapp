@@ -319,6 +319,10 @@ export function createBrowserAnixBridge() {
         }
         return json.data;
       }
+      // Как electron/lib/direct-video-link.js: Kodik, Sibnet, AniLibria; остальное — iframe.
+      const { getOtherDirectVideoLink } = await import('./direct-video-link');
+      const other = await getOtherDirectVideoLink(embedUrl);
+      if (other) return other;
       const { getDirectVideoLink } = await import('./kodik-direct');
       return getDirectVideoLink(embedUrl);
     },

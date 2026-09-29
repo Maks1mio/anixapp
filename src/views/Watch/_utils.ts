@@ -1,6 +1,8 @@
 import { setEmbedMediaContext, getEmbedCookie } from './core/hls-media-context';
 import { normalizeSkipMarks, type SkipMarks } from './_skipMarks';
 import { isTvMode } from '../../platform/tv';
+import { isPhoneMode } from '../../platform/phone';
+import { diagUrl, playDiag } from '../../utils/play-diag';
 import { tvBridgeMediaUrl } from '../../constants/tv-bridge';
 
 export function isVideoEmbedPageUrl(url: string): boolean {
@@ -220,6 +222,9 @@ export async function resolveEpisodeUrl(
       if (directUrl && !isUnplayableVideoSrc(directUrl)) {
         const toPlayable = (u: string) => {
           const abs = u.startsWith('http') ? u : `https:${u}`;
+          // Телефон: Kodik как прогрессивный MP4 — нативный HLS WebView качает в обход
+          // перехвата CdnBridgeWebViewClient и остаётся без Referer (см. kodik-direct.ts).
+          if (isPhoneMode() && isEmbedPage) return abs.replace(/:hls:(manifest|hls)\.m3u8$/i, '');
           if (/:hls:/i.test(abs)) return abs;
           try {
             const parsed = new URL(abs);
@@ -275,6 +280,12 @@ export async function resolveEpisodeUrl(
   }
 
   if (!useVideo && iframe) { playUrl = url; useVideo = false; }
+  playDiag('resolve', {
+    embed: diagUrl(url),
+    mode: useVideo ? 'video' : 'iframe',
+    play: diagUrl(playUrl),
+    quality: currentQuality || undefined,
+  });
   return { playUrl, useVideo, qualityMap, currentQuality, skip };
 }
 

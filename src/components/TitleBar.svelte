@@ -304,7 +304,7 @@
 >
   <div class="titlebar__drag">
     <span class="titlebar__logo" aria-hidden="true">
-      <img src="logo/512x512.png" alt="" class="titlebar__logo-img" />
+      <img src={`${import.meta.env.BASE_URL}logo/512x512.png`} alt="" class="titlebar__logo-img" />
     </span>
     <div class="titlebar__brand" title={appVersion ? `AnixApp v${appVersion}` : 'AnixApp beta'}>
       <span class="titlebar__title">AnixApp</span>

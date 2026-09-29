@@ -73,7 +73,9 @@ env.VITE_ANIXART_PROXY_APP_KEY = proxyKey;
 console.log(proxyKey ? '→ Прокси AnixApp: ключ встроен' : '→ Прокси AnixApp: выключен (только прямые хосты)');
 
 console.log('→ Vite phone web bundle → dist-android');
-yarn(['cross-env', 'VITE_TV_MODE=', 'VITE_PHONE_MODE=1', 'ANIXAPP_OUT_DIR=dist-android', 'vite', 'build']);
+// ANIXAPP_WEB_BASE=/: маршруты телефона — pathname (/release/123), а не hash как в Electron.
+// С base './' относительные пути (логотип, ассеты при перезагрузке) уходили в /release/…
+yarn(['cross-env', 'VITE_TV_MODE=', 'VITE_PHONE_MODE=1', 'ANIXAPP_OUT_DIR=dist-android', 'ANIXAPP_WEB_BASE=/', 'vite', 'build']);
 
 if (!existsSync(path.join(androidDir, 'app'))) {
   console.log('→ Capacitor: add android');

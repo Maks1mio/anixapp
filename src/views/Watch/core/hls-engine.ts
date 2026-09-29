@@ -2,6 +2,7 @@ import Hls from 'hls.js';
 import { isHlsUrl } from '../_utils';
 import { buildHlsConfig } from './hls-media-context';
 import { isLocalMediaUrl } from '../../../utils/local-media-url';
+import { diagUrl, playDiag } from '../../../utils/play-diag';
 
 type VideoWithHls = HTMLVideoElement & {
   _hls?: Hls;
@@ -54,8 +55,11 @@ function bindHlsHandlers(hls: Hls, video: HTMLVideoElement, handlers: SwapMediaH
 
   let attempts = 0;
   let reResolveAttempts = 0;
-  const onError = (_evt: string, data: { fatal: boolean; type: string }) => {
+  const onError = (_evt: string, data: { fatal: boolean; type: string; details?: string; response?: { code?: number } }) => {
     if (el._hlsGen !== gen) return;
+    if (data.fatal) {
+      playDiag('hls:error', { type: data.type, details: data.details, http: data.response?.code });
+    }
     if (!data.fatal) {
       if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
       return;
@@ -99,6 +103,7 @@ export function swapMediaSource(
   // только сетевой стек страницы, поэтому такой плейлист всегда через hls.js.
   const wantHls = isHlsUrl(url) && Hls.isSupported() && (isLocalMediaUrl(url) || !preferNativeHls());
   const existing = getAttachedHls(video);
+  traceMediaEvents(video, url, wantHls ? 'hls.js' : (isHlsUrl(url) ? 'native-hls' : 'video'));
 
   if (wantHls) {
     if (existing && !handlers.forceNew) {
@@ -119,6 +124,44 @@ export function swapMediaSource(
   detachHls(video);
   video.src = url;
   return { reused: false, isHls: false };
+}
+
+const MEDIA_ERROR_NAMES: Record<number, string> = {
+  1: 'ABORTED',
+  2: 'NETWORK',
+  3: 'DECODE',
+  4: 'SRC_NOT_SUPPORTED',
+};
+
+/** Диагностика телефона: какой источник получил плеер и чем кончился медиазапрос. */
+function traceMediaEvents(video: HTMLVideoElement, url: string, mode: string): void {
+  playDiag('player:source', { mode, url: diagUrl(url) });
+  const started = Date.now();
+  const onMeta = () => playDiag('player:metadata', {
+    ms: Date.now() - started,
+    size: `${video.videoWidth}x${video.videoHeight}`,
+    duration: Math.round(video.duration || 0),
+  });
+  const onPlaying = () => playDiag('player:playing', { ms: Date.now() - started });
+  const onError = () => {
+    const err = video.error;
+    playDiag('player:error', {
+      code: err ? (MEDIA_ERROR_NAMES[err.code] ?? err.code) : 'unknown',
+      message: err?.message || undefined,
+      url: diagUrl(url),
+    });
+  };
+  video.addEventListener('loadedmetadata', onMeta, { once: true });
+  video.addEventListener('playing', onPlaying, { once: true });
+  video.addEventListener('error', onError, { once: true });
+  // Следующий swap снимает старые слушатели, чтобы не путать источники в логе.
+  const el = video as HTMLVideoElement & { _diagOff?: () => void };
+  el._diagOff?.();
+  el._diagOff = () => {
+    video.removeEventListener('loadedmetadata', onMeta);
+    video.removeEventListener('playing', onPlaying);
+    video.removeEventListener('error', onError);
+  };
 }
 
 export function startHlsFromTime(video: HTMLVideoElement, time: number): void {

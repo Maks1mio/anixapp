@@ -736,6 +736,46 @@
   }
 }
 
+// Телефон: подписанная кнопка «Скачать тайтл» (на ПК — значок в тулбаре).
+.watch-modal__download-title {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.85rem;
+  border: 0;
+  border-radius: 12px;
+  background: $color-accent;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  svg {
+    flex-shrink: 0;
+  }
+}
+
+.watch-modal__download-title-meta {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  font-size: 0.78rem;
+  opacity: 0.85;
+}
+
 .watch-modal__download-status {
   padding: 0.52rem 0.7rem;
   border-radius: 12px;
@@ -912,6 +952,7 @@
   color: $color-text-muted;
   font-size: 0.86rem;
   line-height: 1.45;
+  white-space: pre-line;
 }
 
 .watch-modal__confirm-actions {

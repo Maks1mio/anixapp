@@ -37,6 +37,7 @@
   import { isTvMode } from '../platform/tv';
   import { scheduleFocusTvOverlayContent } from '../services/tv-navigation';
   import { downloadHost } from '../native/download-host';
+  import { isPhoneMode } from '../platform/phone';
 
   interface Props {
     releaseId: number;
@@ -669,7 +670,14 @@
     };
   }
 
+  /** Есть кому скачивать: Electron или нативный мост телефона. */
+  const canDownload = !!downloadHost()?.queueEpisodeDownloads;
+  /** На телефоне — подписанная кнопка «Скачать тайтл» вместо значка без текста. */
+  const phoneMode = isPhoneMode();
+
   async function queueDownloads(eps: Episode[]) {
+    const host = downloadHost();
+    if (!host?.queueEpisodeDownloads) throw new Error('downloads-unavailable');
     const items: DownloadItem[] = [];
     for (const ep of eps) {
       downloadStatus = `Подготовка серии ${ep.position}…`;
@@ -677,7 +685,8 @@
       if (item) items.push(item);
     }
     if (items.length === 0) throw new Error('no items');
-    await downloadHost()?.queueEpisodeDownloads?.({ items });
+    const res = await host.queueEpisodeDownloads({ items });
+    if (res && res.ok === false) throw new Error(res.error || 'queue-failed');
     void refreshDownloadedState();
   }
 
@@ -692,8 +701,10 @@
         await queueDownloads([ep]);
         downloadStatus = `Серия ${ep.position} добавлена в загрузки`;
         navigate('/downloads');
-      } catch {
-        downloadStatus = `Не удалось подготовить серию ${ep.position}`;
+      } catch (err) {
+        downloadStatus = (err as Error)?.message === 'downloads-unavailable'
+          ? 'Скачивание недоступно в этой сборке'
+          : `Не удалось подготовить серию ${ep.position}`;
       } finally {
         actionBusy = '';
       }
@@ -711,30 +722,84 @@
     await run();
   }
 
+  function episodesWord(n: number): string {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return 'серию';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'серии';
+    return 'серий';
+  }
+
+  async function runDownloadQueue(list: Episode[]) {
+    if (list.length === 0) {
+      downloadStatus = 'Нечего скачивать — все серии уже на диске';
+      return;
+    }
+    actionBusy = 'download-all';
+    optionsOpen = false;
+    downloadStatus = `Подготовка ${list.length} серий…`;
+    try {
+      await queueDownloads(list);
+      downloadStatus = `Добавлено в загрузки: ${list.length}`;
+      navigate('/downloads');
+    } catch (err) {
+      downloadStatus = (err as Error)?.message === 'downloads-unavailable'
+        ? 'Скачивание недоступно в этой сборке'
+        : 'Не удалось подготовить загрузку';
+    } finally {
+      actionBusy = '';
+    }
+  }
+
+  function episodeRangeLabel(list: Episode[]): string {
+    const nums = list
+      .map((ep) => episodeDisplayNumber(ep, episodes))
+      .filter((n): n is number => typeof n === 'number');
+    if (nums.length === 0) return `${list.length}`;
+    const min = Math.min(...nums);
+    const max = Math.max(...nums);
+    return min === max ? `${min}` : `${min}–${max}`;
+  }
+
+  /** «Скачать тайтл»: выбранная озвучка и источник, список серий — в подтверждении. */
+  function downloadTitle() {
+    if (episodes.length === 0 || actionBusy) return;
+    if (!canDownload) {
+      downloadStatus = 'Скачивание недоступно в этой сборке';
+      return;
+    }
+    const already = episodes.filter((ep) => isEpisodeDownloaded(ep.position));
+    const pending = episodes.filter((ep) => !isEpisodeDownloaded(ep.position));
+    const lines = [
+      `Озвучка: ${selectedDubber?.name || '—'} · ${selectedSource?.name || 'источник'}`,
+      `Серии ${episodeRangeLabel(episodes)} — всего ${episodes.length}`,
+    ];
+    if (pending.length === 0) {
+      openConfirm({
+        title: 'Все серии уже скачаны',
+        text: `${lines.join('\n')}\nСкачать все заново?`,
+        yesLabel: 'Скачать заново',
+        onYes: () => { void runDownloadQueue(episodes); },
+      });
+      return;
+    }
+    if (already.length > 0) {
+      lines.push(`Уже скачано: ${already.length} — они будут пропущены`);
+    }
+    openConfirm({
+      title: `Скачать «${releaseTitle}»?`,
+      text: `${lines.join('\n')}\nВ очередь: ${pending.length} ${episodesWord(pending.length)} (${episodeRangeLabel(pending)})`,
+      yesLabel: `Скачать ${pending.length} ${episodesWord(pending.length)}`,
+      onYes: () => { void runDownloadQueue(pending); },
+    });
+  }
+
   async function downloadAllEpisodes() {
     if (episodes.length === 0 || actionBusy) return;
 
     const already = episodes.filter((ep) => isEpisodeDownloaded(ep.position));
     const pending = episodes.filter((ep) => !isEpisodeDownloaded(ep.position));
-
-    const runQueue = async (list: Episode[]) => {
-      if (list.length === 0) {
-        downloadStatus = 'Нечего скачивать — все серии уже на диске';
-        return;
-      }
-      actionBusy = 'download-all';
-      optionsOpen = false;
-      downloadStatus = `Подготовка ${list.length} серий…`;
-      try {
-        await queueDownloads(list);
-        downloadStatus = `Добавлено в загрузки: ${list.length}`;
-        navigate('/downloads');
-      } catch {
-        downloadStatus = 'Не удалось подготовить загрузку';
-      } finally {
-        actionBusy = '';
-      }
-    };
+    const runQueue = runDownloadQueue;
 
     if (already.length > 0) {
       const nums = already.map((ep) => ep.position).join(', ');
@@ -1022,6 +1087,21 @@
                   </div>
                 </div>
               </div>
+
+              {#if phoneMode && canDownload && episodes.length > 0}
+                <button
+                  type="button"
+                  class="watch-modal__download-title"
+                  onclick={downloadTitle}
+                  disabled={actionBusy !== ''}
+                >
+                  {@html downloadIconSvg}
+                  <span>Скачать тайтл</span>
+                  <span class="watch-modal__download-title-meta">
+                    {selectedDubber?.name || ''} · {episodes.length} {episodesWord(episodes.length)}
+                  </span>
+                </button>
+              {/if}
 
               {#if downloadStatus}
                 <div class="watch-modal__download-status">{downloadStatus}</div>

@@ -80,6 +80,7 @@
   import { setPhoneLandscape } from '../../platform/phone';
   import { downloadHost } from '../../native/download-host';
   import { getLocalWatchProgress, saveLocalWatchProgress } from '../../utils/watch-progress';
+  import { diagUrl, playDiag } from '../../utils/play-diag';
 
   // ── URL params ─────────────────────────────────────────────────────────────
   const params          = getWatchParams();
@@ -1595,6 +1596,7 @@
   }
 
   function showPlayerError(embedUrl: string, text?: string) {
+    playDiag('player:giveup', { embed: diagUrl(embedUrl), text: text || undefined });
     playbackAlt = null;
     const gen = ++playbackAltGen;
     player.switching = false;
@@ -1791,6 +1793,7 @@
     return api.getEpisode(rId, sId, ep).then(async (res: any) => {
       if (myGen !== episodeLoadGen) return;
       let episode = res?.episode;
+      playDiag('episode', { releaseId: rId, sourceId: sId, ep, embed: diagUrl(episode?.url), iframe: !!episode?.iframe });
       // Films often use position 0; if target endpoint is empty, fall back to episodes list.
       if (!episode?.url && api.getEpisodes) {
         try {
@@ -2315,7 +2318,12 @@
   // Телефон: полный экран плеера — горизонталь, выход и уход со страницы — портрет.
   $effect(() => {
     setPhoneLandscape(player.isFullscreen);
-    return () => setPhoneLandscape(false);
+    // Шапка «Назад» плеера в полноэкранном режиме прячется (phone.scss).
+    document.documentElement.classList.toggle('phone-player-fullscreen', player.isFullscreen);
+    return () => {
+      setPhoneLandscape(false);
+      document.documentElement.classList.remove('phone-player-fullscreen');
+    };
   });
 
   function toggleFullscreen(opts?: { osd?: boolean }) {
@@ -3624,6 +3632,7 @@
         let episode: { url: string; iframe?: boolean } | null = null;
 
         const direct = await (window as any).anixApi.release.getEpisode(rId, sId, ep);
+        playDiag('episode', { releaseId: rId, sourceId: sId, ep, embed: diagUrl(direct?.episode?.url), iframe: !!direct?.episode?.iframe });
         if (direct?.episode?.url) {
           episode = direct.episode;
         } else if (dubId != null) {

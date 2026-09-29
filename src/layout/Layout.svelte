@@ -19,6 +19,8 @@
   import SettingsModal from '../components/SettingsModal.svelte';
   import SidebarPanelResizeHandle from '../components/SidebarPanelResizeHandle.svelte';
   import SidebarPins from '../components/SidebarPins.svelte';
+  import PhoneBottomNav from '../components/PhoneBottomNav.svelte';
+  import { isPhoneMode } from '../platform/phone';
   import Page from '../components/Page.svelte';
   import UiV2Tooltip from '../components/uikit-v2/UiV2Tooltip.svelte';
   import UiV2MediaLightbox from '../components/uikit-v2/UiV2MediaLightbox.svelte';
@@ -44,6 +46,9 @@
   }
 
   let { children, currentPath = '/', onConnectionRetry }: Props = $props();
+
+  /** Телефон: вместо бокового сайдбара нижняя навигация. Не меняется в рантайме. */
+  const phoneMode = isPhoneMode();
 
   const SIDEBAR_NAV = [
     { href: '/', label: 'Главная', icon: iconHome(18) },
@@ -460,6 +465,7 @@
   <LobbyNowWatching />
 
   <div class="layout__body">
+    {#if !phoneMode}
     <div class="sidebar-column">
       <aside class="sidebar">
         <nav class="sidebar__nav">
@@ -567,6 +573,7 @@
         </div>
       </aside>
     </div>
+    {/if}
 
     <main class="layout__main">
       <div class="content-panel">
@@ -578,6 +585,10 @@
       </div>
     </main>
   </div>
+
+  {#if phoneMode}
+    <PhoneBottomNav {currentPath} onBeforeNavigate={() => closeSchedule()} onSchedule={toggleSchedule} />
+  {/if}
 
   {#if scheduleVisible || (profileVisible && panelUserId) || settingsVisible}
     <button

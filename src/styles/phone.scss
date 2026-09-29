@@ -1,0 +1,309 @@
+@use 'variables' as *;
+
+// Все правила здесь только под html.phone-mode: десктоп и ТВ не затрагиваются.
+
+$phone-nav-h: 3.5rem;
+
+html.phone-mode {
+  // Контент на всю ширину: без отступов и скругления «окна» из десктопа.
+  .content-panel {
+    margin: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  // ——— Нижняя навигация ———
+  .phone-bottom-nav {
+    position: relative;
+    z-index: 60;
+    flex-shrink: 0;
+    display: flex;
+    align-items: stretch;
+    justify-content: space-around;
+    height: calc(#{$phone-nav-h} + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: $color-surface;
+    border-top: 1px solid $color-border;
+  }
+
+  .phone-bottom-nav__tab {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.15rem;
+    padding: 0.3rem 0 0.25rem;
+    margin: 0;
+    border: 0;
+    background: none;
+    color: $color-text-muted;
+    font: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: color $transition;
+
+    &--active {
+      color: $color-accent;
+    }
+
+    &--locked {
+      opacity: 0.55;
+    }
+  }
+
+  .phone-bottom-nav__icon {
+    position: relative;
+    display: flex;
+    line-height: 0;
+  }
+
+  .phone-bottom-nav__label {
+    font-size: 0.68rem;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .phone-bottom-nav__badge {
+    position: absolute;
+    top: -0.3rem;
+    right: -0.55rem;
+    min-width: 1rem;
+    height: 1rem;
+    padding: 0 0.25rem;
+    border-radius: 0.5rem;
+    background: $color-accent;
+    color: #fff;
+    font-size: 0.6rem;
+    font-weight: 600;
+    line-height: 1rem;
+    text-align: center;
+  }
+
+  // ——— Меню «Ещё» ———
+  .phone-more-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 58;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: rgba(0, 0, 0, 0.45);
+  }
+
+  .phone-more-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(#{$phone-nav-h} + env(safe-area-inset-bottom, 0px));
+    z-index: 59;
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem 0;
+    background: $color-surface;
+    border-top: 1px solid $color-border;
+    border-radius: 14px 14px 0 0;
+    box-shadow: $shadow;
+  }
+
+  .phone-more-sheet__item {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    min-height: 3rem;
+    padding: 0 1.25rem;
+    margin: 0;
+    border: 0;
+    background: none;
+    color: $color-text;
+    font: inherit;
+    font-size: 0.95rem;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+
+    &:active {
+      background: $color-surface-hover;
+    }
+
+    &--active {
+      color: $color-accent;
+    }
+
+    &--muted {
+      color: $color-text-muted;
+    }
+  }
+
+  .phone-more-sheet__icon {
+    display: flex;
+    width: 1.25rem;
+    justify-content: center;
+    line-height: 0;
+  }
+
+  .phone-more-sheet__divider {
+    height: 1px;
+    margin: 0.35rem 1.25rem;
+    background: $color-border;
+  }
+}
+
+// Подсказки по наведению на сенсорном экране залипают: касание эмулирует
+// mouseenter, а mouseleave не приходит. Отсюда «второй заголовок» у кнопок
+// шапки (например, «Настройки» под шестерёнкой). На телефоне их не показываем.
+html.phone-mode .uiv2-tooltip {
+  display: none !important;
+}
+
+// Условия использования: панель по реальной высоте экрана, текст
+// прокручивается внутри, кнопка «Понятно» всегда видна.
+html.phone-mode .auth-terms-modal {
+  padding: max(0.75rem, env(safe-area-inset-top, 0px)) 0.75rem
+    max(0.75rem, env(safe-area-inset-bottom, 0px));
+
+  .auth-terms-modal__stage,
+  .auth-terms-modal__panel:not(.auth-terms-modal__panel--compact) {
+    max-height: calc(100dvh - 1.5rem);
+  }
+
+  .auth-terms-modal__foot {
+    flex-shrink: 0;
+  }
+
+  .auth-terms-modal__head {
+    flex-shrink: 0;
+  }
+}
+
+// Горизонтальная карточка тайтла в ленте. На десктопе колонка постера 11rem
+// и ниже блок «тип / студия / режиссёр» — на телефоне это съедает всю ширину
+// и растягивает карточку на полэкрана. Делаем компактно, как в Anixart:
+// небольшой постер слева, справа название, мета и три строки описания.
+html.phone-mode {
+  .uiv2-anime-card--horizontal {
+    gap: 0.75rem;
+    padding: 0.6rem 0;
+  }
+
+  .uiv2-anime-card--horizontal .uiv2-anime-card__media {
+    width: 6.75rem;
+  }
+
+  .uiv2-anime-card--horizontal .uiv2-anime-card__content {
+    gap: 0.3rem;
+  }
+
+  .uiv2-anime-card--horizontal .uiv2-anime-card__meta-panel {
+    display: none;
+  }
+
+  .uiv2-anime-card--horizontal .uiv2-anime-card__desc {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    overflow: hidden;
+  }
+
+}
+
+// ——— Шапка ———
+// Оставляем логотип, поиск иконкой, уведомления, аватар и настройки.
+// Назад/вперёд на телефоне делает системный жест; подсказка Ctrl+K бессмысленна;
+// расписание переехало в меню «Ещё»; выбор аккаунта (стрелка у аватара) пока скрыт.
+html.phone-mode {
+  .titlebar {
+    padding-left: 0.35rem;
+  }
+
+  .titlebar__nav,
+  .titlebar__version,
+  #titlebar-schedule,
+  #titlebar-accounts,
+  .titlebar-island__pill-kbd,
+  .titlebar-island__pill-text,
+  .titlebar-island__esc-hint {
+    display: none !important;
+  }
+
+  .titlebar__space {
+    justify-content: flex-end;
+    padding: 0 0.15rem;
+  }
+
+  .titlebar-island {
+    width: auto;
+  }
+
+  .titlebar-island__pill {
+    justify-content: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    padding: 0;
+    gap: 0;
+  }
+
+  .titlebar__menu {
+    gap: 0.15rem;
+    padding: 0 0.35rem 0 0;
+  }
+
+  // Статус соединения: только значок, текст в раскрывающейся панели по касанию.
+  .conn-banner {
+    margin: 0 0.15rem;
+  }
+
+  .conn-banner__chip {
+    max-width: none;
+    padding: 0.3rem;
+  }
+
+  .conn-banner__text {
+    display: none;
+  }
+
+  .conn-banner__panel {
+    position: fixed;
+    top: calc(40px + 0.5rem);
+    left: 0.75rem;
+    right: 0.75rem;
+    width: auto;
+  }
+}
+
+// ——— Ряд вкладок ———
+// Стрелки прокрутки — десктопный костыль; на телефоне ряд листается пальцем.
+html.phone-mode .uiv2-tabs__arrow {
+  display: none;
+}
+
+// ——— Боковые панели (настройки, профиль, расписание) ———
+// На телефоне — на весь экран и без ручки изменения ширины.
+html.phone-mode {
+  .schedule-panel-shell,
+  .schedule-panel-shell--profile {
+    width: 100vw !important;
+  }
+
+  .schedule-panel-resize {
+    display: none;
+  }
+}
+
+// Поиск: окно прижато к верху, чтобы экранная клавиатура его не закрывала.
+html.phone-mode {
+  .titlebar-island__layer {
+    justify-content: flex-start;
+    padding: max(0.5rem, env(safe-area-inset-top, 0px)) 0.5rem 0.5rem;
+  }
+
+  .titlebar-island__panel {
+    width: 100%;
+    max-height: calc(100dvh - 1rem);
+  }
+}

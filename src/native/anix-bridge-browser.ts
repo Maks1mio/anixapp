@@ -4,10 +4,47 @@ import { attachLegacyEndpoints } from './legacy-endpoints';
 import { ANIXART_UA, attachAnixErrorMessages, enrichAnixError } from './anix-errors';
 import { isTvMode } from '../platform/tv';
 import { tvBridgeInvokeUrl } from '../constants/tv-bridge';
+import {
+  DEFAULT_API_ENDPOINT,
+  isBackupApiProxy,
+  isBackupProxyAvailable,
+  webProxyAppKey,
+} from '../constants/apiEndpoints';
 
 const CONFIG_KEY = 'anixapp.native.config';
 const CUSTOM_TAB_KEY = 'anixapp.homeCustomFilters';
-const DEFAULT_BASE_URL = 'https://api-s.anixsekai.com';
+const DEFAULT_BASE_URL = DEFAULT_API_ENDPOINT;
+const PING_TIMEOUT_MS = 10_000;
+
+/**
+ * Как electron/lib/anixart-proxy-auth.js: запросы к прокси AnixApp получают
+ * X-AnixApp-Proxy-Key. Ставится поверх fetch (на Android это уже CapacitorHttp).
+ */
+let proxyFetchInstalled = false;
+function installProxyKeyFetch() {
+  if (proxyFetchInstalled || typeof window === 'undefined') return;
+  const key = webProxyAppKey();
+  if (!key) return;
+  proxyFetchInstalled = true;
+  const rawFetch = window.fetch.bind(window);
+  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    if (!isBackupApiProxy(url)) return rawFetch(input, init);
+    const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+    headers.set('X-AnixApp-Proxy-Key', key);
+    return rawFetch(input, { ...init, headers });
+  };
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timeout')), ms);
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}
 
 const LIST_STATUS_TO_TYPE: Record<string, number> = {
   watching: BookmarkType.Watching,
@@ -62,7 +99,10 @@ export function createBrowserAnixBridge() {
     const raw = readJson<Partial<NativeConfig>>(CONFIG_KEY, {});
     return {
       token: raw.token ?? null,
-      baseUrl: raw.baseUrl || DEFAULT_BASE_URL,
+      // Сохранённый прокси без ключа (телефон) → прямой хост, иначе всё «не работает».
+      baseUrl: raw.baseUrl && !(isBackupApiProxy(raw.baseUrl) && !isBackupProxyAvailable())
+        ? raw.baseUrl
+        : DEFAULT_BASE_URL,
       profileId: raw.profileId ?? null,
       profileLogin: raw.profileLogin ?? null,
       profileAvatar: raw.profileAvatar ?? null,
@@ -78,6 +118,7 @@ export function createBrowserAnixBridge() {
 
   function createClient({ baseUrl, token }: { baseUrl?: string; token?: string | null } = {}) {
     const cfg = loadConfig();
+    installProxyKeyFetch();
     return attachAnixErrorMessages(attachLegacyEndpoints(new Anixart({
       baseUrl: baseUrl ?? cfg.baseUrl,
       token: token ?? cfg.token ?? undefined,
@@ -196,11 +237,19 @@ export function createBrowserAnixBridge() {
       active: false,
       stickyUntil: null,
     }),
-    'anix:pingBaseUrl': async (_c, [baseUrl]) => {
-      const url = String(baseUrl || DEFAULT_BASE_URL).replace(/\/$/, '');
-      if (url.includes('.invalid')) return { ok: false, latencyMs: null };
-      const res = await fetch(`${url}/`);
-      return { ok: res.ok, status: res.status };
+    // Как на десктопе: настоящий запрос к API, а не корень хоста (он отвечает ошибкой).
+    'anix:pingBaseUrl': async (c, [baseUrl]) => {
+      if (typeof baseUrl !== 'string' || !baseUrl) return { ok: false, latencyMs: null };
+      if (baseUrl.includes('.invalid')) return { ok: false, latencyMs: null };
+      if (isBackupApiProxy(baseUrl) && !isBackupProxyAvailable()) return { ok: false, latencyMs: null };
+      try {
+        const started = Date.now();
+        const client = c.createClient({ baseUrl, token: undefined });
+        await withTimeout(client.endpoints.feed.latest(1), PING_TIMEOUT_MS);
+        return { ok: true, latencyMs: Date.now() - started };
+      } catch {
+        return { ok: false, latencyMs: null };
+      }
     },
     'anix:endpointGeo': async (_c, [baseUrl]) => {
       const { staticEndpointCountry } = await import('../utils/endpointCountry');

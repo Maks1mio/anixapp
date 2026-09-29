@@ -12,6 +12,7 @@
   import { getCardLayout, setCardLayout, type CardLayout } from '../../../prefs';
 
   import ZoomScaleSlider from '../../../components/ZoomScaleSlider.svelte';
+  import { isPhoneMode } from '../../../platform/phone';
   import { DEFAULT_ZOOM, normalizeZoom, type ZoomLevel } from '../../../utils/zoom';
 
   let cardLayout = $state<CardLayout>(getCardLayout());
@@ -128,6 +129,9 @@
     </div>
   </section>
 
+  <!-- Масштаб живёт в Electron (webFrame); на телефоне его нет, а размер текста
+       задаётся системными настройками Android. -->
+  {#if !isPhoneMode()}
   <section class="uiv2-settings__block">
     <h3 class="uiv2-settings__title">Уровень масштабирования</h3>
     <div class="uiv2-settings__group uiv2-settings__group--pad">
@@ -139,6 +143,7 @@
       {/if}
     </div>
   </section>
+  {/if}
 
   <section class="uiv2-settings__block">
     <h3 class="uiv2-settings__title">Тема оформления</h3>

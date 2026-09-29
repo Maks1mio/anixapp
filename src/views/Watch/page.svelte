@@ -77,6 +77,7 @@
   } from '../../utils/adaptive-quality';
   import { getLobbyProfile, leaveLobbyRoomFromUi, joinLobbyRoomAndOpenPlayer } from '../../utils/lobby-player';
   import { resolveFirstAvailableEpisode } from '../../utils/episodeSource';
+  import { setPhoneLandscape } from '../../platform/phone';
 
   // ── URL params ─────────────────────────────────────────────────────────────
   const params          = getWatchParams();
@@ -2307,6 +2308,12 @@
   // Кнопка mute зовёт registry напрямую (обход SoloShell → PlayerChrome → ActionsBar).
   $effect(() => {
     return registerPlayerMuteToggle(toggleMute);
+  });
+
+  // Телефон: полный экран плеера — горизонталь, выход и уход со страницы — портрет.
+  $effect(() => {
+    setPhoneLandscape(player.isFullscreen);
+    return () => setPhoneLandscape(false);
   });
 
   function toggleFullscreen(opts?: { osd?: boolean }) {

@@ -19,6 +19,8 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         WebGpuWebViewBootstrap.applyEarly(this);
         super.onCreate(savedInstanceState);
+        // Телефон: портрет (плеер сам попросит горизонталь). ТВ не трогаем.
+        AnixOrientationBridge.applyDefault(this);
         if (getBridge() == null) return;
 
         getBridge().setWebViewClient(new CdnBridgeWebViewClient(getBridge()));
@@ -38,6 +40,7 @@ public class MainActivity extends BridgeActivity {
         lanBridge = new AnixTvLanBridge(this, webView);
         webView.addJavascriptInterface(lanBridge, "AnixTvLan");
         webView.addJavascriptInterface(new AnixDeviceBridge(this), "AnixDevice");
+        webView.addJavascriptInterface(new AnixOrientationBridge(this), "AnixOrientation");
     }
 
     @Override

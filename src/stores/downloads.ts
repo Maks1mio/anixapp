@@ -1,4 +1,6 @@
 import { writable, derived, get } from 'svelte/store';
+import { downloadHost } from '../native/download-host';
+import type { DownloadHost } from '../native/phone-downloads';
 
 export type DownloadStatus = 'queued' | 'starting' | 'downloading' | 'paused' | 'done' | 'error' | 'cancelled';
 
@@ -168,12 +170,18 @@ function applySettingsPayload(data: Partial<DownloadSettings> & { directory?: st
   }));
 }
 
+const retrying = new Set<string>();
+
+function isNetworkError(error?: string): boolean {
+  return /ERR_NAME_NOT_RESOLVED|ERR_TIMED_OUT|ERR_CONNECTION|ERR_INTERNET|ENOTFOUND|ETIMEDOUT/i.test(error ?? '');
+}
+
 function createDownloadsStore() {
   const { subscribe, update } = writable<DownloadEntry[]>([]);
 
   async function loadSettings() {
     try {
-      const data = await window.electron?.getDownloadSettings?.();
+      const data = await downloadHost()?.getDownloadSettings?.();
       if (data?.directory) applySettingsPayload(data);
     } catch {}
   }
@@ -184,7 +192,7 @@ function createDownloadsStore() {
     autoClearFinished?: boolean;
   }) {
     try {
-      const res = await window.electron?.saveDownloadSettings?.(patch);
+      const res = await downloadHost()?.saveDownloadSettings?.(patch);
       if (res?.ok) applySettingsPayload(res);
       else applySettingsPayload(patch);
     } catch {
@@ -194,13 +202,13 @@ function createDownloadsStore() {
 
   async function loadLibrary() {
     try {
-      const groups = await window.electron?.listDownloadLibrary?.();
+      const groups = await downloadHost()?.listDownloadLibrary?.();
       if (Array.isArray(groups)) libraryStore.set(groups);
     } catch {}
   }
 
   async function pickDirectory() {
-    const res = await window.electron?.pickDownloadDirectory?.();
+    const res = await downloadHost()?.pickDownloadDirectory?.();
     if (res?.ok && res.directory) {
       settingsStore.update((s) => ({ ...s, directory: res.directory! }));
       await loadLibrary();
@@ -210,7 +218,7 @@ function createDownloadsStore() {
   }
 
   async function resetDirectory() {
-    const res = await window.electron?.resetDownloadDirectory?.();
+    const res = await downloadHost()?.resetDownloadDirectory?.();
     if (res?.ok && res.directory) {
       applySettingsPayload(res);
       await loadLibrary();
@@ -312,32 +320,80 @@ function createDownloadsStore() {
   }
 
   async function removeEntry(id: string) {
-    try { await window.electron?.removeDownloadEntry?.(id); } catch {}
+    try { await downloadHost()?.removeDownloadEntry?.(id); } catch {}
     update((list) => list.filter((x) => x.id !== id));
   }
 
   async function cancelEntry(id: string) {
-    try { await window.electron?.cancelDownload?.(id); } catch {}
+    try { await downloadHost()?.cancelDownload?.(id); } catch {}
   }
 
   async function pauseEntry(id: string) {
-    try { await window.electron?.pauseDownload?.(id); } catch {}
+    try { await downloadHost()?.pauseDownload?.(id); } catch {}
   }
 
   async function resumeEntry(id: string) {
-    try { await window.electron?.resumeDownload?.(id); } catch {}
+    try { await downloadHost()?.resumeDownload?.(id); } catch {}
+  }
+
+  /**
+   * Повтор ошибки/отмены. Ссылки источников (Kodik) подписаны и истекают,
+   * поэтому сначала пробуем получить свежую; не вышло — повторяем со старой.
+   */
+  async function retryEntry(id: string) {
+    const host = downloadHost();
+    if (!host?.retryDownload || retrying.has(id)) return;
+    retrying.add(id);
+    try {
+      await retryWithFreshLink(host.retryDownload, id);
+    } finally {
+      retrying.delete(id);
+    }
+  }
+
+  async function retryWithFreshLink(
+    retry: NonNullable<DownloadHost['retryDownload']>,
+    id: string,
+  ) {
+    const entry = get({ subscribe }).find((x) => x.id === id);
+    let fresh: { url: string; headers?: Record<string, string> } | null = null;
+    if (entry?.releaseId && entry.sourceId && entry.episodePosition != null) {
+      try {
+        const { resolveQueueItem } = await import('../utils/download-queue-client');
+        const item = await resolveQueueItem(
+          entry.releaseId,
+          entry.sourceId,
+          entry.dubberId ?? NaN,
+          entry.releaseTitle ?? '',
+          entry.dubberName ?? '',
+          entry.sourceName ?? '',
+          entry.episodePosition,
+        );
+        if (item?.url) fresh = { url: item.url, headers: item.headers };
+      } catch {
+        /* нет сети или API — повторим со старой ссылкой */
+      }
+    }
+    try { await retry(id, fresh); } catch {}
+  }
+
+  async function retryAllErrors() {
+    const ids = get({ subscribe })
+      .filter((x) => x.status === 'error')
+      .map((x) => x.id);
+    for (const id of ids) await retryEntry(id);
   }
 
   async function pauseAllActive() {
-    try { await window.electron?.pauseAllDownloads?.(); } catch {}
+    try { await downloadHost()?.pauseAllDownloads?.(); } catch {}
   }
 
   async function resumeAllActive() {
-    try { await window.electron?.resumeAllDownloads?.(); } catch {}
+    try { await downloadHost()?.resumeAllDownloads?.(); } catch {}
   }
 
   async function reorderEntries(orderedIds: string[]) {
-    try { await window.electron?.reorderDownloads?.({ orderedIds }); } catch {}
+    try { await downloadHost()?.reorderDownloads?.({ orderedIds }); } catch {}
     update((list) => {
       const byId = new Map(list.map((x) => [x.id, x]));
       const next: DownloadEntry[] = [];
@@ -357,20 +413,20 @@ function createDownloadsStore() {
 
   async function deleteLibraryFile(filePath: string) {
     try {
-      await window.electron?.deleteDownloadFile?.(filePath);
+      await downloadHost()?.deleteDownloadFile?.(filePath);
     } catch {}
     await loadLibrary();
   }
 
   async function deleteLibraryGroup(groupName: string) {
     try {
-      await window.electron?.deleteDownloadGroup?.(groupName);
+      await downloadHost()?.deleteDownloadGroup?.(groupName);
     } catch {}
     await loadLibrary();
   }
 
   async function cancelAllActive() {
-    try { await window.electron?.cancelAllDownloads?.(); } catch {}
+    try { await downloadHost()?.cancelAllDownloads?.(); } catch {}
   }
 
   function clearErrors() {
@@ -379,7 +435,7 @@ function createDownloadsStore() {
 
   async function hydrateQueue() {
     try {
-      const items = await window.electron?.getActiveDownloadQueue?.();
+      const items = await downloadHost()?.getActiveDownloadQueue?.();
       if (!Array.isArray(items) || items.length === 0) return;
       update((list) => {
         const byId = new Map(list.map((x) => [x.id, x]));
@@ -416,7 +472,7 @@ function createDownloadsStore() {
     void loadSettings();
     void loadLibrary();
     void hydrateQueue();
-    void window.electron?.isDownloadResumeBlocked?.()
+    void downloadHost()?.isDownloadResumeBlocked?.()
       .then((r) => { resumeBlockedStore.set(!!r?.blocked); })
       .catch(() => {});
     // Повторно подтянуть очередь — restore в main может завершиться чуть позже
@@ -427,9 +483,18 @@ function createDownloadsStore() {
       resumeBlockedStore.set(blocked);
       if (blocked) void hydrateQueue();
     };
+    // Телефон: сеть вернулась — перезапускаем загрузки, упавшие из-за сети.
+    const onOnline = () => {
+      const ids = get({ subscribe })
+        .filter((x) => x.status === 'error' && isNetworkError(x.error))
+        .map((x) => x.id);
+      for (const id of ids) void retryEntry(id);
+    };
     window.addEventListener('episode-download:progress', handleProgress as EventListener);
     window.addEventListener('downloads:streaming-hold', onStreamingHold as EventListener);
+    if (downloadHost()?.retryDownload) window.addEventListener('online', onOnline);
     return () => {
+      window.removeEventListener('online', onOnline);
       clearTimeout(t1);
       clearTimeout(t2);
       window.removeEventListener('episode-download:progress', handleProgress as EventListener);
@@ -457,6 +522,8 @@ function createDownloadsStore() {
     deleteLibraryFile,
     deleteLibraryGroup,
     cancelAllActive,
+    retryEntry,
+    retryAllErrors,
     clearErrors,
     hydrateQueue,
     init,

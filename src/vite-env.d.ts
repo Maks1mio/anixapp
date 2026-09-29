@@ -5,6 +5,8 @@
 
 interface ImportMetaEnv {
   readonly VITE_TV_MODE?: string;
+  readonly VITE_PHONE_MODE?: string;
+  readonly VITE_ANIXART_PROXY_APP_KEY?: string;
   readonly VITE_VPN_67_URL?: string;
 }
 

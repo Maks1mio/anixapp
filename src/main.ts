@@ -6,6 +6,7 @@ import './services/lobby-action-log';
 import { installWindowFluo } from './fluo';
 import { initWebAnixApi } from './services/anix-api-web';
 import { applyTvDefaults, isTvMode } from './platform/tv';
+import { applyPhoneDefaults, isPhoneMode } from './platform/phone';
 import { initTvNavigation } from './services/tv-navigation';
 import { startDebugMetrics } from './services/debug-metrics';
 import { initWebGpuAvailability } from './utils/webgpu-availability.svelte';
@@ -19,6 +20,8 @@ installWindowFluo();
 if (isTvMode()) {
   applyTvDefaults();
   startDebugMetrics();
+} else if (isPhoneMode()) {
+  applyPhoneDefaults();
 }
 
 document.addEventListener('DOMContentLoaded', () => {

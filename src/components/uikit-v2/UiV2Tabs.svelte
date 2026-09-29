@@ -58,8 +58,13 @@
       return;
     }
 
-    indicatorX = nav.offsetLeft + tab.offsetLeft - el.scrollLeft;
-    indicatorW = tab.offsetWidth;
+    // Обрезаем полоску видимой частью ленты вкладок: иначе при активной вкладке,
+    // прокрученной за край, она рисуется под кнопками слева/справа от ряда.
+    const start = tab.offsetLeft - el.scrollLeft;
+    const visLeft = Math.max(start, 0);
+    const visRight = Math.min(start + tab.offsetWidth, el.clientWidth);
+    indicatorX = nav.offsetLeft + visLeft;
+    indicatorW = Math.max(0, visRight - visLeft);
     indicatorVisible = indicatorW > 0;
   }
 

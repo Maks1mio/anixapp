@@ -10,7 +10,7 @@
   import { setEmbedMediaContext } from './core/hls-media-context';
   import { normalizeSkipMarks, mergeSkipMarks, clampSkipMarksToDuration, skipMarkActive, endingIsAtEpisodeEnd, buildTimelineSausages, type SkipMarkKind, type SkipMarks } from './_skipMarks';
   import { getSkipAutoPref, setSkipAutoPref } from './_skipPrefs';
-  import { pathToLocalMediaUrl } from '../../utils/local-media-url';
+  import { isLocalMediaUrl, pathToLocalMediaUrl } from '../../utils/local-media-url';
   import { rememberVideoCdnFromUrl, syncExtraVideoHostsToMain } from '../../utils/extra-video-hosts';
   import { sortDubbersPinnedFirst, readLastEpisodeTypeUpdateId } from '../../utils/dubber-meta';
   import {
@@ -77,6 +77,9 @@
   } from '../../utils/adaptive-quality';
   import { getLobbyProfile, leaveLobbyRoomFromUi, joinLobbyRoomAndOpenPlayer } from '../../utils/lobby-player';
   import { resolveFirstAvailableEpisode } from '../../utils/episodeSource';
+  import { setPhoneLandscape } from '../../platform/phone';
+  import { downloadHost } from '../../native/download-host';
+  import { getLocalWatchProgress, saveLocalWatchProgress } from '../../utils/watch-progress';
 
   // ── URL params ─────────────────────────────────────────────────────────────
   const params          = getWatchParams();
@@ -333,7 +336,7 @@
   /** Онлайн-стрим в плеере → пауза фоновых загрузок (в т.ч. при смене озвучки со скачанного). */
   $effect(() => {
     const streaming = !isLocalPlaybackMode;
-    void window.electron?.setDownloadStreamingHold?.(streaming);
+    void downloadHost()?.setDownloadStreamingHold?.(streaming);
   });
 
   const localScopeEpisodes = $derived.by(() => {
@@ -482,7 +485,7 @@
     }
 
     try {
-      const lib = await window.electron?.listDownloadLibrary?.();
+      const lib = await downloadHost()?.listDownloadLibrary?.();
       if (Array.isArray(lib)) {
         for (const g of lib as Array<{
           name?: string;
@@ -1704,7 +1707,7 @@
       syncPlaybackRate: syncVideoPlaybackRate,
       onFallback: () => {
         player.switching = false;
-        if (pUrl.startsWith('anix-local:')) {
+        if (isLocalMediaUrl(pUrl)) {
           showPlayerError('', 'Не удалось воспроизвести скачанный файл.');
           return;
         }
@@ -1947,7 +1950,7 @@
       return;
     }
     try {
-      const files = await window.electron?.listDownloadsByRelease?.(rId);
+      const files = await downloadHost()?.listDownloadsByRelease?.(rId);
       if (!Array.isArray(files)) {
         downloadedEpisodes = [];
         return;
@@ -2307,6 +2310,12 @@
   // Кнопка mute зовёт registry напрямую (обход SoloShell → PlayerChrome → ActionsBar).
   $effect(() => {
     return registerPlayerMuteToggle(toggleMute);
+  });
+
+  // Телефон: полный экран плеера — горизонталь, выход и уход со страницы — портрет.
+  $effect(() => {
+    setPhoneLandscape(player.isFullscreen);
+    return () => setPhoneLandscape(false);
   });
 
   function toggleFullscreen(opts?: { osd?: boolean }) {
@@ -3113,6 +3122,19 @@
     window.addEventListener('resize', winResizeHandler);
   }
 
+  let localProgressHoldUntil = 0;
+  let lastLocalProgressSave = 0;
+
+  /** Позиция скачанной серии: продолжение с того же места даже без сети. */
+  function persistLocalProgress(v: HTMLVideoElement | null, force = false) {
+    if (!v || !localPlaybackPath || inLobbyRoom()) return;
+    const now = Date.now();
+    if (now < localProgressHoldUntil) return;
+    if (!force && now - lastLocalProgressSave < 5000) return;
+    lastLocalProgressSave = now;
+    saveLocalWatchProgress(localPlaybackPath, v.currentTime, v.duration);
+  }
+
   async function startLocalFilePlayback(
     filePath: string,
     epOverride?: number,
@@ -3144,7 +3166,13 @@
     setSkipMarks(null);
     skipDismissedKind = null;
     await tick();
-    applyVideoAndUI(fileUrl, true, watchState.ep, watchState.title, src, watchState.dubberId);
+    // Старые timeupdate прошлого файла не должны записаться в позицию нового.
+    localProgressHoldUntil = Date.now() + 4000;
+    lastLocalProgressSave = 0;
+    applyVideoAndUI(
+      fileUrl, true, watchState.ep, watchState.title, src, watchState.dubberId,
+      getLocalWatchProgress(filePath),
+    );
     bindVideoElementListeners();
     showAndSchedule();
     await loadLocalContextForFile(filePath);
@@ -3351,7 +3379,7 @@
     }
 
     try {
-      const cached = await window.electron?.readDownloadSkipMarks?.(filePath);
+      const cached = await downloadHost()?.readDownloadSkipMarks?.(filePath);
       if (gen !== localSkipFetchGen || localPlaybackPath !== filePath) return;
       if (cached) setSkipMarks(cached, { carry: true });
 
@@ -3366,7 +3394,7 @@
       const skip = normalizeSkipMarks(res?.skip);
       if (skip) {
         setSkipMarks(skip, { carry: true });
-        void window.electron?.saveDownloadSkipMarks?.({ filePath, skip });
+        void downloadHost()?.saveDownloadSkipMarks?.({ filePath, skip });
       } else if (!cached) {
         setSkipMarks(null);
       }
@@ -3415,6 +3443,7 @@
       player.currentTime = v.currentTime;
       player.duration    = v.duration || 0;
       readVideoBuffer(v);
+      persistLocalProgress(v);
       if (player.upscaleEnabled && isGpuAvailable() && player.useVideo && !core.upscale.active
         && v.readyState >= 2 && v.videoWidth >= 2 && player.loadState === 'ready' && !player.switching) {
         scheduleUpscaleRestart();
@@ -3438,6 +3467,7 @@
       sendToLobby('play');
     }, { signal });
     el.addEventListener('pause', () => {
+      persistLocalProgress(el, true);
       if (isApplyingSync || localMediaSwap || preventAutoPause || el.seeking) return;
       if (inLobbyRoom()) {
         if (lastLobbyPausedIntent === false) {
@@ -4149,6 +4179,7 @@
     document.addEventListener('mouseenter', showAndSchedule, true);
 
     return () => {
+      persistLocalProgress(videoEl, true);
       videoListenersAbort?.abort();
       videoListenersAbort = null;
       persistEqSettings({ immediate: true });

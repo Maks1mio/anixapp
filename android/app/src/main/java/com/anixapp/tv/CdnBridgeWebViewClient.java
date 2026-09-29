@@ -74,6 +74,9 @@ public class CdnBridgeWebViewClient extends BridgeWebViewClient {
         if (uri == null || !"GET".equalsIgnoreCase(request.getMethod())) {
             return super.shouldInterceptRequest(view, request);
         }
+        if (AnixLocalMedia.matches(uri)) {
+            return AnixLocalMedia.serve(request);
+        }
         if (isVideoHost(uri.getHost()) && looksLikeMedia(uri)) {
             WebResourceResponse media = fetchMediaStream(request);
             if (media != null) return media;
@@ -207,10 +210,16 @@ public class CdnBridgeWebViewClient extends BridgeWebViewClient {
             }
         }
 
-        String mirror = toMirror(url);
-        String[] order = (mirror != null && !mirror.equals(url))
-            ? new String[] { url, mirror }
-            : new String[] { url };
+        // Как на десктопе (electron/cdn-proxy.js): сначала основной хост с Referer,
+        // mirror-* только запасной. JS уже переписывает адрес на mirror, поэтому
+        // основной восстанавливаем здесь, иначе он не пробуется никогда.
+        String primary = fromMirror(url);
+        String mirror = toMirror(primary != null ? primary : url);
+        java.util.LinkedHashSet<String> candidates = new java.util.LinkedHashSet<>();
+        if (primary != null) candidates.add(primary);
+        if (mirror != null) candidates.add(mirror);
+        candidates.add(url);
+        String[] order = candidates.toArray(new String[0]);
 
         HttpURLConnection conn = null;
         try {
@@ -219,12 +228,23 @@ public class CdnBridgeWebViewClient extends BridgeWebViewClient {
             String mime = null;
             for (String candidate : order) {
                 if (conn != null) conn.disconnect();
-                conn = open(candidate);
-                code = conn.getResponseCode();
-                mime = conn.getContentType();
+                conn = null;
+                code = 400;
                 body = null;
-                if (code < 400) {
-                    body = readAll(conn.getInputStream());
+                try {
+                    conn = open(candidate);
+                    code = conn.getResponseCode();
+                    mime = conn.getContentType();
+                    if (code < 400) {
+                        long expected = conn.getContentLengthLong();
+                        body = readAll(conn.getInputStream());
+                        // Оборванная загрузка: не отдаём и не кэшируем обрезок.
+                        if (expected > 0 && body.length < expected) body = null;
+                    }
+                } catch (Exception failedHost) {
+                    // Сброс соединения на одном хосте — пробуем следующий.
+                    code = 400;
+                    body = null;
                 }
                 if (code < 400 && body != null && body.length >= 400) {
                     break;
@@ -326,6 +346,23 @@ public class CdnBridgeWebViewClient extends BridgeWebViewClient {
         conn.setRequestProperty("User-Agent", UA);
         conn.setRequestProperty("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8");
         return conn;
+    }
+
+    /** mirror-s.anixmirai.com → s.anixmirai.com; для не-mirror возвращает null. */
+    private static String fromMirror(String url) {
+        try {
+            URL parsed = new URL(url);
+            String host = parsed.getHost();
+            if (host == null) return null;
+            String next;
+            if (host.startsWith("mirror-")) next = host.substring("mirror-".length());
+            else if (host.startsWith("mirror.")) next = host.substring("mirror.".length());
+            else return null;
+            if (next.isEmpty()) return null;
+            return new URL(parsed.getProtocol(), next, parsed.getPort(), parsed.getFile()).toString();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static String toMirror(String url) {

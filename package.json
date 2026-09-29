@@ -33,6 +33,7 @@
         "build:android-tv-remote": "node scripts/build-android-tv-remote.mjs",
         "emu:tv:setup": "node scripts/setup-android-tv-emu.mjs",
         "emu:tv": "node scripts/run-android-tv-emu.mjs",
+        "build:android-phone": "node scripts/build-android-phone.mjs",
         "preview": "vite preview"
     },
     "keywords": [

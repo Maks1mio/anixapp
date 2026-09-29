@@ -1,6 +1,7 @@
 import Hls from 'hls.js';
 import { isHlsUrl } from '../_utils';
 import { buildHlsConfig } from './hls-media-context';
+import { isLocalMediaUrl } from '../../../utils/local-media-url';
 
 type VideoWithHls = HTMLVideoElement & {
   _hls?: Hls;
@@ -94,7 +95,9 @@ export function swapMediaSource(
 ): { reused: boolean; isHls: boolean } {
   // Android TV WebView: MSE/hls.js часто даёт чёрный кадр при живом currentTime.
   // Нативный HLS в <video src> — тот же путь, что у старого Anixholy APK.
-  const wantHls = isHlsUrl(url) && Hls.isSupported() && !preferNativeHls();
+  // Скачанный HLS на телефоне раздаёт WebView-перехват (AnixLocalMedia) — его видит
+  // только сетевой стек страницы, поэтому такой плейлист всегда через hls.js.
+  const wantHls = isHlsUrl(url) && Hls.isSupported() && (isLocalMediaUrl(url) || !preferNativeHls());
   const existing = getAttachedHls(video);
 
   if (wantHls) {

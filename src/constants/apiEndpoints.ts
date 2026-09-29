@@ -1,3 +1,5 @@
+import { isPhoneMode } from '../platform/phone';
+
 export type ApiEndpointOption = { value: string; label: string };
 
 /** Основные Anixart API (прямые хосты). */
@@ -25,13 +27,31 @@ export function isDevDownApiEndpoint(url: string | null | undefined): boolean {
   return String(url).includes('api-down.anixart.invalid') || String(url).includes('anixart.invalid');
 }
 
+/**
+ * Ключ прокси AnixApp для веб/Android-сборок (заголовок X-AnixApp-Proxy-Key).
+ * Electron подставляет ключ в main-процессе, в бандл он не попадает.
+ * Для телефона задаётся при сборке: VITE_ANIXART_PROXY_APP_KEY.
+ * ВНИМАНИЕ: попавший в APK ключ можно извлечь из бандла.
+ */
+export function webProxyAppKey(): string {
+  return String(import.meta.env.VITE_ANIXART_PROXY_APP_KEY || '').trim();
+}
+
+/** На телефоне без ключа прокси отвечает отказом — не предлагаем его. */
+export function isBackupProxyAvailable(): boolean {
+  if (!isPhoneMode()) return true;
+  return webProxyAppKey() !== '';
+}
+
 /** Все варианты в селекторе эндпоинтов (прямые + dev-тест + резерв). */
 export const SELECTABLE_API_ENDPOINTS: readonly ApiEndpointOption[] = [
   ...API_ENDPOINT_OPTIONS,
   ...(isViteDev()
     ? [{ value: DEV_DOWN_API_ENDPOINT, label: DEV_DOWN_API_ENDPOINT_LABEL }]
     : []),
-  { value: BACKUP_API_PROXY, label: BACKUP_API_PROXY_LABEL },
+  ...(isBackupProxyAvailable()
+    ? [{ value: BACKUP_API_PROXY, label: BACKUP_API_PROXY_LABEL }]
+    : []),
 ];
 
 export const DEFAULT_API_ENDPOINT = API_ENDPOINT_OPTIONS[0].value;
@@ -51,7 +71,9 @@ export function normalizeSelectableApiEndpoint(url: string | null | undefined): 
   if (!url) return DEFAULT_API_ENDPOINT;
   const normalized = String(url).trim().replace(/\/$/, '');
   if (!isViteDev() && isDevDownApiEndpoint(normalized)) return DEFAULT_API_ENDPOINT;
-  if (isBackupApiProxy(normalized)) return BACKUP_API_PROXY;
+  if (isBackupApiProxy(normalized)) {
+    return isBackupProxyAvailable() ? BACKUP_API_PROXY : DEFAULT_API_ENDPOINT;
+  }
   const match = SELECTABLE_API_ENDPOINTS.find(
     (o) => o.value === normalized || o.value === url,
   );

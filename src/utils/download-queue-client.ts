@@ -1,4 +1,5 @@
 import { isLibriaHtmlEmbed, resolveDownloadUrl } from '../views/Watch/_utils';
+import { downloadHost } from '../native/download-host';
 
 export interface QueueDownloadItem {
   url: string;
@@ -231,6 +232,6 @@ export async function queueMissingEpisodes(opts: {
     if (item) items.push(item);
   }
   if (items.length === 0) return 0;
-  await window.electron?.queueEpisodeDownloads?.({ items });
+  await downloadHost()?.queueEpisodeDownloads?.({ items });
   return items.length;
 }

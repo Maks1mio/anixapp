@@ -36,6 +36,7 @@
   import { listPlayableDubberSources, NO_EPISODE_PICK_OTHER_DUB } from '../utils/dubber-sources';
   import { isTvMode } from '../platform/tv';
   import { scheduleFocusTvOverlayContent } from '../services/tv-navigation';
+  import { downloadHost } from '../native/download-host';
 
   interface Props {
     releaseId: number;
@@ -280,13 +281,14 @@
   }
 
   async function refreshDownloadedState() {
-    if (!window.electron?.checkDownloadFiles || episodes.length === 0) {
+    const checkFiles = downloadHost()?.checkDownloadFiles;
+    if (!checkFiles || episodes.length === 0) {
       downloadedPositions = {};
       return;
     }
     try {
       const items = episodes.map((ep) => buildDownloadMeta(ep));
-      const results = await window.electron.checkDownloadFiles({ items });
+      const results = await checkFiles({ items });
       const next: Record<number, boolean> = {};
       results.forEach((r, i) => {
         if (r.exists) next[episodes[i].position] = true;
@@ -675,7 +677,7 @@
       if (item) items.push(item);
     }
     if (items.length === 0) throw new Error('no items');
-    await window.electron?.queueEpisodeDownloads?.({ items });
+    await downloadHost()?.queueEpisodeDownloads?.({ items });
     void refreshDownloadedState();
   }
 

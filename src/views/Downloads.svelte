@@ -41,6 +41,7 @@
     iconMic,
     iconRotateCcw,
   } from '../components/icons';
+  import { downloadHost, isPhoneDownloadHost } from '../native/download-host';
 
   interface LibrarySourceBucket {
     id: string;
@@ -140,7 +141,11 @@
   let libSource = $state('');
   let libDubber = $state('');
 
-  const ffmpegAvailable = $derived($ffmpegInstall.available ?? true);
+  /** Телефон: своя папка приложения, без FFmpeg и проводника. */
+  const phoneHost = isPhoneDownloadHost();
+  const canRetry = !!downloadHost()?.retryDownload;
+
+  const ffmpegAvailable = $derived(phoneHost || ($ffmpegInstall.available ?? true));
   const ffmpegPath = $derived($ffmpegInstall.path);
   const ffmpegSource = $derived($ffmpegInstall.source);
   const ffmpegBusy = $derived($ffmpegInstall.busy);
@@ -151,8 +156,10 @@
   onMount(() => {
     unregisterScrollKey = registerActiveScrollKey(() => DOWNLOADS_VIEW_KEY());
     downloads.init();
-    ffmpegInstall.init();
-    void ffmpegInstall.refreshStatus();
+    if (!phoneHost) {
+      ffmpegInstall.init();
+      void ffmpegInstall.refreshStatus();
+    }
     const cached = getViewState<DownloadsViewState>(DOWNLOADS_VIEW_KEY());
     if (cached?.data?.expandedGroups) {
       expandedGroups = { ...cached.data.expandedGroups };
@@ -210,6 +217,7 @@
   );
   const libraryGroups = $derived($downloadLibrary);
   const libraryFileCount = $derived(libraryGroups.reduce((n, g) => n + g.files.length, 0));
+  const librarySize = $derived(libraryGroups.reduce((n, g) => n + groupSize(g), 0));
 
   const librarySourceOptions = $derived.by((): UiV2SelectOption[] => {
     const set = new Set<string>();
@@ -728,7 +736,7 @@
     deleteBusy = src.id;
     try {
       for (const file of src.files) {
-        await window.electron?.deleteDownloadFile?.(file.path);
+        await downloadHost()?.deleteDownloadFile?.(file.path);
       }
       await downloads.loadLibrary();
     } finally {
@@ -742,6 +750,14 @@
     if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} КБ`;
     if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} МБ`;
     return `${(n / (1024 * 1024 * 1024)).toFixed(2)} ГБ`;
+  }
+
+  function episodesWord(n: number): string {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return 'серия';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'серии';
+    return 'серий';
   }
 
   function formatDate(ts: number): string {
@@ -912,11 +928,11 @@
   }
 
   function openFolder() {
-    window.electron?.openDownloadDirectory?.(downloadDir);
+    downloadHost()?.openDownloadDirectory?.(downloadDir);
   }
 
   function showInFolder(file: DownloadLibraryFile) {
-    window.electron?.showDownloadFile?.(file.path);
+    downloadHost()?.showDownloadFile?.(file.path);
   }
 
   function showPlayBlocked(msg: string) {
@@ -942,7 +958,7 @@
       showPlayBlocked('В комнате нельзя переключиться на скачанные файлы');
       return;
     }
-    await window.electron?.playDownloadInApp?.({
+    await downloadHost()?.playDownloadInApp?.({
       filePath: payload.filePath,
       title: payload.title,
       releaseId: payload.releaseId ?? undefined,
@@ -1298,14 +1314,16 @@
                               </span>
                             </button>
                             <div class="dl-v2-file__actions">
-                              <UiV2RoundButton
-                                label="Показать в папке"
-                                size="sm"
-                                title="Показать в папке"
-                                onclick={() => showInFolder(file)}
-                              >
-                                {@html iconFolder(14)}
-                              </UiV2RoundButton>
+                              {#if !phoneHost}
+                                <UiV2RoundButton
+                                  label="Показать в папке"
+                                  size="sm"
+                                  title="Показать в папке"
+                                  onclick={() => showInFolder(file)}
+                                >
+                                  {@html iconFolder(14)}
+                                </UiV2RoundButton>
+                              {/if}
                               <UiV2RoundButton
                                 label="Удалить"
                                 size="sm"
@@ -1439,14 +1457,16 @@
                                           </span>
                                         </button>
                                         <div class="dl-v2-file__actions">
-                                          <UiV2RoundButton
-                                            label="Показать в папке"
-                                            size="sm"
-                                            title="Показать в папке"
-                                            onclick={() => showInFolder(file)}
-                                          >
-                                            {@html iconFolder(14)}
-                                          </UiV2RoundButton>
+                                          {#if !phoneHost}
+                                            <UiV2RoundButton
+                                              label="Показать в папке"
+                                              size="sm"
+                                              title="Показать в папке"
+                                              onclick={() => showInFolder(file)}
+                                            >
+                                              {@html iconFolder(14)}
+                                            </UiV2RoundButton>
+                                          {/if}
                                           <UiV2RoundButton
                                             label="Удалить"
                                             size="sm"
@@ -1520,6 +1540,16 @@
             variant="danger"
             onclick={() => void downloads.cancelAllActive()}
           />
+        {/if}
+        {#if canRetry && errorCount > 0}
+          <UiV2Button
+            label="Повторить ошибки"
+            size="sm"
+            variant="chrome"
+            onclick={() => void downloads.retryAllErrors()}
+          >
+            {#snippet icon()}{@html iconRotateCcw(14)}{/snippet}
+          </UiV2Button>
         {/if}
         {#if errorCount > 0}
           <UiV2Button
@@ -1686,6 +1716,16 @@
                             {@html iconX(14)}
                           </UiV2RoundButton>
                         {/if}
+                        {#if canRetry && (entry.status === 'error' || entry.status === 'cancelled')}
+                          <UiV2RoundButton
+                            label="Повторить"
+                            size="sm"
+                            title="Повторить"
+                            onclick={() => void downloads.retryEntry(entry.id)}
+                          >
+                            {@html iconRotateCcw(14)}
+                          </UiV2RoundButton>
+                        {/if}
                         {#if entry.status === 'error' || entry.status === 'cancelled' || entry.status === 'done'}
                           <UiV2RoundButton
                             label="Убрать из списка"
@@ -1714,6 +1754,28 @@
     </UiV2Card>
   {:else}
     <div class="dl-v2-settings">
+      {#if phoneHost}
+      <UiV2Card title="Информация о загрузках" spaced class="dl-v2-card">
+        <div class="dl-v2-path-row">
+          <div class="dl-v2-path" title={downloadDir}>
+            <span class="dl-v2-path__icon" aria-hidden="true">{@html iconFolder(16)}</span>
+            <span class="dl-v2-path__text">{downloadDir}</span>
+          </div>
+        </div>
+        <div class="dl-v2-pref">
+          <div class="dl-v2-pref__info">
+            <div class="dl-v2-pref__label">Скачано</div>
+            <div class="dl-v2-pref__desc">
+              {libraryFileCount} {episodesWord(libraryFileCount)} · {formatBytes(librarySize)}
+            </div>
+          </div>
+        </div>
+        <p class="dl-v2-pref__desc">
+          Серии хранятся в памяти приложения и открываются без интернета: «Библиотека» → серия.
+          Просмотр продолжается с места остановки. При удалении приложения файлы удаляются.
+        </p>
+      </UiV2Card>
+      {:else}
       <UiV2Card title="Папка" spaced class="dl-v2-card">
         <div class="dl-v2-path-row">
           <div class="dl-v2-path" title={downloadDir}>
@@ -1741,6 +1803,8 @@
           </div>
         </div>
       </UiV2Card>
+
+      {/if}
 
       <UiV2Card title="Скачивание" spaced class="dl-v2-card">
         <div class="dl-v2-pref">
@@ -1803,6 +1867,7 @@
         </div>
       </UiV2Card>
 
+      {#if !phoneHost}
       <UiV2Card
         title="FFmpeg"
         pill={ffmpegAvailable ? 'OK' : 'Нет'}
@@ -1870,6 +1935,7 @@
           />
         </div>
       </UiV2Card>
+      {/if}
     </div>
   {/if}
 </div>

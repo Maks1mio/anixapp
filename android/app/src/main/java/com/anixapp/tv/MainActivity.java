@@ -41,6 +41,10 @@ public class MainActivity extends BridgeActivity {
         webView.addJavascriptInterface(lanBridge, "AnixTvLan");
         webView.addJavascriptInterface(new AnixDeviceBridge(this), "AnixDevice");
         webView.addJavascriptInterface(new AnixOrientationBridge(this), "AnixOrientation");
+        // Загрузки и офлайн-просмотр — только телефон; ТВ-сборку не меняем.
+        if (!AnixOrientationBridge.isTelevision(this)) {
+            webView.addJavascriptInterface(new AnixDownloadBridge(this, webView), "AnixDownloads");
+        }
     }
 
     @Override

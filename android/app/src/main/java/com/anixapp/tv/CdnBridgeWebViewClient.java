@@ -74,6 +74,9 @@ public class CdnBridgeWebViewClient extends BridgeWebViewClient {
         if (uri == null || !"GET".equalsIgnoreCase(request.getMethod())) {
             return super.shouldInterceptRequest(view, request);
         }
+        if (AnixLocalMedia.matches(uri)) {
+            return AnixLocalMedia.serve(request);
+        }
         if (isVideoHost(uri.getHost()) && looksLikeMedia(uri)) {
             WebResourceResponse media = fetchMediaStream(request);
             if (media != null) return media;

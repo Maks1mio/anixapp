@@ -2014,10 +2014,10 @@ hasown@^2.0.4:
   dependencies:
     function-bind "^1.1.2"
 
-hls.js@^1.7.0:
-  version "1.7.0"
-  resolved "https://registry.npmjs.org/hls.js/-/hls.js-1.7.0.tgz"
-  integrity sha512-NnQpT6Z//+2IB2qovSUbKbrlXY1MOpi0JynZ9L2NNOuTJiNCyMSQj9k2laEj1v7CxU/Hb8oTWR98eT3mVpPQVQ==
+hls.js@^1.7.3:
+  version "1.7.3"
+  resolved "https://registry.yarnpkg.com/hls.js/-/hls.js-1.7.3.tgz#79a3338dd2e78fe63fc2ba6cfebdf5e34495537a"
+  integrity sha512-MsPlx6yVW4Qv4C7mEVou4/gk/5cN2dVxOTnrNjPSmyH2f0Ln+/UkG10Ax1PE6OvrmTVPKgQYozTtBaPOuCzq7A==
 
 hosted-git-info@^4.1.0:
   version "4.1.0"

@@ -229,6 +229,11 @@ function preferNativeHls(): boolean {
   if ((window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()) {
     return true;
   }
+  // Chromium (Electron, Chrome, Edge) умеет и MSE, и нативный HLS — начиная с Chromium ~151
+  // canPlayType('application/vnd.apple.mpegurl') возвращает 'maybe'. Нативный путь обходит hls.js
+  // (мягкое восстановление, nudge, буфер) и при долгом ожидании сегмента ломается пересозданием
+  // video.src (сброс таймкода, потеря MediaSession). На десктопе остаёмся на hls.js, как в 0.1.55.
+  if (/(?:Chrome|Chromium|CriOS|Edg)\//.test(navigator.userAgent)) return false;
   const el = document.createElement('video');
   return !!el.canPlayType('application/vnd.apple.mpegurl');
 }

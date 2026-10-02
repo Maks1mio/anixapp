@@ -1,7 +1,7 @@
 'use strict';
 
 const path = require('path');
-const { BrowserWindow } = require('electron');
+const { BrowserWindow, shell } = require('electron');
 const state = require('../lib/app-state');
 const logger = require('../logger');
 const { flushPendingDeepLink } = require('../lib/deep-link');
@@ -42,6 +42,30 @@ function createMainWindow(deps) {
   } else {
     state.mainWindow.loadFile(path.join(electronDir, '../dist/index.html'));
   }
+
+  // Главное окно с привилегированным preload не должно уходить на чужие страницы:
+  // window.open → внешний браузер (только http/https), навигация основного фрейма — только внутри приложения.
+  const wc = state.mainWindow.webContents;
+  wc.setWindowOpenHandler(({ url }) => {
+    try {
+      const u = new URL(url);
+      if (u.protocol === 'http:' || u.protocol === 'https:') shell.openExternal(u.href).catch(() => {});
+    } catch { /* ignore */ }
+    return { action: 'deny' };
+  });
+  wc.on('will-navigate', (e, url) => {
+    try {
+      const target = new URL(url);
+      const current = new URL(wc.getURL() || 'about:blank');
+      const sameApp = target.protocol === 'file:' ? current.protocol === 'file:' : target.origin === current.origin;
+      if (sameApp) return;
+    } catch { /* блокируем */ }
+    e.preventDefault();
+    try {
+      const u = new URL(url);
+      if (u.protocol === 'http:' || u.protocol === 'https:') shell.openExternal(u.href).catch(() => {});
+    } catch { /* ignore */ }
+  });
 
   state.mainWindow.once('ready-to-show', () => {
     logger.info('main', 'window ready-to-show');

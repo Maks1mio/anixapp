@@ -11,7 +11,8 @@ const config: CapacitorConfig = {
   webDir: 'dist-android',
   android: {
     allowMixedContent: true,
-    webContentsDebuggingEnabled: true,
+    // Отладка WebView по chrome://inspect — только по явному флагу сборки (в релизе выключена)
+    webContentsDebuggingEnabled: process.env.ANIXAPP_DEBUG_WEBVIEW === '1',
   },
   server: {
     androidScheme: 'https',

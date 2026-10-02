@@ -15,6 +15,7 @@ const downloadQueue = require('../lib/download-queue');
 const { nodeFetchBuffer } = downloadQueue;
 const { saveFolderMeta, getFolderMeta, parseEpisodeFromFilename } = require('../lib/download-meta');
 const { writeSkipSidecar, readSkipSidecar, normalizeSkipMarks } = require('../lib/skip-marks');
+const { isPathInside, isTraversalSegment } = require('../lib/safe-path');
 const { migrateLibraryLayout } = require('../lib/library-migrate');
 const { fastDownloadHls } = require('../lib/fast-hls-download');
 const ffmpegInstall = require('../lib/ffmpeg-install');
@@ -478,15 +479,17 @@ function resolveDownloadSubDir(baseDir, folder) {
   const parts = String(folder)
     .split(/[/\\]+/)
     .map((p) => sanitizeDownloadDirName(p))
-    .filter(Boolean);
-  return parts.length ? path.join(baseDir, ...parts) : baseDir;
+    // sanitizeDownloadDirName не трогает точки: ".." иначе выводил бы запись за пределы папки загрузок
+    .filter((p) => p && !isTraversalSegment(p));
+  const dir = parts.length ? path.join(baseDir, ...parts) : baseDir;
+  return isPathInside(baseDir, dir) ? dir : baseDir;
 }
 
 function titleKeyFromFolder(folder) {
   const parts = String(folder || '')
     .split(/[/\\]+/)
     .map((p) => sanitizeDownloadDirName(p))
-    .filter(Boolean);
+    .filter((p) => p && !isTraversalSegment(p));
   return parts[0] || '';
 }
 
@@ -813,19 +816,28 @@ ipcMain.handle('downloads:pickDirectory', async () => {
   return { ok: true, directory: result.filePaths[0] };
 });
 
+const OPENABLE_VIDEO_EXT = new Set(['.mp4', '.mkv', '.webm', '.mov', '.m4v', '.avi', '.ts']);
+
+/** Путь допустим для shell-действий, только если он внутри папки загрузок. */
+function insideDownloadRoot(p) {
+  return typeof p === 'string' && p.trim() !== '' && isPathInside(getDownloadDirectory(), p);
+}
+
 ipcMain.handle('downloads:openDirectory', async (_, dir) => {
   const target = typeof dir === 'string' && dir.trim() ? dir : getDownloadDirectory();
+  if (!insideDownloadRoot(target)) return;
   await shell.openPath(target);
 });
 
 ipcMain.handle('downloads:showFile', (_, filePath) => {
-  if (typeof filePath === 'string' && filePath.trim()) {
+  if (insideDownloadRoot(filePath)) {
     shell.showItemInFolder(filePath);
   }
 });
 
 ipcMain.handle('downloads:openFile', (_, filePath) => {
-  if (typeof filePath === 'string' && filePath.trim()) {
+  // shell.openPath запускает файл как исполняемый/ассоциированный: только видео внутри папки загрузок
+  if (insideDownloadRoot(filePath) && OPENABLE_VIDEO_EXT.has(path.extname(filePath).toLowerCase())) {
     shell.openPath(filePath);
   }
 });
@@ -844,7 +856,7 @@ ipcMain.handle('downloads:deleteFile', (_, filePath) => {
   if (typeof filePath !== 'string' || !filePath) return { ok: false, error: 'bad-path' };
   const root = path.resolve(getDownloadDirectory());
   const resolved = path.resolve(filePath);
-  if (!resolved.startsWith(root + path.sep) && resolved !== root) {
+  if (!isPathInside(root, resolved)) {
     return { ok: false, error: 'outside-root' };
   }
   try {
@@ -874,7 +886,7 @@ ipcMain.handle('downloads:deleteGroup', (_, groupName) => {
   const target = path.join(root, sanitizeDownloadDirName(groupName));
   const resolved = path.resolve(target);
   const rootRes = path.resolve(root);
-  if (!resolved.startsWith(rootRes + path.sep)) return { ok: false, error: 'outside-root' };
+  if (resolved === rootRes || !isPathInside(rootRes, resolved)) return { ok: false, error: 'outside-root' };
   try {
     if (fs.existsSync(resolved)) {
       fs.rmSync(resolved, { recursive: true, force: true });
@@ -901,13 +913,13 @@ ipcMain.handle('downloads:deleteGroup', (_, groupName) => {
 ipcMain.handle('downloads:listByRelease', (_, releaseId) => listDownloadsForRelease(releaseId));
 
 ipcMain.handle('downloads:readSkipMarks', (_, filePath) => {
-  if (typeof filePath !== 'string' || !filePath) return null;
+  if (!insideDownloadRoot(filePath)) return null;
   return readSkipSidecar(filePath);
 });
 
 ipcMain.handle('downloads:saveSkipMarks', (_, payload) => {
   const filePath = typeof payload?.filePath === 'string' ? payload.filePath : '';
-  if (!filePath) return { ok: false };
+  if (!insideDownloadRoot(filePath)) return { ok: false };
   return { ok: writeSkipSidecar(filePath, payload?.skip) };
 });
 

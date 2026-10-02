@@ -448,7 +448,16 @@ async function fetchRemoteImage(url) {
     const fetcher = typeof session?.defaultSession?.fetch === 'function'
       ? session.defaultSession.fetch.bind(session.defaultSession)
       : fetch;
-    const response = await fetcher(target, { headers, redirect: 'follow' });
+    // SSRF: не ходим на loopback/LAN/metadata-адреса, каждый редирект проверяем отдельно
+    const { assertPublicHttpUrl } = require('./lib/net-guard');
+    let current = await assertPublicHttpUrl(target);
+    let response = await fetcher(current, { headers, redirect: 'manual' });
+    for (let hop = 0; response.status >= 300 && response.status < 400 && hop < 5; hop += 1) {
+      const loc = response.headers.get('location');
+      if (!loc) break;
+      current = await assertPublicHttpUrl(new URL(loc, current).href);
+      response = await fetcher(current, { headers, redirect: 'manual' });
+    }
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }

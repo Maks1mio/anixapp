@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { Readable } = require('stream');
 const { protocol } = require('electron');
+const { isPathInside } = require('./safe-path');
 
 function registerLocalMediaScheme() {
   protocol.registerSchemesAsPrivileged([
@@ -47,8 +48,8 @@ function setupLocalMediaProtocol(getDownloadRoot, logger) {
 
       const resolved = path.resolve(filePath);
       const root = path.resolve(getDownloadRoot() || '');
-      const norm = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
-      if (!root || !norm(resolved).startsWith(norm(root))) {
+      // path.relative вместо startsWith: «...\Anixapp-evil» не должен проходить как «...\Anixapp»
+      if (!root || !isPathInside(root, resolved)) {
         return new Response('Forbidden', { status: 403 });
       }
       if (!fs.existsSync(resolved)) {

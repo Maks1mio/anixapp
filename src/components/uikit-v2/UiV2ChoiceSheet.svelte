@@ -7,6 +7,8 @@
   export type UiV2ChoiceOption = {
     value: string | number;
     label: string;
+    /** Необязательное пояснение под названием пункта. */
+    description?: string;
   };
 
   type Props = {
@@ -17,6 +19,8 @@
     disabled?: boolean;
     onSelect?: (value: string | number) => void;
     onClose?: () => void;
+    /** Необязательный блок над кнопкой отмены (например, «Запомнить выбор»). */
+    footer?: import('svelte').Snippet;
   };
 
   let {
@@ -27,6 +31,7 @@
     disabled = false,
     onSelect,
     onClose,
+    footer,
   }: Props = $props();
 
   const titleId = `uiv2-choice-sheet-${Math.random().toString(36).slice(2, 9)}`;
@@ -75,11 +80,20 @@
             onclick={() => onSelect?.(opt.value)}
           >
             <span class="uiv2-choice-sheet__radio" aria-hidden="true"></span>
-            <span class="uiv2-choice-sheet__label">{opt.label}</span>
+            <span class="uiv2-choice-sheet__body">
+              <span class="uiv2-choice-sheet__label">{opt.label}</span>
+              {#if opt.description}
+                <span class="uiv2-choice-sheet__description">{opt.description}</span>
+              {/if}
+            </span>
           </button>
         </li>
       {/each}
     </ul>
+
+    {#if footer}
+      <div class="uiv2-choice-sheet__footer">{@render footer()}</div>
+    {/if}
 
     <UiV2Button
       label={cancelLabel}

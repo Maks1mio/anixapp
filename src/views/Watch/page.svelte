@@ -1751,6 +1751,7 @@
 
     const qs = new URLSearchParams({ releaseId: watchState.releaseId, sourceId: watchState.sourceId, ep: String(ep), title: titleStr, sourceName: srcName });
     if (dubId) qs.set('dubberId', dubId);
+    if (new URLSearchParams(window.location.search).get('webplayer') === '1') qs.set('webplayer', '1');
     if (typeof window.history.replaceState === 'function') {
       window.history.replaceState(null, '', `${window.location.pathname}?${qs}`);
     }
@@ -4031,6 +4032,11 @@
           return;
         }
         if (!p?.releaseId || !p.sourceId || episodeIndex(p.ep) == null) return;
+        if (p.webPlayer === true) {
+          const current = new URLSearchParams(window.location.search);
+          current.set('webplayer', '1');
+          window.history.replaceState(null, '', `${window.location.pathname}?${current.toString()}`);
+        }
         lobbyIdleMode = false;
         soloEmptyIdle = false;
         externalPlaybackUrl = '';
@@ -4553,7 +4559,7 @@
           class="watch-page__iframe"
           src={!player.useVideo ? player.playUrl : ''}
           allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-          referrerpolicy="no-referrer-when-downgrade"
+          referrerpolicy="origin-when-cross-origin"
           hidden={player.useVideo || player.loadState !== 'ready' || player.switching || !watchState.releaseId}
           title="Видео плеер"
         ></iframe>

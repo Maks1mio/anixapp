@@ -185,10 +185,20 @@ export async function resolveEpisodeUrl(
   skip: SkipMarks | null;
   error?: string | null;
 }> {
-  // «Веб-плеер» (телефон): страница /watch?webplayer=1 показывает плеер источника как есть
-  if (typeof window !== 'undefined' && /[?&]webplayer=1/.test(window.location.search)) iframe = true;
-  let url = episodeUrl.startsWith('http') ? episodeUrl : `https:${episodeUrl}`;
-  url = stripKodikQueryParams(url);
+  // Веб-плеер: страница источника в iframe, без вытаскивания HLS.
+  // Токены d/s/ip не срезаем — без них Kodik отдаёт soft-404 «страницы не существует».
+  const forceSourceIframe = typeof window !== 'undefined' && /[?&]webplayer=1/.test(window.location.search);
+  const sourceUrl = episodeUrl.startsWith('http') ? episodeUrl : `https:${episodeUrl}`;
+  if (forceSourceIframe) {
+    return {
+      playUrl: sourceUrl,
+      useVideo: false,
+      qualityMap: {},
+      currentQuality: '',
+      skip: null,
+    };
+  }
+  let url = stripKodikQueryParams(sourceUrl);
   const host = (url.match(/https?:\/\/([^/]+)/) || [])[1] || '';
   const isAniqit   = /aniqit\.com|anixis\.com|aniqart\.com/i.test(host);
   const isKodik    = /kodikplayer\.com|kodik\.info/i.test(host);
@@ -308,8 +318,9 @@ export async function resolveEpisodeUrlWithRetry(
 ): Promise<Awaited<ReturnType<typeof resolveEpisodeUrl>>> {
   const abs = episodeUrl.startsWith('http') ? episodeUrl : `https:${episodeUrl}`;
   const iframeOnly = /youtube\.com|youtu\.be/i.test(abs);
+  const sourceWebPlayer = typeof window !== 'undefined' && /[?&]webplayer=1/.test(window.location.search);
   const retryableSocial = /vk\.com|vkvideo|rutube\.ru|ok\.ru|studiomir|mail\.ru|myvi\.|secvideo1|csst\.online|sstrge|sovetromantica/i.test(abs);
-  const attempts = iframeOnly ? 1 : maxAttempts;
+  const attempts = iframeOnly || sourceWebPlayer ? 1 : maxAttempts;
   let lastResult = {
     playUrl: abs,
     useVideo: false,

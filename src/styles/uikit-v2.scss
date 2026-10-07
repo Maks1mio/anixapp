@@ -2284,6 +2284,14 @@
   cursor: pointer;
   transition: background 0.15s ease;
 
+  &:has(.uiv2-choice-sheet__description) {
+    align-items: flex-start;
+
+    .uiv2-choice-sheet__radio {
+      margin-top: 0.15rem;
+    }
+  }
+
   &:hover {
     background: var(--uiv2-hover-subtle);
   }
@@ -2322,6 +2330,26 @@
 .uiv2-choice-sheet__label {
   min-width: 0;
   line-height: 1.35;
+}
+
+.uiv2-choice-sheet__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.uiv2-choice-sheet__description {
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 62%, transparent);
+}
+
+.uiv2-choice-sheet__footer {
+  margin: 0.35rem 0.55rem 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--uiv2-panel-border, color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 10%, transparent));
 }
 
 // ââ Pill field (matches UiV2Button height + 999px radius) âââââââââââââââââââââ

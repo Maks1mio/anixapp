@@ -6,13 +6,19 @@ const path = require('path');
 
 const vlc = require('./players/vlc');
 const mpv = require('./players/mpv');
+const potplayer = require('./players/potplayer');
 
 /** Порядок в UI и приоритет автовыбора. Добавляй новых сюда. */
-const REGISTRY = [vlc, mpv];
+const REGISTRY = [vlc, mpv, potplayer];
 
-/** Короткий кэш детекта — live-опрос без thrashing реестра. */
-let installedCache = { at: 0, list: /** @type {import('./types').InstalledExternalPlayer[]} */ ([]) };
-const INSTALLED_CACHE_MS = 3000;
+/** Кэш детекта: прогревается при старте приложения. */
+let installedCache = {
+  at: 0,
+  warmed: false,
+  list: /** @type {import('./types').InstalledExternalPlayer[]} */ ([]),
+};
+/** После warm — отдаём кэш долго; fresh=true всё ещё пересканирует. */
+const INSTALLED_CACHE_MS = 5 * 60 * 1000;
 
 /**
  * Все известные интеграции (даже если не установлены).
@@ -29,7 +35,11 @@ function listKnownPlayers() {
  */
 function listInstalledPlayers(opts = {}) {
   const now = Date.now();
-  if (!opts.fresh && installedCache.list.length && now - installedCache.at < INSTALLED_CACHE_MS) {
+  if (
+    !opts.fresh
+    && installedCache.warmed
+    && now - installedCache.at < INSTALLED_CACHE_MS
+  ) {
     return installedCache.list.slice();
   }
   const out = [];
@@ -37,8 +47,16 @@ function listInstalledPlayers(opts = {}) {
     const found = p.detect();
     if (found) out.push(found);
   }
-  installedCache = { at: now, list: out };
+  installedCache = { at: now, warmed: true, list: out };
   return out.slice();
+}
+
+/**
+ * Фоновый прогрев кэша при старте Electron — UI не ждёт реестр.
+ * @returns {import('./types').InstalledExternalPlayer[]}
+ */
+function warmInstalledPlayersCache() {
+  return listInstalledPlayers({ fresh: true });
 }
 
 /**
@@ -117,6 +135,7 @@ module.exports = {
   REGISTRY,
   listKnownPlayers,
   listInstalledPlayers,
+  warmInstalledPlayersCache,
   resolvePlayer,
   launchExternalPlayer,
 };

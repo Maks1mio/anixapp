@@ -1,9 +1,9 @@
 /**
  * Клиентская обёртка над Electron player-integration:
- * список установленных плееров (VLC, mpv, …) и предпочтение пользователя.
+ * список установленных плееров (VLC, mpv, PotPlayer, …) и предпочтение пользователя.
  */
 
-export type ExternalPlayerId = 'vlc' | 'mpv';
+export type ExternalPlayerId = 'vlc' | 'mpv' | 'potplayer';
 
 export interface ExternalPlayerOption {
   id: ExternalPlayerId;
@@ -14,11 +14,12 @@ export interface ExternalPlayerOption {
 }
 
 const PREF_KEY = 'anix:externalPlayerId';
+const KNOWN_IDS: ExternalPlayerId[] = ['vlc', 'mpv', 'potplayer'];
 
 export function getPreferredExternalPlayerId(): ExternalPlayerId | null {
   try {
     const v = localStorage.getItem(PREF_KEY);
-    if (v === 'vlc' || v === 'mpv') return v;
+    if (KNOWN_IDS.includes(v as ExternalPlayerId)) return v as ExternalPlayerId;
   } catch { /* ignore */ }
   return null;
 }

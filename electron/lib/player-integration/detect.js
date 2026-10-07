@@ -138,14 +138,23 @@ function winApplicationsCommandCandidates(exeName) {
   return out;
 }
 
+/** Имена exe для игрока (PotPlayer — несколько вариантов). */
+function exeNamesForPlayer(id) {
+  if (id === 'potplayer') {
+    return ['PotPlayerMini64.exe', 'PotPlayerMini.exe', 'PotPlayer64.exe', 'PotPlayer.exe'];
+  }
+  if (id === 'vlc') return ['vlc.exe'];
+  if (id === 'mpv') return ['mpv.exe'];
+  return [`${id}.exe`];
+}
+
 /**
- * @param {string} name
+ * @param {string} name player id
  * @returns {string[]}
  */
 function winProgramCandidates(name) {
   if (process.platform !== 'win32') return [];
   const out = [];
-  const exe = `${name}.exe`;
   const homes = [
     process.env.ProgramFiles,
     process.env['ProgramFiles(x86)'],
@@ -164,15 +173,25 @@ function winProgramCandidates(name) {
       out.push(path.join(base, 'scoop', 'shims', 'mpv.exe'));
       out.push(path.join(base, 'scoop', 'apps', 'mpv', 'current', 'mpv.exe'));
     }
+    if (name === 'potplayer') {
+      out.push(path.join(base, 'DAUM', 'PotPlayer', 'PotPlayerMini64.exe'));
+      out.push(path.join(base, 'DAUM', 'PotPlayer', 'PotPlayerMini.exe'));
+      out.push(path.join(base, 'DAUM', 'PotPlayer', 'PotPlayer64.exe'));
+      out.push(path.join(base, 'DAUM', 'PotPlayer', 'PotPlayer.exe'));
+      out.push(path.join(base, 'PotPlayer', 'PotPlayerMini64.exe'));
+      out.push(path.join(base, 'Programs', 'PotPlayer', 'PotPlayerMini64.exe'));
+    }
   }
   if (name === 'mpv') {
     out.push('C:\\ProgramData\\chocolatey\\bin\\mpv.exe');
   }
 
-  // Реестр: App Paths + Uninstall + Open With
-  out.push(...winAppPathsCandidates(exe));
-  out.push(...winUninstallCandidates(name, exe));
-  out.push(...winApplicationsCommandCandidates(exe));
+  for (const exe of exeNamesForPlayer(name)) {
+    out.push(...winAppPathsCandidates(exe));
+    out.push(...winApplicationsCommandCandidates(exe));
+  }
+  const uninstallHint = name === 'potplayer' ? 'PotPlayer' : name;
+  out.push(...winUninstallCandidates(uninstallHint, exeNamesForPlayer(name)[0]));
 
   return out;
 }
@@ -195,7 +214,9 @@ function darwinCandidates(name) {
  */
 function findExecutable(name, extraCandidates = []) {
   const win = process.platform === 'win32';
-  const executableNames = win ? [`${name}.exe`, name] : [name];
+  const executableNames = win
+    ? (name === 'potplayer' ? exeNamesForPlayer('potplayer') : [`${name}.exe`, name])
+    : [name];
   const candidates = [...extraCandidates];
 
   const pathEntries = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
@@ -203,20 +224,21 @@ function findExecutable(name, extraCandidates = []) {
     for (const executable of executableNames) candidates.push(path.join(entry, executable));
   }
 
-  // Если App Paths дал только имя без каталога — where.exe
   if (win) {
-    try {
-      const whereOut = execFileSync('where.exe', [`${name}.exe`], {
-        encoding: 'utf8',
-        windowsHide: true,
-        timeout: 3000,
-        stdio: ['ignore', 'pipe', 'ignore'],
-      });
-      for (const line of whereOut.split(/\r?\n/)) {
-        const p = line.trim();
-        if (p) candidates.push(p);
-      }
-    } catch { /* not in PATH */ }
+    for (const exeName of executableNames) {
+      try {
+        const whereOut = execFileSync('where.exe', [exeName], {
+          encoding: 'utf8',
+          windowsHide: true,
+          timeout: 3000,
+          stdio: ['ignore', 'pipe', 'ignore'],
+        });
+        for (const line of whereOut.split(/\r?\n/)) {
+          const p = line.trim();
+          if (p) candidates.push(p);
+        }
+      } catch { /* not in PATH */ }
+    }
   }
 
   const seen = new Set();

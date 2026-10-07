@@ -67,6 +67,9 @@
   --uiv2-choice-on-bg: color-mix(in srgb, var(--uikit-v2-accent) 10%, var(--uikit-v2-surface));
   --uiv2-choice-radio-border: var(--uiv2-border-strong);
   --uiv2-choice-radio-dot: var(--uikit-v2-accent);
+  --uiv2-choice-warning-bg: color-mix(in srgb, var(--uikit-v2-danger) 12%, transparent);
+  --uiv2-choice-warning-border: color-mix(in srgb, var(--uikit-v2-danger) 32%, transparent);
+  --uiv2-choice-warning-fg: color-mix(in srgb, var(--uikit-v2-danger) 82%, var(--uikit-v2-text));
 
   // Danger ghost button
   --uiv2-danger-bg: color-mix(in srgb, var(--uikit-v2-danger) 12%, transparent);

@@ -9,6 +9,8 @@
     label: string;
     /** Необязательное пояснение под названием пункта. */
     description?: string;
+    /** Предупреждение под пунктом (акцентная плашка). */
+    warning?: string;
   };
 
   type Props = {
@@ -84,6 +86,9 @@
               <span class="uiv2-choice-sheet__label">{opt.label}</span>
               {#if opt.description}
                 <span class="uiv2-choice-sheet__description">{opt.description}</span>
+              {/if}
+              {#if opt.warning}
+                <span class="uiv2-choice-sheet__warning">{opt.warning}</span>
               {/if}
             </span>
           </button>

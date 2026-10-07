@@ -10,6 +10,7 @@
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import { fetchReactions, sendReaction } from '../services/announcements';
   import type { Reaction, ReactionsResult } from '../services/announcements';
+  import { requestOpenExternal } from '../utils/external-link';
 
   interface Props { announcement: Announcement; }
   let { announcement }: Props = $props();
@@ -71,7 +72,7 @@
 
   function handleLink(e: Event) {
     e.preventDefault();
-    if (announcement.link?.url) (window as any).electron?.openExternal?.(announcement.link.url);
+    if (announcement.link?.url) requestOpenExternal(announcement.link.url);
   }
 
   function commentLabel(n: number): string {

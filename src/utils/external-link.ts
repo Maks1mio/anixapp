@@ -15,6 +15,29 @@ const ANIXART_APP_HOSTS = new Set([
   'www.anixart.tv',
 ]);
 
+/**
+ * Доверенные хосты: можно открыть во внешнем браузере после предупреждения.
+ * Остальные http(s)-ссылки блокируются.
+ */
+const TRUSTED_EXTERNAL_HOSTS = [
+  'anixart-app.com',
+  'anixart.io',
+  'anixart.tv',
+  'github.com',
+  'discord.gg',
+  'discord.com',
+  't.me',
+  'telegram.me',
+  'telegram.org',
+  'boosty.to',
+  'youtube.com',
+  'youtu.be',
+  'vk.com',
+  'vk.ru',
+  'ok.ru',
+  'rutube.ru',
+] as const;
+
 /** Нормализует внешний http(s) URL. Внутренние пути (`/…`) возвращает как есть. */
 export function normalizeLinkHref(raw: string | null | undefined): string | null {
   const value = String(raw ?? '').trim();
@@ -40,6 +63,23 @@ export function externalLinkHost(url: string): string {
 
 function stripHostWww(host: string): string {
   return host.trim().toLowerCase().replace(/^www\./i, '');
+}
+
+/** Хост (или его родитель) в белом списке. */
+export function isTrustedExternalHost(hostname: string): boolean {
+  const host = stripHostWww(hostname);
+  if (!host) return false;
+  return TRUSTED_EXTERNAL_HOSTS.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
+}
+
+export function isTrustedExternalUrl(raw: string | null | undefined): boolean {
+  const href = normalizeLinkHref(raw);
+  if (!href || href.startsWith('/')) return false;
+  try {
+    return isTrustedExternalHost(new URL(href).hostname);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -95,27 +135,42 @@ export function mapAnixartAppUrlToInternalPath(raw: string | null | undefined): 
   return null;
 }
 
-/** Показать модалку (внешние) или перейти внутри приложения (относительные / Anixart). */
-export function requestOpenExternal(raw: string | null | undefined): void {
+export type RequestOpenExternalResult =
+  | 'navigated'
+  | 'confirm'
+  | 'invalid';
+
+/**
+ * Единая точка входа для любых ссылок в приложении:
+ * внутренние / Anixart → navigate;
+ * доверенные внешние → открываем сразу в браузере;
+ * остальные → модалка подтверждения с кнопкой «Открыть».
+ */
+export function requestOpenExternal(raw: string | null | undefined): RequestOpenExternalResult {
   const href = normalizeLinkHref(raw);
-  if (!href) return;
+  if (!href) return 'invalid';
   if (href.startsWith('/')) {
     navigate(href);
-    return;
+    return 'navigated';
   }
   const internal = mapAnixartAppUrlToInternalPath(href);
   if (internal) {
     navigate(internal);
-    return;
+    return 'navigated';
+  }
+  if (isTrustedExternalUrl(href)) {
+    void openExternalInBrowser(href);
+    return 'navigated';
   }
   pendingExternalUrl.set(href);
+  return 'confirm';
 }
 
 export function cancelExternalLink(): void {
   pendingExternalUrl.set(null);
 }
 
-/** Открыть подтверждённую ссылку в системном браузере. */
+/** Открыть ссылку из модалки подтверждения в системном браузере. */
 export async function confirmExternalLink(): Promise<void> {
   const url = get(pendingExternalUrl);
   pendingExternalUrl.set(null);
@@ -123,6 +178,10 @@ export async function confirmExternalLink(): Promise<void> {
   await openExternalInBrowser(url);
 }
 
+/**
+ * Низкоуровневый open без модалки. Только после явного действия пользователя
+ * (клик по доверенной ссылке или подтверждение в модалке).
+ */
 export async function openExternalInBrowser(url: string): Promise<void> {
   const safe = normalizeLinkHref(url);
   if (!safe || safe.startsWith('/')) return;
@@ -132,3 +191,5 @@ export async function openExternalInBrowser(url: string): Promise<void> {
   }
   window.open(safe, '_blank', 'noopener,noreferrer');
 }
+
+export { TRUSTED_EXTERNAL_HOSTS };

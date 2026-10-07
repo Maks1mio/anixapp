@@ -48,12 +48,20 @@ function createMainWindow(deps) {
 
   // Главное окно с привилегированным preload не должно уходить на чужие страницы:
   // window.open → внешний браузер (только http/https), навигация основного фрейма — только внутри приложения.
+  // Политику доверия решает рендерер (`requestOpenExternal`): доверенные хосты открываются сразу,
+  // остальные — через модалку подтверждения. Здесь лишь не даём окну уехать на чужой origin.
   const wc = state.mainWindow.webContents;
-  wc.setWindowOpenHandler(({ url }) => {
+
+  function openExternalUrl(url) {
     try {
       const u = new URL(url);
-      if (u.protocol === 'http:' || u.protocol === 'https:') shell.openExternal(u.href).catch(() => {});
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return;
+      shell.openExternal(u.href).catch(() => {});
     } catch { /* ignore */ }
+  }
+
+  wc.setWindowOpenHandler(({ url }) => {
+    openExternalUrl(url);
     return { action: 'deny' };
   });
   wc.on('will-navigate', (e, url) => {
@@ -66,10 +74,7 @@ function createMainWindow(deps) {
       if (sameApp) return;
     } catch { /* блокируем */ }
     e.preventDefault();
-    try {
-      const u = new URL(url);
-      if (u.protocol === 'http:' || u.protocol === 'https:') shell.openExternal(u.href).catch(() => {});
-    } catch { /* ignore */ }
+    openExternalUrl(url);
   });
 
   state.mainWindow.once('ready-to-show', () => {

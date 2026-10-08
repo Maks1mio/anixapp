@@ -17,6 +17,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
+const { pathToFileURL } = require('url');
 const {
   BrowserWindow,
   Notification,
@@ -198,7 +199,7 @@ function createService(deps) {
 
   /** @type {BrowserWindow | null} */
   let bannerWindow = null;
-  /** @type {Array<{id:string,payload:object,expireTimer:any}>} */
+  /** @type {Array<{id:string,payload:object,hovered?:boolean,expireTimer:any}>} */
   let queue = [];
   /** true вЂ” РѕРєРЅРѕ Р±Р°РЅРЅРµСЂРѕРІ РіРѕС‚РѕРІРѕ РїСЂРёРЅРёРјР°С‚СЊ РєРѕРЅС‚РµРЅС‚. */
   let bannerReady = false;
@@ -525,6 +526,34 @@ function createService(deps) {
     return true;
   }
 
+  function clearExpireTimer(entry) {
+    if (!entry?.expireTimer) return;
+    clearTimeout(entry.expireTimer);
+    entry.expireTimer = null;
+  }
+
+  function armExpireTimer(entry) {
+    if (!entry || entry.hovered) return;
+    clearExpireTimer(entry);
+    entry.expireTimer = setTimeout(() => removeBanner(entry.id), BANNER_TTL_MS);
+  }
+
+  /** Наведение: не удалять, таймер сбросить. */
+  function pauseBanner(id) {
+    const entry = queue.find((q) => q.id === id);
+    if (!entry) return;
+    entry.hovered = true;
+    clearExpireTimer(entry);
+  }
+
+  /** Уход мыши: снова полный TTL. */
+  function resumeBanner(id) {
+    const entry = queue.find((q) => q.id === id);
+    if (!entry) return;
+    entry.hovered = false;
+    armExpireTimer(entry);
+  }
+
   function removeBanner(id) {
     // РџСЂРµРІСЊСЋ СѓРіР»Р° Р¶РёРІС‘С‚ РѕС‚РґРµР»СЊРЅРѕ РѕС‚ РѕС‡РµСЂРµРґРё вЂ” РєСЂРµСЃС‚РёРє РґРѕР»Р¶РµРЅ С‡РёСЃС‚РёС‚СЊ РµРіРѕ items.
     if (cornerPreview?.items?.length) {
@@ -540,7 +569,7 @@ function createService(deps) {
       }
     }
     const entry = queue.find((q) => q.id === id);
-    if (entry?.expireTimer) clearTimeout(entry.expireTimer);
+    clearExpireTimer(entry);
     queue = queue.filter((q) => q.id !== id);
     flushBanners();
   }
@@ -552,14 +581,16 @@ function createService(deps) {
     const entry = {
       id,
       payload: { ...payload, id, image: '' },
-      expireTimer: setTimeout(() => removeBanner(id), BANNER_TTL_MS),
+      hovered: false,
+      expireTimer: null,
     };
+    armExpireTimer(entry);
     queue.push(entry);
     // Лимит одновременно видимых + страховка от утечек.
     const limit = Math.min(Math.max(1, bannerCount || 3), MAX_QUEUE);
     while (queue.length > limit) {
       const oldest = queue[0];
-      if (oldest.expireTimer) clearTimeout(oldest.expireTimer);
+      clearExpireTimer(oldest);
       queue.shift();
     }
     createBannerWindow();
@@ -577,7 +608,7 @@ function createService(deps) {
   }
 
   function clearBanners() {
-    for (const q of queue) if (q.expireTimer) clearTimeout(q.expireTimer);
+    for (const q of queue) clearExpireTimer(q);
     queue = [];
     flushBanners();
   }
@@ -585,10 +616,32 @@ function createService(deps) {
   // вЂ”вЂ”вЂ” РќР°С‚РёРІРЅС‹Рµ СѓРІРµРґРѕРјР»РµРЅРёСЏ РћРЎ вЂ”вЂ”вЂ”
 
   /**
-   * @param {{title?:string, body?:string, silent?:boolean, onClick?:Function, image?:string}} opts
+   * @param {Electron.NotificationConstructorOptions} opts
+   * @param {Function} [onClick]
    */
+  function presentNative(opts, onClick) {
+    const notification = new Notification(opts);
+    liveNative.add(notification);
+    const cleanup = () => liveNative.delete(notification);
+    notification.on('click', () => {
+      focusMainWindow();
+      onClick?.();
+      cleanup();
+    });
+    notification.on('close', cleanup);
+    notification.on('failed', (err) => {
+      logger.warn('notifications', `native failed event: ${err?.message || err || 'unknown'}`);
+      cleanup();
+    });
+    notification.show();
+    return true;
+  }
+
   async function showNative({ title, body, silent, onClick, image }) {
-    if (!Notification.isSupported()) return false;
+    if (!Notification.isSupported()) {
+      logger.warn('notifications', 'native Notification.isSupported() === false');
+      return false;
+    }
     try {
       const fallback = getIconPath();
       const iconPath = await resolveToastIconPath(image, fallback);
@@ -604,32 +657,27 @@ function createService(deps) {
         timeoutType: 'default',
       };
 
-      // Windows: РєСЂСѓРіР»Р°СЏ Р°РІР°С‚Р°СЂРєР° РІРјРµСЃС‚Рѕ РёРєРѕРЅРєРё РїСЂРёР»РѕР¶РµРЅРёСЏ
+      // Windows: круглая аватарка вместо иконки приложения
       if (process.platform === 'win32' && iconPath) {
-        const src = pathToFileURL(iconPath).href;
-        opts.toastXml = [
-          '<toast>',
-          '<visual><binding template="ToastGeneric">',
-          `<text>${escapeXml(safeTitle)}</text>`,
-          `<text>${escapeXml(safeBody)}</text>`,
-          `<image placement="appLogoOverride" hint-crop="circle" src="${escapeXml(src)}"/>`,
-          '</binding></visual>',
-          '</toast>',
-        ].join('');
+        try {
+          const src = pathToFileURL(iconPath).href;
+          opts.toastXml = [
+            '<toast>',
+            '<visual><binding template="ToastGeneric">',
+            `<text>${escapeXml(safeTitle)}</text>`,
+            `<text>${escapeXml(safeBody)}</text>`,
+            `<image placement="appLogoOverride" hint-crop="circle" src="${escapeXml(src)}"/>`,
+            '</binding></visual>',
+            '</toast>',
+          ].join('');
+          return presentNative(opts, onClick);
+        } catch (toastErr) {
+          logger.warn('notifications', `toastXml failed, fallback: ${toastErr?.message || toastErr}`);
+          delete opts.toastXml;
+        }
       }
 
-      const notification = new Notification(opts);
-      liveNative.add(notification);
-      const cleanup = () => liveNative.delete(notification);
-      notification.on('click', () => {
-        focusMainWindow();
-        onClick?.();
-        cleanup();
-      });
-      notification.on('close', cleanup);
-      notification.on('failed', cleanup);
-      notification.show();
-      return true;
+      return presentNative(opts, onClick);
     } catch (err) {
       logger.warn('notifications', `native failed: ${err?.message || err}`);
       return false;
@@ -743,22 +791,29 @@ function createService(deps) {
   }
 
   /**
-   * Р РµР¶РёРј РІС‹Р·РѕРІР° РґР»СЏ С‚РёРїР°: both | banner | native | off.
-   * РЈС‡РёС‚С‹РІР°РµС‚ РіР»РѕР±Р°Р»СЊРЅС‹Рµ С‚СѓРјР±Р»РµСЂС‹ useNative / customBanners.
+   * Режим вызова для типа: both | banner | native | off.
+   * Системные и баннеры приложения взаимоисключающие: при useNative — только ОС.
    */
   function resolveCallMode(settings, kind) {
     const key = resolveKindKey(kind);
     const mode = settings.typeChannels?.[key] || 'both';
     if (mode === 'off') return { wantNative: false, wantBanner: false, wantSound: false };
 
-    let wantNative = settings.useNativeNotifications && (mode === 'native' || mode === 'both');
-    let wantBanner = settings.customBannersEnabled && (mode === 'banner' || mode === 'both');
+    // Глобальный переключатель ОС имеет приоритет над баннерами приложения.
+    if (settings.useNativeNotifications) {
+      return {
+        wantNative: true,
+        wantBanner: false,
+        wantSound: false,
+      };
+    }
 
-    // Р•СЃР»Рё РіР»РѕР±Р°Р»СЊРЅРѕ РІС‹РєР»СЋС‡РµРЅ РѕРґРёРЅ РєР°РЅР°Р» вЂ” РЅРµ С„РѕСЂСЃРёСЂСѓРµРј РµРіРѕ С‡РµСЂРµР· С‚РёРї.
-    if (!settings.useNativeNotifications) wantNative = false;
-    if (!settings.customBannersEnabled) wantBanner = false;
-
-    return { wantNative, wantBanner, wantSound: settings.soundEnabled };
+    const wantBanner = !!settings.customBannersEnabled;
+    return {
+      wantNative: false,
+      wantBanner,
+      wantSound: !!settings.soundEnabled && wantBanner,
+    };
   }
 
   /**
@@ -792,11 +847,11 @@ function createService(deps) {
     };
 
     if (wantNative) {
-      const nativeSilent = !(wantSound && settings.soundId === 'system');
+      // Системный тост: звук ОС. Мелодии приложения (nya и т.п.) не трогаем.
       void showNative({
         title,
         body: displayBody || title,
-        silent: nativeSilent,
+        silent: false,
         onClick,
         image: payload.image || '',
       });
@@ -918,6 +973,12 @@ function createService(deps) {
 
     ipcMain.on('notification-banner:dismiss', (_, id) => {
       if (typeof id === 'string') removeBanner(id);
+    });
+    ipcMain.on('notification-banner:pause', (_, id) => {
+      if (typeof id === 'string') pauseBanner(id);
+    });
+    ipcMain.on('notification-banner:resume', (_, id) => {
+      if (typeof id === 'string') resumeBanner(id);
     });
     ipcMain.on('notification-banner:click', (_, payload) => {
       const { id, url } = payload || {};

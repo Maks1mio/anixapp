@@ -388,8 +388,12 @@ function normalizeNotificationSettings(raw) {
     desktopEnabled: src.desktopEnabled !== false,
     /** Нативные уведомления ОС (Windows Action Center и т.п.). */
     useNativeNotifications: src.useNativeNotifications !== false,
-    /** Свои баннеры поверх окна. */
-    customBannersEnabled: src.customBannersEnabled !== false,
+    /**
+     * Свои баннеры поверх окна.
+     * Взаимоисключающе с useNativeNotifications: при ОС-канале баннеры выключены.
+     */
+    customBannersEnabled:
+      src.useNativeNotifications === false && src.customBannersEnabled !== false,
     /** Показывать превью текста в баннере/тосте. */
     showPreview: src.showPreview !== false,
     /** Мигать иконкой в панели задач. */

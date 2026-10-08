@@ -548,11 +548,11 @@ export type NotificationKindId =
   | 'default';
 
 export interface DeviceNotificationSettings {
-  /** Мастер-выключатель уведомлений устройства. */
+  /** Мастер-выключатель уведомлений на этом устройстве (все платформы). */
   desktopEnabled: boolean;
-  /** Нативные уведомления ОС (Windows Action Center и т.п.). */
+  /** Системные уведомления ОС (Windows / macOS / Linux / Android). */
   useNativeNotifications: boolean;
-  /** Свои баннеры поверх окна. */
+  /** Свои баннеры в углу (desktop Electron). */
   customBannersEnabled: boolean;
   /** Показывать превью текста уведомления. */
   showPreview: boolean;

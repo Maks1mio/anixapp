@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('notificationBanner', {
     return () => ipcRenderer.removeListener('notification-banner:update', handler);
   },
   dismiss: (id) => ipcRenderer.send('notification-banner:dismiss', id),
+  pause: (id) => ipcRenderer.send('notification-banner:pause', id),
+  resume: (id) => ipcRenderer.send('notification-banner:resume', id),
   click: (payload) => ipcRenderer.send('notification-banner:click', payload || {}),
   setHeight: (height) => ipcRenderer.send('notification-banner:height', height),
   /** true = клики сквозь окно; false = ловить мышь на карточке */

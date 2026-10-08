@@ -20,6 +20,8 @@ interface NotificationBannerBridge {
     cb: (items: NotificationBannerItem[], meta?: { position?: string; style?: string }) => void,
   ) => () => void;
   dismiss: (id: string) => void;
+  pause?: (id: string) => void;
+  resume?: (id: string) => void;
   click: (payload: { id: string; url?: { type: string; id: number } | null }) => void;
   setHeight: (height: number) => void;
   setIgnoreMouse?: (ignore: boolean) => void;
@@ -308,9 +310,11 @@ export function mountNotificationBanner(root: HTMLElement): void {
     /* hit-test на shell: parent с pointer-events:none ломал forward в Electron */
     shell.addEventListener('mouseenter', () => {
       bridge.setIgnoreMouse?.(false);
+      bridge.pause?.(item.id);
     });
     shell.addEventListener('mouseleave', () => {
       bridge.setIgnoreMouse?.(true);
+      bridge.resume?.(item.id);
     });
     return shell;
   }

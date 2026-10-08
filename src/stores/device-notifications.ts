@@ -3,7 +3,11 @@ import { isAuthenticated } from './auth';
 import { fetchAllNotifications } from './notifications';
 import { parseNotification } from '../utils/notification-format';
 import { resolveCdnAssetUrl } from '../utils/posterUrl';
-import type { DeviceNotificationSettings, DeviceNotificationPayload } from '../types/electron';
+import type {
+  DeviceNotificationSettings,
+  DeviceNotificationPayload,
+  NotificationSoundOption,
+} from '../types/electron';
 
 const FALLBACK_TEST_IMAGE_RAW = 'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg';
 
@@ -276,13 +280,15 @@ export async function buildCornerPreviewItems(): Promise<CornerPreviewItem[]> {
 
 /**
  * Настройки уведомлений устройства (нативные тосты + баннеры + звук).
- * Хранятся в Electron config (см. electron/lib/config-store.js).
+ * Electron: config-store. Иначе: localStorage (web / Capacitor / Mac·Linux без моста).
  */
+
+const STORAGE_KEY = 'anix.deviceNotificationSettings.v1';
 
 const DEFAULT_SETTINGS: DeviceNotificationSettings = {
   desktopEnabled: true,
   useNativeNotifications: true,
-  customBannersEnabled: true,
+  customBannersEnabled: false,
   showPreview: true,
   flashTaskbar: true,
   soundEnabled: true,
@@ -305,6 +311,18 @@ const DEFAULT_SETTINGS: DeviceNotificationSettings = {
   },
 };
 
+/** Список мелодий без Electron (превью звука там недоступно). */
+export const FALLBACK_NOTIFICATION_SOUNDS: NotificationSoundOption[] = [
+  { id: 'off', label: 'Выключен', file: null, desc: 'Без звука' },
+  { id: 'system', label: 'Системный', file: null, desc: 'Звук операционной системы' },
+  { id: 'chime', label: 'Chime', file: null, desc: 'Мягкий колокольчик' },
+  { id: 'plub', label: 'Plub', file: null, desc: 'sa plub' },
+  { id: 'rawr', label: 'Rawr', file: null, desc: 'sa rawr' },
+  { id: 'nya', label: 'Nya', file: null, desc: 'sa nya' },
+  { id: 'bonk', label: 'Bonk', file: null, desc: 'sa bonk' },
+  { id: 'eh', label: 'Eh', file: null, desc: 'sa eh' },
+];
+
 export const deviceNotificationSettings = writable<DeviceNotificationSettings>(DEFAULT_SETTINGS);
 
 type DeviceNotificationBridge = NonNullable<NonNullable<Window['electron']>['notifications']>;
@@ -313,8 +331,35 @@ function bridge(): DeviceNotificationBridge | null {
   return window.electron?.notifications ?? null;
 }
 
+/** Есть оболочка с баннерами в углу (Electron desktop). */
 export function hasDeviceNotifications(): boolean {
   return !!bridge();
+}
+
+/** То же, что hasDeviceNotifications — явное имя для UI. */
+export function hasDesktopBannerShell(): boolean {
+  return !!bridge();
+}
+
+function readLocalSettings(): Partial<DeviceNotificationSettings> | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<DeviceNotificationSettings>;
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalSettings(settings: DeviceNotificationSettings): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  } catch {
+    /* quota / private mode */
+  }
 }
 
 function mergeSettings(data?: Partial<DeviceNotificationSettings> | null): DeviceNotificationSettings {
@@ -339,48 +384,133 @@ function mergeSettings(data?: Partial<DeviceNotificationSettings> | null): Devic
 
 export async function loadDeviceNotificationSettings(): Promise<DeviceNotificationSettings> {
   const api = bridge();
-  if (!api) return get(deviceNotificationSettings);
-  try {
-    const data = await api.getSettings();
-    const merged = mergeSettings(data);
-    deviceNotificationSettings.set(merged);
-    return merged;
-  } catch {
-    return get(deviceNotificationSettings);
+  if (api) {
+    try {
+      const data = await api.getSettings();
+      const merged = mergeSettings(data);
+      deviceNotificationSettings.set(merged);
+      return merged;
+    } catch {
+      /* fall through to local */
+    }
   }
+  const local = mergeSettings(readLocalSettings());
+  deviceNotificationSettings.set(local);
+  return local;
 }
 
 export async function saveDeviceNotificationSettings(
   patch: Partial<DeviceNotificationSettings>,
 ): Promise<void> {
-  deviceNotificationSettings.update((s) => mergeSettings({
-    ...s,
-    ...patch,
-    typeChannels: { ...s.typeChannels, ...(patch.typeChannels || {}) },
-  }));
+  let next: DeviceNotificationSettings = DEFAULT_SETTINGS;
+  deviceNotificationSettings.update((s) => {
+    next = mergeSettings({
+      ...s,
+      ...patch,
+      typeChannels: { ...s.typeChannels, ...(patch.typeChannels || {}) },
+    });
+    return next;
+  });
+
   const api = bridge();
-  if (!api) return;
-  try {
-    const data = await api.saveSettings(patch);
-    deviceNotificationSettings.set(mergeSettings(data));
-  } catch {
-    // оставляем оптимистичное значение
+  if (api) {
+    try {
+      const data = await api.saveSettings(patch);
+      const merged = mergeSettings(data);
+      deviceNotificationSettings.set(merged);
+      return;
+    } catch {
+      // оставляем оптимистичное значение
+    }
   }
+  writeLocalSettings(next);
+}
+
+export async function listNotificationSounds(): Promise<NotificationSoundOption[]> {
+  const api = bridge();
+  if (api?.listSounds) {
+    try {
+      const list = await api.listSounds();
+      if (Array.isArray(list) && list.length) return list;
+    } catch {
+      /* fallback */
+    }
+  }
+  return FALLBACK_NOTIFICATION_SOUNDS;
 }
 
 export async function previewNotificationSound(soundId?: string): Promise<void> {
-  await bridge()?.previewSound(soundId);
+  const api = bridge();
+  if (api?.previewSound) {
+    await api.previewSound(soundId);
+    return;
+  }
+  // Без Electron — короткий системный клик, если доступен AudioContext
+  if (soundId === 'off' || typeof window === 'undefined') return;
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.value = 0.0001;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    const t = ctx.currentTime;
+    const vol = Math.max(0.02, Math.min(0.2, (get(deviceNotificationSettings).volume || 100) / 500));
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    osc.start(t);
+    osc.stop(t + 0.2);
+    void ctx.resume();
+    setTimeout(() => void ctx.close(), 300);
+  } catch {
+    /* ignore */
+  }
+}
+
+async function showWebNotification(title: string, body: string): Promise<boolean> {
+  if (typeof Notification === 'undefined') return false;
+  try {
+    let permission = Notification.permission;
+    if (permission === 'default') {
+      permission = await Notification.requestPermission();
+    }
+    if (permission !== 'granted') return false;
+    const n = new Notification(title || 'AnixApp', {
+      body: body || '',
+      silent: !get(deviceNotificationSettings).soundEnabled,
+    });
+    setTimeout(() => n.close(), 6000);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function sendTestDeviceNotification(kind?: string): Promise<void> {
   const api = bridge();
-  if (!api) return;
   const key = typeof kind === 'string' && kind ? kind : 'episode';
+  if (api) {
+    try {
+      const [people, favorites] = await Promise.all([loadTestPeople(), loadTestFavorites()]);
+      await api.show(buildPersonalizedTest(key, people, favorites));
+      return;
+    } catch {
+      await api.test?.(key);
+      return;
+    }
+  }
   try {
     const [people, favorites] = await Promise.all([loadTestPeople(), loadTestFavorites()]);
-    await api.show(buildPersonalizedTest(key, people, favorites));
+    const payload = buildPersonalizedTest(key, people, favorites);
+    const ok = await showWebNotification(payload.title || 'AnixApp', payload.body || '');
+    if (!ok) await previewNotificationSound(get(deviceNotificationSettings).soundId);
   } catch {
-    await api.test(key);
+    await showWebNotification('AnixApp', 'Тестовое уведомление');
   }
 }
 
@@ -406,10 +536,22 @@ export async function endNotificationCornerPreview(): Promise<void> {
 
 /**
  * Показать уведомление устройства.
- * Если Electron недоступен — no-op (веб/TV/мобильная сборка).
+ * Electron — баннер/тост; иначе — Notification API браузера / WebView.
  */
 export async function showDeviceNotification(payload: DeviceNotificationPayload): Promise<void> {
-  await bridge()?.show(payload);
+  const s = get(deviceNotificationSettings);
+  if (!s.desktopEnabled || s.muted) return;
+
+  const api = bridge();
+  if (api) {
+    await api.show(payload);
+    return;
+  }
+
+  if (!s.useNativeNotifications) return;
+  const title = payload.title || 'AnixApp';
+  const body = s.showPreview ? (payload.body || '') : '';
+  await showWebNotification(title, body);
 }
 
 // ——— Дифф по опросу API и рассылка устройству ———

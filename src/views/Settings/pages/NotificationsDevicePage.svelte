@@ -16,7 +16,8 @@
     previewNotificationCorner,
     endNotificationCornerPreview,
     buildCornerPreviewItems,
-    hasDeviceNotifications,
+    listNotificationSounds,
+    hasDesktopBannerShell,
     type CornerPreviewItem,
   } from '../../../stores/device-notifications';
   import {
@@ -34,15 +35,14 @@
     'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg',
   ) || 'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg';
 
-  let hasElectron = $state(false);
+  /** Desktop-оболочка с баннерами в углу (Electron на Win/Mac/Linux). */
+  let hasBannerShell = $state(false);
   let loaded = $state(false);
   let sounds = $state<NotificationSoundOption[]>([]);
   let previewing = $state(false);
-  /** Угол под курсором — показываем стек примеров. */
+  /** Угол под курсором — живой стек только в desktop-оболочке. */
   let hoverPosition = $state<NotificationBannerPosition | null>(null);
-  /** Отложенный конец превью угла — чтобы не гаснуть при переходе между точками. */
   let cornerPreviewLeaveTimer: ReturnType<typeof setTimeout> | null = null;
-  /** Персонализированные примеры: друзья / избранное. */
   let stylePreviewPool = $state<CornerPreviewItem[]>([
     {
       title: 'Серия',
@@ -66,6 +66,9 @@
 
   const settings = $derived($deviceNotificationSettings);
   const stylePreviewItems = $derived(stylePreviewPool.slice(0, 3));
+  const deviceOn = $derived(settings.desktopEnabled);
+  /** Системные уведомления ОС — настройки приложения (звук, карточки) приглушены. */
+  const appNotifsInactive = $derived(settings.useNativeNotifications);
 
   function onBannerStyleChange(value: string) {
     save({ bannerStyle: value as NotificationBannerStyle });
@@ -79,7 +82,7 @@
   }
 
   function onCornerHover(pos: NotificationBannerPosition) {
-    if (!settings.desktopEnabled || !hasElectron) return;
+    if (!deviceOn || !hasBannerShell || appNotifsInactive) return;
     hoverPosition = pos;
     cancelCornerPreviewLeave();
     void previewNotificationCorner(pos);
@@ -118,7 +121,7 @@
   );
 
   function testKind(kind: NotificationKindId) {
-    void previewNotificationSound(settings.soundId);
+    // Звук только через канал доставки: ОС — системный, баннеры — мелодия приложения.
     void sendTestDeviceNotification(kind);
   }
 
@@ -131,24 +134,21 @@
   }
 
   async function load() {
-    hasElectron = hasDeviceNotifications();
-    if (hasElectron) {
-      await loadDeviceNotificationSettings();
-      // Режим «Не беспокоить» убран из UI — сбрасываем, если остался включённым.
-      if (get(deviceNotificationSettings).muted) {
-        await saveDeviceNotificationSettings({ muted: false });
-      }
-      try {
-        sounds = (await window.electron?.notifications?.listSounds?.()) ?? [];
-      } catch {
-        sounds = [];
-      }
-      try {
-        const items = await buildCornerPreviewItems();
-        if (items.length) stylePreviewPool = items;
-      } catch {
-        /* fallback samples остаются */
-      }
+    hasBannerShell = hasDesktopBannerShell();
+    await loadDeviceNotificationSettings();
+    if (get(deviceNotificationSettings).muted) {
+      await saveDeviceNotificationSettings({ muted: false });
+    }
+    try {
+      sounds = await listNotificationSounds();
+    } catch {
+      sounds = [];
+    }
+    try {
+      const items = await buildCornerPreviewItems();
+      if (items.length) stylePreviewPool = items;
+    } catch {
+      /* fallback samples */
     }
     loaded = true;
   }
@@ -190,167 +190,191 @@
   {#if !loaded}
     <p class="uiv2-settings__status">Загрузка…</p>
   {:else}
-    {#if hasElectron}
-      <section class="uiv2-settings__block">
-        <h3 class="uiv2-settings__title">Главное</h3>
-        <p class="uiv2-settings__desc">Включение, звук и быстрая проверка на этом ПК</p>
-        <div class="uiv2-settings__group">
-          <UiV2SettingsRow
-            title="Показывать на этом ПК"
-            desc="Баннеры в углу экрана и тосты Windows, даже когда окно свёрнуто"
-          >
-            <UiV2Toggle
-              label="Показывать на этом ПК"
-              checked={settings.desktopEnabled}
-              onChange={(v) => save({ desktopEnabled: v })}
+    <section class="uiv2-settings__block">
+      <h3 class="uiv2-settings__title">Главное</h3>
+      <p class="uiv2-settings__desc">Включение, звук и проверка на этом устройстве</p>
+      <div class="uiv2-settings__group">
+        <UiV2SettingsRow
+          title="Уведомления на устройстве"
+          desc="Показывать уведомления вне приложения — на любом экране, где вы работаете"
+        >
+          <UiV2Toggle
+            label="Уведомления на устройстве"
+            checked={settings.desktopEnabled}
+            onChange={(v) => save({ desktopEnabled: v })}
+          />
+        </UiV2SettingsRow>
+
+        <UiV2SettingsRow
+          title="Системные уведомления"
+          desc="Уведомления операционной системы (Windows, macOS, Linux, Android)"
+        >
+          <UiV2Toggle
+            label="Системные уведомления"
+            checked={settings.useNativeNotifications}
+            disabled={!deviceOn}
+            onChange={(v) =>
+              save({
+                useNativeNotifications: v,
+                customBannersEnabled: !v,
+              })
+            }
+          />
+        </UiV2SettingsRow>
+
+        <UiV2SettingsRow
+          title="Проверить"
+          desc="Отправить тестовое уведомление о новой серии"
+        >
+          <UiV2Button
+            label="Проверить"
+            variant="primary"
+            size="sm"
+            disabled={!deviceOn}
+            onclick={() => testKind('episode')}
+          />
+        </UiV2SettingsRow>
+      </div>
+
+      <div
+        class="uiv2-settings__group"
+        class:notif-app-banners--inactive={appNotifsInactive || !deviceOn}
+        aria-disabled={appNotifsInactive || !deviceOn}
+      >
+        <UiV2SettingsRow
+          title="Звук"
+          desc="Проигрывать звук при новом уведомлении"
+        >
+          <UiV2Toggle
+            label="Звук"
+            checked={settings.soundEnabled}
+            disabled={!deviceOn || appNotifsInactive}
+            onChange={(v) => save({ soundEnabled: v })}
+          />
+        </UiV2SettingsRow>
+
+        <UiV2SettingsRow title="Мелодия" stack>
+          <div class="notif-sound">
+            <UiV2Select
+              options={soundOptions}
+              value={settings.soundId}
+              disabled={!deviceOn || !settings.soundEnabled || appNotifsInactive}
+              ariaLabel="Мелодия уведомления"
+              onChange={onSoundChange}
             />
-          </UiV2SettingsRow>
-
-          <UiV2SettingsRow
-            title="Звук"
-            desc="Проигрывать звук при новом уведомлении"
-          >
-            <UiV2Toggle
-              label="Звук"
-              checked={settings.soundEnabled}
-              disabled={!settings.desktopEnabled}
-              onChange={(v) => save({ soundEnabled: v })}
-            />
-          </UiV2SettingsRow>
-
-          <UiV2SettingsRow title="Мелодия" stack>
-            <div class="notif-sound">
-              <UiV2Select
-                options={soundOptions}
-                value={settings.soundId}
-                disabled={!settings.desktopEnabled || !settings.soundEnabled}
-                ariaLabel="Мелодия уведомления"
-                onChange={onSoundChange}
-              />
-              <UiV2Button
-                label={previewing ? 'Играет…' : 'Прослушать'}
-                variant="chrome"
-                size="sm"
-                disabled={!settings.desktopEnabled || !settings.soundEnabled || settings.soundId === 'off' || settings.soundId === 'system'}
-                onclick={() => void preview()}
-              />
-            </div>
-          </UiV2SettingsRow>
-
-          <UiV2SettingsRow title="Громкость" stack>
-            <div class="notif-volume">
-              <span class="notif-volume__icon" aria-hidden="true">
-                {@html settings.volume <= 0 ? iconVolumeX(18) : iconVolume2(18)}
-              </span>
-              <input
-                class="notif-volume__range"
-                type="range"
-                min="0"
-                max="100"
-                step="1"
-                value={settings.volume}
-                disabled={!settings.desktopEnabled || !settings.soundEnabled}
-                aria-label="Громкость уведомлений"
-                oninput={onVolumeInput}
-                onchange={onVolumeCommit}
-              />
-              <span class="notif-volume__value">{volumePercent}%</span>
-            </div>
-          </UiV2SettingsRow>
-
-          <UiV2SettingsRow
-            title="Проверить"
-            desc="Отправить тестовое уведомление о новой серии"
-          >
             <UiV2Button
-              label="Проверить"
-              variant="primary"
+              label={previewing ? 'Играет…' : 'Прослушать'}
+              variant="chrome"
               size="sm"
-              disabled={!settings.desktopEnabled}
-              onclick={() => testKind('episode')}
+              disabled={!deviceOn || !settings.soundEnabled || appNotifsInactive || settings.soundId === 'off' || settings.soundId === 'system'}
+              onclick={() => void preview()}
             />
-          </UiV2SettingsRow>
-        </div>
-      </section>
-    {:else}
-      <p class="uiv2-settings__status">
-        Уведомления на устройстве (баннеры, тосты, звук) доступны только в приложении Electron.
-      </p>
-    {/if}
+          </div>
+        </UiV2SettingsRow>
+
+        <UiV2SettingsRow title="Громкость" stack>
+          <div class="notif-volume">
+            <span class="notif-volume__icon" aria-hidden="true">
+              {@html settings.volume <= 0 ? iconVolumeX(18) : iconVolume2(18)}
+            </span>
+            <input
+              class="notif-volume__range"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={settings.volume}
+              disabled={!deviceOn || !settings.soundEnabled || appNotifsInactive}
+              aria-label="Громкость уведомлений"
+              oninput={onVolumeInput}
+              onchange={onVolumeCommit}
+            />
+            <span class="notif-volume__value">{volumePercent}%</span>
+          </div>
+        </UiV2SettingsRow>
+      </div>
+    </section>
 
     <section class="uiv2-settings__block">
       <h3 class="uiv2-settings__title">События аккаунта</h3>
-      <p class="uiv2-settings__desc">Какие события приходят в колокольчик и на устройство</p>
+      <p class="uiv2-settings__desc">Какие события приходят в колокольчик и на все ваши устройства</p>
       <div class="notif-prefs-wrap">
         <NotificationPreferencesPanel embedded />
       </div>
     </section>
 
-    {#if hasElectron}
-      <section
-        class="uiv2-settings__block"
-        class:uiv2-settings__block--dimmed={!settings.desktopEnabled}
-      >
-        <h3 class="uiv2-settings__title">Уведомления</h3>
-        <p class="uiv2-settings__desc">Стиль карточки, угол экрана и размер стека</p>
-        <div class="uiv2-settings__group">
-          <UiV2SettingsRow title="Стиль карточки" stack>
-            <UiV2Select
-              options={styleOptions}
-              value={settings.bannerStyle}
-              disabled={!settings.desktopEnabled}
-              ariaLabel="Стиль карточки уведомления"
-              onChange={onBannerStyleChange}
-            />
+    <section
+      class="uiv2-settings__block"
+      class:notif-app-banners--inactive={appNotifsInactive || !deviceOn}
+      aria-disabled={appNotifsInactive || !deviceOn}
+    >
+      <h3 class="uiv2-settings__title">Уведомления приложения</h3>
+      <p class="uiv2-settings__desc">
+        {appNotifsInactive
+          ? 'Неактивно, пока включены системные уведомления ОС'
+          : hasBannerShell
+            ? 'Стиль карточки, угол экрана и размер стека'
+            : 'Стиль карточки для уведомлений AnixApp'}
+      </p>
+      <div class="uiv2-settings__group">
+        <UiV2SettingsRow title="Стиль карточки" stack>
+          <UiV2Select
+            options={styleOptions}
+            value={settings.bannerStyle}
+            disabled={!deviceOn || appNotifsInactive}
+            ariaLabel="Стиль карточки уведомления"
+            onChange={onBannerStyleChange}
+          />
+          <div
+            class="notif-style-live"
+            class:notif-style-live--disabled={!deviceOn || appNotifsInactive}
+            data-style={settings.bannerStyle}
+            data-position={settings.position}
+            aria-live="polite"
+          >
             <div
-              class="notif-style-live"
-              class:notif-style-live--disabled={!settings.desktopEnabled}
-              data-style={settings.bannerStyle}
-              data-position={settings.position}
-              aria-live="polite"
+              class="notif-style-live__stack notif-style-live__stack--{settings.position.startsWith('top') ? 'top' : 'bottom'}"
             >
-              <div
-                class="notif-style-live__stack notif-style-live__stack--{settings.position.startsWith('top') ? 'top' : 'bottom'}"
-              >
-                {#each stylePreviewItems as sample, i (sample.kind + settings.bannerStyle)}
-                  {@const img = sample.image || PREVIEW_IMAGE}
-                  {@const fullMedia = sample.kind === 'episode' || sample.kind === 'related' || sample.kind === 'release'}
-                  <article
-                    class="notif-style-live__card notif-style-live__card--{settings.bannerStyle}"
-                    class:notif-style-live__card--full-media={settings.bannerStyle === 'full' && fullMedia}
-                    class:notif-style-live__card--full-social={settings.bannerStyle === 'full' && !fullMedia}
-                    data-kind={sample.kind}
-                    style="animation-delay: {i * 45}ms"
-                  >
-                    {#if settings.bannerStyle === 'full' && fullMedia}
-                      <span class="notif-style-live__media" style="background-image:url('{img}')"></span>
-                      <span class="notif-style-live__scrim" aria-hidden="true"></span>
-                    {:else if settings.bannerStyle === 'full'}
-                      <span class="notif-style-live__avatar" style="background-image:url('{img}')"></span>
-                    {:else if settings.bannerStyle === 'compact'}
-                      <span class="notif-style-live__wash" style="background-image:url('{img}')" aria-hidden="true"></span>
-                      <span class="notif-style-live__tint" aria-hidden="true"></span>
-                      <span class="notif-style-live__thumb" style="background-image:url('{img}')"></span>
-                    {:else}
-                      <span class="notif-style-live__wash" style="background-image:url('{img}')" aria-hidden="true"></span>
-                      <span class="notif-style-live__tint" aria-hidden="true"></span>
+              {#each stylePreviewItems as sample, i (sample.kind + settings.bannerStyle)}
+                {@const img = sample.image || PREVIEW_IMAGE}
+                {@const fullMedia = sample.kind === 'episode' || sample.kind === 'related' || sample.kind === 'release'}
+                <article
+                  class="notif-style-live__card notif-style-live__card--{settings.bannerStyle}"
+                  class:notif-style-live__card--full-media={settings.bannerStyle === 'full' && fullMedia}
+                  class:notif-style-live__card--full-social={settings.bannerStyle === 'full' && !fullMedia}
+                  data-kind={sample.kind}
+                  style="animation-delay: {i * 45}ms"
+                >
+                  {#if settings.bannerStyle === 'full' && fullMedia}
+                    <span class="notif-style-live__media" style="background-image:url('{img}')"></span>
+                    <span class="notif-style-live__scrim" aria-hidden="true"></span>
+                  {:else if settings.bannerStyle === 'full'}
+                    <span class="notif-style-live__avatar" style="background-image:url('{img}')"></span>
+                  {:else if settings.bannerStyle === 'compact'}
+                    <span class="notif-style-live__wash" style="background-image:url('{img}')" aria-hidden="true"></span>
+                    <span class="notif-style-live__tint" aria-hidden="true"></span>
+                    <span class="notif-style-live__thumb" style="background-image:url('{img}')"></span>
+                  {:else}
+                    <span class="notif-style-live__wash" style="background-image:url('{img}')" aria-hidden="true"></span>
+                    <span class="notif-style-live__tint" aria-hidden="true"></span>
+                  {/if}
+                  <span class="notif-style-live__main">
+                    <span class="notif-style-live__kind">{sample.title}</span>
+                    <span class="notif-style-live__body">{@html emphasizeQuotes(sample.body)}</span>
+                    {#if settings.bannerStyle === 'full'}
+                      <span class="notif-style-live__time">только что</span>
                     {/if}
-                    <span class="notif-style-live__main">
-                      <span class="notif-style-live__kind">{sample.title}</span>
-                      <span class="notif-style-live__body">{@html emphasizeQuotes(sample.body)}</span>
-                      {#if settings.bannerStyle === 'full'}
-                        <span class="notif-style-live__time">только что</span>
-                      {/if}
-                    </span>
-                  </article>
-                {/each}
-              </div>
-              <p class="notif-style-live__hint">
-                Превью обновляется при смене стиля.
-              </p>
+                  </span>
+                </article>
+              {/each}
             </div>
-          </UiV2SettingsRow>
+            <p class="notif-style-live__hint">
+              Превью обновляется при смене стиля.
+            </p>
+          </div>
+        </UiV2SettingsRow>
 
+        {#if hasBannerShell}
           <div class="notif-position" role="radiogroup" aria-label="Угол экрана для уведомлений">
             <div
               class="notif-position__screen"
@@ -386,7 +410,7 @@
                   role="radio"
                   aria-checked={settings.position === pos.id}
                   aria-label={pos.label}
-                  disabled={!settings.desktopEnabled}
+                  disabled={!deviceOn || appNotifsInactive}
                   onmouseenter={() => onCornerHover(pos.id)}
                   onfocus={() => onCornerHover(pos.id)}
                   onblur={onCornerLeave}
@@ -421,7 +445,7 @@
                   class:notif-count__btn--on={settings.bannerCount === n}
                   role="radio"
                   aria-checked={settings.bannerCount === n}
-                  disabled={!settings.desktopEnabled}
+                  disabled={!deviceOn || appNotifsInactive}
                   onclick={() => {
                     void (async () => {
                       await save({ bannerCount: n });
@@ -436,96 +460,92 @@
               {/each}
             </div>
           </div>
-        </div>
-      </section>
+        {/if}
+      </div>
+    </section>
 
-      <section
-        class="uiv2-settings__block"
-        class:uiv2-settings__block--dimmed={!settings.desktopEnabled}
-      >
-        <details class="notif-advanced">
-          <summary class="notif-advanced__summary">
-            <span class="notif-advanced__title">Дополнительно</span>
-            <span class="notif-advanced__hint">Каналы доставки и поведение</span>
-          </summary>
+    <section
+      class="uiv2-settings__block"
+      class:uiv2-settings__block--dimmed={!deviceOn}
+    >
+      <details class="notif-advanced">
+        <summary class="notif-advanced__summary">
+          <span class="notif-advanced__title">Дополнительно</span>
+          <span class="notif-advanced__hint">Каналы доставки и поведение</span>
+        </summary>
 
-          <div class="notif-advanced__body">
-            <div class="uiv2-settings__group">
-              <UiV2SettingsRow
-                title="Центр уведомлений Windows"
-                desc="Системные тосты ОС в дополнение к карточкам AnixApp"
+        <div class="notif-advanced__body">
+          <div class="uiv2-settings__group">
+            <UiV2SettingsRow
+              title="Текст в уведомлении"
+              desc="Показывать текст события; иначе только тип"
+            >
+              <UiV2Toggle
+                label="Текст в уведомлении"
+                checked={settings.showPreview}
+                disabled={!deviceOn}
+                onChange={(v) => save({ showPreview: v })}
+              />
+            </UiV2SettingsRow>
+
+            <UiV2SettingsRow
+              title="Пока приложение открыто"
+              desc="Показывать уведомления и когда AnixApp уже в фокусе"
+            >
+              <UiV2Toggle
+                label="Пока приложение открыто"
+                checked={settings.showWhenFocused}
+                disabled={!deviceOn}
+                onChange={(v) => save({ showWhenFocused: v })}
+              />
+            </UiV2SettingsRow>
+
+            {#if hasBannerShell}
+              <div
+                class="notif-app-banners-opts"
+                class:notif-app-banners--inactive={appNotifsInactive}
+                aria-disabled={appNotifsInactive}
               >
-                <UiV2Toggle
-                  label="Центр уведомлений Windows"
-                  checked={settings.useNativeNotifications}
-                  disabled={!settings.desktopEnabled}
-                  onChange={(v) => save({ useNativeNotifications: v })}
-                />
-              </UiV2SettingsRow>
+                <UiV2SettingsRow
+                  title="Карточки в углу"
+                  desc="Свои баннеры AnixApp поверх окон"
+                >
+                  <UiV2Toggle
+                    label="Карточки в углу"
+                    checked={settings.customBannersEnabled}
+                    disabled={!deviceOn || appNotifsInactive}
+                    onChange={(v) => save({ customBannersEnabled: v })}
+                  />
+                </UiV2SettingsRow>
 
-              <UiV2SettingsRow
-                title="Карточки AnixApp"
-                desc="Свои баннеры в выбранном углу экрана"
-              >
-                <UiV2Toggle
-                  label="Карточки AnixApp"
-                  checked={settings.customBannersEnabled}
-                  disabled={!settings.desktopEnabled}
-                  onChange={(v) => save({ customBannersEnabled: v })}
-                />
-              </UiV2SettingsRow>
+                <UiV2SettingsRow
+                  title="Мигание в панели задач"
+                  desc="Подсвечивать иконку, если окно не в фокусе"
+                >
+                  <UiV2Toggle
+                    label="Мигание в панели задач"
+                    checked={settings.flashTaskbar}
+                    disabled={!deviceOn || appNotifsInactive}
+                    onChange={(v) => save({ flashTaskbar: v })}
+                  />
+                </UiV2SettingsRow>
 
-              <UiV2SettingsRow
-                title="Текст в уведомлении"
-                desc="Показывать текст события; иначе только тип"
-              >
-                <UiV2Toggle
-                  label="Текст в уведомлении"
-                  checked={settings.showPreview}
-                  disabled={!settings.desktopEnabled}
-                  onChange={(v) => save({ showPreview: v })}
-                />
-              </UiV2SettingsRow>
-
-              <UiV2SettingsRow
-                title="Пока AnixApp открыт"
-                desc="Показывать уведомления и когда окно уже в фокусе"
-              >
-                <UiV2Toggle
-                  label="Пока AnixApp открыт"
-                  checked={settings.showWhenFocused}
-                  disabled={!settings.desktopEnabled}
-                  onChange={(v) => save({ showWhenFocused: v })}
-                />
-              </UiV2SettingsRow>
-
-              <UiV2SettingsRow
-                title="Мигание в панели задач"
-                desc="Подсвечивать иконку, если окно не в фокусе"
-              >
-                <UiV2Toggle
-                  label="Мигание в панели задач"
-                  checked={settings.flashTaskbar}
-                  disabled={!settings.desktopEnabled}
-                  onChange={(v) => save({ flashTaskbar: v })}
-                />
-              </UiV2SettingsRow>
-
-              <UiV2SettingsRow
-                title="Поверх всех окон"
-                desc="Карточки остаются видимыми поверх полноэкранных приложений"
-              >
-                <UiV2Toggle
-                  label="Поверх всех окон"
-                  checked={settings.alwaysOnTop}
-                  disabled={!settings.desktopEnabled}
-                  onChange={(v) => save({ alwaysOnTop: v })}
-                />
-              </UiV2SettingsRow>
-            </div>
+                <UiV2SettingsRow
+                  title="Поверх всех окон"
+                  desc="Карточки остаются видимыми поверх полноэкранных приложений"
+                >
+                  <UiV2Toggle
+                    label="Поверх всех окон"
+                    checked={settings.alwaysOnTop}
+                    disabled={!deviceOn || appNotifsInactive}
+                    onChange={(v) => save({ alwaysOnTop: v })}
+                  />
+                </UiV2SettingsRow>
+              </div>
+            {/if}
           </div>
-        </details>
-      </section>
-    {/if}
+        </div>
+      </details>
+    </section>
   {/if}
 </div>

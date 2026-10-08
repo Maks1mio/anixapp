@@ -11228,6 +11228,29 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
   pointer-events: none;
 }
 
+.notif-app-banners--inactive {
+  opacity: 0.4;
+  pointer-events: none;
+  user-select: none;
+
+  /* Parent already dims — don't stack :disabled / --disabled opacities. */
+  .uiv2-toggle--disabled,
+  .uiv2-select--disabled,
+  .uiv2-btn:disabled,
+  .notif-style-live--disabled,
+  :disabled {
+    opacity: 1;
+  }
+}
+
+.notif-app-banners-opts {
+  border-top: 1px solid var(--uiv2-border-subtle);
+
+  .uiv2-settings__row + .uiv2-settings__row {
+    border-top: 1px solid var(--uiv2-border-subtle);
+  }
+}
+
 .notif-advanced {
   margin: 0;
   border-radius: 20px;

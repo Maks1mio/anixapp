@@ -11228,6 +11228,11 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
   flex-direction: column;
   align-items: center;
   gap: 0.6rem;
+  padding: 0.9rem 1rem 0.85rem;
+}
+
+.notif-position + .uiv2-settings__row {
+  border-top: 1px solid var(--uiv2-border-subtle);
 }
 
 .notif-position__screen {
@@ -11294,17 +11299,46 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
   overflow: hidden;
 
   .notifications-modal__settings {
-    padding: 0.35rem 0.15rem 0.5rem;
+    gap: 0;
+    padding: 0;
   }
 
   .notifications-modal__pref-section {
     margin: 0;
-    padding: 0.65rem 0.85rem 0.85rem;
+    padding: 0.75rem 1rem 0.35rem;
     border-top: 1px solid var(--uiv2-border-subtle);
 
     &:first-child {
       border-top: none;
     }
+
+    &:last-child {
+      padding-bottom: 0.35rem;
+    }
+  }
+
+  .notifications-modal__pref-section-title {
+    margin: 0 0 0.15rem;
+    padding: 0;
+  }
+
+  .notifications-modal__pref-row {
+    padding: 0.65rem 0;
+    align-items: flex-start;
+
+    .uiv2-toggle,
+    .notifications-modal__pref-chevron {
+      margin-top: 0.15rem;
+    }
+  }
+
+  .notifications-modal__pref-link {
+    margin-top: 0;
+    padding: 0.65rem 0;
+  }
+
+  .notifications-modal__scope-cards {
+    padding: 0.25rem 0 0.5rem;
   }
 }
 
@@ -11426,8 +11460,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
   }
 }
 
-.notif-sound,
-.notif-kind-row {
+.notif-sound {
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -11441,17 +11474,48 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
 
 /* Живой превью внешнего вида баннера в настройках */
 .notif-style-live {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
   width: 100%;
   margin-top: 0.55rem;
-  padding: 0.75rem;
+  padding: 0.85rem;
   border-radius: 14px;
   border: 1px solid var(--uiv2-border-subtle, rgba(255, 255, 255, 0.08));
-  background:
-    radial-gradient(120% 80% at 10% 0%, color-mix(in srgb, var(--uikit-v2-accent, #e35454) 10%, transparent), transparent 55%),
-    var(--uiv2-surface-raised, rgba(255, 255, 255, 0.03));
+  overflow: hidden;
+  background: #141416;
+  isolation: isolate;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background:
+      url('../assets/media/notifbanner.png') center / cover no-repeat;
+    filter: blur(3.5px);
+    pointer-events: none;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(12, 12, 14, 0.42) 0%,
+      rgba(12, 12, 14, 0.55) 55%,
+      rgba(12, 12, 14, 0.72) 100%
+    );
+    pointer-events: none;
+  }
+
+  > * {
+    position: relative;
+    z-index: 1;
+  }
 }
 
 .notif-style-live--disabled {
@@ -11459,57 +11523,10 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
   pointer-events: none;
 }
 
-.notif-style-live__toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.notif-style-live__label {
-  font-size: 0.78rem;
-  font-weight: 650;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--uiv2-fg-muted, #9a9a9a);
-}
-
-.notif-style-live__actions {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.notif-style-live__chip {
-  min-width: 1.85rem;
-  height: 1.85rem;
-  padding: 0 0.45rem;
-  border-radius: 8px;
-  border: 1px solid var(--uiv2-border-subtle, rgba(255, 255, 255, 0.1));
-  background: transparent;
-  color: var(--uiv2-fg-muted, #9a9a9a);
-  font: inherit;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-
-  &:hover {
-    color: var(--uikit-v2-text, #eee);
-    background: color-mix(in srgb, #fff 6%, transparent);
-  }
-
-  &--on {
-    color: var(--uikit-v2-text, #fff);
-    border-color: color-mix(in srgb, var(--uikit-v2-accent, #e35454) 55%, transparent);
-    background: color-mix(in srgb, var(--uikit-v2-accent, #e35454) 16%, transparent);
-  }
-}
-
 .notif-style-live__stack {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 0.55rem;
   min-height: 4.5rem;
 }
@@ -11524,13 +11541,14 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
 
 .notif-style-live__card {
   --nsl-accent: #e35454;
-  --nsl-tint: #2a2224;
-  --nsl-scrim: #1f2735;
+  --nsl-tint: #222226;
+  --nsl-scrim: #1c1c1e;
   position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
+  max-width: 100%;
   padding: 14px;
   border-radius: 6px;
   border: none;
@@ -11544,25 +11562,27 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
     min-height 0.3s ease,
     padding 0.3s ease;
 
-  &[data-kind='episode'] { --nsl-accent: #448cf6; --nsl-tint: #1f2735; --nsl-scrim: #1f2735; }
-  &[data-kind='comment'] { --nsl-accent: #f472b6; --nsl-tint: #2f1c28; --nsl-scrim: #2f1c28; }
-  &[data-kind='friend'] { --nsl-accent: #a78bfa; --nsl-tint: #262038; --nsl-scrim: #262038; }
-  &[data-kind='friend-accept'] { --nsl-accent: #34d399; --nsl-tint: #1b3028; --nsl-scrim: #1b3028; }
-  &[data-kind='article'] { --nsl-accent: #ffa800; --nsl-tint: #2d271b; --nsl-scrim: #2d271b; }
-  &[data-kind='related'] { --nsl-accent: #15c86a; --nsl-tint: #1b3025; --nsl-scrim: #1b3025; }
+  &[data-kind='episode'] { --nsl-accent: #448cf6; }
+  &[data-kind='comment'] { --nsl-accent: #f472b6; }
+  &[data-kind='friend'] { --nsl-accent: #a78bfa; }
+  &[data-kind='friend-accept'] { --nsl-accent: #34d399; }
+  &[data-kind='article'] { --nsl-accent: #ffa800; }
+  &[data-kind='related'] { --nsl-accent: #15c86a; }
 
   &--full-media {
     flex-direction: column;
     justify-content: flex-end;
     align-items: stretch;
     gap: 12px;
-    padding: 160px 14px 14px;
+    width: 225px;
+    max-width: 100%;
+    padding: 206px 14px 14px;
     min-height: 0;
   }
 
   &--full-social {
     min-height: 5.5rem;
-    background: linear-gradient(90deg, var(--nsl-tint) 0%, #1c1c1e 42%, #1c1c1e 65%);
+    background: #1c1c1e;
   }
 
   &--compact {
@@ -11704,7 +11724,8 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
   margin: 0;
   font-size: 0.75rem;
   line-height: 1.35;
-  color: var(--uiv2-fg-muted, #8a8a8a);
+  color: color-mix(in srgb, #fff 72%, transparent);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 
 .notif-volume {

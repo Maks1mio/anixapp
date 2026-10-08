@@ -19,19 +19,19 @@
     type CornerPreviewItem,
   } from '../../../stores/device-notifications';
   import {
-    NOTIFICATION_KINDS,
-    CALL_MODE_OPTIONS,
     BANNER_STYLE_OPTIONS,
-    type NotificationCallMode,
     type NotificationBannerStyle,
     type NotificationKindId,
   } from '../../../utils/notification-kinds';
+  import { resolveCdnAssetUrl } from '../../../utils/posterUrl';
   import type {
     NotificationBannerPosition,
     NotificationSoundOption,
   } from '../../../types/electron';
 
-  const PREVIEW_IMAGE = 'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg';
+  const PREVIEW_IMAGE = resolveCdnAssetUrl(
+    'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg',
+  ) || 'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg';
 
   let hasElectron = $state(false);
   let loaded = $state(false);
@@ -39,8 +39,6 @@
   let previewing = $state(false);
   /** Угол под курсором — показываем стек примеров. */
   let hoverPosition = $state<NotificationBannerPosition | null>(null);
-  /** Живой превью-стек: сколько карточек показывать (1–3). */
-  let stylePreviewCount = $state(2);
   /** Отложенный конец превью угла — чтобы не гаснуть при переходе между точками. */
   let cornerPreviewLeaveTimer: ReturnType<typeof setTimeout> | null = null;
   /** Персонализированные примеры: друзья / избранное. */
@@ -66,7 +64,7 @@
   ]);
 
   const settings = $derived($deviceNotificationSettings);
-  const stylePreviewItems = $derived(stylePreviewPool.slice(0, stylePreviewCount));
+  const stylePreviewItems = $derived(stylePreviewPool.slice(0, 3));
 
   function onBannerStyleChange(value: string) {
     save({ bannerStyle: value as NotificationBannerStyle });
@@ -114,17 +112,9 @@
     sounds.map((s) => ({ value: s.id, label: s.label, desc: s.desc })),
   );
 
-  const callModeOptions = $derived<UiV2SelectOption[]>(
-    CALL_MODE_OPTIONS.map((o) => ({ value: o.value, label: o.label, desc: o.desc })),
-  );
-
   const styleOptions = $derived<UiV2SelectOption[]>(
     BANNER_STYLE_OPTIONS.map((o) => ({ value: o.value, label: o.label, desc: o.desc })),
   );
-
-  function saveTypeChannel(kind: NotificationKindId, mode: NotificationCallMode) {
-    save({ typeChannels: { ...settings.typeChannels, [kind]: mode } });
-  }
 
   function testKind(kind: NotificationKindId) {
     void previewNotificationSound(settings.soundId);
@@ -283,39 +273,6 @@
               data-position={settings.position}
               aria-live="polite"
             >
-              <div class="notif-style-live__toolbar">
-                <span class="notif-style-live__label">Живой пример</span>
-                <div class="notif-style-live__actions">
-                  <button
-                    type="button"
-                    class="notif-style-live__chip"
-                    class:notif-style-live__chip--on={stylePreviewCount === 1}
-                    disabled={!settings.desktopEnabled}
-                    onclick={() => { stylePreviewCount = 1; }}
-                  >1</button>
-                  <button
-                    type="button"
-                    class="notif-style-live__chip"
-                    class:notif-style-live__chip--on={stylePreviewCount === 2}
-                    disabled={!settings.desktopEnabled}
-                    onclick={() => { stylePreviewCount = 2; }}
-                  >2</button>
-                  <button
-                    type="button"
-                    class="notif-style-live__chip"
-                    class:notif-style-live__chip--on={stylePreviewCount === 3}
-                    disabled={!settings.desktopEnabled}
-                    onclick={() => { stylePreviewCount = 3; }}
-                  >3</button>
-                  <UiV2Button
-                    label="На экран"
-                    variant="chrome"
-                    size="sm"
-                    disabled={!settings.desktopEnabled}
-                    onclick={() => testKind('episode')}
-                  />
-                </div>
-              </div>
               <div
                 class="notif-style-live__stack notif-style-live__stack--{settings.position.startsWith('top') ? 'top' : 'bottom'}"
               >
@@ -353,7 +310,7 @@
                 {/each}
               </div>
               <p class="notif-style-live__hint">
-                Меняйте стиль выше — превью обновляется сразу. «На экран» — реальный баннер в выбранном углу.
+                Меняйте стиль выше — превью обновляется сразу.
               </p>
             </div>
           </UiV2SettingsRow>
@@ -397,37 +354,8 @@
       </section>
 
       <section class="uiv2-settings__block">
-        <h3 class="uiv2-settings__title">Вариации вызова по типу</h3>
-        <p class="uiv2-settings__desc">
-          Как вызывать устройство для каждого типа: серии, записи, друзья, комментарии, релизы
-        </p>
-        <div class="uiv2-settings__group">
-          {#each NOTIFICATION_KINDS as kind (kind.id)}
-            <UiV2SettingsRow title={kind.label} desc={kind.desc} stack>
-              <div class="notif-kind-row">
-                <UiV2Select
-                  options={callModeOptions}
-                  value={settings.typeChannels[kind.id] ?? 'both'}
-                  disabled={!settings.desktopEnabled}
-                  ariaLabel={`Вызов для: ${kind.label}`}
-                  onChange={(v) => saveTypeChannel(kind.id, v as NotificationCallMode)}
-                />
-                <UiV2Button
-                  label="Проверить"
-                  variant="chrome"
-                  size="sm"
-                  disabled={!settings.desktopEnabled || (settings.typeChannels[kind.id] ?? 'both') === 'off'}
-                  onclick={() => testKind(kind.id)}
-                />
-              </div>
-            </UiV2SettingsRow>
-          {/each}
-        </div>
-      </section>
-
-      <section class="uiv2-settings__block">
         <h3 class="uiv2-settings__title">Расположение на экране</h3>
-        <div class="uiv2-settings__group uiv2-settings__group--pad">
+        <div class="uiv2-settings__group">
           <div class="notif-position" role="radiogroup" aria-label="Положение баннеров на экране">
             <div
               class="notif-position__screen"

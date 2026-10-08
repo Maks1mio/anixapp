@@ -483,7 +483,7 @@
           >
             <div class="notifications-modal__pref-text">
               <span class="notifications-modal__pref-label">Уведомления от озвучек</span>
-              <span class="notifications-modal__pref-hint">{typeSummary}</span>
+              <span class="notifications-modal__pref-hint notifications-modal__pref-hint--clamp-3">{typeSummary}</span>
             </div>
             <span class="notifications-modal__pref-chevron">{@html iconChevronRight(16)}</span>
           </button>

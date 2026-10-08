@@ -458,9 +458,8 @@ function createService(deps) {
     if (!allowed.has(position)) return false;
     const settings = config.getNotificationSettings();
     const hasCustom = Array.isArray(customItems) && customItems.length > 0;
-    const count = hasCustom
-      ? Math.min(5, Math.max(1, customItems.length))
-      : Math.min(5, Math.max(1, settings.bannerCount || 3));
+    // Всегда лимит из настроек — customItems только контент, не количество.
+    const count = Math.min(5, Math.max(1, settings.bannerCount || 3));
     const styleKey = settings.bannerStyle === 'rich' ? 'compact' : settings.bannerStyle;
     const styleH = ({ full: 300, compact: 72, minimal: 72 })[styleKey] || BANNER_ITEM_HEIGHT;
     const gap = BANNER_ITEM_GAP;
@@ -472,7 +471,7 @@ function createService(deps) {
     const prevPos = cornerPreview?.position;
     const prevCount = cornerPreview?.items?.length || 0;
     if (prevPos && prevPos !== position && !hasCustom) {
-      // Fade РЅР° СЃС‚Р°СЂРѕРј СѓРіР»Сѓ (РІС‹СЃРѕС‚Сѓ РЅРµ С‚СЂРѕРіР°РµРј) в†’ РѕРєРЅРѕ РІ РЅРѕРІС‹Р№ СѓРіРѕР» в†’ РїРѕСЏРІР»РµРЅРёРµ.
+      // Fade на старом углу (высоту не трогаем) → окно в новый угол → появление.
       cornerPreview = { position: prevPos, items: [] };
       if (bannerReady) flushBanners();
       setTimeout(() => {
@@ -491,8 +490,8 @@ function createService(deps) {
       return true;
     }
 
-    // Тот же угол без кастома — не дёргаем, если уже показано.
-    if (!hasCustom && prevPos === position && prevCount === count && cornerPreview?.items?.length) {
+    // Тот же угол и тот же лимит — не дёргаем (кастомный контент обновляем при смене count).
+    if (prevPos === position && prevCount === count && cornerPreview?.items?.length) {
       return true;
     }
 

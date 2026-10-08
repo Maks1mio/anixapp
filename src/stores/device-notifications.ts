@@ -2,10 +2,10 @@ import { get, writable } from 'svelte/store';
 import { isAuthenticated } from './auth';
 import { fetchAllNotifications } from './notifications';
 import { parseNotification } from '../utils/notification-format';
-import { fromCdnProxyUrl, resolveCdnAssetUrl } from '../utils/posterUrl';
+import { resolveCdnAssetUrl } from '../utils/posterUrl';
 import type { DeviceNotificationSettings, DeviceNotificationPayload } from '../types/electron';
 
-const FALLBACK_TEST_IMAGE = 'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg';
+const FALLBACK_TEST_IMAGE_RAW = 'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg';
 
 type TestPerson = { name: string; image: string; isSelf?: boolean };
 type TestAnime = { title: string; image: string };
@@ -15,15 +15,18 @@ let testPeopleCachedAt = 0;
 let testFavoritesCache: TestAnime[] = [];
 let testFavoritesCachedAt = 0;
 
+/** CDN без Referer отдаёт пустышку — для UI нужен anix-cdn:// / __cdn прокси. */
+function fallbackTestImage(): string {
+  return resolveCdnAssetUrl(FALLBACK_TEST_IMAGE_RAW) || FALLBACK_TEST_IMAGE_RAW;
+}
+
 function personImage(raw: unknown): string {
-  if (typeof raw !== 'string' || !raw.trim()) return FALLBACK_TEST_IMAGE;
-  const proxied = resolveCdnAssetUrl(raw);
-  const https = fromCdnProxyUrl(proxied);
-  return https.startsWith('http') ? https : FALLBACK_TEST_IMAGE;
+  if (typeof raw !== 'string' || !raw.trim()) return fallbackTestImage();
+  return resolveCdnAssetUrl(raw) || fallbackTestImage();
 }
 
 function pickPerson(people: TestPerson[]): TestPerson {
-  if (!people.length) return { name: 'AnixUser', image: FALLBACK_TEST_IMAGE };
+  if (!people.length) return { name: 'AnixUser', image: fallbackTestImage() };
   return people[Math.floor(Math.random() * people.length)]!;
 }
 
@@ -33,7 +36,7 @@ function friendsOnly(people: TestPerson[]): TestPerson[] {
 }
 
 function pickAnime(list: TestAnime[], fallbackTitle = 'Необъятный океан 3'): TestAnime {
-  if (!list.length) return { title: fallbackTitle, image: FALLBACK_TEST_IMAGE };
+  if (!list.length) return { title: fallbackTitle, image: fallbackTestImage() };
   return list[Math.floor(Math.random() * list.length)]!;
 }
 
@@ -208,7 +211,7 @@ function buildPersonalizedTest(
           'Превью баннера и системного тоста',
           'Проверка звука и внешнего вида',
         ]),
-        image: anime.image !== FALLBACK_TEST_IMAGE ? anime.image : a.image,
+        image: anime.image !== fallbackTestImage() ? anime.image : a.image,
         kind: 'default',
         force: true,
       };

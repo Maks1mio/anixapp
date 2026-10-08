@@ -27,6 +27,7 @@ export default [
       'release/**',
       'dist*/**',
       'scripts/**',
+      'src/vendor/**',
       '**/*.worklet.js',
       '**/*.min.js',
       'electron/**/*.html',
@@ -76,6 +77,7 @@ export default [
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/ban-ts-comment': 'warn',
       '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/triple-slash-reference': 'off',
     },
   },
   {
@@ -95,6 +97,9 @@ export default [
       'svelte/no-at-html-tags': 'warn',
       'svelte/no-unused-svelte-ignore': 'warn',
       'svelte/require-each-key': 'warn',
+      // Preference: не всегда баг (кэши/не-UI Map/Set) — не блокируем lint
+      'svelte/prefer-svelte-reactivity': 'off',
+      'svelte/prefer-writable-derived': 'warn',
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': [
         'warn',

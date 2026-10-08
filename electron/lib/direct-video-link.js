@@ -208,7 +208,7 @@ function parseLibriaFileField(raw) {
   if (!raw) return null;
   const cleaned = String(raw).replace(/\\\//g, '/');
   const qualityMap = {};
-  const qualRe = /\[(\d+)p\]([^,\[]+)/g;
+  const qualRe = /\[(\d+)p\]([^,[]+)/g;
   let m;
   while ((m = qualRe.exec(cleaned)) !== null) {
     const src = m[2].trim();

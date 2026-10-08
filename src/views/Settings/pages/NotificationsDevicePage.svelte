@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { get } from 'svelte/store';
   import UiV2Toggle from '../../../components/uikit-v2/UiV2Toggle.svelte';
   import UiV2SettingsRow from '../../../components/uikit-v2/UiV2SettingsRow.svelte';
   import UiV2Button from '../../../components/uikit-v2/UiV2Button.svelte';
@@ -69,6 +68,10 @@
   const deviceOn = $derived(settings.desktopEnabled);
   /** Системные уведомления ОС — настройки приложения (звук, карточки) приглушены. */
   const appNotifsInactive = $derived(settings.useNativeNotifications);
+  /** Есть канал доставки: ОС или баннеры приложения. */
+  const canDeliver = $derived(
+    deviceOn && (settings.useNativeNotifications || settings.customBannersEnabled),
+  );
 
   function onBannerStyleChange(value: string) {
     save({ bannerStyle: value as NotificationBannerStyle });
@@ -136,9 +139,6 @@
   async function load() {
     hasBannerShell = hasDesktopBannerShell();
     await loadDeviceNotificationSettings();
-    if (get(deviceNotificationSettings).muted) {
-      await saveDeviceNotificationSettings({ muted: false });
-    }
     try {
       sounds = await listNotificationSounds();
     } catch {
@@ -224,13 +224,15 @@
 
         <UiV2SettingsRow
           title="Проверить"
-          desc="Отправить тестовое уведомление о новой серии"
+          desc={canDeliver
+            ? 'Отправить тестовое уведомление о новой серии'
+            : 'Включите системные уведомления или карточки приложения'}
         >
           <UiV2Button
             label="Проверить"
             variant="primary"
             size="sm"
-            disabled={!deviceOn}
+            disabled={!canDeliver}
             onclick={() => testKind('episode')}
           />
         </UiV2SettingsRow>
@@ -500,11 +502,23 @@
               />
             </UiV2SettingsRow>
 
+            <UiV2SettingsRow
+              title="Мигание в панели задач"
+              desc="Подсвечивать иконку, если окно не в фокусе"
+            >
+              <UiV2Toggle
+                label="Мигание в панели задач"
+                checked={settings.flashTaskbar}
+                disabled={!deviceOn}
+                onChange={(v) => save({ flashTaskbar: v })}
+              />
+            </UiV2SettingsRow>
+
             {#if hasBannerShell}
               <div
                 class="notif-app-banners-opts"
-                class:notif-app-banners--inactive={appNotifsInactive}
-                aria-disabled={appNotifsInactive}
+                class:notif-app-banners--inactive={appNotifsInactive && deviceOn}
+                aria-disabled={appNotifsInactive && deviceOn}
               >
                 <UiV2SettingsRow
                   title="Карточки в углу"
@@ -514,19 +528,12 @@
                     label="Карточки в углу"
                     checked={settings.customBannersEnabled}
                     disabled={!deviceOn || appNotifsInactive}
-                    onChange={(v) => save({ customBannersEnabled: v })}
-                  />
-                </UiV2SettingsRow>
-
-                <UiV2SettingsRow
-                  title="Мигание в панели задач"
-                  desc="Подсвечивать иконку, если окно не в фокусе"
-                >
-                  <UiV2Toggle
-                    label="Мигание в панели задач"
-                    checked={settings.flashTaskbar}
-                    disabled={!deviceOn || appNotifsInactive}
-                    onChange={(v) => save({ flashTaskbar: v })}
+                    onChange={(v) =>
+                      save({
+                        customBannersEnabled: v,
+                        useNativeNotifications: !v,
+                      })
+                    }
                   />
                 </UiV2SettingsRow>
 

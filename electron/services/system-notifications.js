@@ -286,32 +286,32 @@ function createService(deps) {
     const n = Math.min(5, Math.max(1, count || 3));
     const fallback = [
       {
-        title: 'РЎРµСЂРёСЏ',
-        body: 'Р’С‹С€Р»Р° В«11 СЃРµСЂРёСЏВ» В«РќРµРѕР±СЉСЏС‚РЅС‹Р№ РѕРєРµР°РЅ 3В» В· JAM CLUB В· Kodik',
+        title: 'Серия',
+        body: 'Вышла «11 серия» «Необъятный океан 3» · JAM CLUB · Kodik',
         kind: 'episode',
         image: SAMPLE_POSTER,
       },
       {
-        title: 'РљРѕРјРјРµРЅС‚Р°СЂРёР№',
-        body: 'В«PIKA_4YВ»: Р·Р°С†РµРЅРё РЅРѕРІСѓСЋ СЃРµСЂРёСЋ!',
+        title: 'Комментарий',
+        body: '«PIKA_4Y»: зацени новую серию!',
         kind: 'comment',
         image: SAMPLE_POSTER,
       },
       {
-        title: 'Р”СЂСѓР·СЊСЏ',
-        body: 'В«FlexHunterZВ» РґРѕР±Р°РІРёР» РІР°СЃ РІ РґСЂСѓР·СЊСЏ',
+        title: 'Друзья',
+        body: '«FlexHunterZ» добавил вас в друзья',
         kind: 'friend',
         image: SAMPLE_POSTER,
       },
       {
-        title: 'Р—Р°РїРёСЃСЊ',
-        body: 'В«РњР°СЃС‚РµСЂСЃРєР°СЏ РњРёР·РѕСЂРёВ»: СЃРІРµР¶РёР№ РїРѕСЃС‚ РІ Р»РµРЅС‚Рµ',
+        title: 'Запись',
+        body: '«Мастерская Мизори»: свежий пост в ленте',
         kind: 'article',
         image: SAMPLE_POSTER,
       },
       {
-        title: 'Р РµР»РёР·',
-        body: 'Р”РѕР±Р°РІР»РµРЅР° СЃС‚СЂР°РЅРёС†Р° СЂРµР»РёР·Р° В«РљР°Рµ РЅРµ СЃС‚СЂР°С€РЅРѕВ»',
+        title: 'Релиз',
+        body: 'Добавлена страница релиза «Кае не страшно»',
         kind: 'related',
         image: SAMPLE_POSTER,
       },
@@ -491,8 +491,13 @@ function createService(deps) {
       return true;
     }
 
-    // Тот же угол и тот же лимит — не дёргаем (кастомный контент обновляем при смене count).
-    if (prevPos === position && prevCount === count && cornerPreview?.items?.length) {
+    // Тот же угол/лимит без нового контента — не дёргаем; custom всегда обновляем.
+    if (
+      !hasCustom
+      && prevPos === position
+      && prevCount === count
+      && cornerPreview?.items?.length
+    ) {
       return true;
     }
 
@@ -809,10 +814,14 @@ function createService(deps) {
     }
 
     const wantBanner = !!settings.customBannersEnabled;
+    // Страховка: оба канала off → системные (как в config normalize).
+    if (!wantBanner) {
+      return { wantNative: true, wantBanner: false, wantSound: false };
+    }
     return {
       wantNative: false,
-      wantBanner,
-      wantSound: !!settings.soundEnabled && wantBanner,
+      wantBanner: true,
+      wantSound: !!settings.soundEnabled,
     };
   }
 
@@ -834,7 +843,7 @@ function createService(deps) {
     const title = payload.title || 'AnixApp';
     const displayBody = settings.showPreview
       ? (settings.bannerStyle === 'minimal' ? '' : (payload.body || ''))
-      : 'РЈ РІР°СЃ РЅРѕРІРѕРµ СѓРІРµРґРѕРјР»РµРЅРёРµ';
+      : 'У вас новое уведомление';
 
     const openDeepLink = (link) => {
       const type = typeof link?.type === 'string' ? link.type : '';
@@ -922,38 +931,38 @@ function createService(deps) {
     ipcMain.handle('notifications:test', (_, kind) => {
       const samples = {
         episode: {
-          title: 'РЎРµСЂРёСЏ',
-          body: 'Р’С‹С€Р»Р° В«11 СЃРµСЂРёСЏВ» В«РќРµРѕР±СЉСЏС‚РЅС‹Р№ РѕРєРµР°РЅ 3В» В· JAM CLUB В· Kodik',
+          title: 'Серия',
+          body: 'Вышла «11 серия» «Необъятный океан 3» · JAM CLUB · Kodik',
           kind: 'episode',
           image: SAMPLE_POSTER,
         },
         article: {
-          title: 'Р—Р°РїРёСЃСЊ',
-          body: 'В«РњР°СЃС‚РµСЂСЃРєР°СЏ РњРёР·РѕСЂРёВ»: СЃРІРµР¶РёР№ РїРѕСЃС‚ РІ Р»РµРЅС‚Рµ вЂ” Р·Р°РіР»СЏРЅРё',
+          title: 'Запись',
+          body: '«Мастерская Мизори»: свежий пост в ленте — загляни',
           kind: 'article',
           image: SAMPLE_POSTER,
         },
         friend: {
-          title: 'Р”СЂСѓР·СЊСЏ',
-          body: 'В«PieyonВ» РґРѕР±Р°РІРёР» РІР°СЃ РІ РґСЂСѓР·СЊСЏ',
+          title: 'Друзья',
+          body: '«Pieyon» добавил вас в друзья',
           kind: 'friend',
           image: SAMPLE_POSTER,
         },
         comment: {
-          title: 'РљРѕРјРјРµРЅС‚Р°СЂРёР№',
-          body: 'В«Р—РѕРІРёС‚Рµ РјРµРЅСЏ Р“СѓСЃС‚Р°РІВ»: Р·Р°С†РµРЅРё РЅРѕРІСѓСЋ СЃРµСЂРёСЋ!',
+          title: 'Комментарий',
+          body: '«Зовите меня Густав»: зацени новую серию!',
           kind: 'comment',
           image: SAMPLE_POSTER,
         },
         release: {
-          title: 'Р РµР»РёР·',
-          body: 'Р”РѕР±Р°РІР»РµРЅР° СЃС‚СЂР°РЅРёС†Р° СЂРµР»РёР·Р° В«РќРµРѕР±СЉСЏС‚РЅС‹Р№ РѕРєРµР°РЅ 3В»',
+          title: 'Релиз',
+          body: 'Добавлена страница релиза «Необъятный океан 3»',
           kind: 'related',
           image: SAMPLE_POSTER,
         },
         default: {
           title: 'AnixApp',
-          body: 'РџСЂРµРІСЊСЋ Р±Р°РЅРЅРµСЂР° Рё СЃРёСЃС‚РµРјРЅРѕРіРѕ С‚РѕСЃС‚Р°',
+          body: 'Превью баннера и системного тоста',
           kind: 'default',
           image: SAMPLE_POSTER,
         },

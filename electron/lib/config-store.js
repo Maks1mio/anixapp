@@ -386,14 +386,26 @@ function normalizeNotificationSettings(raw) {
   return {
     /** Мастер-выключатель уведомлений устройства. */
     desktopEnabled: src.desktopEnabled !== false,
-    /** Нативные уведомления ОС (Windows Action Center и т.п.). */
-    useNativeNotifications: src.useNativeNotifications !== false,
     /**
-     * Свои баннеры поверх окна.
-     * Взаимоисключающе с useNativeNotifications: при ОС-канале баннеры выключены.
+     * Системные и баннеры приложения взаимоисключающие.
+     * Никогда оба off: при конфликте предпочитаем системные.
      */
-    customBannersEnabled:
-      src.useNativeNotifications === false && src.customBannersEnabled !== false,
+    ...(() => {
+      let useNative = src.useNativeNotifications !== false;
+      let customBanners =
+        src.useNativeNotifications === false && src.customBannersEnabled !== false;
+      if (!useNative && !customBanners) {
+        useNative = true;
+        customBanners = false;
+      }
+      if (useNative && customBanners) {
+        customBanners = false;
+      }
+      return {
+        useNativeNotifications: useNative,
+        customBannersEnabled: customBanners,
+      };
+    })(),
     /** Показывать превью текста в баннере/тосте. */
     showPreview: src.showPreview !== false,
     /** Мигать иконкой в панели задач. */

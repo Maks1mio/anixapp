@@ -1500,7 +1500,7 @@
   gap: 0.65rem;
 }
 
-// ââ UI Kit V2 components âââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── UI Kit V2 components ─────────────────────────────────────────────────────
 
 .uiv2-btn {
   --uiv2-btn-icon: 1rem;
@@ -1766,7 +1766,7 @@
     height: 2.6rem;
   }
 
-  // Ð pill-bar ÑÑÑÐµÐ»ÐºÐ¸ Ð¿Ð¾ ÑÐ¼Ð¾Ð»ÑÐ°Ð½Ð¸Ñ ÑÐ²ÑÑÐ½ÑÑÑ, Ð¿Ð¾ÑÐ²Ð»ÑÑÑÑÑ Ð½Ð° hover / alwaysShowArrows
+  // В pill-bar стрелки по умолчанию свёрнуты, появляются на hover / alwaysShowArrows
   .uiv2-pill-bar:not(.uiv2-pill-bar--arrows) & {
     width: 0;
     margin: 0;
@@ -1868,7 +1868,7 @@
   user-select: none;
 }
 
-// ââ Horizontal scroll tabs (bookmarks, home, search) âââââââââââââââââââââââââ
+// ── Horizontal scroll tabs (bookmarks, home, search) ─────────────────────────
 
 .uiv2-tabs {
   position: sticky;
@@ -2170,7 +2170,7 @@
   }
 }
 
-// ââ Back Bar: Ð½Ð°Ð·Ð°Ð´ + Ð³Ð´Ðµ ÑÐµÐ¹ÑÐ°Ñ / Ð½Ð°ÑÐ»ÐµÐ´Ð¾Ð²Ð°Ð½Ð¸Ðµ ââââââââââââââââââââââââââââââ
+// ── Back Bar: назад + где сейчас / наследование ──────────────────────────────
 
 .uiv2-back-bar {
   display: inline-flex;
@@ -2240,7 +2240,7 @@
   user-select: none;
 }
 
-// ââ Card: ÐºÐ¾Ð½ÑÐµÐ½Ñ-Ð¿Ð°Ð½ÐµÐ»Ñ Ð¿ÑÐ¾ÑÐ¸Ð»Ñ âââââââââââââââââââââââââââââââââââââââââââââ
+// ── Card: контент-панель профиля ─────────────────────────────────────────────
 
 .uiv2-card {
   margin: 0;
@@ -2251,7 +2251,7 @@
   box-shadow: var(--uiv2-chrome-shadow);
   font-family: $font-sans;
   color: $color-text;
-  // ÐÐ´Ð¸Ð½Ð°ÐºÐ¾Ð²ÑÐ¹ AA Ð¸ Ð² UI Kit, Ð¸ Ð²Ð½ÑÑÑÐ¸ profile-panel (transform-ÑÐ»Ð¾Ð¹)
+  // Одинаковый AA и в UI Kit, и внутри profile-panel (transform-слой)
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
@@ -2306,7 +2306,7 @@
   min-width: 0;
 }
 
-// ââ Choice Sheet: Ð²ÑÐ±Ð¾Ñ Ð¾Ð´Ð½Ð¾Ð¹ Ð¾Ð¿ÑÐ¸Ð¸ (ÑÐ°Ð´Ð¸Ð¾) ââââââââââââââââââââââââââââââââââ
+// ── Choice Sheet: выбор одной опции (радио) ──────────────────────────────────
 
 .uiv2-ext-link {
   position: fixed;
@@ -2510,7 +2510,7 @@
   line-height: 1.35;
 }
 
-// ââ Pill field (matches UiV2Button height + 999px radius) âââââââââââââââââââââ
+// ── Pill field (matches UiV2Button height + 999px radius) ─────────────────────
 
 .uiv2-pill-field {
   --uiv2-pill-field-icon: 1rem;
@@ -2636,7 +2636,7 @@
   }
 }
 
-// ââ Outlined field (floating label) ââââââââââââââââââââââââââââââââââââââââââ
+// ── Outlined field (floating label) ──────────────────────────────────────────
 
 .uiv2-outlined-field {
   --uiv2-field-ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -2861,7 +2861,7 @@
   }
 }
 
-// ââ Status dot (tooltip, select) ââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Status dot (tooltip, select) ──────────────────────────────────────────────
 
 .uiv2-status-dot {
   flex-shrink: 0;
@@ -2891,7 +2891,7 @@
   }
 }
 
-// ââ Tooltip âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Tooltip ───────────────────────────────────────────────────────────────────
 
 .uiv2-tooltip__trigger {
   display: inline-flex;
@@ -3090,7 +3090,7 @@
   }
 }
 
-// ââ Select ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Select ────────────────────────────────────────────────────────────────────
 
 .uiv2-select {
   display: block;
@@ -3582,7 +3582,7 @@
   }
 }
 
-// ââ Anime Card (ÐºÐ°ÑÐ°Ð»Ð¾Ð³): vertical grid + horizontal list ââââââââââââââââââââ
+// ── Anime Card (каталог): vertical grid + horizontal list ────────────────────
 
 .uiv2-anime-card {
   --uiv2-anime-radius: 12px;
@@ -3948,7 +3948,7 @@
   line-height: 1;
 }
 
-// Ð ÐµÐ¹ÑÐ¸Ð½Ð³: Ð¿ÑÐ¾ÑÑÐ¾ Ð·Ð¾Ð»Ð¾ÑÐ¾Ð¹ ÑÐµÐºÑÑ + Ð·Ð²ÐµÐ·Ð´Ð°, Ð±ÐµÐ· ÑÐ¸Ð¿Ð°
+// Рейтинг: просто золотой текст + звезда, без чипа
 .uiv2-anime-card__score {
   display: inline-flex;
   align-items: center;
@@ -4002,7 +4002,7 @@
   font-variant-numeric: tabular-nums;
 
   &::before {
-    content: 'Â·';
+    content: '·';
     margin-right: 0.2rem;
     opacity: 0.7;
   }
@@ -4227,7 +4227,7 @@
   white-space: pre-line;
 }
 
-// ââ Popup menu (Yandex Musicâlike glass) âââââââââââââââââââââââââââââââââââââ
+// ── Popup menu (Yandex Music–like glass) ─────────────────────────────────────
 
 .uiv2-popup-menu {
   position: fixed;
@@ -4253,7 +4253,7 @@
   backdrop-filter: blur(28px) saturate(1.35);
   color: var(--uiv2-popup-fg);
 
-  /* ÐÐµÐ²Ð¸Ð´Ð¸Ð¼ÑÐ¹ Ð¼Ð¾ÑÑ Ðº ÐºÐ½Ð¾Ð¿ÐºÐµ-ÑÑÐ¸Ð³Ð³ÐµÑÑ â ÐºÑÑÑÐ¾Ñ Ð½Ðµ Â«ÑÐµÑÑÐµÑÑÑÂ» Ð² Ð·Ð°Ð·Ð¾ÑÐµ */
+  /* Невидимый мост к кнопке-триггеру — курсор не «теряется» в зазоре */
   &:not(.uiv2-popup-menu__panel--sub)::before {
     content: '';
     position: absolute;
@@ -4921,7 +4921,7 @@
   overflow: visible;
   transform-origin: left center;
 
-  /* ÐÐ¾ÑÑ Ðº ÑÐ¾Ð´Ð¸ÑÐµÐ»Ñ â ÐºÑÑÑÐ¾Ñ Ð½Ðµ Â«ÑÐµÑÑÐµÑÂ» submenu Ð² Ð·Ð°Ð·Ð¾ÑÐµ */
+  /* Мост к родителю — курсор не «теряет» submenu в зазоре */
   &::before {
     content: '';
     position: absolute;
@@ -5104,7 +5104,7 @@
   }
 }
 
-// ââ Custom scroll area âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Custom scroll area ───────────────────────────────────────────────────────
 
 .uiv2-scroll-area {
   position: relative;
@@ -5271,7 +5271,7 @@ body.uiv2-scroll-dragging * {
   }
 }
 
-// ââ Skeleton loaders âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Skeleton loaders ─────────────────────────────────────────────────────────
 
 @keyframes uiv2-skeleton-shimmer {
   0% {
@@ -5667,7 +5667,7 @@ body.uiv2-scroll-dragging * {
   color: var(--uikit-v2-text);
 }
 
-/* âââ V2 section header âââ */
+/* ——— V2 section header ——— */
 .uiv2-section-head {
   display: flex;
   align-items: flex-end;
@@ -5945,7 +5945,7 @@ button.uiv2-air-cal__day {
   box-shadow: none;
 }
 
-/* âââ V2 release carousel âââ */
+/* ——— V2 release carousel ——— */
 .uiv2-carousel {
   position: relative;
   width: 100%;
@@ -6002,7 +6002,7 @@ button.uiv2-air-cal__day {
   }
 }
 
-/* âââ V2 discuss list (compact horizontal, Ð±ÐµÐ· ÑÐ¾Ð½Ð°-ÐºÐ°ÑÑÐ¾ÑÐºÐ¸) âââ */
+/* ——— V2 discuss list (compact horizontal, без фона-карточки) ——— */
 .uiv2-discuss {
   display: flex;
   flex-direction: column;
@@ -6177,7 +6177,7 @@ button.uiv2-air-cal__day {
   font-variant-numeric: tabular-nums;
 
   &::before {
-    content: 'Â·';
+    content: '·';
     margin-right: 0.2rem;
     opacity: 0.7;
   }
@@ -6250,7 +6250,7 @@ button.uiv2-air-cal__day {
   font-variant-numeric: tabular-nums;
 }
 
-/* âââ V2 search franchise card âââ */
+/* ——— V2 search franchise card ——— */
 .uiv2-franchise {
   display: flex;
   align-items: center;
@@ -6416,7 +6416,7 @@ button.uiv2-air-cal__day {
   }
 }
 
-/* âââ V2 collection card âââ */
+/* ——— V2 collection card ——— */
 .uiv2-collection {
   position: relative;
   display: flex;
@@ -6816,7 +6816,7 @@ button.uiv2-air-cal__day {
   }
 }
 
-/* âââ V2 feed posts (official-site card) âââ */
+/* ——— V2 feed posts (official-site card) ——— */
 .uiv2-feed-post {
   display: flex;
   flex-direction: column;
@@ -8502,7 +8502,7 @@ button.uiv2-air-cal__day {
 }
 
 .uiv2-media-lightbox__source--hidden {
-  /* Ð¾ÑÑÐ°Ð²Ð»ÑÐµÐ¼ Ð¼ÐµÑÑÐ¾ Ð² layout, ÑÑÐ¾Ð±Ñ stage Ð½Ðµ ÑÑÐ»Ð¾Ð¿Ð½ÑÐ»ÑÑ */
+  /* оставляем место в layout, чтобы stage не схлопнулся */
   visibility: hidden;
   pointer-events: none;
 }
@@ -8513,7 +8513,7 @@ button.uiv2-air-cal__day {
   top: 50%;
   transform: translate(-50%, -50%);
   display: block;
-  /* ÑÐ°Ð·Ð¼ÐµÑ Ð·Ð°Ð´Ð°ÑÑ JS (Ð¿ÑÐ¾Ð¿Ð¾ÑÑÐ¸Ð¸ Ð±ÑÑÐµÑÐ°) â max-* Ð·Ð´ÐµÑÑ ÑÐ¿Ð»ÑÑÐ¸Ð²Ð°ÑÑ canvas */
+  /* размер задаёт JS (пропорции буфера) — max-* здесь сплющивают canvas */
   max-width: none;
   max-height: none;
   background: #000;
@@ -9111,7 +9111,7 @@ button.uiv2-air-cal__day {
   }
 }
 
-/* âââ V2 comments (threaded) âââ */
+/* ——— V2 comments (threaded) ——— */
 $uiv2-thread-w: 2px;
 $uiv2-thread-r: 12px;
 $uiv2-thread-gap: 0.35rem;
@@ -9329,7 +9329,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
     }
   }
 
-  // Elbow from parent stem â reply avatar center
+  // Elbow from parent stem → reply avatar center
   &::before {
     content: '';
     position: absolute;
@@ -9959,7 +9959,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
 }
 
 
-/* âââ V2 comment reactions (submenu panel content) âââ */
+/* ——— V2 comment reactions (submenu panel content) ——— */
 .uiv2-reactions {
   display: flex;
   flex-direction: column;
@@ -10137,7 +10137,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
   }
 }
 
-/* âââ V2 comment composer (inline reply) âââ */
+/* ——— V2 comment composer (inline reply) ——— */
 .uiv2-comment__composer-slot {
   margin: 0.45rem 0 0.65rem;
   width: 100%;
@@ -10310,7 +10310,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
     letter-spacing: -0.01em;
 
     &::before {
-      content: 'â';
+      content: '–';
       position: absolute;
       left: 0.35rem;
       opacity: 0.55;

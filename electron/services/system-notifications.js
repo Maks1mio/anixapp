@@ -1,16 +1,16 @@
 ﻿'use strict';
 
 /**
- * РЈРІРµРґРѕРјР»РµРЅРёСЏ СѓСЃС‚СЂРѕР№СЃС‚РІР° (РЅР°С‚РёРІРЅС‹Рµ С‚РѕСЃС‚С‹ + Р±Р°РЅРЅРµСЂС‹ + Р·РІСѓРє).
+ * Уведомления устройства (нативные тосты + баннеры + звук).
  *
- * Р’РѕР·РјРѕР¶РЅРѕСЃС‚Рё:
- *   вЂў РќР°С‚РёРІРЅС‹Рµ СѓРІРµРґРѕРјР»РµРЅРёСЏ РћРЎ (Windows Action Center / macOS / Linux libnotify)
- *   вЂў РЎРІРѕРё Р±Р°РЅРЅРµСЂС‹ РїРѕРІРµСЂС… РѕРєРЅР° вЂ” РѕС‚РґРµР»СЊРЅРѕРµ РїСЂРѕР·СЂР°С‡РЅРѕРµ always-on-top РѕРєРЅРѕ
- *   вЂў Р’С‹Р±РѕСЂ Р·РІСѓРєР° СѓРІРµРґРѕРјР»РµРЅРёСЏ Рё РіСЂРѕРјРєРѕСЃС‚Рё (+ РїСЂРµРґРїСЂРѕСЃР»СѓС€РёРІР°РЅРёРµ РІ РЅР°СЃС‚СЂРѕР№РєР°С…)
- *   вЂў РњРёРіР°РЅРёРµ РёРєРѕРЅРєРё РІ РїР°РЅРµР»Рё Р·Р°РґР°С‡, РєР»РёРє в†’ РѕС‚РєСЂС‹С‚РёРµ РїСЂРёР»РѕР¶РµРЅРёСЏ
- *   вЂў РџРѕР·РёС†РёСЏ РЅР° СЌРєСЂР°РЅРµ Рё РєРѕР»РёС‡РµСЃС‚РІРѕ РѕРґРЅРѕРІСЂРµРјРµРЅРЅРѕ РІРёРґРёРјС‹С… Р±Р°РЅРЅРµСЂРѕРІ
+ * Возможности:
+ *   • Нативные уведомления ОС (Windows Action Center / macOS / Linux libnotify)
+ *   • Свои баннеры поверх окна — отдельное прозрачное always-on-top окно
+ *   • Выбор звука уведомления и громкости (+ предпрослушивание в настройках)
+ *   • Мигание иконки в панели задач, клик → открытие приложения
+ *   • Позиция на экране и количество одновременно видимых баннеров
  *
- * Р’СЃС‘ РїРѕРІРµРґРµРЅРёРµ РєРѕРЅС„РёРіСѓСЂРёСЂСѓРµС‚СЃСЏ РёР· РЅР°СЃС‚СЂРѕРµРє СѓСЃС‚СЂРѕР№СЃС‚РІР° (notificationSettings).
+ * Всё поведение конфигурируется из настроек устройства (notificationSettings).
  */
 
 const path = require('path');
@@ -40,7 +40,7 @@ const BANNER_WIDTH = 400;
 const BANNER_HEIGHT = 128;
 const BANNER_ITEM_HEIGHT = 76;
 const BANNER_ITEM_GAP = 10;
-/** Р‘РµР· РІРЅРµС€РЅРёС… РїР°РґРґРёРЅРіРѕРІ СЃС‚РµРєР° вЂ” РєР»РёРєРё СЃРєРІРѕР·СЊ РїСѓСЃС‚РѕС‚Сѓ РѕРєРЅР°. */
+/** Без внешних паддингов стека — клики сквозь пустоту окна. */
 const STACK_PADDING = 0;
 const BANNER_MARGIN = 16;
 const SAMPLE_POSTER = 'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg';
@@ -103,7 +103,7 @@ async function hydrateBannerItemImages(items) {
   }));
 }
 
-/** HTTPS URL РєР°СЂС‚РёРЅРєРё РґР»СЏ СЃРєР°С‡РёРІР°РЅРёСЏ (РёР· anix-cdn / __cdn / http). */
+/** HTTPS URL картинки для скачивания (из anix-cdn / __cdn / http). */
 function toHttpsImageUrl(image) {
   if (typeof image !== 'string') return '';
   let s = image.trim();
@@ -131,11 +131,11 @@ function escapeXml(value) {
     .replace(/"/g, '&quot;');
 }
 
-/** РљСЌС€ Р»РѕРєР°Р»СЊРЅС‹С… PNG РґР»СЏ СЃРёСЃС‚РµРјРЅС‹С… С‚РѕСЃС‚РѕРІ: https в†’ file path. */
+/** Кэш локальных PNG для системных тостов: https → file path. */
 const toastIconCache = new Map();
 
 /**
- * РЎРєР°С‡РёРІР°РµС‚ Р°РІР°С‚Р°СЂ/РїРѕСЃС‚РµСЂ РІРѕ РІСЂРµРјРµРЅРЅС‹Р№ PNG РґР»СЏ Windows toast / Electron Notification.icon.
+ * Скачивает аватар/постер во временный PNG для Windows toast / Electron Notification.icon.
  * @returns {Promise<string|undefined>}
  */
 async function resolveToastIconPath(image, fallbackPath) {
@@ -163,9 +163,9 @@ async function resolveToastIconPath(image, fallbackPath) {
   }
 }
 
-/** РЎРєРѕР»СЊРєРѕ РјРёР»Р»РёСЃРµРєСѓРЅРґ РѕРґРёРЅ Р±Р°РЅРЅРµСЂ РѕСЃС‚Р°С‘С‚СЃСЏ РЅР° СЌРєСЂР°РЅРµ. */
+/** Сколько миллисекунд один баннер остаётся на экране. */
 const BANNER_TTL_MS = 6000;
-/** РњР°РєСЃРёРјСѓРј СѓРґРµСЂР¶РёРІР°РµРјС‹С… Р±Р°РЅРЅРµСЂРѕРІ (СЃС‚СЂР°С…РѕРІРєР° РѕС‚ СѓС‚РµС‡РµРє). */
+/** Максимум удерживаемых баннеров (страховка от утечек). */
 const MAX_QUEUE = 12;
 
 /** Список доступных звуков: id, подпись (файл в electron/assets/sounds). */
@@ -201,12 +201,12 @@ function createService(deps) {
   let bannerWindow = null;
   /** @type {Array<{id:string,payload:object,hovered?:boolean,expireTimer:any}>} */
   let queue = [];
-  /** true вЂ” РѕРєРЅРѕ Р±Р°РЅРЅРµСЂРѕРІ РіРѕС‚РѕРІРѕ РїСЂРёРЅРёРјР°С‚СЊ РєРѕРЅС‚РµРЅС‚. */
+  /** true — окно баннеров готово принимать контент. */
   let bannerReady = false;
-  /** РљСЌС€ РЅР°С‚РёРІРЅРѕРіРѕ СѓРІРµРґРѕРјР»РµРЅРёСЏ вЂ” Electron С‚СЂРµР±СѓРµС‚ С…СЂР°РЅРёС‚СЊ СЃСЃС‹Р»РєСѓ, РёРЅР°С‡Рµ С‚РѕСЃС‚ РёСЃС‡РµР·Р°РµС‚. */
+  /** Кэш нативного уведомления — Electron требует хранить ссылку, иначе тост исчезает. */
   const liveNative = new Set();
 
-  // вЂ”вЂ”вЂ” Р—Р°РіСЂСѓР·РєР° Р±Р°РЅРЅРµСЂРЅРѕРіРѕ РѕРєРЅР° вЂ”вЂ”вЂ”
+  // ——— Загрузка баннерного окна ———
 
   function bannerUrl() {
     if (isDev) return `${getDevServerOrigin()}/notification-banner.html`;
@@ -243,7 +243,7 @@ function createService(deps) {
     });
     bannerWindow.setAlwaysOnTop(true, 'screen-saver');
     bannerWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-    // РџСѓСЃС‚РѕС‚Р° РѕРєРЅР° РїСЂРѕР·СЂР°С‡РЅР° РґР»СЏ РєР»РёРєРѕРІ; РЅР°Рґ РєР°СЂС‚РѕС‡РєРѕР№ РІРєР»СЋС‡Р°РµРј СЃРЅРѕРІР° РёР· СЂРµРЅРґРµСЂРµСЂР°.
+    // Пустота окна прозрачна для кликов; над карточкой включаем снова из рендерера.
     bannerWindow.setIgnoreMouseEvents(true, { forward: true });
 
     bannerWindow.webContents.once('did-finish-load', () => {
@@ -264,17 +264,17 @@ function createService(deps) {
     return bannerWindow;
   }
 
-  // вЂ”вЂ”вЂ” РџРѕР·РёС†РёРѕРЅРёСЂРѕРІР°РЅРёРµ РѕРєРЅР° Р±Р°РЅРЅРµСЂРѕРІ вЂ”вЂ”вЂ”
+  // ——— Позиционирование окна баннеров ———
 
-  /** РўРµРєСѓС‰Р°СЏ РІС‹СЃРѕС‚Р° РѕРєРЅР° Р±Р°РЅРЅРµСЂРѕРІ (РІ px). */
+  /** Текущая высота окна баннеров (в px). */
   let bannerHeight = BANNER_HEIGHT;
 
   /**
-   * РџСЂРµРІСЊСЋ СѓРіР»Р° РёР· РЅР°СЃС‚СЂРѕРµРє: { position, items } | null.
-   * РџРѕРєР° Р°РєС‚РёРІРЅРѕ вЂ” РїРµСЂРµРєСЂС‹РІР°РµС‚ РѕР±С‹С‡РЅСѓСЋ РѕС‡РµСЂРµРґСЊ (Р±РµР· Р·РІСѓРєР°/native).
+   * Превью угла из настроек: { position, items } | null.
+   * Пока активно — перекрывает обычную очередь (без звука/native).
    */
   let cornerPreview = null;
-  /** РРЅРєСЂРµРјРµРЅС‚ РѕС‚РјРµРЅСЏРµС‚ РЅРµР·Р°РІРµСЂС€С‘РЅРЅСѓСЋ СЃРјРµРЅСѓ СѓРіР»Р°. */
+  /** Инкремент отменяет незавершённую смену угла. */
   let cornerPreviewGen = 0;
 
   function resolveBannerPosition(settings) {
@@ -347,8 +347,8 @@ function createService(deps) {
   }
 
   /**
-   * Р Р°СЃРїРѕР»РѕР¶РёС‚СЊ РѕРєРЅРѕ Р±Р°РЅРЅРµСЂРѕРІ РЅР° СЌРєСЂР°РЅРµ.
-   * @param {number} height вЂ” Р¶РµР»Р°РµРјР°СЏ РІС‹СЃРѕС‚Р° РѕРєРЅР° РІ px
+   * Расположить окно баннеров на экране.
+   * @param {number} height — желаемая высота окна в px
    */
   function positionBannerWindow(height) {
     if (!bannerWindow || bannerWindow.isDestroyed()) return;
@@ -388,7 +388,7 @@ function createService(deps) {
     bannerWindow.setAlwaysOnTop(!!alwaysOnTop, 'screen-saver');
   }
 
-  // вЂ”вЂ”вЂ” РћС‚РїСЂР°РІРєР° РєРѕРЅС‚РµРЅС‚Р° РІ Р±Р°РЅРЅРµСЂРЅРѕРµ РѕРєРЅРѕ вЂ”вЂ”вЂ”
+  // ——— Отправка контента в баннерное окно ———
 
   let hideBannerTimer = null;
   let shrinkBannerTimer = null;
@@ -408,7 +408,7 @@ function createService(deps) {
       ? STACK_PADDING * 2 + visible * styleH + (visible - 1) * gap
       : styleH + STACK_PADDING * 2;
 
-    // РЎРЅР°С‡Р°Р»Р° РєРѕРЅС‚РµРЅС‚ вЂ” leave/FLIP РІ СЂРµРЅРґРµСЂРµСЂРµ; РІС‹СЃРѕС‚Сѓ РѕРєРЅР° РЅРµ СѓРјРµРЅСЊС€Р°РµРј СЂРµР·РєРѕ (РјРµСЂС†Р°РЅРёРµ).
+    // Сначала контент — leave/FLIP в рендерере; высоту окна не уменьшаем резко (мерцание).
     bannerWindow.webContents.send('notification-banner:update', {
       items,
       position,
@@ -426,20 +426,20 @@ function createService(deps) {
 
     if (visible > 0) {
       if (!bannerWindow.isVisible()) bannerWindow.showInactive();
-      // РўРѕР»СЊРєРѕ СЂРѕСЃС‚ вЂ” СѓРјРµРЅСЊС€РµРЅРёРµ bounds РЅР° РЅРёР¶РЅРёС… СѓРіР»Р°С… РґРІРёРіР°РµС‚ РІРµСЃСЊ СЃС‚РµРє.
+      // Только рост — уменьшение bounds на нижних углах двигает весь стек.
       if (desiredHeight > bannerHeight) {
         positionBannerWindow(desiredHeight);
       } else if (desiredHeight === bannerHeight) {
         positionBannerWindow(desiredHeight);
       } else {
-        // Р”РµСЂР¶РёРј С‚РµРєСѓС‰СѓСЋ РІС‹СЃРѕС‚Сѓ, РїРѕРєР° РєР°СЂС‚РѕС‡РєРё РЅР° СЌРєСЂР°РЅРµ.
+        // Держим текущую высоту, пока карточки на экране.
         positionBannerWindow(bannerHeight);
       }
     } else if (cornerPreview) {
-      // РџСѓСЃС‚РѕР№ РїСЂРµРІСЊСЋ РїСЂРё СЃРјРµРЅРµ СѓРіР»Р°: РќР• СѓРјРµРЅСЊС€Р°РµРј РѕРєРЅРѕ, С‚РѕР»СЊРєРѕ Р¶РґС‘Рј РЅРѕРІС‹Рµ РєР°СЂС‚РѕС‡РєРё.
+      // Пустой превью при смене угла: НЕ уменьшаем окно, только ждём новые карточки.
       if (!bannerWindow.isVisible()) bannerWindow.showInactive();
     } else {
-      // Fade СЃС‚РµРєР° (~320ms), РїРѕС‚РѕРј hide. Bounds РЅРµ С‚СЂРѕРіР°РµРј РґРѕ СЃРєСЂС‹С‚РёСЏ.
+      // Fade стека (~320ms), потом hide. Bounds не трогаем до скрытия.
       hideBannerTimer = setTimeout(() => {
         if (queue.length === 0 && !cornerPreview && bannerWindow && !bannerWindow.isDestroyed()) {
           bannerWindow.hide();
@@ -513,7 +513,7 @@ function createService(deps) {
     cornerPreviewGen += 1;
     if (!cornerPreview) return false;
     const pos = cornerPreview.position;
-    // РћРґРёРЅ flush СЃ РїСѓСЃС‚С‹Рј СЃРїРёСЃРєРѕРј в†’ stack exit РІ СЂРµРЅРґРµСЂРµСЂРµ. РџРѕС‚РѕРј С‚РёС…Рѕ СЃРЅРёРјР°РµРј preview.
+    // Один flush с пустым списком → stack exit в рендерере. Потом тихо снимаем preview.
     cornerPreview = { position: pos, items: [] };
     if (bannerReady) flushBanners();
     const gen = cornerPreviewGen;
@@ -560,7 +560,7 @@ function createService(deps) {
   }
 
   function removeBanner(id) {
-    // РџСЂРµРІСЊСЋ СѓРіР»Р° Р¶РёРІС‘С‚ РѕС‚РґРµР»СЊРЅРѕ РѕС‚ РѕС‡РµСЂРµРґРё вЂ” РєСЂРµСЃС‚РёРє РґРѕР»Р¶РµРЅ С‡РёСЃС‚РёС‚СЊ РµРіРѕ items.
+    // Превью угла живёт отдельно от очереди — крестик должен чистить его items.
     if (cornerPreview?.items?.length) {
       const next = cornerPreview.items.filter((item) => item.id !== id);
       if (next.length !== cornerPreview.items.length) {
@@ -618,7 +618,7 @@ function createService(deps) {
     flushBanners();
   }
 
-  // вЂ”вЂ”вЂ” РќР°С‚РёРІРЅС‹Рµ СѓРІРµРґРѕРјР»РµРЅРёСЏ РћРЎ вЂ”вЂ”вЂ”
+  // ——— Нативные уведомления ОС ———
 
   /**
    * @param {Electron.NotificationConstructorOptions} opts
@@ -689,11 +689,11 @@ function createService(deps) {
     }
   }
 
-  // вЂ”вЂ”вЂ” Р—РІСѓРє вЂ”вЂ”вЂ”
+  // ——— Звук ———
 
   /**
-   * Р’РѕСЃРїСЂРѕРёР·РІРѕРґРёС‚ Р·РІСѓРє СѓРІРµРґРѕРјР»РµРЅРёСЏ.
-   * @param {string} [overrideId] вЂ” РїСЂРёРЅСѓРґРёС‚РµР»СЊРЅС‹Р№ id (РґР»СЏ РїСЂРµРґРїСЂРѕСЃР»СѓС€РёРІР°РЅРёСЏ)
+   * Воспроизводит звук уведомления.
+   * @param {string} [overrideId] — принудительный id (для предпрослушивания)
    */
   function playSound(overrideId) {
     const settings = config.getNotificationSettings();
@@ -703,7 +703,7 @@ function createService(deps) {
 
     const volume = config.clampNotificationVolume(settings.volume);
 
-    // РЎРёСЃС‚РµРјРЅС‹Р№ Р·РІСѓРє вЂ” beep РћРЎ.
+    // Системный звук — beep ОС.
     if (soundId === 'system') {
       try { shell.beep(); } catch { /* ignore */ }
       return;
@@ -716,14 +716,14 @@ function createService(deps) {
     if (!fileUrl) return;
     const payload = { soundId, fileUrl, volume };
 
-    // Р“Р»Р°РІРЅРѕРµ РѕРєРЅРѕ вЂ” РѕСЃРЅРѕРІРЅРѕР№ РєР°РЅР°Р» (user-gesture / Р±РµР· Р°РІС‚РѕРїР»РµР№-Р±Р»РѕРєРёСЂРѕРІРєРё).
+    // Главное окно — основной канал (user-gesture / без автоплей-блокировки).
     const main = state.mainWindow;
     if (main && !main.isDestroyed()) {
       main.webContents.send('notification-sound:playInApp', payload);
       return;
     }
 
-    // Р—Р°РїР°СЃРЅРѕР№ РєР°РЅР°Р» вЂ” СЃРєСЂС‹С‚РѕРµ РѕРєРЅРѕ (РєРѕРіРґР° РіР»Р°РІРЅРѕРіРѕ РЅРµС‚).
+    // Запасной канал — скрытое окно (когда главного нет).
     const win = createSoundWindow(volume);
     const send = () => {
       if (win.isDestroyed()) return;
@@ -770,7 +770,7 @@ function createService(deps) {
     return soundVolume;
   }
 
-  // вЂ”вЂ”вЂ” Р¤РѕРєСѓСЃ РіР»Р°РІРЅРѕРіРѕ РѕРєРЅР° вЂ”вЂ”вЂ”
+  // ——— Фокус главного окна ———
 
   function focusMainWindow() {
     const win = state.mainWindow;
@@ -780,7 +780,7 @@ function createService(deps) {
     win.focus();
   }
 
-  // вЂ”вЂ”вЂ” РџСѓР±Р»РёС‡РЅС‹Р№ API вЂ”вЂ”вЂ”
+  // ——— Публичный API ———
 
   function resolveKindKey(kind) {
     switch (String(kind || '')) {
@@ -826,7 +826,7 @@ function createService(deps) {
   }
 
   /**
-   * РџРѕРєР°Р·Р°С‚СЊ СѓРІРµРґРѕРјР»РµРЅРёРµ СѓСЃС‚СЂРѕР№СЃС‚РІР°.
+   * Показать уведомление устройства.
    * @param {{title?:string, body?:string, image?:string, deepLink?:{type:string,id:number}, kind?:string, id?:string, force?:boolean}} payload
    */
   function notify(payload = {}) {
@@ -896,7 +896,7 @@ function createService(deps) {
     }
   }
 
-  // вЂ”вЂ”вЂ” IPC вЂ”вЂ”вЂ”
+  // ——— IPC ———
 
   function registerIpc() {
     ipcMain.handle('notifications:show', (_, payload) => {
@@ -1012,7 +1012,7 @@ function createService(deps) {
     ipcMain.on('notification-banner:height', (_, height) => {
       if (!bannerWindow || bannerWindow.isDestroyed()) return;
       const h = Math.max(BANNER_HEIGHT, Math.round(Number(height) || BANNER_HEIGHT));
-      // РўРѕР»СЊРєРѕ СѓРІРµР»РёС‡РёРІР°РµРј вЂ” СѓРјРµРЅСЊС€РµРЅРёРµ bounds РЅР° РЅРёР¶РЅРёС… СѓРіР»Р°С… РґР°С‘С‚ РјРµСЂС†Р°РЅРёРµ.
+      // Только увеличиваем — уменьшение bounds на нижних углах даёт мерцание.
       if (h > bannerHeight) positionBannerWindow(h);
     });
     ipcMain.on('notification-banner:setIgnoreMouse', (_, ignore) => {

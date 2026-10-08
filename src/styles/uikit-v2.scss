@@ -11223,12 +11223,97 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
 
 // ── Уведомления устройства (Settings → Уведомления) ──────────────────────────
 
+.uiv2-settings__block--dimmed {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.notif-advanced {
+  margin: 0;
+  border-radius: 20px;
+  background: var(--uiv2-card-bg);
+  box-shadow: var(--uiv2-chrome-shadow);
+  overflow: hidden;
+
+  &[open] .notif-advanced__summary {
+    border-bottom: 1px solid var(--uiv2-border-subtle);
+  }
+}
+
+.notif-advanced__summary {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.9rem 2.4rem 0.9rem 1rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    right: 1.1rem;
+    top: 50%;
+    width: 0.45rem;
+    height: 0.45rem;
+    border-right: 2px solid var(--uiv2-fg-muted);
+    border-bottom: 2px solid var(--uiv2-fg-muted);
+    transform: translateY(-65%) rotate(45deg);
+    transition: transform 0.15s ease;
+  }
+
+  .notif-advanced[open] &::after {
+    transform: translateY(-20%) rotate(225deg);
+  }
+}
+
+.notif-advanced__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--uikit-v2-text);
+  line-height: 1.3;
+}
+
+.notif-advanced__hint {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--uiv2-fg-muted);
+}
+
+.notif-advanced__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.85rem 0 0.35rem;
+}
+
+.notif-advanced__body .uiv2-settings__group {
+  box-shadow: none;
+  background: transparent;
+  border-radius: 0;
+}
+
+.notif-advanced__subtitle {
+  margin: 0.15rem 1rem 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--uiv2-fg-muted);
+}
+
 .notif-position {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.6rem;
   padding: 0.9rem 1rem 0.85rem;
+  border-top: 1px solid var(--uiv2-border-subtle);
 }
 
 .notif-position + .uiv2-settings__row {

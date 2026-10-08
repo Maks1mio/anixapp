@@ -3816,7 +3816,7 @@
   font-variant-numeric: tabular-nums;
 
   &::before {
-    content: 'Â·';
+    content: '·';
     margin-right: 0.2rem;
     opacity: 0.7;
   }
@@ -5991,7 +5991,7 @@ button.uiv2-air-cal__day {
   font-variant-numeric: tabular-nums;
 
   &::before {
-    content: 'Â·';
+    content: '·';
     margin-right: 0.2rem;
     opacity: 0.7;
   }
@@ -10115,7 +10115,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
   li {
     position: relative;
     margin: 0;
-    padding: 0.4rem 0.55rem 0.4rem 0.85rem;
+    padding: 0.4rem 0.55rem 0.4rem 1.2rem;
     border-radius: 10px;
     font-size: 0.8125rem;
     font-weight: 450;
@@ -10124,7 +10124,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
     letter-spacing: -0.01em;
 
     &::before {
-      content: 'â';
+      content: '–';
       position: absolute;
       left: 0.35rem;
       opacity: 0.55;

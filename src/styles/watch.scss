@@ -675,7 +675,24 @@ $p-skip-dark:   #66c94280;
   }
 }
 
-.watch-page--iframe-mode .watch-page__center-play { display: none; }
+// Веб-плеер / iframe источника: только плеер Kodik и т.п., без chrome AnixApp.
+// tap-layer и hotspot иначе перехватывают клики у iframe.
+.watch-page--iframe-mode {
+  .watch-page__center-play,
+  .watch-page__tap-layer,
+  .watch-page__bottom-controls,
+  .watch-page__chrome-hotspot {
+    display: none !important;
+  }
+
+  .watch-page__gui-overlay {
+    pointer-events: none;
+  }
+
+  .watch-page__top-bar {
+    pointer-events: auto;
+  }
+}
 
 // ── Bottom controls ────────────────────────────────────────────────────────────
 

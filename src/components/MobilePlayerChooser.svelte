@@ -12,11 +12,16 @@
   let kind = $state<MobilePlayerKind>(initial.kind);
   let ask = $state(initial.ask);
 
-  const OPTIONS: { id: MobilePlayerKind; title: string; text: string; beta?: boolean }[] = [
+  const OPTIONS: { id: MobilePlayerKind; title: string; text: string; beta?: boolean; warning?: string }[] = [
     { id: 'web', title: 'Веб-плеер', text: 'Просмотр в плеере источника. Стандартный вариант.' },
     { id: 'anix', title: 'АниксПлеер', text: 'Наш самый продвинутый плеер с наилучшим качеством.', beta: true },
     { id: 'builtin', title: 'Встроенный плеер', text: 'Простой и удобный, не требует отдельного скачивания.' },
-    { id: 'external', title: 'Сторонний плеер', text: 'Просмотр в любом плеере, который установлен на вашем устройстве.' },
+    {
+      id: 'external',
+      title: 'Сторонний плеер',
+      text: 'Просмотр в любом плеере, который установлен на вашем устройстве.',
+      warning: 'Не помечается просмотренным в приложении при выборе серий в плеере.',
+    },
   ];
 </script>
 
@@ -39,6 +44,7 @@
             {#if o.beta}<span class="m-option__beta">BETA</span>{/if}
           </span>
           <span class="m-option__text">{o.text}</span>
+          {#if o.warning}<span class="m-option__warning">{o.warning}</span>{/if}
         </button>
       {/each}
     </div>
@@ -89,6 +95,12 @@
       font-size: 13px; font-weight: 500; letter-spacing: 0.02em;
     }
     &__text { font-size: 17px; line-height: 1.3; color: var(--m-text-2); }
+    &__warning {
+      margin-top: 6px; padding: var(--m-space-2) var(--m-space-3); border-radius: 12px;
+      background: color-mix(in srgb, var(--m-danger) 14%, transparent);
+      color: color-mix(in srgb, var(--m-danger) 78%, var(--m-text));
+      font-size: 15px; font-weight: 500; line-height: 1.3;
+    }
   }
   .m-dialog__check {
     display: flex; align-items: center; gap: var(--m-space-3);

@@ -62,6 +62,7 @@ function toPlayerPayload(params: WatchLaunchParams) {
     ...(typeof params.currentTime === 'number' ? { currentTime: params.currentTime } : {}),
     ...(params.paused != null ? { paused: params.paused } : {}),
     ...(params.applyRoomPlayback ? { applyRoomPlayback: true } : {}),
+    ...(params.webPlayer ? { webPlayer: true } : {}),
   };
 }
 

@@ -238,6 +238,8 @@ contextBridge.exposeInMainWorld('electron', {
   setPlayerWindowTitle: (payload) => ipcRenderer.send('player:setWindowTitle', payload),
   isPlayerOpen: () => ipcRenderer.invoke('player:isOpen'),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+  listExternalPlayers: () => ipcRenderer.invoke('player:listExternal'),
+  openExternalPlayer: (url, headers) => ipcRenderer.invoke('player:openExternal', url, headers),
   setCursorScreenPos: (x, y) => ipcRenderer.invoke('cursor:setScreenPos', { x, y }),
   startTvLanLogin: () => ipcRenderer.invoke('tvLan:start'),
   stopTvLanLogin: () => ipcRenderer.invoke('tvLan:stop'),

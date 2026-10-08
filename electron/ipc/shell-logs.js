@@ -3,8 +3,83 @@
 const { ipcMain, BrowserWindow } = require('electron');
 const { shell, app } = require('electron');
 const diagnostics = require('../session-diagnostics');
+const {
+  listInstalledPlayers,
+  listKnownPlayers,
+  launchExternalPlayer,
+} = require('../lib/player-integration');
+
+function normalizeExternalPayload(urlOrOpts, headers = {}) {
+  if (urlOrOpts && typeof urlOrOpts === 'object' && !Array.isArray(urlOrOpts)) {
+    const opts = urlOrOpts;
+    return {
+      url: typeof opts.url === 'string' ? opts.url : '',
+      headers: (opts.headers && typeof opts.headers === 'object') ? opts.headers : {},
+      title: typeof opts.title === 'string' ? opts.title : '',
+      playlist: Array.isArray(opts.playlist) ? opts.playlist : null,
+      startIndex: Number.isFinite(Number(opts.startIndex)) ? Math.max(0, Number(opts.startIndex)) : 0,
+      playerId: typeof opts.playerId === 'string' ? opts.playerId : '',
+    };
+  }
+  return {
+    url: typeof urlOrOpts === 'string' ? urlOrOpts : '',
+    headers: (headers && typeof headers === 'object') ? headers : {},
+    title: '',
+    playlist: null,
+    startIndex: 0,
+    playerId: '',
+  };
+}
 
 function register() {
+  ipcMain.handle('player:listExternal', (_, opts = {}) => {
+    const fresh = !!(opts && opts.fresh);
+    const installed = listInstalledPlayers({ fresh }).map((p) => ({
+      id: p.id,
+      label: p.label,
+      description: p.description,
+      installed: true,
+      path: p.path,
+    }));
+    const installedIds = new Set(installed.map((p) => p.id));
+    const missing = listKnownPlayers()
+      .filter((p) => !installedIds.has(p.id))
+      .map((p) => ({
+        id: p.id,
+        label: p.label,
+        description: p.description,
+        installed: false,
+        path: null,
+      }));
+    return { players: [...installed, ...missing], installedCount: installed.length };
+  });
+
+  ipcMain.handle('player:openExternal', async (_, urlOrOpts, headers = {}) => {
+    const payload = normalizeExternalPayload(urlOrOpts, headers);
+    try {
+      const referer = typeof payload.headers.Referer === 'string' ? payload.headers.Referer : '';
+      const userAgent = typeof payload.headers['User-Agent'] === 'string' ? payload.headers['User-Agent'] : '';
+      const playlist = (payload.playlist || [])
+        .map((e) => ({
+          title: String(e?.title || '').trim() || 'Серия',
+          url: String(e?.url || '').trim(),
+        }))
+        .filter((e) => /^https?:\/\//i.test(e.url));
+
+      return await launchExternalPlayer({
+        playerId: payload.playerId || undefined,
+        url: payload.url,
+        title: payload.title,
+        referer,
+        userAgent,
+        playlist: playlist.length ? playlist : undefined,
+        startIndex: payload.startIndex,
+      });
+    } catch {
+      return { ok: false, reason: 'invalid-url' };
+    }
+  });
+
   ipcMain.handle('shell:openExternal', (_, url) => {
     if (!url || typeof url !== 'string') return false;
     try {

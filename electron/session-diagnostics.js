@@ -232,6 +232,23 @@ function broadcast(entry) {
   }
 }
 
+/** Шум от ads/metrika в sandbox iframe (Kodik и т.п.) — не полезен в диагностике. */
+function isNoisyConsoleMessage(message, sourceId = '') {
+  const msg = String(message || '');
+  const src = String(sourceId || '');
+  if (/Blocked script execution/i.test(msg) && /sandboxed/i.test(msg) && /allow-scripts/i.test(msg)) {
+    return true;
+  }
+  if (/Blocked script execution/i.test(msg) && /data:text\/html/i.test(msg)) {
+    return true;
+  }
+  // Метрика/счётчики внутри data: или пустых about:blank фреймов.
+  if (/data:text\/html/i.test(src) && /yandex|metrika|mc\.yandex/i.test(msg)) {
+    return true;
+  }
+  return false;
+}
+
 function attachConsole(contents) {
   if (!contents || contents.isDestroyed?.()) return;
   if (contents.__anixDiagConsole) return;
@@ -255,6 +272,7 @@ function attachConsole(contents) {
       line = Number(args[3] ?? 0);
       sourceId = String(args[4] ?? '');
     }
+    if (isNoisyConsoleMessage(message, sourceId)) return;
     const kind = CONSOLE_LEVELS[Math.min(3, Math.max(0, level))] || 'info';
     push({
       channel: 'console',

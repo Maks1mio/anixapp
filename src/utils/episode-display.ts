@@ -105,3 +105,41 @@ export function episodeDisplayLabel(ep: EpisodeLike, list?: EpisodeLike[] | null
   }
   return `Серия ${num} — ${name}`;
 }
+
+/**
+ * «Сколько серий» для UI: последний видимый номер (1122), а не length при дырах в нумерации (1120).
+ * Для операций (скачать N файлов) по-прежнему используй `list.length`.
+ */
+export function episodeListDisplayTotal(list: EpisodeLike[] | null | undefined): number {
+  if (!list?.length) return 0;
+  let max = 0;
+  for (const ep of list) {
+    const n = episodeDisplayNumber(ep, list);
+    if (n != null && Number.isFinite(n) && n > max) max = n;
+  }
+  return max > 0 ? max : list.length;
+}
+
+/** Все отображаемые номера серий (для диапазонов плейлиста и т.п.). */
+export function episodeListDisplayNumbers(list: EpisodeLike[] | null | undefined): number[] {
+  if (!list?.length) return [];
+  const out: number[] = [];
+  for (const ep of list) {
+    const n = episodeDisplayNumber(ep, list);
+    if (n != null && Number.isFinite(n)) out.push(n);
+  }
+  return out;
+}
+
+export function epWordRu(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'эпизод';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'эпизода';
+  return 'эпизодов';
+}
+
+export function episodeListDisplayTotalLabel(list: EpisodeLike[] | null | undefined): string {
+  const n = episodeListDisplayTotal(list);
+  return n > 0 ? `${n} ${epWordRu(n)}` : '';
+}

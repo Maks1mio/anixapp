@@ -19,6 +19,7 @@
   import SidebarPanelResizeHandle from './SidebarPanelResizeHandle.svelte';
   import { iconX } from './icons';
   import { getProfilePanelWidthPx, setProfilePanelWidthPx } from '../prefs';
+  import { requestOpenExternal } from '../utils/external-link';
 
   interface Props {
     onClose: () => void;
@@ -144,7 +145,7 @@
 
   function handleGithubLink(e: Event) {
     e.preventDefault();
-    window.electron?.openExternal?.('https://github.com/Maks1mio/anixapp');
+    requestOpenExternal('https://github.com/Maks1mio/anixapp');
   }
 
   onMount(() => {

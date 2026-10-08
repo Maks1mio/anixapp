@@ -189,6 +189,18 @@ app.whenReady().then(() => {
   try {
     require('./lib/backup-proxy').initBackupProxyKeepAlive();
   } catch (_) {}
+  // Ранний скан VLC/mpv/PotPlayer — к моменту выбора плеера список уже в кэше.
+  setImmediate(() => {
+    try {
+      const { warmInstalledPlayersCache } = require('./lib/player-integration');
+      const found = warmInstalledPlayersCache();
+      logger.info('player-integration', 'warm scan', {
+        players: found.map((p) => p.id),
+      });
+    } catch (err) {
+      logger.warn('player-integration', `warm scan failed: ${err?.message || err}`);
+    }
+  });
   void startFetchAAppBridge(logger).catch((err) => {
     logger.warn('fetchaapp', `bridge failed: ${err?.message || err}`);
   });

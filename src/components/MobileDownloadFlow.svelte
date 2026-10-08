@@ -17,6 +17,7 @@
     queueEpisodes,
     type QueueEp,
   } from '../utils/mobile-download-actions';
+  import { episodeListDisplayTotal } from '../utils/episode-display';
 
   interface Props {
     releaseId: number;
@@ -141,6 +142,8 @@
   }
 
   const toDownload = $derived(onlyMissing && hasSome ? missing : episodes.length);
+  /** Последний номер серии для UI (не length при дырах в нумерации). */
+  const displayTotal = $derived(episodeListDisplayTotal(episodes));
 </script>
 
 <div class="m-flow-scrim" role="presentation" use:portal>
@@ -161,7 +164,11 @@
             <button type="button" role="radio" aria-checked={d.id === dubberId} class="m-dub" class:m-dub--on={d.id === dubberId} onclick={() => void pickDubber(d.id)}>
               <span class="m-dub__ava" style={d.icon ? `background-image:url(${d.icon})` : ''}></span>
               <span class="m-dub__name">{d.name}</span>
-              {#if d.episodes > 0}<span class="m-dub__eps">{d.episodes} эп.</span>{/if}
+              {#if d.id === dubberId && displayTotal > 0}
+                <span class="m-dub__eps">{displayTotal} эп.</span>
+              {:else if d.episodes > 0}
+                <span class="m-dub__eps">{d.episodes} эп.</span>
+              {/if}
               <span class="m-dub__radio" aria-hidden="true"></span>
             </button>
           {/each}
@@ -189,7 +196,7 @@
           <p class="m-flow__label">Какие серии</p>
           <div class="m-flow__pills">
             <button type="button" class="m-pill" class:m-pill--on={onlyMissing} onclick={() => (onlyMissing = true)}>Недостающие ({missing})</button>
-            <button type="button" class="m-pill" class:m-pill--on={!onlyMissing} onclick={() => (onlyMissing = false)}>Все ({episodes.length})</button>
+            <button type="button" class="m-pill" class:m-pill--on={!onlyMissing} onclick={() => (onlyMissing = false)}>Все ({displayTotal || episodes.length})</button>
           </div>
         {/if}
 

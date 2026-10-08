@@ -88,13 +88,58 @@ declare global {
         anixartjs: string;
       }>;
       window: ElectronWindowAPI;
-      openPlayerWindow: (params: { releaseId: string; sourceId: string; ep: string; title: string; sourceName: string; dubberId?: string; localFile?: string; externalUrl?: string; referer?: string; pageUrl?: string; cookies?: string; lobbyIdle?: boolean; currentTime?: number; paused?: boolean; applyRoomPlayback?: boolean }) => Promise<void>;
+      openPlayerWindow: (params: {
+        releaseId: string;
+        sourceId: string;
+        ep: string;
+        title: string;
+        sourceName: string;
+        dubberId?: string;
+        dubberName?: string;
+        localFile?: string;
+        externalUrl?: string;
+        referer?: string;
+        pageUrl?: string;
+        cookies?: string;
+        lobbyIdle?: boolean;
+        currentTime?: number;
+        paused?: boolean;
+        applyRoomPlayback?: boolean;
+        /** Веб-плеер: открыть HTML-плеер источника (Kodik) в отдельном окне. */
+        sourceWeb?: boolean;
+        /** Опциональный hint URL; свежая ссылка всё равно берётся в main. */
+        sourceEmbedUrl?: string;
+      }) => Promise<void>;
       closePlayerWindow: () => void;
       togglePlayerFullScreen: () => Promise<boolean>;
       togglePlayerAlwaysOnTop: () => Promise<boolean>;
       setPlayerWindowTitle?: (payload: { title?: string; episode?: string }) => void;
       isPlayerOpen: () => Promise<boolean>;
       openExternal: (url: string) => void;
+      /** Установленные/известные сторонние плееры (player-integration). */
+      listExternalPlayers?: (opts?: { fresh?: boolean }) => Promise<{
+        players: Array<{
+          id: string;
+          label: string;
+          description: string;
+          installed: boolean;
+          path?: string | null;
+        }>;
+        installedCount: number;
+      }>;
+      openExternalPlayer?: (
+        urlOrOpts: string | {
+          url: string;
+          headers?: Record<string, string>;
+          title?: string;
+          /** Плейлист серий для VLC/mpv (.m3u с #EXTINF). */
+          playlist?: Array<{ url: string; title: string }>;
+          startIndex?: number;
+          /** Предпочтительный плеер из player-integration (`vlc` | `mpv` | …). */
+          playerId?: string;
+        },
+        headers?: Record<string, string>,
+      ) => Promise<{ ok: boolean; reason?: string; player?: string; playlist?: number }>;
       /** Warp OS mouse cursor (Windows). Screen coordinates. */
       setCursorScreenPos?: (x: number, y: number) => Promise<boolean>;
       startTvLanLogin?: () => Promise<{ url: string | null; error?: string }>;

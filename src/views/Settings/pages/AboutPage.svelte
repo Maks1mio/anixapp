@@ -4,6 +4,7 @@
   import UserAvatar from '../../../components/UserAvatar.svelte';
   import { FOUNDER_ID } from '../../../services/admin-api';
   import { openProfilePanel } from '../../../stores/profile-panel';
+  import { requestOpenExternal } from '../../../utils/external-link';
 
   const TG_CHANNEL = 'https://t.me/anixapp';
   const GITHUB_PROFILE = 'https://github.com/Maks1mio';
@@ -34,7 +35,7 @@
   });
 
   function openExternal(url: string) {
-    window.electron?.openExternal?.(url);
+    requestOpenExternal(url);
   }
 
   function openFounderProfile() {

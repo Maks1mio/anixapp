@@ -3,6 +3,7 @@
   import { cubicOut } from 'svelte/easing';
   import { portal } from '../../actions/portal';
   import UiV2Button from './UiV2Button.svelte';
+  import externalLinkArt from '../../assets/animeSvg/externalLink.svg';
   import {
     cancelExternalLink,
     confirmExternalLink,
@@ -45,28 +46,38 @@
       class="uiv2-ext-link__panel"
       transition:scale={{ duration: 220, start: 0.94, easing: cubicOut }}
     >
-      <h3 id={titleId} class="uiv2-ext-link__title">Переход на другой сайт</h3>
-      <p class="uiv2-ext-link__lead">
-        Вы собираетесь открыть внешнюю ссылку в браузере. Убедитесь, что доверяете этому сайту.
-      </p>
-      <p class="uiv2-ext-link__host" title={url}>{host}</p>
-      <p class="uiv2-ext-link__url">{url}</p>
+      <img
+        class="uiv2-ext-link__art"
+        src={externalLinkArt}
+        alt=""
+        aria-hidden="true"
+        draggable="false"
+      />
 
-      <div class="uiv2-ext-link__actions">
-        <UiV2Button
-          label="Отмена"
-          size="lg"
-          block
-          variant="chrome"
-          onclick={() => cancelExternalLink()}
-        />
-        <UiV2Button
-          label="Открыть"
-          size="lg"
-          block
-          variant="primary"
-          onclick={() => void confirmExternalLink()}
-        />
+      <div class="uiv2-ext-link__content">
+        <h3 id={titleId} class="uiv2-ext-link__title">Переход на другой сайт</h3>
+        <p class="uiv2-ext-link__lead">
+          Вы собираетесь открыть внешнюю ссылку в браузере. Убедитесь, что доверяете этому сайту.
+        </p>
+        <p class="uiv2-ext-link__host">{host}</p>
+        <p class="uiv2-ext-link__url">{url}</p>
+
+        <div class="uiv2-ext-link__actions">
+          <UiV2Button
+            label="Отмена"
+            size="lg"
+            block
+            variant="chrome"
+            onclick={() => cancelExternalLink()}
+          />
+          <UiV2Button
+            label="Открыть"
+            size="lg"
+            block
+            variant="primary"
+            onclick={() => void confirmExternalLink()}
+          />
+        </div>
       </div>
     </div>
   </div>

@@ -22,6 +22,7 @@
   import { openReleaseMetaSearch } from '../../../utils/releaseMetaSearch';
   import type { ListStatusId } from '../_types';
   import { openImageLightbox, formatVoteCount } from '../_utils';
+import { requestOpenExternal } from '../../../utils/external-link';
   import { toPosterDisplayUrl } from '../../../utils/posterUrl';
   import { isMobileMode } from '../../../platform/mobile';
 
@@ -123,6 +124,22 @@
 
   function scrollToComments() {
     document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /**
+   * Ссылки внутри описания/примечания (сырой HTML от API) перехватываем и отдаём
+   * в `requestOpenExternal`: доверенные — модалка подтверждения, остальные — тост.
+   * Без этого клик уходил в навигацию фрейма, и Electron открывал сайт во внешнем
+   * браузере в обход проверки хостов.
+   */
+  function onRichTextClick(e: MouseEvent) {
+    const target = e.target instanceof Element ? e.target.closest('a') : null;
+    if (!target) return;
+    const href = target.getAttribute('href');
+    e.preventDefault();
+    e.stopPropagation();
+    if (!href) return;
+    requestOpenExternal(href);
   }
 </script>
 
@@ -312,12 +329,13 @@
         на свой страх и риск — видео может не открыться или быть ограничено источником.
       </div>
     {:else if noteHtml}
-      <div class="release-page__note">{@html noteHtml}</div>
+      <div class="release-page__note" onclick={onRichTextClick}>{@html noteHtml}</div>
     {/if}
 
     {#if descClean}
       <div
         class="release-page__desc{descCollapsed && descNeedsTruncate ? ' release-page__desc--collapsed' : ''}"
+        onclick={onRichTextClick}
       >
         {@html descHtml}
       </div>

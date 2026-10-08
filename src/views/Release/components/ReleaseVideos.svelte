@@ -12,6 +12,7 @@
     type ReleaseVideoItem,
     type ReleaseStreamingPlatform,
   } from '../_videoUtils';
+  import { requestOpenExternal } from '../../../utils/external-link';
 
   interface Props {
     releaseId: number;
@@ -123,8 +124,7 @@
   }
 
   function openPlatform(url: string) {
-    if (window.electron?.openExternal) window.electron.openExternal(url);
-    else window.open(url, '_blank', 'noopener,noreferrer');
+    requestOpenExternal(url);
   }
 
   onMount(() => {

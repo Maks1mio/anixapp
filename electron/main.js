@@ -15,7 +15,48 @@ const { loadLocalEnv } = require('./lib/load-dotenv');
 loadLocalEnv();
 require('./lib/anixart-proxy-auth').installAnixartProxyFetchAuth();
 
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, shell } = require('electron');
+
+/** Имя в системных уведомлениях / доке вместо «Electron». */
+const APP_DISPLAY_NAME = 'AnixApp';
+const APP_USER_MODEL_ID = 'com.anixapp.client';
+app.setName(APP_DISPLAY_NAME);
+try { process.title = APP_DISPLAY_NAME; } catch { /* ignore */ }
+if (process.platform === 'win32') {
+  app.setAppUserModelId(APP_USER_MODEL_ID);
+}
+
+/** Windows: без ярлыка с AUMID тосты подписываются как «Electron». */
+function ensureWindowsNotificationIdentity() {
+  if (process.platform !== 'win32') return;
+  try {
+    const fs = require('fs');
+    const programs = path.join(
+      app.getPath('appData'),
+      'Microsoft',
+      'Windows',
+      'Start Menu',
+      'Programs',
+    );
+    fs.mkdirSync(programs, { recursive: true });
+    const shortcutPath = path.join(programs, `${APP_DISPLAY_NAME}.lnk`);
+    const appRoot = path.join(electronDir, '..');
+    const iconPath = getIconPath();
+    const options = {
+      target: process.execPath,
+      args: app.isPackaged ? '' : `"${appRoot}"`,
+      cwd: app.isPackaged ? path.dirname(process.execPath) : appRoot,
+      appUserModelId: APP_USER_MODEL_ID,
+      description: APP_DISPLAY_NAME,
+      ...(iconPath ? { icon: iconPath, iconIndex: 0 } : {}),
+    };
+    const operation = fs.existsSync(shortcutPath) ? 'replace' : 'create';
+    const ok = shell.writeShortcutLink(shortcutPath, operation, options);
+    if (!ok) logger.warn('main', 'failed to write Start Menu shortcut for toast identity');
+  } catch (err) {
+    logger.warn('main', `toast identity shortcut: ${err?.message || err}`);
+  }
+}
 
 // TV dev can run alongside desktop dev (separate userData → separate single-instance lock).
 if (process.env.ANIXAPP_TV === '1') {
@@ -27,6 +68,10 @@ const electronDir = __dirname;
 
 const { registerCdnScheme, setupCdnProtocol } = require('./cdn-proxy');
 const { registerLocalMediaScheme, setupLocalMediaProtocol } = require('./lib/local-media-protocol');
+const {
+  registerNotificationSoundScheme,
+  setupNotificationSoundProtocol,
+} = require('./lib/notification-sound-protocol');
 const {
   setupDeepLinks,
   handleSecondInstanceArgv,
@@ -54,6 +99,7 @@ const { startFetchAAppBridge, stopFetchAAppBridge } = require('./lib/fetchaapp-b
 
 registerCdnScheme();
 registerLocalMediaScheme();
+registerNotificationSoundScheme();
 applyGpuFlags();
 
 // Deep links (anixart://…) need a single instance so the OS hands URLs to a running app.
@@ -121,9 +167,12 @@ app.whenReady().then(() => {
     electron: process.versions.electron,
   });
 
+  ensureWindowsNotificationIdentity();
+
   setupSessionRequestHeaders();
   setupCdnProtocol(logger);
   setupLocalMediaProtocol(() => media.getDownloadDirectory?.() || '', logger);
+  setupNotificationSoundProtocol(electronDir, logger);
   if (media.getDownloadDirectory) media.getDownloadDirectory();
 
   // macOS: в dev док показывает иконку Electron; в сборке её задаёт electron-builder.

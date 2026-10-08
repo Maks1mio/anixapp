@@ -24,6 +24,7 @@ function registerAll(deps) {
   require('./cursor').register();
   require('../services/updater').register();
   require('../windows/tools').register(deps);
+  require('../services/system-notifications').createService(deps).registerIpc();
 }
 
 module.exports = { registerAll };

@@ -1,0 +1,159 @@
+/* Баннерное окно: стек/анимации + UIKit V2 toast (общий компонент) */
+
+@use 'uikit-v2-theme';
+@use 'uikit-v2-notif-toast';
+
+:root {
+  color-scheme: dark;
+  --font-sans: 'Onest', 'IBM Plex Sans', 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: var(--uikit-v2-font, var(--font-sans));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  cursor: default;
+  pointer-events: none;
+}
+
+.notification-banner-body { background: transparent; }
+
+#app {
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.nb-stack {
+  --nb-stack-exit-x: 20px;
+  --nb-stack-exit-y: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.3s ease,
+    transform 0.32s cubic-bezier(0.4, 0, 0.8, 0.4);
+}
+
+.nb-stack--br,
+.nb-stack--tr { align-items: flex-end; }
+.nb-stack--bl,
+.nb-stack--tl { align-items: flex-start; }
+
+.nb-stack--exiting {
+  opacity: 0;
+  transform: translate3d(var(--nb-stack-exit-x), var(--nb-stack-exit-y), 0);
+  pointer-events: none;
+}
+
+.nb-stack--br.nb-stack--exiting,
+.nb-stack--tr.nb-stack--exiting { --nb-stack-exit-x: 22px; }
+.nb-stack--bl.nb-stack--exiting,
+.nb-stack--tl.nb-stack--exiting { --nb-stack-exit-x: -22px; }
+.nb-stack--br.nb-stack--exiting,
+.nb-stack--bl.nb-stack--exiting { --nb-stack-exit-y: 18px; }
+.nb-stack--tr.nb-stack--exiting,
+.nb-stack--tl.nb-stack--exiting { --nb-stack-exit-y: -18px; }
+
+.nb-stack--br,
+.nb-stack--bl { justify-content: flex-end; }
+.nb-stack--tr,
+.nb-stack--tl { justify-content: flex-start; }
+
+/*
+ * Motion только на shell. Карточка внутри без transform —
+ * иначе в конце анимации Chromium перерисовывает текст/градиент → дёргание.
+ */
+.uiv2-notif-toast-shell {
+  --nb-enter-x: 28px;
+  --nb-enter-y: 0px;
+  --nb-enter-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  width: 100%;
+  max-width: 100%;
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+  transition:
+    transform 0.38s var(--nb-enter-ease),
+    opacity 0.26s ease;
+  /* auto: иначе Electron setIgnoreMouseEvents({forward}) не видит карточку внутри */
+  pointer-events: auto;
+}
+
+/* Full 225px — не растягивать на всю ширину окна, прижать к углу стека */
+.uiv2-notif-toast-shell:has(.uiv2-notif-toast--full-media) {
+  width: auto;
+}
+
+.nb-stack--br .uiv2-notif-toast-shell {
+  --nb-enter-x: 28px;
+  --nb-enter-y: 16px;
+}
+.nb-stack--tr .uiv2-notif-toast-shell {
+  --nb-enter-x: 28px;
+  --nb-enter-y: -16px;
+}
+.nb-stack--bl .uiv2-notif-toast-shell {
+  --nb-enter-x: -28px;
+  --nb-enter-y: 16px;
+}
+.nb-stack--tl .uiv2-notif-toast-shell {
+  --nb-enter-x: -28px;
+  --nb-enter-y: -16px;
+}
+
+.uiv2-notif-toast-shell--entering {
+  opacity: 0;
+  transform: translate3d(var(--nb-enter-x), var(--nb-enter-y), 0);
+}
+
+.uiv2-notif-toast-shell--leaving {
+  pointer-events: none;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition:
+    transform 0.32s cubic-bezier(0.4, 0, 0.8, 0.4),
+    opacity 0.24s ease,
+    height 0.32s cubic-bezier(0.4, 0, 0.8, 0.4),
+    margin 0.32s ease !important;
+  transform: translate3d(var(--nb-enter-x), var(--nb-enter-y), 0);
+}
+
+.uiv2-notif-toast-shell--moving {
+  z-index: 2;
+}
+
+.nb-stack .uiv2-notif-toast {
+  box-shadow: none;
+  filter: none !important;
+  pointer-events: auto;
+}
+
+.nb-stack .uiv2-notif-toast:focus-visible {
+  outline: 2px solid #e35454;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uiv2-notif-toast-shell {
+    transition: opacity 0.12s ease;
+  }
+  .uiv2-notif-toast-shell--entering,
+  .uiv2-notif-toast-shell--leaving {
+    transform: none;
+  }
+}

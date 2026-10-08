@@ -312,6 +312,25 @@ declare global {
       fetchReleaseGeoBypass?: (releaseId: number) => Promise<unknown>;
       getSettings?: () => Promise<AppSettings>;
       saveSettings?: (settings: Partial<AppSettings>) => Promise<void>;
+      /** Уведомления устройства (нативные тосты, баннеры, звук). */
+      notifications?: {
+        /** Показать уведомление устройства. */
+        show: (payload: DeviceNotificationPayload) => Promise<boolean>;
+        /** Показать тестовое уведомление. kind: episode | article | friend | comment | release. */
+        test: (kind?: string) => Promise<boolean>;
+        getSettings: () => Promise<DeviceNotificationSettings>;
+        saveSettings: (patch: Partial<DeviceNotificationSettings>) => Promise<DeviceNotificationSettings>;
+        listSounds: () => Promise<NotificationSoundOption[]>;
+        /** Проиграть звук (для предпрослушивания). Без аргумента — текущий из настроек. */
+        previewSound: (soundId?: string) => Promise<boolean>;
+        clear: () => Promise<boolean>;
+        /** Наведение на угол / демо UI Kit — баннеры на экране. */
+        previewCorner: (
+          position: NotificationBannerPosition,
+          items?: Array<{ title?: string; body?: string; kind?: string; image?: string }>,
+        ) => Promise<boolean>;
+        endPreviewCorner: () => Promise<boolean>;
+      };
       /** Dev-only local HTTP bridge to Anixart API (see Settings → Разработчик). */
       getDevBridgeStatus?: () => Promise<DevBridgeStatus>;
       setDevBridgeEnabled?: (enabled: boolean) => Promise<DevBridgeStatus>;
@@ -502,6 +521,84 @@ export interface AppSettings {
   discordRpcPageDownloads?: boolean;
   discordRpcPageAnnouncement?: boolean;
   discordRpcPageOther?: boolean;
+}
+
+/** Позиция баннеров уведомлений на экране. */
+export type NotificationBannerPosition =
+  | 'top-left'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-right';
+
+/** Режим отображения уведомлений устройства. */
+export type NotificationAppearance = 'banner' | 'native' | 'both';
+
+/** Вариация вызова для типа уведомления. */
+export type NotificationCallMode = 'both' | 'banner' | 'native' | 'off';
+
+/** Внешний вид баннера. */
+export type NotificationBannerStyle = 'full' | 'compact' | 'minimal';
+
+export type NotificationKindId =
+  | 'episode'
+  | 'article'
+  | 'friend'
+  | 'comment'
+  | 'release'
+  | 'default';
+
+export interface DeviceNotificationSettings {
+  /** Мастер-выключатель уведомлений устройства. */
+  desktopEnabled: boolean;
+  /** Нативные уведомления ОС (Windows Action Center и т.п.). */
+  useNativeNotifications: boolean;
+  /** Свои баннеры поверх окна. */
+  customBannersEnabled: boolean;
+  /** Показывать превью текста уведомления. */
+  showPreview: boolean;
+  /** Мигать иконкой в панели задач. */
+  flashTaskbar: boolean;
+  /** Разрешить звук. */
+  soundEnabled: boolean;
+  /** id звука: off | system | chime | plub | rawr | nya | bonk | eh | gatcha | mambo | pue | note. */
+  soundId: string;
+  /** Громкость 0–100. */
+  volume: number;
+  /** Сколько баннеров показывать одновременно (1–5). */
+  bannerCount: number;
+  /** Угол экрана для баннеров. */
+  position: NotificationBannerPosition;
+  /** banner | native | both. */
+  appearance: NotificationAppearance;
+  /** Внешний вид баннера. */
+  bannerStyle: NotificationBannerStyle;
+  /** Баннеры поверх других окон. */
+  alwaysOnTop: boolean;
+  /** Не беспокоить. */
+  muted: boolean;
+  /** Показывать, когда окно приложения в фокусе. */
+  showWhenFocused: boolean;
+  /** Вариации вызова по типу (серии / записи / друзья / комменты / релизы). */
+  typeChannels: Record<NotificationKindId, NotificationCallMode>;
+}
+
+export interface NotificationSoundOption {
+  id: string;
+  label: string;
+  file: string | null;
+  desc: string;
+}
+
+export interface DeviceNotificationPayload {
+  title?: string;
+  body?: string;
+  image?: string;
+  /** Структурная ссылка { type, id } — открывается по клику на уведомление. */
+  deepLink?: { type: string; id: number };
+  kind?: string;
+  id?: string;
+  /** Показать даже если окно в фокусе. */
+  force?: boolean;
 }
 
 export interface DiscordUpdatePayload {

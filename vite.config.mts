@@ -57,6 +57,8 @@ export default defineConfig(({ command, mode }) => {
             resolve(rootDir, 'theme-editor.html'),
             resolve(rootDir, 'upscale-tool.html'),
             resolve(rootDir, 'overview-video-editor.html'),
+            resolve(rootDir, 'notification-banner.html'),
+            resolve(rootDir, 'notification-sound.html'),
           ],
       output: {
         manualChunks(id) {

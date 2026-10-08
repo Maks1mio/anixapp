@@ -9,6 +9,7 @@
         "install:no-esbuild-postinstall": "cross-env ESBUILD_SKIP_POSTINSTALL=1 yarn install",
         "dev": "vite",
         "build:icon": "node scripts/build-icon.js",
+        "build:sounds": "node scripts/generate-notification-sounds.js",
         "build": "vite build && yarn build:icon && node scripts/inject-oauth-env.js && electron-builder --publish=never",
         "build:win": "vite build && yarn build:icon && node scripts/inject-oauth-env.js && electron-builder --win --publish=never",
         "build:mac": "vite build && yarn build:icon && node scripts/inject-oauth-env.js && electron-builder --mac --publish=never",

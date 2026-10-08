@@ -20,7 +20,7 @@
     setConnectionProblem,
   } from './stores/connection';
   import { currentPath, navigate, replacePath, seedAnixHistory } from './stores/navigation';
-  import { focusFeedArticle, focusFeedChannel } from './stores/feed-focus';
+  import { focusFeedArticle, focusFeedChannel, openFeedArticle, openFeedChannel } from './stores/feed-focus';
   import { settingsModalOpen, notificationsModalOpen, watchModalOpen, watchModalReleaseId, watchModalReleaseTitle, lobbyCurrentPlayback, isPlayerWindowOpen, lobbyWatchingPeerIds } from './stores/modals';
   import { sendPlayerViewActive } from './services/lobby-ws';
   import { getPath, getSearchParams } from './router';
@@ -269,6 +269,8 @@
     if (d.type === 'profile') openProfilePanel(d.id);
     else if (d.type === 'release') navigate(`/release/${d.id}`);
     else if (d.type === 'collection') navigate(`/collection/${d.id}`);
+    else if (d.type === 'article') openFeedArticle(d.id);
+    else if (d.type === 'channel') openFeedChannel(d.id);
   }
 
   async function checkAndShow() {

@@ -836,14 +836,17 @@ function createService(deps) {
       ? (settings.bannerStyle === 'minimal' ? '' : (payload.body || ''))
       : 'РЈ РІР°СЃ РЅРѕРІРѕРµ СѓРІРµРґРѕРјР»РµРЅРёРµ';
 
-    const openDeepLink = () => {
-      if (payload.deepLink?.type && Number.isFinite(payload.deepLink.id)) {
-        win?.webContents?.send('app:deepLink', payload.deepLink);
-      }
+    const openDeepLink = (link) => {
+      const type = typeof link?.type === 'string' ? link.type : '';
+      const id = Number(link?.id);
+      if (!type || !Number.isFinite(id) || id <= 0) return;
+      const target = state.mainWindow;
+      if (!target || target.isDestroyed()) return;
+      target.webContents.send('anix:deepLink', { type, id });
     };
     const onClick = () => {
       focusMainWindow();
-      openDeepLink();
+      openDeepLink(payload.deepLink);
     };
 
     if (wantNative) {
@@ -984,9 +987,13 @@ function createService(deps) {
       const { id, url } = payload || {};
       if (typeof id === 'string') removeBanner(id);
       focusMainWindow();
-      if (url && typeof url === 'object' && Number.isFinite(url.id)) {
+      const type = typeof url?.type === 'string' ? url.type : '';
+      const linkId = Number(url?.id);
+      if (type && Number.isFinite(linkId) && linkId > 0) {
         const win = state.mainWindow;
-        win?.webContents?.send('app:deepLink', { type: url.type, id: url.id });
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('anix:deepLink', { type, id: linkId });
+        }
       }
     });
     ipcMain.on('notification-banner:ready', () => {

@@ -11,8 +11,8 @@ import type {
 
 const FALLBACK_TEST_IMAGE_RAW = 'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg';
 
-type TestPerson = { name: string; image: string; isSelf?: boolean };
-type TestAnime = { title: string; image: string };
+type TestPerson = { name: string; image: string; id?: number; isSelf?: boolean };
+type TestAnime = { title: string; image: string; id?: number };
 
 let testPeopleCache: TestPerson[] = [];
 let testPeopleCachedAt = 0;
@@ -60,25 +60,31 @@ async function loadTestPeople(): Promise<TestPerson[]> {
   }
   const people: TestPerson[] = [];
   const seen = new Set<string>();
-  const push = (name: unknown, avatar: unknown, isSelf = false) => {
+  const push = (name: unknown, avatar: unknown, id?: number, isSelf = false) => {
     const n = typeof name === 'string' ? name.trim() : '';
     if (!n || seen.has(n)) return;
     seen.add(n);
-    people.push({ name: n, image: personImage(avatar), isSelf });
+    const pid = Number(id);
+    people.push({
+      name: n,
+      image: personImage(avatar),
+      id: Number.isFinite(pid) && pid > 0 ? pid : undefined,
+      isSelf,
+    });
   };
   try {
     const selfRes = await window.anixApi?.profile?.self?.() as {
       profile?: { id?: number; login?: string; avatar?: string };
     } | null;
     const self = selfRes?.profile;
-    push(self?.login, self?.avatar, true);
+    push(self?.login, self?.avatar, self?.id, true);
     const uid = Number(self?.id);
     if (Number.isFinite(uid) && uid > 0) {
       const friendsRes = await window.anixApi?.profile?.getFriends?.(uid, 0) as {
-        content?: Array<{ login?: string; avatar?: string }>;
+        content?: Array<{ id?: number; login?: string; avatar?: string }>;
       } | null;
       for (const fr of friendsRes?.content ?? []) {
-        push(fr?.login, fr?.avatar, false);
+        push(fr?.login, fr?.avatar, fr?.id, false);
       }
     }
   } catch {
@@ -110,7 +116,12 @@ async function loadTestFavorites(): Promise<TestAnime[]> {
       const title = String(release?.title_ru || release?.title || raw?.title_ru || '').trim();
       if (!title || seen.has(title)) continue;
       seen.add(title);
-      favs.push({ title, image: personImage(release?.image || release?.poster || raw?.image) });
+      const rid = Number(release?.id ?? raw?.id);
+      favs.push({
+        title,
+        image: personImage(release?.image || release?.poster || raw?.image),
+        id: Number.isFinite(rid) && rid > 0 ? rid : undefined,
+      });
     }
   } catch {
     // избранное опционально
@@ -133,6 +144,9 @@ function buildPersonalizedTest(
   const id = `test-${kind}-${Date.now()}`;
   const names = { name: a.name, other: b.name, title: anime.title };
 
+  const profileLink = a.id ? { type: 'profile' as const, id: a.id } : undefined;
+  const releaseLink = anime.id ? { type: 'release' as const, id: anime.id } : undefined;
+
   switch (kind) {
     case 'friend':
       return {
@@ -146,6 +160,7 @@ function buildPersonalizedTest(
         ]), names),
         image: a.image,
         kind: Math.random() > 0.5 ? 'friend' : 'friend-accept',
+        deepLink: profileLink,
         force: true,
       };
     case 'comment':
@@ -162,6 +177,7 @@ function buildPersonalizedTest(
         ]), names),
         image: a.image,
         kind: 'comment',
+        deepLink: releaseLink ?? profileLink,
         force: true,
       };
     case 'article':
@@ -176,6 +192,7 @@ function buildPersonalizedTest(
         ]), names),
         image: a.image,
         kind: 'article',
+        deepLink: profileLink,
         force: true,
       };
     case 'release':
@@ -190,6 +207,7 @@ function buildPersonalizedTest(
         ]), names),
         image: anime.image,
         kind: 'related',
+        deepLink: releaseLink,
         force: true,
       };
     case 'episode':
@@ -204,6 +222,7 @@ function buildPersonalizedTest(
         ]), names),
         image: anime.image,
         kind: 'episode',
+        deepLink: releaseLink,
         force: true,
       };
     default:
@@ -217,6 +236,7 @@ function buildPersonalizedTest(
         ]),
         image: anime.image !== fallbackTestImage() ? anime.image : a.image,
         kind: 'default',
+        deepLink: releaseLink ?? profileLink,
         force: true,
       };
   }

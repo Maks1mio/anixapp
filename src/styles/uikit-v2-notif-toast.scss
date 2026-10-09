@@ -30,6 +30,12 @@
   &[data-kind='friend-accept'] { --toast-accent: #34d399; --toast-tint: #1b3028; --toast-scrim: #1b3028; }
   &[data-kind='comment'] { --toast-accent: #f472b6; --toast-tint: #2f1c28; --toast-scrim: #2f1c28; }
   &[data-kind='related'] { --toast-accent: #15c86a; --toast-tint: #1b3025; --toast-scrim: #1b3025; }
+  /* Как в Android: тёплый оливково-золотой слева → графит */
+  &[data-kind='achievement'] {
+    --toast-accent: #f0c43a;
+    --toast-tint: #6b5a1b;
+    --toast-scrim: #2a2414;
+  }
   &[data-kind='default'] { --toast-accent: #e35454; --toast-tint: #2a2224; --toast-scrim: #2a2224; }
 
   /* Плавный «перелив» градиента при hover — без filter/смены background */
@@ -74,7 +80,8 @@
     }
   }
 
-  &--full-social {
+  &--full-social,
+  &--full-badge {
     align-items: flex-start;
     min-height: 5.9rem;
     background: #1c1c1e;
@@ -97,6 +104,53 @@
         #222226 42%,
         #222226 65%
       );
+    }
+  }
+
+  /* Достижение: выравнивание по центру как на референсе Android */
+  &--full-badge {
+    align-items: center;
+    min-height: 5.4rem;
+    padding: 12px 14px;
+    gap: 14px;
+
+    &::before {
+      background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--toast-tint) 92%, #1c1c1e) 0%,
+        color-mix(in srgb, var(--toast-tint) 35%, #1c1c1e) 38%,
+        #1c1c1e 72%
+      );
+    }
+
+    &:hover::before {
+      background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--toast-tint) 78%, var(--toast-accent)) 0%,
+        color-mix(in srgb, var(--toast-tint) 28%, #222226) 40%,
+        #222226 72%
+      );
+    }
+  }
+
+  &[data-kind='achievement'].uiv2-notif-toast--compact {
+    align-items: center;
+    padding: 8px 12px 8px 8px;
+    min-height: 4.35rem;
+    gap: 12px;
+
+    .uiv2-notif-toast__tint {
+      background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--toast-tint) 88%, transparent) 0%,
+        rgba(28, 28, 30, 0.82) 46%,
+        rgba(28, 28, 30, 0.9) 70%
+      );
+    }
+
+    .uiv2-notif-toast__wash {
+      opacity: 0.18;
+      filter: saturate(0.85);
     }
   }
 
@@ -170,6 +224,77 @@
 .uiv2-notif-toast--full-social .uiv2-notif-toast__avatar {
   margin-top: 0;
   align-self: flex-start;
+}
+
+/* Значок достижения — цельная белая плитка; арт внутри, без «оливковой» рамки */
+.uiv2-notif-toast__badge {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+}
+
+.uiv2-notif-toast__badge-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background-color: transparent;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.uiv2-notif-toast--full-badge .uiv2-notif-toast__badge {
+  margin-top: 0;
+  align-self: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 12px;
+}
+
+.uiv2-notif-toast[data-kind='achievement'] .uiv2-notif-toast__thumb {
+  box-sizing: border-box;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  padding: 0;
+  background-color: #fff;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-clip: border-box;
+  background-origin: border-box;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+}
+
+.uiv2-notif-toast[data-kind='achievement'] .uiv2-notif-toast__body {
+  color: #f2f2f2;
+  font-weight: 600;
+  -webkit-line-clamp: 1;
+}
+
+.uiv2-notif-toast[data-kind='achievement'] .uiv2-notif-toast__body b {
+  color: #fff;
+  font-weight: 700;
+}
+
+.uiv2-notif-toast[data-kind='achievement'] .uiv2-notif-toast__kind {
+  letter-spacing: 0.04em;
+}
+
+.uiv2-notif-toast[data-kind='achievement'] .uiv2-notif-toast__time {
+  margin-top: 1px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  color: color-mix(in srgb, #d0d0d0 55%, transparent);
 }
 
 .uiv2-notif-toast__thumb {

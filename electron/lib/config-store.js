@@ -349,7 +349,9 @@ const NOTIFICATION_SOUND_MIGRATE = {
 const NOTIFICATION_APPEARANCE = new Set(['banner', 'native', 'both']);
 const NOTIFICATION_CALL_MODES = new Set(['both', 'banner', 'native', 'off']);
 const NOTIFICATION_BANNER_STYLES = new Set(['full', 'compact', 'minimal']);
-const NOTIFICATION_KIND_IDS = ['episode', 'article', 'friend', 'comment', 'release', 'default'];
+const NOTIFICATION_KIND_IDS = [
+  'episode', 'article', 'friend', 'comment', 'release', 'achievement', 'default',
+];
 
 function clampNotificationCount(n) {
   const v = Math.round(Number(n));

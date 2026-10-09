@@ -361,7 +361,7 @@ declare global {
       notifications?: {
         /** Показать уведомление устройства. */
         show: (payload: DeviceNotificationPayload) => Promise<boolean>;
-        /** Показать тестовое уведомление. kind: episode | article | friend | comment | release. */
+        /** Показать тестовое уведомление. kind: episode | article | friend | comment | release | achievement. */
         test: (kind?: string) => Promise<boolean>;
         getSettings: () => Promise<DeviceNotificationSettings>;
         saveSettings: (patch: Partial<DeviceNotificationSettings>) => Promise<DeviceNotificationSettings>;
@@ -375,6 +375,19 @@ declare global {
           items?: Array<{ title?: string; body?: string; kind?: string; image?: string }>,
         ) => Promise<boolean>;
         endPreviewCorner: () => Promise<boolean>;
+        /** FCM push (тот же канал, что Android NotificationService). */
+        fcmStatus: () => Promise<{
+          connected: boolean;
+          topicSubscribed: boolean;
+          topic: string | null;
+          hasCredentials: boolean;
+        }>;
+        fcmSync: () => Promise<{
+          connected: boolean;
+          topicSubscribed: boolean;
+          topic: string | null;
+          hasCredentials: boolean;
+        }>;
       };
       /** Dev-only local HTTP bridge to Anixart API (see Settings → Разработчик). */
       getDevBridgeStatus?: () => Promise<DevBridgeStatus>;
@@ -590,6 +603,7 @@ export type NotificationKindId =
   | 'friend'
   | 'comment'
   | 'release'
+  | 'achievement'
   | 'default';
 
 export interface DeviceNotificationSettings {

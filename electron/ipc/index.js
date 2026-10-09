@@ -24,7 +24,23 @@ function registerAll(deps) {
   require('./cursor').register();
   require('../services/updater').register();
   require('../windows/tools').register(deps);
-  require('../services/system-notifications').createService(deps).registerIpc();
+
+  const notifications = require('../services/system-notifications').createService(deps);
+  notifications.registerIpc();
+
+  const fcm = require('../services/fcm-push').createFcmPushService({
+    notify: (payload) => notifications.notify(payload),
+    getAnixart: deps.getAnixart,
+  });
+  deps.fcmPush = fcm;
+
+  ipcMain.handle('notifications:fcmStatus', () => fcm.getStatus());
+  ipcMain.handle('notifications:fcmSync', () => fcm.sync());
+
+  // Подписка на FCM topic после старта (когда уже есть токен сессии).
+  setTimeout(() => {
+    void fcm.sync();
+  }, 12_000);
 }
 
 module.exports = { registerAll };

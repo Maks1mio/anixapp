@@ -225,16 +225,25 @@
         <UiV2SettingsRow
           title="Проверить"
           desc={canDeliver
-            ? 'Отправить тестовое уведомление о новой серии'
+            ? 'Тест серии или значка (как «Новое достижение» на Android)'
             : 'Включите системные уведомления или карточки приложения'}
         >
-          <UiV2Button
-            label="Проверить"
-            variant="primary"
-            size="sm"
-            disabled={!canDeliver}
-            onclick={() => testKind('episode')}
-          />
+          <div class="notif-test-actions">
+            <UiV2Button
+              label="Серия"
+              variant="primary"
+              size="sm"
+              disabled={!canDeliver}
+              onclick={() => testKind('episode')}
+            />
+            <UiV2Button
+              label="Значок"
+              variant="chrome"
+              size="sm"
+              disabled={!canDeliver}
+              onclick={() => testKind('achievement')}
+            />
+          </div>
         </UiV2SettingsRow>
       </div>
 
@@ -340,18 +349,26 @@
               {#each stylePreviewItems as sample, i (sample.kind + settings.bannerStyle)}
                 {@const img = sample.image || PREVIEW_IMAGE}
                 {@const fullMedia = sample.kind === 'episode' || sample.kind === 'related' || sample.kind === 'release'}
+                {@const fullBadge = sample.kind === 'achievement' || sample.kind === 'badge'}
                 <article
                   class="notif-style-live__card notif-style-live__card--{settings.bannerStyle}"
                   class:notif-style-live__card--full-media={settings.bannerStyle === 'full' && fullMedia}
-                  class:notif-style-live__card--full-social={settings.bannerStyle === 'full' && !fullMedia}
+                  class:notif-style-live__card--full-social={settings.bannerStyle === 'full' && !fullMedia && !fullBadge}
+                  class:notif-style-live__card--full-badge={settings.bannerStyle === 'full' && fullBadge}
                   data-kind={sample.kind}
                   style="animation-delay: {i * 45}ms"
                 >
                   {#if settings.bannerStyle === 'full' && fullMedia}
                     <span class="notif-style-live__media" style="background-image:url('{img}')"></span>
                     <span class="notif-style-live__scrim" aria-hidden="true"></span>
+                  {:else if settings.bannerStyle === 'full' && fullBadge}
+                    <span class="notif-style-live__badge" style="background-image:url('{img}')"></span>
                   {:else if settings.bannerStyle === 'full'}
                     <span class="notif-style-live__avatar" style="background-image:url('{img}')"></span>
+                  {:else if settings.bannerStyle === 'compact' && fullBadge}
+                    <span class="notif-style-live__wash" style="background-image:url('{img}')" aria-hidden="true"></span>
+                    <span class="notif-style-live__tint" aria-hidden="true"></span>
+                    <span class="notif-style-live__badge" style="background-image:url('{img}')"></span>
                   {:else if settings.bannerStyle === 'compact'}
                     <span class="notif-style-live__wash" style="background-image:url('{img}')" aria-hidden="true"></span>
                     <span class="notif-style-live__tint" aria-hidden="true"></span>

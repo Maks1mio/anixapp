@@ -52,6 +52,8 @@ const KIND_CLASS: Record<string, string> = {
   friend: 'friend',
   'friend-accept': 'friend-accept',
   comment: 'comment',
+  achievement: 'achievement',
+  badge: 'achievement',
   test: 'default',
   default: 'default',
 };
@@ -105,8 +107,10 @@ function kindKey(kind?: string): string {
   return KIND_CLASS[kind || 'default'] || 'default';
 }
 
-function fullLayout(kind: string): 'media' | 'social' {
-  return kind === 'episode' || kind === 'related' ? 'media' : 'social';
+function fullLayout(kind: string): 'media' | 'social' | 'badge' {
+  if (kind === 'episode' || kind === 'related') return 'media';
+  if (kind === 'achievement') return 'badge';
+  return 'social';
 }
 
 function visualOrder(
@@ -251,6 +255,19 @@ export function mountNotificationBanner(root: HTMLElement): void {
         el.appendChild(media);
         el.appendChild(scrim);
         el.appendChild(main);
+      } else if (layout === 'badge') {
+        /* Белая плитка + арт внутри (как large icon на Android) */
+        const badge = document.createElement('span');
+        badge.className = 'uiv2-notif-toast__badge';
+        const art = document.createElement('span');
+        art.className = 'uiv2-notif-toast__badge-art';
+        if (image) art.style.backgroundImage = bgUrl(image);
+        badge.appendChild(art);
+        const main = document.createElement('span');
+        main.className = 'uiv2-notif-toast__main';
+        appendKindBody(main, kindLabel, bodyHtml, timeStr);
+        el.appendChild(badge);
+        el.appendChild(main);
       } else {
         const avatar = document.createElement('span');
         avatar.className = 'uiv2-notif-toast__avatar';
@@ -274,14 +291,29 @@ export function mountNotificationBanner(root: HTMLElement): void {
       tint.setAttribute('aria-hidden', 'true');
       el.appendChild(tint);
 
-      const thumb = document.createElement('span');
-      thumb.className = 'uiv2-notif-toast__thumb';
-      if (image) thumb.style.backgroundImage = bgUrl(image);
-      const main = document.createElement('span');
-      main.className = 'uiv2-notif-toast__main';
-      appendKindBody(main, kindLabel, bodyHtml);
-      el.appendChild(thumb);
-      el.appendChild(main);
+      /* Достижение: белая плитка + время, как на Android-референсе */
+      if (kind === 'achievement') {
+        const badge = document.createElement('span');
+        badge.className = 'uiv2-notif-toast__badge';
+        const art = document.createElement('span');
+        art.className = 'uiv2-notif-toast__badge-art';
+        if (image) art.style.backgroundImage = bgUrl(image);
+        badge.appendChild(art);
+        const main = document.createElement('span');
+        main.className = 'uiv2-notif-toast__main';
+        appendKindBody(main, kindLabel, bodyHtml, timeStr);
+        el.appendChild(badge);
+        el.appendChild(main);
+      } else {
+        const thumb = document.createElement('span');
+        thumb.className = 'uiv2-notif-toast__thumb';
+        if (image) thumb.style.backgroundImage = bgUrl(image);
+        const main = document.createElement('span');
+        main.className = 'uiv2-notif-toast__main';
+        appendKindBody(main, kindLabel, bodyHtml);
+        el.appendChild(thumb);
+        el.appendChild(main);
+      }
     } else {
       if (image) {
         const wash = document.createElement('span');
@@ -330,7 +362,7 @@ export function mountNotificationBanner(root: HTMLElement): void {
     if (item.image) {
       const url = bgUrl(item.image);
       for (const node of el.querySelectorAll(
-        '.uiv2-notif-toast__media, .uiv2-notif-toast__avatar, .uiv2-notif-toast__thumb, .uiv2-notif-toast__wash',
+        '.uiv2-notif-toast__media, .uiv2-notif-toast__avatar, .uiv2-notif-toast__badge-art, .uiv2-notif-toast__thumb, .uiv2-notif-toast__wash',
       ) as NodeListOf<HTMLElement>) {
         if (node.style.backgroundImage !== url) node.style.backgroundImage = url;
       }

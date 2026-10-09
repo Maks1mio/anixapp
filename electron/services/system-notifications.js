@@ -44,6 +44,18 @@ const BANNER_ITEM_GAP = 10;
 const STACK_PADDING = 0;
 const BANNER_MARGIN = 16;
 const SAMPLE_POSTER = 'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg';
+/** Fallback-картинка значка для теста (прозрачный фон под белую плитку тоста). */
+const SAMPLE_BADGE =
+  'data:image/svg+xml,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' +
+      '<defs><linearGradient id="g" x1="0.2" y1="0" x2="0.8" y2="1">' +
+      '<stop offset="0%" stop-color="#f6d35a"/><stop offset="100%" stop-color="#e29a1a"/>' +
+      '</linearGradient></defs>' +
+      '<circle cx="32" cy="26" r="13" fill="url(#g)"/>' +
+      '<path d="M18 50c5-11 23-11 28 0v2H18z" fill="url(#g)"/>' +
+      '</svg>',
+  );
 
 /**
  * Картинка для баннера.
@@ -314,6 +326,12 @@ function createService(deps) {
         body: 'Добавлена страница релиза «Кае не страшно»',
         kind: 'related',
         image: SAMPLE_POSTER,
+      },
+      {
+        title: 'Новое достижение',
+        body: '«Спасибо Эрен»',
+        kind: 'achievement',
+        image: SAMPLE_BADGE,
       },
     ];
     const rawList = Array.isArray(customItems) && customItems.length
@@ -642,7 +660,10 @@ function createService(deps) {
     return true;
   }
 
-  async function showNative({ title, body, silent, onClick, image }) {
+  /**
+   * @param {{ title?: string, body?: string, silent?: boolean, onClick?: () => void, image?: string, imageCrop?: 'circle' | 'none' }} args
+   */
+  async function showNative({ title, body, silent, onClick, image, imageCrop = 'circle' }) {
     if (!Notification.isSupported()) {
       logger.warn('notifications', 'native Notification.isSupported() === false');
       return false;
@@ -652,6 +673,7 @@ function createService(deps) {
       const iconPath = await resolveToastIconPath(image, fallback);
       const safeTitle = title || 'AnixApp';
       const safeBody = body || '';
+      const crop = imageCrop === 'none' ? 'none' : 'circle';
 
       /** @type {Electron.NotificationConstructorOptions} */
       const opts = {
@@ -662,16 +684,17 @@ function createService(deps) {
         timeoutType: 'default',
       };
 
-      // Windows: круглая аватарка вместо иконки приложения
+      // Windows: аватар кругом; значок достижения — без crop (как Android appearance=1)
       if (process.platform === 'win32' && iconPath) {
         try {
           const src = pathToFileURL(iconPath).href;
+          const cropAttr = crop === 'none' ? '' : ' hint-crop="circle"';
           opts.toastXml = [
             '<toast>',
             '<visual><binding template="ToastGeneric">',
             `<text>${escapeXml(safeTitle)}</text>`,
             `<text>${escapeXml(safeBody)}</text>`,
-            `<image placement="appLogoOverride" hint-crop="circle" src="${escapeXml(src)}"/>`,
+            `<image placement="appLogoOverride"${cropAttr} src="${escapeXml(src)}"/>`,
             '</binding></visual>',
             '</toast>',
           ].join('');
@@ -791,6 +814,8 @@ function createService(deps) {
       case 'comment': return 'comment';
       case 'related':
       case 'release': return 'release';
+      case 'achievement':
+      case 'badge': return 'achievement';
       default: return 'default';
     }
   }
@@ -847,8 +872,16 @@ function createService(deps) {
 
     const openDeepLink = (link) => {
       const type = typeof link?.type === 'string' ? link.type : '';
+      if (!type) return;
       const id = Number(link?.id);
-      if (!type || !Number.isFinite(id) || id <= 0) return;
+      // profile-badge на Android приходит с id=0 — экран своих значков без сущности.
+      if (type === 'profile-badge') {
+        const target = state.mainWindow;
+        if (!target || target.isDestroyed()) return;
+        target.webContents.send('anix:deepLink', { type, id: Number.isFinite(id) ? id : 0 });
+        return;
+      }
+      if (!Number.isFinite(id) || id <= 0) return;
       const target = state.mainWindow;
       if (!target || target.isDestroyed()) return;
       target.webContents.send('anix:deepLink', { type, id });
@@ -858,6 +891,7 @@ function createService(deps) {
       openDeepLink(payload.deepLink);
     };
 
+    const kindKey = resolveKindKey(payload.kind);
     if (wantNative) {
       // Системный тост: звук ОС. Мелодии приложения (nya и т.п.) не трогаем.
       void showNative({
@@ -866,6 +900,7 @@ function createService(deps) {
         silent: false,
         onClick,
         image: payload.image || '',
+        imageCrop: kindKey === 'achievement' ? 'none' : 'circle',
       });
     }
 
@@ -960,6 +995,13 @@ function createService(deps) {
           kind: 'related',
           image: SAMPLE_POSTER,
         },
+        achievement: {
+          title: 'Новое достижение',
+          body: '«Спасибо Эрен»',
+          kind: 'achievement',
+          image: SAMPLE_BADGE,
+          deepLink: { type: 'profile-badge', id: 0 },
+        },
         default: {
           title: 'AnixApp',
           body: 'Превью баннера и системного тоста',
@@ -998,11 +1040,18 @@ function createService(deps) {
       focusMainWindow();
       const type = typeof url?.type === 'string' ? url.type : '';
       const linkId = Number(url?.id);
-      if (type && Number.isFinite(linkId) && linkId > 0) {
-        const win = state.mainWindow;
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('anix:deepLink', { type, id: linkId });
-        }
+      if (!type) return;
+      const win = state.mainWindow;
+      if (!win || win.isDestroyed()) return;
+      if (type === 'profile-badge') {
+        win.webContents.send('anix:deepLink', {
+          type,
+          id: Number.isFinite(linkId) ? linkId : 0,
+        });
+        return;
+      }
+      if (Number.isFinite(linkId) && linkId > 0) {
+        win.webContents.send('anix:deepLink', { type, id: linkId });
       }
     });
     ipcMain.on('notification-banner:ready', () => {

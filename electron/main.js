@@ -228,6 +228,7 @@ app.on('before-quit', () => {
   // а не прятать окно в трей.
   if (process.platform === 'darwin') state.isQuitting = true;
   try { media.persistDownloads?.(); } catch (_) {}
+  try { void deps.fcmPush?.stop?.(); } catch (_) {}
   stopFetchAAppBridge();
   try { require('./lib/tv-lan-login').stop(); } catch (_) {}
   if (discordRpc) discordRpc.destroy();

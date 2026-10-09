@@ -10,6 +10,7 @@
   import { notificationUnreadCount, refreshNotificationUnreadCount } from '../stores/notifications';
   import {
     startDeviceNotificationPolling,
+    startBadgeAchievementPolling,
     resetDeviceNotificationBaseline,
     loadDeviceNotificationSettings,
   } from '../stores/device-notifications';
@@ -284,7 +285,10 @@
     }, 60_000);
 
     // Уведомления устройства: опрашиваем новые и показываем тост/баннер.
-    const stopDevicePolling = startDeviceNotificationPolling(60_000);
+    // Poll — запасной канал, если FCM topic ещё не подписан; при активном FCM тосты идут пушем.
+    const stopDevicePolling = startDeviceNotificationPolling(45_000);
+    // Значки: на Android только FCM; на ПК дополнительно смотрим каталог badges.
+    const stopBadgePolling = startBadgeAchievementPolling(60_000);
     const stopSound = startNotificationSoundListener();
 
     return () => {
@@ -294,6 +298,7 @@
       unsubAuth();
       clearInterval(unreadPoll);
       stopDevicePolling();
+      stopBadgePolling();
       stopSound();
     };
   });

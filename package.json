@@ -85,6 +85,7 @@
     "dependencies": {
         "@capacitor/app": "^8.1.2",
         "@capacitor/core": "^8.5.2",
+        "@eneris/push-receiver": "4.4.0",
         "@xhayper/discord-rpc": "^1.5.1",
         "anime4k-webgpu": "^1.0.0",
         "anixapi": "0.3.3",

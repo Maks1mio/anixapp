@@ -11657,6 +11657,14 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
   }
 }
 
+.notif-test-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .notif-sound {
   display: flex;
   align-items: center;
@@ -11765,6 +11773,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
   &[data-kind='friend-accept'] { --nsl-accent: #34d399; }
   &[data-kind='article'] { --nsl-accent: #ffa800; }
   &[data-kind='related'] { --nsl-accent: #15c86a; }
+  &[data-kind='achievement'] { --nsl-accent: #f0c43a; --nsl-tint: #6b5a1b; }
 
   &--full-media {
     flex-direction: column;
@@ -11858,6 +11867,60 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
   background-color: #222;
 }
 
+.notif-style-live__badge {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  padding: 0;
+  background-color: #fff;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+}
+
+.notif-style-live__card--full-badge {
+  align-items: center;
+  min-height: 5.2rem;
+  gap: 12px;
+
+  &::before {
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--nsl-tint, #6b5a1b) 92%, #1c1c1e) 0%,
+      color-mix(in srgb, var(--nsl-tint, #6b5a1b) 35%, #1c1c1e) 38%,
+      #1c1c1e 72%
+    );
+  }
+}
+
+.notif-style-live__card[data-kind='achievement'] .notif-style-live__thumb {
+  box-sizing: border-box;
+  padding: 0;
+  border-radius: 12px;
+  background-color: #fff;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+}
+
+.notif-style-live__card[data-kind='achievement'] .notif-style-live__body {
+  color: #f2f2f2;
+  font-weight: 600;
+}
+
+.notif-style-live__card[data-kind='achievement'] .notif-style-live__body :global(b) {
+  color: #fff;
+  font-weight: 700;
+}
+
 .notif-style-live__thumb {
   position: relative;
   z-index: 2;
@@ -11868,6 +11931,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
   background-size: cover;
   background-position: center;
   background-color: #222;
+
 }
 
 .notif-style-live__main {

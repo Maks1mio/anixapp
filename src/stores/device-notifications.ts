@@ -2,7 +2,9 @@ import { get, writable } from 'svelte/store';
 import { isAuthenticated } from './auth';
 import { fetchAllNotifications } from './notifications';
 import { parseNotification } from '../utils/notification-format';
+import { resolveBadgeImageUrl, resolveBadgeName } from '../utils/badge';
 import { resolveCdnAssetUrl } from '../utils/posterUrl';
+import { resolveJacksonRefs } from '../utils/jackson-refs';
 import type {
   DeviceNotificationSettings,
   DeviceNotificationPayload,
@@ -10,6 +12,19 @@ import type {
 } from '../types/electron';
 
 const FALLBACK_TEST_IMAGE_RAW = 'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg';
+
+/** Тестовая картинка значка (прозрачный фон — на белой плитке тоста). */
+const SAMPLE_ACHIEVEMENT_BADGE =
+  'data:image/svg+xml,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' +
+      '<defs><linearGradient id="g" x1="0.2" y1="0" x2="0.8" y2="1">' +
+      '<stop offset="0%" stop-color="#f6d35a"/><stop offset="100%" stop-color="#e29a1a"/>' +
+      '</linearGradient></defs>' +
+      '<circle cx="32" cy="26" r="13" fill="url(#g)"/>' +
+      '<path d="M18 50c5-11 23-11 28 0v2H18z" fill="url(#g)"/>' +
+      '</svg>',
+  );
 
 type TestPerson = { name: string; image: string; id?: number; isSelf?: boolean };
 type TestAnime = { title: string; image: string; id?: number };
@@ -225,6 +240,22 @@ function buildPersonalizedTest(
         deepLink: releaseLink,
         force: true,
       };
+    case 'achievement':
+    case 'badge':
+      return {
+        id,
+        title: 'Новое достижение',
+        body: pickText([
+          '«Спасибо Эрен»',
+          '«Я-Гуль»',
+          '«Накама на всегда»',
+          '«Хелпер»',
+        ]),
+        image: SAMPLE_ACHIEVEMENT_BADGE,
+        kind: 'achievement',
+        deepLink: { type: 'profile-badge', id: 0 },
+        force: true,
+      };
     default:
       return {
         id,
@@ -295,6 +326,12 @@ export async function buildCornerPreviewItems(): Promise<CornerPreviewItem[]> {
       kind: 'related',
       image: rel.image,
     },
+    {
+      title: 'Новое достижение',
+      body: '«Спасибо Эрен»',
+      kind: 'achievement',
+      image: SAMPLE_ACHIEVEMENT_BADGE,
+    },
   ];
 }
 
@@ -327,6 +364,7 @@ const DEFAULT_SETTINGS: DeviceNotificationSettings = {
     friend: 'both',
     comment: 'both',
     release: 'both',
+    achievement: 'both',
     default: 'both',
   },
 };
@@ -618,8 +656,21 @@ function notificationTitle(kind: string): string {
       return 'Друзья';
     case 'comment':
       return 'Новый комментарий';
+    case 'achievement':
+    case 'badge':
+      return 'Новое достижение';
     default:
       return 'AnixApp';
+  }
+}
+
+/** FCM topic активен — девайс-тосты идут пушем; poll только для baseline/колокольчика. */
+async function isFcmPushActive(): Promise<boolean> {
+  try {
+    const st = await bridge()?.fcmStatus?.();
+    return !!(st?.connected && st?.topicSubscribed);
+  } catch {
+    return false;
   }
 }
 
@@ -629,6 +680,7 @@ export async function pollDeviceNotifications(): Promise<void> {
   if (!api) return;
   polling = true;
   try {
+    const fcmActive = await isFcmPushActive();
     const content = await fetchAllNotifications();
     const fresh: { raw: unknown; key: string }[] = [];
     for (let i = 0; i < content.length; i++) {
@@ -652,6 +704,8 @@ export async function pollDeviceNotifications(): Promise<void> {
 
     for (const f of fresh) {
       seenIds.add(f.key);
+      // Когда FCM подписан на topic — пуши уже показали тост; не дублируем из poll.
+      if (fcmActive) continue;
       const n = parseNotification(f.raw);
       const kind = n.markerKind === 'none' ? 'default' : n.markerKind;
       await showDeviceNotification({
@@ -674,6 +728,7 @@ export async function pollDeviceNotifications(): Promise<void> {
 export function resetDeviceNotificationBaseline(): void {
   seenIds.clear();
   baselineReady = false;
+  resetBadgeAchievementBaseline();
 }
 
 /**
@@ -690,5 +745,96 @@ export function startDeviceNotificationPolling(intervalMs = 60_000): () => void 
     clearTimeout(warmup);
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = null;
+  };
+}
+
+// ——— Значки / достижения (FCM-only на Android; на ПК — poll каталога) ———
+
+const seenBadgeIds = new Set<number>();
+let badgeBaselineReady = false;
+let badgePolling = false;
+let badgePollTimer: ReturnType<typeof setInterval> | null = null;
+
+type BadgeRow = { id: number; name: string; image: string; available: boolean };
+
+async function fetchAvailableBadges(): Promise<BadgeRow[]> {
+  const api = window.anixApi?.settings;
+  if (!api?.getBadges) return [];
+  const out: BadgeRow[] = [];
+  const seen = new Set<number>();
+  for (let page = 0; page < 20; page++) {
+    const res = resolveJacksonRefs(await api.getBadges(page)) as {
+      content?: unknown[];
+      total_page_count?: number;
+    };
+    const rows = Array.isArray(res?.content) ? res.content : [];
+    for (const raw of rows) {
+      if (!raw || typeof raw !== 'object') continue;
+      const row = raw as Record<string, unknown>;
+      const id = Number(row.id);
+      if (!Number.isFinite(id) || id <= 0 || seen.has(id)) continue;
+      const available = row.available === true || row.is_available === true;
+      if (!available) continue;
+      seen.add(id);
+      out.push({
+        id,
+        name: resolveBadgeName(row) || 'Без названия',
+        image: resolveBadgeImageUrl(row) || SAMPLE_ACHIEVEMENT_BADGE,
+        available: true,
+      });
+    }
+    const total = Math.max(1, Math.floor(Number(res?.total_page_count) || 1));
+    if (page + 1 >= total) break;
+  }
+  return out;
+}
+
+/**
+ * Опрос каталога значков: новый available → тост «Новое достижение»
+ * (на Android это только FCM ACTION_ACHIEVEMENT_OBTAINED).
+ */
+export async function pollBadgeAchievements(): Promise<void> {
+  if (badgePolling || !get(isAuthenticated)) return;
+  if (!bridge() && !window.anixApi?.settings?.getBadges) return;
+  badgePolling = true;
+  try {
+    const badges = await fetchAvailableBadges();
+    if (!badgeBaselineReady) {
+      for (const b of badges) seenBadgeIds.add(b.id);
+      badgeBaselineReady = true;
+      return;
+    }
+    for (const b of badges) {
+      if (seenBadgeIds.has(b.id)) continue;
+      seenBadgeIds.add(b.id);
+      await showDeviceNotification({
+        id: `achievement-badge-${b.id}-${Date.now()}`,
+        title: 'Новое достижение',
+        body: `«${b.name}»`,
+        image: b.image,
+        kind: 'achievement',
+        deepLink: { type: 'profile-badge', id: 0 },
+      });
+    }
+  } catch {
+    // тихо
+  } finally {
+    badgePolling = false;
+  }
+}
+
+export function resetBadgeAchievementBaseline(): void {
+  seenBadgeIds.clear();
+  badgeBaselineReady = false;
+}
+
+export function startBadgeAchievementPolling(intervalMs = 60_000): () => void {
+  const tick = () => { void pollBadgeAchievements(); };
+  const warmup = setTimeout(tick, 12_000);
+  badgePollTimer = setInterval(tick, intervalMs);
+  return () => {
+    clearTimeout(warmup);
+    if (badgePollTimer) clearInterval(badgePollTimer);
+    badgePollTimer = null;
   };
 }

@@ -9,6 +9,7 @@ export type NotificationKindId =
   | 'friend'
   | 'comment'
   | 'release'
+  | 'achievement'
   | 'default';
 
 /** Как вызывать уведомление устройства для типа. */
@@ -71,6 +72,13 @@ export const NOTIFICATION_KINDS: NotificationKindMeta[] = [
     sampleTitle: 'Новый релиз',
     sampleBody: 'В приложение была добавлена страница релиза «Необъятный океан 3»',
   },
+  {
+    id: 'achievement',
+    label: 'Значки',
+    desc: 'Новое достижение / полученный значок',
+    sampleTitle: 'Новое достижение',
+    sampleBody: '«Спасибо Эрен»',
+  },
 ];
 
 export const CALL_MODE_OPTIONS: { value: NotificationCallMode; label: string; desc: string }[] = [
@@ -85,7 +93,7 @@ export const BANNER_STYLE_OPTIONS: {
   label: string;
   desc: string;
 }[] = [
-  { value: 'full', label: 'Полный', desc: 'Постер для серий/релизов, аватар для остальных' },
+  { value: 'full', label: 'Полный', desc: 'Постер, аватар или значок — по типу события' },
   { value: 'compact', label: 'Компактный', desc: 'Квадратное превью, тип и текст' },
   { value: 'minimal', label: 'Минимальный', desc: 'Без превью, тонированный фон' },
 ];
@@ -104,6 +112,9 @@ export function normalizeKind(kind?: string | null): NotificationKindId {
     case 'related':
     case 'release':
       return 'release';
+    case 'achievement':
+    case 'badge':
+      return 'achievement';
     default:
       return 'default';
   }
@@ -116,6 +127,7 @@ export function defaultTypeChannels(): Record<NotificationKindId, NotificationCa
     friend: 'both',
     comment: 'both',
     release: 'both',
+    achievement: 'both',
     default: 'both',
   };
 }

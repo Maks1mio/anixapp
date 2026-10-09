@@ -309,6 +309,9 @@ contextBridge.exposeInMainWorld('electron', {
     previewCorner: (position, items) =>
       ipcRenderer.invoke('notifications:previewCorner', position, items ?? null),
     endPreviewCorner: () => ipcRenderer.invoke('notifications:endPreviewCorner'),
+    /** Статус FCM push (как на Android). */
+    fcmStatus: () => ipcRenderer.invoke('notifications:fcmStatus'),
+    fcmSync: () => ipcRenderer.invoke('notifications:fcmSync'),
   },
   getDevBridgeStatus: () => ipcRenderer.invoke('dev:getBridgeStatus'),
   setDevBridgeEnabled: (enabled) => ipcRenderer.invoke('dev:setBridgeEnabled', enabled),

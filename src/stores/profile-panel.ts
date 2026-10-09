@@ -17,6 +17,20 @@ export const profilePanelHistoryIndex = writable(0);
 export type ProfilePanelInnerView = 'overview' | 'friends' | 'edit' | 'loginHistory';
 export const profilePanelInnerView = writable<ProfilePanelInnerView>('overview');
 
+/** Стартовый подэкран редактирования (напр. badge из deep link уведомления о значке). */
+export type ProfilePanelEditScreen =
+  | 'menu'
+  | 'status'
+  | 'nickname'
+  | 'social'
+  | 'badge'
+  | 'health'
+  | 'hiddenChannels'
+  | 'blocklist'
+  | 'email'
+  | 'password';
+export const profilePanelPendingEditScreen = writable<ProfilePanelEditScreen | null>(null);
+
 export const profilePanelCanBack = derived(
   [profilePanelHistory, profilePanelHistoryIndex],
   ([$h, $i]) => $i > 0,
@@ -145,10 +159,22 @@ export function updateProfilePanelLogin(userId: number, login: string): void {
 export function closeProfilePanel(): void {
   profilePanelOpen.set(false);
   profilePanelUserId.set(null);
+  profilePanelPendingEditScreen.set(null);
   resetProfilePanelHistory();
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('anix:profilePanelClose'));
   }
+}
+
+/**
+ * Открыть экран своих значков (как DEEP_LINK_TYPE_PROFILE_BADGE на Android).
+ * Вызывается по клику на уведомление о достижении.
+ */
+export function openProfileBadgePanel(): void {
+  const id = Number((window as { __anixProfile?: { id?: number } }).__anixProfile?.id ?? 0);
+  if (!Number.isFinite(id) || id <= 0) return;
+  profilePanelPendingEditScreen.set('badge');
+  openProfilePanel(id);
 }
 
 export function setProfilePanelInnerView(view: ProfilePanelInnerView): void {

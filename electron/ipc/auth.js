@@ -41,6 +41,16 @@ function register(deps) {
     });
   }
 
+  function scheduleFcmSync() {
+    setTimeout(() => {
+      try { void deps.fcmPush?.sync?.(); } catch { /* ignore */ }
+    }, 800);
+  }
+
+  function scheduleFcmStop() {
+    try { void deps.fcmPush?.stop?.(); } catch { /* ignore */ }
+  }
+
   function activateSavedAccount(account, baseUrl) {
     config.saveConfig({
       token: account.token,
@@ -51,6 +61,7 @@ function register(deps) {
     });
     accountsStore.upsertAccount(account);
     state.anixart = createAnixClient({ baseUrl, token: account.token });
+    scheduleFcmSync();
   }
 
   function clearActiveSession() {
@@ -62,6 +73,7 @@ function register(deps) {
       profileRaw: null,
     });
     state.anixart = null;
+    scheduleFcmStop();
   }
 
   function applyLoginSuccess(profile, profileToken, baseUrl) {
@@ -90,6 +102,7 @@ function register(deps) {
       });
     }
     state.anixart = createAnixClient({ baseUrl, token: profileToken.token });
+    scheduleFcmSync();
   }
 
   function rememberSignup(provider, token, res) {

@@ -433,16 +433,12 @@ function createAnixBridgeCore(options = {}) {
       const profileId = config.profileId || (profileRaw && profileRaw.id) || null;
 
       if (profileId) {
-        try {
-          const data = await c.getClient().endpoints.profile.info(profileId);
-          if (data && data.is_my_profile === false) {
-            c.saveConfig({ profileId: null, profileLogin: null, profileAvatar: null, profileRaw: null });
-            return { profile: null, session_mismatch: true };
-          }
-          if (data && data.profile) return data;
-        } catch (err) {
-          throw err;
+        const data = await c.getClient().endpoints.profile.info(profileId);
+        if (data && data.is_my_profile === false) {
+          c.saveConfig({ profileId: null, profileLogin: null, profileAvatar: null, profileRaw: null });
+          return { profile: null, session_mismatch: true };
         }
+        if (data && data.profile) return data;
       }
 
       if (profileRaw) {

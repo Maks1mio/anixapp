@@ -8,10 +8,13 @@
     iconBan,
     iconPlus,
   } from './icons';
+  import { get } from 'svelte/store';
   import {
     openProfilePanel,
     setProfilePanelInnerView,
     updateProfilePanelLogin,
+    profilePanelPendingEditScreen,
+    type ProfilePanelEditScreen,
     type ProfilePanelInnerView,
   } from '../stores/profile-panel';
   import { resolveCdnAssetUrl, toCdnProxyUrl, fetchCdnJson } from '../utils/posterUrl';
@@ -87,7 +90,7 @@
   let blogChannelId = $state<number | null>(null);
   let blogMuted = $state(false);
   let blogMuteBusy = $state(false);
-  let editStartScreen = $state<'menu' | 'status' | 'nickname' | 'social'>('menu');
+  let editStartScreen = $state<ProfilePanelEditScreen>('menu');
 
   let badgeLottieEl = $state<HTMLElement | undefined>();
   let badgeAnim: { destroy?: () => void } | null = null;
@@ -401,9 +404,18 @@
     panelView = 'overview';
   }
 
-  function openEditView(screen: 'menu' | 'status' | 'nickname' | 'social' = 'menu') {
+  function openEditView(screen: ProfilePanelEditScreen = 'menu') {
     editStartScreen = screen;
     panelView = 'edit';
+  }
+
+  /** Deep link «profile-badge»: открыть экран значков своего профиля. */
+  function consumePendingEditScreen() {
+    if (!active || !isMyProfile || loadState !== 'ready') return;
+    const pending = get(profilePanelPendingEditScreen);
+    if (!pending) return;
+    profilePanelPendingEditScreen.set(null);
+    openEditView(pending);
   }
 
   function closeEditView() {
@@ -444,6 +456,13 @@
       return;
     }
     setProfilePanelInnerView(panelView);
+  });
+
+  $effect(() => {
+    void active;
+    void isMyProfile;
+    void loadState;
+    consumePendingEditScreen();
   });
 
   async function onFriendClick() {

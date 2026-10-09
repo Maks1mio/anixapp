@@ -7,6 +7,7 @@
   import AppearancePage from '../views/Settings/pages/AppearancePage.svelte';
   import ConnectionPage from '../views/Settings/pages/ConnectionPage.svelte';
   import BehaviorPage from '../views/Settings/pages/BehaviorPage.svelte';
+  import NotificationsDevicePage from '../views/Settings/pages/NotificationsDevicePage.svelte';
   import PlaybackPage from '../views/Settings/pages/PlaybackPage.svelte';
   import DiscordRpcPage from '../views/Settings/pages/DiscordRpcPage.svelte';
   import AboutPage from '../views/Settings/pages/AboutPage.svelte';
@@ -35,6 +36,7 @@
     | 'appearance'
     | 'connection'
     | 'behavior'
+    | 'notifications'
     | 'playback'
     | 'discord'
     | 'update'
@@ -47,6 +49,7 @@
     appearance: 'Внешний вид',
     connection: 'Соединение',
     behavior: 'Поведение',
+    notifications: 'Уведомления',
     playback: 'Воспроизведение',
     discord: 'Discord RPC',
     update: 'Обновление',
@@ -59,6 +62,7 @@
     { tab: 'appearance', title: 'Внешний вид', sub: 'Тема, масштаб, навигация', section: 'Настройки приложения' },
     { tab: 'connection', title: 'Соединение', sub: 'Эндпоинт API' },
     { tab: 'behavior', title: 'Поведение', sub: 'Трей и ускорение' },
+    { tab: 'notifications', title: 'Уведомления', sub: 'Тосты, баннеры и звук' },
     { tab: 'playback', title: 'Воспроизведение', sub: 'Апскейл, звук и горячие клавиши' },
     { tab: 'discord', title: 'Discord RPC', sub: 'Статус в Discord' },
     { tab: 'update', title: 'Обновление', sub: 'Новые и предыдущие версии' },
@@ -254,6 +258,8 @@
               <ConnectionPage />
             {:else if screen === 'behavior'}
               <BehaviorPage />
+            {:else if screen === 'notifications'}
+              <NotificationsDevicePage />
             {:else if screen === 'playback'}
               <PlaybackPage />
             {:else if screen === 'discord'}

@@ -1,4 +1,5 @@
 @use 'variables' as *;
+@use 'uikit-v2-notif-toast';
 
 .view-uikit-v2 {
   max-width: 48rem;
@@ -1305,6 +1306,191 @@
   margin: 0 0 0.85rem;
   font-size: 0.85rem;
   color: var(--uikit-v2-muted);
+
+  b {
+    color: var(--uikit-v2-text);
+    font-weight: 650;
+  }
+}
+
+.uikit-v2-notif-friends__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.uikit-v2-notif-friends__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 11rem;
+  padding: 0.28rem 0.55rem 0.28rem 0.28rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--uikit-v2-text) 10%, transparent);
+  background: color-mix(in srgb, var(--uikit-v2-text) 4%, transparent);
+}
+
+.uikit-v2-notif-friends__avatar {
+  flex: 0 0 auto;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  background-color: color-mix(in srgb, var(--uikit-v2-text) 8%, transparent);
+}
+
+.uikit-v2-notif-friends__name {
+  min-width: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--uikit-v2-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.uikit-v2-notif-panel {
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--uikit-v2-text) 10%, transparent);
+  background: color-mix(in srgb, var(--uikit-v2-surface, #1a1a1a) 88%, transparent);
+  overflow: hidden;
+
+  .notifications-modal__item {
+    width: 100%;
+    cursor: default;
+  }
+}
+
+.uikit-v2-notif-panel__type {
+  margin-bottom: 0.1rem;
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--uikit-v2-muted);
+}
+
+.uikit-v2-notif-overlay-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.uikit-v2-notif-overlay-toolbar__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.uikit-v2-notif-overlay-toolbar__chip {
+  min-height: 1.85rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--uikit-v2-text) 12%, transparent);
+  background: transparent;
+  color: var(--uikit-v2-muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    color: var(--uikit-v2-text);
+    background: color-mix(in srgb, var(--uikit-v2-text) 6%, transparent);
+  }
+
+  &--on {
+    color: var(--uikit-v2-text);
+    border-color: color-mix(in srgb, var(--uikit-v2-accent) 50%, transparent);
+    background: color-mix(in srgb, var(--uikit-v2-accent) 14%, transparent);
+  }
+}
+
+.uikit-v2-notif-overlay-stage {
+  padding: 1rem;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--uikit-v2-text) 10%, transparent);
+  background:
+    radial-gradient(120% 90% at 90% 10%, color-mix(in srgb, var(--uikit-v2-accent) 12%, transparent), transparent 55%),
+    #0c0c0e;
+}
+
+.uikit-v2-notif-overlay-stack {
+  --nb-enter-x: 18px;
+  --nb-enter-y: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  max-width: 26rem;
+  width: 100%;
+}
+
+.uikit-v2-notif-overlay-stack--right {
+  margin-left: auto;
+  margin-right: 0;
+  align-items: flex-end;
+  --nb-enter-x: 18px;
+}
+
+.uikit-v2-notif-overlay-stack--left {
+  margin-left: 0;
+  margin-right: auto;
+  align-items: flex-start;
+  --nb-enter-x: -18px;
+}
+
+.uikit-v2-notif-overlay-stack--top {
+  --nb-enter-y: -8px;
+}
+
+.uikit-v2-notif-overlay-stack--bottom {
+  --nb-enter-y: 8px;
+}
+
+/* Движение на shell — иначе после transform текст/градиент перещёлкиваются */
+.uiv2-notif-toast-shell {
+  width: 100%;
+  max-width: 100%;
+  animation: uiv2-notif-toast-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Узкий full-media — ширина по карточке, прижимается к углу стека */
+.uiv2-notif-toast-shell:has(.uiv2-notif-toast--full-media) {
+  width: auto;
+}
+
+@keyframes uiv2-notif-toast-in {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--nb-enter-x, 18px), var(--nb-enter-y, 8px), 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.uikit-v2-notif-markers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.25rem;
+}
+
+.uikit-v2-notif-markers__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  color: var(--uikit-v2-muted);
+
+  .notifications-modal__avatar-wrap {
+    margin-right: 0;
+  }
 }
 
 .uikit-v2-round-row {
@@ -1314,7 +1500,7 @@
   gap: 0.65rem;
 }
 
-// ââ UI Kit V2 components âââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── UI Kit V2 components ─────────────────────────────────────────────────────
 
 .uiv2-btn {
   --uiv2-btn-icon: 1rem;
@@ -1580,7 +1766,7 @@
     height: 2.6rem;
   }
 
-  // Ð pill-bar ÑÑÑÐµÐ»ÐºÐ¸ Ð¿Ð¾ ÑÐ¼Ð¾Ð»ÑÐ°Ð½Ð¸Ñ ÑÐ²ÑÑÐ½ÑÑÑ, Ð¿Ð¾ÑÐ²Ð»ÑÑÑÑÑ Ð½Ð° hover / alwaysShowArrows
+  // В pill-bar стрелки по умолчанию свёрнуты, появляются на hover / alwaysShowArrows
   .uiv2-pill-bar:not(.uiv2-pill-bar--arrows) & {
     width: 0;
     margin: 0;
@@ -1682,7 +1868,7 @@
   user-select: none;
 }
 
-// ââ Horizontal scroll tabs (bookmarks, home, search) âââââââââââââââââââââââââ
+// ── Horizontal scroll tabs (bookmarks, home, search) ─────────────────────────
 
 .uiv2-tabs {
   position: sticky;
@@ -1984,7 +2170,7 @@
   }
 }
 
-// ââ Back Bar: Ð½Ð°Ð·Ð°Ð´ + Ð³Ð´Ðµ ÑÐµÐ¹ÑÐ°Ñ / Ð½Ð°ÑÐ»ÐµÐ´Ð¾Ð²Ð°Ð½Ð¸Ðµ ââââââââââââââââââââââââââââââ
+// ── Back Bar: назад + где сейчас / наследование ──────────────────────────────
 
 .uiv2-back-bar {
   display: inline-flex;
@@ -2054,7 +2240,7 @@
   user-select: none;
 }
 
-// ââ Card: ÐºÐ¾Ð½ÑÐµÐ½Ñ-Ð¿Ð°Ð½ÐµÐ»Ñ Ð¿ÑÐ¾ÑÐ¸Ð»Ñ âââââââââââââââââââââââââââââââââââââââââââââ
+// ── Card: контент-панель профиля ─────────────────────────────────────────────
 
 .uiv2-card {
   margin: 0;
@@ -2065,7 +2251,7 @@
   box-shadow: var(--uiv2-chrome-shadow);
   font-family: $font-sans;
   color: $color-text;
-  // ÐÐ´Ð¸Ð½Ð°ÐºÐ¾Ð²ÑÐ¹ AA Ð¸ Ð² UI Kit, Ð¸ Ð²Ð½ÑÑÑÐ¸ profile-panel (transform-ÑÐ»Ð¾Ð¹)
+  // Одинаковый AA и в UI Kit, и внутри profile-panel (transform-слой)
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
@@ -2120,7 +2306,7 @@
   min-width: 0;
 }
 
-// ââ Choice Sheet: Ð²ÑÐ±Ð¾Ñ Ð¾Ð´Ð½Ð¾Ð¹ Ð¾Ð¿ÑÐ¸Ð¸ (ÑÐ°Ð´Ð¸Ð¾) ââââââââââââââââââââââââââââââââââ
+// ── Choice Sheet: выбор одной опции (радио) ──────────────────────────────────
 
 .uiv2-ext-link {
   position: fixed;
@@ -2413,7 +2599,7 @@
   border-top: 1px solid var(--uiv2-panel-border, color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 10%, transparent));
 }
 
-// ââ Pill field (matches UiV2Button height + 999px radius) âââââââââââââââââââââ
+// ── Pill field (matches UiV2Button height + 999px radius) ─────────────────────
 
 .uiv2-pill-field {
   --uiv2-pill-field-icon: 1rem;
@@ -2539,7 +2725,7 @@
   }
 }
 
-// ââ Outlined field (floating label) ââââââââââââââââââââââââââââââââââââââââââ
+// ── Outlined field (floating label) ──────────────────────────────────────────
 
 .uiv2-outlined-field {
   --uiv2-field-ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -2764,7 +2950,7 @@
   }
 }
 
-// ââ Status dot (tooltip, select) ââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Status dot (tooltip, select) ──────────────────────────────────────────────
 
 .uiv2-status-dot {
   flex-shrink: 0;
@@ -2794,7 +2980,7 @@
   }
 }
 
-// ââ Tooltip âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Tooltip ───────────────────────────────────────────────────────────────────
 
 .uiv2-tooltip__trigger {
   display: inline-flex;
@@ -2993,7 +3179,7 @@
   }
 }
 
-// ââ Select ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Select ────────────────────────────────────────────────────────────────────
 
 .uiv2-select {
   display: block;
@@ -3485,7 +3671,7 @@
   }
 }
 
-// ââ Anime Card (ÐºÐ°ÑÐ°Ð»Ð¾Ð³): vertical grid + horizontal list ââââââââââââââââââââ
+// ── Anime Card (каталог): vertical grid + horizontal list ────────────────────
 
 .uiv2-anime-card {
   --uiv2-anime-radius: 12px;
@@ -3851,7 +4037,7 @@
   line-height: 1;
 }
 
-// Ð ÐµÐ¹ÑÐ¸Ð½Ð³: Ð¿ÑÐ¾ÑÑÐ¾ Ð·Ð¾Ð»Ð¾ÑÐ¾Ð¹ ÑÐµÐºÑÑ + Ð·Ð²ÐµÐ·Ð´Ð°, Ð±ÐµÐ· ÑÐ¸Ð¿Ð°
+// Рейтинг: просто золотой текст + звезда, без чипа
 .uiv2-anime-card__score {
   display: inline-flex;
   align-items: center;
@@ -4130,7 +4316,7 @@
   white-space: pre-line;
 }
 
-// ââ Popup menu (Yandex Musicâlike glass) âââââââââââââââââââââââââââââââââââââ
+// ── Popup menu (Yandex Music–like glass) ─────────────────────────────────────
 
 .uiv2-popup-menu {
   position: fixed;
@@ -4156,7 +4342,7 @@
   backdrop-filter: blur(28px) saturate(1.35);
   color: var(--uiv2-popup-fg);
 
-  /* ÐÐµÐ²Ð¸Ð´Ð¸Ð¼ÑÐ¹ Ð¼Ð¾ÑÑ Ðº ÐºÐ½Ð¾Ð¿ÐºÐµ-ÑÑÐ¸Ð³Ð³ÐµÑÑ â ÐºÑÑÑÐ¾Ñ Ð½Ðµ Â«ÑÐµÑÑÐµÑÑÑÂ» Ð² Ð·Ð°Ð·Ð¾ÑÐµ */
+  /* Невидимый мост к кнопке-триггеру — курсор не «теряется» в зазоре */
   &:not(.uiv2-popup-menu__panel--sub)::before {
     content: '';
     position: absolute;
@@ -4824,7 +5010,7 @@
   overflow: visible;
   transform-origin: left center;
 
-  /* ÐÐ¾ÑÑ Ðº ÑÐ¾Ð´Ð¸ÑÐµÐ»Ñ â ÐºÑÑÑÐ¾Ñ Ð½Ðµ Â«ÑÐµÑÑÐµÑÂ» submenu Ð² Ð·Ð°Ð·Ð¾ÑÐµ */
+  /* Мост к родителю — курсор не «теряет» submenu в зазоре */
   &::before {
     content: '';
     position: absolute;
@@ -5007,7 +5193,7 @@
   }
 }
 
-// ââ Custom scroll area âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Custom scroll area ───────────────────────────────────────────────────────
 
 .uiv2-scroll-area {
   position: relative;
@@ -5174,7 +5360,7 @@ body.uiv2-scroll-dragging * {
   }
 }
 
-// ââ Skeleton loaders âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Skeleton loaders ─────────────────────────────────────────────────────────
 
 @keyframes uiv2-skeleton-shimmer {
   0% {
@@ -5570,7 +5756,7 @@ body.uiv2-scroll-dragging * {
   color: var(--uikit-v2-text);
 }
 
-/* âââ V2 section header âââ */
+/* ——— V2 section header ——— */
 .uiv2-section-head {
   display: flex;
   align-items: flex-end;
@@ -5848,7 +6034,7 @@ button.uiv2-air-cal__day {
   box-shadow: none;
 }
 
-/* âââ V2 release carousel âââ */
+/* ——— V2 release carousel ——— */
 .uiv2-carousel {
   position: relative;
   width: 100%;
@@ -5905,7 +6091,7 @@ button.uiv2-air-cal__day {
   }
 }
 
-/* âââ V2 discuss list (compact horizontal, Ð±ÐµÐ· ÑÐ¾Ð½Ð°-ÐºÐ°ÑÑÐ¾ÑÐºÐ¸) âââ */
+/* ——— V2 discuss list (compact horizontal, без фона-карточки) ——— */
 .uiv2-discuss {
   display: flex;
   flex-direction: column;
@@ -6153,7 +6339,7 @@ button.uiv2-air-cal__day {
   font-variant-numeric: tabular-nums;
 }
 
-/* âââ V2 search franchise card âââ */
+/* ——— V2 search franchise card ——— */
 .uiv2-franchise {
   display: flex;
   align-items: center;
@@ -6319,7 +6505,7 @@ button.uiv2-air-cal__day {
   }
 }
 
-/* âââ V2 collection card âââ */
+/* ——— V2 collection card ——— */
 .uiv2-collection {
   position: relative;
   display: flex;
@@ -6719,7 +6905,7 @@ button.uiv2-air-cal__day {
   }
 }
 
-/* âââ V2 feed posts (official-site card) âââ */
+/* ——— V2 feed posts (official-site card) ——— */
 .uiv2-feed-post {
   display: flex;
   flex-direction: column;
@@ -8405,7 +8591,7 @@ button.uiv2-air-cal__day {
 }
 
 .uiv2-media-lightbox__source--hidden {
-  /* Ð¾ÑÑÐ°Ð²Ð»ÑÐµÐ¼ Ð¼ÐµÑÑÐ¾ Ð² layout, ÑÑÐ¾Ð±Ñ stage Ð½Ðµ ÑÑÐ»Ð¾Ð¿Ð½ÑÐ»ÑÑ */
+  /* оставляем место в layout, чтобы stage не схлопнулся */
   visibility: hidden;
   pointer-events: none;
 }
@@ -8416,7 +8602,7 @@ button.uiv2-air-cal__day {
   top: 50%;
   transform: translate(-50%, -50%);
   display: block;
-  /* ÑÐ°Ð·Ð¼ÐµÑ Ð·Ð°Ð´Ð°ÑÑ JS (Ð¿ÑÐ¾Ð¿Ð¾ÑÑÐ¸Ð¸ Ð±ÑÑÐµÑÐ°) â max-* Ð·Ð´ÐµÑÑ ÑÐ¿Ð»ÑÑÐ¸Ð²Ð°ÑÑ canvas */
+  /* размер задаёт JS (пропорции буфера) — max-* здесь сплющивают canvas */
   max-width: none;
   max-height: none;
   background: #000;
@@ -9014,7 +9200,7 @@ button.uiv2-air-cal__day {
   }
 }
 
-/* âââ V2 comments (threaded) âââ */
+/* ——— V2 comments (threaded) ——— */
 $uiv2-thread-w: 2px;
 $uiv2-thread-r: 12px;
 $uiv2-thread-gap: 0.35rem;
@@ -9232,7 +9418,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
     }
   }
 
-  // Elbow from parent stem â reply avatar center
+  // Elbow from parent stem → reply avatar center
   &::before {
     content: '';
     position: absolute;
@@ -9862,7 +10048,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
 }
 
 
-/* âââ V2 comment reactions (submenu panel content) âââ */
+/* ——— V2 comment reactions (submenu panel content) ——— */
 .uiv2-reactions {
   display: flex;
   flex-direction: column;
@@ -10040,7 +10226,7 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
   }
 }
 
-/* âââ V2 comment composer (inline reply) âââ */
+/* ——— V2 comment composer (inline reply) ——— */
 .uiv2-comment__composer-slot {
   margin: 0.45rem 0 0.65rem;
   width: 100%;
@@ -11122,6 +11308,744 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
   font-size: 0.78rem;
   line-height: 1.45;
   color: var(--uiv2-fg-muted);
+}
+
+// ── Уведомления устройства (Settings → Уведомления) ──────────────────────────
+
+.uiv2-settings__block--dimmed {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.notif-app-banners--inactive {
+  opacity: 0.4;
+  pointer-events: none;
+  user-select: none;
+
+  /* Parent already dims — don't stack :disabled / --disabled opacities. */
+  .uiv2-toggle--disabled,
+  .uiv2-select--disabled,
+  .uiv2-btn:disabled,
+  .notif-style-live--disabled,
+  :disabled {
+    opacity: 1;
+  }
+}
+
+.notif-app-banners-opts {
+  border-top: 1px solid var(--uiv2-border-subtle);
+
+  .uiv2-settings__row + .uiv2-settings__row {
+    border-top: 1px solid var(--uiv2-border-subtle);
+  }
+}
+
+.notif-advanced {
+  margin: 0;
+  border-radius: 20px;
+  background: var(--uiv2-card-bg);
+  box-shadow: var(--uiv2-chrome-shadow);
+  overflow: hidden;
+
+  &[open] .notif-advanced__summary {
+    border-bottom: 1px solid var(--uiv2-border-subtle);
+  }
+}
+
+.notif-advanced__summary {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.9rem 2.4rem 0.9rem 1rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    right: 1.1rem;
+    top: 50%;
+    width: 0.45rem;
+    height: 0.45rem;
+    border-right: 2px solid var(--uiv2-fg-muted);
+    border-bottom: 2px solid var(--uiv2-fg-muted);
+    transform: translateY(-65%) rotate(45deg);
+    transition: transform 0.15s ease;
+  }
+
+  .notif-advanced[open] &::after {
+    transform: translateY(-20%) rotate(225deg);
+  }
+}
+
+.notif-advanced__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--uikit-v2-text);
+  line-height: 1.3;
+}
+
+.notif-advanced__hint {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--uiv2-fg-muted);
+}
+
+.notif-advanced__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.85rem 0 0.35rem;
+}
+
+.notif-advanced__body .uiv2-settings__group {
+  box-shadow: none;
+  background: transparent;
+  border-radius: 0;
+}
+
+.notif-advanced__subtitle {
+  margin: 0.15rem 1rem 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--uiv2-fg-muted);
+}
+
+.notif-position {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem 0.85rem;
+  border-top: 1px solid var(--uiv2-border-subtle);
+}
+
+.notif-position + .uiv2-settings__row {
+  border-top: 1px solid var(--uiv2-border-subtle);
+}
+
+.notif-position__screen {
+  position: relative;
+  width: 100%;
+  max-width: 17rem;
+  aspect-ratio: 16 / 11;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--uikit-v2-text) 6%, transparent);
+  box-shadow: inset 0 0 0 1px var(--uiv2-border-subtle);
+  overflow: hidden;
+}
+
+.notif-position__preview {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 3.4rem;
+  pointer-events: none;
+
+  &--top-left { top: 0.55rem; left: 0.55rem; }
+  &--top-right { top: 0.55rem; right: 0.55rem; }
+  &--bottom-left { bottom: 0.55rem; left: 0.55rem; }
+  &--bottom-right { bottom: 0.55rem; right: 0.55rem; }
+
+  &--top-left,
+  &--top-right {
+    flex-direction: column;
+  }
+
+  &--bottom-left,
+  &--bottom-right {
+    flex-direction: column-reverse;
+  }
+}
+
+.notif-position__toast {
+  display: block;
+  height: 0.55rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--uikit-v2-accent) 55%, var(--uikit-v2-surface));
+  box-shadow: 0 1px 3px color-mix(in srgb, #000 35%, transparent);
+  opacity: 0.92;
+  animation: notif-toast-pop 0.28s cubic-bezier(0.22, 1.2, 0.36, 1) both;
+}
+
+@keyframes notif-toast-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(4px);
+  }
+  to {
+    opacity: 0.92;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.notif-prefs-wrap {
+  border-radius: 20px;
+  background: var(--uiv2-card-bg);
+  box-shadow: var(--uiv2-chrome-shadow);
+  overflow: hidden;
+
+  .notifications-modal__settings {
+    gap: 0;
+    padding: 0;
+  }
+
+  .notifications-modal__pref-section {
+    margin: 0;
+    padding: 0.75rem 1rem 0.35rem;
+    border-top: 1px solid var(--uiv2-border-subtle);
+
+    &:first-child {
+      border-top: none;
+    }
+
+    &:last-child {
+      padding-bottom: 0.35rem;
+    }
+  }
+
+  .notifications-modal__pref-section-title {
+    margin: 0 0 0.15rem;
+    padding: 0;
+  }
+
+  .notifications-modal__pref-row {
+    padding: 0.65rem 0;
+    align-items: flex-start;
+
+    .uiv2-toggle,
+    .notifications-modal__pref-chevron {
+      margin-top: 0.15rem;
+    }
+  }
+
+  .notifications-modal__pref-link {
+    margin-top: 0;
+    padding: 0.65rem 0;
+  }
+
+  .notifications-modal__scope-cards {
+    padding: 0.25rem 0 0.5rem;
+  }
+}
+
+.notif-position__monitor {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--uiv2-fg-muted);
+  pointer-events: none;
+}
+
+.notif-position__corner {
+  position: absolute;
+  z-index: 3;
+  width: 2.4rem;
+  height: 1.55rem;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  border: 1.5px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  &:hover:not(:disabled),
+  &--hover:not(:disabled) {
+    background: color-mix(in srgb, var(--uikit-v2-text) 8%, transparent);
+  }
+
+  &--on {
+    border-color: var(--uikit-v2-accent);
+    background: color-mix(in srgb, var(--uikit-v2-accent) 12%, transparent);
+  }
+
+  &--top-left { top: 0.5rem; left: 0.5rem; justify-content: flex-start; padding-left: 0.4rem; }
+  &--top-right { top: 0.5rem; right: 0.5rem; justify-content: flex-end; padding-right: 0.4rem; }
+  &--bottom-left { bottom: 0.5rem; left: 0.5rem; justify-content: flex-start; padding-left: 0.4rem; }
+  &--bottom-right { bottom: 0.5rem; right: 0.5rem; justify-content: flex-end; padding-right: 0.4rem; }
+}
+
+.notif-position__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--uiv2-fg-muted);
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.notif-position__corner--on .notif-position__dot {
+  background: var(--uikit-v2-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--uikit-v2-accent) 25%, transparent);
+}
+
+.notif-position__caption {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--uiv2-fg-muted);
+}
+
+.notif-count {
+  display: flex;
+  align-items: stretch;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.notif-count__btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.5rem 0.25rem 0.45rem;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--uiv2-fg-muted);
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--uikit-v2-text) 6%, transparent);
+  }
+}
+
+.notif-count__num {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--uikit-v2-text);
+}
+
+.notif-count__bar {
+  width: 100%;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--uiv2-surface-raised);
+  transition: background 0.15s ease;
+}
+
+.notif-count__btn--on {
+  color: var(--uikit-v2-accent);
+
+  .notif-count__bar {
+    background: var(--uikit-v2-accent);
+  }
+}
+
+.notif-test-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.notif-sound {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+
+  .uiv2-select {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* Живой превью внешнего вида баннера в настройках */
+.notif-style-live {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 100%;
+  margin-top: 0.55rem;
+  padding: 0.85rem;
+  border-radius: 14px;
+  border: 1px solid var(--uiv2-border-subtle, rgba(255, 255, 255, 0.08));
+  overflow: hidden;
+  background: #141416;
+  isolation: isolate;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background:
+      url('../assets/media/notifbanner.png') center / cover no-repeat;
+    filter: blur(3.5px);
+    pointer-events: none;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(12, 12, 14, 0.42) 0%,
+      rgba(12, 12, 14, 0.55) 55%,
+      rgba(12, 12, 14, 0.72) 100%
+    );
+    pointer-events: none;
+  }
+
+  > * {
+    position: relative;
+    z-index: 1;
+  }
+}
+
+.notif-style-live--disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.notif-style-live__stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.55rem;
+  min-height: 4.5rem;
+}
+
+.notif-style-live__stack--top {
+  justify-content: flex-start;
+}
+
+.notif-style-live__stack--bottom {
+  justify-content: flex-end;
+}
+
+.notif-style-live__card {
+  --nsl-accent: #e35454;
+  --nsl-tint: #222226;
+  --nsl-scrim: #1c1c1e;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 100%;
+  padding: 14px;
+  border-radius: 6px;
+  border: none;
+  background: #1c1c1e;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+  animation: notif-style-live-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition:
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.25s ease,
+    min-height 0.3s ease,
+    padding 0.3s ease;
+
+  &[data-kind='episode'] { --nsl-accent: #448cf6; }
+  &[data-kind='comment'] { --nsl-accent: #f472b6; }
+  &[data-kind='friend'] { --nsl-accent: #a78bfa; }
+  &[data-kind='friend-accept'] { --nsl-accent: #34d399; }
+  &[data-kind='article'] { --nsl-accent: #ffa800; }
+  &[data-kind='related'] { --nsl-accent: #15c86a; }
+  &[data-kind='achievement'] { --nsl-accent: #f0c43a; --nsl-tint: #6b5a1b; }
+
+  &--full-media {
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: stretch;
+    gap: 12px;
+    width: 225px;
+    max-width: 100%;
+    padding: 206px 14px 14px;
+    min-height: 0;
+  }
+
+  &--full-social {
+    min-height: 5.5rem;
+    background: #1c1c1e;
+  }
+
+  &--compact {
+    padding: 5px;
+    min-height: 3.75rem;
+  }
+
+  &--minimal {
+    padding: 7px 10px 7px 7px;
+    min-height: 3.5rem;
+  }
+}
+
+@keyframes notif-style-live-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.notif-style-live__media,
+.notif-style-live__scrim,
+.notif-style-live__wash,
+.notif-style-live__tint {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.notif-style-live__media {
+  z-index: 0;
+  background-size: cover;
+  background-position: center top;
+}
+
+.notif-style-live__scrim {
+  z-index: 1;
+  background: linear-gradient(
+    180deg,
+    rgba(28, 28, 30, 0) 44.9%,
+    rgba(28, 28, 30, 0.57) 64.1%,
+    var(--nsl-scrim) 99.7%
+  );
+}
+
+.notif-style-live__wash {
+  z-index: 0;
+  background-size: cover;
+  background-position: center;
+}
+
+.notif-style-live__tint {
+  z-index: 1;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--nsl-tint) 88%, transparent) 0%,
+    rgba(28, 28, 30, 0.88) 42%,
+    rgba(28, 28, 30, 0.88) 65%
+  );
+}
+
+.notif-style-live__avatar {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  background-color: #222;
+}
+
+.notif-style-live__badge {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  padding: 0;
+  background-color: #fff;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+}
+
+.notif-style-live__card--full-badge {
+  align-items: center;
+  min-height: 5.2rem;
+  gap: 12px;
+
+  &::before {
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--nsl-tint, #6b5a1b) 92%, #1c1c1e) 0%,
+      color-mix(in srgb, var(--nsl-tint, #6b5a1b) 35%, #1c1c1e) 38%,
+      #1c1c1e 72%
+    );
+  }
+}
+
+.notif-style-live__card[data-kind='achievement'] .notif-style-live__thumb {
+  box-sizing: border-box;
+  padding: 0;
+  border-radius: 12px;
+  background-color: #fff;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+}
+
+.notif-style-live__card[data-kind='achievement'] .notif-style-live__body {
+  color: #f2f2f2;
+  font-weight: 600;
+}
+
+.notif-style-live__card[data-kind='achievement'] .notif-style-live__body :global(b) {
+  color: #fff;
+  font-weight: 700;
+}
+
+.notif-style-live__thumb {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  width: 50px;
+  height: 50px;
+  border-radius: 5px;
+  background-size: cover;
+  background-position: center;
+  background-color: #222;
+
+}
+
+.notif-style-live__main {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 0.5rem;
+}
+
+.notif-style-live__kind {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--nsl-accent);
+}
+
+.notif-style-live__body {
+  font-size: 13px;
+  line-height: 1.3;
+  color: #d0d0d0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+
+  b {
+    font-weight: 700;
+    color: #d0d0d0;
+  }
+}
+
+.notif-style-live__card--full-media .notif-style-live__body {
+  -webkit-line-clamp: 4;
+}
+
+.notif-style-live__card--full-social .notif-style-live__body {
+  -webkit-line-clamp: 3;
+}
+
+.notif-style-live__time {
+  font-size: 12px;
+  color: #8d8d8d;
+}
+
+.notif-style-live__hint {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: color-mix(in srgb, #fff 72%, transparent);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.notif-volume {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+}
+
+.notif-volume__icon {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--uiv2-fg-muted);
+}
+
+.notif-volume__range {
+  flex: 1;
+  min-width: 0;
+  height: 4px;
+  appearance: none;
+  border-radius: 999px;
+  background: var(--uiv2-surface-raised);
+  cursor: pointer;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  &::-webkit-slider-thumb {
+    appearance: none;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--uikit-v2-accent);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    transition: transform 0.12s ease;
+  }
+
+  &:hover:not(:disabled)::-webkit-slider-thumb {
+    transform: scale(1.12);
+  }
+
+  &::-moz-range-thumb {
+    width: 15px;
+    height: 15px;
+    border: none;
+    border-radius: 50%;
+    background: var(--uikit-v2-accent);
+  }
+}
+
+.notif-volume__value {
+  flex-shrink: 0;
+  min-width: 2.75rem;
+  text-align: right;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--uiv2-fg-soft);
 }
 
 // ── Navigation settings (Appearance) ─────────────────────────────────────────

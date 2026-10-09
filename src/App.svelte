@@ -20,7 +20,7 @@
     setConnectionProblem,
   } from './stores/connection';
   import { currentPath, navigate, replacePath, seedAnixHistory } from './stores/navigation';
-  import { focusFeedArticle, focusFeedChannel } from './stores/feed-focus';
+  import { focusFeedArticle, focusFeedChannel, openFeedArticle, openFeedChannel } from './stores/feed-focus';
   import { settingsModalOpen, notificationsModalOpen, watchModalOpen, watchModalReleaseId, watchModalReleaseTitle, lobbyCurrentPlayback, isPlayerWindowOpen, lobbyWatchingPeerIds } from './stores/modals';
   import { sendPlayerViewActive } from './services/lobby-ws';
   import { getPath, getSearchParams } from './router';
@@ -44,7 +44,7 @@
     clearDiscordContext,
     scheduleDiscordPresenceSync,
   } from './services/discord-presence';
-  import { openProfilePanel } from './stores/profile-panel';
+  import { openProfilePanel, openProfileBadgePanel } from './stores/profile-panel';
   import { openProfileFromPath } from './stores/user-profile';
 
   import Layout from './layout/Layout.svelte';
@@ -266,9 +266,12 @@
   }
 
   function applyDeepLink(d: { type: string; id: number }) {
-    if (d.type === 'profile') openProfilePanel(d.id);
+    if (d.type === 'profile-badge') openProfileBadgePanel();
+    else if (d.type === 'profile') openProfilePanel(d.id);
     else if (d.type === 'release') navigate(`/release/${d.id}`);
     else if (d.type === 'collection') navigate(`/collection/${d.id}`);
+    else if (d.type === 'article') openFeedArticle(d.id);
+    else if (d.type === 'channel') openFeedChannel(d.id);
   }
 
   async function checkAndShow() {
@@ -693,9 +696,11 @@
       ['anix:deepLink', ((e: CustomEvent) => {
         window.electron?.consumePendingDeepLink?.();
         const d = e.detail as { type?: string; id?: number } | null;
-        const id = Number(d?.id);
-        if (!d?.type || !Number.isFinite(id) || id <= 0) return;
-        const payload = { type: d.type, id };
+        if (!d?.type) return;
+        const id = Number(d.id);
+        // profile-badge: id может быть 0 (как на Android)
+        if (d.type !== 'profile-badge' && (!Number.isFinite(id) || id <= 0)) return;
+        const payload = { type: d.type, id: Number.isFinite(id) ? id : 0 };
         if (get(appScreen) !== 'main') {
           pendingDeepLink = payload;
           return;

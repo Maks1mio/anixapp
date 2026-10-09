@@ -1,0 +1,395 @@
+/* Shared UIKit V2 notification toast — UI Kit preview + Electron banner window */
+
+.uiv2-notif-toast {
+  --toast-accent: #e35454;
+  --toast-tint: #2a2224;
+  --toast-scrim: #1f2735;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  border-radius: 6px;
+  border: none;
+  background: #1c1c1e;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
+  overflow: hidden;
+  color: #d0d0d0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+  /* Всегда непрозрачная подложка — иначе на hover просвечивает окно снизу */
+  isolation: isolate;
+
+  /* Уникальные цвета типов */
+  &[data-kind='episode'] { --toast-accent: #448cf6; --toast-tint: #1f2735; --toast-scrim: #1f2735; }
+  &[data-kind='article'] { --toast-accent: #ffa800; --toast-tint: #2d271b; --toast-scrim: #2d271b; }
+  &[data-kind='friend'] { --toast-accent: #a78bfa; --toast-tint: #262038; --toast-scrim: #262038; }
+  &[data-kind='friend-accept'] { --toast-accent: #34d399; --toast-tint: #1b3028; --toast-scrim: #1b3028; }
+  &[data-kind='comment'] { --toast-accent: #f472b6; --toast-tint: #2f1c28; --toast-scrim: #2f1c28; }
+  &[data-kind='related'] { --toast-accent: #15c86a; --toast-tint: #1b3025; --toast-scrim: #1b3025; }
+  /* Как в Android: тёплый оливково-золотой слева → графит */
+  &[data-kind='achievement'] {
+    --toast-accent: #f0c43a;
+    --toast-tint: #6b5a1b;
+    --toast-scrim: #2a2414;
+  }
+  &[data-kind='default'] { --toast-accent: #e35454; --toast-tint: #2a2224; --toast-scrim: #2a2224; }
+
+  /* Плавный «перелив» градиента при hover — без filter/смены background */
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.28s ease;
+    background: linear-gradient(
+      105deg,
+      color-mix(in srgb, var(--toast-accent) 28%, transparent) 0%,
+      color-mix(in srgb, var(--toast-tint) 85%, #1c1c1e) 40%,
+      transparent 75%
+    );
+  }
+
+  &:hover::after {
+    opacity: 1;
+  }
+
+  &--full-media {
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: stretch;
+    gap: 12px;
+    padding: 206px 14px 14px;
+    min-height: 0;
+    max-width: 225px;
+    width: 225px;
+
+    &::after {
+      background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--toast-accent) 12%, transparent) 0%,
+        transparent 42%,
+        color-mix(in srgb, var(--toast-accent) 22%, transparent) 100%
+      );
+    }
+  }
+
+  &--full-social,
+  &--full-badge {
+    align-items: flex-start;
+    min-height: 5.9rem;
+    background: #1c1c1e;
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      background: linear-gradient(90deg, var(--toast-tint) 0%, #1c1c1e 42%, #1c1c1e 65%);
+      transition: background 0.28s ease;
+    }
+
+    &:hover::before {
+      background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--toast-tint) 88%, var(--toast-accent)) 0%,
+        #222226 42%,
+        #222226 65%
+      );
+    }
+  }
+
+  /* Достижение: выравнивание по центру как на референсе Android */
+  &--full-badge {
+    align-items: center;
+    min-height: 5.4rem;
+    padding: 12px 14px;
+    gap: 14px;
+
+    &::before {
+      background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--toast-tint) 92%, #1c1c1e) 0%,
+        color-mix(in srgb, var(--toast-tint) 35%, #1c1c1e) 38%,
+        #1c1c1e 72%
+      );
+    }
+
+    &:hover::before {
+      background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--toast-tint) 78%, var(--toast-accent)) 0%,
+        color-mix(in srgb, var(--toast-tint) 28%, #222226) 40%,
+        #222226 72%
+      );
+    }
+  }
+
+  &[data-kind='achievement'].uiv2-notif-toast--compact {
+    align-items: center;
+    padding: 8px 12px 8px 8px;
+    min-height: 4.35rem;
+    gap: 12px;
+
+    .uiv2-notif-toast__tint {
+      background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--toast-tint) 88%, transparent) 0%,
+        rgba(28, 28, 30, 0.82) 46%,
+        rgba(28, 28, 30, 0.9) 70%
+      );
+    }
+
+    .uiv2-notif-toast__wash {
+      opacity: 0.18;
+      filter: saturate(0.85);
+    }
+  }
+
+  &--compact {
+    padding: 5px;
+    min-height: 3.75rem;
+    gap: 12px;
+  }
+
+  &--minimal {
+    padding: 7px 10px 7px 7px;
+    min-height: 3.5rem;
+  }
+}
+
+.uiv2-notif-toast__media,
+.uiv2-notif-toast__scrim,
+.uiv2-notif-toast__wash,
+.uiv2-notif-toast__tint {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.uiv2-notif-toast__media {
+  z-index: 0;
+  background-size: cover;
+  background-position: center top;
+  background-color: #1c1c1e;
+}
+
+.uiv2-notif-toast__scrim {
+  z-index: 1;
+  background: linear-gradient(
+    180deg,
+    rgba(28, 28, 30, 0) 44.9%,
+    rgba(28, 28, 30, 0.57) 64.1%,
+    var(--toast-scrim) 99.7%
+  );
+}
+
+.uiv2-notif-toast__wash {
+  z-index: 0;
+  background-size: cover;
+  background-position: center;
+}
+
+.uiv2-notif-toast__tint {
+  z-index: 1;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--toast-tint) 88%, transparent) 0%,
+    rgba(28, 28, 30, 0.88) 42%,
+    rgba(28, 28, 30, 0.88) 65%
+  );
+}
+
+.uiv2-notif-toast__avatar {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  background-color: #222;
+}
+
+.uiv2-notif-toast--full-social .uiv2-notif-toast__avatar {
+  margin-top: 0;
+  align-self: flex-start;
+}
+
+/* Значок достижения — цельная белая плитка; арт внутри, без «оливковой» рамки */
+.uiv2-notif-toast__badge {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+}
+
+.uiv2-notif-toast__badge-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background-color: transparent;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.uiv2-notif-toast--full-badge .uiv2-notif-toast__badge {
+  margin-top: 0;
+  align-self: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 12px;
+}
+
+.uiv2-notif-toast[data-kind='achievement'] .uiv2-notif-toast__thumb {
+  box-sizing: border-box;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  padding: 0;
+  background-color: #fff;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-clip: border-box;
+  background-origin: border-box;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+}
+
+.uiv2-notif-toast[data-kind='achievement'] .uiv2-notif-toast__body {
+  color: #f2f2f2;
+  font-weight: 600;
+  -webkit-line-clamp: 1;
+}
+
+.uiv2-notif-toast[data-kind='achievement'] .uiv2-notif-toast__body b {
+  color: #fff;
+  font-weight: 700;
+}
+
+.uiv2-notif-toast[data-kind='achievement'] .uiv2-notif-toast__kind {
+  letter-spacing: 0.04em;
+}
+
+.uiv2-notif-toast[data-kind='achievement'] .uiv2-notif-toast__time {
+  margin-top: 1px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  color: color-mix(in srgb, #d0d0d0 55%, transparent);
+}
+
+.uiv2-notif-toast__thumb {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  width: 50px;
+  height: 50px;
+  border-radius: 5px;
+  background-size: cover;
+  background-position: center;
+  background-color: #222;
+}
+
+.uiv2-notif-toast__main {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 22px;
+}
+
+.uiv2-notif-toast__kind {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--toast-accent);
+  white-space: nowrap;
+}
+
+.uiv2-notif-toast__body {
+  font-size: 13px;
+  line-height: 1.3;
+  color: #d0d0d0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+
+  b {
+    font-weight: 700;
+    color: #d0d0d0;
+  }
+}
+
+.uiv2-notif-toast--full-media .uiv2-notif-toast__body {
+  -webkit-line-clamp: 4;
+}
+
+.uiv2-notif-toast--full-social .uiv2-notif-toast__body {
+  -webkit-line-clamp: 3;
+}
+
+.uiv2-notif-toast__time {
+  font-size: 12px;
+  color: #8d8d8d;
+}
+
+.uiv2-notif-toast__close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: color-mix(in srgb, #fff 70%, transparent);
+  transition: background 0.14s ease, color 0.14s ease, transform 0.14s ease;
+
+  &:hover {
+    background: color-mix(in srgb, #fff 14%, transparent);
+    color: #fff;
+  }
+
+  &:active {
+    transform: scale(0.94);
+  }
+}
+
+.uiv2-notif-toast--full-media .uiv2-notif-toast__close {
+  top: 10px;
+  right: 10px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+  }
+}

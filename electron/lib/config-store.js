@@ -328,6 +328,128 @@ function buildDownloadSettingsPayload(data) {
   };
 }
 
+// ——— Уведомления устройства ———
+
+const NOTIFICATION_POSITIONS = new Set([
+  'top-left', 'top-right', 'bottom-left', 'bottom-right',
+]);
+
+const NOTIFICATION_SOUND_IDS = new Set([
+  'off', 'system', 'chime',
+  'plub', 'rawr', 'nya', 'bonk', 'eh', 'gatcha', 'mambo', 'pue', 'note',
+]);
+/** Старые id → актуальные после смены пакета звуков. */
+const NOTIFICATION_SOUND_MIGRATE = {
+  anix: 'chime',
+  drop: 'plub',
+  pulse: 'nya',
+  'tri-tone': 'gatcha',
+};
+
+const NOTIFICATION_APPEARANCE = new Set(['banner', 'native', 'both']);
+const NOTIFICATION_CALL_MODES = new Set(['both', 'banner', 'native', 'off']);
+const NOTIFICATION_BANNER_STYLES = new Set(['full', 'compact', 'minimal']);
+const NOTIFICATION_KIND_IDS = [
+  'episode', 'article', 'friend', 'comment', 'release', 'achievement', 'default',
+];
+
+function clampNotificationCount(n) {
+  const v = Math.round(Number(n));
+  if (!Number.isFinite(v)) return 3;
+  return Math.min(5, Math.max(1, v));
+}
+
+function clampNotificationVolume(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return 100;
+  return Math.min(100, Math.max(0, Math.round(v)));
+}
+
+function normalizeTypeChannels(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  const out = {};
+  for (const id of NOTIFICATION_KIND_IDS) {
+    const v = src[id];
+    out[id] = NOTIFICATION_CALL_MODES.has(v) ? v : 'both';
+  }
+  return out;
+}
+
+/** Нормализует raw-настройки уведомлений устройства. */
+function normalizeNotificationSettings(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  const position = NOTIFICATION_POSITIONS.has(src.position) ? src.position : 'bottom-right';
+  const rawSound = typeof src.soundId === 'string' ? src.soundId : '';
+  const migratedSound = NOTIFICATION_SOUND_MIGRATE[rawSound] || rawSound;
+  const soundId = NOTIFICATION_SOUND_IDS.has(migratedSound) ? migratedSound : 'chime';
+  const appearance = NOTIFICATION_APPEARANCE.has(src.appearance) ? src.appearance : 'banner';
+  const rawStyle = src.bannerStyle === 'rich' ? 'compact' : src.bannerStyle;
+  const bannerStyle = NOTIFICATION_BANNER_STYLES.has(rawStyle) ? rawStyle : 'compact';
+  return {
+    /** Мастер-выключатель уведомлений устройства. */
+    desktopEnabled: src.desktopEnabled !== false,
+    /**
+     * Системные и баннеры приложения взаимоисключающие.
+     * Никогда оба off: при конфликте предпочитаем системные.
+     */
+    ...(() => {
+      let useNative = src.useNativeNotifications !== false;
+      let customBanners =
+        src.useNativeNotifications === false && src.customBannersEnabled !== false;
+      if (!useNative && !customBanners) {
+        useNative = true;
+        customBanners = false;
+      }
+      if (useNative && customBanners) {
+        customBanners = false;
+      }
+      return {
+        useNativeNotifications: useNative,
+        customBannersEnabled: customBanners,
+      };
+    })(),
+    /** Показывать превью текста в баннере/тосте. */
+    showPreview: src.showPreview !== false,
+    /** Мигать иконкой в панели задач. */
+    flashTaskbar: src.flashTaskbar !== false,
+    /** Разрешить звук. */
+    soundEnabled: src.soundEnabled !== false,
+    /** Идентификатор звука: off | system | chime | plub | rawr | nya | bonk | eh | gatcha | mambo | pue | note. */
+    soundId,
+    /** Громкость 0–100. */
+    volume: clampNotificationVolume(src.volume),
+    /** Сколько баннеров стекировать одновременно. */
+    bannerCount: clampNotificationCount(src.bannerCount),
+    /** Угол экрана для баннеров. */
+    position,
+    /** Режим отображения по умолчанию: banner | native | both (если тип = inherit). */
+    appearance,
+    /** Внешний вид баннера: full | compact | minimal. */
+    bannerStyle,
+    /** Показывать баннеры поверх других окон (always on top). */
+    alwaysOnTop: src.alwaysOnTop !== false,
+    /** Не беспокоить: показывать только в трее/колокольчике. */
+    muted: src.muted === true,
+    /** Показывать уведомления, когда окно приложения в фокусе. */
+    showWhenFocused: src.showWhenFocused === true,
+    /**
+     * Вариации вызова по типу уведомления:
+     * episode | article | friend | comment | release | default → both | banner | native | off
+     */
+    typeChannels: normalizeTypeChannels(src.typeChannels),
+  };
+}
+
+function getNotificationSettings() {
+  const raw = _configCache ?? _readConfigFromDisk();
+  return normalizeNotificationSettings(raw.notificationSettings);
+}
+
+function buildNotificationSettingsPayload(data) {
+  const src = data && typeof data === 'object' ? data : (_configCache ?? _readConfigFromDisk());
+  return normalizeNotificationSettings(src.notificationSettings);
+}
+
 module.exports = {
   _configCache: {
     get value() { return _configCache; },
@@ -368,6 +490,17 @@ module.exports = {
   getDownloadOrganizeByTitle,
   getDownloadAutoClearFinished,
   buildDownloadSettingsPayload,
+  normalizeNotificationSettings,
+  getNotificationSettings,
+  buildNotificationSettingsPayload,
+  clampNotificationCount,
+  clampNotificationVolume,
+  NOTIFICATION_POSITIONS,
+  NOTIFICATION_SOUND_IDS,
+  NOTIFICATION_APPEARANCE,
+  NOTIFICATION_CALL_MODES,
+  NOTIFICATION_BANNER_STYLES,
+  NOTIFICATION_KIND_IDS,
   HLS_CONCURRENCY_MIN,
   HLS_CONCURRENCY_MAX,
   PARALLEL_FILES_MIN,

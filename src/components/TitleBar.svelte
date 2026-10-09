@@ -8,6 +8,13 @@
   import { isAuthenticated, openLoginPrompt, applyAccountSessionChange } from '../stores/auth';
   import { goBack, goForward, refreshCurrentPage } from '../stores/navigation';
   import { notificationUnreadCount, refreshNotificationUnreadCount } from '../stores/notifications';
+  import {
+    startDeviceNotificationPolling,
+    startBadgeAchievementPolling,
+    resetDeviceNotificationBaseline,
+    loadDeviceNotificationSettings,
+  } from '../stores/device-notifications';
+  import { startNotificationSoundListener } from '../utils/notification-sound';
   import ConnectionBanner from './ConnectionBanner.svelte';
   import TitleBarSearchIsland from './TitleBarSearchIsland.svelte';
   import UiV2Tooltip from './uikit-v2/UiV2Tooltip.svelte';
@@ -263,6 +270,7 @@
         void refreshSavedAccounts();
       } else {
         notificationUnreadCount.set(0);
+        resetDeviceNotificationBaseline();
         profileLogin = '';
         profileId = 0;
         avatarUrl = null;
@@ -271,9 +279,17 @@
     });
     void refreshNotificationUnreadCount();
     void refreshSavedAccounts();
+    void loadDeviceNotificationSettings();
     const unreadPoll = setInterval(() => {
       void refreshNotificationUnreadCount();
     }, 60_000);
+
+    // Уведомления устройства: опрашиваем новые и показываем тост/баннер.
+    // Poll — запасной канал, если FCM topic ещё не подписан; при активном FCM тосты идут пушем.
+    const stopDevicePolling = startDeviceNotificationPolling(45_000);
+    // Значки: на Android только FCM; на ПК дополнительно смотрим каталог badges.
+    const stopBadgePolling = startBadgeAchievementPolling(60_000);
+    const stopSound = startNotificationSoundListener();
 
     return () => {
       window.removeEventListener('app-update-progress', onProgress);
@@ -281,6 +297,9 @@
       unsubUnread();
       unsubAuth();
       clearInterval(unreadPoll);
+      stopDevicePolling();
+      stopBadgePolling();
+      stopSound();
     };
   });
 

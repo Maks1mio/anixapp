@@ -29,12 +29,13 @@ html.mobile-mode {
   --m-text-2: #9f9f9f;             // вторичный: метаданные, подписи секций
   --m-text-3: #767676;             // третичный: описания, подсказки, неактивные иконки
   --m-text-tab: #8a888b;           // неактивный таб
-  --m-nav-idle: #626262;           // неактивный пункт навбара
+  --m-nav-idle: #7a7a7a;           // неактивный пункт навбара (было #626262 — 3.3:1, ниже WCAG AA)
 
   --m-outline: #565656;            // обводка полей (1dp)
   --m-outline-variant: #424242;    // обводка плиток/выбора (md grey 800)
   --m-divider: #1c1c1c;
   --m-navbar-bg: rgba(5, 5, 5, 0.94);
+  --m-fav: #ff8f8f;                // счётчик избранного (контраст на тёмном ≥ 4.5:1)
 
   --m-secondary-container: #494458; // M3 secondaryContainer — активная пилюля навбара
   --m-on-secondary-container: #e8def8;
@@ -149,6 +150,7 @@ html.mobile-mode[data-m-theme='dark'] {
   --m-surface-raised: #2a2a2a;
   --m-divider: #2a2a2a;
   --m-navbar-bg: rgba(24, 24, 24, 0.96);
+  --m-nav-idle: #868686;
   --m-skeleton-top: #4a4a4a;
   --m-skeleton-bottom: #333333;
 }
@@ -162,14 +164,15 @@ html.mobile-mode[data-m-theme='light'] {
 
   --m-text: #1c1b1f;
   --m-text-2: #5c5b61;
-  --m-text-3: #78777d;
+  --m-text-3: #727177;
   --m-text-tab: #6a696e;
-  --m-nav-idle: #78777d;
+  --m-nav-idle: #6b6a70;
 
   --m-outline: #79747e;
   --m-outline-variant: #c4c4c8;
   --m-divider: #e6e6ea;
   --m-navbar-bg: rgba(248, 248, 250, 0.96);
+  --m-fav: #b3261e;
 
   --m-secondary-container: #e8def8;
   --m-on-secondary-container: #1d192b;

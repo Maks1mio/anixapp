@@ -74,6 +74,23 @@ html.mobile-mode {
   .uiv2-select__trigger {
     min-height: 40px;
   }
+
+  // ── Коллекции: без декоративной «стопки листов» (торчала сверху) и с фоном из темы ─────────
+  .uiv2-collection__stack {
+    display: none;
+  }
+
+  .uiv2-collection__card {
+    background: var(--m-surface-block);
+  }
+
+  // Счётчик избранного: тень рассчитана на текст поверх картинки, на фоне карточки она «мылит» текст.
+  .uiv2-collection__meta-item--fav,
+  .uiv2-collection__meta-item--fav * {
+    text-shadow: none !important;
+    filter: none !important;
+    color: var(--m-fav) !important;
+  }
 }
 
 // ── Лента на телефоне: разделы — горизонтальная полоса вкладок, а не столбик на пол-экрана ──

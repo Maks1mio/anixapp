@@ -62,6 +62,23 @@
       grid-template-columns: 220px minmax(0, 1fr) minmax(260px, 300px);
     }
 
+    // ── Экраны на всю ширину: на ПК .view ограничен 896 px — на планшете это пустые поля ──
+    .m-app__content > .view {
+      max-width: none;
+      margin-inline: 0;
+      padding-inline: var(--m-space-5);
+    }
+
+    // ── Типографика планшета: экран дальше от глаз — на ступень крупнее телефона ──────────
+    .uiv2-tabs__tab { font-size: 16px; }
+    .uiv2-anime-card__title { font-size: 16px; }
+    .uiv2-anime-card__meta-text,
+    .uiv2-anime-card__meta-sep,
+    .uiv2-anime-card__score-value { font-size: 14px; }
+    .uiv2-collection__title { font-size: 17px; }
+    .uiv2-collection__desc,
+    .uiv2-collection__stat { font-size: 14px; }
+
     // ── Списки карточек: две колонки ──────────────────────────────────────────────────────
     .release-cards-grid-root--wide {
       display: grid !important;

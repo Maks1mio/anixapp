@@ -10,7 +10,7 @@
   import { notificationsModalOpen, settingsModalOpen } from '../stores/modals';
   import { isAuthenticated, requireAuth } from '../stores/auth';
   import { ensureProfileId } from '../utils/profile';
-  import { iconDownload, iconPlus, iconHome, iconCompass, iconBookmark, iconNewspaper, iconUser, iconSearch, iconSettings, iconBell } from '../components/icons';
+  import { iconDownload, iconPlus, iconHome, iconCompass, iconBookmark, iconNewspaper, iconUser, iconSearch, iconSettings, iconBell, iconArrowUp } from '../components/icons';
   import SettingsModal from '../components/SettingsModal.svelte';
   import SidebarProfilePanel from '../components/SidebarProfilePanel.svelte';
   import { profilePanelOpen, resetProfilePanelHistory } from '../stores/profile-panel';
@@ -32,6 +32,15 @@
   ];
 
   let profileOpen = $state(false);
+
+  /** Кнопка «Наверх»: появляется после прокрутки примерно на полтора экрана. */
+  let scrolledFar = $state(false);
+  const showToTop = $derived(scrolledFar && !floatBack && path !== '/watch');
+
+  function scrollToTop() {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+  }
   let profileUserId = $state<number | null>(null);
 
   const path = $derived((currentPath.split('?')[0] || '/').replace(/\/+$/, '') || '/');
@@ -54,6 +63,11 @@
   );
 
   function goTab(tab: (typeof TABS)[number]) {
+    // Повторное нажатие на открытую вкладку — наверх (как в Anixart и системных приложениях Android).
+    if (tab.id !== 'profile' && activeTab === tab.id && isRoot) {
+      scrollToTop();
+      return;
+    }
     if (tab.id === 'profile') {
       void openProfile();
       return;
@@ -98,11 +112,22 @@
       }
     };
     const onClose = () => { profileOpen = false; };
+    let scrollRaf = 0;
+    const onScroll = () => {
+      if (scrollRaf) return;
+      scrollRaf = requestAnimationFrame(() => {
+        scrollRaf = 0;
+        scrolledFar = window.scrollY > window.innerHeight * 1.5;
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('anix:profilePanelOpen', onOpen);
     window.addEventListener('anix:profilePanelClose', onClose);
     return () => {
       stopDl();
       window.clearTimeout(offlineStart);
+      window.removeEventListener('scroll', onScroll);
+      if (scrollRaf) cancelAnimationFrame(scrollRaf);
       window.removeEventListener('anix:profilePanelOpen', onOpen);
       window.removeEventListener('anix:profilePanelClose', onClose);
     };
@@ -150,6 +175,18 @@
   <main class="m-app__content">
     {@render children?.()}
   </main>
+
+  <button
+    type="button"
+    class="m-to-top"
+    class:m-to-top--visible={showToTop}
+    onclick={scrollToTop}
+    aria-label="Наверх"
+    aria-hidden={!showToTop}
+    tabindex={showToTop ? 0 : -1}
+  >
+    {@html iconArrowUp(22)}
+  </button>
 
   <nav class="m-navbar" aria-label="Разделы">
     {#each TABS as tab (tab.id)}
@@ -213,6 +250,49 @@
   }
 
   .m-app { position: relative; }
+
+  /* «Наверх»: вторичная кнопка в цветах темы, над таб-баром (на планшете — в правом нижнем углу). */
+  .m-to-top {
+    position: fixed;
+    z-index: 25; /* ниже таб-бара (30) и полноэкранных панелей (50) */
+    right: calc(var(--m-space-4) + env(safe-area-inset-right));
+    bottom: calc(var(--m-nav-h) + env(safe-area-inset-bottom) + var(--m-space-4));
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: 1px solid var(--m-outline-variant);
+    border-radius: 50%;
+    background: var(--m-surface-raised);
+    color: var(--m-text);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+    opacity: 0;
+    transform: translateY(12px) scale(0.9);
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    -webkit-tap-highlight-color: transparent;
+
+    :global(svg) { width: 22px; height: 22px; }
+    &:active { filter: brightness(1.15); }
+  }
+
+  .m-to-top--visible {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  @media (min-width: 840px) {
+    .m-to-top {
+      right: calc(var(--m-space-5) + env(safe-area-inset-right));
+      bottom: calc(var(--m-space-5) + env(safe-area-inset-bottom));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .m-to-top { transform: none; transition: opacity 0.12s linear; }
+  }
 
   .m-offline {
     display: flex; align-items: center; justify-content: space-between; gap: var(--m-space-3);

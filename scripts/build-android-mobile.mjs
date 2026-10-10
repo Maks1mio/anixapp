@@ -57,7 +57,8 @@ console.log('→ Capacitor sync (android-mobile)');
 run('npx', ['cap', 'sync', 'android']);
 
 console.log('→ Gradle assembleDebug');
-const gradlew = process.platform === 'win32' ? 'gradlew.bat' : 'sh';
+// Windows: полный путь — cmd с shell:true не ищет gradlew.bat в cwd дочернего процесса.
+const gradlew = process.platform === 'win32' ? path.join(androidDir, 'gradlew.bat') : 'sh';
 const gradlewArgs = process.platform === 'win32'
   ? ['assembleDebug', '--no-daemon', '--console=plain']
   : ['./gradlew', 'assembleDebug', '--no-daemon', '--console=plain'];

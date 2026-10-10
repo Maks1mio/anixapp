@@ -680,6 +680,42 @@ html.mobile-mode {
     &::before { display: none; }
   }
 
+  // Верхняя панель раздела настроек: стрелка выровнена по краю контента (4 + (48−24)/2 = 16 px)
+  .m-set-bar {
+    position: sticky;
+    z-index: 2;
+    top: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--m-space-1);
+    min-height: 64px;
+    padding: 0 var(--m-space-1);
+    background: var(--m-bg);
+  }
+
+  .m-set-bar__back {
+    @extend .m-btn-reset;
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    color: var(--m-text);
+
+    &:active { background: color-mix(in srgb, var(--m-text) 10%, transparent); }
+    :is(svg) { width: 24px; height: 24px; }
+  }
+
+  .m-set-bar__title {
+    margin: 0;
+    overflow: hidden;
+    font-size: 22px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .m-set {
     display: flex;
     flex-direction: column;

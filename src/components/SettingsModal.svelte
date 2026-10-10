@@ -18,7 +18,7 @@
   import UiV2BackBar from './uikit-v2/UiV2BackBar.svelte';
   import UiV2RoundButton from './uikit-v2/UiV2RoundButton.svelte';
   import SidebarPanelResizeHandle from './SidebarPanelResizeHandle.svelte';
-  import { iconX, iconChevronRight, iconPalette, iconTv, iconDownload, iconGlobe, iconClipboardList, iconInfo } from './icons';
+  import { iconX, iconArrowLeft, iconChevronRight, iconPalette, iconTv, iconDownload, iconGlobe, iconClipboardList, iconInfo } from './icons';
   import { getProfilePanelWidthPx, setProfilePanelWidthPx } from '../prefs';
   import { requestOpenExternal } from '../utils/external-link';
 
@@ -233,6 +233,7 @@
     aria-modal="true"
     aria-label="Настройки приложения"
   >
+    {#if !mobileUi}
     <header class="profile-panel__chrome" aria-hidden={bossLocked}>
       <div class="profile-panel__close">
         <UiV2RoundButton label="Закрыть" onclick={close} disabled={bossLocked}>
@@ -240,12 +241,23 @@
         </UiV2RoundButton>
       </div>
     </header>
+    {/if}
 
     <Page scrollId="settings-panel" extraClass="profile-panel__page" noPadding>
       <div class="profile-panel__edit-view">
-        <header class="profile-panel__friends-head" aria-hidden={bossLocked}>
-          <UiV2BackBar segments={backSegments} onBack={onHeadBack} />
-        </header>
+        {#if mobileUi}
+          <!-- Android: верхняя панель Material — «назад» + заголовок экрана, без «×» и хлебных крошек -->
+          <header class="m-set-bar">
+            <button type="button" class="m-set-bar__back" onclick={onHeadBack} aria-label={screen === 'menu' ? 'Закрыть настройки' : 'Назад'}>
+              {@html iconArrowLeft(24)}
+            </button>
+            <h1 class="m-set-bar__title">{screen === 'menu' ? 'Настройки' : TAB_TITLES[screen]}</h1>
+          </header>
+        {:else}
+          <header class="profile-panel__friends-head" aria-hidden={bossLocked}>
+            <UiV2BackBar segments={backSegments} onBack={onHeadBack} />
+          </header>
+        {/if}
 
         {#if screen === 'menu' && mobileUi}
           <div class="m-set">

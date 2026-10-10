@@ -133,3 +133,16 @@ html.mobile-mode {
     }
   }
 }
+
+// ── Оценка по градации: звезда и число одного цвета (перебивает серый из mobile-overrides) ──
+html.mobile-mode {
+  @each $tone in (low, midlow, mid, high, top) {
+    [data-score-tone='#{$tone}'],
+    [data-score-tone='#{$tone}'] .uiv2-anime-card__score-star,
+    [data-score-tone='#{$tone}'] .uiv2-anime-card__score-value,
+    [data-score-tone='#{$tone}'] .uiv2-discuss__score-star,
+    [data-score-tone='#{$tone}'] .uiv2-discuss__score-value {
+      color: var(--m-score-#{$tone}) !important;
+    }
+  }
+}

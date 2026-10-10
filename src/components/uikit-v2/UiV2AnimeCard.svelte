@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { scoreTone } from '../../utils/score-tone';
   import {
     iconBookOpen,
     iconCalendar,
@@ -278,6 +279,7 @@
 
   const ep = $derived(episodesLabel(episodes));
   const rate = $derived(ratingLabel(rating));
+  const rateTone = $derived(scoreTone(rating));
   const dur = $derived(durationLabel(duration));
   const descriptionText = $derived(description ? withEllipsis(description) : null);
   const posterThumb = $derived<PosterThumbPreset>(
@@ -565,7 +567,7 @@
               </span>
             </span>
           {:else if showSiteRating && rate}
-            <span class="uiv2-anime-card__score uiv2-anime-card__score--inline">
+            <span class="uiv2-anime-card__score uiv2-anime-card__score--inline" data-score-tone={rateTone}>
               <span class="uiv2-anime-card__score-star" aria-hidden="true">{@html iconStar(11)}</span>
               <span class="uiv2-anime-card__score-value">{rate}</span>
             </span>
@@ -658,7 +660,7 @@
               </span>
             </span>
           {:else if showSiteRating && rate}
-            <span class="uiv2-anime-card__score">
+            <span class="uiv2-anime-card__score" data-score-tone={rateTone}>
               <span class="uiv2-anime-card__score-star" aria-hidden="true">{@html iconStar(12)}</span>
               <span class="uiv2-anime-card__score-value">{rate}</span>
               {#if ratingCount != null && ratingCount !== ''}

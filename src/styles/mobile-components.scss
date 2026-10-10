@@ -653,3 +653,136 @@ html.mobile-mode {
     *:hover { transition: none; }
   }
 }
+
+// ── Меню настроек (Android): группы-карточки, строка = иконка + название/подпись + стрелка ────
+html.mobile-mode {
+  // Панель настроек/профиля с ПК (выезжает справа, фикс. ширина, ручка ширины, разделитель) —
+  // здесь это полноэкранный раздел: на всю область, от левого края.
+  .m-fullscreen .schedule-panel-backdrop,
+  .m-fullscreen .schedule-panel-resize {
+    display: none;
+  }
+
+  .m-fullscreen .schedule-panel-wrap {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    transform: none;
+    justify-content: flex-start;
+  }
+
+  .m-fullscreen .schedule-panel-shell {
+    width: 100% !important;
+    margin: 0;
+    border: 0 !important;
+    box-shadow: none !important;
+
+    &::before { display: none; }
+  }
+
+  .m-set {
+    display: flex;
+    flex-direction: column;
+    padding: var(--m-space-2) var(--m-gutter) var(--m-space-6);
+  }
+
+  .m-set__group {
+    margin: var(--m-space-5) var(--m-space-1) var(--m-space-2);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--m-text-2);
+
+    &:first-child { margin-top: var(--m-space-2); }
+  }
+
+  .m-set__card {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: var(--m-radius-lg);
+    background: var(--m-surface-block);
+  }
+
+  .m-set__row {
+    @extend .m-btn-reset;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--m-space-4);
+    min-height: 68px;
+    padding: var(--m-space-3) var(--m-space-4);
+    text-align: left;
+
+    &:active { background: color-mix(in srgb, var(--m-text) 6%, transparent); }
+
+    // Разделитель между строками — с отступом под иконку
+    & + &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: calc(var(--m-space-4) + 40px + var(--m-space-4));
+      right: 0;
+      height: 1px;
+      background: var(--m-divider);
+    }
+  }
+
+  .m-set__icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--m-surface-chip);
+    color: var(--m-text);
+
+    :is(svg) { width: 22px; height: 22px; }
+  }
+
+  .m-set__text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .m-set__title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--m-text);
+  }
+
+  .m-set__sub {
+    overflow: hidden;
+    font-size: 14px;
+    color: var(--m-text-2);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .m-set__chevron {
+    display: grid;
+    flex: none;
+    color: var(--m-text-3);
+
+    :is(svg) { width: 20px; height: 20px; }
+  }
+
+  .m-set__footer {
+    display: flex;
+    align-items: center;
+    gap: var(--m-space-2);
+    margin: var(--m-space-5) var(--m-space-1) 0;
+    font-size: 13px;
+    color: var(--m-text-3);
+  }
+
+  .m-set__link {
+    @extend .m-btn-reset;
+    min-height: 32px;
+    color: var(--m-text-2);
+    text-decoration: underline;
+  }
+}

@@ -18,7 +18,7 @@
   import UiV2BackBar from './uikit-v2/UiV2BackBar.svelte';
   import UiV2RoundButton from './uikit-v2/UiV2RoundButton.svelte';
   import SidebarPanelResizeHandle from './SidebarPanelResizeHandle.svelte';
-  import { iconX } from './icons';
+  import { iconX, iconChevronRight, iconPalette, iconTv, iconDownload, iconGlobe, iconClipboardList, iconInfo } from './icons';
   import { getProfilePanelWidthPx, setProfilePanelWidthPx } from '../prefs';
   import { requestOpenExternal } from '../utils/external-link';
 
@@ -76,6 +76,30 @@
   function hiddenOnThisPlatform(tab: SettingsTab): boolean {
     return isMobileMode() && DESKTOP_ONLY_TABS.includes(tab);
   }
+
+  /** Android: меню настроек группами, с иконками (как в Anixart). */
+  const mobileUi = isMobileMode();
+  const MOBILE_GROUPS: { title: string; rows: { tab: SettingsTab; title: string; sub: string; icon: (s: number) => string }[] }[] = [
+    {
+      title: 'Приложение',
+      rows: [
+        { tab: 'appearance', title: 'Внешний вид', sub: 'Тема и вид карточек', icon: iconPalette },
+        { tab: 'playback', title: 'Воспроизведение', sub: 'Плеер, апскейл и звук', icon: iconTv },
+        { tab: 'downloads', title: 'Загрузки', sub: 'Качество, Wi-Fi, место на устройстве', icon: iconDownload },
+      ],
+    },
+    {
+      title: 'Сеть',
+      rows: [{ tab: 'connection', title: 'Соединение', sub: 'Сервер API', icon: iconGlobe }],
+    },
+    {
+      title: 'Сведения',
+      rows: [
+        { tab: 'debug', title: 'Отладка', sub: 'Логи консоли и сети', icon: iconClipboardList },
+        { tab: 'about', title: 'О программе', sub: '', icon: iconInfo },
+      ],
+    },
+  ];
 
   const MENU_ROWS = isMobileMode()
     ? MENU_ROWS_ALL.filter((r) => !DESKTOP_ONLY_TABS.includes(r.tab))
@@ -223,7 +247,28 @@
           <UiV2BackBar segments={backSegments} onBack={onHeadBack} />
         </header>
 
-        {#if screen === 'menu'}
+        {#if screen === 'menu' && mobileUi}
+          <div class="m-set">
+            {#each MOBILE_GROUPS as group (group.title)}
+              <h3 class="m-set__group">{group.title}</h3>
+              <div class="m-set__card">
+                {#each group.rows as row (row.tab)}
+                  <button type="button" class="m-set__row" onclick={() => openTab(row.tab)}>
+                    <span class="m-set__icon" aria-hidden="true">{@html row.icon(22)}</span>
+                    <span class="m-set__text">
+                      <span class="m-set__title">{row.title}</span>
+                      <span class="m-set__sub">{row.tab === 'about' ? appVersion : row.sub}</span>
+                    </span>
+                    <span class="m-set__chevron" aria-hidden="true">{@html iconChevronRight(20)}</span>
+                  </button>
+                {/each}
+              </div>
+            {/each}
+            <div class="m-set__footer">
+              <button type="button" class="m-set__link" onclick={handleGithubLink}>Исходный код на GitHub</button>
+            </div>
+          </div>
+        {:else if screen === 'menu'}
           <div class="profile-panel__edit-menu">
             {#each MENU_ROWS as row (row.tab)}
               {#if row.section}

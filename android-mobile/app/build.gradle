@@ -9,8 +9,9 @@ android {
         applicationId "com.mobileapp.anix"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Версия из package.json: versionName как есть, versionCode = major*10000 + minor*100 + patch
+        versionCode appVersionCode()
+        versionName appVersionName()
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -84,4 +85,15 @@ try {
     }
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
+
+def appVersionName() {
+    def pkg = new groovy.json.JsonSlurper().parse(rootProject.file('../package.json'))
+    return pkg.version.toString()
+}
+
+def appVersionCode() {
+    def parts = appVersionName().tokenize('.-')
+    def num = { i -> parts.size() > i && parts[i].isInteger() ? parts[i].toInteger() : 0 }
+    return num(0) * 10000 + num(1) * 100 + num(2)
 }

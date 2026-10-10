@@ -186,6 +186,9 @@
       void window.electron.getAppVersion().then((v: string) => {
         if (v) appVersion = `AnixApp v${v}`;
       }).catch(() => {});
+    } else if (__APP_VERSION__) {
+      // Android/браузер: Electron-моста нет — версия из package.json на этапе сборки.
+      appVersion = `AnixApp v${__APP_VERSION__}`;
     }
   });
 

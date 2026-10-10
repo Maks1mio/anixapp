@@ -134,15 +134,49 @@ html.mobile-mode {
   }
 }
 
-// ── Оценка по градации: звезда и число одного цвета (перебивает серый из mobile-overrides) ──
+// ── Оценка по градации (utils/score-tone.ts): залитый бейдж пяти чётко разных оттенков ─────────
+// Красный → оранжевый → жёлтый → салатовый → зелёный; цвет текста подобран под фон (контраст ≥ 4.98:1).
+// Одинаково в любой теме: тёмные «читаемые» оттенки на белом сливались между собой.
+$score-tones: (
+  low: (#d32f2f, #ffffff),
+  midlow: (#f57c00, #1c1b1f),
+  mid: (#fbc02d, #1c1b1f),
+  high: (#9ccc65, #1c1b1f),
+  top: (#2e7d32, #ffffff),
+);
+
 html.mobile-mode {
-  @each $tone in (low, midlow, mid, high, top) {
+  [data-score-tone] {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 8px;
+    border-radius: var(--m-radius-pill);
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  @each $tone, $pair in $score-tones {
+    [data-score-tone='#{$tone}'] {
+      background: nth($pair, 1);
+    }
+
     [data-score-tone='#{$tone}'],
     [data-score-tone='#{$tone}'] .uiv2-anime-card__score-star,
     [data-score-tone='#{$tone}'] .uiv2-anime-card__score-value,
     [data-score-tone='#{$tone}'] .uiv2-discuss__score-star,
     [data-score-tone='#{$tone}'] .uiv2-discuss__score-value {
-      color: var(--m-score-#{$tone}) !important;
+      color: nth($pair, 2) !important;
     }
+  }
+
+  // Карточки-сетка: оценка бейджем в углу постера — строка «эпизоды · год» не обрезается.
+  .uiv2-anime-card--vertical [data-score-tone] {
+    position: absolute;
+    z-index: 2;
+    top: 8px;
+    left: 8px;
+    margin: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   }
 }

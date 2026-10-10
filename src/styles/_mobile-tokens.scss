@@ -35,12 +35,6 @@ html.mobile-mode {
   --m-outline-variant: #424242;    // обводка плиток/выбора (md grey 800)
   --m-divider: #1c1c1c;
   --m-navbar-bg: rgba(5, 5, 5, 0.94);
-  // Оценка релиза по градации (utils/score-tone.ts): красный → оттенки жёлтого → зелёный
-  --m-score-low: #ff6b6b;
-  --m-score-midlow: #f0a33a;
-  --m-score-mid: #f2c94c;
-  --m-score-high: #b5d334;
-  --m-score-top: #4cc76a;
   --m-fav: #ff8f8f;                // счётчик избранного (контраст на тёмном ≥ 4.5:1)
 
   --m-secondary-container: #494458; // M3 secondaryContainer — активная пилюля навбара
@@ -179,12 +173,6 @@ html.mobile-mode[data-m-theme='light'] {
   --m-divider: #e6e6ea;
   --m-navbar-bg: rgba(248, 248, 250, 0.96);
   --m-fav: #b3261e;
-  // Светлая тема: та же шкала темнее — яркие жёлтый и салатовый на белом не читаются (контраст ≥ 4.5:1)
-  --m-score-low: #c62828;
-  --m-score-midlow: #a85500;
-  --m-score-mid: #846600;
-  --m-score-high: #5e7300;
-  --m-score-top: #2e7d32;
 
   --m-secondary-container: #e8def8;
   --m-on-secondary-container: #1d192b;

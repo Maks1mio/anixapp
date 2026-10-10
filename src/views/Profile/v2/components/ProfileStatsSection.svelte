@@ -129,6 +129,22 @@
       pct: statusTotal ? (i.value / statusTotal) * 100 : 0,
     })),
   );
+  /** Кольцо: сегменты по окружности r=42 (viewBox 100), между сегментами 2 px фона. */
+  const DONUT_R = 42;
+  const DONUT_C = 2 * Math.PI * DONUT_R;
+  const donutSegs = $derived.by(() => {
+    const parts = statusShares.filter((x) => x.value > 0);
+    const gap = parts.length > 1 ? 2 : 0;
+    let acc = 0;
+    return parts.map((x) => {
+      const len = (x.value / statusTotal) * DONUT_C;
+      const seg = { key: x.key, dash: Math.max(len - gap, 0.6), offset: -acc };
+      acc += len;
+      return seg;
+    });
+  });
+  let prefsOpen = $state(false);
+
   const barLabel = $derived(
     statusShares.map((s) => `${s.label} ${s.value} (${Math.round(s.pct)}%)`).join(', '),
   );
@@ -184,26 +200,34 @@
 
 {#if mobileUi}
 <section class="m-stats" aria-label="Статистика">
-  <!-- Заголовок «Статистика» уже даёт раздел профиля — здесь только итог -->
-  <p class="m-stats__total">{statusTotal.toLocaleString('ru-RU')} тайтлов в списках</p>
 
   {#if statusTotal > 0}
-    <div class="m-stats__bar" role="img" aria-label={barLabel}>
-      {#each statusShares as s (s.key)}
-        {#if s.value > 0}
-          <span class="m-stats__seg" data-status={s.key} style="flex-grow:{s.value}"></span>
-        {/if}
-      {/each}
+    <div class="m-stats__donut" role="img" aria-label={barLabel}>
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        {#each donutSegs as seg (seg.key)}
+          <circle
+            class="m-stats__arc"
+            data-status={seg.key}
+            cx="50" cy="50" r={DONUT_R}
+            stroke-dasharray="{seg.dash} {DONUT_C}"
+            stroke-dashoffset={seg.offset}
+            transform="rotate(-90 50 50)"
+          />
+        {/each}
+      </svg>
+      <span class="m-stats__donut-center">
+        <span class="m-stats__donut-value">{statusTotal.toLocaleString('ru-RU')}</span>
+        <span class="m-stats__donut-label">в списках</span>
+      </span>
     </div>
   {/if}
 
   <div class="m-stats__legend">
     {#each statusShares as s (s.key)}
       <button type="button" class="m-stats__item" disabled={s.value <= 0} onclick={() => openList(s.tab)}>
-        <span class="m-stats__dot" data-status={s.key} aria-hidden="true"></span>
+        <span class="m-stats__swatch" data-status={s.key} aria-hidden="true"></span>
         <span class="m-stats__label">{s.label}</span>
-        <span class="m-stats__value">{s.value.toLocaleString('ru-RU')}</span>
-        <span class="m-stats__pct">{statusTotal ? Math.round(s.pct) + '%' : ''}</span>
+        <span class="m-stats__meta">{s.value.toLocaleString('ru-RU')} · {statusTotal ? Math.round(s.pct) : 0}%</span>
       </button>
     {/each}
   </div>
@@ -220,17 +244,20 @@
     </button>
   </div>
 
-  {#each prefChips as row (row.label)}
-    <div class="m-stats__prefs">
-      <span class="m-stats__prefs-label">{row.label}</span>
-      <div class="m-stats__chips">
-        {#each row.chips as chip (chip)}<span class="m-stats__chip">{chip}</span>{/each}
-      </div>
-    </div>
-  {/each}
-
-  {#if showMoreLink}
-    <button type="button" class="m-stats__more" onclick={openFullStats}>Подробнее</button>
+  {#if prefChips.length}
+    {#if prefsOpen}
+      {#each prefChips as row (row.label)}
+        <div class="m-stats__prefs">
+          <span class="m-stats__prefs-label">{row.label}</span>
+          <div class="m-stats__chips">
+            {#each row.chips as chip (chip)}<span class="m-stats__chip">{chip}</span>{/each}
+          </div>
+        </div>
+      {/each}
+    {/if}
+    <button type="button" class="m-stats__more" aria-expanded={prefsOpen} onclick={() => (prefsOpen = !prefsOpen)}>
+      {prefsOpen ? 'Скрыть' : 'Подробнее'}
+    </button>
   {/if}
 </section>
 {:else}

@@ -8,6 +8,8 @@
   import ConnectionPage from '../views/Settings/pages/ConnectionPage.svelte';
   import BehaviorPage from '../views/Settings/pages/BehaviorPage.svelte';
   import PlaybackPage from '../views/Settings/pages/PlaybackPage.svelte';
+  import DownloadsPage from '../views/Settings/pages/DownloadsPage.svelte';
+  import { isMobileMode } from '../platform/mobile';
   import DiscordRpcPage from '../views/Settings/pages/DiscordRpcPage.svelte';
   import AboutPage from '../views/Settings/pages/AboutPage.svelte';
   import UpdatePage from '../views/Settings/pages/UpdatePage.svelte';
@@ -36,6 +38,7 @@
     | 'connection'
     | 'behavior'
     | 'playback'
+    | 'downloads'
     | 'discord'
     | 'update'
     | 'debug'
@@ -48,6 +51,7 @@
     connection: 'Соединение',
     behavior: 'Поведение',
     playback: 'Воспроизведение',
+    downloads: 'Загрузки',
     discord: 'Discord RPC',
     update: 'Обновление',
     debug: 'Отладка',
@@ -55,22 +59,34 @@
     about: 'О программе',
   };
 
-  const MENU_ROWS: { tab: SettingsTab; title: string; sub: string; section?: string }[] = [
+  /** Android (мобильный режим): разделы, которые имеют смысл только в Electron, не показываем. */
+  const DESKTOP_ONLY_TABS: SettingsTab[] = ['behavior', 'discord', 'update'];
+
+  const MENU_ROWS_ALL: { tab: SettingsTab; title: string; sub: string; section?: string }[] = [
     { tab: 'appearance', title: 'Внешний вид', sub: 'Тема, масштаб, навигация', section: 'Настройки приложения' },
     { tab: 'connection', title: 'Соединение', sub: 'Эндпоинт API' },
     { tab: 'behavior', title: 'Поведение', sub: 'Трей и ускорение' },
     { tab: 'playback', title: 'Воспроизведение', sub: 'Апскейл, звук и горячие клавиши' },
+    // Android: отдельный раздел параметров загрузок
+    ...(isMobileMode() ? [{ tab: 'downloads' as const, title: 'Загрузки', sub: 'Качество, Wi-Fi, место на устройстве' }] : []),
     { tab: 'discord', title: 'Discord RPC', sub: 'Статус в Discord' },
     { tab: 'update', title: 'Обновление', sub: 'Новые и предыдущие версии' },
     { tab: 'debug', title: 'Отладка', sub: 'Логи консоли и сети' },
   ];
+  function hiddenOnThisPlatform(tab: SettingsTab): boolean {
+    return isMobileMode() && DESKTOP_ONLY_TABS.includes(tab);
+  }
+
+  const MENU_ROWS = isMobileMode()
+    ? MENU_ROWS_ALL.filter((r) => !DESKTOP_ONLY_TABS.includes(r.tab))
+    : MENU_ROWS_ALL;
 
   const isDev = import.meta.env.DEV;
   const PANEL_ANIM_MS = 340;
 
   const initialTab = get(settingsModalInitialTab) as SettingsTab | null;
   let screen = $state<SettingsTab | 'menu'>(
-    initialTab && initialTab in TAB_TITLES ? initialTab : 'menu',
+    initialTab && initialTab in TAB_TITLES && !hiddenOnThisPlatform(initialTab) ? initialTab : 'menu',
   );
   let sheetOpen = $state(false);
   let closing = $state(false);
@@ -95,7 +111,7 @@
 
   $effect(() => {
     const next = $settingsModalInitialTab;
-    if (next && next in TAB_TITLES) screen = next as SettingsTab;
+    if (next && next in TAB_TITLES && !hiddenOnThisPlatform(next as SettingsTab)) screen = next as SettingsTab;
   });
 
   function close() {
@@ -254,6 +270,8 @@
               <ConnectionPage />
             {:else if screen === 'behavior'}
               <BehaviorPage />
+            {:else if screen === 'downloads'}
+              <DownloadsPage />
             {:else if screen === 'playback'}
               <PlaybackPage />
             {:else if screen === 'discord'}

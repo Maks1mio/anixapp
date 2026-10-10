@@ -14,6 +14,19 @@ html.mobile-mode {
     font-size: var(--m-fs-body);
     line-height: 1.35;
     -webkit-font-smoothing: antialiased;
+    // Как в нативном приложении: долгое нажатие/проведение пальцем не выделяет текст и не открывает меню копирования.
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  input,
+  textarea,
+  select,
+  [contenteditable]:not([contenteditable='false']) {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
   }
 
   .m-screen {
@@ -278,7 +291,7 @@ html.mobile-mode {
     display: flex;
     height: calc(var(--m-nav-h) + env(safe-area-inset-bottom));
     padding-bottom: env(safe-area-inset-bottom);
-    background: rgba(5, 5, 5, 0.94);
+    background: var(--m-navbar-bg);
     backdrop-filter: blur(12px);
   }
 
@@ -488,7 +501,7 @@ html.mobile-mode {
       align-items: center;
       justify-content: center;
     }
-    &--on &__box { border-color: var(--m-on-secondary-container); background: #1b1b1f; }
+    &--on &__box { border-color: var(--m-on-secondary-container); background: var(--m-surface-raised); }
     &--on { color: var(--m-text); }
     &__check {
       position: absolute;

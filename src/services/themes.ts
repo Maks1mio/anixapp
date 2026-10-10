@@ -175,10 +175,22 @@ function isLightTheme(v: ThemeVars): boolean {
 }
 
 export function applyTheme(theme: Theme): void {
-  // Мобильный режим: фиксированная тёмная палитра из токенов .m-* (см. _mobile-tokens.scss), темы desktop не применяем.
-  if (isMobileMode()) return;
   // For 'auto', resolve the actual theme based on OS preference
   const effective = theme.id === 'auto' ? resolveAutoTheme() : theme;
+
+  // Мобильный режим: цвета задают токены --m-* (_mobile-tokens.scss), через них питается и uikit-v2.
+  // Inline --color-* здесь не пишем (перебили бы это сопоставление) — выбираем палитру атрибутом.
+  if (isMobileMode()) {
+    const root = document.documentElement;
+    const light = isLightTheme(effective.vars);
+    const amoled = !light && effective.vars.colorBg.replace('#', '').slice(0, 6).toLowerCase() === '000000';
+    root.dataset.mTheme = light ? 'light' : amoled ? 'amoled' : 'dark';
+    root.dataset.themeMode = light ? 'light' : 'dark';
+    root.style.colorScheme = light ? 'light' : 'dark';
+    setActiveThemeId(theme.id);
+    window.dispatchEvent(new CustomEvent('anix:themeChanged', { detail: { theme } }));
+    return;
+  }
 
   const root = document.documentElement;
   const v = effective.vars;

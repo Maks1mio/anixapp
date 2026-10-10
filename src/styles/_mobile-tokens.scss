@@ -34,6 +34,7 @@ html.mobile-mode {
   --m-outline: #565656;            // обводка полей (1dp)
   --m-outline-variant: #424242;    // обводка плиток/выбора (md grey 800)
   --m-divider: #1c1c1c;
+  --m-navbar-bg: rgba(5, 5, 5, 0.94);
 
   --m-secondary-container: #494458; // M3 secondaryContainer — активная пилюля навбара
   --m-on-secondary-container: #e8def8;
@@ -136,4 +137,51 @@ html.mobile-mode {
   font-family: var(--m-font);
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
+}
+
+// ── Темы (Настройки → Внешний вид). По умолчанию и для AMOLED — палитра выше (чистый чёрный). ──
+// data-m-theme выставляет applyTheme() в services/themes.ts.
+html.mobile-mode[data-m-theme='dark'] {
+  --m-bg: #121212;
+  --m-surface-block: #1b1b1b;
+  --m-surface-chip: #262626;
+  --m-surface-sheet: #202020;
+  --m-surface-raised: #2a2a2a;
+  --m-divider: #2a2a2a;
+  --m-navbar-bg: rgba(24, 24, 24, 0.96);
+  --m-skeleton-top: #4a4a4a;
+  --m-skeleton-bottom: #333333;
+}
+
+html.mobile-mode[data-m-theme='light'] {
+  --m-bg: #ffffff;
+  --m-surface-block: #f3f3f5;
+  --m-surface-chip: #ececef;
+  --m-surface-sheet: #ffffff;
+  --m-surface-raised: #e9e9ec;
+
+  --m-text: #1c1b1f;
+  --m-text-2: #5c5b61;
+  --m-text-3: #78777d;
+  --m-text-tab: #6a696e;
+  --m-nav-idle: #78777d;
+
+  --m-outline: #79747e;
+  --m-outline-variant: #c4c4c8;
+  --m-divider: #e6e6ea;
+  --m-navbar-bg: rgba(248, 248, 250, 0.96);
+
+  --m-secondary-container: #e8def8;
+  --m-on-secondary-container: #1d192b;
+  --m-primary: #6750a4;
+  --m-on-primary: #ffffff;
+  --m-fill-button: #1c1b1f;
+  --m-on-fill-button: #ffffff;
+  --m-danger: #b3261e;
+
+  --m-skeleton-top: #e4e4e8;
+  --m-skeleton-bottom: #d2d2d6;
+
+  --uiv2-overlay: rgba(0, 0, 0, 0.35);
+  color-scheme: light;
 }

@@ -93,7 +93,24 @@ object MediaEngine {
         ).apply {
             maxParallelDownloads = 2
             minRetryCount = 5
-            requirements = Requirements(Requirements.NETWORK)
+            requirements = downloadRequirements(isWifiOnly())
         }
+    }
+
+    // --- Настройки загрузок (раздел «Загрузки» в настройках приложения) -------------------------
+
+    private const val DL_PREFS = "anix_downloads"
+    private const val KEY_WIFI_ONLY = "wifiOnly"
+
+    private fun downloadRequirements(wifiOnly: Boolean) =
+        Requirements(if (wifiOnly) Requirements.NETWORK_UNMETERED else Requirements.NETWORK)
+
+    fun isWifiOnly(): Boolean =
+        appContext.getSharedPreferences(DL_PREFS, Context.MODE_PRIVATE).getBoolean(KEY_WIFI_ONLY, false)
+
+    /** «Только по Wi-Fi»: загрузки ждут безлимитную сеть; сохраняется и применяется при следующем запуске. */
+    fun setWifiOnly(value: Boolean) {
+        appContext.getSharedPreferences(DL_PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_WIFI_ONLY, value).commit()
+        downloadManager.requirements = downloadRequirements(value)
     }
 }

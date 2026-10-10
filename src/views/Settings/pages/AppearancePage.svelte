@@ -15,6 +15,9 @@
   import NavigationSettingsSection from '../../../components/settings/NavigationSettingsSection.svelte';
   import { DEFAULT_ZOOM, normalizeZoom, type ZoomLevel } from '../../../utils/zoom';
   import { isMac } from '../../../utils/platform';
+  import { isMobileMode } from '../../../platform/mobile';
+  /** Android: масштаб (Ctrl +/−) и раскладка боковых панелей — только для ПК. */
+  const desktopOnly = !isMobileMode();
 
   const modKey = isMac ? '⌘' : 'Ctrl';
 
@@ -132,6 +135,7 @@
     </div>
   </section>
 
+  {#if desktopOnly}
   <section class="uiv2-settings__block">
     <h3 class="uiv2-settings__title">Уровень масштабирования</h3>
     <div class="uiv2-settings__group uiv2-settings__group--pad">
@@ -143,6 +147,7 @@
       {/if}
     </div>
   </section>
+  {/if}
 
   <section class="uiv2-settings__block">
     <h3 class="uiv2-settings__title">Тема оформления</h3>
@@ -237,5 +242,5 @@
     </div>
   </section>
 
-  <NavigationSettingsSection />
+  {#if desktopOnly}<NavigationSettingsSection />{/if}
 </div>

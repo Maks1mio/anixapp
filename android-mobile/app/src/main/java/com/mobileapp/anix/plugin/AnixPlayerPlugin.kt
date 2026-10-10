@@ -362,6 +362,23 @@ class AnixPlayerPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun removeAllDownloads(call: PluginCall) {
+        DownloadService.sendRemoveAllDownloads(context, AnixDownloadService::class.java, false)
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun downloadSettings(call: PluginCall) {
+        call.resolve(JSObject().put("wifiOnly", MediaEngine.isWifiOnly()))
+    }
+
+    @PluginMethod
+    fun setDownloadSettings(call: PluginCall) {
+        call.getBoolean("wifiOnly")?.let { MediaEngine.setWifiOnly(it) }
+        call.resolve(JSObject().put("wifiOnly", MediaEngine.isWifiOnly()))
+    }
+
+    @PluginMethod
     fun storage(call: PluginCall) {
         val stat = StatFs(context.filesDir.path)
         call.resolve(

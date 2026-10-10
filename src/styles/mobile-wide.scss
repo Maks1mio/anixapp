@@ -55,6 +55,27 @@
       column-gap: var(--m-space-6) !important;
     }
 
+    // ── Настройки и профиль: на всю область справа от полосы, текст — удобной для чтения ширины ──
+    .m-fullscreen .schedule-panel-backdrop,
+    .m-fullscreen .schedule-panel-resize {
+      display: none;
+    }
+
+    .m-fullscreen .schedule-panel-wrap {
+      position: absolute;
+      inset: 0;
+      width: auto;
+      transform: none;
+    }
+
+    .m-fullscreen .schedule-panel-shell {
+      width: 100% !important;
+      max-width: 760px;
+      margin: 0 auto;
+      border: 0 !important;
+      box-shadow: none !important;
+    }
+
     // ── Шторки и меню: не во всю ширину, а по центру ──────────────────────────────────────
     .m-sheet {
       left: 50%;

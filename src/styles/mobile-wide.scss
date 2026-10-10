@@ -107,3 +107,42 @@
     }
   }
 }
+
+// ── Средние и широкие экраны (от 600 dp: телефон в альбомной, планшет) ─────────────────────
+// Телефонные пропорции (баннер на 75% ширины, ссылки в две колонки) здесь дают гигантский баннер
+// и разбросанные пункты — показываем несколько баннеров и ссылки плитками.
+@media (min-width: 600px) {
+  html.mobile-mode {
+    .m-banner {
+      flex-basis: calc((100% - 2 * var(--m-space-4)) / 2.4);
+    }
+
+    .m-quick {
+      grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+      gap: var(--m-space-3);
+      padding-top: var(--m-space-4);
+
+      &__item {
+        min-height: 56px;
+        padding: 0 var(--m-space-4);
+        border-radius: var(--m-radius-lg);
+        background: var(--m-surface-block);
+        gap: var(--m-space-3);
+        font-size: 15px;
+      }
+    }
+  }
+}
+
+@media (min-width: 1200px) {
+  html.mobile-mode .m-banner {
+    flex-basis: calc((100% - 3 * var(--m-space-4)) / 3.2);
+  }
+}
+
+// Телефон в альбомной ориентации: экран низкий — картинка баннера не выше ~40% высоты (16:9).
+@media (min-width: 600px) and (max-height: 500px) {
+  html.mobile-mode .m-banner {
+    flex-basis: min(calc((100% - 2 * var(--m-space-4)) / 2.4), calc(40vh * 16 / 9));
+  }
+}

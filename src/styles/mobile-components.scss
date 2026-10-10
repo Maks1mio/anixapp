@@ -536,6 +536,12 @@ html.mobile-mode {
     // замер: баннер ≈324dp (75% ширины экрана), следующий выглядывает
     flex: 0 0 calc((100% + 2 * var(--m-gutter)) * 0.75);
     scroll-snap-align: start;
+    // Баннер — <button>: без этого Chromium центрирует содержимое по вертикали, и картинки
+    // карточек с подписью разной длины стоят «лесенкой».
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    text-align: left;
     &__img {
       width: 100%;
       aspect-ratio: 16 / 9;
@@ -543,6 +549,15 @@ html.mobile-mode {
       overflow: hidden;
       background: linear-gradient(135deg, #3b2f5a, #1c3b52);
       img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    }
+    // Подписи — не больше двух строк: высота ленты баннеров = самой высокой карточке, длинная
+    // подпись одного баннера давала пустоту под остальными.
+    &__title, &__sub {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
     }
     &__title { margin: var(--m-space-3) var(--m-space-2) 0; font-size: 15px; font-weight: 500; }
     &__sub { margin: var(--m-space-1) var(--m-space-2) 0; font-size: 13px; color: var(--m-text-2); }

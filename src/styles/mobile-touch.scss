@@ -75,3 +75,44 @@ html.mobile-mode {
     min-height: 40px;
   }
 }
+
+// ── Лента на телефоне: разделы — горизонтальная полоса вкладок, а не столбик на пол-экрана ──
+@media (max-width: 839px) {
+  html.mobile-mode {
+    .view-feed__layout,
+    .view-feed__layout--no-aside {
+      padding: 0 var(--m-gutter);
+      gap: var(--m-space-3);
+    }
+
+    .feed-side__nav {
+      flex-direction: row;
+      flex-wrap: nowrap;
+      gap: var(--m-space-2);
+      overflow-x: auto;
+      margin: 0 calc(-1 * var(--m-gutter));
+      padding: 0 var(--m-gutter) var(--m-space-1);
+      scrollbar-width: none;
+
+      &::-webkit-scrollbar { display: none; }
+    }
+
+    .feed-side__item {
+      flex: none;
+      width: auto;
+      min-height: 40px;
+      padding: 0 var(--m-space-4);
+      gap: var(--m-space-2);
+      border: 1px solid var(--m-outline-variant);
+      border-radius: var(--m-radius-pill);
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    .feed-side__item-icon,
+    .feed-side__item-icon svg {
+      width: 20px !important;
+      height: 20px !important;
+    }
+  }
+}

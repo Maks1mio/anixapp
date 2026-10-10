@@ -1,0 +1,77 @@
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Касание вместо мыши: общие экраны (лента и т. п.) сделаны под курсор — значки 10–18 px,
+// кнопки 17–37 px. На телефоне и планшете значки 20–24 px, зона нажатия не меньше 44 px
+// (Material: 48 dp, Apple HIG: 44 pt). Только под html.mobile-mode.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+html.mobile-mode {
+  --m-icon: 24px;
+  --m-icon-action: 22px;
+  --m-hit: 44px;
+
+  // ── Лента: меню разделов («Моя лента», «Свежее», …) ───────────────────────────────────────
+  .feed-side__item {
+    min-height: 48px;
+    gap: var(--m-space-4);
+    font-size: 16px;
+  }
+
+  .feed-side__item-icon,
+  .feed-side__item-icon svg {
+    width: var(--m-icon) !important;
+    height: var(--m-icon) !important;
+  }
+
+  // ── Лента: запись ────────────────────────────────────────────────────────────────────────
+  .uiv2-feed-post__votes {
+    gap: var(--m-space-1);
+  }
+
+  .uiv2-feed-post__vote {
+    min-width: var(--m-hit);
+    min-height: var(--m-hit);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    svg {
+      width: var(--m-icon-action) !important;
+      height: var(--m-icon-action) !important;
+    }
+  }
+
+  .uiv2-feed-post__repost-count {
+    min-height: var(--m-hit);
+    padding-inline: var(--m-space-4);
+    font-size: 15px;
+
+    svg {
+      width: 20px !important;
+      height: 20px !important;
+    }
+  }
+
+  .uiv2-feed-post__head-actions .uiv2-round-btn {
+    min-width: var(--m-hit);
+    min-height: var(--m-hit);
+
+    svg {
+      width: var(--m-icon-action) !important;
+      height: var(--m-icon-action) !important;
+    }
+  }
+
+  .uiv2-feed-post__follow svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+  .uiv2-feed-post__carousel-nav svg {
+    width: var(--m-icon) !important;
+    height: var(--m-icon) !important;
+  }
+
+  .uiv2-select__trigger {
+    min-height: 40px;
+  }
+}

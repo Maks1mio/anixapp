@@ -9,7 +9,8 @@ android {
         applicationId "com.mobileapp.anix"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // Версия из package.json: versionName как есть, versionCode = major*10000 + minor*100 + patch
+        // Версия Android отдельно от ПК — android-version.json. versionCode = (major*10000 + minor*100 + patch)*10 + стадия
+        // (alpha 1, beta 5, rc 7, релиз 9), чтобы 1.0.0-alpha < 1.0.0-beta < 1.0.0.
         versionCode appVersionCode()
         versionName appVersionName()
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -88,12 +89,15 @@ try {
 }
 
 def appVersionName() {
-    def pkg = new groovy.json.JsonSlurper().parse(rootProject.file('../package.json'))
-    return pkg.version.toString()
+    def v = new groovy.json.JsonSlurper().parse(rootProject.file('../android-version.json'))
+    return v.version.toString()
 }
 
 def appVersionCode() {
-    def parts = appVersionName().tokenize('.-')
-    def num = { i -> parts.size() > i && parts[i].isInteger() ? parts[i].toInteger() : 0 }
-    return num(0) * 10000 + num(1) * 100 + num(2)
+    def name = appVersionName()
+    def core = name.tokenize('-')[0].tokenize('.')
+    def num = { i -> core.size() > i && core[i].isInteger() ? core[i].toInteger() : 0 }
+    def pre = name.contains('-') ? name.substring(name.indexOf('-') + 1).toLowerCase() : ''
+    def stage = pre.startsWith('alpha') ? 1 : pre.startsWith('beta') ? 5 : pre.startsWith('rc') ? 7 : (pre ? 1 : 9)
+    return (num(0) * 10000 + num(1) * 100 + num(2)) * 10 + stage
 }

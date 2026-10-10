@@ -188,7 +188,8 @@
       }).catch(() => {});
     } else if (__APP_VERSION__) {
       // Android/браузер: Electron-моста нет — версия из package.json на этапе сборки.
-      appVersion = `AnixApp v${__APP_VERSION__}`;
+      // «1.0.0-alpha» → «1.0 alpha»
+      appVersion = `AnixApp ${__APP_VERSION__.replace(/\.0(?=$|-)/, '').replace('-', ' ')}`;
     }
   });
 

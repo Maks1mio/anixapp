@@ -822,3 +822,135 @@ html.mobile-mode {
     text-decoration: underline;
   }
 }
+
+// ── Статистика профиля: полоса «часть целого» + легенда + плитки итогов ──────────────────────
+// Цвета статусов проверены валидатором dataviz (CVD-различимость, светлота, контраст) отдельно
+// для тёмных и светлой темы. Текст — в цветах текста, цвет несёт только метка.
+html.mobile-mode {
+  --st-watching: #1fae55;
+  --st-planned: #ec4899;
+  --st-completed: #3b82f6;
+  --st-on_hold: #c8800c;
+  --st-dropped: #e11d48;
+
+  &[data-m-theme='light'] {
+    --st-watching: #22c55e;
+    --st-planned: #ec4899;
+    --st-completed: #3b82f6;
+    --st-on_hold: #f59e0b;
+    --st-dropped: #ef4444;
+  }
+
+  @each $st in (watching, planned, completed, on_hold, dropped) {
+    .m-stats [data-status='#{$st}'] { background: var(--st-#{$st}); }
+  }
+
+  .m-stats {
+    // Родитель (шапка профиля) центрирует содержимое — блок статистики растягиваем и выравниваем влево
+    align-self: stretch;
+    box-sizing: border-box;
+    width: 100%;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--m-space-4);
+    // Блок лежит внутри карточки раздела профиля — свой фон и поля давали «карточку в карточке»
+    padding: 0;
+    background: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .m-stats__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--m-space-3);
+  }
+
+  .m-stats__title { margin: 0; font-size: 18px; font-weight: 600; }
+  .m-stats__total { margin: 0; font-size: 14px; color: var(--m-text-2); }
+
+  // 2 px промежутки между сегментами, скругление 4 px только на краях полосы
+  .m-stats__bar {
+    display: flex;
+    gap: 2px;
+    height: 14px;
+    overflow: hidden;
+    border-radius: 4px;
+  }
+
+  .m-stats__seg {
+    flex-basis: 0;
+    min-width: 4px;
+  }
+
+  .m-stats__legend {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+    column-gap: var(--m-space-5);
+  }
+
+  .m-stats__item {
+    @extend .m-btn-reset;
+    display: grid;
+    grid-template-columns: 10px 1fr auto 3.2em;
+    align-items: center;
+    gap: var(--m-space-3);
+    min-height: 44px;
+    text-align: left;
+
+    &:disabled { opacity: 0.5; }
+    &:active:not(:disabled) { background: color-mix(in srgb, var(--m-text) 6%, transparent); border-radius: 8px; }
+  }
+
+  .m-stats__dot { width: 10px; height: 10px; border-radius: 50%; }
+  .m-stats__label { font-size: 15px; color: var(--m-text); }
+  .m-stats__value { font-size: 15px; font-weight: 600; color: var(--m-text); }
+  .m-stats__pct { font-size: 13px; color: var(--m-text-2); text-align: right; }
+
+  .m-stats__kpis {
+    display: grid;
+    grid-template-columns: 1fr 1.3fr 1fr; // время просмотра — самое длинное значение
+    gap: var(--m-space-2);
+  }
+
+  .m-stats__kpi {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--m-space-3) 10px;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--m-text) 6%, transparent);
+    min-width: 0;
+  }
+
+  .m-stats__kpi--btn {
+    @extend .m-btn-reset;
+    text-align: left;
+    &:active:not(:disabled) { filter: brightness(1.1); }
+  }
+
+  .m-stats__kpi-value { font-size: 16px; font-weight: 700; color: var(--m-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .m-stats__kpi-label { font-size: 13px; color: var(--m-text-2); }
+
+  .m-stats__prefs { display: flex; flex-direction: column; align-items: flex-start; gap: var(--m-space-2); }
+  .m-stats__prefs-label { font-size: 13px; font-weight: 600; color: var(--m-text-2); }
+  .m-stats__chips { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 6px; }
+  .m-stats__chip {
+    padding: 4px 10px;
+    border-radius: var(--m-radius-pill);
+    background: var(--m-surface-chip);
+    font-size: 13px;
+    color: var(--m-text);
+  }
+
+  .m-stats__more {
+    @extend .m-btn-reset;
+    align-self: flex-start;
+    min-height: 40px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--m-primary);
+  }
+}

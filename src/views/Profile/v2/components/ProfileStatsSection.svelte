@@ -3,6 +3,10 @@
   import { fmtWatchedTime } from '../../_utils';
   import { profileShowcaseBackground } from '../../../../utils/profile-showcase-theme';
   import { toCdnProxyUrl } from '../../../../utils/posterUrl';
+  import { isMobileMode } from '../../../../platform/mobile';
+
+  /** Android: статистика полосой «часть целого» + легенда с числами + плитки итогов (вместо «пирога»). */
+  const mobileUi = isMobileMode();
 
   interface Props {
     profile: Record<string, unknown>;
@@ -116,6 +120,41 @@
     </svg>`;
   }
 
+  type StatusKey = 'watching' | 'planned' | 'completed' | 'on_hold' | 'dropped';
+  const statusTotal = $derived(statusItems.reduce((sum, i) => sum + i.value, 0));
+  const statusShares = $derived(
+    statusItems.map((i) => ({
+      ...i,
+      key: i.tab as StatusKey,
+      pct: statusTotal ? (i.value / statusTotal) * 100 : 0,
+    })),
+  );
+  const barLabel = $derived(
+    statusShares.map((s) => `${s.label} ${s.value} (${Math.round(s.pct)}%)`).join(', '),
+  );
+  /** Для плитки: «111 дней 21 час» → «111 д 21 ч» (полная форма — в подсказке). */
+  const watchTimeShort = $derived(
+    watchTimeLabel
+      .replace(/\s(дней|дня|день)/g, ' д')
+      .replace(/\s(часов|часа|час)/g, ' ч')
+      .replace(/\s(минут|минуты|минута)/g, ' мин'),
+  );
+  const prefChips = $derived.by(() => {
+    type Pref = { name?: string; percentage?: number; percent?: number };
+    const rows: { label: string; chips: string[] }[] = [];
+    const add = (items: Pref[] | undefined, label: string) => {
+      const chips = (items ?? [])
+        .slice(0, 4)
+        .map((g) => `${g.name ?? ''} ${Math.round(Number(g.percentage ?? g.percent ?? 0))}%`.trim())
+        .filter(Boolean);
+      if (chips.length) rows.push({ label, chips });
+    };
+    add(profile.preferred_genres as Pref[] | undefined, 'Жанры');
+    add(profile.preferred_audiences as Pref[] | undefined, 'Аудитория');
+    add(profile.preferred_themes as Pref[] | undefined, 'Тематика');
+    return rows;
+  });
+
   // API: watched_time в минутах (35524 → «24 дня 16 часов»)
   const watchTimeLabel = $derived.by(() => {
     const min = Number(profile.watched_time ?? 0);
@@ -143,6 +182,58 @@
   }
 </script>
 
+{#if mobileUi}
+<section class="m-stats" aria-label="Статистика">
+  <!-- Заголовок «Статистика» уже даёт раздел профиля — здесь только итог -->
+  <p class="m-stats__total">{statusTotal.toLocaleString('ru-RU')} тайтлов в списках</p>
+
+  {#if statusTotal > 0}
+    <div class="m-stats__bar" role="img" aria-label={barLabel}>
+      {#each statusShares as s (s.key)}
+        {#if s.value > 0}
+          <span class="m-stats__seg" data-status={s.key} style="flex-grow:{s.value}"></span>
+        {/if}
+      {/each}
+    </div>
+  {/if}
+
+  <div class="m-stats__legend">
+    {#each statusShares as s (s.key)}
+      <button type="button" class="m-stats__item" disabled={s.value <= 0} onclick={() => openList(s.tab)}>
+        <span class="m-stats__dot" data-status={s.key} aria-hidden="true"></span>
+        <span class="m-stats__label">{s.label}</span>
+        <span class="m-stats__value">{s.value.toLocaleString('ru-RU')}</span>
+        <span class="m-stats__pct">{statusTotal ? Math.round(s.pct) + '%' : ''}</span>
+      </button>
+    {/each}
+  </div>
+
+  <div class="m-stats__kpis">
+    {#if episodesLabel}
+      <div class="m-stats__kpi"><span class="m-stats__kpi-value">{episodesLabel}</span><span class="m-stats__kpi-label">серий</span></div>
+    {/if}
+    {#if watchTimeLabel}
+      <div class="m-stats__kpi m-stats__kpi--time" title={`≈ ${watchTimeLabel}`}><span class="m-stats__kpi-value">{watchTimeShort}</span><span class="m-stats__kpi-label">в просмотре</span></div>
+    {/if}
+    <button type="button" class="m-stats__kpi m-stats__kpi--btn" disabled={loadedVotesCount <= 0} onclick={() => openList('votes')}>
+      <span class="m-stats__kpi-value">{loadedVotesCount.toLocaleString('ru-RU')}</span><span class="m-stats__kpi-label">оценок</span>
+    </button>
+  </div>
+
+  {#each prefChips as row (row.label)}
+    <div class="m-stats__prefs">
+      <span class="m-stats__prefs-label">{row.label}</span>
+      <div class="m-stats__chips">
+        {#each row.chips as chip (chip)}<span class="m-stats__chip">{chip}</span>{/each}
+      </div>
+    </div>
+  {/each}
+
+  {#if showMoreLink}
+    <button type="button" class="m-stats__more" onclick={openFullStats}>Подробнее</button>
+  {/if}
+</section>
+{:else}
 <div
   class="profile-v2__stats"
   class:profile-v2__stats--themed={!!showcaseBg}
@@ -196,3 +287,4 @@
     </button>
   {/if}
 </div>
+{/if}

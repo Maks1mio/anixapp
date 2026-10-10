@@ -847,7 +847,6 @@ html.mobile-mode {
   }
 
   .m-stats {
-    // Родитель (шапка профиля) центрирует содержимое — блок статистики растягиваем и выравниваем влево
     align-self: stretch;
     box-sizing: border-box;
     width: 100%;
@@ -856,118 +855,215 @@ html.mobile-mode {
     flex-direction: column;
     align-items: stretch;
     gap: var(--m-space-4);
-    // Блок лежит внутри карточки раздела профиля — свой фон и поля давали «карточку в карточке»
-    padding: 0;
-    background: none;
     font-variant-numeric: tabular-nums;
   }
 
-  .m-stats__head {
+  .m-stats__main {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
-    gap: var(--m-space-3);
+    gap: var(--m-space-4);
   }
 
-  .m-stats__title { margin: 0; font-size: 18px; font-weight: 600; }
-  .m-stats__total { margin: 0; font-size: 14px; color: var(--m-text-2); }
+  .m-stats__legend { display: flex; flex-direction: column; min-width: 0; }
 
-  // Кольцо: тонкое (как у референса), итог в центре; 2 px фона между сегментами
+  .m-stats__item {
+    @extend .m-btn-reset;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 34px;
+    text-align: left;
+
+    &:disabled { opacity: 0.55; }
+    &:active:not(:disabled) { opacity: 0.7; }
+  }
+
+  .m-stats__swatch { flex: none; width: 14px; height: 14px; border-radius: 50%; }
+  .m-stats__label { font-size: 15px; color: var(--m-text-2); }
+  .m-stats__count { font-size: 15px; font-weight: 700; color: var(--m-text); }
+
+  // Кольцо как в Anixart: толстое, без подписи в центре; 2 px фона между сегментами
   .m-stats__donut {
-    position: relative;
-    align-self: center;
-    width: min(180px, 60%);
+    flex: none;
+    width: min(140px, 38%);
     aspect-ratio: 1;
 
     svg { display: block; width: 100%; height: 100%; }
   }
 
-  .m-stats__arc {
-    fill: none;
-    stroke-width: 13;
-    background: none !important;
-  }
+  .m-stats__arc { fill: none; stroke-width: 24; background: none !important; }
 
-  .m-stats__donut-center {
-    position: absolute;
-    inset: 0;
+  .m-stats__lines {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    gap: 4px;
+
+    p { margin: 0; font-size: 15px; line-height: 1.4; color: var(--m-text); }
+    strong { font-weight: 700; }
   }
 
-  .m-stats__donut-value { font-size: 22px; font-weight: 700; color: var(--m-text); }
-  .m-stats__donut-label { font-size: 13px; color: var(--m-text-2); }
-
-  // Легенда под кольцом — две колонки: квадратик цвета + название + «число · %»
-  .m-stats__legend {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: var(--m-space-4);
-  }
-
-  .m-stats__item {
-    @extend .m-btn-reset;
-    display: grid;
-    grid-template-columns: 12px minmax(0, 1fr);
-    grid-template-rows: auto auto;
-    column-gap: var(--m-space-2);
-    align-items: center;
-    min-height: 48px;
-    padding: 4px;
-    text-align: left;
-
-    &:disabled { opacity: 0.5; }
-    &:active:not(:disabled) { background: color-mix(in srgb, var(--m-text) 6%, transparent); border-radius: 8px; }
-  }
-
-  .m-stats__swatch { width: 12px; height: 12px; border-radius: 3px; grid-row: 1; }
-  .m-stats__label { grid-column: 2; font-size: 15px; color: var(--m-text); }
-  .m-stats__meta { grid-column: 2; font-size: 13px; color: var(--m-text-2); }
-
-  .m-stats__kpis {
-    display: grid;
-    grid-template-columns: 1fr 1.3fr 1fr; // время просмотра — самое длинное значение
-    gap: var(--m-space-2);
-  }
-
-  .m-stats__kpi {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: var(--m-space-3) 10px;
-    border-radius: 12px;
-    background: color-mix(in srgb, var(--m-text) 6%, transparent);
-    min-width: 0;
-  }
-
-  .m-stats__kpi--btn {
-    @extend .m-btn-reset;
-    text-align: left;
-    &:active:not(:disabled) { filter: brightness(1.1); }
-  }
-
-  .m-stats__kpi-value { font-size: 16px; font-weight: 700; color: var(--m-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .m-stats__kpi-label { font-size: 13px; color: var(--m-text-2); }
-
-  .m-stats__prefs { display: flex; flex-direction: column; align-items: flex-start; gap: var(--m-space-2); }
-  .m-stats__prefs-label { font-size: 13px; font-weight: 600; color: var(--m-text-2); }
-  .m-stats__chips { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 6px; }
-  .m-stats__chip {
-    padding: 4px 10px;
-    border-radius: var(--m-radius-pill);
-    background: var(--m-surface-chip);
-    font-size: 13px;
-    color: var(--m-text);
-  }
+  .m-stats__line-label { font-weight: 700; color: var(--m-text); }
+  .m-stats__line-text { color: var(--m-text-2); }
 
   .m-stats__more {
     @extend .m-btn-reset;
     align-self: center;
-    min-height: 40px;
-    font-size: 14px;
+    min-height: 44px;
+    padding: 0 var(--m-space-4);
+    font-size: 15px;
     font-weight: 600;
-    color: var(--m-primary);
+    color: var(--m-text);
   }
+}
+
+// ── Профиль на Android (как в Anixart) ───────────────────────────────────────────────────────
+html.mobile-mode {
+  // Разделы профиля отделены полосой фона, а не карточками
+  .m-psec,
+  .m-ptabs {
+    padding: var(--m-space-4) var(--m-gutter);
+    border-top: 8px solid color-mix(in srgb, var(--m-text) 7%, transparent);
+  }
+
+  .m-psec__title { margin: 0 0 var(--m-space-3); font-size: 20px; font-weight: 700; color: var(--m-text); }
+
+  // Вкладки-чипы: горизонтальная прокрутка, выбранная — с заливкой
+  .m-ptabs__bar {
+    display: flex;
+    gap: var(--m-space-2);
+    margin: 0 calc(-1 * var(--m-gutter)) var(--m-space-4);
+    padding: 0 var(--m-gutter);
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar { display: none; }
+  }
+
+  .m-ptabs__chip {
+    @extend .m-btn-reset;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--m-space-2);
+    min-height: 40px;
+    padding: 0 var(--m-space-4);
+    border: 1px solid var(--m-outline-variant);
+    border-radius: 12px;
+    font-size: 15px;
+    color: var(--m-text-2);
+
+    :is(svg) { width: 18px; height: 18px; }
+  }
+
+  .m-ptabs__chip--on {
+    border-color: var(--m-text);
+    background: var(--m-surface-chip);
+    color: var(--m-text);
+  }
+
+  .m-ptabs__empty { margin: var(--m-space-5) 0; text-align: center; font-size: 15px; color: var(--m-text-2); }
+
+  // Строка превью: постер + название + мета
+  .m-ptabs__row {
+    @extend .m-btn-reset;
+    display: flex;
+    align-items: center;
+    gap: var(--m-space-4);
+    width: 100%;
+    padding: var(--m-space-2) 0;
+    text-align: left;
+
+    &:active { opacity: 0.75; }
+  }
+
+  .m-ptabs__poster {
+    flex: none;
+    width: 52px;
+    aspect-ratio: 2 / 3;
+    overflow: hidden;
+    border-radius: 8px;
+    background: var(--m-surface-chip);
+
+    :is(img, .poster-image__fallback) { width: 100%; height: 100%; object-fit: cover; display: block; }
+  }
+
+  .m-ptabs__poster--wide { width: 96px; aspect-ratio: 16 / 9; }
+
+  .m-ptabs__text { display: flex; flex: 1; flex-direction: column; gap: 6px; min-width: 0; }
+  .m-ptabs__title { font-size: 16px; color: var(--m-text); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .m-ptabs__meta { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--m-text-2); }
+  .m-ptabs__meta--clamp { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+  .m-ptabs__stars { display: inline-flex; gap: 2px; }
+  .m-ptabs__star { display: inline-grid; color: var(--m-text-3); :is(svg) { width: 16px; height: 16px; } }
+  .m-ptabs__star--on { color: var(--m-text); }
+
+  // Комментарий
+  .m-ptabs__comment {
+    @extend .m-btn-reset;
+    display: flex;
+    flex-direction: column;
+    gap: var(--m-space-2);
+    width: 100%;
+    margin-bottom: var(--m-space-3);
+    padding: var(--m-space-3) var(--m-space-4);
+    border: 1px solid var(--m-outline-variant);
+    border-radius: 16px;
+    text-align: left;
+  }
+
+  .m-ptabs__c-head { display: flex; align-items: center; gap: var(--m-space-3); }
+  .m-ptabs__avatar { flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--m-surface-chip) center / cover; }
+  .m-ptabs__c-who { display: flex; flex-direction: column; min-width: 0; }
+  .m-ptabs__c-login { font-size: 15px; font-weight: 600; color: var(--m-text); }
+  .m-ptabs__c-to { font-weight: 400; color: var(--m-text-2); font-size: 13px; }
+  .m-ptabs__c-release { font-size: 13px; color: var(--m-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .m-ptabs__c-text { font-size: 15px; line-height: 1.4; color: var(--m-text); display: -webkit-box; -webkit-line-clamp: 6; line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+  .m-ptabs__c-foot { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--m-text-2); }
+  .m-ptabs__c-likes { padding: 2px 8px; border-radius: 6px; background: color-mix(in srgb, #22c55e 18%, transparent); color: #22c55e; font-weight: 700; }
+
+  .m-ptabs__all {
+    @extend .m-btn-reset;
+    display: block;
+    margin: var(--m-space-2) auto 0;
+    min-height: 44px;
+    padding: 0 var(--m-space-4);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--m-text);
+  }
+
+  // Динамика: столбики по дням, число сверху, дата снизу (повёрнута, как в Anixart)
+  .m-dyn {
+    margin: 0 calc(-1 * var(--m-gutter));
+    padding: 0 var(--m-gutter);
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar { display: none; }
+  }
+
+  .m-dyn__plot { display: flex; gap: 14px; width: max-content; padding-bottom: var(--m-space-2); }
+  .m-dyn__col { display: flex; flex-direction: column; align-items: center; width: 30px; }
+
+  .m-dyn__box {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    height: 150px;
+  }
+
+  .m-dyn__value { font-size: 14px; font-weight: 600; color: var(--m-text-2); margin-bottom: 4px; }
+  .m-dyn__bar { width: 26px; border-radius: 6px 6px 2px 2px; background: color-mix(in srgb, var(--m-text) 82%, transparent); }
+  .m-dyn__date { margin-top: 16px; font-size: 12px; color: var(--m-text-2); transform: rotate(-60deg); white-space: nowrap; }
+
+  // Шапка профиля: пустой баннер не показываем (как в Anixart — аватар на фоне)
+  .m-fullscreen--profile .profile-panel__banner--empty { display: none; }
+  // Без баннера аватару не на что «наезжать» — убираем отрицательный отступ (иначе уходит под шапку)
+  .m-fullscreen--profile .profile-panel__banner--empty ~ .profile-panel__head .profile-panel__identity {
+    margin-top: var(--m-space-4);
+  }
+  .m-pbar { border-bottom: 1px solid var(--m-divider); }
 }

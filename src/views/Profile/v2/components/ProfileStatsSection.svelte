@@ -129,8 +129,8 @@
       pct: statusTotal ? (i.value / statusTotal) * 100 : 0,
     })),
   );
-  /** Кольцо: сегменты по окружности r=42 (viewBox 100), между сегментами 2 px фона. */
-  const DONUT_R = 42;
+  /** Кольцо: сегменты по окружности (viewBox 100), между сегментами 2 px фона. */
+  const DONUT_R = 38; // толщина 24 → внешний край ровно 50 (граница viewBox)
   const DONUT_C = 2 * Math.PI * DONUT_R;
   const donutSegs = $derived.by(() => {
     const parts = statusShares.filter((x) => x.value > 0);
@@ -199,65 +199,54 @@
 </script>
 
 {#if mobileUi}
+<!-- Android: раскладка как в Anixart — легенда слева, кольцо справа, предпочтения и итоги строками -->
 <section class="m-stats" aria-label="Статистика">
+  <div class="m-stats__main">
+    <div class="m-stats__legend">
+      {#each statusShares as s (s.key)}
+        <button type="button" class="m-stats__item" disabled={s.value <= 0} onclick={() => openList(s.tab)}>
+          <span class="m-stats__swatch" data-status={s.key} aria-hidden="true"></span>
+          <span class="m-stats__label">{s.label}</span>
+          <span class="m-stats__count">{s.value.toLocaleString('ru-RU')}</span>
+        </button>
+      {/each}
+    </div>
 
-  {#if statusTotal > 0}
-    <div class="m-stats__donut" role="img" aria-label={barLabel}>
-      <svg viewBox="0 0 100 100" aria-hidden="true">
-        {#each donutSegs as seg (seg.key)}
-          <circle
-            class="m-stats__arc"
-            data-status={seg.key}
-            cx="50" cy="50" r={DONUT_R}
-            stroke-dasharray="{seg.dash} {DONUT_C}"
-            stroke-dashoffset={seg.offset}
-            transform="rotate(-90 50 50)"
-          />
-        {/each}
-      </svg>
-      <span class="m-stats__donut-center">
-        <span class="m-stats__donut-value">{statusTotal.toLocaleString('ru-RU')}</span>
-        <span class="m-stats__donut-label">в списках</span>
-      </span>
+    {#if statusTotal > 0}
+      <div class="m-stats__donut" role="img" aria-label={barLabel}>
+        <svg viewBox="0 0 100 100" aria-hidden="true">
+          {#each donutSegs as seg (seg.key)}
+            <circle
+              class="m-stats__arc"
+              data-status={seg.key}
+              cx="50" cy="50" r={DONUT_R}
+              stroke-dasharray="{seg.dash} {DONUT_C}"
+              stroke-dashoffset={seg.offset}
+              transform="rotate(-90 50 50)"
+            />
+          {/each}
+        </svg>
+      </div>
+    {/if}
+  </div>
+
+  {#if preferredBlocks.length}
+    <div class="m-stats__lines">
+      {#each preferredBlocks as block (block.label)}
+        <p><span class="m-stats__line-label">{block.label}:</span> <span class="m-stats__line-text">{block.text}</span></p>
+      {/each}
     </div>
   {/if}
 
-  <div class="m-stats__legend">
-    {#each statusShares as s (s.key)}
-      <button type="button" class="m-stats__item" disabled={s.value <= 0} onclick={() => openList(s.tab)}>
-        <span class="m-stats__swatch" data-status={s.key} aria-hidden="true"></span>
-        <span class="m-stats__label">{s.label}</span>
-        <span class="m-stats__meta">{s.value.toLocaleString('ru-RU')} · {statusTotal ? Math.round(s.pct) : 0}%</span>
-      </button>
-    {/each}
-  </div>
+  {#if episodesLabel || watchTimeLabel}
+    <div class="m-stats__lines">
+      {#if episodesLabel}<p><span class="m-stats__line-text">Просмотрено серий:</span> <strong>{episodesLabel}</strong></p>{/if}
+      {#if watchTimeLabel}<p><span class="m-stats__line-text">Время просмотра:</span> <strong>~ {watchTimeLabel}</strong></p>{/if}
+    </div>
+  {/if}
 
-  <div class="m-stats__kpis">
-    {#if episodesLabel}
-      <div class="m-stats__kpi"><span class="m-stats__kpi-value">{episodesLabel}</span><span class="m-stats__kpi-label">серий</span></div>
-    {/if}
-    {#if watchTimeLabel}
-      <div class="m-stats__kpi m-stats__kpi--time" title={`≈ ${watchTimeLabel}`}><span class="m-stats__kpi-value">{watchTimeShort}</span><span class="m-stats__kpi-label">в просмотре</span></div>
-    {/if}
-    <button type="button" class="m-stats__kpi m-stats__kpi--btn" disabled={loadedVotesCount <= 0} onclick={() => openList('votes')}>
-      <span class="m-stats__kpi-value">{loadedVotesCount.toLocaleString('ru-RU')}</span><span class="m-stats__kpi-label">оценок</span>
-    </button>
-  </div>
-
-  {#if prefChips.length}
-    {#if prefsOpen}
-      {#each prefChips as row (row.label)}
-        <div class="m-stats__prefs">
-          <span class="m-stats__prefs-label">{row.label}</span>
-          <div class="m-stats__chips">
-            {#each row.chips as chip (chip)}<span class="m-stats__chip">{chip}</span>{/each}
-          </div>
-        </div>
-      {/each}
-    {/if}
-    <button type="button" class="m-stats__more" aria-expanded={prefsOpen} onclick={() => (prefsOpen = !prefsOpen)}>
-      {prefsOpen ? 'Скрыть' : 'Подробнее'}
-    </button>
+  {#if showMoreLink}
+    <button type="button" class="m-stats__more" onclick={() => openList('completed')}>Показать списки</button>
   {/if}
 </section>
 {:else}

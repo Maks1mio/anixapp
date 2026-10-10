@@ -114,10 +114,11 @@ class AnixPlayerPlugin : Plugin() {
         val act = activity
         if (act == null) { call.resolve(); return }
         act.runOnUiThread {
+            // Вне плеера — обычный поворот (телефон/планшет, с учётом системной блокировки поворота).
             act.requestedOrientation = if (landscape) {
                 ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             } else {
-                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                ActivityInfo.SCREEN_ORIENTATION_FULL_USER
             }
             val controller = WindowCompat.getInsetsController(act.window, act.window.decorView)
             if (landscape) {

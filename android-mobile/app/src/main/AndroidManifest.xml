@@ -30,14 +30,15 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
-        <!-- Основное приложение: портрет по умолчанию -->
+        <!-- Основное приложение: телефон и планшет, поворот по датчику с учётом системной блокировки -->
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
-            android:screenOrientation="portrait"
+            android:screenOrientation="fullUser"
+            android:resizeableActivity="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -1,0 +1,74 @@
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Широкие экраны мобильного режима: планшет и телефон в альбомной ориентации (от 840 dp).
+// Телефонная вёрстка (mobile-components / mobile-overrides) не меняется — здесь только надстройки:
+// нижний таб-бар становится боковой навигационной полосой, списки — в две колонки, шторки — по центру.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+@media (min-width: 840px) {
+  html.mobile-mode {
+    --m-rail-w: 88px;
+    --m-sheet-max-w: 640px;
+
+    // ── Боковая навигационная полоса вместо нижнего таб-бара ──────────────────────────────
+    .m-navbar {
+      top: 0;
+      right: auto;
+      bottom: 0;
+      width: calc(var(--m-rail-w) + env(safe-area-inset-left));
+      height: auto;
+      flex-direction: column;
+      justify-content: center;
+      gap: var(--m-space-3);
+      padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) env(safe-area-inset-left);
+      border-right: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .m-nav-item {
+      flex: 0 0 auto;
+      padding-top: 0;
+      font-size: 12px;
+    }
+
+    // Контент сдвигается вправо на ширину полосы, нижний отступ под таб-бар больше не нужен.
+    .m-app {
+      padding-left: calc(var(--m-rail-w) + env(safe-area-inset-left));
+    }
+
+    .m-app__content,
+    .m-screen {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .m-fullscreen {
+      left: calc(var(--m-rail-w) + env(safe-area-inset-left));
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .m-topbar--float {
+      left: calc(var(--m-rail-w) + env(safe-area-inset-left) + var(--m-space-4));
+    }
+
+    // ── Списки карточек: две колонки ──────────────────────────────────────────────────────
+    .release-cards-grid-root--wide {
+      display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: var(--m-space-6) !important;
+    }
+
+    // ── Шторки и меню: не во всю ширину, а по центру ──────────────────────────────────────
+    .m-sheet {
+      left: 50%;
+      right: auto;
+      width: min(100%, var(--m-sheet-max-w));
+      transform: translateX(-50%);
+    }
+
+    .m-sheet-scrim {
+      justify-content: center;
+    }
+
+    .m-sheet-menu {
+      width: min(100%, var(--m-sheet-max-w));
+    }
+  }
+}

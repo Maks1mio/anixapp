@@ -83,6 +83,91 @@ class AnixPlayerPlugin : Plugin() {
         }
     }
 
+    // --- Системные полосы под тему ------------------------------------------------------------
+
+    /** Последние цвета от веба: Capacitor SystemBars сбрасывает фон окна на чёрный при повороте. */
+    private var barsTop: Int? = null
+    private var barsBottom: Int? = null
+    private var barsLight = false
+
+    /** Фон под строкой состояния (верх) и под жестовой панелью (низ) + тёмные/светлые значки. */
+    private class SystemBarsDrawable(private val top: Int, private val bottom: Int, private val bottomInset: () -> Int) :
+        android.graphics.drawable.Drawable() {
+        private val paint = android.graphics.Paint()
+        override fun draw(canvas: android.graphics.Canvas) {
+            val b = bounds
+            val split = (b.bottom - bottomInset()).coerceIn(b.top, b.bottom)
+            paint.color = top
+            canvas.drawRect(b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), split.toFloat(), paint)
+            paint.color = bottom
+            canvas.drawRect(b.left.toFloat(), split.toFloat(), b.right.toFloat(), b.bottom.toFloat(), paint)
+        }
+        override fun setAlpha(alpha: Int) {}
+        override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) {}
+        @Deprecated("Deprecated in Java")
+        override fun getOpacity() = android.graphics.PixelFormat.OPAQUE
+    }
+
+    private fun applySystemBars() {
+        val top = barsTop ?: return
+        val bottom = barsBottom ?: top
+        val window = activity.window
+        val decor = window.decorView
+        decor.background = SystemBarsDrawable(top, bottom) {
+            androidx.core.view.ViewCompat.getRootWindowInsets(decor)
+                ?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom ?: 0
+        }
+        WindowCompat.getInsetsController(window, decor).apply {
+            isAppearanceLightStatusBars = barsLight
+            isAppearanceLightNavigationBars = barsLight
+        }
+    }
+
+    /** {top: "#rrggbb", bottom?: "#rrggbb", light: boolean} — цвета системных полос по теме приложения. */
+    @PluginMethod
+    fun setSystemBars(call: PluginCall) {
+        val top = runCatching { android.graphics.Color.parseColor(call.getString("top")) }.getOrNull()
+        if (top == null) { call.reject("top обязателен"); return }
+        barsTop = top
+        barsBottom = runCatching { android.graphics.Color.parseColor(call.getString("bottom")) }.getOrNull()
+        barsLight = call.getBoolean("light") ?: false
+        activity.runOnUiThread { applySystemBars(); call.resolve() }
+    }
+
+    override fun handleOnConfigurationChanged(newConfig: android.content.res.Configuration?) {
+        super.handleOnConfigurationChanged(newConfig)
+        // После SystemBars (он ставит чёрный windowBackground) — возвращаем свои цвета
+        activity.window.decorView.post { applySystemBars() }
+    }
+
+    override fun handleOnResume() {
+        super.handleOnResume()
+        activity.window.decorView.post { applySystemBars() }
+    }
+
+    // --- Язык АниксПлеера ---------------------------------------------------------------------
+
+    /**
+     * Системный экран «Язык приложения» для официального АниксПлеера (Android 13+; он поддерживает en/ru).
+     * Ниже Android 13 — карточка приложения: язык там совпадает с системным. {opened: "locale"|"details"|"none"}
+     */
+    @PluginMethod
+    fun openAnixPlayerLanguage(call: PluginCall) {
+        if (installedVersion(officialAnixPlayer) == null) { call.resolve(JSObject().put("opened", "none")); return }
+        val uri = Uri.fromParts("package", officialAnixPlayer, null)
+        val tries = buildList {
+            if (android.os.Build.VERSION.SDK_INT >= 33) add("locale" to Intent(android.provider.Settings.ACTION_APP_LOCALE_SETTINGS, uri))
+            add("details" to Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, uri))
+        }
+        for ((kind, intent) in tries) {
+            try {
+                activity.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                call.resolve(JSObject().put("opened", kind)); return
+            } catch (_: Exception) { /* следующий вариант */ }
+        }
+        call.resolve(JSObject().put("opened", "none"))
+    }
+
     override fun handleOnDestroy() {
         MediaEngine.downloadManager.removeListener(dlListener)
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager

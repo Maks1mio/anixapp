@@ -255,6 +255,11 @@ html.mobile-mode {
     }
     &::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 45%, var(--m-bg) 100%); }
   }
+  // Светлая тема: тёмная размытая обложка под тёмным текстом даёт низкий контраст — осветляем фон
+  &[data-m-theme='light'] .m-release-bg {
+    &::before { filter: blur(30px) brightness(1.15) saturate(0.85); opacity: 0.55; }
+    &::after { background: linear-gradient(to bottom, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.2) 45%, var(--m-bg) 100%); }
+  }
   .release-page__head > *:not(.m-release-bg):not(.m-sheet-scrim):not(.m-flow-scrim) { position: relative; z-index: 1; }
   .release-page__head-top { padding: 0 !important; align-items: stretch !important; }
   .release-page__actions { width: 100%; }
@@ -327,6 +332,31 @@ html.mobile-mode {
   .release-page__meta-info-row svg { width: 20px; height: 20px; }
   .release-page__meta-info-text { display: block; text-align: left !important; font: 400 15px/1.35 var(--m-font) !important; color: var(--m-text) !important; }
   .release-page__meta-info-text a, .release-page__meta-info-link { display: inline !important; text-align: left; }
+}
+
+// ── Релиз на телефоне в альбомной ориентации: постер слева, название/действия/«Воспроизвести» справа.
+// Иначе постер на ширину экрана занимает всю высоту и до кнопок не долистать.
+@media (orientation: landscape) and (max-height: 600px) {
+  html.mobile-mode {
+    .release-page__head-top {
+      display: grid !important;
+      grid-template-columns: 168px minmax(0, 1fr);
+      grid-template-areas: 'hero brief' 'hero actions' 'hero play' 'hero .';
+      grid-template-rows: auto auto auto 1fr;
+      column-gap: var(--m-space-5);
+      padding-top: calc(env(safe-area-inset-top) + 68px) !important;
+    }
+    .release-page__head-intro { display: contents !important; }
+    .release-page__head--narrow .release-page__head-hero, .release-page__head-hero {
+      grid-area: hero; justify-content: flex-start; padding-top: 0 !important;
+    }
+    .release-page__poster { width: 168px !important; border-radius: 20px !important; }
+    .release-page__head--narrow .release-page__head-brief, .release-page__head-brief { grid-area: brief; padding-top: 0 !important; }
+    .release-page__actions { grid-area: actions; }
+    .release-page__play-slot { grid-area: play; max-width: 480px; }
+    .release-page__episode-added { text-align: left; }
+    .m-release-bg { height: 520px; }
+  }
 }
 
 // ── Загрузки в окне «Выберите серию» ──
@@ -440,4 +470,13 @@ html.mobile-mode {
 html.mobile-mode.m-scroll-lock { &, body { overflow: hidden !important; touch-action: none; } }
 html.mobile-mode {
   .m-flow__body, .m-sheet-menu, .m-flow__dubs { overscroll-behavior: contain; touch-action: pan-y; }
+}
+
+// ── Светлая тема: элементы, рассчитанные на тёмный фон ──
+html.mobile-mode[data-m-theme='light'] {
+  // «Воспроизвести»: светло-серая кнопка на белом почти не видна — делаем основной тёмной
+  .release-page__btn--play { background: var(--m-text) !important; color: var(--m-bg) !important; }
+  // Подпись об условиях на экране входа: белый текст с тенью на светлом градиенте не читается
+  .auth-legal__text { color: var(--m-text-2); text-shadow: none; }
+  .auth-legal__link { color: var(--m-text); text-shadow: none; text-decoration-color: currentColor; }
 }

@@ -246,7 +246,7 @@
     padding: 0;
     justify-content: space-between;
 
-    .m-icon-btn { width: 48px; height: 48px; border-radius: 16px; background: rgba(28, 28, 28, 0.72); color: var(--m-text); backdrop-filter: blur(6px); }
+    .m-icon-btn { width: 48px; height: 48px; border-radius: 16px; background: rgba(28, 28, 28, 0.72); color: #fff; backdrop-filter: blur(6px); }
   }
 
   .m-app { position: relative; }

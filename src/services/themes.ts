@@ -1,6 +1,7 @@
 // ── Theme system ──────────────────────────────────────────────────────────────
 
 import { isMobileMode } from '../platform/mobile';
+import { syncSystemBars } from '../native/system-bars';
 import { isTvMode } from '../platform/tv';
 
 export interface ThemeVars {
@@ -188,6 +189,7 @@ export function applyTheme(theme: Theme): void {
     root.dataset.themeMode = light ? 'light' : 'dark';
     root.style.colorScheme = light ? 'light' : 'dark';
     setActiveThemeId(theme.id);
+    syncSystemBars();
     window.dispatchEvent(new CustomEvent('anix:themeChanged', { detail: { theme } }));
     return;
   }

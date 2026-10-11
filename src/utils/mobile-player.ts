@@ -133,6 +133,7 @@ type NativePlugin = {
     resumeIndices?: number[];
     resumeValuesMs?: number[];
   }>;
+  openWebPlayer?: (o: { url: string; referer?: string; title?: string }) => Promise<{ closed?: boolean; seconds?: number }>;
   anixPlayerStatus?: () => Promise<{ installed?: boolean; versionCode?: number; ownInstalled?: boolean; abis?: string[] }>;
 };
 
@@ -417,6 +418,46 @@ export interface MobileLaunchResult {
   watchedPositions?: number[];
 }
 
+const DEFAULT_IFRAME_EMBED = 'https://anixmirai.com/iframe?url=';
+const DEFAULT_APP_REFERER = 'https://anixart-app.com/';
+let iframeEmbedCache: { prefix: string; referer: string } | null = null;
+
+/** Обёртка веб-плеера Anixart из config/toggles (как в ПК-версии), с запасным адресом. */
+async function resolveIframeEmbed(): Promise<{ prefix: string; referer: string }> {
+  if (iframeEmbedCache) return iframeEmbedCache;
+  for (const base of ANIX_PLAYER_CONFIG_BASES) {
+    try {
+      const res = await fetch(`${base}/config/toggles?version_code=26090418&is_beta=true`, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) continue;
+      const j = (await res.json()) as { iframeEmbedUrl?: string; baseUrl?: string };
+      const embed = typeof j.iframeEmbedUrl === 'string' ? j.iframeEmbedUrl.trim() : '';
+      if (!/^https:\/\//i.test(embed)) continue;
+      const prefix = /[=?&]$/.test(embed) ? embed : `${embed}${embed.includes('?') ? '&url=' : '?url='}`;
+      const referer = typeof j.baseUrl === 'string' && /^https:\/\//i.test(j.baseUrl)
+        ? (j.baseUrl.endsWith('/') ? j.baseUrl : `${j.baseUrl}/`)
+        : DEFAULT_APP_REFERER;
+      iframeEmbedCache = { prefix, referer };
+      return iframeEmbedCache;
+    } catch { /* следующее зеркало */ }
+  }
+  return { prefix: DEFAULT_IFRAME_EMBED, referer: DEFAULT_APP_REFERER };
+}
+
+async function launchNativeWebPlayer(plugin: NativePlugin, params: WatchLaunchParams): Promise<MobileLaunchResult> {
+  const api = releaseApi();
+  const res = await api.getEpisode(Number(params.releaseId), Number(params.sourceId), Number(params.ep));
+  let embed = res?.episode?.url || '';
+  if (!embed) throw new Error('Не удалось получить ссылку на серию');
+  if (embed.startsWith('//')) embed = `https:${embed}`;
+  const { prefix, referer } = await resolveIframeEmbed();
+  // Как Anixart: ссылка серии без параметров запроса
+  let clean = embed;
+  try { const u = new URL(embed); clean = `${u.origin}${u.pathname}`; } catch { /* как есть */ }
+  mlog('player', 'info', `Веб-плеер: «${params.title}», серия ${params.ep}, источник ${params.sourceName ?? '?'} (${safeUrl(clean)})`);
+  const out = await plugin.openWebPlayer!({ url: `${prefix}${encodeURIComponent(clean)}`, referer, title: `${params.title} — ${params.ep} серия` });
+  return { started: (out?.seconds ?? 0) >= 60, watchedPositions: (out?.seconds ?? 0) >= 60 ? [Number(params.ep)] : [] };
+}
+
 export interface AnixPlayerRelease {
   versionCode: number;
   whatsNew: string;
@@ -524,6 +565,9 @@ export async function launchWithKind(
       });
       return { started: true };
     }
+    // Android: Kodik во фрейме https://localhost не играет («Error code: ds») — нативное окно с обёрткой Anixart
+    const native = nativePlugin();
+    if (native?.openWebPlayer) return launchNativeWebPlayer(native, params);
     await launchPlayer({ ...params, webPlayer: true });
     return { started: true };
   }

@@ -2,7 +2,9 @@
   /** Android: журнал приложения — ошибки, сеть, АниксПлеер. Копирование и «Поделиться» для отчёта о баге. */
   import { onDestroy } from 'svelte';
   import UiV2Button from '../../../components/uikit-v2/UiV2Button.svelte';
-  import { subscribeLog, clearLog, exportLogText, type LogEntry, type LogChannel } from '../../../services/mobile-log';
+  import { subscribeLog, clearLog, exportLogText, isVerboseLog, setVerboseLog, type LogEntry, type LogChannel } from '../../../services/mobile-log';
+  import UiV2SettingsRow from '../../../components/uikit-v2/UiV2SettingsRow.svelte';
+  import UiV2Toggle from '../../../components/uikit-v2/UiV2Toggle.svelte';
 
   type Filter = 'all' | 'error' | LogChannel;
   const FILTERS: { id: Filter; label: string }[] = [
@@ -10,13 +12,16 @@
     { id: 'error', label: 'Ошибки' },
     { id: 'player', label: 'Плеер' },
     { id: 'network', label: 'Сеть' },
+    { id: 'download', label: 'Загрузки' },
+    { id: 'system', label: 'Система' },
     { id: 'app', label: 'Приложение' },
   ];
-  const CHANNEL_LABEL: Record<LogChannel, string> = { app: 'Приложение', network: 'Сеть', player: 'Плеер', system: 'Система' };
+  const CHANNEL_LABEL: Record<LogChannel, string> = { app: 'Приложение', network: 'Сеть', player: 'Плеер', download: 'Загрузки', system: 'Система' };
 
   let entries = $state<LogEntry[]>([]);
   let filter = $state<Filter>('all');
   let feedback = $state('');
+  let verbose = $state(isVerboseLog());
   const unsub = subscribeLog((e) => { entries = [...e]; });
   onDestroy(unsub);
 
@@ -85,6 +90,14 @@
   </section>
 
   <section class="uiv2-settings__block">
+    <div class="uiv2-settings__group">
+      <UiV2SettingsRow title="Подробный журнал" desc="Записывать все запросы к серверу со временем ответа, а не только ошибки. Включайте, когда ловите баг.">
+        <UiV2Toggle label="Подробный журнал" checked={verbose} onChange={(v) => { verbose = v; setVerboseLog(v); }} />
+      </UiV2SettingsRow>
+    </div>
+  </section>
+
+  <section class="uiv2-settings__block">
     {#if shown.length}
       <ul class="mdbg__list">
         {#each shown as e (e.ts + e.message)}
@@ -118,10 +131,10 @@
   .mdbg__filters { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
   .mdbg__chip {
     flex: none;
-    min-height: 36px;
-    padding: 0 14px;
+    min-height: 40px;
+    padding: 0 16px;
     border: 1px solid var(--m-outline-variant, rgba(255, 255, 255, 0.16));
-    border-radius: 18px;
+    border-radius: 20px;
     background: none;
     color: inherit;
     font: inherit;

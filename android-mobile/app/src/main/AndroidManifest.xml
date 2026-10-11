@@ -47,6 +47,14 @@
             </intent-filter>
         </activity>
 
+        <!-- Веб-плеер источника (Kodik и др.) на весь экран -->
+        <activity
+            android:name=".ui.WebPlayerActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:exported="false" />
+
         <!-- Нативный плеер: ландшафт, PiP -->
         <activity
             android:name=".ui.PlayerActivity"

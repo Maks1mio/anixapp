@@ -46,10 +46,10 @@ class PlaybackService : MediaSessionService() {
                 android.util.Log.i("AnixPerf", "audio groups=${a.size} " + a.joinToString { g -> (0 until g.length).joinToString { i -> "${g.getTrackFormat(i).sampleMimeType}/${g.getTrackFormat(i).channelCount}ch/${g.getTrackFormat(i).sampleRate}Hz supported=${g.isTrackSupported(i)}" } })
             }
             override fun onAudioSinkError(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, audioSinkError: Exception) {
-                android.util.Log.e("AnixPerf", "audio sink error", audioSinkError)
+                com.mobileapp.anix.log.AppLog.e("player", "Ошибка вывода звука", audioSinkError)
             }
             override fun onAudioCodecError(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, audioCodecError: Exception) {
-                android.util.Log.e("AnixPerf", "audio codec error", audioCodecError)
+                com.mobileapp.anix.log.AppLog.e("player", "Ошибка аудиокодека", audioCodecError)
             }
             override fun onVideoDecoderInitialized(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
                 android.util.Log.i("AnixPerf", "video decoder: $decoderName")

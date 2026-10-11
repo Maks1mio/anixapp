@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { buildPosterUrl, toCdnProxyUrl } from '../utils/posterUrl';
+  import { scoreTone } from '../utils/score-tone';
 
   const COLS = 9;
   const ROWS = 7;
@@ -9,6 +10,8 @@
   const SCROLL_S = 90;
   const FLIP_MS = 700;
   const FLIP_HALF = Math.round(FLIP_MS / 2);
+  /** Сколько оценка видна на перевёрнутой обложке */
+  const SCORE_SHOW_MS = 3800;
 
   const PANEL_COLORS = [
     '#3b2a2c',
@@ -23,9 +26,14 @@
     '#322a2a',
   ];
 
+  type Poster = { src: string; grade: number | null };
+
   type Tile = {
     id: number;
     src: string;
+    /** Оценка тайтла (0–5) — показывается после переворота */
+    grade: number | null;
+    showScore: boolean;
     color: string;
     loaded: boolean;
     /** CSS rotate3d Y angle in deg */
@@ -35,7 +43,7 @@
   };
 
   let tiles = $state<Tile[]>([]);
-  let pool = $state<string[]>([]);
+  let pool = $state<Poster[]>([]);
   let reduced = $state(false);
   let swapping = $state(false);
 
@@ -76,12 +84,15 @@
     return arr;
   }
 
-  function makeTiles(urls: string[]): Tile[] {
+  function makeTiles(posters: Poster[]): Tile[] {
     const next: Tile[] = [];
     for (let i = 0; i < TILE_COUNT; i += 1) {
+      const p = posters.length ? posters[i % posters.length]! : null;
       next.push({
         id: i,
-        src: urls.length ? urls[i % urls.length]! : '',
+        src: p?.src ?? '',
+        grade: p?.grade ?? null,
+        showScore: false,
         color: pickColor(i + Math.floor(Math.random() * 3)),
         loaded: false,
         angle: 0,
@@ -103,14 +114,15 @@
     t.loaded = false;
     if (pool.length > 1) {
       const alt = pool[Math.floor(Math.random() * pool.length)]!;
-      if (alt !== t.src) {
-        t.src = alt;
+      if (alt.src !== t.src) {
+        t.src = alt.src;
+        t.grade = alt.grade;
         t.color = pickColor(Math.floor(Math.random() * PANEL_COLORS.length));
       }
     }
   }
 
-  function collectReleasePosters(payload: unknown, urls: string[], seen: Set<string>) {
+  function collectReleasePosters(payload: unknown, urls: Poster[], seen: Set<string>) {
     const root = payload as { content?: unknown[]; releases?: unknown[] } | null;
     const list = (root?.content ?? root?.releases ?? []) as Record<string, unknown>[];
     for (const raw of list) {
@@ -119,7 +131,8 @@
       const url = extractPoster(release);
       if (!url || seen.has(url)) continue;
       seen.add(url);
-      urls.push(url);
+      const g = Number(release.grade);
+      urls.push({ src: url, grade: Number.isFinite(g) && g > 0 ? g : null });
     }
   }
 
@@ -132,7 +145,7 @@
       window.anixApi.discover.discussing(),
     ]);
 
-    const urls: string[] = [];
+    const urls: Poster[] = [];
     const seen = new Set<string>();
     for (const result of results) {
       if (result.status !== 'fulfilled') continue;
@@ -146,7 +159,9 @@
     const base = tiles.length ? tiles : makeTiles([]);
     for (let i = 0; i < TILE_COUNT; i += 1) {
       const tile = base[i]!;
-      tile.src = urls[i % urls.length]!;
+      tile.src = urls[i % urls.length]!.src;
+      tile.grade = urls[i % urls.length]!.grade;
+      tile.showScore = false;
       tile.loaded = false;
       tile.color = pickColor(i + Math.floor(Math.random() * PANEL_COLORS.length));
     }
@@ -183,6 +198,11 @@
     await wait(FLIP_HALF);
 
     // Swap content while edge-on
+    tileA.showScore = false;
+    tileB.showScore = false;
+    const gradeA = tileA.grade;
+    tileA.grade = tileB.grade;
+    tileB.grade = gradeA;
     const srcA = tileA.src;
     const loadedA = tileA.loaded;
     const colorA = tileA.color;
@@ -214,8 +234,22 @@
 
     tileA.flipping = false;
     tileB.flipping = false;
+    // После переворота — оценка в углу, через несколько секунд гаснет
+    tileA.showScore = tileA.grade != null;
+    tileB.showScore = tileB.grade != null;
     tiles = [...tiles];
     swapping = false;
+    const genA = tileA.flipGen;
+    const genB = tileB.flipGen;
+    setTimeout(() => {
+      if (tileA.flipGen === genA) tileA.showScore = false;
+      if (tileB.flipGen === genB) tileB.showScore = false;
+      tiles = [...tiles];
+    }, SCORE_SHOW_MS);
+  }
+
+  function formatGrade(g: number): string {
+    return g.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
   }
 
   onMount(() => {
@@ -276,6 +310,12 @@
                     onerror={() => markFailed(tile.id)}
                   />
                 {/if}
+                {#if tile.showScore && tile.grade != null && tile.loaded}
+                  <span class="auth-cover-tile__score" data-tone={scoreTone(tile.grade)}>
+                    <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6L2.5 9.4l6.6-.8z" /></svg>
+                    {formatGrade(tile.grade)}
+                  </span>
+                {/if}
               </div>
             </div>
           {/each}
@@ -287,3 +327,37 @@
   <div class="auth-cover-stage__fade auth-cover-stage__fade--bottom"></div>
   <div class="auth-cover-stage__fade auth-cover-stage__fade--right"></div>
 </div>
+
+<style>
+  /* Оценка на перевёрнутой обложке: те же цвета, что у значка оценки на карточках */
+  .auth-cover-tile__score {
+    position: absolute;
+    top: 6%;
+    left: 6%;
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    font: 700 11px/1.3 var(--m-font, inherit);
+    font-variant-numeric: tabular-nums;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    animation: auth-score-in 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+    pointer-events: none;
+  }
+  .auth-cover-tile__score[data-tone='low'] { background: #d32f2f; color: #fff; }
+  .auth-cover-tile__score[data-tone='midlow'] { background: #f57c00; color: #1c1b1f; }
+  .auth-cover-tile__score[data-tone='mid'] { background: #fbc02d; color: #1c1b1f; }
+  .auth-cover-tile__score[data-tone='high'] { background: #9ccc65; color: #1c1b1f; }
+  .auth-cover-tile__score[data-tone='top'] { background: #2e7d32; color: #fff; }
+
+  @keyframes auth-score-in {
+    from { opacity: 0; transform: translateY(-4px) scale(0.85); }
+    to { opacity: 1; transform: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .auth-cover-tile__score { animation: none; }
+  }
+</style>

@@ -132,7 +132,7 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    min-height: 56px;
+    min-height: 64px;
     padding: 10px 12px;
     border: 1px solid var(--m-outline-variant, rgba(255, 255, 255, 0.16));
     border-radius: 12px;
@@ -147,7 +147,7 @@
     background: var(--m-secondary-container, rgba(208, 188, 255, 0.16));
   }
 
-  .mpb__chip-title { font-weight: 600; }
+  .mpb__chip-title { font-size: 16px; font-weight: 600; }
   .mpb__chip-hint { font-size: 13px; opacity: 0.7; }
 
   .mpb__whats-new {

@@ -86,26 +86,26 @@
   .m-dialog__options { display: flex; flex-direction: column; gap: var(--m-space-3); }
   .m-option {
     display: flex; flex-direction: column; gap: 4px; text-align: left; width: 100%;
-    padding: var(--m-space-4) var(--m-space-5); border-radius: 20px;
-    border: 2px solid var(--m-outline-variant); background: transparent; color: inherit; font: inherit;
+    padding: var(--m-space-4); border-radius: 16px; min-height: 64px;
+    border: 1.5px solid var(--m-outline-variant); background: transparent; color: inherit; font: inherit;
     &--selected { border-color: var(--m-text); }
-    &__title { display: flex; align-items: center; gap: var(--m-space-2); font-size: 20px; font-weight: 500; }
+    &__title { display: flex; align-items: center; gap: var(--m-space-2); font-size: 16px; font-weight: 600; line-height: 1.3; }
     &__beta {
-      padding: 1px 8px; border-radius: 6px; background: var(--m-text); color: #111;
-      font-size: 13px; font-weight: 500; letter-spacing: 0.02em;
+      padding: 1px 6px; border-radius: 6px; background: var(--m-text); color: var(--m-bg);
+      font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
     }
-    &__text { font-size: 17px; line-height: 1.3; color: var(--m-text-2); }
+    &__text { font-size: 14px; line-height: 1.4; color: var(--m-text-2); }
     &__warning {
       margin-top: 6px; padding: var(--m-space-2) var(--m-space-3); border-radius: 12px;
       background: color-mix(in srgb, var(--m-danger) 14%, transparent);
       color: color-mix(in srgb, var(--m-danger) 78%, var(--m-text));
-      font-size: 15px; font-weight: 500; line-height: 1.3;
+      font-size: 13px; font-weight: 500; line-height: 1.4;
     }
   }
   .m-dialog__check {
     display: flex; align-items: center; gap: var(--m-space-3);
     margin: var(--m-space-4) 0 0; padding: var(--m-space-4) var(--m-space-2) 0;
-    border-top: 1px solid var(--m-divider); font-size: 18px;
+    border-top: 1px solid var(--m-divider); font-size: 16px; min-height: 56px;
     input { position: absolute; opacity: 0; pointer-events: none; }
   }
   .m-dialog__box {

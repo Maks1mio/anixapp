@@ -27,6 +27,7 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.mobileapp.anix.download.AnixDownloadService
+import com.mobileapp.anix.log.AppLog
 import com.mobileapp.anix.media.HeaderStore
 import com.mobileapp.anix.media.MediaEngine
 import com.mobileapp.anix.net.AnixBackClient
@@ -49,6 +50,9 @@ class AnixPlayerPlugin : Plugin() {
 
     private val dlListener = object : DownloadManager.Listener {
         override fun onDownloadChanged(downloadManager: DownloadManager, download: Download, finalException: Exception?) {
+            if (download.state == Download.STATE_FAILED) {
+                AppLog.e("download", "Загрузка ${download.request.id} не удалась (причина ${download.failureReason})", finalException)
+            }
             notifyListeners("downloadState", download.toJs(finalException?.message))
         }
 
@@ -69,6 +73,68 @@ class AnixPlayerPlugin : Plugin() {
         cm.registerDefaultNetworkCallback(cb)
         netCallback = cb
         resumePendingDownloads()
+        AppLog.listener = { e -> notifyListeners("nativeLog", e.toJs()) }
+    }
+
+    private fun AppLog.Entry.toJs() = JSObject()
+        .put("ts", ts).put("level", level).put("channel", channel).put("message", message)
+
+    // --- Журнал ------------------------------------------------------------------------------
+
+    /** {level, channel, message} — запись из веба в logcat (тег AnixApp), чтобы видеть всё в одном месте. */
+    @PluginMethod
+    fun nativeLog(call: PluginCall) {
+        val msg = "[${call.getString("channel") ?: "app"}] ${call.getString("message") ?: ""}"
+        when (call.getString("level")) {
+            "error" -> android.util.Log.e("AnixApp/web", msg)
+            "warn" -> android.util.Log.w("AnixApp/web", msg)
+            else -> android.util.Log.i("AnixApp/web", msg)
+        }
+        call.resolve()
+    }
+
+    /** Нативные записи, накопленные, пока веб не слушал (например, во время просмотра). {entries: [...]} */
+    @PluginMethod
+    fun nativeLogs(call: PluginCall) {
+        call.resolve(JSObject().put("entries", JSArray(AppLog.drain().map { it.toJs() })))
+    }
+
+    /**
+     * Почему процесс приложения завершался раньше (Android 11+): вылет, ANR, нехватка памяти, закрыт пользователем.
+     * {exits: [{ts, reason, description, importance}]}
+     */
+    @PluginMethod
+    fun exitReasons(call: PluginCall) {
+        val out = JSArray()
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            runCatching { am.getHistoricalProcessExitReasons(context.packageName, 0, 10) }.getOrDefault(emptyList()).forEach { x ->
+                val reason = when (x.reason) {
+                    android.app.ApplicationExitInfo.REASON_CRASH -> "crash"
+                    android.app.ApplicationExitInfo.REASON_CRASH_NATIVE -> "crash_native"
+                    android.app.ApplicationExitInfo.REASON_ANR -> "anr"
+                    android.app.ApplicationExitInfo.REASON_LOW_MEMORY -> "low_memory"
+                    android.app.ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "excessive_resource"
+                    android.app.ApplicationExitInfo.REASON_USER_REQUESTED -> "user_requested"
+                    android.app.ApplicationExitInfo.REASON_USER_STOPPED -> "user_stopped"
+                    android.app.ApplicationExitInfo.REASON_SIGNALED -> "signaled"
+                    android.app.ApplicationExitInfo.REASON_EXIT_SELF -> "exit_self"
+                    android.app.ApplicationExitInfo.REASON_DEPENDENCY_DIED -> "dependency_died"
+                    android.app.ApplicationExitInfo.REASON_PERMISSION_CHANGE -> "permission_change"
+                    android.app.ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "init_failure"
+                    else -> "other"
+                }
+                out.put(JSObject().put("ts", x.timestamp).put("reason", reason)
+                    .put("description", x.description ?: "").put("importance", x.importance))
+            }
+        }
+        val res = JSObject().put("exits", out)
+        val prefs = context.getSharedPreferences("anix_log", Context.MODE_PRIVATE)
+        prefs.getString("last_crash", null)?.let { trace ->
+            res.put("lastCrash", JSObject().put("ts", prefs.getLong("last_crash_ts", 0L)).put("trace", trace))
+            prefs.edit().remove("last_crash").remove("last_crash_ts").apply()
+        }
+        call.resolve(res)
     }
 
     /** Приложение запущено заново (процесс мог умереть) — докачиваем незавершённое, пока не вернули сеть/сервис. */
@@ -143,6 +209,26 @@ class AnixPlayerPlugin : Plugin() {
     override fun handleOnResume() {
         super.handleOnResume()
         activity.window.decorView.post { applySystemBars() }
+    }
+
+    // --- Веб-плеер источника -----------------------------------------------------------------
+
+    /** {url, referer?, title?} — веб-плеер на весь экран (страница-обёртка верхним уровнем). Резолвится по закрытию: {closed, seconds}. */
+    @PluginMethod
+    fun openWebPlayer(call: PluginCall) {
+        val url = call.getString("url")
+        if (!isNetworkUrl(url)) { call.reject("Недопустимая ссылка"); return }
+        val intent = Intent(context, com.mobileapp.anix.ui.WebPlayerActivity::class.java)
+            .putExtra(com.mobileapp.anix.ui.WebPlayerActivity.EXTRA_URL, url)
+            .putExtra(com.mobileapp.anix.ui.WebPlayerActivity.EXTRA_REFERER, call.getString("referer"))
+            .putExtra(com.mobileapp.anix.ui.WebPlayerActivity.EXTRA_TITLE, call.getString("title"))
+        startActivityForResult(call, intent, "webPlayerResult")
+    }
+
+    @ActivityCallback
+    private fun webPlayerResult(call: PluginCall?, result: ActivityResult) {
+        val secs = result.data?.getIntExtra(com.mobileapp.anix.ui.WebPlayerActivity.RESULT_SECONDS, 0) ?: 0
+        call?.resolve(JSObject().put("closed", true).put("seconds", secs))
     }
 
     // --- Журнал: «Поделиться» ----------------------------------------------------------------

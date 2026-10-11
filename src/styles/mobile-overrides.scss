@@ -521,3 +521,112 @@ html.mobile-mode {
   .auth-terms-modal__foot { flex: none; }
   .auth-terms-modal__foot--split { flex-wrap: wrap; gap: var(--m-space-3); }
 }
+
+// ── Заголовки «Поиск» и «Коллекции» стояли вплотную к левому краю (у .view на телефоне нет полей,
+// поля задают сами блоки) — даём им общее боковое поле.
+html.mobile-mode {
+  .search-page__header,
+  .view-collections-list > .view-header,
+  .m-app__content > .view > .view-header {
+    padding-left: calc(var(--m-gutter) + env(safe-area-inset-left)) !important;
+    padding-right: calc(var(--m-gutter) + env(safe-area-inset-right)) !important;
+    box-sizing: border-box;
+  }
+}
+
+// ── Единые меню на телефоне и планшете ──
+// Выпадающее меню ПК (UiV2PopupMenu: «⋯» у карточек, комментарии, посты, коллекции) было мельче
+// остальных меню (строка 40 px, шрифт 15). На Android показываем его нижней шторкой
+// с теми же размерами, что «⋮» на релизе и выбор плеера: строка 56 dp, шрифт 17, значки 22, скругление 28.
+html.mobile-mode {
+  .uiv2-popup-menu {
+    pointer-events: auto;
+    background: rgba(0, 0, 0, 0.5);
+    animation: m-fade-in 0.16s ease-out;
+  }
+  .uiv2-popup-menu__panel {
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    max-height: min(75dvh, 560px) !important;
+    border-radius: 28px 28px 0 0 !important;
+    padding: var(--m-space-3) var(--m-space-2) calc(var(--m-space-3) + env(safe-area-inset-bottom)) !important;
+    background: var(--m-surface-sheet) !important;
+    color: var(--m-text) !important;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35) !important;
+    backdrop-filter: none !important;
+    transform-origin: 50% 100% !important;
+    &::before, &::after { display: none !important; }
+    // «ручка» шторки
+    &:not(.uiv2-popup-menu__panel--sub) { box-sizing: border-box; }
+  }
+  // Подменю — поверх основной шторки, такого же размера
+  .uiv2-popup-menu__panel--sub { z-index: 1; }
+  .uiv2-popup-menu__scroll { max-height: none !important; overflow-y: auto; overscroll-behavior: contain; }
+  .uiv2-popup-menu__item {
+    min-height: 56px !important;
+    padding: 0 var(--m-space-4) !important;
+    gap: var(--m-space-4) !important;
+    border-radius: 16px !important;
+    color: var(--m-text) !important;
+    font: 400 17px/1.3 var(--m-font) !important;
+  }
+  .uiv2-popup-menu__icon { width: 22px !important; height: 22px !important; color: var(--m-text-2); svg { width: 22px !important; height: 22px !important; } }
+  .uiv2-popup-menu__section-label { font: 500 13px/1.3 var(--m-font) !important; color: var(--m-text-2) !important; padding: var(--m-space-3) var(--m-space-4) var(--m-space-1) !important; }
+  .uiv2-popup-menu__header-title { font: 500 17px/1.3 var(--m-font) !important; }
+  .uiv2-popup-menu__divider { margin: var(--m-space-1) var(--m-space-4) !important; }
+
+  // Все остальные «нижние меню» — те же размеры
+  .m-sheet-menu button, .m-choice { min-height: 56px; font-size: 17px; }
+
+  // Планшет/широкий экран: шторка не на всю ширину, по центру
+  @media (min-width: 840px) {
+    .uiv2-popup-menu__panel { left: calc(50% - 280px) !important; right: auto !important; width: 560px !important; }
+    .m-sheet-menu { max-width: 560px; margin: 0 auto; }
+    .m-sheet { max-width: 560px; margin: 0 auto; }
+  }
+}
+@keyframes m-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+// Находки прогона по размерам экранов:
+html.mobile-mode {
+  // 320–360 dp: «Все / Озвучки / Субтитры» не влезали — ряд прокручивается по горизонтали
+  .watch-modal__filters { overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; &::-webkit-scrollbar { display: none; } }
+  // «Коллекции»: кнопки «Создать…» и сортировка — с тем же боковым полем, что заголовок
+  .view-collections-list > .collections-header-actions,
+  .view-collections-list > .collections-sort-select,
+  .view-collections-list > [class*='collections-sort'] {
+    margin-left: calc(var(--m-gutter) + env(safe-area-inset-left)) !important;
+    margin-right: calc(var(--m-gutter) + env(safe-area-inset-right)) !important;
+  }
+}
+
+// ── Единый стандарт размеров (Material 3, телефон и планшет) ──
+// Строки списков: одна строка 56 dp, две — от 68 dp; заголовок 16, подпись 14.
+// Пункты меню и шторок: 56 dp, шрифт 16. Кнопки и фильтры: 40 dp, шрифт 14. Карточки выбора: от 64 dp, 16/13.
+html.mobile-mode {
+  // Строки настроек
+  .uiv2-settings__row { min-height: 56px; }
+  .uiv2-settings__row-title { font-size: 16px !important; line-height: 1.3 !important; }
+  .uiv2-settings__row-desc { font-size: 14px !important; line-height: 1.4 !important; }
+  // Кнопки внутри настроек и страниц («Сбросить», «Выбрать», «Поделиться» были 28 dp, шрифт 12)
+  .uiv2-settings .uiv2-btn,
+  .uiv2-settings .uiv2-btn.uiv2-btn--sm {
+    min-height: 40px !important;
+    padding: 0 16px !important;
+    font-size: 14px !important;
+    border-radius: 20px !important;
+  }
+  // «Внешний вид»: подписи вариантов и тем были 11–12 px
+  .uiv2-settings__choice { font-size: 14px !important; }
+  .uiv2-settings__theme-name { font-size: 14px !important; }
+  // Пункты меню/шторок — 56 dp, шрифт 16 (как строки списков)
+  .m-sheet-menu button, .uiv2-popup-menu__item { font-size: 16px !important; }
+  .m-choice { min-height: 56px; font-size: 16px; }
+  // Фильтры-«чипы» — 40 dp, шрифт 14
+  .watch-modal__filter { height: 40px; font-size: 14px !important; }
+}

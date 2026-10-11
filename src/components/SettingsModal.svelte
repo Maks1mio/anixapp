@@ -9,6 +9,7 @@
   import BehaviorPage from '../views/Settings/pages/BehaviorPage.svelte';
   import PlaybackPage from '../views/Settings/pages/PlaybackPage.svelte';
   import DownloadsPage from '../views/Settings/pages/DownloadsPage.svelte';
+  import MobilePlaybackPage from '../views/Settings/pages/MobilePlaybackPage.svelte';
   import { isMobileMode } from '../platform/mobile';
   import DiscordRpcPage from '../views/Settings/pages/DiscordRpcPage.svelte';
   import AboutPage from '../views/Settings/pages/AboutPage.svelte';
@@ -84,7 +85,7 @@
       title: 'Приложение',
       rows: [
         { tab: 'appearance', title: 'Внешний вид', sub: 'Тема и вид карточек', icon: iconPalette },
-        { tab: 'playback', title: 'Воспроизведение', sub: 'Плеер, апскейл и звук', icon: iconTv },
+        { tab: 'playback', title: 'Воспроизведение', sub: 'Плеер по умолчанию, пропуск опенингов', icon: iconTv },
         { tab: 'downloads', title: 'Загрузки', sub: 'Качество, Wi-Fi, место на устройстве', icon: iconDownload },
       ],
     },
@@ -334,7 +335,7 @@
             {:else if screen === 'downloads'}
               <DownloadsPage />
             {:else if screen === 'playback'}
-              <PlaybackPage />
+              {#if mobileUi}<MobilePlaybackPage />{:else}<PlaybackPage />{/if}
             {:else if screen === 'discord'}
               <DiscordRpcPage />
             {:else if screen === 'update'}

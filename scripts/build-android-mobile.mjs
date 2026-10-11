@@ -18,6 +18,11 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const androidDir = path.join(root, 'android-mobile');
 const install = process.argv.includes('--install');
+const release = process.argv.includes('--release');
+if (release && !existsSync(path.join(androidDir, 'keystore.properties'))) {
+  console.error('Для --release нужен android-mobile/keystore.properties (storeFile, storePassword, keyAlias, keyPassword).');
+  process.exit(2);
+}
 
 if (/[^\x00-\x7F]/.test(root)) {
   console.error(
@@ -37,6 +42,8 @@ const javaHome = process.env.JAVA_HOME || 'C:\\Program Files\\Eclipse Adoptium\\
 const env = {
   ...process.env,
   ANIXAPP_TARGET: 'mobile',
+  // Релиз: отладка WebView (chrome://inspect) всегда выключена
+  ...(release ? { ANIXAPP_DEBUG_WEBVIEW: '0' } : {}),
   ANDROID_HOME: sdkDir,
   ANDROID_SDK_ROOT: sdkDir,
   JAVA_HOME: javaHome,
@@ -56,15 +63,19 @@ writeFileSync(path.join(androidDir, 'local.properties'), `sdk.dir=${sdkDir.repla
 console.log('→ Capacitor sync (android-mobile)');
 run('npx', ['cap', 'sync', 'android']);
 
-console.log('→ Gradle assembleDebug');
+// --release: подписанный релиз (ключ из android-mobile/keystore.properties), WebView-отладка выключена.
+const task = release ? 'assembleRelease' : 'assembleDebug';
+console.log(`→ Gradle ${task}`);
 // Windows: полный путь — cmd с shell:true не ищет gradlew.bat в cwd дочернего процесса.
 const gradlew = process.platform === 'win32' ? path.join(androidDir, 'gradlew.bat') : 'sh';
 const gradlewArgs = process.platform === 'win32'
-  ? ['assembleDebug', '--no-daemon', '--console=plain']
-  : ['./gradlew', 'assembleDebug', '--no-daemon', '--console=plain'];
+  ? [task, '--no-daemon', '--console=plain']
+  : ['./gradlew', task, '--no-daemon', '--console=plain'];
 run(gradlew, gradlewArgs, androidDir);
 
-const apk = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+const apk = release
+  ? path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
+  : path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
 if (!existsSync(apk)) {
   console.error('APK не найден:', apk);
   process.exit(1);
@@ -73,7 +84,7 @@ const outDir = path.join(root, 'release');
 mkdirSync(outDir, { recursive: true });
 // Версия Android отдельно от ПК: android-version.json (например 1.0.0-alpha)
 const androidVersion = JSON.parse(readFileSync(path.join(root, 'android-version.json'), 'utf8')).version;
-const apkDest = path.join(outDir, `AnixApp-Mobile-${androidVersion}.apk`);
+const apkDest = path.join(outDir, `AnixApp-Mobile-${androidVersion}${release ? '' : '-debug'}.apk`);
 cpSync(apk, apkDest);
 console.log('✓ APK (Android телефон):', apkDest);
 

@@ -171,6 +171,9 @@ class AnixPlayerPlugin : Plugin() {
     fun openExternalPlayer(call: PluginCall) {
         val url = call.getString("url")
         if (url.isNullOrBlank()) { call.reject("url обязателен"); return }
+        // Только сетевые потоки: file:// и content:// (в т.ч. наш FileProvider) другим приложениям не отдаём
+        val scheme = Uri.parse(url).scheme?.lowercase()
+        if (scheme != "https" && scheme != "http") { call.reject("Недопустимая ссылка"); return }
         val mode = call.getString("mode") ?: "chooser"
         val title = call.getString("title")
         val headers = call.getArray("headers")?.toList<String>()?.toTypedArray()
@@ -230,16 +233,39 @@ class AnixPlayerPlugin : Plugin() {
         val key = call.getString("key")?.replace(Regex("[^A-Za-z0-9_-]"), "_")
         val url = call.getString("url")
         if (key.isNullOrBlank() || url.isNullOrBlank()) { call.reject("key и url обязательны"); return }
+        // Только https-картинки разумного размера: file://, jar:, http и ответы не-изображения отклоняются
+        if (!url.startsWith("https://", ignoreCase = true)) { call.reject("savePoster: только https"); return }
         scope.launch(Dispatchers.IO) {
             try {
                 val dir = java.io.File(context.filesDir, "posters").apply { mkdirs() }
                 val file = java.io.File(dir, "$key.img")
                 if (!file.exists() || file.length() == 0L) {
-                    val conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+                    val conn = (java.net.URL(url).openConnection() as javax.net.ssl.HttpsURLConnection).apply {
                         connectTimeout = 15_000; readTimeout = 20_000; instanceFollowRedirects = true
                     }
-                    conn.inputStream.use { input -> file.outputStream().use { input.copyTo(it) } }
-                    conn.disconnect()
+                    try {
+                        if (conn.responseCode !in 200..299) throw java.io.IOException("HTTP ${conn.responseCode}")
+                        if (conn.contentType?.startsWith("image/") != true) throw java.io.IOException("не изображение")
+                        val limit = 10L * 1024 * 1024
+                        if (conn.contentLengthLong > limit) throw java.io.IOException("слишком большой файл")
+                        val tmp = java.io.File(dir, "$key.part")
+                        conn.inputStream.use { input ->
+                            tmp.outputStream().use { out ->
+                                val buf = ByteArray(16 * 1024)
+                                var total = 0L
+                                while (true) {
+                                    val n = input.read(buf)
+                                    if (n < 0) break
+                                    total += n
+                                    if (total > limit) throw java.io.IOException("слишком большой файл")
+                                    out.write(buf, 0, n)
+                                }
+                            }
+                        }
+                        if (!tmp.renameTo(file)) { tmp.copyTo(file, overwrite = true); tmp.delete() }
+                    } finally {
+                        conn.disconnect()
+                    }
                 }
                 call.resolve(JSObject().put("path", file.absolutePath))
             } catch (e: Exception) {

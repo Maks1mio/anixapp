@@ -11,6 +11,7 @@
 
     <!-- Видимость пакетов (Android 11+): наш AnixApp Player и любые видеоплееры для «Сторонний плеер» -->
     <queries>
+        <package android:name="com.swiftsoft.anixart.player" />
         <package android:name="com.anixapp.player" />
         <package android:name="com.anixapp.player.debug" />
         <intent>

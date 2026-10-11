@@ -3,7 +3,16 @@
   import UiV2SettingsRow from '../../../components/uikit-v2/UiV2SettingsRow.svelte';
   import UiV2Toggle from '../../../components/uikit-v2/UiV2Toggle.svelte';
   import UiV2Button from '../../../components/uikit-v2/UiV2Button.svelte';
-  import { getMobilePlayerPrefs, setMobilePlayerPrefs, type MobilePlayerKind } from '../../../utils/mobile-player';
+  import { onMount } from 'svelte';
+  import {
+    getMobilePlayerPrefs,
+    setMobilePlayerPrefs,
+    getAnixPlayerStatus,
+    fetchAnixPlayerRelease,
+    type AnixPlayerRelease,
+    type MobilePlayerKind,
+  } from '../../../utils/mobile-player';
+  import { openExternalInBrowser } from '../../../utils/external-link';
 
   const OPTIONS: { id: MobilePlayerKind; title: string; hint: string }[] = [
     { id: 'builtin', title: 'Встроенный', hint: 'Без отдельного скачивания' },
@@ -14,6 +23,37 @@
 
   let prefs = $state(getMobilePlayerPrefs());
   let skipCleared = $state(false);
+
+  type AnixState = { installed: boolean; versionCode?: number; abis: string[] };
+  let anix = $state<AnixState | null>(null);
+  let anixRelease = $state<AnixPlayerRelease | null>(null);
+  let anixChecking = $state(true);
+
+  const anixUpdate = $derived(
+    !!anix?.installed && !!anixRelease && anixRelease.versionCode > (anix.versionCode ?? 0),
+  );
+  const anixDesc = $derived(
+    anixChecking
+      ? 'Проверяем…'
+      : !anix
+        ? 'Недоступно в этой сборке'
+        : anix.installed
+          ? `Установлен, сборка ${anix.versionCode ?? '—'}${anixUpdate ? ` · доступна ${anixRelease?.versionCode}` : ''}`
+          : 'Не установлен. Официальный плеер Anixart: выбор качества, Anime4K, следующая серия.',
+  );
+
+  onMount(async () => {
+    try {
+      const st = await getAnixPlayerStatus();
+      anix = st;
+      if (st) anixRelease = await fetchAnixPlayerRelease(st.abis);
+    } catch { /* ignore */ }
+    anixChecking = false;
+  });
+
+  async function downloadAnixPlayer() {
+    if (anixRelease?.downloadUrl) await openExternalInBrowser(anixRelease.downloadUrl);
+  }
 
   function setKind(kind: MobilePlayerKind) {
     prefs = { ...prefs, kind };
@@ -57,6 +97,20 @@
   </section>
 
   <section class="uiv2-settings__block">
+    <h3 class="uiv2-settings__title">АниксПлеер</h3>
+    <div class="uiv2-settings__group">
+      <UiV2SettingsRow title="Официальный плеер Anixart" desc={anixDesc}>
+        {#if anix && (!anix.installed || anixUpdate) && anixRelease?.downloadUrl}
+          <UiV2Button label={anixUpdate ? 'Обновить' : 'Скачать'} variant="chrome" size="sm" onclick={downloadAnixPlayer} />
+        {/if}
+      </UiV2SettingsRow>
+      {#if anixUpdate && anixRelease?.whatsNew}
+        <p class="mpb__whats-new">{anixRelease.whatsNew}</p>
+      {/if}
+    </div>
+  </section>
+
+  <section class="uiv2-settings__block">
     <h3 class="uiv2-settings__title">Опенинги и эндинги</h3>
     <div class="uiv2-settings__group">
       <UiV2SettingsRow title="Сбросить выбор пропуска" desc="Плеер снова спросит, пропускать ли опенинг и эндинг в каждом тайтле.">
@@ -95,4 +149,13 @@
 
   .mpb__chip-title { font-weight: 600; }
   .mpb__chip-hint { font-size: 13px; opacity: 0.7; }
+
+  .mpb__whats-new {
+    margin: 0;
+    padding: 0 16px 12px;
+    font-size: 13px;
+    line-height: 1.45;
+    white-space: pre-line;
+    opacity: 0.75;
+  }
 </style>

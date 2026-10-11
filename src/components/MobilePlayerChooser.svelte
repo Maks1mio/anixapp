@@ -14,7 +14,7 @@
 
   const OPTIONS: { id: MobilePlayerKind; title: string; text: string; beta?: boolean; warning?: string }[] = [
     { id: 'web', title: 'Веб-плеер', text: 'Просмотр в плеере источника. Стандартный вариант.' },
-    { id: 'anix', title: 'АниксПлеер', text: 'Наш самый продвинутый плеер с наилучшим качеством.', beta: true },
+    { id: 'anix', title: 'АниксПлеер', text: 'Официальный плеер Anixart: выбор качества, Anime4K и следующая серия.', beta: true },
     { id: 'builtin', title: 'Встроенный плеер', text: 'Простой и удобный, не требует отдельного скачивания.' },
     {
       id: 'external',

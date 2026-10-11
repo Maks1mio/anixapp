@@ -159,12 +159,80 @@ class AnixPlayerPlugin : Plugin() {
 
     // --- Внешние плееры ----------------------------------------------------------------------
 
-    private val anixPlayerPackages = listOf("com.anixapp.player", "com.anixapp.player.debug")
+    /** Официальный АниксПлеер (Anixart, на базе mpv) — протокол как у Anixart 10.0. */
+    private val officialAnixPlayer = "com.swiftsoft.anixart.player"
+    /** Наш форк mpvEx (AnixApp Player) — Intent API из docs/INTENT_API.md; запасной вариант. */
+    private val ownAnixPlayerPackages = listOf("com.anixapp.player", "com.anixapp.player.debug")
+
+    private fun installedVersion(pkg: String): Long? = try {
+        val info = context.packageManager.getPackageInfo(pkg, 0)
+        if (android.os.Build.VERSION.SDK_INT >= 28) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()
+    } catch (_: PackageManager.NameNotFoundException) { null }
+
+    private fun isNetworkUrl(url: String?): Boolean {
+        val scheme = url?.let { Uri.parse(it).scheme?.lowercase() }
+        return scheme == "https" || scheme == "http"
+    }
+
+    /** {installed, versionCode?, abis} — установлен ли официальный АниксПлеер (для кнопки «Установить/Обновить»). */
+    @PluginMethod
+    fun anixPlayerStatus(call: PluginCall) {
+        val out = JSObject()
+        val v = installedVersion(officialAnixPlayer)
+        out.put("installed", v != null)
+        if (v != null) out.put("versionCode", v)
+        out.put("ownInstalled", ownAnixPlayerPackages.any { installedVersion(it) != null })
+        out.put("abis", JSArray(android.os.Build.SUPPORTED_ABIS.toList()))
+        call.resolve(out)
+    }
+
+    /**
+     * Официальный АниксПлеер: ACTION_VIEW c плейлистом (video_list) — те же extras, что передаёт Anixart 10.0.
+     * Стартовая серия = элемент video_list, совпадающий с data. Позиции — в миллисекундах.
+     */
+    private fun buildOfficialAnixIntent(call: PluginCall, url: String, title: String?, headers: Array<String>?, startMs: Long): Intent? {
+        val items = call.getArray("playlist")?.toList<org.json.JSONObject>().orEmpty()
+            .filter { isNetworkUrl(it.optString("url")) }
+        val urls = if (items.isEmpty()) listOf(url) else items.map { it.getString("url") }
+        var start = call.getInt("startIndex") ?: urls.indexOf(url)
+        if (start !in urls.indices) start = 0
+        val uris = urls.map { Uri.parse(it) }.toTypedArray()
+        val names = Array(urls.size) { i -> items.getOrNull(i)?.optString("name").orEmpty().ifBlank { title.orEmpty() } }
+        val infos = Array(urls.size) { i -> items.getOrNull(i)?.optString("info").orEmpty() }
+        val thumb = call.getString("thumbnail")?.takeIf { isNetworkUrl(it) }.orEmpty()
+        val qualities = org.json.JSONArray()
+        for (i in urls.indices) qualities.put(items.getOrNull(i)?.optJSONObject("qualities") ?: org.json.JSONObject())
+        val positions = IntArray(urls.size) { i ->
+            val ms = items.getOrNull(i)?.optLong("positionMs", 0L) ?: 0L
+            (if (i == start && startMs > 0) startMs else ms).coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+        }
+        return Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uris[start], "video/*")
+            setPackage(officialAnixPlayer)
+            putExtra("video_list", uris)
+            putExtra("video_list.name", names)
+            putExtra("video_list.info", infos)
+            putExtra("video_list.thumbnail", Array(urls.size) { thumb })
+            headers?.let { putExtra("headers", it) }
+            title?.let { putExtra("title", it) }
+            putExtra("playlist_qualities", qualities.toString())
+            call.getString("selectedQuality")?.let { putExtra("selected_quality", it) }
+            putExtra("playlist_positions", positions)
+            // Честно представляемся своим пакетом: плеер это поле не проверяет
+            putExtra("host_package_name", context.packageName)
+            try {
+                val pi = context.packageManager.getPackageInfo(context.packageName, 0)
+                putExtra("host_version_code", (if (android.os.Build.VERSION.SDK_INT >= 28) pi.longVersionCode else @Suppress("DEPRECATION") pi.versionCode.toLong()).toInt())
+                putExtra("host_version_name", pi.versionName)
+            } catch (_: Exception) { /* не критично */ }
+        }
+    }
 
     /**
      * Открыть серию во внешнем плеере.
-     * {mode: "anix"|"chooser", url, title?, label?, mime?, headers?: [name,value,…], startMs?}
-     * "anix" — наш AnixApp Player по Intent API (docs/INTENT_API.md); если не установлен → {installed:false}.
+     * {mode: "anix"|"chooser", url, title?, label?, mime?, headers?: [name,value,…], startMs?,
+     *  playlist?: [{url, name?, info?, qualities?: {"720p": url}, positionMs?}], startIndex?, selectedQuality?, thumbnail?}
+     * "anix" — официальный АниксПлеер (протокол Anixart), иначе наш AnixApp Player; если нет ни одного → {installed:false}.
      * "chooser" — системный выбор любого видеоплеера (ACTION_VIEW).
      */
     @PluginMethod
@@ -172,8 +240,7 @@ class AnixPlayerPlugin : Plugin() {
         val url = call.getString("url")
         if (url.isNullOrBlank()) { call.reject("url обязателен"); return }
         // Только сетевые потоки: file:// и content:// (в т.ч. наш FileProvider) другим приложениям не отдаём
-        val scheme = Uri.parse(url).scheme?.lowercase()
-        if (scheme != "https" && scheme != "http") { call.reject("Недопустимая ссылка"); return }
+        if (!isNetworkUrl(url)) { call.reject("Недопустимая ссылка"); return }
         val mode = call.getString("mode") ?: "chooser"
         val title = call.getString("title")
         val headers = call.getArray("headers")?.toList<String>()?.toTypedArray()
@@ -182,10 +249,14 @@ class AnixPlayerPlugin : Plugin() {
             setDataAndType(Uri.parse(url), call.getString("mime") ?: "video/*")
         }
         val intent: Intent
-        if (mode == "anix") {
-            val pkg = anixPlayerPackages.firstOrNull { p ->
-                try { context.packageManager.getPackageInfo(p, 0); true } catch (_: PackageManager.NameNotFoundException) { false }
+        if (mode == "anix" && installedVersion(officialAnixPlayer) != null) {
+            intent = try {
+                buildOfficialAnixIntent(call, url, title, headers, startMs)!!
+            } catch (e: Exception) {
+                call.reject("Не удалось подготовить плейлист: " + e.message); return
             }
+        } else if (mode == "anix") {
+            val pkg = ownAnixPlayerPackages.firstOrNull { installedVersion(it) != null }
             if (pkg == null) { call.resolve(JSObject().put("installed", false)); return }
             intent = view.setClassName(pkg, "com.anixapp.player.ui.player.PlayerActivity").apply {
                 title?.let { putExtra("com.anixapp.player.extra.TITLE", it) }
@@ -221,6 +292,16 @@ class AnixPlayerPlugin : Plugin() {
         } else if (d?.hasExtra("position") == true) {
             out.put("positionMs", d.getIntExtra("position", 0).toLong())
             out.put("durationMs", d.getIntExtra("duration", 0).toLong())
+        }
+        // Официальный АниксПлеер: на какой серии плейлиста остановились и позиции (мс) по сериям
+        if (d?.hasExtra("playlist_position") == true) {
+            out.put("playlistPosition", d.getIntExtra("playlist_position", -1))
+            val idx = d.getIntArrayExtra("playlist_resume_indices")
+            val vals = d.getIntArrayExtra("playlist_resume_values")
+            if (idx != null && vals != null && idx.size == vals.size) {
+                out.put("resumeIndices", JSArray(idx.toList()))
+                out.put("resumeValuesMs", JSArray(vals.toList()))
+            }
         }
         call?.resolve(out)
     }

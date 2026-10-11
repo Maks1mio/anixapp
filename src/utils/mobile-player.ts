@@ -26,7 +26,14 @@ export interface ExternalLaunchOpts {
   episodeMeta?: Array<{ position: number; name?: string; url?: string }>;
   /** Конкретный сторонний плеер (vlc / mpv / …) из player-integration. */
   playerId?: string;
+  /** Вместо окна вокруг серии — текущая и N следующих (АниксПлеер: «следующая серия» без долгой подготовки). */
+  aheadOnly?: number;
+  /** Постер релиза — превью серий в АниксПлеере. */
+  thumbnail?: string;
 }
+
+/** Сколько следующих серий отдавать АниксПлееру вместе с текущей. */
+export const ANIX_PLAYLIST_AHEAD = 11;
 
 const PREFS_KEY = 'anix:mobilePlayerPrefs';
 const DEFAULTS: MobilePlayerPrefs = { kind: 'builtin', ask: true };
@@ -119,7 +126,11 @@ type NativePlugin = {
     positionMs?: number;
     durationMs?: number;
     completed?: boolean;
+    playlistPosition?: number;
+    resumeIndices?: number[];
+    resumeValuesMs?: number[];
   }>;
+  anixPlayerStatus?: () => Promise<{ installed?: boolean; versionCode?: number; ownInstalled?: boolean; abis?: string[] }>;
 };
 
 function nativePlugin(): NativePlugin | undefined {
@@ -132,6 +143,9 @@ interface ResolvedStream {
   url: string;
   headers: string[];
   title?: string;
+  /** Качества источника в формате АниксПлеера: {"720p": url}. */
+  qualities?: Record<string, string>;
+  episodeName?: string;
 }
 
 type ReleaseApi = {
@@ -156,6 +170,17 @@ function pickDirectUrl(direct: Awaited<ReturnType<ReleaseApi['getDirectVideoLink
   const url = (key ? map[key] || map[`${key}p`] : direct?.directUrl) || '';
   if (!url) return '';
   return url.startsWith('http') ? url : `https:${url}`;
+}
+
+/** qualityMap источника → {"360p": url, …} с абсолютными ссылками (ключи как у Anixart). */
+function normalizeQualities(direct: Awaited<ReturnType<ReleaseApi['getDirectVideoLink']>>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(direct?.qualityMap ?? {})) {
+    const m = /^(\d{3,4})p?$/i.exec(String(k).trim());
+    if (!m || !v) continue;
+    out[`${m[1]}p`] = v.startsWith('http') ? v : `https:${v}`;
+  }
+  return out;
 }
 
 function headersObject(pairs: string[]): Record<string, string> {
@@ -211,6 +236,8 @@ async function resolveEpisodeStream(
     url: abs,
     headers,
     title: episodeTitle(opts?.releaseTitle || '', Number(ep), episodeName),
+    qualities: normalizeQualities(direct),
+    episodeName,
   };
 }
 
@@ -238,6 +265,8 @@ interface PlaylistEntry {
   url: string;
   title: string;
   position: number;
+  episodeName?: string;
+  qualities?: Record<string, string>;
 }
 
 type EpisodeMeta = { position: number; name: string; url: string };
@@ -298,7 +327,12 @@ async function buildExternalPlaylist(
     meta = [{ position: currentEp, name: '', url: '' }];
   }
 
-  meta = sliceMetaWindow(meta, currentEp, playlistWindow);
+  if (opts.aheadOnly != null) {
+    const idx = Math.max(0, meta.findIndex((m) => m.position === currentEp));
+    meta = meta.slice(idx, idx + 1 + Math.max(0, opts.aheadOnly));
+  } else {
+    meta = sliceMetaWindow(meta, currentEp, playlistWindow);
+  }
   const total = meta.length;
   opts.onProgress?.({ done: 0, total });
 
@@ -317,6 +351,8 @@ async function buildExternalPlaylist(
         url: stream.url,
         title: stream.title || episodeTitle(params.title, item.position, item.name),
         headers: stream.headers,
+        episodeName: item.name || stream.episodeName,
+        qualities: stream.qualities,
       };
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') throw e;
@@ -336,7 +372,13 @@ async function buildExternalPlaylist(
     });
     return {
       current,
-      playlist: [{ url: current.url, title: current.title || episodeTitle(params.title, currentEp), position: currentEp }],
+      playlist: [{
+        url: current.url,
+        title: current.title || episodeTitle(params.title, currentEp),
+        position: currentEp,
+        episodeName: current.episodeName,
+        qualities: current.qualities,
+      }],
       startIndex: 0,
     };
   }
@@ -350,7 +392,13 @@ async function buildExternalPlaylist(
   };
   return {
     current,
-    playlist: playlist.map((e) => ({ url: e.url, title: e.title, position: e.position })),
+    playlist: playlist.map((e) => ({
+      url: e.url,
+      title: e.title,
+      position: e.position,
+      episodeName: e.episodeName,
+      qualities: e.qualities,
+    })),
     startIndex,
   };
 }
@@ -360,6 +408,55 @@ export interface MobileLaunchResult {
   started: boolean;
   message?: string;
   cancelled?: boolean;
+  /** АниксПлеер не установлен — показать предложение установить. */
+  notInstalled?: boolean;
+  /** Номера серий, которые АниксПлеер прошёл по плейлисту (для отметки «просмотрено»). */
+  watchedPositions?: number[];
+}
+
+export interface AnixPlayerRelease {
+  versionCode: number;
+  whatsNew: string;
+  downloadUrl: string | null;
+}
+
+const ANIX_PLAYER_CONFIG_BASES = ['https://api.anixart.app', 'https://api.anixart.tv', 'https://api-s.anixsekai.com'];
+
+/** Как AnixPlayerDownload в Anixart: ссылка под ABI устройства → universal → любая. */
+export function pickAnixPlayerDownload(links: Record<string, string>, abis: string[]): string | null {
+  const ok = (u?: string) => (u && /^https:\/\//i.test(u.trim()) ? u.trim() : null);
+  for (const abi of abis) {
+    const u = ok(links[abi]);
+    if (u) return u;
+  }
+  return ok(links.universal) ?? Object.values(links).map(ok).find(Boolean) ?? null;
+}
+
+/** Свежая версия официального АниксПлеера с сервера Anixart (config/anixplayer). */
+export async function fetchAnixPlayerRelease(abis: string[]): Promise<AnixPlayerRelease | null> {
+  for (const base of ANIX_PLAYER_CONFIG_BASES) {
+    try {
+      const res = await fetch(`${base}/config/anixplayer`, { signal: AbortSignal.timeout(10_000) });
+      if (!res.ok) continue;
+      const j = (await res.json()) as { last_version_code?: number; whats_new?: string; download_links?: Record<string, string> };
+      return {
+        versionCode: Number(j.last_version_code) || 0,
+        whatsNew: String(j.whats_new || ''),
+        downloadUrl: pickAnixPlayerDownload(j.download_links || {}, abis),
+      };
+    } catch {
+      /* следующее зеркало */
+    }
+  }
+  return null;
+}
+
+/** Состояние официального АниксПлеера на устройстве (null — не Android). */
+export async function getAnixPlayerStatus(): Promise<{ installed: boolean; versionCode?: number; ownInstalled: boolean; abis: string[] } | null> {
+  const plugin = nativePlugin();
+  if (!plugin?.anixPlayerStatus) return null;
+  const s = await plugin.anixPlayerStatus();
+  return { installed: !!s?.installed, versionCode: s?.versionCode, ownInstalled: !!s?.ownInstalled, abis: s?.abis ?? [] };
 }
 
 /** Десктоп: VLC/mpv с M3U-плейлистом (окно серий или все). */
@@ -433,20 +530,70 @@ export async function launchWithKind(
     if (kind === 'external') return launchExternalDesktop(params, opts);
     return { started: false, message: 'Внешние плееры доступны только в приложении' };
   }
+  if (kind === 'anix') return launchAnixPlayer(plugin, params, opts);
   const stream = await resolveEpisodeStream(params.releaseId, params.sourceId, params.ep, {
     releaseTitle: params.title,
     signal: opts.signal,
   });
   const out = await plugin.openExternalPlayer({
-    mode: kind === 'anix' ? 'anix' : 'chooser',
+    mode: 'chooser',
     url: stream.url,
     title: stream.title || params.title,
     label: `${params.ep} серия`,
     headers: stream.headers,
     startMs: params.currentTime ? Math.round(params.currentTime * 1000) : 0,
   });
-  if (kind === 'anix' && out?.installed === false) {
-    return { started: false, message: 'АниксПлеер не установлен. Установите AnixApp Player или выберите другой плеер.' };
+  return { started: out?.installed !== false };
+}
+
+/**
+ * АниксПлеер: как Anixart — плейлист (текущая + следующие серии) с качествами, заголовками и позициями.
+ * По возврату — какие серии плейлиста пройдены.
+ */
+async function launchAnixPlayer(
+  plugin: NativePlugin,
+  params: WatchLaunchParams,
+  opts: ExternalLaunchOpts,
+): Promise<MobileLaunchResult> {
+  const status = await plugin.anixPlayerStatus?.().catch(() => null);
+  if (status && !status.installed && !status.ownInstalled) {
+    return { started: false, notInstalled: true, message: 'АниксПлеер не установлен' };
   }
-  return { started: true };
+  try {
+    const built = await buildExternalPlaylist(params, { ...opts, aheadOnly: opts.aheadOnly ?? ANIX_PLAYLIST_AHEAD });
+    throwIfAborted(opts.signal);
+    const cur = built.playlist[built.startIndex];
+    const qualities = cur?.qualities ?? {};
+    const selectedQuality = QUALITY_ORDER.map((q) => `${q}p`).find((q) => qualities[q]);
+    const out = await plugin.openExternalPlayer!({
+      mode: 'anix',
+      url: built.current.url,
+      title: built.current.title || params.title,
+      label: `${params.ep} серия`,
+      headers: built.current.headers,
+      startMs: params.currentTime ? Math.round(params.currentTime * 1000) : 0,
+      playlist: built.playlist.map((e) => ({
+        url: e.url,
+        name: String(params.title || '').trim() || 'AnixApp',
+        info: e.episodeName && !/^\d+$/.test(e.episodeName) ? e.episodeName : `${e.position} серия`,
+        qualities: e.qualities ?? {},
+      })),
+      startIndex: built.startIndex,
+      ...(selectedQuality ? { selectedQuality } : {}),
+      ...(opts.thumbnail ? { thumbnail: opts.thumbnail } : {}),
+    });
+    if (out?.installed === false) return { started: false, notInstalled: true, message: 'АниксПлеер не установлен' };
+    const last = typeof out?.playlistPosition === 'number' && out.playlistPosition >= built.startIndex
+      ? Math.min(out.playlistPosition, built.playlist.length - 1)
+      : built.startIndex;
+    return {
+      started: true,
+      watchedPositions: built.playlist.slice(built.startIndex, last + 1).map((e) => e.position),
+    };
+  } catch (e) {
+    if ((e as Error)?.name === 'AbortError' || (e as Error)?.message === 'cancelled') {
+      return { started: false, cancelled: true };
+    }
+    throw e;
+  }
 }

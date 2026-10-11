@@ -145,6 +145,26 @@ class AnixPlayerPlugin : Plugin() {
         activity.window.decorView.post { applySystemBars() }
     }
 
+    // --- Журнал: «Поделиться» ----------------------------------------------------------------
+
+    /** {text, title?} — системное «Поделиться» (Telegram, почта, заметки) текстом журнала. */
+    @PluginMethod
+    fun shareText(call: PluginCall) {
+        val text = call.getString("text")
+        if (text.isNullOrEmpty()) { call.reject("text обязателен"); return }
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+            putExtra(Intent.EXTRA_SUBJECT, call.getString("title") ?: "Журнал AnixApp")
+        }
+        try {
+            activity.startActivity(Intent.createChooser(send, call.getString("title") ?: "Журнал AnixApp"))
+            call.resolve()
+        } catch (e: Exception) {
+            call.reject("Не удалось открыть «Поделиться»: " + e.message)
+        }
+    }
+
     // --- Язык АниксПлеера ---------------------------------------------------------------------
 
     /**
@@ -358,6 +378,7 @@ class AnixPlayerPlugin : Plugin() {
             }
             intent = Intent.createChooser(v, title ?: "Открыть в плеере")
         }
+        android.util.Log.i("AnixApp", "openExternalPlayer mode=$mode pkg=${intent.`package` ?: intent.component?.packageName ?: "chooser"}")
         try {
             startActivityForResult(call, intent, "externalPlayerResult")
         } catch (e: Exception) {
@@ -369,6 +390,9 @@ class AnixPlayerPlugin : Plugin() {
     private fun externalPlayerResult(call: PluginCall?, result: ActivityResult) {
         val d = result.data
         val out = JSObject().put("installed", true).put("closed", true)
+            // -1 = RESULT_OK; 0 без данных — плеер закрыт без ответа (вылет, ANR «Закрыть», смахнули из недавних)
+            .put("resultCode", result.resultCode)
+            .put("hasData", d != null)
         val pos = d?.getLongExtra("com.anixapp.player.extra.RESULT_POSITION_MS", -1L) ?: -1L
         if (pos >= 0) {
             out.put("positionMs", pos)

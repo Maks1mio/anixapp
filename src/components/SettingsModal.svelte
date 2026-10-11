@@ -11,6 +11,7 @@
   import DownloadsPage from '../views/Settings/pages/DownloadsPage.svelte';
   import MobilePlaybackPage from '../views/Settings/pages/MobilePlaybackPage.svelte';
   import LanguagePage from '../views/Settings/pages/LanguagePage.svelte';
+  import MobileDebugPage from '../views/Settings/pages/MobileDebugPage.svelte';
   import { isMobileMode } from '../platform/mobile';
   import DiscordRpcPage from '../views/Settings/pages/DiscordRpcPage.svelte';
   import AboutPage from '../views/Settings/pages/AboutPage.svelte';
@@ -102,7 +103,7 @@
     {
       title: 'Сведения',
       rows: [
-        { tab: 'debug', title: 'Отладка', sub: 'Логи консоли и сети', icon: iconClipboardList },
+        { tab: 'debug', title: 'Отладка', sub: 'Журнал ошибок, сети и плеера', icon: iconClipboardList },
         { tab: 'about', title: 'О программе', sub: '', icon: iconInfo },
       ],
     },
@@ -349,7 +350,7 @@
             {:else if screen === 'update'}
               <UpdatePage />
             {:else if screen === 'debug'}
-              <DebugPage />
+              {#if mobileUi}<MobileDebugPage />{:else}<DebugPage />{/if}
             {:else if screen === 'developer'}
               <DeveloperPage />
             {:else}

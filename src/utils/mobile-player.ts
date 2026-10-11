@@ -3,6 +3,7 @@
  * встроенный плеер (/watch на hls.js) и сторонний (системный выбор). Настройка хранится локально.
  */
 import { launchPlayer, type WatchLaunchParams } from './watch-nav';
+import { mlog, safeUrl } from '../services/mobile-log';
 
 export type MobilePlayerKind = 'web' | 'anix' | 'builtin' | 'external';
 
@@ -127,6 +128,8 @@ type NativePlugin = {
     durationMs?: number;
     completed?: boolean;
     playlistPosition?: number;
+    resultCode?: number;
+    hasData?: boolean;
     resumeIndices?: number[];
     resumeValuesMs?: number[];
   }>;
@@ -557,14 +560,21 @@ async function launchAnixPlayer(
 ): Promise<MobileLaunchResult> {
   const status = await plugin.anixPlayerStatus?.().catch(() => null);
   if (status && !status.installed && !status.ownInstalled) {
+    mlog('player', 'warn', 'АниксПлеер не установлен');
     return { started: false, notInstalled: true, message: 'АниксПлеер не установлен' };
   }
+  const which = status?.installed ? `официальный (сборка ${status.versionCode ?? '?'})` : 'AnixApp Player (форк mpvEx)';
+  const t0 = Date.now();
   try {
     const built = await buildExternalPlaylist(params, { ...opts, aheadOnly: opts.aheadOnly ?? ANIX_PLAYLIST_AHEAD });
     throwIfAborted(opts.signal);
     const cur = built.playlist[built.startIndex];
     const qualities = cur?.qualities ?? {};
     const selectedQuality = QUALITY_ORDER.map((q) => `${q}p`).find((q) => qualities[q]);
+    mlog('player', 'info', `Запуск АниксПлеера — ${which}: «${params.title}», серия ${params.ep}, `
+      + `в плейлисте ${built.playlist.length} (с ${built.startIndex + 1}-й), качество ${selectedQuality ?? 'по умолчанию'} `
+      + `[${Object.keys(qualities).join(', ') || 'нет вариантов'}], поток ${safeUrl(built.current.url)}, `
+      + `заголовков ${built.current.headers.length / 2}, позиция ${params.currentTime ? Math.round(params.currentTime) + ' с' : 'с начала'}`);
     const out = await plugin.openExternalPlayer!({
       mode: 'anix',
       url: built.current.url,
@@ -583,6 +593,15 @@ async function launchAnixPlayer(
       ...(opts.thumbnail ? { thumbnail: opts.thumbnail } : {}),
     });
     if (out?.installed === false) return { started: false, notInstalled: true, message: 'АниксПлеер не установлен' };
+    const secs = Math.round((Date.now() - t0) / 1000);
+    if (out?.resultCode !== -1 && !out?.hasData) {
+      mlog('player', 'error', `АниксПлеер закрылся без ответа через ${secs} с — вероятно, вылет или зависание (ANR), `
+        + 'либо его закрыли из недавних. Позиция не сохранена.');
+    } else {
+      const fmt = (ms?: number) => (ms != null ? `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}` : '?');
+      mlog('player', 'info', `АниксПлеер закрыт через ${secs} с: позиция ${fmt(out?.positionMs)} из ${fmt(out?.durationMs)}`
+        + (typeof out?.playlistPosition === 'number' ? `, остановились на ${out.playlistPosition + 1}-й в плейлисте` : ''));
+    }
     const last = typeof out?.playlistPosition === 'number' && out.playlistPosition >= built.startIndex
       ? Math.min(out.playlistPosition, built.playlist.length - 1)
       : built.startIndex;
@@ -592,8 +611,10 @@ async function launchAnixPlayer(
     };
   } catch (e) {
     if ((e as Error)?.name === 'AbortError' || (e as Error)?.message === 'cancelled') {
+      mlog('player', 'info', 'Запуск АниксПлеера отменён');
       return { started: false, cancelled: true };
     }
+    mlog('player', 'error', 'Не удалось запустить АниксПлеер:', e);
     throw e;
   }
 }

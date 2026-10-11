@@ -480,3 +480,44 @@ html.mobile-mode[data-m-theme='light'] {
   .auth-legal__text { color: var(--m-text-2); text-shadow: none; }
   .auth-legal__link { color: var(--m-text); text-shadow: none; text-decoration-color: currentColor; }
 }
+
+// ── Релиз: все блоки под шапкой — с единым боковым полем (раньше «Видео», «Рейтинг», статистика,
+// рекомендации и комментарии стояли вплотную к краям экрана). Карусели — от края до края с полем внутри.
+html.mobile-mode {
+  .release-page > .release-page__section,
+  .release-page > .release-page__recommended,
+  .release-page > .anix-comments {
+    padding-left: calc(var(--m-gutter) + env(safe-area-inset-left)) !important;
+    padding-right: calc(var(--m-gutter) + env(safe-area-inset-right)) !important;
+    box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .release-page .release-page__carousel-scroll,
+  .release-page .uiv2-carousel {
+    margin-left: calc(-1 * var(--m-gutter)) !important;
+    margin-right: calc(-1 * var(--m-gutter)) !important;
+    padding-left: var(--m-gutter) !important;
+    padding-right: var(--m-gutter) !important;
+    scroll-padding-inline: var(--m-gutter);
+    max-width: none;
+  }
+}
+
+// «О проекте» / условия: на низких экранах (320 dp, альбомная) окно не влезало и кнопки обрезались —
+// ограничиваем высоту экраном, прокручивается только текст.
+html.mobile-mode {
+  .auth-terms-modal__panel,
+  .auth-terms-modal__panel--compact {
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
+  }
+  .auth-terms-modal__body--compact,
+  .auth-terms-modal__scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto !important;
+  }
+  .auth-terms-modal__head,
+  .auth-terms-modal__foot { flex: none; }
+  .auth-terms-modal__foot--split { flex-wrap: wrap; gap: var(--m-space-3); }
+}

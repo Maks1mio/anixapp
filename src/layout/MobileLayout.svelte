@@ -8,7 +8,9 @@
   import type { Snippet } from 'svelte';
   import { navigate } from '../stores/navigation';
   import { notificationsModalOpen, settingsModalOpen } from '../stores/modals';
-  import { isAuthenticated, requireAuth } from '../stores/auth';
+  import { isAuthenticated, authReady, openLoginPrompt } from '../stores/auth';
+  import { showToast } from '../stores/toast';
+  import MobileGuestGate from '../components/MobileGuestGate.svelte';
   import { ensureProfileId } from '../utils/profile';
   import { iconDownload, iconPlus, iconHome, iconCompass, iconBookmark, iconNewspaper, iconUser, iconSearch, iconSettings, iconBell, iconArrowUp } from '../components/icons';
   import SettingsModal from '../components/SettingsModal.svelte';
@@ -32,6 +34,8 @@
   ];
 
   let profileOpen = $state(false);
+  /** Гость нажал «Профиль»/«Закладки» — экран с «Войти» вместо мгновенного окна входа. */
+  let guestTab = $state<'profile' | 'bookmarks' | null>(null);
 
   /** Кнопка «Наверх»: появляется после прокрутки примерно на полтора экрана. */
   let scrolledFar = $state(false);
@@ -57,7 +61,7 @@
   });
   /** Корневые экраны разделов получают верхнюю панель с поиском; остальные — панель с «назад». */
   const isRoot = $derived(rootTab !== null && path !== '/overview/popular' && path !== '/schedule');
-  const activeTab = $derived<Tab | null>(profileOpen ? 'profile' : rootTab);
+  const activeTab = $derived<Tab | null>(profileOpen ? 'profile' : guestTab ?? rootTab);
   const searchHint = $derived(
     rootTab === 'feed' ? 'Поиск записей и блогов' : rootTab === 'bookmarks' ? 'Поиск в закладках' : 'Поиск аниме',
   );
@@ -68,6 +72,13 @@
       scrollToTop();
       return;
     }
+    const guest = get(authReady) && !get(isAuthenticated);
+    if (guest && (tab.id === 'profile' || tab.id === 'bookmarks')) {
+      closeProfile();
+      guestTab = tab.id;
+      return;
+    }
+    guestTab = null;
     if (tab.id === 'profile') {
       void openProfile();
       return;
@@ -77,14 +88,32 @@
   }
 
   async function openProfile() {
-    if (!(await requireAuth())) return;
-    const id = await ensureProfileId();
-    if (id == null) return;
+    if (!get(isAuthenticated)) { guestTab = 'profile'; return; }
+    let id: number | null = null;
+    try { id = await ensureProfileId(); } catch { id = null; }
+    if (id == null) {
+      showToast('Не удалось загрузить профиль — сервер не отвечает, попробуйте позже', 'err');
+      return;
+    }
     profileUserId = id;
     resetProfilePanelHistory();
     profilePanelOpen.set(true);
     profileOpen = true;
   }
+
+  $effect(() => {
+    if (!$isAuthenticated || !guestTab) return;
+    const t = guestTab;
+    guestTab = null;
+    if (t === 'profile') void openProfile();
+    else navigate('/bookmarks');
+  });
+
+  // Переход на другой экран закрывает экран гостя
+  $effect(() => {
+    void path;
+    if (guestTab && path !== '/' && path !== '/bookmarks' && path !== '/overview' && path !== '/feed') guestTab = null;
+  });
 
   function closeProfile() {
     if (!profileOpen) return;
@@ -201,6 +230,12 @@
       </button>
     {/each}
   </nav>
+
+  {#if guestTab}
+    <div class="m-fullscreen m-fullscreen--profile">
+      <MobileGuestGate kind={guestTab} onLogin={openLoginPrompt} />
+    </div>
+  {/if}
 
   {#if profileOpen && profileUserId != null}
     <div class="m-fullscreen m-fullscreen--profile">

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isMobileMode } from '../platform/mobile';
   import { tick, onMount } from 'svelte';
   import UiV2OutlinedField from '../components/uikit-v2/UiV2OutlinedField.svelte';
   import OAuthBrandIcon from '../components/OAuthBrandIcon.svelte';
@@ -1035,7 +1036,8 @@
                   </span>
                 </button>
 
-                {#if !tv}
+                <!-- Android: вход через соцсети (VK, Google, Telegram, Яндекс) не работает — только логин и пароль -->
+                {#if !tv && !isMobileMode()}
                 <div
                   class="auth-oauth"
                   aria-label={isRegister ? 'Регистрация через сервисы' : 'Вход через сервисы'}

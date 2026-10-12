@@ -727,3 +727,16 @@ html.mobile-mode {
   .fluo-page__state-title { font: 600 16px/1.3 var(--m-font) !important; }
   .fluo-page__state-sub { font: 400 14px/1.4 var(--m-font) !important; }
 }
+
+// ── Экран входа: подпись о соглашениях наезжала на карточку на невысоких экранах ──
+// Была прибита к низу экрана поверх всего; теперь идёт под карточкой, экран прокручивается.
+html.mobile-mode {
+  .view-auth--overlay, .view-auth { overflow-y: auto !important; overscroll-behavior-y: contain; }
+  .view-auth__body { flex: 1 0 auto !important; padding-top: calc(72px + env(safe-area-inset-top)) !important; padding-bottom: var(--m-space-4) !important; }
+  .auth-legal--screen {
+    position: relative !important;
+    inset: auto !important;
+    flex: none;
+    padding: var(--m-space-4) var(--m-gutter) calc(var(--m-space-4) + env(safe-area-inset-bottom)) !important;
+  }
+}

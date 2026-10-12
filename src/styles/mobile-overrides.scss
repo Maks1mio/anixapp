@@ -630,3 +630,100 @@ html.mobile-mode {
   // Фильтры-«чипы» — 40 dp, шрифт 14
   .watch-modal__filter { height: 40px; font-size: 14px !important; }
 }
+
+// ── Прокрутка: «ловушка» вложенной области ──
+// У uiv2-scroll-area__viewport overscroll-behavior: contain. Если область растянута по содержимому
+// (не прокручивается сама) внутри прокручиваемого экрана (профиль — .m-fullscreen), жест не доходит
+// до внешнего контейнера и страница «не мотается». На Android жест передаётся дальше;
+// удержание оставлено только в шторках/меню, где оно нужно.
+html.mobile-mode {
+  .uiv2-scroll-area__viewport { overscroll-behavior-y: auto !important; }
+  .m-sheet, .m-sheet-menu, .uiv2-popup-menu__scroll, .m-flow__body, .m-flow__dubs,
+  .m-dialog, .watch-modal__body {
+    overscroll-behavior-y: contain !important;
+  }
+}
+
+// ── Профиль: страница не прокручивалась ──
+// Внутренняя область профиля (.page__scroll) растягивалась по содержимому (1480 dp при экране 866),
+// и свайп браузер отдавал прокрутке главной страницы ПОД профилем. Теперь вся цепочка — высотой экрана,
+// прокручивается сама область профиля (как на ПК), внешний .m-fullscreen не прокручивается.
+html.mobile-mode {
+  .m-fullscreen--profile {
+    overflow: hidden !important;
+    display: flex;
+    flex-direction: column;
+  }
+  .m-fullscreen--profile > .profile-panel { flex: 1 1 auto; min-height: 0; height: auto !important; }
+  .m-fullscreen--profile .profile-panel__viewport { flex: 1 1 auto; min-height: 0; }
+  .m-fullscreen--profile .profile-panel__track,
+  .m-fullscreen--profile .profile-panel__slide,
+  .m-fullscreen--profile .profile-panel__block,
+  .m-fullscreen--profile .profile-panel__inner-viewport,
+  .m-fullscreen--profile .profile-panel__inner-track,
+  .m-fullscreen--profile .profile-panel__inner-slide,
+  .m-fullscreen--profile .profile-panel__inner-slide > .page {
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+  .m-fullscreen--profile .page__scroll {
+    flex: 1 1 auto;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain !important;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+// Горизонтальные карусели (расписание и др.): только горизонтальная прокрутка —
+// вертикальный свайп по постеру всегда уходит странице.
+html.mobile-mode {
+  .m-hscroll, .uiv2-carousel, .release-page__carousel-scroll, .m-dyn, .watch-modal__filters, .m-ptabs__bar, .m-tabs__scroll, .m-banner-track, .mdbg__filters {
+    overflow-y: hidden !important;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x pan-y;
+  }
+}
+
+// ── Fluo (совместный просмотр): верх страницы ──
+// Поле «Код комнаты» растягивалось по высоте (192 dp) и со скруглением-«таблеткой» превращалось в овал,
+// кнопки были 34 dp. Теперь: заголовок, «Создать комнату» на всю ширину, поле кода + «Войти» одной строкой, 48 dp.
+html.mobile-mode {
+  .fluo-page { padding-left: calc(var(--m-gutter) + env(safe-area-inset-left)) !important; padding-right: calc(var(--m-gutter) + env(safe-area-inset-right)) !important; }
+  .fluo-page__hero {
+    margin: 0 !important;
+    padding: var(--m-space-4) 0 var(--m-space-3) !important;
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+  .fluo-page__hero-top { display: flex !important; flex-direction: column; align-items: stretch !important; gap: var(--m-space-4); }
+  .fluo-page__brand { gap: var(--m-space-3); }
+  .fluo-page__title { font: 700 22px/1.25 var(--m-font) !important; }
+  .fluo-page__subtitle { font: 400 14px/1.4 var(--m-font) !important; color: var(--m-text-2) !important; }
+  .fluo-page__create.uiv2-btn {
+    height: 48px !important; min-height: 48px !important; width: 100%;
+    border-radius: 24px !important; font-size: 16px !important;
+  }
+  .fluo-page__toolbar {
+    display: flex !important; flex-direction: row !important; align-items: stretch !important;
+    gap: var(--m-space-2); margin-top: var(--m-space-3) !important;
+  }
+  .fluo-page__code.uiv2-pill-field {
+    flex: 1 1 auto; min-width: 0;
+    height: 48px !important; min-height: 48px !important; max-height: 48px;
+    border-radius: 24px !important;
+    padding: 0 var(--m-space-4) !important;
+    display: flex; align-items: center;
+  }
+  .fluo-page__code .uiv2-pill-field__input { font-size: 16px !important; }
+  .fluo-page__toolbar > .uiv2-btn {
+    flex: none; height: 48px !important; min-height: 48px !important;
+    padding: 0 var(--m-space-5) !important; border-radius: 24px !important; font-size: 16px !important;
+  }
+  .fluo-page__hint { font-size: 14px !important; margin-top: var(--m-space-2) !important; }
+  .fluo-page__state-title { font: 600 16px/1.3 var(--m-font) !important; }
+  .fluo-page__state-sub { font: 400 14px/1.4 var(--m-font) !important; }
+}

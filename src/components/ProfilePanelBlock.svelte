@@ -372,7 +372,7 @@
       void loadCover(id);
       void loadFriendsPreview();
     } catch (err) {
-      errorMsg = String(err);
+      errorMsg = err instanceof Error ? err.message : String(err);
       loadState = 'error';
     }
   }

@@ -53,6 +53,8 @@
   import UiV2Card from './uikit-v2/UiV2Card.svelte';
   import { showToast } from '../stores/toast';
   import { requireAuth } from '../stores/auth';
+  import { fetchMyBadges, fetchUsersBadges, getCachedBadges, cacheBadges, type AppBadge } from '../services/badges-api';
+  import { resolveAnixbackUploadUrl } from '../services/anixback-endpoint';
   import {
     hasProfileSocial,
     listSocialLinks,
@@ -188,6 +190,49 @@
       : [],
   );
   const badge = $derived((profile?.badge as { image_url?: string; name?: string } | null) ?? null);
+
+  // ── Anixapp badges (anixback): default (from DB) + granted/purchased ─────
+  let appBadges = $state<AppBadge[]>([]);
+  let appBadgesLoaded = $state(false);
+
+  async function loadAppBadges(): Promise<void> {
+    if (!Number.isFinite(userId) || userId <= 0) return;
+    try {
+      const cached = getCachedBadges(userId);
+      if (cached) {
+        appBadges = cached;
+        appBadgesLoaded = true;
+        return;
+      }
+      // Own profile → exact list with statuses; other profiles → bulk public API.
+      const selfId = Number((window as { __anixProfile?: { id?: number } }).__anixProfile?.id ?? 0);
+      if (selfId === userId) {
+        const me = await fetchMyBadges(userId, '');
+        appBadges = me?.badges ?? [];
+      } else {
+        const map = await fetchUsersBadges([userId]);
+        appBadges = map.get(userId) ?? [];
+      }
+      // Default badge (from DB) always renders first
+      appBadges = [
+        { slug: 'anixapp-user', name: 'Пользуется Anixapp', image_url: '/api/badges/images/default.png', status: 'granted', is_custom: false },
+        ...appBadges.filter((b) => b.slug !== 'anixapp-user'),
+      ];
+      cacheBadges(userId, appBadges);
+    } catch {
+      appBadges = [
+        { slug: 'anixapp-user', name: 'Пользуется Anixapp', image_url: '/api/badges/images/default.png', status: 'granted', is_custom: false },
+      ];
+      /* badges are cosmetic — never block profile */
+    } finally {
+      appBadgesLoaded = true;
+    }
+  }
+
+  $effect(() => {
+    if (loadState === 'ready' && userId > 0) void loadAppBadges();
+  });
+
   const friendCount = $derived(Number(profile?.friend_count ?? 0));
   const blockedByUser = $derived(isBlockedByProfile(profile));
   const showPrivacy = $derived(
@@ -788,6 +833,19 @@
                       {/if}
                       {#if profile.is_verified}
                         <span class="profile-panel__verified" title="Подтверждён">✓</span>
+                      {/if}
+                      {#if appBadgesLoaded}
+                        {#each appBadges as ab (ab.slug)}
+                          {#if ab.status !== 'pending'}
+                            <img
+                              class="profile-panel__badge-img"
+                              src={resolveAnixbackUploadUrl(ab.image_url)}
+                              alt={ab.name}
+                              title={ab.name}
+                              loading="lazy"
+                            />
+                          {/if}
+                        {/each}
                       {/if}
                     </h2>
 

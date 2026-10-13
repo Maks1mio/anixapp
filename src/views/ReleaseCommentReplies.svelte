@@ -11,10 +11,13 @@
   } from '../components/uikit-v2/UiV2CommentComposer.svelte';
   import CommentsLoadSentinel from '../components/comments/CommentsLoadSentinel.svelte';
   import CommentsPageHeader from '../components/comments/CommentsPageHeader.svelte';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
   import {
     normalizeComment,
     normalizeCommentsFromResponse,
     buildReleaseCommentAddBody,
+    apiVotePayload,
   } from '../utils/comment';
   import { resolveJacksonRefs } from '../utils/jackson-refs';
   import {
@@ -24,7 +27,7 @@
     setUiV2CommentReplies,
     uiV2NodeToCommentData,
   } from '../utils/comment-v2';
-  import type { CommentSort } from '../types/comment';
+  import type { CommentSort, CommentVoteValue } from '../types/comment';
   import { COMMENT_REPLIES_SORT_DEFAULT } from '../types/comment';
 
   interface Props {
@@ -71,7 +74,7 @@
     }
 
     if (append) loadingMore = true;
-    else if (nextPage === 0) loadState = 'loading';
+    else if (nextPage === 0 && loadState !== 'error') loadState = 'loading';
 
     try {
       const data = (await window.anixApi.comments.release.replies(commentId, nextPage, sort)) as {
@@ -96,7 +99,7 @@
     } catch (err) {
       if (!append) {
         loadState = 'error';
-        errorMsg = String(err);
+        errorMsg = headlineFromLoadError(err);
       }
     } finally {
       loadingMore = false;
@@ -165,7 +168,11 @@
 
     if (!window.anixApi?.comments?.release) return;
     const id = typeof updated.id === 'number' ? updated.id : Number(updated.id);
-    window.anixApi.comments.release.vote(id, updated.userVote ?? 0).catch(() => {
+    const apiVote = apiVotePayload(
+      (prev.userVote ?? 0) as CommentVoteValue,
+      (updated.userVote ?? 0) as CommentVoteValue,
+    );
+    window.anixApi.comments.release.vote(id, apiVote).catch(() => {
       if (isParent) {
         parent = prev;
       } else {
@@ -346,7 +353,7 @@
       {#if loadState === 'loading' && !parent}
         <div class="anix-comments__empty">Загрузка…</div>
       {:else if loadState === 'error'}
-        <div class="anix-comments__empty">{errorMsg}</div>
+        <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void reloadAll()} />
       {:else}
         {#if parent}
           <div class="anix-comments-replies-page__parent">

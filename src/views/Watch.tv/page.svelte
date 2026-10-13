@@ -1020,16 +1020,17 @@
   });
 </script>
 
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
   class="tv-watch"
   class:tv-watch--chrome-hidden={loadState === 'ready' && !overlayVisible && !panelOpen && !settingsOpen}
   class:tv-watch--error={loadState === 'error'}
   class:tv-watch--iframe={!useVideo}
   bind:this={rootEl}
-  onpointerdown={() => showOverlay()}
-  onkeydown={onRootKeydown}
   role="application"
   aria-label="Плеер"
+  onpointerdown={() => showOverlay()}
+  onkeydown={onRootKeydown}
 >
   <div class="tv-watch__stage">
     <iframe

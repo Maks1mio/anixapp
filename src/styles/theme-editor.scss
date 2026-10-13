@@ -320,3 +320,14 @@ html, body {
   .te-btn--danger { width: 100%; }
 }
 
+
+// macOS: нативные кнопки окна слева.
+.platform-darwin {
+  .te-titlebar__win-btns {
+    display: none;
+  }
+
+  &:not(.window-fullscreen) .te-titlebar {
+    padding-left: var(--traffic-lights-inset, 98px);
+  }
+}

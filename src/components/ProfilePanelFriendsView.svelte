@@ -1,10 +1,22 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
   import { iconMessageCircle } from './icons';
   import UserBadge from './UserBadge.svelte';
+  import Checkbox from './Checkbox.svelte';
   import { resolveBadgeName, resolveProfileBadgeUrl } from '../utils/badge';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import UiV2BackBar from './uikit-v2/UiV2BackBar.svelte';
+  import {
+    getProfileBanDurationLabel,
+    getProfileBanNotice,
+    type ProfileBanFields,
+  } from '../views/Profile/_utils';
+  import {
+    createFriendBanScanner,
+    isCheckedFriendBanned,
+    mergeBanFields,
+    type FriendBanScanner,
+  } from '../services/friends-ban-scan';
 
   interface Props {
     profileId: number;
@@ -40,8 +52,28 @@
   let loadState = $state<'loading' | 'error' | 'empty' | 'ready'>('loading');
   let errorMsg = $state('');
   let requestBusyId = $state(0);
+  let showBannedOnly = $state(false);
+  let banFieldsById = $state<Record<number, ProfileBanFields>>({});
+  let banCheckedCount = $state(0);
+  let banScanTotal = $state(0);
+  let banScanRunning = $state(false);
+  let banScanner: FriendBanScanner | null = null;
 
   const hasAnyRequests = $derived(requestsIn.length > 0 || requestsOut.length > 0);
+  const friendsWithBan = $derived(
+    friends.map((fr) => mergeBanFields(fr, banFieldsById[Number(fr.id)])),
+  );
+  const bannedFriends = $derived(
+    friendsWithBan.filter((fr) => isCheckedFriendBanned(fr, banFieldsById)),
+  );
+  const visibleFriends = $derived(showBannedOnly ? bannedFriends : friendsWithBan);
+  const scanningBanned = $derived(
+    showBannedOnly && (banScanRunning || loading || hasMore) && loadState !== 'error',
+  );
+  const listCount = $derived(showBannedOnly ? bannedFriends.length : friendCount);
+  const scanLabel = $derived(
+    `ищем… ${banCheckedCount}/${banScanTotal || friendCount || friends.length || '…'}`,
+  );
 
   let scrollEl: HTMLElement | null = null;
   let scrollListener: (() => void) | null = null;
@@ -127,6 +159,7 @@
       hasMore = content.length >= 20;
       loading = false;
       attachScroll();
+      if (showBannedOnly && hasMore) void loadFriends(true);
     } catch (err) {
       errorMsg = String(err);
       loadState = 'error';
@@ -187,6 +220,41 @@
     }
   }
 
+  $effect(() => {
+    if (!showBannedOnly) return;
+    untrack(() => {
+      if (!loading && hasMore && loadState === 'ready') void loadFriends(true);
+    });
+  });
+
+  $effect(() => {
+    const enabled = showBannedOnly;
+    const ids = friends
+      .map((fr) => Number(fr.id))
+      .filter((id) => Number.isFinite(id) && id > 0);
+    const totalHint = friendCount > 0 ? friendCount : ids.length;
+
+    untrack(() => {
+      if (!enabled) {
+        banScanner?.abort();
+        banScanner = null;
+        banScanRunning = false;
+        return;
+      }
+      banScanRunning = true;
+      if (!ids.length) return;
+      if (!banScanner) {
+        banScanner = createFriendBanScanner((state) => {
+          banScanRunning = state.scanning;
+          banCheckedCount = state.checkedCount;
+          banScanTotal = state.friendsTotal;
+          banFieldsById = state.fieldsById;
+        });
+      }
+      banScanner.scan(ids, totalHint);
+    });
+  });
+
   onMount(async () => {
     await loadRequests();
     await loadFriends(false);
@@ -194,6 +262,8 @@
   });
 
   onDestroy(() => {
+    banScanner?.abort();
+    banScanner = null;
     if (scrollEl && scrollListener) scrollEl.removeEventListener('scroll', scrollListener);
   });
 </script>
@@ -290,12 +360,22 @@
   {/if}
 
   <section class="profile-panel__friends-list-wrap" aria-label="Мои друзья">
-    <h3 class="profile-panel__friends-section-title">
-      {isMyProfile ? 'Мои друзья' : 'Друзья'}
-      {#if friendCount > 0}
-        <span class="profile-panel__friends-badge">{friendCount}</span>
+    <div class="profile-panel__friends-section-head">
+      <h3 class="profile-panel__friends-section-title" id="profile-panel-friends-heading">
+        {isMyProfile ? 'Мои друзья' : 'Друзья'}
+        {#if listCount > 0}
+          <span class="profile-panel__friends-badge">{listCount}</span>
+        {/if}
+      </h3>
+      {#if scanningBanned}
+        <span class="profile-panel__friends-scan" aria-live="polite">{scanLabel}</span>
       {/if}
-    </h3>
+      <Checkbox
+        className="profile-panel__friends-ban-filter"
+        bind:checked={showBannedOnly}
+        label="Забаненные"
+      />
+    </div>
 
     {#if loadState === 'loading' && !friends.length}
       <p class="profile-panel__state">Загрузка…</p>
@@ -303,15 +383,25 @@
       <p class="profile-panel__state">{errorMsg || 'Не удалось загрузить'}</p>
     {:else if loadState === 'empty' && !hasAnyRequests}
       <p class="profile-panel__state">Нет друзей</p>
-    {:else if friends.length}
-      <ul class="profile-panel__friend-rows">
-        {#each friends as fr (fr.id)}
+    {:else if showBannedOnly && !visibleFriends.length}
+      <p class="profile-panel__state" aria-live="polite">
+        {scanningBanned ? scanLabel : 'Нет забаненных друзей'}
+      </p>
+    {:else if visibleFriends.length}
+      <ul
+        class="profile-panel__friend-rows"
+        aria-labelledby="profile-panel-friends-heading"
+        aria-busy={scanningBanned ? 'true' : undefined}
+      >
+        {#each visibleFriends as fr (fr.id)}
           {@const av = avatarOf(fr)}
           {@const badgeUrl =
             (typeof fr.__badgeUrl === 'string' ? fr.__badgeUrl : null) ??
             resolveProfileBadgeUrl(fr, friendsRoot)}
           {@const n = Number(fr.friend_count ?? 0)}
           {@const social = hasSocial(fr)}
+          {@const banLabel = getProfileBanDurationLabel(fr)}
+          {@const banNotice = getProfileBanNotice(fr)}
           <li class="profile-panel__friend-row">
             <button
               type="button"
@@ -325,8 +415,13 @@
               ></span>
               <span class="profile-panel__friend-row-meta">
                 <span class="profile-panel__friend-row-name">
-                  {fr.login || 'Без имени'}
+                  <span class="profile-panel__friend-row-login">{fr.login || 'Без имени'}</span>
                   <UserBadge url={badgeUrl} name={resolveBadgeName(fr.badge)} size="xs" />
+                  {#if banLabel}
+                    <span class="profile-panel__friend-row-ban" title={banNotice ?? undefined}>
+                      {banLabel}
+                    </span>
+                  {/if}
                 </span>
                 {#if Number.isFinite(n)}
                   <span class="profile-panel__friend-row-sub">{n} {friendWord(n)}</span>
@@ -346,7 +441,7 @@
           </li>
         {/each}
       </ul>
-      {#if loading}
+      {#if loading && !showBannedOnly}
         <p class="profile-panel__state">Загрузка…</p>
       {/if}
     {/if}

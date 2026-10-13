@@ -13,6 +13,7 @@
 const path = require('path');
 const { loadLocalEnv } = require('./lib/load-dotenv');
 loadLocalEnv();
+require('./lib/anixart-proxy-auth').installAnixartProxyFetchAuth();
 
 const { app, BrowserWindow } = require('electron');
 
@@ -35,7 +36,7 @@ const logger = require('./logger');
 const state = require('./lib/app-state');
 const config = require('./lib/config-store');
 const { LIST_STATUS_TO_TYPE } = require('./lib/constants');
-const { getIconPath } = require('./lib/paths');
+const { getIconPath, getMacDockIconPath } = require('./lib/paths');
 const { applyUiZoom } = require('./lib/ui-zoom');
 const { createDiscordSettings } = require('./lib/discord-settings');
 const { createIpcHelpers } = require('./lib/ipc-helpers');
@@ -43,6 +44,7 @@ const { applyGpuFlags } = require('./setup/gpu-flags');
 const { setupSessionRequestHeaders } = require('./setup/session-headers');
 const { createMainWindow } = require('./setup/main-window');
 const { createTray } = require('./setup/tray');
+const { setupAppMenu } = require('./setup/app-menu');
 const { createAnixClient, getAnixart, resetAnixart } = require('./services/anix-client');
 const { createDevApiBridge } = require('./dev-api-bridge');
 const { registerAll } = require('./ipc');
@@ -109,6 +111,8 @@ registerAll(deps);
 app.whenReady().then(() => {
   config.primeConfigCache();
 
+  require('./session-diagnostics').install();
+
   logger.init(app.getPath('userData'), app.getVersion(), process.versions.electron);
   logger.patchConsole();
   logger.info('main', 'app ready', {
@@ -122,10 +126,32 @@ app.whenReady().then(() => {
   setupLocalMediaProtocol(() => media.getDownloadDirectory?.() || '', logger);
   if (media.getDownloadDirectory) media.getDownloadDirectory();
 
+  // macOS: в dev док показывает иконку Electron; в сборке её задаёт electron-builder.
+  if (process.platform === 'darwin' && !app.isPackaged) {
+    const dockIcon = getMacDockIconPath();
+    if (dockIcon) app.dock?.setIcon(dockIcon);
+  }
+
+  setupAppMenu(deps);
   createMainWindow(deps);
   createTray(deps);
   discord.initDiscordRpc();
   flushPendingDeepLink();
+  try {
+    require('./lib/backup-proxy').initBackupProxyKeepAlive();
+  } catch (_) {}
+  // Ранний скан VLC/mpv/PotPlayer — к моменту выбора плеера список уже в кэше.
+  setImmediate(() => {
+    try {
+      const { warmInstalledPlayersCache } = require('./lib/player-integration');
+      const found = warmInstalledPlayersCache();
+      logger.info('player-integration', 'warm scan', {
+        players: found.map((p) => p.id),
+      });
+    } catch (err) {
+      logger.warn('player-integration', `warm scan failed: ${err?.message || err}`);
+    }
+  });
   void startFetchAAppBridge(logger).catch((err) => {
     logger.warn('fetchaapp', `bridge failed: ${err?.message || err}`);
   });
@@ -149,6 +175,9 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   logger.info('main', 'app before-quit');
+  // macOS: ⌘Q, «Завершить» в доке и выключение системы должны завершать приложение,
+  // а не прятать окно в трей.
+  if (process.platform === 'darwin') state.isQuitting = true;
   try { media.persistDownloads?.(); } catch (_) {}
   stopFetchAAppBridge();
   try { require('./lib/tv-lan-login').stop(); } catch (_) {}
@@ -163,5 +192,9 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createMainWindow(deps);
+  } else if (state.mainWindow && !state.mainWindow.isVisible()) {
+    // Окно спрятано в трей — клик по иконке в доке должен его вернуть.
+    state.mainWindow.show();
+    state.mainWindow.focus();
   }
 });

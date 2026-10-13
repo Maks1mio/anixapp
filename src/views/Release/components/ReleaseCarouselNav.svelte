@@ -10,6 +10,8 @@
     scrollClass?: string;
     initialScrollLeft?: number;
     onScrollLeftChange?: (left: number) => void;
+    /** Вертикальное колесо крутит ряд влево-вправо, как подписки в ленте. */
+    mapWheel?: boolean;
   }
 
   let {
@@ -19,6 +21,7 @@
     scrollClass = '',
     initialScrollLeft = 0,
     onScrollLeftChange,
+    mapWheel = false,
   }: Props = $props();
 
   let scrollEl = $state<HTMLDivElement | undefined>();
@@ -28,6 +31,64 @@
   let initialScrollApplied = false;
 
   const SCROLL_EDGE = 4;
+
+  let wheelRaf = 0;
+  let wheelTarget = 0;
+
+  function prefersReducedMotion(): boolean {
+    return typeof window !== 'undefined'
+      && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function cancelWheelAnim() {
+    if (!wheelRaf) return;
+    cancelAnimationFrame(wheelRaf);
+    wheelRaf = 0;
+  }
+
+  function clampScroll(el: HTMLElement, left: number): number {
+    const max = Math.max(0, el.scrollWidth - el.clientWidth);
+    return Math.max(0, Math.min(max, left));
+  }
+
+  function tickWheel() {
+    const el = scrollEl;
+    if (!el) {
+      wheelRaf = 0;
+      return;
+    }
+    wheelTarget = clampScroll(el, wheelTarget);
+    const cur = el.scrollLeft;
+    const dist = wheelTarget - cur;
+    if (Math.abs(dist) < 0.4) {
+      el.scrollLeft = wheelTarget;
+      wheelRaf = 0;
+      return;
+    }
+    el.scrollLeft = cur + dist * 0.2;
+    wheelRaf = requestAnimationFrame(tickWheel);
+  }
+
+  function onWheel(e: WheelEvent) {
+    const el = scrollEl;
+    if (!el || el.scrollWidth <= el.clientWidth + 1) return;
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    e.preventDefault();
+
+    let delta = e.deltaY;
+    if (e.deltaMode === 1) delta *= 16;
+    else if (e.deltaMode === 2) delta *= el.clientWidth;
+
+    if (prefersReducedMotion()) {
+      cancelWheelAnim();
+      el.scrollLeft = clampScroll(el, el.scrollLeft + delta);
+      return;
+    }
+
+    if (!wheelRaf) wheelTarget = el.scrollLeft;
+    wheelTarget = clampScroll(el, wheelTarget + delta);
+    if (!wheelRaf) wheelRaf = requestAnimationFrame(tickWheel);
+  }
 
   function updateScrollState() {
     const el = scrollEl;
@@ -50,11 +111,13 @@
   function scrollByDir(dir: -1 | 1) {
     const el = scrollEl;
     if (!el) return;
+    cancelWheelAnim();
     el.scrollBy({ left: dir * getScrollStep(el), behavior: 'smooth' });
   }
 
   $effect(() => {
     measureKey;
+    mapWheel;
     const el = scrollEl;
     if (!el) return;
 
@@ -73,6 +136,7 @@
     };
     el.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', update);
+    if (mapWheel) el.addEventListener('wheel', onWheel, { passive: false });
 
     if (!initialScrollApplied && initialScrollLeft > 0) {
       requestAnimationFrame(() => {
@@ -82,8 +146,10 @@
     }
 
     return () => {
+      cancelWheelAnim();
       ro.disconnect();
       el.removeEventListener('scroll', onScroll);
+      el.removeEventListener('wheel', onWheel);
       window.removeEventListener('resize', update);
     };
   });

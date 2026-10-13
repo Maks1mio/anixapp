@@ -183,12 +183,6 @@ function shouldSkipDuplicate(entry: LobbyActionEntry): boolean {
   );
 }
 
-function persistLobbyLine(line: string): void {
-  try {
-    (window as any).electron?.logLobbyLine?.(line);
-  } catch { /* ignore */ }
-}
-
 export function logLobbyAction(input: LobbyActionInput): LobbyActionEntry | null {
   seq += 1;
   const entry: LobbyActionEntry = {
@@ -204,9 +198,6 @@ export function logLobbyAction(input: LobbyActionInput): LobbyActionEntry | null
   };
   if (shouldSkipDuplicate(entry)) return null;
   if (!append(entry)) return null;
-
-  const line = formatLobbyActionLine(entry);
-  persistLobbyLine(line);
 
   try {
     if (
@@ -248,11 +239,7 @@ export function getLobbyActionLog(): LobbyActionEntry[] {
 }
 
 export async function downloadLobbyActionLog(): Promise<void> {
-  const api = window.electron as { logGetLobbyPath?: () => Promise<string | null> } | undefined;
-  const diskPath = await api?.logGetLobbyPath?.().catch(() => null);
-  const text = diskPath
-    ? `# Файл на диске: ${diskPath}\n\n${formatLobbyActionLogText()}`
-    : formatLobbyActionLogText();
+  const text = formatLobbyActionLogText();
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
@@ -261,34 +248,6 @@ export async function downloadLobbyActionLog(): Promise<void> {
   a.download = `anixapp-lobby-${stamp}.txt`;
   a.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-}
-
-export async function copyLobbyLogsFolderPath(): Promise<{ ok: boolean; path: string; copied: boolean }> {
-  const api = window.electron as {
-    logGetSessionDir?: () => Promise<string | null>;
-    logGetLobbyPath?: () => Promise<string | null>;
-    logGetFolderPath?: () => Promise<string | null>;
-  } | undefined;
-
-  const sessionDir = await api?.logGetSessionDir?.().catch(() => null);
-  const lobbyFile = await api?.logGetLobbyPath?.().catch(() => null);
-  const folder = sessionDir || lobbyFile || await api?.logGetFolderPath?.().catch(() => null);
-
-  if (folder) {
-    try {
-      await navigator.clipboard.writeText(folder);
-      return { ok: true, path: folder, copied: true };
-    } catch {
-      return { ok: true, path: folder, copied: false };
-    }
-  }
-  const fallback = 'В браузере нет папки логов — нажмите «Скачать журнал».';
-  try {
-    await navigator.clipboard.writeText(fallback);
-    return { ok: false, path: fallback, copied: true };
-  } catch {
-    return { ok: false, path: fallback, copied: false };
-  }
 }
 
 if (typeof window !== 'undefined') {

@@ -20,10 +20,13 @@
   let anixbackPing = $state<Record<string, PingState>>({});
   let anixbackPingInterval: ReturnType<typeof setInterval> | null = null;
 
-  async function pingAnixbackOnce() {
-    const next: Record<string, PingState> = {};
+  async function pingAnixbackOnce(opts?: { all?: boolean }) {
+    const next: Record<string, PingState> = { ...anixbackPing };
+    const targets = opts?.all
+      ? ANIXBACK_ENDPOINT_OPTIONS
+      : ANIXBACK_ENDPOINT_OPTIONS.filter((opt) => opt.value === anixbackMode);
     await Promise.all(
-      ANIXBACK_ENDPOINT_OPTIONS.map(async (opt) => {
+      targets.map(async (opt) => {
         next[opt.value] = await pingAnixbackOrigin(opt.origin);
       }),
     );
@@ -34,14 +37,14 @@
     const mode = value as AnixbackEndpointMode;
     anixbackMode = mode;
     await setAnixbackEndpoint(mode);
-    void pingAnixbackOnce();
+    void pingAnixbackOnce({ all: true });
   }
 
   function pingLabel(map: Record<string, PingState>, key: string): string {
     const s = map[key];
     if (!s) return '';
     if (s.ok && typeof s.latencyMs === 'number') return `${s.latencyMs} мс`;
-    if (!s.ok) return 'недоступен';
+    if (!s.ok) return 'неработает';
     return '';
   }
 
@@ -58,8 +61,9 @@
   onMount(async () => {
     await initAnixbackEndpoint();
     anixbackMode = getAnixbackEndpointMode();
+    // One-shot: only the selected endpoint (prod users must not hit :8787).
     void pingAnixbackOnce();
-    anixbackPingInterval = setInterval(() => void pingAnixbackOnce(), 2000);
+    anixbackPingInterval = setInterval(() => void pingAnixbackOnce(), 5000);
   });
 
   onDestroy(() => {

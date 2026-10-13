@@ -61,20 +61,33 @@ function getAccounts() {
         },
       ];
       config.saveConfig({ accounts });
-    } else if (accounts[idx].token !== activeToken) {
-      accounts = accounts.map((a, i) =>
-        i === idx
-          ? {
-              ...a,
-              token: activeToken,
-              login: String(raw.profileLogin || a.login).trim() || a.login,
-              avatar: raw.profileAvatar != null ? String(raw.profileAvatar) : a.avatar,
-              profileRaw: raw.profileRaw ?? a.profileRaw,
-              updatedAt: Date.now(),
-            }
-          : a,
-      );
-      config.saveConfig({ accounts });
+    } else {
+      const cur = accounts[idx];
+      const nextLogin = String(raw.profileLogin || cur.login).trim() || cur.login;
+      const nextAvatar = raw.profileAvatar
+        ? String(raw.profileAvatar)
+        : cur.avatar;
+      const nextRaw = raw.profileRaw ?? cur.profileRaw;
+      const tokenChanged = cur.token !== activeToken;
+      const metaChanged =
+        cur.login !== nextLogin ||
+        cur.avatar !== nextAvatar ||
+        cur.profileRaw !== nextRaw;
+      if (tokenChanged || metaChanged) {
+        accounts = accounts.map((a, i) =>
+          i === idx
+            ? {
+                ...a,
+                token: activeToken,
+                login: nextLogin,
+                avatar: nextAvatar,
+                profileRaw: nextRaw,
+                updatedAt: Date.now(),
+              }
+            : a,
+        );
+        config.saveConfig({ accounts });
+      }
     }
   }
 
@@ -101,15 +114,19 @@ function upsertAccount(entry) {
   if (!(id > 0) || !token) return;
 
   const accounts = getAccounts();
+  const idx = accounts.findIndex((a) => a.id === id);
+  const prev = idx >= 0 ? accounts[idx] : null;
+  const nextAvatar = entry.avatar != null && String(entry.avatar).trim()
+    ? String(entry.avatar).trim()
+    : (prev?.avatar ?? null);
   const next = {
     id,
-    login: String(entry.login || '').trim() || `ID ${id}`,
-    avatar: entry.avatar ? String(entry.avatar) : null,
+    login: String(entry.login || prev?.login || '').trim() || `ID ${id}`,
+    avatar: nextAvatar,
     token,
-    profileRaw: entry.profileRaw ?? null,
+    profileRaw: entry.profileRaw ?? prev?.profileRaw ?? null,
     updatedAt: Date.now(),
   };
-  const idx = accounts.findIndex((a) => a.id === id);
   if (idx >= 0) {
     accounts[idx] = { ...accounts[idx], ...next };
   } else {
@@ -138,16 +155,36 @@ function preserveActiveSession() {
 }
 
 /**
+ * @param {SavedAccount} account
+ * @returns {string | null}
+ */
+function resolveAccountAvatar(account) {
+  if (account.avatar && String(account.avatar).trim()) return String(account.avatar).trim();
+  const raw = account.profileRaw;
+  if (raw && typeof raw === 'object') {
+    const av = /** @type {any} */ (raw).avatar;
+    if (av && String(av).trim()) return String(av).trim();
+  }
+  return null;
+}
+
+/**
  * @returns {{ id: number, login: string, avatar: string | null, active: boolean }[]}
  */
 function listAccountsPublic() {
-  const activeId = Number(config.loadConfig().profileId) || 0;
-  return getAccounts().map((a) => ({
-    id: a.id,
-    login: a.login,
-    avatar: a.avatar,
-    active: a.id === activeId,
-  }));
+  const cfg = config.loadConfig();
+  const activeId = Number(cfg.profileId) || 0;
+  const sessionAvatar = cfg.profileAvatar ? String(cfg.profileAvatar).trim() : '';
+  return getAccounts().map((a) => {
+    let avatar = resolveAccountAvatar(a);
+    if (!avatar && a.id === activeId && sessionAvatar) avatar = sessionAvatar;
+    return {
+      id: a.id,
+      login: a.login,
+      avatar,
+      active: a.id === activeId,
+    };
+  });
 }
 
 /**

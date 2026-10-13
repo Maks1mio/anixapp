@@ -2,6 +2,7 @@
 
 const { ipcMain } = require('electron');
 const { DefaultResult, OAuthAuthResult } = require('anixapi');
+const { ANIXART_UA } = require('../lib/constants');
 const config = require('../lib/config-store');
 const state = require('../lib/app-state');
 const {
@@ -139,9 +140,6 @@ function register(deps) {
     return { success: false, code };
   }
 
-  const ANIX_UA =
-    'AnixartApp/9.0 BETA 21-26080522 (Android 9; SDK 28; x86_64; ROG ASUS AI2201_B; ru)';
-
   /** Прямой POST /auth/vk — обходим возможные нюансы URLSearchParams. */
   async function signInWithVkRaw(baseUrl, vkAccessToken, fieldName = 'vkAccessToken') {
     const url = new URL('auth/vk', baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
@@ -150,7 +148,7 @@ function register(deps) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': ANIX_UA,
+        'User-Agent': ANIXART_UA,
         Accept: 'application/json',
       },
       body,
@@ -701,17 +699,45 @@ ipcMain.handle('anix:getBaseUrl', () => {
 
 ipcMain.handle('anix:setBaseUrl', (_, baseUrl) => {
   if (typeof baseUrl !== 'string' || !baseUrl) return;
+  const {
+    isBackupUrl,
+    clearSticky,
+    markSticky,
+    setBackupProxyEnabled,
+    BACKUP_API_PROXY: backupUrl,
+  } = require('../lib/backup-proxy');
+  if (isBackupUrl(baseUrl)) {
+    config.saveConfig({ baseUrl: backupUrl, backupProxyEnabled: true });
+    setBackupProxyEnabled(true);
+    markSticky();
+    state.anixart = null;
+    return undefined;
+  }
   config.saveConfig({ baseUrl });
+  clearSticky();
   state.anixart = null;
   return undefined;
+});
+
+ipcMain.handle('anix:getBackupProxy', async () => {
+  const { getStatusWithConnections } = require('../lib/backup-proxy');
+  return getStatusWithConnections();
+});
+
+ipcMain.handle('anix:setBackupProxyEnabled', (_, enabled) => {
+  const { setBackupProxyEnabled, getStatus } = require('../lib/backup-proxy');
+  setBackupProxyEnabled(enabled !== false);
+  return getStatus();
 });
 
 // Пинг произвольного эндпоинта без изменения глобального baseUrl и без оффлайн‑экрана.
 ipcMain.handle('anix:pingBaseUrl', async (_, baseUrl) => {
   if (typeof baseUrl !== 'string' || !baseUrl) return { ok: false, latencyMs: null };
+  if (baseUrl.includes('.invalid')) return { ok: false, latencyMs: null };
   try {
     const started = Date.now();
-    const client = createAnixClient({ baseUrl, token: undefined });
+    // Без failover — иначе мёртвый primary будет «зелёным» через прокси
+    const client = createAnixClient({ baseUrl, token: undefined, backupFailover: false });
     await client.endpoints.feed.latest(1);
     return { ok: true, latencyMs: Date.now() - started };
   } catch (err) {
@@ -719,6 +745,19 @@ ipcMain.handle('anix:pingBaseUrl', async (_, baseUrl) => {
     // при проверке альтернативных эндпоинтов.
     appendLog('endpoint_ping', { baseUrl, error: String(err) });
     return { ok: false, latencyMs: null };
+  }
+});
+
+ipcMain.handle('anix:endpointGeo', async (_, baseUrl) => {
+  if (typeof baseUrl !== 'string' || !baseUrl) {
+    return { countryCode: null, countryName: null, ip: null };
+  }
+  try {
+    const { resolveEndpointGeo } = require('../lib/endpoint-geo');
+    return await resolveEndpointGeo(baseUrl);
+  } catch (err) {
+    appendLog('endpoint_geo', { baseUrl, error: String(err) });
+    return { countryCode: null, countryName: null, ip: null };
   }
 });
 
@@ -815,6 +854,29 @@ ipcMain.handle('anix:selfProfile', async () => {
       }
       if (data && data.profile) {
         appendLog('profile', { event: 'selfProfile_ok', profileId });
+        const p = data.profile;
+        const login = p.login ?? p.nickname ?? null;
+        const avatar = p.avatar ?? null;
+        config.saveConfig({
+          profileLogin: login,
+          profileAvatar: avatar,
+          profileRaw: p,
+        });
+        try {
+          const token = typeof cfg.token === 'string' ? cfg.token : '';
+          const id = Number(p.id ?? profileId) || 0;
+          if (id > 0 && token) {
+            accountsStore.upsertAccount({
+              id,
+              login,
+              avatar,
+              token,
+              profileRaw: p,
+            });
+          }
+        } catch {
+          /* ignore */
+        }
         return data;
       }
     } catch (err) {

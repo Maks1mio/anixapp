@@ -13,6 +13,7 @@
   import { isTvMode } from '../platform/tv';
   import { tvLoginQrSvg } from '../utils/tv-login-qr';
   import { startTvLanLogin, stopTvLanLogin, subscribeTvLanCredentials } from '../services/tv-lan-login';
+  import { formatAnixError } from '../native/anix-errors';
 
   const ANIXART_TERMS_URL = 'https://anixart-app.com/terms';
   const ANIXART_PRIVACY_URL = 'https://anixart-app.com/privacy';
@@ -318,7 +319,7 @@
       else if (code === 403) errorText = 'Аккаунт заблокирован навсегда.';
       else errorText = `Ошибка входа (код ${code}).`;
     } catch (err) {
-      errorText = `Ошибка: ${String(err)}`;
+      errorText = formatAnixError(err);
     } finally {
       isSubmitting = false;
     }
@@ -362,7 +363,7 @@
 
       errorText = mapOAuthError(result, provider);
     } catch (err) {
-      errorText = `Ошибка: ${String(err)}`;
+      errorText = formatAnixError(err);
     } finally {
       oauthBusy = null;
     }
@@ -398,7 +399,7 @@
       }
       errorText = mapOAuthSignupError(result?.code, result?.error);
     } catch (err) {
-      errorText = `Ошибка: ${String(err)}`;
+      errorText = formatAnixError(err);
     } finally {
       isSubmitting = false;
     }
@@ -449,7 +450,7 @@
       }
       errorText = mapRegisterError(result?.code, result?.error);
     } catch (err) {
-      errorText = `Ошибка: ${String(err)}`;
+      errorText = formatAnixError(err);
     } finally {
       isSubmitting = false;
     }
@@ -486,7 +487,7 @@
       }
       errorText = mapVerifyError(result?.code, result?.error);
     } catch (err) {
-      errorText = `Ошибка: ${String(err)}`;
+      errorText = formatAnixError(err);
     } finally {
       isSubmitting = false;
     }
@@ -510,7 +511,7 @@
       }
       errorText = mapRegisterError(result?.code, result?.error);
     } catch (err) {
-      errorText = `Ошибка: ${String(err)}`;
+      errorText = formatAnixError(err);
     } finally {
       isSubmitting = false;
     }
@@ -555,7 +556,7 @@
       }
       errorText = mapRestoreError(result?.code, result?.error);
     } catch (err) {
-      errorText = `Ошибка: ${String(err)}`;
+      errorText = formatAnixError(err);
     } finally {
       isSubmitting = false;
     }
@@ -591,7 +592,7 @@
       }
       errorText = mapRestoreVerifyError(result?.code, result?.error);
     } catch (err) {
-      errorText = `Ошибка: ${String(err)}`;
+      errorText = formatAnixError(err);
     } finally {
       isSubmitting = false;
     }
@@ -618,7 +619,7 @@
       }
       errorText = mapRestoreError(result?.code, result?.error);
     } catch (err) {
-      errorText = `Ошибка: ${String(err)}`;
+      errorText = formatAnixError(err);
     } finally {
       isSubmitting = false;
     }

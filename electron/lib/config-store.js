@@ -8,6 +8,8 @@ const { randomBytes } = require('crypto');
 const {
   AUTH_FILE,
   DEFAULT_BASE_URL,
+  BACKUP_API_PROXY,
+  DEV_DOWN_API_ENDPOINT,
   LOG_DIR,
   UI_ZOOM_LEVELS,
   DISCORD_RPC_PAGE_KEYS,
@@ -27,8 +29,35 @@ function _readConfigFromDisk() {
   return {};
 }
 
+/**
+ * Разовая миграция Anime4K: у старых сборок апскейл по умолчанию был включён и на 4K.
+ * Сбрасываем на «выкл + 1080p» один раз. После этого ручной выбор пользователя сохраняется.
+ */
+const ANIME4K_DEFAULTS_MIGRATION = 2;
+
+function migrateAnime4kDefaults() {
+  const raw = _configCache ?? _readConfigFromDisk();
+  if (!raw || typeof raw !== 'object') return;
+  if (raw.anime4kDefaultsMigration >= ANIME4K_DEFAULTS_MIGRATION) return;
+  const next = {
+    ...raw,
+    upscaleEnabled: false,
+    upscaleType: 'off',
+    upscaleMode: 15,
+    upscaleTargetRes: '1080',
+    anime4kDefaultsMigration: ANIME4K_DEFAULTS_MIGRATION,
+  };
+  try {
+    fs.writeFileSync(getConfigPath(), JSON.stringify(next), 'utf8');
+    _configCache = next;
+  } catch (err) {
+    console.error('Failed to migrate anime4k defaults', err);
+  }
+}
+
 function primeConfigCache() {
   if (_configCache === null) _configCache = _readConfigFromDisk();
+  migrateAnime4kDefaults();
 }
 
 function getMinimizeToTray() {
@@ -125,11 +154,36 @@ function appendLog(name, payload, isDev) {
   }
 }
 
+function isDevDownApiEndpointUrl(url) {
+  const n = String(url || '').trim().replace(/\/$/, '');
+  return n === String(DEV_DOWN_API_ENDPOINT).replace(/\/$/, '') || n.includes('anixart.invalid');
+}
+
+function isDevBuild() {
+  return process.env.NODE_ENV === 'development' || !app.isPackaged;
+}
+
+function isBackupApiProxyUrl(url) {
+  const n = String(url || '')
+    .trim()
+    .replace(/\/$/, '');
+  return n === String(BACKUP_API_PROXY).replace(/\/$/, '') || n.includes('api.anixapp.com/anixart-api');
+}
+
+function normalizeBaseUrl(url) {
+  if (!url) return DEFAULT_BASE_URL;
+  const n = String(url).trim().replace(/\/$/, '');
+  if (isDevDownApiEndpointUrl(n) && !isDevBuild()) return DEFAULT_BASE_URL;
+  if (isBackupApiProxyUrl(n)) return String(BACKUP_API_PROXY).replace(/\/$/, '');
+  return n || DEFAULT_BASE_URL;
+}
+
 function loadConfig() {
   const raw = _readConfigFromDisk();
   const cfg = {
     token: raw.token || null,
-    baseUrl: raw.baseUrl || DEFAULT_BASE_URL,
+    baseUrl: normalizeBaseUrl(raw.baseUrl || DEFAULT_BASE_URL),
+    backupProxyEnabled: raw.backupProxyEnabled !== false,
     profileId: raw.profileId ?? null,
     profileLogin: raw.profileLogin || null,
     profileAvatar: raw.profileAvatar || null,

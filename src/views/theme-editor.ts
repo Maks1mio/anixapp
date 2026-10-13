@@ -78,8 +78,9 @@ function primaryFamily(value: string): string {
 // Only fonts that natively support the Cyrillic script are included.
 // At render time the list is filtered to fonts actually installed on the system.
 const ALL_CYRILLIC_FONTS: FontEntry[] = [
-  // ── Системные (без засечек) ──────────────────────────────────────────────────
-  { group: 'Системные', label: 'Segoe UI (по умолчанию)', value: "'Segoe UI', system-ui, -apple-system, sans-serif", alwaysShow: true },
+  // ── Системные / встроенные (без засечек) ─────────────────────────────────────
+  { group: 'Системные', label: 'IBM Plex Sans (по умолчанию)', value: "'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif", alwaysShow: true },
+  { label: 'Segoe UI',         value: "'Segoe UI', system-ui, -apple-system, sans-serif", alwaysShow: true },
   { label: 'System UI',        value: 'system-ui, -apple-system, sans-serif', alwaysShow: true },
   { label: 'Arial',            value: 'Arial, Helvetica, sans-serif',         alwaysShow: true },
   { label: 'Verdana',          value: 'Verdana, sans-serif',                  alwaysShow: true },

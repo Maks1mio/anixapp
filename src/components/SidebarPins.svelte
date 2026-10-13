@@ -3,14 +3,25 @@
   import { flip } from 'svelte/animate';
   import { cubicOut } from 'svelte/easing';
   import { scale } from 'svelte/transition';
-  import { navigateIndependentTab } from '../stores/navigation';
-  import { sidebarPins, sidebarPinsLoading, releaseListStatusLabel, type SidebarPin } from '../stores/sidebar-pins';
-  import { toCdnThumbnailUrl } from '../utils/posterUrl';
+  import { navigate, navigateIndependentTab } from '../stores/navigation';
+  import {
+    sidebarPins,
+    sidebarPinsLoading,
+    sidebarPinsSource,
+    releaseListStatusLabel,
+    sidebarPinsSourceLabel,
+    type SidebarPin,
+  } from '../stores/sidebar-pins';
+  import { formatReleaseEpisodes } from '../utils/release-card';
+  import PosterImage from './PosterImage.svelte';
+
   interface Props {
     currentPath?: string;
+    /** Сторона панели — влияет на позицию превью */
+    side?: 'left' | 'right';
   }
 
-  let { currentPath = '/' }: Props = $props();
+  let { currentPath = '/', side = 'left' }: Props = $props();
 
   let scrollEl: HTMLDivElement | null = $state(null);
   let topFadeOpacity = $state(0);
@@ -23,15 +34,30 @@
 
   const pins = $derived($sidebarPins);
   const loading = $derived($sidebarPinsLoading);
-  const visible = $derived(loading || pins.length > 0);
+  const source = $derived($sidebarPinsSource);
+  const sourceLabel = $derived(sidebarPinsSourceLabel(source));
+  const visible = $derived(source !== 'none' && (loading || pins.length > 0));
 
-  function releasePath(id: number): string {
-    return `/release/${id}`;
+  function pinKey(pin: SidebarPin): string {
+    return `${pin.kind}:${pin.id}`;
   }
 
-  function isPinActive(id: number): boolean {
+  function pinPath(pin: SidebarPin): string {
+    return pin.kind === 'collection' ? `/collection/${pin.id}` : `/release/${pin.id}`;
+  }
+
+  function isPinActive(pin: SidebarPin): boolean {
     const path = currentPath ?? '';
-    return path === releasePath(id) || path.startsWith(`${releasePath(id)}/`);
+    const target = pinPath(pin);
+    return path === target || path.startsWith(`${target}/`);
+  }
+
+  function openPin(pin: SidebarPin) {
+    if (pin.kind === 'collection') {
+      navigate(pinPath(pin));
+      return;
+    }
+    navigateIndependentTab('favorites', pinPath(pin));
   }
 
   function updateFades() {
@@ -83,8 +109,8 @@
   function pinMeta(pin: SidebarPin): string {
     const parts: string[] = [];
     if (pin.year) parts.push(pin.year);
-    const ep = pin.episodesReleased ?? pin.episodesTotal;
-    if (ep != null) parts.push(`${ep} эп.`);
+    const ep = formatReleaseEpisodes(pin.episodesReleased, pin.episodesTotal);
+    if (ep) parts.push(ep);
     if (typeof pin.rating === 'number' && pin.rating > 0) parts.push(`${pin.rating.toFixed(1)} ★`);
     return parts.join(' · ');
   }
@@ -109,8 +135,6 @@
     };
   });
 
-  // Элемент появляется только после загрузки пинов, поэтому ResizeObserver
-  // подключается реактивно, а не один раз во время mount.
   $effect(() => {
     const el = scrollEl;
     if (!el) return;
@@ -129,7 +153,7 @@
 
   $effect(() => {
     if (!hoveredPin) return;
-    if (pins.some((pin) => pin.id === hoveredPin?.id)) return;
+    if (pins.some((pin) => pinKey(pin) === pinKey(hoveredPin!))) return;
     clearHidePreviewTimer();
     previewVisible = false;
     hoveredPin = null;
@@ -137,7 +161,7 @@
 </script>
 
 {#if visible}
-  <div class="sidebar-pins" aria-label="Избранное">
+  <div class="sidebar-pins" class:sidebar-pins--right={side === 'right'} aria-label={sourceLabel}>
     <div
       class="sidebar-pins__fade sidebar-pins__fade--top"
       style:opacity={topFadeOpacity}
@@ -150,13 +174,13 @@
           <div class="sidebar-pins__skel" aria-hidden="true"></div>
         {/each}
       {:else}
-        {#each pins as pin, index (pin.id)}
+        {#each pins as pin, index (pinKey(pin))}
           <button
             type="button"
             class="sidebar-pins__item"
-            class:sidebar-pins__item--active={isPinActive(pin.id)}
+            class:sidebar-pins__item--active={isPinActive(pin)}
             aria-label={pin.title}
-            onclick={() => navigateIndependentTab('favorites', releasePath(pin.id))}
+            onclick={() => openPin(pin)}
             onmouseenter={(e) => showPreview(pin, e.currentTarget as HTMLElement)}
             onmouseleave={scheduleHidePreview}
             onfocus={(e) => showPreview(pin, e.currentTarget as HTMLElement)}
@@ -180,14 +204,12 @@
             }}
           >
             {#if pin.poster}
-              <img
+              <PosterImage
                 class="sidebar-pins__img"
-                src={toCdnThumbnailUrl(pin.poster, 36)}
+                src={pin.poster}
+                thumb="pin"
+                loading={index < 16 ? 'eager' : 'lazy'}
                 alt=""
-                width="26"
-                height="26"
-                loading="lazy"
-                decoding="async"
               />
             {:else}
               <span class="sidebar-pins__fallback" aria-hidden="true">
@@ -212,6 +234,7 @@
   <div
     class="sidebar-pins__preview"
     class:sidebar-pins__preview--visible={previewVisible}
+    class:sidebar-pins__preview--right={side === 'right'}
     style:top="{previewTop}px"
     role="tooltip"
     onmouseenter={clearHidePreviewTimer}
@@ -220,15 +243,12 @@
     <div class="sidebar-pins__preview-card">
       <div class="sidebar-pins__preview-poster">
         {#if hoveredPin.poster}
-          <img
-            src={toCdnThumbnailUrl(hoveredPin.poster, 89, 133)}
+          <PosterImage
+            src={hoveredPin.poster}
+            thumb={hoveredPin.kind === 'collection' ? 'collectionCover' : 'profileRecent'}
+            loading="eager"
             alt=""
-            width="89"
-            height="133"
-            loading="lazy"
-            decoding="async"
           />
-    
         {:else}
           <span class="sidebar-pins__preview-poster-fallback">{hoveredPin.title.slice(0, 1)}</span>
         {/if}
@@ -244,7 +264,7 @@
         {#if hoveredPin.listStatus}
           <span class="sidebar-pins__preview-status">{releaseListStatusLabel(hoveredPin.listStatus)}</span>
         {/if}
-        <span class="sidebar-pins__preview-hint">Избранное</span>
+        <span class="sidebar-pins__preview-hint">{sourceLabel}</span>
       </div>
     </div>
   </div>

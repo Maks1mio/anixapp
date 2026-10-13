@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { openSettingsModal } from '../../../../stores/modals';
-  import { fmtRelative, isLottieBadgeUrl, posterUrl } from '../../_utils';
+  import { fmtRelative, getProfileBanNotice, isLottieBadgeUrl, posterUrl } from '../../_utils';
   import { fetchCdnJson, toCdnProxyUrl } from '../../../../utils/posterUrl';
+  import { iconBan } from '../../../../components/icons';
 
   interface Props {
     profile:     any;
@@ -12,6 +13,8 @@
   }
 
   let { profile, coverUrl, isMyProfile, onOpenSocial }: Props = $props();
+
+  const banNotice = $derived(getProfileBanNotice(profile));
 
   // ── Lottie badge ────────────────────────────────────────────────────────
   let badgeLottieEl = $state<HTMLElement | undefined>();
@@ -119,6 +122,13 @@
 
       {#if profile.status?.trim()}
         <p class="profile__status">{profile.status}</p>
+      {/if}
+
+      {#if banNotice}
+        <div class="profile__ban" role="status">
+          <span class="profile__ban-icon" aria-hidden="true">{@html iconBan(18)}</span>
+          <p class="profile__ban-text">{banNotice}</p>
+        </div>
       {/if}
 
       <!-- Roles -->

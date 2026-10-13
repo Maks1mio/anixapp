@@ -6,10 +6,12 @@
   import { getFluoPlayer, installWindowFluo, sendFluoPreviewFrame } from '../../fluo';
   import type { WatchState, EpisodeItem, DubberItem, LobbyActivityEntry, LobbyChatMessage, PopoverType, NextEpAltDub, DownloadedEpisodeItem, PlaybackAlt, SourceItem } from './_types';
   import { isHlsUrl, isDubberBlacklisted, lobbyActionText, allowsIframeFallback, userPlaybackError } from './_utils';
+  import { createClickOrDblclick } from './_clickGate';
   import { setEmbedMediaContext } from './core/hls-media-context';
   import { normalizeSkipMarks, mergeSkipMarks, clampSkipMarksToDuration, skipMarkActive, endingIsAtEpisodeEnd, buildTimelineSausages, type SkipMarkKind, type SkipMarks } from './_skipMarks';
   import { getSkipAutoPref, setSkipAutoPref } from './_skipPrefs';
   import { pathToLocalMediaUrl } from '../../utils/local-media-url';
+  import { episodeHistoryLabel } from '../../utils/episode-display';
   import { rememberVideoCdnFromUrl, syncExtraVideoHostsToMain } from '../../utils/extra-video-hosts';
   import { sortDubbersPinnedFirst, readLastEpisodeTypeUpdateId } from '../../utils/dubber-meta';
   import {
@@ -26,7 +28,7 @@
   import { PlayerState } from './_usePlayer.svelte';
   import { LobbyState }  from './_useLobby.svelte';
   import { PlayerCore } from './core/PlayerCore';
-  import { isGpuAvailable } from '../../utils/webgpu-availability.svelte';
+  import { initWebGpuAvailability, isGpuAvailable } from '../../utils/webgpu-availability.svelte';
   import { swapMediaSource } from './core/hls-engine';
   import {
     anime4kTargetHeight,
@@ -54,6 +56,7 @@
   import LobbyActionLogPanel from './components/LobbyActionLogPanel.svelte';
   import LobbyChooserOverlay from './components/LobbyChooserOverlay.svelte';
   import NextEpisodePreview from './components/NextEpisodePreview.svelte';
+  import UiV2Button from '../../components/uikit-v2/UiV2Button.svelte';
   import { registerPlayerMuteToggle } from './core/player-mute';
   import type { PlayerChromeProps } from './shells/PlayerChrome.svelte';
   import { mapReleaseRawToCard } from '../../utils/release-card';
@@ -256,6 +259,7 @@
   let lastExternalOpts: { title?: string; referer?: string; pageUrl?: string; cookies?: string } | undefined;
   let externalCdnRetryCount = 0;
   let externalCdnRetrying = false;
+  let reconnectUiTimer: ReturnType<typeof setTimeout> | null = null;
   let lastEpisodeTypeUpdateId = $state<number | null>(null);
   let playbackAlt = $state<PlaybackAlt | null>(null);
   let playbackAltGen = 0;
@@ -834,22 +838,46 @@
   // ── Overlay idle-hide ──────────────────────────────────────────────────────
   const IDLE_MS = 3000;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastPointerPosition: { x: number; y: number } | null = null;
+
+  function chromeHideBlocked(): boolean {
+    if (popoverType != null) return true;
+    // Автоскип держит хром, пока висит промпт опенинга/эндинга
+    if (skipPromptVisible && skipAutoPref === 'auto') return true;
+    return false;
+  }
 
   function showOverlay() {
     if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
     player.overlayVisible = true;
   }
+  let idleTimerArmed = false;
   function scheduleHide() {
-    if (popoverType != null) return; // не гасим интерфейс, пока открыты «Серии» / «Озвучка»
-    if (skipPromptVisible && skipAutoPref === 'auto') {
+    idleTimerArmed = false;
+    if (chromeHideBlocked()) {
+      if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
       player.overlayVisible = true;
       return;
     }
     if (idleTimer) clearTimeout(idleTimer);
-    idleTimer = setTimeout(() => { player.overlayVisible = false; idleTimer = null; }, IDLE_MS);
+    idleTimerArmed = true;
+    idleTimer = setTimeout(() => {
+      idleTimer = null;
+      idleTimerArmed = false;
+      if (chromeHideBlocked()) {
+        player.overlayVisible = true;
+        return;
+      }
+      player.overlayVisible = false;
+    }, IDLE_MS);
+  }
+
+  function onPointerLeaveWindow() {
+    if (chromeHideBlocked()) return;
+    hideNow();
   }
   function hideNow() {
-    if (popoverType != null) return; // не гасим, пока открыты поповеры
+    if (chromeHideBlocked()) return;
     if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
     player.overlayVisible = false;
   }
@@ -857,6 +885,16 @@
 
   function onPointerActivity(e: Event) {
     if (e instanceof PointerEvent && e.pointerType === 'touch' && e.type === 'pointermove') return;
+    if (e instanceof PointerEvent && e.type === 'pointermove') {
+      const { clientX: x, clientY: y } = e;
+      if (lastPointerPosition?.x === x && lastPointerPosition.y === y) return;
+      lastPointerPosition = { x, y };
+    }
+    showAndSchedule();
+  }
+
+  function onPlayerEnter(e: MouseEvent) {
+    lastPointerPosition = { x: e.clientX, y: e.clientY };
     showAndSchedule();
   }
 
@@ -865,6 +903,29 @@
       if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
       player.overlayVisible = true;
     }
+  });
+
+  /** После смены серии / seek из зоны автоскипа — снова запускаем idle-hide. */
+  let wasChromeHideBlocked = true;
+  $effect(() => {
+    const blocked = chromeHideBlocked() || player.switching || player.loadState !== 'ready';
+    const leftBlock = wasChromeHideBlocked && !blocked;
+    wasChromeHideBlocked = blocked;
+    if (!leftBlock) return;
+    if (!player.overlayVisible) return;
+    scheduleHide();
+  });
+
+  $effect(() => {
+    const active = player.overlayVisible
+      && !player.paused
+      && player.loadState === 'ready'
+      && !player.switching
+      && !chromeHideBlocked();
+    if (!active) return;
+    untrack(() => {
+      if (!idleTimerArmed) scheduleHide();
+    });
   });
 
   function bindCoreEls() {
@@ -882,7 +943,7 @@
       title: watchState.title || '',
       sourceName: watchState.sourceName || '',
     }, { origin: 'system' });
-    if (videoEl && player.useVideo) {
+    if (videoEl && player.useVideo && needsWebAudio()) {
       // Всегда цепляем Web Audio (хотя бы passthrough), иначе mute/volume на <video> ломаются.
       void core.surround.setEqGains(player.eqGains).then(() =>
         core.surround.setEqLevel(player.eqLevel).then(() =>
@@ -897,6 +958,11 @@
   /** Снять постер/«Загрузка…» и показать кадр. Плашку ошибки убираем только если серия реально идёт. */
   function revealPlayerMedia() {
     player.switching = false;
+    if (reconnectUiTimer != null) {
+      clearTimeout(reconnectUiTimer);
+      reconnectUiTimer = null;
+    }
+    player.reconnecting = false;
     if (player.loadState === 'error') {
       const v = videoEl;
       const live = !!(player.useVideo && v && (
@@ -907,10 +973,12 @@
       player.loadState = 'ready';
       player.errorText = '';
       playbackAlt = null;
+      scheduleHide();
       return;
     }
     if (player.loadState === 'loading') player.loadState = 'ready';
     applyLobbyJoinSeekIfNeeded();
+    scheduleHide();
   }
 
   function mediaHasRenderableFrame(el: HTMLVideoElement | null | undefined): boolean {
@@ -1594,6 +1662,11 @@
     playbackAlt = null;
     const gen = ++playbackAltGen;
     player.switching = false;
+    if (reconnectUiTimer != null) {
+      clearTimeout(reconnectUiTimer);
+      reconnectUiTimer = null;
+    }
+    player.reconnecting = false;
     player.useVideo = false;
     player.playUrl = '';
     player.overlayVisible = true;
@@ -1607,6 +1680,32 @@
     if (text !== 'Не удалось воспроизвести скачанный файл.') {
       void loadPlaybackAlternative(gen, watchState.ep);
     }
+  }
+
+  function setPlayerReconnecting(active: boolean) {
+    if (player.loadState === 'error') {
+      if (reconnectUiTimer != null) {
+        clearTimeout(reconnectUiTimer);
+        reconnectUiTimer = null;
+      }
+      player.reconnecting = false;
+      return;
+    }
+    if (!active) {
+      if (reconnectUiTimer != null) {
+        clearTimeout(reconnectUiTimer);
+        reconnectUiTimer = null;
+      }
+      player.reconnecting = false;
+      return;
+    }
+    // Soft recovery is silent; only show a tiny hint if still reconnecting after a delay.
+    if (player.reconnecting || reconnectUiTimer != null) return;
+    reconnectUiTimer = setTimeout(() => {
+      reconnectUiTimer = null;
+      if (player.loadState === 'error' || player.switching || player.loadState === 'loading') return;
+      player.reconnecting = true;
+    }, 3_500);
   }
 
   function retryCurrentPlayback() {
@@ -1656,18 +1755,20 @@
     pUrl: string, useVid: boolean, ep: number,
     titleStr: string, srcName: string, dubId: string,
     seekTime?: number, initialPaused?: boolean,
+    resolveError?: string | null,
   ) {
     watchState.ep = ep; watchState.title = titleStr;
     watchState.sourceName = srcName; watchState.dubberId = dubId;
 
     const qs = new URLSearchParams({ releaseId: watchState.releaseId, sourceId: watchState.sourceId, ep: String(ep), title: titleStr, sourceName: srcName });
     if (dubId) qs.set('dubberId', dubId);
+    if (new URLSearchParams(window.location.search).get('webplayer') === '1') qs.set('webplayer', '1');
     if (typeof window.history.replaceState === 'function') {
       window.history.replaceState(null, '', `${window.location.pathname}?${qs}`);
     }
 
     if (!useVid && !allowsIframeFallback(core.origEpUrl || pUrl)) {
-      showPlayerError(core.origEpUrl || pUrl);
+      showPlayerError(core.origEpUrl || pUrl, userPlaybackError(core.origEpUrl || pUrl, resolveError));
       return;
     }
 
@@ -1680,7 +1781,8 @@
       core.applySource({
         url: pUrl, useVideo: false, ep, title: titleStr, sourceName: srcName, dubberId: dubId,
         volume: player.volume, muted: player.muted, onFallback: () => {}, onReresolve: () => {},
-        onWatchdogReresolve: async () => null, syncPlaybackRate: syncVideoPlaybackRate,
+        onWatchdogReresolve: async () => null, onReconnect: setPlayerReconnecting,
+        syncPlaybackRate: syncVideoPlaybackRate,
       });
       upscaleHoldForNewFrame = false;
       revealPlayerMedia();
@@ -1701,8 +1803,10 @@
       releaseId: watchState.releaseId,
       sourceId: watchState.sourceId,
       syncPlaybackRate: syncVideoPlaybackRate,
+      onReconnect: setPlayerReconnecting,
       onFallback: () => {
         player.switching = false;
+        player.reconnecting = false;
         if (pUrl.startsWith('anix-local:')) {
           showPlayerError('', 'Не удалось воспроизвести скачанный файл.');
           return;
@@ -1722,10 +1826,11 @@
       onReresolve: (savedTime, wasPaused) => {
         const curEpUrl = core.origEpUrl;
         if (!curEpUrl) return;
+        setPlayerReconnecting(true);
         core.invalidateCache(curEpUrl);
         core.resolve(curEpUrl, false).then(res => {
           if (!res.useVideo || !res.playUrl) {
-            applyVideoAndUI(curEpUrl, false, ep, titleStr, srcName, dubId);
+            applyVideoAndUI(curEpUrl, false, ep, titleStr, srcName, dubId, undefined, undefined, res.error);
             return;
           }
           const resolved = applyQualityMap(res.qualityMap, res.currentQuality, res.playUrl);
@@ -1735,6 +1840,7 @@
       onWatchdogReresolve: async () => {
         const embedUrl = core.origEpUrl;
         if (!embedUrl) return null;
+        setPlayerReconnecting(true);
         core.invalidateCache(embedUrl);
         const res = await core.resolve(embedUrl, false, 3);
         if (!res.useVideo || !res.playUrl) return null;
@@ -1753,6 +1859,7 @@
 
   function beginMediaCover(nextReleaseId?: string) {
     player.switching = true;
+    player.reconnecting = false;
     try { videoEl?.pause(); } catch { /* ignore */ }
     holdUpscaleForNewSource(0);
     player.upscaleCanvasOn = false;
@@ -1805,11 +1912,11 @@
         return;
       }
       setOrigEpisodeUrl(episode.url);
-      const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq, skip } = await core.resolve(episode.url, episode.iframe);
+      const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq, skip, error: resolveError } = await core.resolve(episode.url, episode.iframe);
       if (myGen !== episodeLoadGen) return;
       setSkipMarks(skip, { carry: true });
       const resolved = applyQualityMap(qualityMap, cq, pUrl, { resetManualLock: true });
-      applyVideoAndUI(resolved.url, uv, ep, titleStr, srcName, dubId, seekTime, initialPaused);
+      applyVideoAndUI(resolved.url, uv, ep, titleStr, srcName, dubId, seekTime, initialPaused, resolveError);
       refreshSourceNameFromApi();
       applyLobbyJoinSeekIfNeeded();
     }).catch(() => {
@@ -2235,10 +2342,22 @@
         return;
       }
       fluo.setProgress(targetTime, { origin: 'user' });
+      sendToLobby('seek', targetTime);
+      showAndSchedule();
     }
   }
 
   let volumeBeforeMute = 50;
+
+  /**
+   * Телефон: Web Audio (createMediaElementSource) на WebView с MSE даёт писк/тишину/рывки звука
+   * (частота AudioContext не совпадает с 44,1 кГц потока, маршрут рвётся при паузе). Без объёмного звука и эквалайзера
+   * играем напрямую через <video> — громкость и mute работают штатно.
+   */
+  function needsWebAudio(): boolean {
+    if (!document.documentElement.classList.contains('mobile-mode')) return true;
+    return player.surroundMode !== 'off' || player.eqLevel !== 0;
+  }
 
   function applyVolumeToMedia() {
     const muted = player.muted || player.volume <= 0;
@@ -2253,7 +2372,7 @@
   /** После жеста — уровень + починить маршрут, если source был оборван. */
   async function applyVolumeToMediaNow() {
     applyVolumeToMedia();
-    if (!videoEl || !player.useVideo) return;
+    if (!videoEl || !player.useVideo || !needsWebAudio()) return;
     try {
       if (!core.surround.attached) {
         await core.surround.attach(videoEl);
@@ -2308,7 +2427,68 @@
     return registerPlayerMuteToggle(toggleMute);
   });
 
+  let pipActive = $state(false);
+  let pipHidden = $state(false);
+  let pipWasUpscale = $state(false);
+  let pipClosing = $state(false);
+
+  const pipEpisodeLabel = $derived.by(() => {
+    const current = episodes.find((item) => item.position === watchState.ep);
+    return episodeHistoryLabel(current ?? { position: watchState.ep, name: null }, episodes);
+  });
+
+  function syncPlayerWindowTitle() {
+    if (!pipActive) return;
+    const title = (watchState.title || '').trim();
+    const episode = pipEpisodeLabel;
+    const label = title && episode ? `${title} · ${episode}` : (title || 'AnixApp');
+    document.title = label;
+    window.electron?.setPlayerWindowTitle?.({ title, episode });
+  }
+
+  $effect(() => {
+    const _title = watchState.title;
+    const _ep = pipEpisodeLabel;
+    if (!pipActive) return;
+    syncPlayerWindowTitle();
+  });
+
+  function setPipChrome(active: boolean) {
+    pipActive = active;
+    document.body.classList.toggle('player-pip', active);
+    if (!active) pipHidden = false;
+  }
+
+  function restoreAfterPip() {
+    setPipChrome(false);
+    document.title = 'AnixApp — Просмотр';
+    window.electron?.setPlayerWindowTitle?.({ title: '', episode: '' });
+    if (pipWasUpscale && player.upscaleEnabled) void startUpscale();
+    pipWasUpscale = false;
+    showAndSchedule();
+  }
+
+  async function requestVideoPip() {
+    const video = videoEl as (HTMLVideoElement & {
+      requestPictureInPicture?: () => Promise<PictureInPictureWindow>;
+    }) | undefined;
+    if (!video?.requestPictureInPicture || document.pictureInPictureEnabled === false) return false;
+
+    try {
+      await video.requestPictureInPicture();
+      setPipChrome(true);
+      pipHidden = false;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function toggleFullscreen(opts?: { osd?: boolean }) {
+    if (pipActive) {
+      void exitPip({ fullscreen: true, osd: opts?.osd });
+      return;
+    }
     void (async () => {
       const next = await (window as any).electron?.togglePlayerFullScreen?.();
       if (typeof next === 'boolean') {
@@ -2320,11 +2500,87 @@
     })();
   }
 
+  const hotspotClicks = createClickOrDblclick({
+    onSingle: () => {
+      showAndSchedule();
+      togglePlay();
+    },
+    onDouble: () => toggleFullscreen({ osd: true }),
+  });
+
+  $effect(() => () => hotspotClicks.dispose());
+
   async function toggleAlwaysOnTop(opts?: { osd?: boolean }) {
     const next = await (window as any).electron?.togglePlayerAlwaysOnTop?.();
     const pinned = !!next;
     window.dispatchEvent(new CustomEvent('player-always-on-top', { detail: pinned }));
     if (opts?.osd) showOsd(pinned ? 'Поверх всех окон' : 'Окно откреплено');
+  }
+
+  async function enterPip(opts?: { osd?: boolean }) {
+    if (pipActive) return;
+    if (!player.useVideo || !videoEl) {
+      showOsd('PiP доступен только для видео-потока', { warn: true });
+      return;
+    }
+    pipWasUpscale = player.upscaleEnabled && player.upscaleType !== 'off';
+    if (pipWasUpscale) stopUpscale();
+    const opened = await requestVideoPip();
+    if (!opened) {
+      if (pipWasUpscale && player.upscaleEnabled) void startUpscale();
+      pipWasUpscale = false;
+      showOsd('Не удалось открыть картинку в картинке', { warn: true });
+      return;
+    }
+    if (player.isFullscreen) {
+      const left = await window.electron?.togglePlayerFullScreen?.();
+      player.isFullscreen = left === true;
+    }
+    if (opts?.osd) showOsd('Картинка в картинке');
+  }
+
+  async function exitPip(opts?: { fullscreen?: boolean; osd?: boolean }) {
+    if (!pipActive && !opts?.fullscreen) return;
+    pipClosing = true;
+    if (document.pictureInPictureElement === videoEl) {
+      try {
+        await document.exitPictureInPicture();
+      } catch { /* PiP may already be closed by the OS. */ }
+    }
+    pipClosing = false;
+    let fullscreen = !!opts?.fullscreen;
+    if (fullscreen) {
+      const next = await window.electron?.togglePlayerFullScreen?.();
+      fullscreen = next !== false;
+    }
+    restoreAfterPip();
+    player.isFullscreen = fullscreen;
+    if (opts?.osd) showOsd(fullscreen ? 'Полный экран' : 'Обычный режим');
+  }
+
+  function togglePip(opts?: { osd?: boolean }) {
+    if (pipActive) void exitPip({ osd: opts?.osd });
+    else void enterPip({ osd: opts?.osd });
+  }
+
+  async function hidePipWindow() {
+    if (!pipActive || pipHidden) return;
+    pipHidden = true;
+    pipClosing = true;
+    if (document.pictureInPictureElement === videoEl) {
+      try {
+        await document.exitPictureInPicture();
+      } catch {
+        pipHidden = false;
+      }
+    }
+    pipClosing = false;
+  }
+
+  async function showPipWindow() {
+    if (!pipActive || !pipHidden) return;
+    const opened = await requestVideoPip();
+    if (!opened) pipHidden = true;
   }
 
   function applyAnime4kPreset(type: Anime4kType, intensity: Anime4kIntensity) {
@@ -2847,6 +3103,7 @@
         raf = requestAnimationFrame(tickFrame);
       };
       raf = requestAnimationFrame(tickFrame);
+      if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
       player.overlayVisible = true;
 
       return () => {
@@ -2874,6 +3131,7 @@
         raf = requestAnimationFrame(tickFrame);
       };
       raf = requestAnimationFrame(tickFrame);
+      if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
       player.overlayVisible = true;
 
       return () => {
@@ -2964,6 +3222,7 @@
     }
     if (e.code === hotkeys.alwaysOnTopCode) {
       e.preventDefault();
+      if (pipActive) return;
       void toggleAlwaysOnTop({ osd: true });
     }
   }
@@ -3212,13 +3471,13 @@
     player.loadState = 'loading';
     await rememberCdnsAndSync([raw]);
     try {
-      const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq, skip } = await core.resolve(raw, false);
+      const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq, skip, error: resolveError } = await core.resolve(raw, false);
       await rememberCdnsAndSync([pUrl, ...Object.values(qualityMap || {})]);
       const resolved = applyQualityMap(qualityMap, cq, pUrl, { resetManualLock: true });
       setSkipMarks(skip, { carry: false });
       player.loadState = 'ready';
       await tick();
-      applyVideoAndUI(resolved.url, uv, 1, watchState.title, watchState.sourceName, '');
+      applyVideoAndUI(resolved.url, uv, 1, watchState.title, watchState.sourceName, '', undefined, undefined, resolveError);
       if (uv) bindVideoElementListeners();
       showAndSchedule();
     } catch {
@@ -3426,6 +3685,14 @@
       player.paused = false;
       sendToLobby('play');
     }, { signal });
+    el.addEventListener('enterpictureinpicture', () => {
+      if (!pipActive) setPipChrome(true);
+      syncPlayerWindowTitle();
+    }, { signal });
+    el.addEventListener('leavepictureinpicture', () => {
+      if (pipClosing || !pipActive) return;
+      restoreAfterPip();
+    }, { signal });
     el.addEventListener('pause', () => {
       if (isApplyingSync || localMediaSwap || preventAutoPause || el.seeking) return;
       if (inLobbyRoom()) {
@@ -3499,7 +3766,10 @@
     player.playbackRate = readStoredPlaybackRate();
 
     if ((window as any).electron?.getSettings) {
-      (window as any).electron.getSettings().then((s: any) => {
+      void Promise.all([
+        (window as any).electron.getSettings() as Promise<any>,
+        initWebGpuAvailability(true),
+      ]).then(([s]) => {
         player.debugOverlay = s?.playerDebugOverlay === true;
         adaptiveQualityByWindow = s?.adaptiveQualityByWindow === true;
         hotkeys = normalizePlayerHotkeys(s?.playerHotkeys);
@@ -3509,7 +3779,7 @@
         void core.surround.setEqGains(player.eqGains).then(() =>
           core.surround.setEqLevel(player.eqLevel).then(() =>
             core.surround.setMode(player.surroundMode).then(() => {
-              if (videoEl && player.useVideo) {
+              if (videoEl && player.useVideo && needsWebAudio()) {
                 return core.surround.attach(videoEl).then(() => applyVolumeToMedia());
               }
             }),
@@ -3520,6 +3790,8 @@
         }
         if (adaptiveQualityByWindow) scheduleAdaptiveQuality();
       }).catch(() => {});
+    } else {
+      void initWebGpuAvailability(true);
     }
 
     const flushEqOnLeave = () => persistEqSettings({ immediate: true });
@@ -3603,12 +3875,12 @@
         }
 
         setOrigEpisodeUrl(episode.url);
-        const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq, skip } = await core.resolve(episode.url, episode.iframe);
+        const { playUrl: pUrl, useVideo: uv, qualityMap, currentQuality: cq, skip, error: resolveError } = await core.resolve(episode.url, episode.iframe);
         const resolved = applyQualityMap(qualityMap, cq, pUrl, { resetManualLock: true });
         setSkipMarks(skip, { carry: true });
         player.loadState = 'ready';
         await tick();
-        applyVideoAndUI(resolved.url, uv, ep, watchState.title, watchState.sourceName, watchState.dubberId, initialSeek, initialJoinPaused);
+        applyVideoAndUI(resolved.url, uv, ep, watchState.title, watchState.sourceName, watchState.dubberId, initialSeek, initialJoinPaused, resolveError);
         if (initialSeek != null) rememberLobbyJoinSeek(initialSeek);
         refreshDubberNameFromApi();
         refreshSourceNameFromApi();
@@ -3772,6 +4044,11 @@
           return;
         }
         if (!p?.releaseId || !p.sourceId || episodeIndex(p.ep) == null) return;
+        if (p.webPlayer === true) {
+          const current = new URLSearchParams(window.location.search);
+          current.set('webplayer', '1');
+          window.history.replaceState(null, '', `${window.location.pathname}?${current.toString()}`);
+        }
         lobbyIdleMode = false;
         soloEmptyIdle = false;
         externalPlaybackUrl = '';
@@ -4121,6 +4398,7 @@
         const d = e.detail as LobbyWaitOverlay;
         lobbyWaitOverlay = d ?? null;
       }) as EventListener],
+
     ];
 
     handlers.forEach(([evt, fn]) => window.addEventListener(evt, fn));
@@ -4130,7 +4408,7 @@
     window.addEventListener('wheel', onWheel, wheelOpts);
     window.addEventListener('pointermove', onPointerActivity, true);
     window.addEventListener('pointerdown', onPointerActivity, true);
-    document.addEventListener('mouseenter', showAndSchedule, true);
+    window.addEventListener('blur', onPointerLeaveWindow);
 
     return () => {
       videoListenersAbort?.abort();
@@ -4144,7 +4422,7 @@
       window.removeEventListener('wheel', onWheel, wheelOpts);
       window.removeEventListener('pointermove', onPointerActivity, true);
       window.removeEventListener('pointerdown', onPointerActivity, true);
-      document.removeEventListener('mouseenter', showAndSchedule, true);
+      window.removeEventListener('blur', onPointerLeaveWindow);
       stopUpscale();
       core.destroy();
       ro?.disconnect();
@@ -4153,6 +4431,7 @@
       if (applySyncTimer)  clearTimeout(applySyncTimer);
       if (idleTimer)       clearTimeout(idleTimer);
       if (osdTimer)        clearTimeout(osdTimer);
+      if (reconnectUiTimer) clearTimeout(reconnectUiTimer);
       if (adaptiveQualityTimer) clearTimeout(adaptiveQualityTimer);
     };
   });
@@ -4185,6 +4464,7 @@
     muted: player.muted,
     volume: player.volume,
     isFullscreen: player.isFullscreen,
+    pipActive,
     episodes,
     dubbers,
     sources: dubberSources,
@@ -4237,6 +4517,7 @@
     ontogglePinDub: togglePinDubber,
     onclosePopover: () => { popoverType = null; },
     onfullscreen: toggleFullscreen,
+    onpip: () => togglePip({ osd: true }),
     onchangeRate: changePlaybackRate,
     onchangeAspect: changeAspectRatio,
     onchangeSurround: (mode) => changeSurroundMode(mode, { osd: true }),
@@ -4266,7 +4547,8 @@
 <div class="view view-watch">
   <div
     class="watch-page watch-page--anidesk {!player.useVideo ? 'watch-page--iframe-mode' : ''}"
-    class:watch-page--chrome-hidden={player.loadState === 'ready' && !player.overlayVisible}
+    class:watch-page--pip={pipActive}
+    class:watch-page--chrome-hidden={player.loadState === 'ready' && !player.overlayVisible && !pipActive}
     class:watch-page--error={player.loadState === 'error'}
     class:watch-page--lobby={inLobby}
     class:watch-page--lobby-sidebar={inLobby && sidebarOpen}
@@ -4274,7 +4556,8 @@
     bind:this={playerWrapEl}
     onpointermove={onPointerActivity}
     onpointerdown={onPointerActivity}
-    onmouseenter={showAndSchedule}
+    onmouseenter={onPlayerEnter}
+    onmouseleave={onPointerLeaveWindow}
     role="presentation"
   >
     <div class="watch-page__player-wrap">
@@ -4285,7 +4568,7 @@
           class="watch-page__iframe"
           src={!player.useVideo ? player.playUrl : ''}
           allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-          referrerpolicy="no-referrer-when-downgrade"
+          referrerpolicy="origin-when-cross-origin"
           hidden={player.useVideo || player.loadState !== 'ready' || player.switching || !watchState.releaseId}
           title="Видео плеер"
         ></iframe>
@@ -4301,9 +4584,35 @@
           <canvas
             bind:this={canvasEl}
             class="watch-page__upscale-canvas {player.aspectRatio !== 'auto' ? `watch-page__upscale-canvas--ratio watch-page__upscale-canvas--ratio-${player.aspectRatio.replace('/', '-')}` : ''}"
-            class:watch-page__upscale-canvas--on={player.upscaleCanvasOn && !player.switching}
+            class:watch-page__upscale-canvas--on={player.upscaleCanvasOn && !player.switching && !pipActive}
           ></canvas>
         {/key}
+
+        {#if pipActive}
+          <div class="watch-page__pip-standby" role="status">
+            <p class="watch-page__pip-standby-kicker">Картинка в картинке</p>
+            <p class="watch-page__pip-standby-title">{watchState.title || 'Воспроизведение'}</p>
+            <p class="watch-page__pip-standby-ep">{pipEpisodeLabel} открыта в окне PiP</p>
+            <p class="watch-page__pip-standby-note">Видео сейчас в отдельном окне. Anime4K в режиме PiP не работает и включится снова, когда плеер вернётся сюда.</p>
+            <div class="watch-page__pip-standby-actions">
+              {#if pipHidden}
+                <button type="button" class="watch-page__open-browser" onclick={() => { void showPipWindow(); }}>
+                  Показать окно
+                </button>
+              {:else}
+                <button type="button" class="watch-page__open-browser" onclick={() => { void hidePipWindow(); }}>
+                  Скрыть окно
+                </button>
+              {/if}
+              <button type="button" class="watch-page__open-browser" onclick={() => { void exitPip({ osd: true }); }}>
+                Вернуть сюда
+              </button>
+              <button type="button" class="watch-page__open-browser" onclick={() => { void exitPip({ fullscreen: true, osd: true }); }}>
+                Полный экран
+              </button>
+            </div>
+          </div>
+        {/if}
 
         {#if player.loadState === 'loading' || player.switching}
           <div class="watch-page__poster-layer" aria-hidden="true">
@@ -4372,23 +4681,25 @@
             {/if}
           </p>
           <div class="watch-page__player-error-actions">
-            <button
-              type="button"
-              class="watch-page__player-error-btn"
+            <UiV2Button
+              label="Попробовать снова"
+              size="md"
+              variant="chrome"
               onclick={retryCurrentPlayback}
-            >
-              Попробовать снова
-            </button>
+            />
             {#if playbackAlt}
-              <button
-                type="button"
-                class="watch-page__player-error-btn watch-page__player-error-btn--secondary"
+              <UiV2Button
+                label={playbackAltLabel(playbackAlt)}
+                size="md"
+                variant="primary"
                 onclick={acceptPlaybackAlt}
-              >
-                {playbackAltLabel(playbackAlt)}
-              </button>
+              />
             {/if}
           </div>
+        </div>
+      {:else if player.reconnecting && player.loadState !== 'loading' && !player.switching}
+        <div class="watch-page__player-reconnect" role="status" aria-live="polite">
+          <p class="watch-page__player-reconnect-title">Восстановление…</p>
         </div>
       {/if}
 
@@ -4450,7 +4761,8 @@
       <div
         class="watch-page__chrome-hotspot"
         aria-hidden="true"
-        onclick={() => { showAndSchedule(); togglePlay(); }}
+        onclick={(e) => hotspotClicks.handle(e)}
+        ondblclick={(e) => e.preventDefault()}
       ></div>
     </div>
 

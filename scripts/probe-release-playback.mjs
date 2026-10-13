@@ -20,6 +20,7 @@ const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
 const client = attachLegacyEndpoints(new Anixart({
   baseUrl: cfg.baseUrl || 'https://api-s.anixsekai.com',
   token: cfg.token || undefined,
+  userAgent: 'AnixartApp/10.0-26090418 (Android 14; SDK 34; x86_64; ROG ASUS AI2201_B; ru)',
 }));
 
 function hostOf(url) {

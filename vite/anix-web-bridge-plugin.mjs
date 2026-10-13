@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createRequire } from 'module';
+import https from 'node:https';
 
 const require = createRequire(import.meta.url);
 const { proxyMediaRequest, corsHeaders } = require('../electron/lib/media-proxy.js');
@@ -43,7 +44,10 @@ function shouldTryNextOrigin(res, path, originIndex, total) {
 
 /** ffmpeg download / render can take minutes — never apply the short proxy timeout. */
 function isLongRunningAnixbackPath(path) {
-  return /\/admin\/overview\/overrides\/[^/?#]+\/(source-url|source|render|bg)\b/.test(path);
+  return (
+    /\/admin\/overview\/overrides\/[^/?#]+\/(source-url|source|render|bg)\b/.test(path)
+    || /\/api\/admin\/ads(\/|$)/.test(path)
+  );
 }
 
 function readBody(req, maxBytes = 4 * 1024 * 1024) {
@@ -77,23 +81,149 @@ function sendJson(res, code, payload) {
   res.end(JSON.stringify(payload));
 }
 
-async function proxyCdn(url, res) {
+async function proxyCdnViaRelay(url) {
   try {
-    const upstream = await fetch(url, {
-      headers: {
-        Referer: ANIXART_REFERER,
-        Origin: ANIXART_ORIGIN,
-        Accept: 'image/*,*/*',
-        'User-Agent': 'AnixApp/0.1 (Web Dev)',
-      },
-    });
-    const ct = upstream.headers.get('content-type') || 'application/octet-stream';
-    res.writeHead(upstream.status, { 'Content-Type': ct, 'Cache-Control': 'public, max-age=3600' });
-    const buf = Buffer.from(await upstream.arrayBuffer());
-    res.end(buf);
-  } catch (err) {
-    sendJson(res, 502, { ok: false, error: String(err?.message || err) });
+    const { loadLocalEnv } = require('../electron/lib/load-dotenv.js');
+    loadLocalEnv();
+  } catch {
+    /* optional */
   }
+  const key = String(process.env.ANIXART_PROXY_APP_KEY || process.env.ANIXAPP_PROXY_KEY || '').trim();
+  if (!key) throw new Error('CDN relay unavailable: proxy key not set');
+
+  const relayUrl = `https://api.anixapp.com/anixart-api/cdn-asset?u=${encodeURIComponent(url)}`;
+  const upstream = await fetch(relayUrl, {
+    method: 'GET',
+    headers: {
+      Accept: 'image/*,application/octet-stream,*/*',
+      'User-Agent': 'AnixApp/0.1 (Web Dev)',
+      'x-anixapp-proxy-key': key,
+    },
+    redirect: 'follow',
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!upstream.ok) throw new Error(`CDN relay HTTP ${upstream.status}`);
+  const buf = Buffer.from(await upstream.arrayBuffer());
+  if (!buf.length) throw new Error('Empty CDN relay body');
+  const ct = upstream.headers.get('content-type') || 'application/octet-stream';
+  return { buf, ct };
+}
+
+async function proxyCdn(url, res) {
+  const headers = {
+    Referer: ANIXART_REFERER,
+    Origin: ANIXART_ORIGIN,
+    Accept: 'image/*,*/*',
+    'User-Agent': 'AnixApp/0.1 (Web Dev)',
+  };
+  const candidates = [];
+  try {
+    const parsed = new URL(url);
+    const parts = parsed.hostname.split('.');
+    parsed.hostname = parts.length > 2
+      ? `mirror-${parts[0]}.${parts.slice(1).join('.')}`
+      : `mirror.${parsed.hostname}`;
+    const mirror = parsed.toString();
+    if (mirror !== url) candidates.push(mirror);
+  } catch {
+    /* keep original only */
+  }
+  candidates.push(url);
+
+  const DUMMY_MIN = 400;
+
+  async function fetchCandidate(candidate, timeoutMs) {
+    return await new Promise((resolve, reject) => {
+      const req = https.get(candidate, {
+        headers,
+        timeout: timeoutMs,
+        rejectUnauthorized: false,
+      }, (upstream) => {
+        if (!upstream.statusCode || upstream.statusCode < 200 || upstream.statusCode >= 300) {
+          upstream.resume();
+          reject(new Error(`CDN HTTP ${upstream.statusCode}`));
+          return;
+        }
+        const chunks = [];
+        upstream.on('data', (chunk) => chunks.push(chunk));
+        upstream.on('end', () => {
+          const buf = Buffer.concat(chunks);
+          if (!buf.length || buf.length < DUMMY_MIN) {
+            reject(new Error('CDN dummy/empty body'));
+            return;
+          }
+          const ct = String(upstream.headers['content-type'] || 'application/octet-stream');
+          resolve({ buf, ct });
+        });
+        upstream.on('error', reject);
+      });
+      req.on('timeout', () => {
+        req.destroy(new Error('timeout'));
+      });
+      req.on('error', reject);
+    });
+  }
+
+  const origin = url;
+  const mirror = candidates.find((c) => c !== origin) || null;
+
+  function writeCdn(winner, extra = {}) {
+    if (res.headersSent || res.writableEnded) return;
+    res.writeHead(200, {
+      'Content-Type': winner.ct,
+      'Cache-Control': 'public, max-age=3600',
+      ...extra,
+    });
+    res.end(winner.buf);
+  }
+
+  try {
+    writeCdn(await fetchCandidate(origin, 5000));
+    return;
+  } catch {
+    /* origin blocked / dummy — запасные пути */
+  }
+
+  let lastErr = null;
+  if (mirror) {
+    try {
+      writeCdn(await fetchCandidate(mirror, 3000));
+      return;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, Math.min(4000, 300 * 2 ** (attempt - 1))));
+    }
+
+    try {
+      writeCdn(await fetchCandidate(origin, 5000));
+      return;
+    } catch (err) {
+      lastErr = err;
+    }
+
+    if (mirror) {
+      try {
+        writeCdn(await fetchCandidate(mirror, 3000));
+        return;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+
+    try {
+      writeCdn(await proxyCdnViaRelay(url), { 'X-AnixApp-Cdn-Relay': '1' });
+      return;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+
+  sendJson(res, 502, { ok: false, error: String(lastErr?.message || lastErr || 'CDN fetch failed') });
 }
 
 async function proxyAnixback(req, res, url) {
@@ -149,8 +279,9 @@ async function proxyAnixback(req, res, url) {
         break;
       } catch (err) {
         lastErr = err;
-        // Admin / long-running: не уходим на следующий origin после timeout/сети.
-        if (longRunning || path.startsWith('/api/admin/')) break;
+        // Long-running: не прыгаем на другой origin.
+        // Admin: при недоступном localhost всё же пробуем prod (иначе сейвы «в никуда»).
+        if (longRunning) break;
       }
     }
 
@@ -166,7 +297,7 @@ async function proxyAnixback(req, res, url) {
       }
     }
     if (!outHeaders['cache-control']) {
-      if (path.startsWith('/fluo')) {
+      if (path.startsWith('/fluo') || path.startsWith('/api/ads') || path.startsWith('/api/admin/ads') || path.startsWith('/embed/')) {
         outHeaders['Cache-Control'] = 'no-store, no-cache, must-revalidate';
       } else {
         outHeaders['Cache-Control'] = path.includes('/uploads/')

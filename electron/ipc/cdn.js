@@ -1,7 +1,7 @@
 'use strict';
 
 const { ipcMain } = require('electron');
-const { fetchCdnJson, isAnixartCdnUrl } = require('../cdn-proxy');
+const { fetchCdnJson, fetchRemoteImage, isAnixartCdnUrl } = require('../cdn-proxy');
 
 function unwrapTarget(url) {
   if (!url || typeof url !== 'string') return '';
@@ -30,6 +30,16 @@ function register() {
       const target = unwrapTarget(url);
       if (!target || !isAnixartCdnUrl(target)) return null;
       return await fetchCdnJson(target);
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle('cdn:fetchImage', async (_, url) => {
+    try {
+      const target = unwrapTarget(url);
+      if (!target) return null;
+      return await fetchRemoteImage(target);
     } catch {
       return null;
     }

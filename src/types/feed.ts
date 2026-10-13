@@ -8,13 +8,18 @@ export type FeedDateFilter =
   | 4 // Год
   | 5; // Всё время
 
-export const FEED_DATE_OPTIONS: Array<{ id: FeedDateFilter; label: string }> = [
-  { id: 0, label: 'Последнее' },
-  { id: 1, label: '24 часа' },
-  { id: 2, label: 'Неделя' },
-  { id: 3, label: 'Месяц' },
-  { id: 4, label: 'Год' },
-  { id: 5, label: 'Всё время' },
+export const FEED_DATE_OPTIONS: Array<{
+  id: FeedDateFilter;
+  label: string;
+  /** Огонёк: популярно за этот период. 0 — хронология без огонька. */
+  popular: boolean;
+}> = [
+  { id: 0, label: 'Последнее', popular: false },
+  { id: 1, label: '24 часа', popular: true },
+  { id: 2, label: 'Неделя', popular: true },
+  { id: 3, label: 'Месяц', popular: true },
+  { id: 4, label: 'Год', popular: true },
+  { id: 5, label: 'Всё время', popular: true },
 ];
 
 export interface FeedChannel {
@@ -24,12 +29,20 @@ export interface FeedChannel {
   avatar?: string;
   cover?: string;
   is_blog?: boolean;
+  /** ID профиля владельца блога (не путать с id канала). */
+  blog_profile_id?: number;
   is_verified?: boolean;
   is_subscribed?: boolean;
+  is_muted?: boolean;
   is_creator?: boolean;
   is_administrator_or_higher?: boolean;
+  /** Участники могут предлагать записи на модерацию. */
+  is_article_suggestion_enabled?: boolean;
   subscriber_count?: number;
   article_count?: number;
+  creation_date?: number;
+  /** Unix-секунды последней статьи (для индикатора «свежее»). */
+  last_article_date?: number;
   /** Значок канала / блога (объект badge или URL). */
   badge?: unknown;
 }
@@ -47,24 +60,46 @@ export interface FeedArticleBlock {
   data?: Record<string, unknown>;
 }
 
+export interface FeedArticlePayload {
+  time?: number;
+  version?: string;
+  blocks?: FeedArticleBlock[];
+  block_count?: number;
+}
+
+export interface FeedArticleLastComment {
+  message?: string;
+  text?: string;
+  profile?: FeedProfile | null;
+  author?: FeedProfile | null;
+  creation_date?: number;
+  date?: number;
+  is_spoiler?: boolean;
+  is_deleted?: boolean;
+  vote_count?: number;
+}
+
 export interface FeedArticle {
   id: number;
   channel?: FeedChannel | null;
   author?: FeedProfile | null;
-  payload?: {
-    time?: number;
-    blocks?: FeedArticleBlock[];
-  };
+  /** Объект или JSON-строка — лента иногда отдаёт payload строкой. */
+  payload?: FeedArticlePayload | string;
   comment_count?: number;
   repost_count?: number;
   vote_count?: number;
+  /** 0 — нет, 1 — минус, 2 — плюс (как в Anixart API). */
   vote?: number;
+  tags?: Array<string | { name?: string; title?: string; tag?: string }>;
+  last_comment?: FeedArticleLastComment | null;
   creation_date?: number;
   last_update_date?: number;
   is_deleted?: boolean;
   is_under_moderation?: boolean;
   is_pinned?: boolean;
   is_muted?: boolean;
+  /** Пост подписан автором канала (показать «Автор: …»). */
+  is_signed?: boolean;
   has_delete_enforcement?: boolean;
   contains_repost_article?: boolean;
   /** Вложенная статья при репосте. */

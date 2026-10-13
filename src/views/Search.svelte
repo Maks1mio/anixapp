@@ -14,6 +14,8 @@
   import type { ReleaseCardData } from '../types/release';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import { mapReleaseRawToCard } from '../utils/release-card';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
   import {
     buildViewStateKey,
     getViewState,
@@ -217,7 +219,7 @@
     isLoading = true;
 
     if (!append) {
-      loadState = 'loading';
+      if (loadState !== 'error') loadState = 'loading';
       currentPage = 0;
       hasMore = true;
       releaseResults = [];
@@ -282,7 +284,7 @@
       isLoading = false;
       attachInfiniteScroll();
     } catch (err) {
-      errorMsg = String(err);
+      errorMsg = headlineFromLoadError(err);
       loadState = 'error';
       isLoading = false;
     }
@@ -569,11 +571,7 @@
           <p class="search-page__state-title">Ищем «{currentQuery}»</p>
         </div>
       {:else if loadState === 'error'}
-        <div class="search-page__state search-page__state--error">
-          <p class="search-page__state-title">Не удалось выполнить поиск</p>
-          <p class="search-page__error">{errorMsg}</p>
-          <button type="button" class="search-page__retry" onclick={() => runSearch(currentQuery)}>Повторить</button>
-        </div>
+        <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void performSearch(false)} />
       {:else if loadState === 'empty'}
         <div class="search-page__state">
           <p class="search-page__state-title">Ничего не найдено</p>

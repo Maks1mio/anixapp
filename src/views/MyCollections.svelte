@@ -4,6 +4,8 @@
   import UiV2CollectionCardSkeleton from '../components/uikit-v2/UiV2CollectionCardSkeleton.svelte';
   import CollectionsHeaderActions from '../components/collections/CollectionsHeaderActions.svelte';
   import { iconArrowLeft } from '../components/icons';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
   import { navigate } from '../stores/navigation';
   import { mapCollectionCard } from '../utils/collection';
   import { ensureProfileId } from '../utils/profile';
@@ -27,7 +29,7 @@
 
     isLoading = true;
     const nextPage = page;
-    if (nextPage === 0 && items.length === 0) loadState = 'loading';
+    if (nextPage === 0 && items.length === 0 && loadState !== 'error') loadState = 'loading';
 
     try {
       const data = (await window.anixApi.collection.profileCollections(profileId, nextPage)) as {
@@ -47,7 +49,7 @@
       requestAnimationFrame(checkIfNeedsMore);
     } catch (err) {
       if (items.length === 0) {
-        errorMsg = String(err);
+        errorMsg = headlineFromLoadError(err);
         loadState = 'error';
       }
     } finally {
@@ -107,22 +109,7 @@
       <UiV2CollectionCardSkeleton count={6} />
     </div>
   {:else if loadState === 'error'}
-    <div class="discover-page__error">
-      <p>{errorMsg || 'Не удалось загрузить коллекции'}</p>
-      <button
-        type="button"
-        class="discover-page__retry"
-        onclick={() => {
-          items = [];
-          page = 0;
-          hasMore = true;
-          loadState = 'loading';
-          void loadPage();
-        }}
-      >
-        Повторить
-      </button>
-    </div>
+    <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadPage()} />
   {:else if loadState === 'empty'}
     <div class="discover-page__empty">Ой, а тут коллекций нет!</div>
   {:else}

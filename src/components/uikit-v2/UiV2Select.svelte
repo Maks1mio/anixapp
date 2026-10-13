@@ -3,6 +3,7 @@
   import { scale } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { portal } from '../../actions/portal';
+  import { uiv2CustomScroll } from '../../actions/uiv2CustomScroll';
   import { iconArrowUpDown, iconCheck, iconChevronDown } from '../icons';
 
   export type UiV2SelectStatus = 'good' | 'medium' | 'bad' | 'offline' | 'neutral';
@@ -33,6 +34,10 @@
     class?: string;
     /** Компактный триггер — только иконка (тулбары) */
     compact?: boolean;
+    /** Крупный заголовок без рамки (сортировка ленты как на Android). */
+    appearance?: 'default' | 'title';
+    /** Доступное имя, если нет видимого label */
+    ariaLabel?: string;
     onChange?: (value: string) => void;
   };
 
@@ -45,8 +50,12 @@
     id = `uiv2-select-${Math.random().toString(36).slice(2, 9)}`,
     class: className = '',
     compact = false,
+    appearance = 'default',
+    ariaLabel,
     onChange,
   }: Props = $props();
+
+  const isTitle = $derived(appearance === 'title');
 
   const GAP = 8;
   const EDGE = 10;
@@ -81,12 +90,13 @@
     await tick();
 
     const rect = triggerEl.getBoundingClientRect();
-    panelWidth = compact ? 0 : rect.width;
+    panelWidth = compact || isTitle ? 0 : rect.width;
 
     const spaceBelow = window.innerHeight - rect.bottom - GAP;
     const spaceAbove = rect.top - GAP;
     // Предпочитаем вниз, чтобы панель реже накрывала поля выше (поиск)
-    const need = Math.min(panelEl.scrollHeight || 180, 260);
+    const listEl = panelEl.querySelector<HTMLElement>('.uiv2-select__list');
+    const need = Math.min(listEl?.scrollHeight || panelEl.scrollHeight || 180, 260);
     openDown = spaceBelow >= Math.min(need, 140) || spaceBelow >= spaceAbove;
     originY = openDown ? '0%' : '100%';
     panelMaxHeight = Math.max(120, openDown ? spaceBelow : spaceAbove);
@@ -186,6 +196,7 @@
   class:uiv2-select--disabled={disabled}
   class:uiv2-select--open={open}
   class:uiv2-select--compact={compact}
+  class:uiv2-select--title={isTitle}
 >
   {#if label && !compact}
     <label class="uiv2-select__label" for="{id}-trigger">{label}</label>
@@ -202,7 +213,7 @@
       aria-haspopup="listbox"
       aria-expanded={open}
       aria-controls={open ? listboxId : undefined}
-      aria-label={compact ? compactTitle : undefined}
+      aria-label={ariaLabel ?? (compact ? compactTitle : undefined)}
       title={compact ? compactTitle : undefined}
       {disabled}
       onclick={togglePanel}
@@ -259,65 +270,74 @@
       class="uiv2-select__panel"
       class:uiv2-select__panel--up={!openDown}
       class:uiv2-select__panel--with-leading={showLeading}
+      class:uiv2-select__panel--title={isTitle}
       role="listbox"
       tabindex="-1"
       aria-labelledby="{id}-trigger"
       style:left="{panelLeft}px"
       style:top="{panelTop}px"
-      style:width={compact ? undefined : `${panelWidth}px`}
-      style:min-width={compact ? '15rem' : undefined}
+      style:width={compact || isTitle ? undefined : `${panelWidth}px`}
+      style:min-width={compact ? '15rem' : isTitle ? '13rem' : undefined}
       style:max-height="{panelMaxHeight}px"
       style:transform-origin="50% {originY}"
       transition:scale={{ duration: 200, start: 0.97, easing: cubicOut }}
       onpointerdown={(e) => e.stopPropagation()}
     >
-      <ul class="uiv2-select__list">
-        {#each options as opt (opt.value)}
-          <li class="uiv2-select__item">
-            <button
-              type="button"
-              class="uiv2-select__option"
-              class:uiv2-select__option--selected={value === opt.value}
-              class:uiv2-select__option--disabled={opt.disabled}
-              class:uiv2-select__option--with-desc={!!opt.desc || !!opt.warning}
-              role="option"
-              aria-selected={value === opt.value}
-              disabled={opt.disabled}
-              onclick={() => selectOption(opt)}
-            >
-              {#if showLeading}
-                <span class="uiv2-select__option-leading">
-                  {#if opt.status}
-                    <span class="uiv2-status-dot uiv2-status-dot--{opt.status}" aria-hidden="true"></span>
-                  {/if}
-                  {#if opt.icon}
-                    <span class="uiv2-select__option-icon">{@html opt.icon}</span>
-                  {/if}
-                </span>
-              {/if}
-              <span class="uiv2-select__option-body">
-                <span class="uiv2-select__option-label">{opt.label}</span>
-                {#if opt.desc}
-                  <span class="uiv2-select__option-desc">{opt.desc}</span>
-                {/if}
-                {#if opt.warning}
-                  <span class="uiv2-select__option-warning">{opt.warning}</span>
-                {/if}
-              </span>
-              <span class="uiv2-select__option-trailing">
-                {#if value !== opt.value && opt.hint}
-                  <span class="uiv2-select__option-hint">{opt.hint}</span>
-                {/if}
-                {#if value === opt.value}
-                  <span class="uiv2-select__option-check" aria-hidden="true">
-                    {@html iconCheck(16)}
+      <div
+        class="uiv2-select__scroll uiv2-scroll-area uiv2-scroll-area--y"
+        use:uiv2CustomScroll={{ axis: 'y', viewportSelector: '.uiv2-select__list' }}
+      >
+        <ul class="uiv2-select__list uiv2-scroll-area__viewport" data-uiv2-scroll>
+          {#each options as opt (opt.value)}
+            <li class="uiv2-select__item">
+              <button
+                type="button"
+                class="uiv2-select__option"
+                class:uiv2-select__option--selected={value === opt.value}
+                class:uiv2-select__option--disabled={opt.disabled}
+                class:uiv2-select__option--with-desc={!!opt.desc || !!opt.warning}
+                role="option"
+                aria-selected={value === opt.value}
+                disabled={opt.disabled}
+                onclick={() => selectOption(opt)}
+              >
+                {#if showLeading}
+                  <span class="uiv2-select__option-leading">
+                    {#if opt.status}
+                      <span class="uiv2-status-dot uiv2-status-dot--{opt.status}" aria-hidden="true"></span>
+                    {/if}
+                    {#if opt.icon}
+                      <span class="uiv2-select__option-icon">{@html opt.icon}</span>
+                    {/if}
                   </span>
                 {/if}
-              </span>
-            </button>
-          </li>
-        {/each}
-      </ul>
+                <span class="uiv2-select__option-body">
+                  <span class="uiv2-select__option-label">{opt.label}</span>
+                  {#if opt.desc}
+                    <span class="uiv2-select__option-desc">{opt.desc}</span>
+                  {/if}
+                  {#if opt.warning}
+                    <span class="uiv2-select__option-warning">{opt.warning}</span>
+                  {/if}
+                </span>
+                <span class="uiv2-select__option-trailing">
+                  {#if value !== opt.value && opt.hint}
+                    <span class="uiv2-select__option-hint">{opt.hint}</span>
+                  {/if}
+                  {#if value === opt.value}
+                    <span class="uiv2-select__option-check" aria-hidden="true">
+                      {@html iconCheck(16)}
+                    </span>
+                  {/if}
+                </span>
+              </button>
+            </li>
+          {/each}
+        </ul>
+        <div class="uiv2-scroll-area__v-track" aria-hidden="true">
+          <div class="uiv2-scroll-area__v-thumb"></div>
+        </div>
+      </div>
     </div>
   </div>
 {/if}

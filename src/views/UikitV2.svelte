@@ -55,7 +55,18 @@
   import UiV2FeedPost from '../components/uikit-v2/UiV2FeedPost.svelte';
   import UiV2FeedPostSkeleton from '../components/uikit-v2/UiV2FeedPostSkeleton.svelte';
   import UiV2FeedSideNav from '../components/uikit-v2/UiV2FeedSideNav.svelte';
+  import UiV2FeedChannelCard from '../components/uikit-v2/UiV2FeedChannelCard.svelte';
+  import UiV2FeedRecommended from '../components/uikit-v2/UiV2FeedRecommended.svelte';
+  import UiV2ReleaseFriends, {
+    type UiV2ReleaseFriend,
+  } from '../components/uikit-v2/UiV2ReleaseFriends.svelte';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import { UIV2_FEED_POST_DEMO } from '../utils/uikit-v2-feed-post';
+  import {
+    ARTICLE_VOTE_PLUS,
+    nextArticleVoteCount,
+    normalizeArticleVote,
+  } from '../utils/feed-article';
   import { buildFeedArticleMenuItems } from '../utils/feed-article-menu';
   import type { FeedArticle } from '../types/feed';
   import { showToast } from '../stores/toast';
@@ -76,19 +87,20 @@
     formatPlaybackRate,
   } from '../utils/player-hotkeys';
 
-  type SectionId = 'tokens' | 'type' | 'controls' | 'surfaces' | 'cards' | 'posts' | 'comments' | 'menu';
+  type SectionId = 'tokens' | 'type' | 'controls' | 'surfaces' | 'cards' | 'posts' | 'comments' | 'menu' | 'release-friends';
 
   const sections: { id: SectionId; title: string; desc: string }[] = [
     { id: 'tokens', title: 'Токены', desc: 'Цвета, радиусы, тени — основа V2' },
     { id: 'type', title: 'Типографика', desc: 'Иерархия заголовков и текста' },
     { id: 'controls', title: 'Контролы', desc: 'Кнопки, pill-навигация, вкладки, поля' },
-    { id: 'surfaces', title: 'Поверхности', desc: 'Панели, модалки, карточки взаимодействия' },
+    { id: 'surfaces', title: 'Поверхности', desc: 'Панели, модалки, ошибка загрузки, карточки' },
     { id: 'cards', title: 'Карточки', desc: 'Аниме, карусель, обсуждения, коллекции, франшиза' },
     { id: 'posts', title: 'Посты', desc: 'Карточки ленты, репосты, медиа, боковая навигация' },
     { id: 'comments', title: 'Комментарии', desc: 'Треды, спойлеры, голоса, глубокая вложенность' },
     { id: 'menu', title: 'Popup Menu', desc: 'Вложенные меню, тоглы, копирование без закрытия' },
+    { id: 'release-friends', title: 'Друзья на релизе', desc: 'Блок друзей на странице тайтла: статусы, поиск, сетка' },
   ];
-  let active: SectionId = $state('posts');
+  let active: SectionId = $state('release-friends');
   let feedDemoNavId = $state('latest');
   let feedDemoTopicId = $state<number | null>(null);
   let feedDemoPosts = $state(structuredClone(UIV2_FEED_POST_DEMO));
@@ -106,15 +118,18 @@
     { id: 3, label: 'FrameLab', avatar: UIV2_FEED_POST_DEMO[2].channel.avatar },
   ];
 
-  function toggleFeedDemoVote(postId: string | number) {
+  function toggleFeedDemoVote(postId: string | number, nextVote: 0 | 1 | 2) {
     feedDemoPosts = feedDemoPosts.map((post) => {
       if (post.id !== postId) return post;
-      const voted = !post.voted;
-      const delta = voted ? 1 : -1;
+      const prev =
+        post.vote === 1 || post.vote === 2
+          ? post.vote
+          : normalizeArticleVote(post.voted ? ARTICLE_VOTE_PLUS : 0);
       return {
         ...post,
-        voted,
-        voteCount: Math.max(0, Number(post.voteCount ?? 0) + delta),
+        vote: nextVote,
+        voted: nextVote === ARTICLE_VOTE_PLUS,
+        voteCount: nextArticleVoteCount(Number(post.voteCount ?? 0), prev, nextVote),
       };
     });
   }
@@ -128,6 +143,55 @@
         channel: { ...post.channel, isSubscribed: next },
       };
     });
+  }
+
+  const UIV2_DEMO_BADGE_RED =
+    `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="3" fill="#ef4444"/><circle cx="8" cy="8" r="3.4" fill="none" stroke="#fff" stroke-width="1.8"/></svg>')}`;
+  const UIV2_DEMO_BADGE_GRID =
+    `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="3" fill="#3b82f6"/><rect x="3" y="3" width="4" height="4" rx="0.6" fill="#fff"/><rect x="9" y="3" width="4" height="4" rx="0.6" fill="#fff"/><rect x="3" y="9" width="4" height="4" rx="0.6" fill="#fff"/><rect x="9" y="9" width="4" height="4" rx="0.6" fill="#fff"/></svg>')}`;
+
+  const UIV2_RELEASE_FRIENDS_DEMO: UiV2ReleaseFriend[] = [
+    { id: 1, login: 'CMAAAK', avatar: UIV2_FEED_POST_DEMO[0].channel.avatar, isOnline: true, badgeUrl: UIV2_DEMO_BADGE_RED, badgeName: 'Значок', status: 'watching' },
+    { id: 2, login: 'Nassc', avatar: UIV2_FEED_POST_DEMO[1].channel.avatar, isOnline: true, badgeUrl: UIV2_DEMO_BADGE_GRID, badgeName: 'Значок', status: 'watching' },
+    { id: 3, login: 'strannow', avatar: UIV2_FEED_POST_DEMO[2].channel.avatar, badgeUrl: UIV2_DEMO_BADGE_GRID, badgeName: 'Значок', status: 'watching' },
+    { id: 4, login: 'TheFatMouseTool', status: 'watching' },
+    { id: 5, login: 'DMax', status: 'planned' },
+    { id: 6, login: 'MysteryMarshak', status: 'planned' },
+    { id: 7, login: 'Nlkki', status: 'planned' },
+    { id: 8, login: 'Re.', status: 'planned' },
+  ];
+
+  let releaseFriendsDemo = $state<UiV2ReleaseFriend[]>([...UIV2_RELEASE_FRIENDS_DEMO]);
+  let releaseFriendsScanning = $state(true);
+  let releaseFriendsChecked = $state(8);
+  let releaseFriendsTotal = $state(24);
+  let releaseFriendsScanTimer: ReturnType<typeof setInterval> | null = null;
+
+  function stopReleaseFriendsDemoScan() {
+    if (releaseFriendsScanTimer) {
+      clearInterval(releaseFriendsScanTimer);
+      releaseFriendsScanTimer = null;
+    }
+  }
+
+  function playReleaseFriendsDemoScan() {
+    stopReleaseFriendsDemoScan();
+    releaseFriendsDemo = [];
+    releaseFriendsScanning = true;
+    releaseFriendsChecked = 0;
+    releaseFriendsTotal = UIV2_RELEASE_FRIENDS_DEMO.length + 4;
+    let i = 0;
+    releaseFriendsScanTimer = setInterval(() => {
+      i += 1;
+      releaseFriendsChecked = Math.min(i, releaseFriendsTotal);
+      if (i <= UIV2_RELEASE_FRIENDS_DEMO.length) {
+        releaseFriendsDemo = UIV2_RELEASE_FRIENDS_DEMO.slice(0, i);
+      }
+      if (i >= releaseFriendsTotal) {
+        releaseFriendsScanning = false;
+        stopReleaseFriendsDemoScan();
+      }
+    }, 520);
   }
 
   function demoFeedMenuItems(post: (typeof UIV2_FEED_POST_DEMO)[number]) {
@@ -206,7 +270,7 @@
     {
       value: 'api.anixart.tv',
       label: 'api.anixart.tv',
-      desc: 'Заблокирован в РФ',
+      desc: 'заблокирован в вашей стране',
       status: 'offline' as const,
       disabled: true,
     },
@@ -1067,7 +1131,7 @@
   });
 </script>
 
-<div class="view view-uikit-v2" class:view-uikit-v2--wide={active === 'cards' || active === 'comments' || active === 'posts'}>
+<div class="view view-uikit-v2" class:view-uikit-v2--wide={active === 'cards' || active === 'comments' || active === 'posts' || active === 'release-friends'}>
   <header class="uikit-v2-header">
     <div class="uikit-v2-header__top">
       <button type="button" class="uikit-v2-back" onclick={() => navigate('/')}>
@@ -1365,11 +1429,34 @@
             <div class="uikit-v2-select-demo">
               <UiV2EndpointSelect
                 pingIntervalMs={1000}
+                adSlot="uikit"
                 onChange={(v) => showToast(`Эндпоинт: ${v.replace(/^https:\/\//, '')}`)}
               />
             </div>
           </div>
         {:else if s.id === 'surfaces'}
+          <div class="uikit-v2-demo-block">
+            <h3 class="uikit-v2-demo-block__title">Ошибка загрузки</h3>
+            <p class="uikit-v2-demo-block__desc">
+              Пилюля по центру контента: warn — сервер недоступен, danger — нет связи.
+              Пока ошибка retryable, спиннер крутится и загрузка повторяется сама.
+            </p>
+            <div class="uikit-v2-retry-demo">
+              <UiV2ContentRetryOverlay
+                compact
+                headline="Ошибка: сервера Anixart временно недоступен"
+                tone="warn"
+                retryable
+              />
+              <UiV2ContentRetryOverlay
+                compact
+                headline="Ошибка: нет связи с сервером Anixart"
+                tone="danger"
+                retryable
+              />
+            </div>
+          </div>
+
           <div class="uikit-v2-demo-block">
             <h3 class="uikit-v2-demo-block__title">Choice Sheet</h3>
             <p class="uikit-v2-demo-block__desc">
@@ -1632,18 +1719,19 @@
           <div class="uikit-v2-demo-block">
             <h3 class="uikit-v2-demo-block__title">UiV2FeedPost</h3>
             <p class="uikit-v2-demo-block__desc">
-              Карточка поста ленты: канал, заголовок, превью, медиа, репост, голоса и комментарии.
+              Карточка поста: имя и время под аватаром, красный «+» на аватаре, «Показать ещё»,
+              сетка картинок, топовый комментарий под футером. Клик по фото открывает предпросмотр.
               Стили — классы <code>.uiv2-feed-post*</code> в <code>uikit-v2.scss</code>.
             </p>
             <div class="uikit-v2-feed-list">
               {#each feedDemoPosts as post (post.id)}
                 <UiV2FeedPost
                   data={post}
-                  showSubscribe={post.id === 'demo-image'}
+                  showSubscribe
                   menuItems={demoFeedMenuItems(post)}
                   onVote={async (data, next) => {
-                    toggleFeedDemoVote(data.id);
-                    showToast(next ? 'Оценено' : 'Оценка снята');
+                    toggleFeedDemoVote(data.id, next);
+                    showToast(next === 1 ? 'Плюс' : next === 2 ? 'Минус' : 'Оценка снята');
                   }}
                   onSubscribe={async (_id, next) => {
                     toggleFeedDemoSubscribe(post.channel.id, next);
@@ -1671,8 +1759,7 @@
           <div class="uikit-v2-demo-block">
             <h3 class="uikit-v2-demo-block__title">Layout: боковая навигация + лента</h3>
             <p class="uikit-v2-demo-block__desc">
-              Двухколоночный макет как на странице ленты: <code>max-width: 56rem</code>,
-              слева <code>UiV2FeedSideNav</code>, справа посты.
+              Трёхколоночный макет: слева разделы, в центре лента, справа карточка канала и рекомендации.
             </p>
             <div class="uikit-v2-feed-layout">
               <UiV2FeedSideNav
@@ -1703,10 +1790,52 @@
                     onclick={(data) => showToast(`Открыть: ${data.id}`)}
                     onAuthor={(_data, _e) => showToast(`Автор: ${post.channel.title}`)}
                     onChannel={(id) => showToast(`Канал: ${id}`)}
-                    onVote={async (data) => toggleFeedDemoVote(data.id)}
+                    onVote={async (data, next) => toggleFeedDemoVote(data.id, next)}
                   />
                 {/each}
               </div>
+              <aside class="uikit-v2-feed-layout__aside">
+                <UiV2FeedChannelCard
+                  data={{
+                    id: 1,
+                    title: 'Nassc',
+                    description: 'Демо-канал для UI Kit',
+                    avatar: UIV2_FEED_POST_DEMO[0].channel.avatar,
+                    isVerified: true,
+                    subscriberCount: 1280,
+                    articleCount: 94,
+                  }}
+                  onOpen={(id) => showToast(`Канал: ${id}`)}
+                  onSubscribe={async (_id, next) => showToast(next ? 'Подписка' : 'Отписка')}
+                />
+                <UiV2FeedRecommended
+                  title="Каналы"
+                  avatarShape="channel"
+                  items={feedSideTopics
+                    .filter((t) => t.id != null && t.id % 2 === 1)
+                    .map((t) => ({
+                      id: t.id!,
+                      title: t.label,
+                      avatar: t.avatar,
+                      isVerified: t.id === 1,
+                      subscriberCount: 1000,
+                    }))}
+                  onOpen={(id) => showToast(`Канал: ${id}`)}
+                />
+                <UiV2FeedRecommended
+                  title="Блоги"
+                  avatarShape="circle"
+                  items={feedSideTopics
+                    .filter((t) => t.id != null && t.id % 2 === 0)
+                    .map((t) => ({
+                      id: t.id!,
+                      title: t.label,
+                      avatar: t.avatar,
+                      subscriberCount: 120,
+                    }))}
+                  onOpen={(id) => showToast(`Блог: ${id}`)}
+                />
+              </aside>
             </div>
           </div>
         {:else if s.id === 'comments'}
@@ -1900,6 +2029,40 @@
               · pin: <code>{popupPinned ? 'on' : 'off'}</code>
               · subs: <code>{popupSubtitles ? 'on' : 'off'}</code>
             </p>
+          </div>
+        {:else if s.id === 'release-friends'}
+          <div class="uikit-v2-demo-block">
+            <h3 class="uikit-v2-demo-block__title">Идёт поиск</h3>
+            <p class="uikit-v2-demo-block__desc">
+              Совпадения уже есть, но скан ещё идёт — прогресс «ищем…» в скелетоне следующего слота.
+            </p>
+            <UiV2Button
+              variant="chrome"
+              size="sm"
+              label="Проиграть поиск"
+              onclick={playReleaseFriendsDemoScan}
+            />
+            <div style="margin-top:1rem">
+              <UiV2ReleaseFriends
+                friends={releaseFriendsDemo}
+                scanning={releaseFriendsScanning}
+                checkedCount={releaseFriendsChecked}
+                friendsTotal={releaseFriendsTotal}
+              />
+            </div>
+          </div>
+
+          <div class="uikit-v2-demo-block">
+            <h3 class="uikit-v2-demo-block__title">Готово</h3>
+            <p class="uikit-v2-demo-block__desc">Скан закончен, индикатор поиска скрыт.</p>
+            <UiV2ReleaseFriends
+              friends={UIV2_RELEASE_FRIENDS_DEMO}
+            />
+          </div>
+
+          <div class="uikit-v2-demo-block">
+            <h3 class="uikit-v2-demo-block__title">Пусто</h3>
+            <UiV2ReleaseFriends friends={[]} />
           </div>
         {/if}
       </section>

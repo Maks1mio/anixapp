@@ -25,6 +25,7 @@ function register(deps) {
     config,
     app,
     logger,
+    resetAnixart,
   } = deps;
 
 // ——— Anixart API bridge (raw JSON responses for renderer) ———
@@ -304,6 +305,180 @@ ipcMain.handle('anix:articleVote', async (_, id, vote) => {
   }
 });
 
+ipcMain.handle('anix:articleCreate', async (_, channelId, body) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.article.create(channelId, body);
+  } catch (err) {
+    handleAnixError(err, 'articleCreate');
+  }
+});
+
+ipcMain.handle('anix:articleEdit', async (_, articleId, body) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.article.edit(articleId, body);
+  } catch (err) {
+    handleAnixError(err, 'articleEdit');
+  }
+});
+
+ipcMain.handle('anix:articleSuggestionCreate', async (_, channelId, body) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.articleSuggestion.create(channelId, body);
+  } catch (err) {
+    handleAnixError(err, 'articleSuggestionCreate');
+  }
+});
+
+ipcMain.handle('anix:articleSuggestions', async (_, page = 0, opts = {}) => {
+  try {
+    const client = getAnixart();
+    const channelId = Number(opts?.channelId ?? opts?.channel_id ?? 0);
+    return await client.endpoints.articleSuggestion.articleSuggestions(page, {
+      channel_id: channelId > 0 ? channelId : undefined,
+    });
+  } catch (err) {
+    handleAnixError(err, 'articleSuggestions');
+  }
+});
+
+ipcMain.handle('anix:articleSuggestionDelete', async (_, suggestionId) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.articleSuggestion.delete(suggestionId);
+  } catch (err) {
+    handleAnixError(err, 'articleSuggestionDelete');
+  }
+});
+
+ipcMain.handle('anix:articleUploadImage', async (event, mediaToken, imageBase64, fileName = 'image.jpg', uploadId = '') => {
+  try {
+    const client = getAnixart();
+    const base64 = typeof imageBase64 === 'string' ? imageBase64.replace(/^data:[^;]+;base64,/, '') : '';
+    const buffer = Buffer.from(base64, 'base64');
+    return await client.endpoints.article.uploadArticleImage(mediaToken, buffer, fileName, {
+      uploadId,
+      onProgress: (ratio) => {
+        const sender = event?.sender;
+        if (!sender || sender.isDestroyed()) return;
+        sender.send('anix:articleUploadProgress', {
+          uploadId,
+          progress: Math.round(Math.min(100, Math.max(0, Number(ratio) * 100))),
+        });
+      },
+    });
+  } catch (err) {
+    if (err?.name === 'AbortError') return { success: 0, aborted: true };
+    handleAnixError(err, 'articleUploadImage');
+  }
+});
+
+ipcMain.on('anix:articleUploadAbort', (_, uploadId) => {
+  try {
+    require('../lib/article-editor-media').abortUpload(uploadId);
+  } catch {
+    /* ignore */
+  }
+});
+
+ipcMain.handle('anix:articleGenerateEmbed', async (_, type, mediaToken, url) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.article.generateEmbedData(type, mediaToken, url);
+  } catch (err) {
+    handleAnixError(err, 'articleGenerateEmbed');
+  }
+});
+
+loggedHandle('anix:articleCommentsPopular', async (_, id) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.articleComment.commentsPopular(id);
+  } catch (err) {
+    handleAnixError(err, 'articleCommentsPopular');
+  }
+});
+
+loggedHandle('anix:articleComments', async (_, id, page = 0, sort = 2) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.articleComment.comments(id, page, { sort });
+  } catch (err) {
+    handleAnixError(err, 'articleComments');
+  }
+});
+
+loggedHandle('anix:articleCommentAdd', async (_, id, body) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.articleComment.add(id, body);
+  } catch (err) {
+    handleAnixError(err, 'articleCommentAdd');
+  }
+});
+
+loggedHandle('anix:articleCommentReplies', async (_, commentId, page = 0, sort = 2) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.articleComment.replies(commentId, page, { sort });
+  } catch (err) {
+    handleAnixError(err, 'articleCommentReplies');
+  }
+});
+
+loggedHandle('anix:articleCommentVote', async (_, commentId, vote) => {
+  try {
+    const client = getAnixart();
+    const res = await client.endpoints.articleComment.vote(commentId, vote);
+    if (res?.code != null && res.code !== DefaultResult.Ok) {
+      return Promise.reject(new Error(String(res.code ?? 'article comment vote failed')));
+    }
+    return res;
+  } catch (err) {
+    handleAnixError(err, 'articleCommentVote');
+  }
+});
+
+loggedHandle('anix:articleCommentVotes', async (_, commentId, page = 0, sort = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.articleComment.votes(commentId, page, { sort });
+  } catch (err) {
+    handleAnixError(err, 'articleCommentVotes');
+  }
+});
+
+loggedHandle('anix:articleCommentEdit', async (_, commentId, body) => {
+  try {
+    const client = getAnixart();
+    const res = await client.endpoints.articleComment.edit(commentId, {
+      message: body.message,
+      spoiler: !!(body.spoiler ?? body.isSpoiler),
+    });
+    if (res?.code != null && res.code !== DefaultResult.Ok) {
+      return Promise.reject(new Error(String(res.code ?? 'article comment edit failed')));
+    }
+    return res;
+  } catch (err) {
+    handleAnixError(err, 'articleCommentEdit');
+  }
+});
+
+loggedHandle('anix:articleCommentDelete', async (_, commentId) => {
+  try {
+    const client = getAnixart();
+    const res = await client.endpoints.articleComment.delete(commentId);
+    if (res?.code != null && res.code !== DefaultResult.Ok) {
+      return Promise.reject(new Error(String(res.code ?? 'article comment delete failed')));
+    }
+    return res;
+  } catch (err) {
+    handleAnixError(err, 'articleCommentDelete');
+  }
+});
+
 ipcMain.handle('anix:articleDelete', async (_, id) => {
   try {
     const client = getAnixart();
@@ -358,6 +533,24 @@ ipcMain.handle('anix:reportArticle', async (_, body) => {
   }
 });
 
+ipcMain.handle('anix:reportChannelReasons', async () => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.report.channelReasons();
+  } catch (err) {
+    handleAnixError(err, 'reportChannelReasons');
+  }
+});
+
+ipcMain.handle('anix:reportChannel', async (_, body) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.report.channel(body);
+  } catch (err) {
+    handleAnixError(err, 'reportChannel');
+  }
+});
+
 ipcMain.handle('anix:channelById', async (_, id) => {
   try {
     const client = getAnixart();
@@ -395,12 +588,94 @@ ipcMain.handle('anix:channelUnsubscribe', async (_, channelId) => {
   }
 });
 
-ipcMain.handle('anix:channelSubscriptions', async (_, page = 0) => {
+ipcMain.handle('anix:channelMute', async (_, channelId) => {
   try {
     const client = getAnixart();
-    return await client.endpoints.channel.subscriptions(page);
+    return await client.endpoints.channel.mute(channelId);
+  } catch (err) {
+    handleAnixError(err, 'channelMute');
+  }
+});
+
+ipcMain.handle('anix:channelUnmute', async (_, channelId) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.channel.unmute(channelId);
+  } catch (err) {
+    handleAnixError(err, 'channelUnmute');
+  }
+});
+
+ipcMain.handle('anix:channelMutes', async (_, page = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.channel.mutes(page);
+  } catch (err) {
+    handleAnixError(err, 'channelMutes');
+  }
+});
+
+ipcMain.handle('anix:profileBlockList', async (_, page = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileBlockList.blockList(page);
+  } catch (err) {
+    handleAnixError(err, 'profileBlockList');
+  }
+});
+
+ipcMain.handle('anix:profileBlockListAdd', async (_, profileId) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileBlockList.addToBlockList(profileId);
+  } catch (err) {
+    handleAnixError(err, 'profileBlockListAdd');
+  }
+});
+
+ipcMain.handle('anix:profileBlockListRemove', async (_, profileId) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileBlockList.removeFromBlockList(profileId);
+  } catch (err) {
+    handleAnixError(err, 'profileBlockListRemove');
+  }
+});
+
+ipcMain.handle('anix:channelSubscriptions', async (_, page = 0, opts = {}) => {
+  try {
+    const client = getAnixart();
+    const query = {};
+    if (typeof opts?.sort === 'number') query.sort = opts.sort;
+    return await client.endpoints.channel.subscriptions(page, query);
   } catch (err) {
     handleAnixError(err, 'channelSubscriptions');
+  }
+});
+
+ipcMain.handle('anix:channelAll', async (_, page = 0, opts = {}) => {
+  try {
+    const client = getAnixart();
+    const body = {};
+    if (typeof opts?.isBlog === 'boolean') body.is_blog = opts.isBlog;
+    if (typeof opts?.isSubscribed === 'boolean') body.is_subscribed = opts.isSubscribed;
+    if (typeof opts?.permission === 'number') body.permission = opts.permission;
+    if (typeof opts?.sort === 'number') body.sort = opts.sort;
+    return await client.endpoints.channel.channels(page, body);
+  } catch (err) {
+    handleAnixError(err, 'channelAll');
+  }
+});
+
+ipcMain.handle('anix:channelRecommendations', async (_, page = 0, opts = {}) => {
+  try {
+    const client = getAnixart();
+    const query = {};
+    if (typeof opts?.isBlog === 'boolean') query.is_blog = opts.isBlog;
+    if (typeof opts?.excludeSubscribed === 'boolean') query.exclude_subscribed = opts.excludeSubscribed;
+    return await client.endpoints.channel.recommendations(page, query);
+  } catch (err) {
+    handleAnixError(err, 'channelRecommendations');
   }
 });
 
@@ -410,6 +685,19 @@ ipcMain.handle('anix:channelEditorAll', async () => {
     return await client.endpoints.channel.editorAvailableAll();
   } catch (err) {
     handleAnixError(err, 'channelEditorAll');
+  }
+});
+
+ipcMain.handle('anix:channelEditorAvailable', async (_, channelId, opts = {}) => {
+  try {
+    const client = getAnixart();
+    const query = {
+      is_suggestion: !!opts?.isSuggestion,
+      is_edit_mode: !!opts?.isEditMode,
+    };
+    return await client.endpoints.channel.editorAvailable(channelId, query);
+  } catch (err) {
+    handleAnixError(err, 'channelEditorAvailable');
   }
 });
 
@@ -654,6 +942,93 @@ ipcMain.handle('anix:notificationsRead', async () => {
   }
 });
 
+ipcMain.handle('anix:notificationPreferenceMy', async () => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.notificationPreference.my();
+  } catch (err) {
+    handleAnixError(err, 'notificationPreferenceMy');
+  }
+});
+
+ipcMain.handle('anix:notificationPreferenceEdit', async (_, type) => {
+  try {
+    const client = getAnixart();
+    const t = String(type || '');
+    if (!t) throw new Error('type required');
+    return await client.endpoints.notificationPreference.edit(t);
+  } catch (err) {
+    handleAnixError(err, 'notificationPreferenceEdit');
+  }
+});
+
+ipcMain.handle('anix:notificationPreferenceEditStatus', async (_, statuses) => {
+  try {
+    const client = getAnixart();
+    const list = Array.isArray(statuses) ? statuses.map((n) => Number(n)).filter((n) => Number.isFinite(n)) : [];
+    // Android Retrofit body uses camelCase field names (no @JsonProperty on the request class).
+    return await client.endpoints.notificationPreference.editStatus({
+      profileStatusNotificationPreferences: list,
+    });
+  } catch (err) {
+    const msg = String(err?.message || err || '');
+    // Some Anixart preference POSTs return HTTP 200 with an empty body on success.
+    if (msg.includes('empty response')) return { code: 0 };
+    handleAnixError(err, 'notificationPreferenceEditStatus');
+  }
+});
+
+ipcMain.handle('anix:notificationPreferenceEditType', async (_, typeIds) => {
+  try {
+    const client = getAnixart();
+    const list = Array.isArray(typeIds) ? typeIds.map((n) => Number(n)).filter((n) => Number.isFinite(n)) : [];
+    return await client.endpoints.notificationPreference.editType({
+      profileTypeNotificationPreferences: list,
+    });
+  } catch (err) {
+    const msg = String(err?.message || err || '');
+    if (msg.includes('empty response')) return { code: 0 };
+    handleAnixError(err, 'notificationPreferenceEditType');
+  }
+});
+
+ipcMain.handle('anix:notificationPreferenceReleaseTypes', async (_, releaseId) => {
+  try {
+    const client = getAnixart();
+    const id = Number(releaseId);
+    if (!Number.isFinite(id)) throw new Error('releaseId required');
+    return await client.endpoints.notificationPreference.releaseTypes(id);
+  } catch (err) {
+    handleAnixError(err, 'notificationPreferenceReleaseTypes');
+  }
+});
+
+ipcMain.handle('anix:notificationPreferenceEditReleaseTypes', async (_, releaseId, typeIds) => {
+  try {
+    const client = getAnixart();
+    const id = Number(releaseId);
+    if (!Number.isFinite(id)) throw new Error('releaseId required');
+    const list = Array.isArray(typeIds) ? typeIds.map((n) => Number(n)).filter((n) => Number.isFinite(n)) : [];
+    return await client.endpoints.notificationPreference.editReleaseTypes({
+      release_id: id,
+      profile_release_type_notification_preferences: list,
+    });
+  } catch (err) {
+    const msg = String(err?.message || err || '');
+    if (msg.includes('empty response')) return { code: 0 };
+    handleAnixError(err, 'notificationPreferenceEditReleaseTypes');
+  }
+});
+
+ipcMain.handle('anix:notificationPreferenceReleases', async (_, page = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.notificationPreference.releases(Number(page) || 0);
+  } catch (err) {
+    handleAnixError(err, 'notificationPreferenceReleases');
+  }
+});
+
 ipcMain.handle('anix:history', async (_, page = 0) => {
   try {
     const client = getAnixart();
@@ -856,6 +1231,51 @@ ipcMain.handle('anix:getProfileSettings', async () => {
   }
 });
 
+ipcMain.handle('anix:profileHealthStatus', async () => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileHealth.status();
+  } catch (err) {
+    handleAnixError(err, 'profileHealthStatus');
+  }
+});
+
+ipcMain.handle('anix:profileHealthAccount', async (_, page = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileHealth.account(page);
+  } catch (err) {
+    handleAnixError(err, 'profileHealthAccount');
+  }
+});
+
+ipcMain.handle('anix:profileHealthContent', async (_, page = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileHealth.content(page);
+  } catch (err) {
+    handleAnixError(err, 'profileHealthContent');
+  }
+});
+
+ipcMain.handle('anix:profileHealthEnforcement', async (_, id) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileHealth.enforcement(id);
+  } catch (err) {
+    handleAnixError(err, 'profileHealthEnforcement');
+  }
+});
+
+ipcMain.handle('anix:profileHealthAppeal', async (_, id, body) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileHealth.appeal(id, body);
+  } catch (err) {
+    handleAnixError(err, 'profileHealthAppeal');
+  }
+});
+
 ipcMain.handle('anix:setStatus', async (_, status) => {
   try {
     const client = getAnixart();
@@ -942,6 +1362,64 @@ ipcMain.handle('anix:changeLogin', async (_, newLogin) => {
   }
 });
 
+ipcMain.handle('anix:changeEmail', async (_, data) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.settings.changeEmail(data);
+  } catch (err) {
+    handleAnixError(err, 'changeEmail');
+  }
+});
+
+ipcMain.handle('anix:changeEmailResend', async (_, data) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.settings.changeEmailResend(data);
+  } catch (err) {
+    handleAnixError(err, 'changeEmailResend');
+  }
+});
+
+ipcMain.handle('anix:changeEmailVerify', async (_, data) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.settings.changeEmailVerify(data);
+  } catch (err) {
+    handleAnixError(err, 'changeEmailVerify');
+  }
+});
+
+ipcMain.handle('anix:changePassword', async (_, data) => {
+  try {
+    const client = getAnixart();
+    const res = await client.endpoints.settings.changePassword(data);
+    const token = typeof res?.token === 'string' ? res.token.trim() : '';
+    if (res && (res.code === 0 || res.code === undefined) && token) {
+      config.saveConfig({ token });
+      if (typeof resetAnixart === 'function') resetAnixart();
+      try {
+        const accountsStore = require('../lib/accounts-store');
+        const cfg = config.getRawConfig?.() ?? {};
+        const id = Number(cfg.profileId);
+        if (id > 0) {
+          accountsStore.upsertAccount({
+            id,
+            login: cfg.profileLogin,
+            avatar: cfg.profileAvatar,
+            token,
+            profileRaw: cfg.profileRaw,
+          });
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    return res;
+  } catch (err) {
+    handleAnixError(err, 'changePassword');
+  }
+});
+
 ipcMain.handle('anix:getBadges', async (_, page = 0) => {
   try {
     const client = getAnixart();
@@ -1023,6 +1501,36 @@ ipcMain.handle('anix:channelCreateBlog', async () => {
   }
 });
 
+ipcMain.handle('anix:channelCreate', async (_, body) => {
+  try {
+    const client = getAnixart();
+    const payload = {
+      title: String(body?.title ?? '').trim(),
+      description: String(body?.description ?? '').trim(),
+      is_commenting_enabled: body?.is_commenting_enabled !== false,
+      is_article_suggestion_enabled: body?.is_article_suggestion_enabled !== false,
+    };
+    return await client.endpoints.channel.create(payload);
+  } catch (err) {
+    handleAnixError(err, 'channelCreate');
+  }
+});
+
+ipcMain.handle('anix:configToggles', async () => {
+  try {
+    const client = getAnixart();
+    // Android: version_code + is_beta + is_api_alt — без них сервер отдаёт пустое тело.
+    return await client.endpoints.config.toggles({
+      version_code: 26080522,
+      is_beta: true,
+      is_api_alt: false,
+    });
+  } catch (err) {
+    appendLog('configToggles', { error: String(err) });
+    return null;
+  }
+});
+
 ipcMain.handle('anix:loginHistory', async (_, profileId, page = 0) => {
   try {
     const client = getAnixart();
@@ -1079,6 +1587,37 @@ ipcMain.handle('anix:searchCollections', async (_, query, page = 0) => {
     return data;
   } catch (err) {
     handleAnixError(err, 'searchCollections');
+  }
+});
+
+loggedHandle('anix:searchChannelSubscribers', async (_, channelId, page = 0, query = '') => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.search.channelSubscribersSearch(channelId, page, {
+      query: String(query ?? ''),
+      page,
+      searchBy: 0,
+      channel_id: Number(channelId),
+    });
+  } catch (err) {
+    handleAnixError(err, 'searchChannelSubscribers');
+  }
+});
+
+loggedHandle('anix:searchFeed', async (_, query, page = 0, searchBy = 0) => {
+  try {
+    const client = getAnixart();
+    const data = await client.endpoints.search.feedSearch(page, { query, page, searchBy });
+    logger.info('search', 'feed', {
+      query,
+      page,
+      searchBy,
+      articles: data?.articles?.total_count ?? data?.articles?.content?.length,
+      channels: data?.channels?.total_count ?? data?.channels?.content?.length,
+    });
+    return data;
+  } catch (err) {
+    handleAnixError(err, 'searchFeed');
   }
 });
 

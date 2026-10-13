@@ -41,9 +41,13 @@
   /** spring-ish ease ≈ cubic-bezier(0.22, 1, 0.36, 1) */
   const SMART_EASE = (t: number) => 1 - Math.pow(1 - t, 3.35);
 
-  let step = $state<AnixappLegalStep>(initialStep);
+  let step = $state<AnixappLegalStep>('about');
   let dontShowAgain = $state(false);
   let reduceMotion = $state(false);
+
+  $effect(() => {
+    step = initialStep;
+  });
 
   $effect(() => {
     try {

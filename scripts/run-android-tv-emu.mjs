@@ -31,10 +31,8 @@ function sleep(ms) {
 
 function apkPath() {
   const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
-  const versioned = path.join(root, 'release', `AnixApp-TV-${pkg.version}-debug.apk`);
-  const plain = path.join(root, 'release', 'AnixApp-TV-debug.apk');
+  const versioned = path.join(root, 'release', `AnixApp-TV-${pkg.version}-alpha.apk`);
   if (existsSync(versioned)) return versioned;
-  if (existsSync(plain)) return plain;
   return null;
 }
 

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import { fetchAllNotifications, markNotificationsRead } from '../stores/notifications';
+  import { headlineFromLoadError } from '../utils/content-load-error';
 
   interface NotificationItem {
     title: string;
@@ -16,13 +18,14 @@
     return new Date(ts * 1000).toLocaleString();
   }
 
-  onMount(async () => {
+  async function loadNotifications() {
     if (!window.anixApi) {
       errorMsg = 'API недоступно (только в Electron).';
       loadState = 'error';
       return;
     }
 
+    if (loadState !== 'error') loadState = 'loading';
     try {
       const content = await fetchAllNotifications();
       void markNotificationsRead();
@@ -55,9 +58,13 @@
 
       loadState = 'ready';
     } catch (err) {
-      errorMsg = String(err);
+      errorMsg = headlineFromLoadError(err);
       loadState = 'error';
     }
+  }
+
+  onMount(() => {
+    void loadNotifications();
   });
 </script>
 
@@ -71,7 +78,7 @@
     {#if loadState === 'loading'}
       <div class="notifications__loading">Загрузка…</div>
     {:else if loadState === 'error'}
-      <p class="notifications__error">Ошибка: {errorMsg}</p>
+      <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadNotifications()} />
     {:else if loadState === 'empty'}
       <p class="notifications__empty">Уведомлений пока нет.</p>
     {:else}

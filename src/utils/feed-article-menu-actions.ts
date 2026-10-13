@@ -24,6 +24,8 @@ export type FeedArticleMenuActionResult =
   | { kind: 'none' }
   | { kind: 'removed'; articleId: number }
   | { kind: 'updated'; article: FeedArticle }
+  | { kind: 'edit'; article: FeedArticle }
+  | { kind: 'repost'; article: FeedArticle }
   | { kind: 'navigate'; path: string };
 
 export async function runFeedArticleMenuAction(
@@ -58,17 +60,16 @@ export async function runFeedArticleMenuAction(
 
   if (actionId === 'votes') {
     showToast('Список оценивших скоро будет в desktop-версии', 'info');
-    return { kind: 'navigate', path: `/article/${articleId}` };
+    return { kind: 'none' };
   }
 
   if (actionId === 'reposts') {
     showToast('Список репостнувших скоро будет в desktop-версии', 'info');
-    return { kind: 'navigate', path: `/article/${articleId}` };
+    return { kind: 'none' };
   }
 
   if (actionId === 'edit') {
-    showToast('Редактор записей скоро будет в desktop-версии', 'info');
-    return { kind: 'navigate', path: `/article/${articleId}` };
+    return { kind: 'edit', article };
   }
 
   if (actionId === 'delete') {

@@ -106,6 +106,7 @@
           persist={false}
           pingIntervalMs={1000}
           disabled={switching}
+          showVpnAd={false}
           onChange={changeEndpoint}
         />
       </div>

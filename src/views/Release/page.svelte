@@ -1,8 +1,10 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from 'svelte';
+  import { get } from 'svelte/store';
   import { navigate } from '../../stores/navigation';
-  import { requireAuth } from '../../stores/auth';
+  import { requireAuth, isAuthenticated } from '../../stores/auth';
   import { openWatchModal } from '../../stores/modals';
+  import { isMobileMode } from '../../platform/mobile';
   import { buildPosterUrl, buildScreenshotUrl, toPosterDisplayUrl } from '../../utils/posterUrl';
   import { setDiscordContext, refreshDiscordPresence } from '../../services/discord-presence';
   import { isTvMode } from '../../platform/tv';
@@ -14,6 +16,7 @@
   import { LIST_STATUSES, type ListStatusId } from './_types';
   import type { ReleaseMetaInfoRow } from './_metaInfo';
   import {
+    buildCategorySegments,
     buildCreditsSegments,
     buildGenreSegments,
     buildSourceSegments,
@@ -23,17 +26,26 @@
     getAgeRateText, getSeasonName, stripHtmlToText, sanitizeRichHtml,
     numToStatusId, ratingHue, mapCardData, formatEpisodeAdded,
   } from './_utils';
-  import { isReleaseAnnounce } from '../../utils/release-card';
-  import { ReleaseHead, ReleaseVideos, ReleaseRating, ReleaseRelated, ReleaseRecommendations, ReleaseScreenshots, ReleaseComments } from './components';
+  import { isReleaseAnnounce, formatReleaseEpisodes } from '../../utils/release-card';
+  import { ReleaseHead, ReleaseAirCalendar, ReleaseVideos, ReleaseRating, ReleaseFriends, ReleaseRelated, ReleaseRecommendations, ReleaseScreenshots, ReleaseComments } from './components';
   import { notifyFavoritesChanged } from '../../utils/favorites-events';
   import { applyReleaseListStatus } from '../../utils/release-list-status';
   import { enrichBlockedRelease } from '../../services/release-geo-bypass';
   import { extractHistoryEpisodeInfo } from '../../utils/historyFormat';
+  import UiV2ContentRetryOverlay from '../../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../../utils/content-load-error';
+  import ReleaseEpisodeNotifyModal from '../../components/ReleaseEpisodeNotifyModal.svelte';
+  import {
+    parseNotificationPrefs,
+    parseReleaseTypeIds,
+    parseVoiceoverCatalog,
+    type VoiceoverTypeOption,
+  } from '../../utils/notification-preferences';
 
   interface Props { id: number; }
   let { id }: Props = $props();
 
-  const tvOpenTarget = isTvMode() ? getTvReleaseOpenTarget(id) : null;
+  const tvOpenTarget = $derived(isTvMode() ? getTvReleaseOpenTarget(id) : null);
 
   // ── State ──────────────────────────────────────────────────────────────────
   let loadState   = $state<'loading' | 'error' | 'ready'>('loading');
@@ -44,6 +56,13 @@
   let currentStatus  = $state<ListStatusId | null>(null);
   let descCollapsed  = $state(true);
   let historyResume  = $state<{ episode: string; dubber: string } | null>(null);
+  let notifyCount = $state(0);
+  let notifyOpen = $state(false);
+  let notifyBusy = $state(false);
+  let notifySelected = $state<number[]>([]);
+  let notifyCatalog = $state<VoiceoverTypeOption[]>([]);
+  /** Колокольчик только в режиме «По выбранным релизам». */
+  let showNotifyBell = $state(false);
 
   function readResumeInfo(raw: Record<string, unknown> | null | undefined) {
     if (!raw) return { episode: '', dubber: '' };
@@ -169,9 +188,27 @@
   const seasonName   = $derived(getSeasonName(season));
   const releaseDate  = $derived((release?.release_date ?? '') as string);
   const airedOnDate  = $derived(release?.aired_on_date as number | null | undefined);
+  const broadcast    = $derived(typeof release?.broadcast === 'number' ? release.broadcast as number : null);
   const isViewBlocked = $derived(!!(release?.is_view_blocked));
   const hasEpisodesReleased = $derived(typeof episodesReleased === 'number' && episodesReleased > 0);
   const releaseId    = $derived(release?.id as number | undefined);
+  const notifyEnabled = $derived(notifyCount > 0);
+
+  async function refreshNotifyBellVisibility() {
+    if (!get(isAuthenticated) || !window.anixApi?.notification?.preference?.my) {
+      showNotifyBell = false;
+      return;
+    }
+    try {
+      const data = await window.anixApi.notification.preference.my();
+      const prefs = parseNotificationPrefs(data);
+      showNotifyBell =
+        prefs.is_episode_notifications_enabled &&
+        prefs.is_release_type_notifications_enabled;
+    } catch {
+      showNotifyBell = false;
+    }
+  }
 
   const resumeInfo = $derived.by(() => {
     const fromRelease = readResumeInfo(release);
@@ -222,17 +259,16 @@
       });
     }
 
-    let epText = '';
-    if (episodesReleased != null && episodesTotal != null && episodesTotal > 0) epText = `${episodesReleased} из ${episodesTotal} эп.`;
-    else if (episodesReleased != null) epText = `${episodesReleased} эп.`;
-    else if (episodesTotal    != null) epText = `${episodesTotal} эп.`;
+    let epText = formatReleaseEpisodes(episodesReleased, episodesTotal);
     if (duration && duration > 0) epText += epText ? ` по ~${duration} мин.` : `~${duration} мин.`;
     if (epText) rows.push({ kind: 'episodes', segments: plainMetaSegments(epText) });
 
-    const catParts: string[] = [];
-    if (categoryName) catParts.push(categoryName);
-    if (statusName)   catParts.push(statusName);
-    if (catParts.length) rows.push({ kind: 'category', segments: plainMetaSegments(catParts.join(', ')) });
+    const catSegments = buildCategorySegments(
+      categoryName,
+      statusName,
+      statusId === 2 || statusId === 3 || /^выходит$/i.test(statusName),
+    );
+    if (catSegments.length) rows.push({ kind: 'category', segments: catSegments });
 
     const creditSegments = buildCreditsSegments(studio, author, director);
     if (creditSegments.length) rows.push({ kind: 'credits', segments: creditSegments });
@@ -265,7 +301,7 @@
 
   // ── Select options ────────────────────────────────────────────────────────
   const selectOptions = $derived([
-    { value: '', label: 'Не в списке' },
+    { value: '', label: isMobileMode() ? 'Не смотрю' : 'Не в списке' },
     ...LIST_STATUSES.map(s => ({ value: s.id, label: s.label })),
   ] as SelectOption[]);
 
@@ -301,6 +337,61 @@
     }
   }
 
+  async function openNotifyModal() {
+    if (!window.anixApi?.notification?.preference || !requireAuth()) return;
+    notifyOpen = true;
+    notifyBusy = true;
+    try {
+      const [typesRaw, selectedRaw] = await Promise.all([
+        window.anixApi.type?.all?.(),
+        window.anixApi.notification.preference.releaseTypes(id),
+      ]);
+      notifyCatalog = parseVoiceoverCatalog(typesRaw);
+      notifySelected = parseReleaseTypeIds(selectedRaw);
+      const list = (selectedRaw as { profile_release_type_notification_preferences?: unknown })
+        ?.profile_release_type_notification_preferences;
+      if (Array.isArray(list)) {
+        const map = new Map(notifyCatalog.map((t) => [t.id, t]));
+        for (const entry of list) {
+          if (!entry || typeof entry !== 'object') continue;
+          const type = (entry as { type?: { id?: number; name?: string } }).type;
+          if (type?.id != null) {
+            map.set(Number(type.id), {
+              id: Number(type.id),
+              name: type.name || `Озвучка ${type.id}`,
+            });
+          }
+        }
+        notifyCatalog = Array.from(map.values());
+      }
+    } catch (err) {
+      errorMsg = String(err);
+    } finally {
+      notifyBusy = false;
+    }
+  }
+
+  async function saveNotifyTypes(typeIds: number[]) {
+    if (!window.anixApi?.notification?.preference || notifyBusy) return;
+    notifyBusy = true;
+    try {
+      await window.anixApi.notification.preference.editReleaseTypes(id, typeIds);
+      notifySelected = typeIds;
+      notifyCount = typeIds.length;
+      if (release) {
+        release = {
+          ...release,
+          profile_release_type_notification_preference_count: typeIds.length,
+        };
+      }
+      if (typeIds.length === 0) notifyOpen = false;
+    } catch (err) {
+      errorMsg = String(err);
+    } finally {
+      notifyBusy = false;
+    }
+  }
+
   async function syncListStateFromApi() {
     if (!window.anixApi || !id) return;
     try {
@@ -324,6 +415,9 @@
         isFavorite = !!(raw.is_favorite);
         if (typeof raw.favorites_count === 'number') favoritesCount = raw.favorites_count;
         currentStatus = numToStatusId(raw.profile_list_status as number | null | undefined);
+        if (typeof raw.profile_release_type_notification_preference_count === 'number') {
+          notifyCount = raw.profile_release_type_notification_preference_count;
+        }
       }
     } catch { /* ignore */ }
   }
@@ -334,18 +428,13 @@
     void syncListStateFromApi();
   }
 
-  // ── Load ──────────────────────────────────────────────────────────────────
-  onMount(async () => {
-    if (tvOpenTarget) {
-      void tick().then(() => runTvReleaseOpenAnimation(id));
-    }
-
-    window.addEventListener('anix:bookmarksChanged', onBookmarksChanged);
+  async function loadRelease() {
     if (!window.anixApi) {
       errorMsg  = 'API недоступно (только в Electron).';
       loadState = 'error';
       return;
     }
+    if (loadState !== 'error') loadState = 'loading';
     try {
       const historyResumePromise = loadHistoryResume(id).catch(() => null);
       const data = await window.anixApi.release.info(id, true) as any;
@@ -360,7 +449,11 @@
       isFavorite     = !!(raw.is_favorite);
       favoritesCount = (raw.favorites_count ?? 0) as number;
       currentStatus  = numToStatusId(raw.profile_list_status as number | null | undefined);
+      notifyCount    = typeof raw.profile_release_type_notification_preference_count === 'number'
+        ? raw.profile_release_type_notification_preference_count
+        : 0;
       loadState      = 'ready';
+      void refreshNotifyBellVisibility();
 
       const posterVal = buildPosterUrl(
         typeof raw.poster === 'string' ? raw.poster :
@@ -376,9 +469,19 @@
         if (resume?.episode || resume?.dubber) historyResume = resume;
       });
     } catch (err) {
-      errorMsg  = String(err);
+      errorMsg  = headlineFromLoadError(err);
       loadState = 'error';
     }
+  }
+
+  // ── Load ──────────────────────────────────────────────────────────────────
+  onMount(() => {
+    if (tvOpenTarget) {
+      void tick().then(() => runTvReleaseOpenAnimation(id));
+    }
+
+    window.addEventListener('anix:bookmarksChanged', onBookmarksChanged);
+    void loadRelease();
   });
 
   onDestroy(() => {
@@ -408,7 +511,7 @@
     <div class="release-loading">Загрузка…</div>
 
   {:else if loadState === 'error'}
-    <div class="release-loading">{errorMsg}</div>
+    <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadRelease()} />
 
   {:else if release}
     <section class="release-page" class:release-page--tv-enter={!!tvOpenTarget}>
@@ -421,11 +524,26 @@
         {isViewBlocked} {noteHtml} {descHtml} {descClean} {descNeedsTruncate} {descCollapsed}
         {metaInfoRows} {playBtnText} {playBtnDisabled} {episodeAddedText}
         {currentStatus} {selectOptions}
+        {notifyEnabled}
+        showNotify={showNotifyBell}
         onToggleFavorite={toggleFavorite}
         onWatch={handleWatch}
         onSetStatus={setStatus}
         onToggleDesc={() => { descCollapsed = !descCollapsed; }}
-      />
+        onOpenNotify={() => { void openNotifyModal(); }}
+      >
+        {#snippet airDate()}
+          <ReleaseAirCalendar
+            releaseId={id}
+            {broadcast}
+            {airedOnDate}
+            {episodesReleased}
+            {episodesTotal}
+            {statusId}
+            fallback={statusName || 'Выходит'}
+          />
+        {/snippet}
+      </ReleaseHead>
 
       <ReleaseVideos releaseId={id} releaseTitle={title} />
 
@@ -439,6 +557,8 @@
         {canVote}
         onRefresh={refreshReleaseData}
       />
+
+      <ReleaseFriends releaseId={id} />
 
       <!-- Screenshots -->
       {#if screenshots.length > 0}
@@ -466,3 +586,13 @@
   {/if}
   </div>
 </div>
+
+<ReleaseEpisodeNotifyModal
+  open={notifyOpen}
+  releaseId={id}
+  catalog={notifyCatalog}
+  selectedIds={notifySelected}
+  busy={notifyBusy}
+  onClose={() => { notifyOpen = false; }}
+  onSave={(ids) => saveNotifyTypes(ids)}
+/>

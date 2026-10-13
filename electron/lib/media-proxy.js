@@ -30,7 +30,20 @@ const EXTRA_MEDIA_HOSTS = [
 ];
 
 const ALLOW_HOSTS = [...VIDEO_HOSTS, ...EXTRA_MEDIA_HOSTS];
-const FETCH_TIMEOUT_MS = 12_000;
+/** Per-attempt timeout — fail over to another Kodik edge quickly. */
+const FETCH_TIMEOUT_ATTEMPT_MS = 14_000;
+const FETCH_TIMEOUT_EDGE_MS = 8_000;
+/** Max Kodik pN mirrors to try for one client request. */
+const SOLOD_MAX_TRIES = 4;
+/** Known-good solodcdn progressive edges (same path, different POP). */
+const SOLOD_KNOWN_HOSTS = [
+  'p12.solodcdn.com',
+  'p13.solodcdn.com',
+  'p14.solodcdn.com',
+];
+
+/** Sticky last-good pN host for this process (avoids flapping). */
+let stickySolodHost = null;
 
 function hostAllowed(host) {
   const h = String(host || '').replace(/^www\./, '').toLowerCase();
@@ -111,6 +124,71 @@ function isShadowHost(url) {
   }
 }
 
+function isSolodProgressiveHost(host) {
+  return /^p\d+\.solodcdn\.com$/i.test(String(host || ''));
+}
+
+function withHost(url, host) {
+  const u = new URL(url);
+  u.hostname = host;
+  return u.href;
+}
+
+/** Build alternate Kodik progressive CDN URLs (p12/p13/p14…). */
+function solodMirrorCandidates(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return [url];
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (!isSolodProgressiveHost(host)) return [url];
+
+  const out = [];
+  const addHost = (h) => {
+    const hh = String(h || '').toLowerCase();
+    if (!isSolodProgressiveHost(hh)) return;
+    if (out.some((u) => {
+      try { return new URL(u).hostname.toLowerCase() === hh; } catch { return false; }
+    })) return;
+    out.push(withHost(url, hh));
+  };
+
+  if (stickySolodHost) addHost(stickySolodHost);
+  addHost(host);
+  for (const h of SOLOD_KNOWN_HOSTS) addHost(h);
+
+  const m = host.match(/^p(\d+)\.solodcdn\.com$/i);
+  if (m) {
+    const n = Number(m[1]);
+    for (const d of [1, -1, 2, -2, 3, -3]) {
+      const nn = n + d;
+      if (nn >= 1 && nn <= 40) addHost(`p${nn}.solodcdn.com`);
+    }
+  }
+
+  return out.slice(0, SOLOD_MAX_TRIES);
+}
+
+function shouldFailoverStatus(status) {
+  if (!status) return true;
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function rememberSolodHost(url) {
+  try {
+    const h = new URL(url).hostname.toLowerCase();
+    if (isSolodProgressiveHost(h)) stickySolodHost = h;
+  } catch { /* ignore */ }
+}
+
+/** Rewrite absolute pN.solodcdn.com → sticky host so HLS keeps hitting the good edge. */
+function pinSolodHostsInPlaylist(text, stickyHost) {
+  if (!stickyHost || !text) return text;
+  return String(text).replace(/https?:\/\/p\d+\.solodcdn\.com/gi, `https://${stickyHost}`);
+}
+
 function proxyPath(targetUrl, ref, cookie) {
   const prefix = process.env.ANIX_MEDIA_PROXY_PREFIX || '/__anix/media';
   let p = `${prefix}?u=${encodeURIComponent(targetUrl)}`;
@@ -165,9 +243,9 @@ async function drain(res) {
 }
 
 async function fetchOnce(url, method, headers) {
-  let timeoutMs = FETCH_TIMEOUT_MS;
+  let timeoutMs = FETCH_TIMEOUT_ATTEMPT_MS;
   try {
-    if (isKodikEdgeHost(new URL(url).hostname)) timeoutMs = 4_000;
+    if (isKodikEdgeHost(new URL(url).hostname)) timeoutMs = FETCH_TIMEOUT_EDGE_MS;
   } catch { /* keep default */ }
   return fetch(url, {
     method,
@@ -190,7 +268,7 @@ async function fetchMedia(url, method, headers, hops = 0) {
   try { next = new URL(loc, url).href; } catch { next = loc; }
   if (!isAllowedMediaUrl(next)) throw new Error('Redirect host not allowed');
 
-  // edge (bingo/shadow) с части сетей недоступен — не уходим в 12s+ таймаут
+  // edge (bingo/shadow) с части сетей недоступен — пусть вызывающий код сменит pN-зеркало
   if (isKodikEdgeHost(new URL(next).hostname) && isKodikCdn(url)) {
     throw new Error('Kodik CDN edge unreachable');
   }
@@ -202,6 +280,43 @@ async function fetchMedia(url, method, headers, hops = 0) {
   }
 
   return fetchMedia(next, method, headers, hops + 1);
+}
+
+/**
+ * Try URL (+ Kodik pN mirrors). Returns first 200/206, or null.
+ * Network / 5xx / edge-unreachable → next mirror (client never sees mid-hop 502).
+ */
+async function fetchMediaResilient(url, method, headers) {
+  const candidates = solodMirrorCandidates(url);
+  let lastErr = null;
+  let lastStatus = 0;
+
+  for (const cand of candidates) {
+    try {
+      const { res, finalUrl } = await fetchMedia(cand, method, headers);
+      if (res.ok || res.status === 206) {
+        rememberSolodHost(cand);
+        rememberSolodHost(finalUrl);
+        return { res, finalUrl: finalUrl || cand, usedUrl: cand };
+      }
+      lastStatus = res.status;
+      await drain(res);
+      if (!shouldFailoverStatus(res.status)) {
+        // Hard 4xx (404 etc.) — no point cycling mirrors.
+        return { res, finalUrl: finalUrl || cand, usedUrl: cand };
+      }
+    } catch (err) {
+      lastErr = err;
+      // try next mirror
+    }
+  }
+
+  if (lastErr) throw lastErr;
+  if (lastStatus) {
+    // All mirrors returned retryable statuses — synthesize failure for caller.
+    throw new Error(`Upstream status ${lastStatus}`);
+  }
+  throw new Error('Upstream fetch failed');
 }
 
 async function proxyMediaRequest(req, res, targetUrl, refOverride, cookieOverride) {
@@ -225,15 +340,14 @@ async function proxyMediaRequest(req, res, targetUrl, refOverride, cookieOverrid
   let upstream;
   let finalUrl = preferred;
   try {
-    const first = await fetchMedia(preferred, method, headers);
-    upstream = first.res;
-    finalUrl = first.finalUrl || preferred;
-    if ((!upstream.ok && upstream.status !== 206) && preferred !== targetUrl) {
-      await drain(upstream);
-      const fallback = await fetchMedia(targetUrl, method, headers);
-      upstream = fallback.res;
-      finalUrl = fallback.finalUrl || targetUrl;
+    let got = await fetchMediaResilient(preferred, method, headers);
+    // If HLS rewrite failed with hard 4xx, try original non-HLS URL once.
+    if ((!got.res.ok && got.res.status !== 206) && preferred !== targetUrl) {
+      await drain(got.res);
+      got = await fetchMediaResilient(targetUrl, method, headers);
     }
+    upstream = got.res;
+    finalUrl = got.finalUrl || preferred;
   } catch (err) {
     const timedOut = err?.name === 'TimeoutError' || err?.name === 'AbortError';
     res.writeHead(timedOut ? 504 : 502, { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders() });
@@ -244,7 +358,17 @@ async function proxyMediaRequest(req, res, targetUrl, refOverride, cookieOverrid
   const ct = upstream.headers.get('content-type') || '';
 
   if (isPlaylistUrl(finalUrl, ct) && req.method !== 'HEAD') {
-    const text = await upstream.text();
+    let text = await upstream.text();
+    if (stickySolodHost) {
+      text = pinSolodHostsInPlaylist(text, stickySolodHost);
+      try {
+        const base = new URL(finalUrl);
+        if (isSolodProgressiveHost(base.hostname)) {
+          base.hostname = stickySolodHost;
+          finalUrl = base.href;
+        }
+      } catch { /* keep */ }
+    }
     const rewritten = rewriteM3u8(text, finalUrl, refOverride, cookie);
     res.writeHead(200, {
       ...corsHeaders(),
@@ -255,10 +379,22 @@ async function proxyMediaRequest(req, res, targetUrl, refOverride, cookieOverrid
     return;
   }
 
+  // Non-OK after resilient fetch (hard 4xx) — forward status.
+  if (!upstream.ok && upstream.status !== 206) {
+    const body = Buffer.from(await upstream.arrayBuffer().catch(() => new ArrayBuffer(0)));
+    res.writeHead(upstream.status, {
+      ...corsHeaders(),
+      'Content-Type': ct || 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+    });
+    res.end(body);
+    return;
+  }
+
   const out = { ...corsHeaders() };
   if (ct) out['Content-Type'] = ct;
-  const cl = upstream.headers.get('content-length');
-  if (cl) out['Content-Length'] = cl;
+  // Do NOT forward Content-Length when piping: mid-body abort + stale length
+  // → net::ERR_CONTENT_LENGTH_MISMATCH. Chunked fails cleanly → hls.js retries.
   const cr = upstream.headers.get('content-range');
   if (cr) out['Content-Range'] = cr;
   const ar = upstream.headers.get('accept-ranges');
@@ -276,6 +412,9 @@ async function proxyMediaRequest(req, res, targetUrl, refOverride, cookieOverrid
   nodeStream.on('error', () => {
     try { res.destroy(); } catch { /* ignore */ }
   });
+  res.on('close', () => {
+    try { nodeStream.destroy(); } catch { /* ignore */ }
+  });
   nodeStream.pipe(res);
 }
 
@@ -287,4 +426,5 @@ module.exports = {
   proxyMediaRequest,
   corsHeaders,
   EXTRA_MEDIA_HOSTS,
+  solodMirrorCandidates,
 };

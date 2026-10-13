@@ -1,12 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
-  import { iconArrowLeft, iconArrowRight, iconSearch, iconUsers, iconBell, iconCalendar, iconUser, iconSettings, iconDownload, iconChevronDown, iconPlus, iconX } from './icons';
+  import { iconArrowLeft, iconArrowRight, iconRefreshCw, iconBell, iconCalendar, iconUser, iconSettings, iconDownload, iconChevronDown, iconPlus, iconX } from './icons';
   import { checkForUpdate, type UpdateInfo } from '../services/update-checker';
   import type { AppUpdateProgress } from '../types/electron';
+  import { isMac } from '../utils/platform';
   import { isAuthenticated, openLoginPrompt, applyAccountSessionChange } from '../stores/auth';
+  import { goBack, goForward, refreshCurrentPage } from '../stores/navigation';
   import { notificationUnreadCount, refreshNotificationUnreadCount } from '../stores/notifications';
   import ConnectionBanner from './ConnectionBanner.svelte';
+  import TitleBarSearchIsland from './TitleBarSearchIsland.svelte';
   import UiV2Tooltip from './uikit-v2/UiV2Tooltip.svelte';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from './uikit-v2/UiV2PopupMenu.svelte';
 
@@ -15,26 +18,22 @@
   type SavedAccountRow = { id: number; login: string; avatar: string | null; active: boolean };
 
   interface Props {
-    onLobby?: () => void;
     onNotifications?: () => void;
     onSchedule?: () => void;
     scheduleOpen?: boolean;
     onSettings?: () => void;
+    settingsOpen?: boolean;
     onProfile?: (event: MouseEvent) => void;
-    onSearchTab?: () => void;
-    searchTabActive?: boolean;
     onConnectionRetry?: () => void | Promise<void>;
   }
 
   let {
-    onLobby,
     onNotifications,
     onSchedule,
     scheduleOpen = false,
     onSettings,
+    settingsOpen = false,
     onProfile,
-    onSearchTab,
-    searchTabActive = false,
     onConnectionRetry,
   }: Props = $props();
 
@@ -73,10 +72,13 @@
     }
   }
 
-  function accountAvatarIcon(avatar: string | null): string {
-    if (!avatar) return iconUser(18);
-    const url = resolveCdnAssetUrl(avatar);
-    return `<span class="titlebar__account-menu-avatar" style="background-image:url(${url})"></span>`;
+  function accountAvatarIcon(avatar: string | null, fallbackUrl: string | null = null): string {
+    const raw = (avatar && String(avatar).trim()) || (fallbackUrl && String(fallbackUrl).trim()) || '';
+    if (!raw) return iconUser(18);
+    const url = resolveCdnAssetUrl(raw) || raw;
+    if (!url) return iconUser(18);
+    const safe = url.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    return `<img class="titlebar__account-menu-avatar" src="${safe}" alt="" draggable="false" />`;
   }
 
   const accountMenuItems = $derived.by((): UiV2PopupMenuItem[] => {
@@ -84,16 +86,17 @@
     const list = savedAccounts.length > 0
       ? savedAccounts
       : (authed && (profileLogin || profileId)
-          ? [{ id: profileId || 0, login: profileLogin || `ID ${profileId}`, avatar: null, active: true }]
+          ? [{ id: profileId || 0, login: profileLogin || `ID ${profileId}`, avatar: avatarUrl, active: true }]
           : []);
 
     for (const acc of list) {
+      const isActive = !!acc.active || (profileId > 0 && acc.id === profileId);
       items.push({
         id: `account:${acc.id}`,
         label: acc.login || `ID ${acc.id}`,
-        icon: accountAvatarIcon(acc.avatar),
+        icon: accountAvatarIcon(acc.avatar, isActive ? avatarUrl : null),
         type: 'radio',
-        checked: !!acc.active,
+        checked: isActive,
         keepOpen: false,
         trailingIcon: list.length > 1 ? iconX(14) : undefined,
         trailingLabel: list.length > 1 ? 'Выйти / удалить из списка' : undefined,
@@ -203,6 +206,7 @@
     if (installType === 'appimage') return 'Файл скачан — приложение заменится и перезапустится';
     if (installType === 'pacman')   return 'Откроется окно pkexec (ввод пароля root)';
     if (installType === 'flatpak')  return 'Запустится flatpak update';
+    if (isMac) return 'Откроется образ .dmg — перетащите AnixApp в «Программы»';
     return 'Откроется установщик пакета';
   }
 
@@ -243,7 +247,11 @@
       }
     };
     window.addEventListener('app-update-progress', onProgress);
-    window.addEventListener('anix:profileUpdated', syncAvatarFromGlobalProfile as EventListener);
+    const onProfileUpdated = () => {
+      syncAvatarFromGlobalProfile();
+      void refreshSavedAccounts();
+    };
+    window.addEventListener('anix:profileUpdated', onProfileUpdated);
 
     const unsubUnread = notificationUnreadCount.subscribe((n) => {
       hasUnreadNotifications = n > 0;
@@ -269,7 +277,7 @@
 
     return () => {
       window.removeEventListener('app-update-progress', onProgress);
-      window.removeEventListener('anix:profileUpdated', syncAvatarFromGlobalProfile as EventListener);
+      window.removeEventListener('anix:profileUpdated', onProfileUpdated);
       unsubUnread();
       unsubAuth();
       clearInterval(unreadPoll);
@@ -292,8 +300,29 @@
     });
   }
 
-  function handleBack() { window.history.back(); }
-  function handleForward() { window.history.forward(); }
+  let isRefreshing = $state(false);
+
+  function handleRefresh() {
+    if (isRefreshing) return;
+    isRefreshing = true;
+    refreshCurrentPage();
+    window.setTimeout(() => { isRefreshing = false; }, 700);
+  }
+
+  function handleRefreshShortcut(event: KeyboardEvent) {
+    if (event.key !== 'F5' || event.defaultPrevented) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void handleRefresh();
+  }
+
+  onMount(() => {
+    window.addEventListener('keydown', handleRefreshShortcut, true);
+    return () => window.removeEventListener('keydown', handleRefreshShortcut, true);
+  });
+
+  function handleBack() { goBack(); }
+  function handleForward() { goForward(); }
   function handleMinimize() { (window as any).electron?.window?.minimize(); }
   function handleMaximize() { (window as any).electron?.window?.maximize(); }
   function handleClose() { (window as any).electron?.window?.close(); }
@@ -340,10 +369,24 @@
         {@html iconArrowRight(16)}
       </button>
     </UiV2Tooltip>
+    <UiV2Tooltip text="Обновить (F5)">
+      <button
+        type="button"
+        class="titlebar__nav-btn"
+        class:titlebar__nav-btn--refreshing={isRefreshing}
+        id="titlebar-refresh"
+        aria-label="Обновить страницу"
+        onclick={() => void handleRefresh()}
+      >
+        {@html iconRefreshCw(16)}
+      </button>
+    </UiV2Tooltip>
   </div>
 
   <!-- Явная зона drag / dblclick между навигацией и меню -->
-  <div class="titlebar__space" aria-hidden="true"></div>
+  <div class="titlebar__space">
+    <TitleBarSearchIsland />
+  </div>
 
   <div class="titlebar__menu" id="titlebar-menu">
     <ConnectionBanner onRetry={onConnectionRetry} />
@@ -404,18 +447,6 @@
         </UiV2Tooltip>
       {/if}
     {/if}
-
-    <UiV2Tooltip text="Совместный просмотр">
-      <button
-        type="button"
-        class="titlebar__menu-item"
-        id="titlebar-lobby"
-        aria-label="Совместный просмотр"
-        onclick={onLobby}
-      >
-        {@html iconUsers(18)}
-      </button>
-    </UiV2Tooltip>
 
     <UiV2Tooltip text="Расписание">
       <button
@@ -491,23 +522,12 @@
         type="button"
         class="titlebar__menu-item"
         id="titlebar-settings"
+        class:titlebar__menu-item--active={settingsOpen}
         aria-label="Настройки"
+        aria-expanded={settingsOpen}
         onclick={onSettings}
       >
         {@html iconSettings(18)}
-      </button>
-    </UiV2Tooltip>
-
-    <UiV2Tooltip text="Поиск">
-      <button
-        type="button"
-        class="titlebar__menu-item"
-        class:titlebar__menu-item--active={searchTabActive}
-        aria-label="Поиск"
-        aria-current={searchTabActive ? 'page' : undefined}
-        onclick={onSearchTab}
-      >
-        {@html iconSearch(18)}
       </button>
     </UiV2Tooltip>
   </div>

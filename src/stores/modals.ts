@@ -1,5 +1,4 @@
 import { get, writable } from 'svelte/store';
-import { requireAuth } from './auth';
 import { openProfilePanel, closeProfilePanel } from './profile-panel';
 
 export interface LobbyCurrentPlayback {
@@ -24,8 +23,8 @@ export const lobbyWatchingPeerIds = writable<string[]>([]);
 
 export const settingsModalOpen = writable(false);
 export const settingsModalInitialTab = writable<string | null>(null);
-export const lobbyModalOpen = writable(false);
-export const lobbyModalInitialCode = writable<string | null>(null);
+/** Блокирует закрытие/навигацию настроек во время босс-пасхалки. */
+export const settingsBossFightLock = writable(false);
 export const notificationsModalOpen = writable(false);
 export const watchModalOpen = writable(false);
 export const watchModalReleaseId = writable<number>(0);
@@ -45,8 +44,11 @@ const watchModalStateCache = new Map<number, WatchModalCachedState>();
 export const settingsModalLastTab = writable<string | null>(null);
 
 export function openSettingsModal(tab?: string): void {
-  const cached = get(settingsModalLastTab);
-  settingsModalInitialTab.set(tab ?? cached ?? null);
+  if (get(settingsModalOpen) && !tab) {
+    closeSettingsModal();
+    return;
+  }
+  settingsModalInitialTab.set(tab?.trim() || null);
   settingsModalOpen.set(true);
 }
 export function closeSettingsModal(): void {
@@ -67,21 +69,14 @@ export function clearWatchModalState(releaseId?: number): void {
   else watchModalStateCache.clear();
 }
 
-export function openLobbyModal(roomCode?: string): void {
-  if (!requireAuth()) return;
-  lobbyModalInitialCode.set(roomCode ?? null);
-  lobbyModalOpen.set(true);
-}
-export function closeLobbyModal(): void {
-  lobbyModalOpen.set(false);
-  lobbyModalInitialCode.set(null);
-}
-
 export function openNotificationsModal(): void {
   notificationsModalOpen.set(true);
 }
 export function closeNotificationsModal(): void {
   notificationsModalOpen.set(false);
+}
+export function toggleNotificationsModal(): void {
+  notificationsModalOpen.update((open) => !open);
 }
 
 export function openWatchModal(releaseId: number, releaseTitle: string): void {

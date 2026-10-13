@@ -1,9 +1,11 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import Page from './Page.svelte';
   import {
     iconMoreHorizontal,
     iconMessageCircle,
+    iconMessageSquareX,
+    iconBan,
     iconPlus,
   } from './icons';
   import {
@@ -14,10 +16,18 @@
   } from '../stores/profile-panel';
   import { resolveCdnAssetUrl, toCdnProxyUrl, fetchCdnJson } from '../utils/posterUrl';
   import { resolveFriendButtonState } from '../utils/profile-friend';
-  import { fmtDate, fmtLastSeen, isLottieBadgeUrl, posterUrl } from '../views/Profile/_utils';
+  import {
+    fmtDate,
+    fmtLastSeen,
+    getProfileBanNotice,
+    isLottieBadgeUrl,
+    posterUrl,
+  } from '../views/Profile/_utils';
   import { resolveJacksonRefs } from '../utils/jackson-refs';
   import {
     hasProfilePrivacyRestrictions,
+    isBlockedByProfile,
+    PROFILE_BLOCKED_BY_USER_NOTICE,
     PROFILE_PRIVACY_NOTICE,
   } from '../views/Profile/v2/profile-privacy';
   import ProfileStatsSection from '../views/Profile/v2/components/ProfileStatsSection.svelte';
@@ -28,6 +38,16 @@
   import ProfilePanelLoginHistoryView from './ProfilePanelLoginHistoryView.svelte';
   import ProfileSocialSheet from './ProfileSocialSheet.svelte';
   import ProfilePanelMoreSheet, { type ProfileMoreAction } from './ProfilePanelMoreSheet.svelte';
+  import { openFeedMediaLightbox } from '../utils/feed-media-lightbox';
+  import {
+    captureFlip,
+    playFlip,
+    lockHeightAndMeasure,
+    playHeightTo,
+    unlockHeight,
+    clearAllFlips,
+    PROFILE_LAYOUT_MS,
+  } from '../utils/flip-move';
   import UiV2Button from './uikit-v2/UiV2Button.svelte';
   import UiV2RoundButton from './uikit-v2/UiV2RoundButton.svelte';
   import UiV2Card from './uikit-v2/UiV2Card.svelte';
@@ -64,10 +84,80 @@
   let socialPages = $state<ProfileSocialPages | null>(null);
   let socialBusy = $state(false);
   let moreSheetOpen = $state(false);
+  let blogChannelId = $state<number | null>(null);
+  let blogMuted = $state(false);
+  let blogMuteBusy = $state(false);
   let editStartScreen = $state<'menu' | 'status' | 'nickname' | 'social'>('menu');
 
   let badgeLottieEl = $state<HTMLElement | undefined>();
   let badgeAnim: { destroy?: () => void } | null = null;
+
+  /** Широкий UI шапки профиля (FLIP + плавная высота, с реверсом на лету). */
+  const PROFILE_WIDE_ENTER = 480;
+  const PROFILE_WIDE_EXIT = 450;
+  let isWide = $state(false);
+  let topEl = $state<HTMLElement | null>(null);
+  let layoutAnimGen = 0;
+  /** Актуальная ширина для hysteresis без stale-closure. */
+  let wideRef = false;
+
+  function prefersReducedMotion(): boolean {
+    return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function isPanelResizing(): boolean {
+    return typeof document !== 'undefined' && document.body.classList.contains('is-sidebar-panel-resizing');
+  }
+
+  function wideFromWidth(w: number, currentlyWide: boolean): boolean {
+    return currentlyWide ? w >= PROFILE_WIDE_EXIT : w >= PROFILE_WIDE_ENTER;
+  }
+
+  function applyWideInstant(el: HTMLElement, next: boolean) {
+    layoutAnimGen += 1;
+    clearAllFlips(el);
+    unlockHeight(el);
+    // сброс inline transition:none после clear
+    requestAnimationFrame(() => {
+      clearAllFlips(el);
+      for (const node of el.querySelectorAll<HTMLElement>('[data-pp-flip]')) {
+        node.style.transition = '';
+      }
+    });
+    isWide = next;
+    wideRef = next;
+  }
+
+  async function setProfileWide(next: boolean, animate: boolean) {
+    if (next === isWide) return;
+    const el = topEl;
+    if (!el) {
+      isWide = next;
+      wideRef = next;
+      return;
+    }
+
+    // Во время drag ширины панели морф даёт артефакты — только мгновенный layout
+    if (!animate || prefersReducedMotion() || isPanelResizing()) {
+      applyWideInstant(el, next);
+      return;
+    }
+
+    const gen = ++layoutAnimGen;
+    const token = `h-${gen}`;
+
+    const heightFrom = el.getBoundingClientRect().height;
+    const snapshot = captureFlip(el);
+
+    isWide = next;
+    wideRef = next;
+    await tick();
+    if (gen !== layoutAnimGen) return;
+
+    const heightTo = lockHeightAndMeasure(el, heightFrom);
+    playFlip(snapshot, { duration: PROFILE_LAYOUT_MS });
+    playHeightTo(el, heightTo, { duration: PROFILE_LAYOUT_MS, token });
+  }
 
   const login = $derived(String(profile?.login ?? 'Профиль'));
   const avatarUrl = $derived(profile?.avatar ? posterUrl(String(profile.avatar)) : '');
@@ -99,7 +189,11 @@
   );
   const badge = $derived((profile?.badge as { image_url?: string; name?: string } | null) ?? null);
   const friendCount = $derived(Number(profile?.friend_count ?? 0));
-  const showPrivacy = $derived(profile ? hasProfilePrivacyRestrictions(profile, isMyProfile) : false);
+  const blockedByUser = $derived(isBlockedByProfile(profile));
+  const showPrivacy = $derived(
+    profile && !blockedByUser ? hasProfilePrivacyRestrictions(profile, isMyProfile) : false,
+  );
+  const banNotice = $derived(getProfileBanNotice(profile));
   const friendNamesPreview = $derived.by(() => {
     const names = friends
       .map((f) => String(f.login ?? '').trim())
@@ -156,6 +250,7 @@
     {
       requestsDisallowed: !!profile?.is_friend_requests_disallowed,
       isBlocked: !!profile?.is_blocked,
+      isMeBlocked: blockedByUser,
     },
   ));
 
@@ -206,14 +301,42 @@
       const ch = window.anixApi?.channel?.getBlog
         ? await window.anixApi.channel.getBlog(id)
         : await window.anixApi?.channel?.info?.(id);
-      const cover =
-        (ch as { channel?: { cover?: string } } | undefined)?.channel?.cover
-        || (ch as { blogInfo?: { channel?: { cover?: string } } } | undefined)?.blogInfo?.channel?.cover
-        || null;
-      coverUrl = cover ? String(cover) : null;
+      const channel = (ch as { channel?: Record<string, unknown> } | undefined)?.channel
+        ?? (ch as { blogInfo?: { channel?: Record<string, unknown> } } | undefined)?.blogInfo?.channel
+        ?? null;
+      const cover = channel?.cover ? String(channel.cover) : null;
+      coverUrl = cover;
+      const channelId = Number(channel?.id ?? 0);
+      blogChannelId = channelId > 0 ? channelId : null;
+      blogMuted = !!channel?.is_muted;
     } catch {
       coverUrl = null;
+      blogChannelId = null;
+      blogMuted = false;
     }
+  }
+
+  async function resolveBlogChannelId(): Promise<number | null> {
+    if (blogChannelId && blogChannelId > 0) return blogChannelId;
+    const id = Number(profile?.id ?? userId ?? 0);
+    if (!(id > 0)) return null;
+    try {
+      const ch = window.anixApi?.channel?.getBlog
+        ? await window.anixApi.channel.getBlog(id)
+        : await window.anixApi?.channel?.info?.(id);
+      const channel = (ch as { channel?: Record<string, unknown> } | undefined)?.channel
+        ?? (ch as { blogInfo?: { channel?: Record<string, unknown> } } | undefined)?.blogInfo?.channel
+        ?? null;
+      const channelId = Number(channel?.id ?? 0);
+      if (channelId > 0) {
+        blogChannelId = channelId;
+        blogMuted = !!channel?.is_muted;
+        return channelId;
+      }
+    } catch {
+      /* ignore */
+    }
+    return null;
   }
 
   async function loadProfile() {
@@ -250,7 +373,7 @@
   }
 
   async function loadFriendsPreview() {
-    if (!window.anixApi?.profile || !userId || profile?.is_counts_hidden) return;
+    if (!window.anixApi?.profile || !userId || profile?.is_counts_hidden || profile?.is_me_blocked) return;
     try {
       const data = await window.anixApi.profile.getFriends(userId, 0) as { content?: Record<string, unknown>[] };
       friends = (data?.content ?? []).slice(0, 12);
@@ -422,7 +545,63 @@
     if (id === 'loginHistory') openLoginHistoryView();
     else if (id === 'share') void shareProfile();
     else if (id === 'copyLink') void copyProfileLink();
+    else if (id === 'block') void blockProfile();
+    else if (id === 'muteBlog') void toggleMuteBlog();
     else showToast('Скоро', 'err');
+  }
+
+  async function toggleMuteBlog() {
+    if (isMyProfile || blogMuteBusy) return;
+    const api = window.anixApi?.channel;
+    if (!api?.mute || !api?.unmute) {
+      showToast('API недоступно', 'err');
+      return;
+    }
+    blogMuteBusy = true;
+    try {
+      const channelId = await resolveBlogChannelId();
+      if (!(channelId && channelId > 0)) {
+        showToast('У пользователя нет блога', 'err');
+        return;
+      }
+      if (blogMuted) {
+        await api.unmute(channelId);
+        blogMuted = false;
+        showToast('Скрытие блога отменено, он снова будет в ленте', 'ok');
+      } else {
+        const ok = window.confirm(
+          'Скрыть блог из ленты?\n\nЗаписи этого блога перестанут отображаться в ленте и поиске. Отменить можно в настройках профиля → Скрытые каналы.',
+        );
+        if (!ok) return;
+        await api.mute(channelId);
+        blogMuted = true;
+        showToast('Блог скрыт из ленты', 'ok');
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : String(err), 'err');
+    } finally {
+      blogMuteBusy = false;
+    }
+  }
+
+  async function blockProfile() {
+    const id = Number(profile?.id ?? 0);
+    if (!(id > 0) || isMyProfile) return;
+    const api = window.anixApi?.profile?.blockAdd;
+    if (!api) {
+      showToast('API недоступно', 'err');
+      return;
+    }
+    const loginName = String(profile?.login ?? 'пользователя');
+    const ok = window.confirm(`Заблокировать ${loginName}?\n\nОн не сможет просматривать вашу страницу.`);
+    if (!ok) return;
+    try {
+      await api(id);
+      if (profile) profile = { ...profile, is_blocked: true };
+      showToast('Пользователь заблокирован', 'ok');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : String(err), 'err');
+    }
   }
 
   function openFriend(id: number, friendLogin?: string) {
@@ -443,6 +622,28 @@
     if (mod10 === 1 && mod100 !== 11) return 'друг';
     if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'друга';
     return 'друзей';
+  }
+
+  function previewCover(e: MouseEvent) {
+    if (!coverUrl) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openFeedMediaLightbox(
+      [{ url: toCdnProxyUrl(coverUrl), kind: 'image' }],
+      0,
+      e.currentTarget as HTMLElement,
+    );
+  }
+
+  function previewAvatar(e: MouseEvent) {
+    if (!avatarUrl) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openFeedMediaLightbox(
+      [{ url: avatarUrl, kind: 'image' }],
+      0,
+      e.currentTarget as HTMLElement,
+    );
   }
 
   $effect(() => {
@@ -467,6 +668,23 @@
 
   onMount(() => {
     void loadProfile();
+  });
+
+  $effect(() => {
+    const el = topEl;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const initial = wideFromWidth(el.getBoundingClientRect().width, false);
+    isWide = initial;
+    wideRef = initial;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      void setProfileWide(wideFromWidth(w, wideRef), true);
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      unlockHeight(el);
+    };
   });
 
   onDestroy(() => destroyBadgeAnim());
@@ -503,103 +721,154 @@
           inert={panelView === 'overview' ? undefined : true}
         >
           <Page scrollId={`profile-panel-${userId}`} extraClass="profile-panel__page">
-            <section class="profile-panel__top">
-              <div class="profile-panel__banner" class:profile-panel__banner--empty={!coverUrl && !roles[0]?.color} style={bannerStyle}></div>
+            <section
+              class="profile-panel__top"
+              class:profile-panel__top--wide={isWide}
+              bind:this={topEl}
+            >
+              {#if banNotice}
+                <div class="profile-panel__ban-alert" role="status">
+                  <span class="profile-panel__ban-alert-icon" aria-hidden="true">
+                    {@html iconMessageSquareX(18)}
+                  </span>
+                  <p class="profile-panel__ban-alert-text">{banNotice}</p>
+                </div>
+              {/if}
 
-              <div class="profile-panel__identity">
-                <div class="profile-panel__avatar-wrap">
-                  <div
-                    class="profile-panel__avatar"
-                    style={avatarUrl ? `background-image:url('${avatarUrl}')` : undefined}
-                    role="img"
-                    aria-label={login}
-                  ></div>
-                  <span
-                    class="profile-panel__online"
-                    class:profile-panel__online--on={isOnline}
-                    aria-hidden="true"
-                  ></span>
+              {#if coverUrl}
+                <button
+                  type="button"
+                  class="profile-panel__banner profile-panel__banner--clickable"
+                  style={bannerStyle}
+                  aria-label="Смотреть обложку"
+                  onclick={previewCover}
+                ></button>
+              {:else}
+                <div
+                  class="profile-panel__banner"
+                  class:profile-panel__banner--empty={!roles[0]?.color}
+                  style={bannerStyle}
+                ></div>
+              {/if}
+
+              <div class="profile-panel__head">
+                <div class="profile-panel__identity">
+                  <div class="profile-panel__avatar-wrap" data-pp-flip>
+                    {#if avatarUrl}
+                      <button
+                        type="button"
+                        class="profile-panel__avatar profile-panel__avatar--clickable"
+                        style={`background-image:url('${avatarUrl}')`}
+                        aria-label="Смотреть аватар"
+                        onclick={previewAvatar}
+                      ></button>
+                    {:else}
+                      <div
+                        class="profile-panel__avatar"
+                        role="img"
+                        aria-label={login}
+                      ></div>
+                    {/if}
+                    <span
+                      class="profile-panel__online"
+                      class:profile-panel__online--on={isOnline}
+                      aria-hidden="true"
+                    ></span>
+                  </div>
+
+                  <div class="profile-panel__identity-main" data-pp-flip>
+                    <h2 class="profile-panel__name">
+                      <span class="profile-panel__name-text">{login}</span>
+                      {#if badge?.image_url}
+                        {#if isLottieBadgeUrl(badge.image_url)}
+                          <span class="profile-panel__badge" title={badge.name ?? ''} bind:this={badgeLottieEl}></span>
+                        {:else}
+                          <img class="profile-panel__badge-img" src={toCdnProxyUrl(badge.image_url)} alt={badge.name ?? ''} />
+                        {/if}
+                      {/if}
+                      {#if profile.is_verified}
+                        <span class="profile-panel__verified" title="Подтверждён">✓</span>
+                      {/if}
+                    </h2>
+
+                    {#if statusText}
+                      <p class="profile-panel__bio">{statusText}</p>
+                    {/if}
+
+                    {#if level != null || metaSecondary}
+                      <div class="profile-panel__meta">
+                        {#if level != null}
+                          <span class="profile-panel__level">{level}</span>
+                        {/if}
+                        {#if level != null && metaSecondary}
+                          <span class="profile-panel__meta-dot" aria-hidden="true">·</span>
+                        {/if}
+                        {#if metaSecondary}
+                          <span class="profile-panel__meta-text">{metaSecondary}</span>
+                        {/if}
+                      </div>
+                    {/if}
+
+                    {#if roles.length}
+                      <div class="profile-panel__roles">
+                        {#each roles as role}
+                          <span class="profile-panel__role" style={roleStyle(role.color)}>
+                            <i class="profile-panel__role-dot" style="background:{role.color || '#888'}"></i>
+                            {role.name}
+                          </span>
+                        {/each}
+                      </div>
+                    {/if}
+                  </div>
                 </div>
 
-                <h2 class="profile-panel__name">
-                  <span class="profile-panel__name-text">{login}</span>
-                  {#if badge?.image_url}
-                    {#if isLottieBadgeUrl(badge.image_url)}
-                      <span class="profile-panel__badge" title={badge.name ?? ''} bind:this={badgeLottieEl}></span>
-                    {:else}
-                      <img class="profile-panel__badge-img" src={toCdnProxyUrl(badge.image_url)} alt={badge.name ?? ''} />
-                    {/if}
+                <div class="profile-panel__cta" data-pp-flip>
+                  {#if isMyProfile || friendButton.action !== 'none'}
+                    <span class="profile-panel__cta-primary">
+                      <UiV2Button
+                        label={friendBusy ? '…' : primaryLabel}
+                        size="lg"
+                        block
+                        variant={!isMyProfile && friendButton.action === 'send' ? 'light' : 'chrome'}
+                        disabled={!isMyProfile && (friendBusy || friendButton.disabled)}
+                        onclick={() => void onFriendClick()}
+                      />
+                    </span>
+                  {:else if friendButton.disabled}
+                    <span class="profile-panel__cta-primary">
+                      <UiV2Button
+                        label={friendButton.label}
+                        size="lg"
+                        block
+                        variant="light"
+                        disabled
+                        title={blockedByUser ? PROFILE_BLOCKED_BY_USER_NOTICE : friendButton.label}
+                      />
+                    </span>
                   {/if}
-                  {#if profile.is_verified}
-                    <span class="profile-panel__verified" title="Подтверждён">✓</span>
+                  {#if !isMyProfile}
+                    <UiV2RoundButton
+                      label="Сообщение"
+                      size="lg"
+                      title="Сообщение"
+                      disabled={socialBusy}
+                      class={!hasSocial ? 'uiv2-round-btn--muted' : ''}
+                      onclick={() => void openSocialSheet(userId, profile)}
+                    >
+                      {@html iconMessageCircle(18)}
+                    </UiV2RoundButton>
                   {/if}
-                </h2>
-
-                {#if statusText}
-                  <p class="profile-panel__bio">{statusText}</p>
-                {/if}
-
-                {#if level != null || metaSecondary}
-                  <div class="profile-panel__meta">
-                    {#if level != null}
-                      <span class="profile-panel__level">{level}</span>
-                    {/if}
-                    {#if level != null && metaSecondary}
-                      <span class="profile-panel__meta-dot" aria-hidden="true">·</span>
-                    {/if}
-                    {#if metaSecondary}
-                      <span class="profile-panel__meta-text">{metaSecondary}</span>
-                    {/if}
-                  </div>
-                {/if}
-
-                {#if roles.length}
-                  <div class="profile-panel__roles">
-                    {#each roles as role}
-                      <span class="profile-panel__role" style={roleStyle(role.color)}>
-                        <i class="profile-panel__role-dot" style="background:{role.color || '#888'}"></i>
-                        {role.name}
-                      </span>
-                    {/each}
-                  </div>
-                {/if}
-              </div>
-
-              <div class="profile-panel__cta">
-                {#if isMyProfile || friendButton.action !== 'none'}
-                  <UiV2Button
-                    label={friendBusy ? '…' : primaryLabel}
-                    size="lg"
-                    block
-                    variant={!isMyProfile && friendButton.action === 'send' ? 'light' : 'chrome'}
-                    disabled={!isMyProfile && (friendBusy || friendButton.disabled)}
-                    onclick={() => void onFriendClick()}
-                  />
-                {:else if friendButton.disabled}
-                  <UiV2Button label={friendButton.label} size="lg" block disabled />
-                {/if}
-                {#if !isMyProfile}
                   <UiV2RoundButton
-                    label="Сообщение"
+                    label="Ещё"
                     size="lg"
-                    title="Сообщение"
-                    disabled={socialBusy}
-                    class={!hasSocial ? 'uiv2-round-btn--muted' : ''}
-                    onclick={() => void openSocialSheet(userId, profile)}
+                    title="Ещё"
+                    ariaHaspopup="dialog"
+                    ariaExpanded={moreSheetOpen}
+                    onclick={onMoreClick}
                   >
-                    {@html iconMessageCircle(18)}
+                    {@html iconMoreHorizontal(18)}
                   </UiV2RoundButton>
-                {/if}
-                <UiV2RoundButton
-                  label="Ещё"
-                  size="lg"
-                  title="Ещё"
-                  ariaHaspopup="dialog"
-                  ariaExpanded={moreSheetOpen}
-                  onclick={onMoreClick}
-                >
-                  {@html iconMoreHorizontal(18)}
-                </UiV2RoundButton>
+                </div>
               </div>
 
               {#if isMyProfile}
@@ -624,7 +893,7 @@
                 </div>
               {/if}
 
-              {#if !profile.is_counts_hidden && (friendCount > 0 || isMyProfile)}
+              {#if !blockedByUser && !profile.is_counts_hidden && (friendCount > 0 || isMyProfile)}
                 <button type="button" class="profile-panel__friends-row" onclick={openFriendsView}>
                   <div class="profile-panel__friends-copy">
                     <span class="profile-panel__friends-count">{friendCount} {friendWord(friendCount)}</span>
@@ -646,13 +915,20 @@
                 </button>
               {/if}
 
-              {#if showPrivacy}
+              {#if blockedByUser}
+                <div class="profile-panel__block-hint" role="status">
+                  <span class="profile-panel__block-hint-icon" aria-hidden="true">
+                    {@html iconBan(22)}
+                  </span>
+                  <p class="profile-panel__block-hint-text">{PROFILE_BLOCKED_BY_USER_NOTICE}</p>
+                </div>
+              {:else if showPrivacy}
                 <p class="profile-panel__privacy">{PROFILE_PRIVACY_NOTICE}</p>
               {/if}
             </section>
 
             <div class="profile-panel__tab-body">
-              {#if !profile.is_stats_hidden}
+              {#if !blockedByUser && !profile.is_stats_hidden}
                 <UiV2Card title="Статистика">
                   <div class="profile-panel__stats">
                     <ProfileStatsSection
@@ -684,7 +960,7 @@
                     </div>
                   </UiV2Card>
                 {/if}
-              {:else if !isMyProfile}
+              {:else if !blockedByUser && !isMyProfile}
                 <p class="profile-panel__hint">Статистика скрыта настройками приватности.</p>
               {/if}
             </div>
@@ -717,6 +993,7 @@
                 status={statusText}
                 badgeName={badge?.name ?? null}
                 badgeUrl={badge?.image_url ?? null}
+                avatarUrl={avatarUrl}
                 startScreen={editStartScreen}
                 onBack={closeEditView}
                 onProfilePatched={onProfilePatched}
@@ -743,6 +1020,7 @@
   {#if moreSheetOpen}
     <ProfilePanelMoreSheet
       {isMyProfile}
+      {blogMuted}
       onClose={closeMoreSheet}
       onAction={onMoreAction}
     />

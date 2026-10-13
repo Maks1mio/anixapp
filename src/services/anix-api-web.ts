@@ -35,6 +35,9 @@ function buildWebAnixApi(): AnixApi {
       getBaseUrl: () => invoke('anix:getBaseUrl'),
       setBaseUrl: (baseUrl) => invoke('anix:setBaseUrl', baseUrl),
       pingBaseUrl: (baseUrl) => invoke('anix:pingBaseUrl', baseUrl),
+      endpointGeo: (baseUrl) => invoke('anix:endpointGeo', baseUrl),
+      getBackupProxy: () => invoke('anix:getBackupProxy'),
+      setBackupProxyEnabled: (enabled) => invoke('anix:setBackupProxyEnabled', enabled),
       getAuthStatus: () => invoke('anix:getAuthStatus'),
       checkConnection: () => invoke('anix:checkConnection'),
       testOffline: () => invoke('anix:testOffline'),
@@ -87,6 +90,9 @@ function buildWebAnixApi(): AnixApi {
         invoke('anix:profileArticleComments', profileId, page, sort),
       getFavoriteVideos: (profileId, page = 0) =>
         invoke('anix:profileFavoriteVideos', profileId, page),
+      blockList: (page = 0) => invoke('anix:profileBlockList', page),
+      blockAdd: (profileId) => invoke('anix:profileBlockListAdd', profileId),
+      blockRemove: (profileId) => invoke('anix:profileBlockListRemove', profileId),
     },
 
     release: {
@@ -161,6 +167,9 @@ function buildWebAnixApi(): AnixApi {
       collections: (query, page = 0) => invoke('anix:searchCollections', query, page),
       profileList: (status, query, page = 0, searchBy = 0) =>
         invoke('anix:searchProfileList', status, query, page, searchBy),
+      feed: (query, page = 0, searchBy = 0) => invoke('anix:searchFeed', query, page, searchBy),
+      channelSubscribers: (channelId, page = 0, query = '') =>
+        invoke('anix:searchChannelSubscribers', channelId, page, query),
     },
 
     collection: {
@@ -190,18 +199,41 @@ function buildWebAnixApi(): AnixApi {
       articles: (channelId, page = 0) => invoke('anix:channelArticles', channelId, page),
       subscribe: (channelId) => invoke('anix:channelSubscribe', channelId),
       unsubscribe: (channelId) => invoke('anix:channelUnsubscribe', channelId),
-      subscriptions: (page = 0) => invoke('anix:channelSubscriptions', page),
+      mute: (channelId) => invoke('anix:channelMute', channelId),
+      unmute: (channelId) => invoke('anix:channelUnmute', channelId),
+      mutes: (page = 0) => invoke('anix:channelMutes', page),
+      subscriptions: (page = 0, opts) => invoke('anix:channelSubscriptions', page, opts ?? {}),
+      all: (page = 0, opts) => invoke('anix:channelAll', page, opts ?? {}),
+      recommendations: (page = 0, opts) =>
+        invoke('anix:channelRecommendations', page, opts ?? {}),
       editorAll: () => invoke('anix:channelEditorAll'),
+      editorAvailable: (channelId, opts) =>
+        invoke('anix:channelEditorAvailable', channelId, opts ?? {}),
       uploadCover: (channelId, imageBase64, fileName) =>
         invoke('anix:channelUploadCover', channelId, imageBase64, fileName),
       deleteCover: (channelId) => invoke('anix:channelDeleteCover', channelId),
       createBlog: () => invoke('anix:channelCreateBlog'),
+      create: (body) => invoke('anix:channelCreate', body),
+    },
+
+    config: {
+      toggles: () => invoke('anix:configToggles'),
     },
 
     notification: {
       all: (page = 0) => invoke('anix:notificationsAll', page),
       count: () => invoke('anix:notificationsCount'),
       read: () => invoke('anix:notificationsRead'),
+      preference: {
+        my: () => invoke('anix:notificationPreferenceMy'),
+        edit: (type) => invoke('anix:notificationPreferenceEdit', type),
+        editStatus: (statuses) => invoke('anix:notificationPreferenceEditStatus', statuses),
+        editType: (typeIds) => invoke('anix:notificationPreferenceEditType', typeIds),
+        releaseTypes: (releaseId) => invoke('anix:notificationPreferenceReleaseTypes', releaseId),
+        editReleaseTypes: (releaseId, typeIds) =>
+          invoke('anix:notificationPreferenceEditReleaseTypes', releaseId, typeIds),
+        releases: (page = 0) => invoke('anix:notificationPreferenceReleases', page),
+      },
     },
 
     history: {
@@ -223,15 +255,42 @@ function buildWebAnixApi(): AnixApi {
     article: {
       info: (id) => invoke('anix:articleById', id),
       vote: (id, vote) => invoke('anix:articleVote', id, vote),
+      create: (channelId, body) => invoke('anix:articleCreate', channelId, body),
+      edit: (articleId, body) => invoke('anix:articleEdit', articleId, body),
+      createSuggestion: (channelId, body) =>
+        invoke('anix:articleSuggestionCreate', channelId, body),
+      suggestions: (page = 0, opts) =>
+        invoke('anix:articleSuggestions', page, opts ?? {}),
+      deleteSuggestion: (suggestionId) =>
+        invoke('anix:articleSuggestionDelete', suggestionId),
+      uploadImage: (mediaToken, imageBase64, fileName, uploadId) =>
+        invoke('anix:articleUploadImage', mediaToken, imageBase64, fileName, uploadId ?? ''),
+      abortUpload: () => {
+        /* прогресс/abort только в Electron main */
+      },
+      generateEmbed: (type, mediaToken, url) =>
+        invoke('anix:articleGenerateEmbed', type, mediaToken, url),
       delete: (id) => invoke('anix:articleDelete', id),
       mute: (id) => invoke('anix:articleMute', id),
       unmute: (id) => invoke('anix:articleUnmute', id),
       setPinned: (id, isPinned) => invoke('anix:articlePin', id, isPinned),
+      commentsPopular: (id) => invoke('anix:articleCommentsPopular', id),
+      comments: (id, page = 0, sort = 2) => invoke('anix:articleComments', id, page, sort),
+      commentAdd: (id, body) => invoke('anix:articleCommentAdd', id, body),
+      commentReplies: (commentId, page = 0, sort = 2) =>
+        invoke('anix:articleCommentReplies', commentId, page, sort),
+      commentVote: (commentId, vote) => invoke('anix:articleCommentVote', commentId, vote),
+      commentVotes: (commentId, page = 0, sort = 0) =>
+        invoke('anix:articleCommentVotes', commentId, page, sort),
+      commentEdit: (commentId, body) => invoke('anix:articleCommentEdit', commentId, body),
+      commentDelete: (commentId) => invoke('anix:articleCommentDelete', commentId),
     },
 
     report: {
       articleReasons: () => invoke('anix:reportArticleReasons'),
       submitArticle: (body) => invoke('anix:reportArticle', body),
+      channelReasons: () => invoke('anix:reportChannelReasons'),
+      submitChannel: (body) => invoke('anix:reportChannel', body),
     },
 
     home: {
@@ -250,12 +309,24 @@ function buildWebAnixApi(): AnixApi {
       setPrivacyFriendRequests: (state) => invoke('anix:setPrivacyFriendRequests', state),
       getLoginInfo: () => invoke('anix:getLoginInfo'),
       changeLogin: (newLogin) => invoke('anix:changeLogin', newLogin),
+      changeEmail: (data) => invoke('anix:changeEmail', data),
+      changeEmailResend: (data) => invoke('anix:changeEmailResend', data),
+      changeEmailVerify: (data) => invoke('anix:changeEmailVerify', data),
+      changePassword: (data) => invoke('anix:changePassword', data),
       getBadges: (page = 0) => invoke('anix:getBadges', page),
       setBadge: (id) => invoke('anix:setBadge', id),
       removeBadge: () => invoke('anix:removeBadge'),
       selectTheme: (id) => invoke('anix:selectTheme', id),
       setAvatar: (imageBase64, fileName) => invoke('anix:setAvatar', imageBase64, fileName),
       deleteAvatar: () => invoke('anix:deleteAvatar'),
+    },
+
+    profileHealth: {
+      status: () => invoke('anix:profileHealthStatus'),
+      account: (page = 0) => invoke('anix:profileHealthAccount', page),
+      content: (page = 0) => invoke('anix:profileHealthContent', page),
+      enforcement: (id) => invoke('anix:profileHealthEnforcement', id),
+      appeal: (id, body) => invoke('anix:profileHealthAppeal', id, body),
     },
   };
 }
@@ -270,7 +341,9 @@ export async function initWebAnixApi(): Promise<boolean> {
   }
 
   try {
-    const health = await fetch(`${window.location.origin}/__anix/health`);
+    const health = await fetch(`${window.location.origin}/__anix/health`, {
+      signal: AbortSignal.timeout(2500),
+    });
     if (!health.ok) return false;
     window.anixApi = buildWebAnixApi();
     return true;

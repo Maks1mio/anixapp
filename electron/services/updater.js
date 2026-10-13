@@ -29,28 +29,75 @@ function getLinuxInstallType() {
   return 'appimage';
 }
 
-/** Возвращает regex-паттерн для поиска подходящего ассета в GitHub Releases. */
-function getUpdateAssetPattern() {
+/** Возвращает regex-паттерны ассетов в порядке предпочтения для текущей ОС. */
+function getUpdateAssetPatterns() {
   if (process.platform === 'linux') {
     const t = getLinuxInstallType();
-    if (t === 'pacman')  return /\.(pacman|pkg\.tar\.zst)(\?|$)/i;
-    if (t === 'deb')     return /\.deb(\?|$)/i;
-    if (t === 'flatpak') return /\.flatpak(\?|$)/i;
-    return /\.AppImage(\?|$)/i; // appimage + fallback
+    const patterns = [];
+    if (t === 'pacman') patterns.push(/\.(pacman|pkg\.tar\.zst)(\?|$)/i);
+    else if (t === 'deb') patterns.push(/\.deb(\?|$)/i);
+    else if (t === 'flatpak') patterns.push(/\.flatpak(\?|$)/i);
+    // AppImage — универсальный fallback на Linux (в старых релизах часто только он)
+    patterns.push(/\.AppImage(\?|$)/i);
+    return patterns;
   }
-  return /\.exe(\?|$)/i;
+  if (process.platform === 'darwin') {
+    // Сборки раздельные по архитектуре: AnixApp-<version>-mac-arm64.dmg / -x64.dmg
+    return [new RegExp(`(${process.arch}|universal)\\.dmg(\\?|$)`, 'i')];
+  }
+  return [/\.exe(\?|$)/i];
 }
 
-/** Человекочитаемое расширение для логов. */
+/** Человекочитаемое расширение / платформа для логов и UI. */
 function getUpdateAssetLabel() {
   if (process.platform === 'linux') {
     const t = getLinuxInstallType();
-    if (t === 'pacman')  return '.pacman/.pkg.tar.zst';
-    if (t === 'deb')     return '.deb';
-    if (t === 'flatpak') return '.flatpak';
+    if (t === 'pacman') return '.pacman / .AppImage';
+    if (t === 'deb') return '.deb / .AppImage';
+    if (t === 'flatpak') return '.flatpak / .AppImage';
     return '.AppImage';
   }
+  if (process.platform === 'darwin') return `${process.arch}.dmg`;
   return '.exe';
+}
+
+function getPlatformLabel() {
+  if (process.platform === 'linux') return 'Linux';
+  if (process.platform === 'darwin') return 'macOS';
+  if (process.platform === 'win32') return 'Windows';
+  return process.platform;
+}
+
+function assetMatchText(asset) {
+  const name = typeof asset?.name === 'string' ? asset.name : '';
+  const url = typeof asset?.browser_download_url === 'string' ? asset.browser_download_url : '';
+  return `${name} ${url}`;
+}
+
+function pickInstallAsset(data) {
+  const assets = Array.isArray(data?.assets) ? data.assets : [];
+  for (const pattern of getUpdateAssetPatterns()) {
+    const asset = assets.find((a) => pattern.test(assetMatchText(a)));
+    if (asset && typeof asset.browser_download_url === 'string') return asset;
+  }
+  return null;
+}
+
+function releaseHasInstallAsset(data) {
+  return !!pickInstallAsset(data);
+}
+
+function pickInstallAssetUrl(data) {
+  const asset = pickInstallAsset(data);
+  if (!asset?.browser_download_url) {
+    throw new Error(`No ${getUpdateAssetLabel()} asset in release for ${getPlatformLabel()}`);
+  }
+  return asset.browser_download_url;
+}
+
+function looksPrereleaseVersion(version, prereleaseFlag) {
+  if (prereleaseFlag) return true;
+  return /(?:^|[.+-])(beta|alpha|rc|pre|dev|test)(?:[.+-]|\d|$)/i.test(String(version || ''));
 }
 
 function sendUpdateProgress(extra) {
@@ -67,22 +114,54 @@ function sendUpdateProgress(extra) {
   state.mainWindow.webContents.send('app:update-progress', payload);
 }
 
-async function fetchLatestGitHubRelease() {
+const GITHUB_CACHE_TTL_MS = 15 * 60 * 1000;
+const GITHUB_FORCE_MIN_INTERVAL_MS = 90 * 1000;
+
+/** @type {Map<string, { at: number; data: any }>} */
+const githubJsonCache = new Map();
+/** @type {Map<string, Promise<any>>} */
+const githubJsonInflight = new Map();
+
+function githubCacheKey(urlPath) {
+  return urlPath.startsWith('http') ? urlPath : `https://api.github.com${urlPath}`;
+}
+
+function readGithubCache(key, { allowStale = false, maxAge = GITHUB_CACHE_TTL_MS } = {}) {
+  const hit = githubJsonCache.get(key);
+  if (!hit) return null;
+  const age = Date.now() - hit.at;
+  if (!allowStale && age > maxAge) return null;
+  return hit;
+}
+
+function writeGithubCache(key, data) {
+  githubJsonCache.set(key, { at: Date.now(), data });
+}
+
+function githubGetJsonRaw(urlPath) {
   const https = require('https');
-  const url = 'https://api.github.com/repos/Maks1mio/anixapp/releases/latest';
+  const url = urlPath.startsWith('http')
+    ? urlPath
+    : `https://api.github.com${urlPath}`;
+  const headers = {
+    'User-Agent': 'AnixApp-Updater',
+    Accept: 'application/vnd.github.v3+json',
+  };
+  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '';
+  if (token) headers.Authorization = `Bearer ${token}`;
+
   return new Promise((resolve, reject) => {
     const req = https.get(
       url,
       {
-        headers: {
-          'User-Agent': 'AnixApp-Updater',
-          Accept: 'application/vnd.github.v3+json',
-        },
-        timeout: 15000,
+        headers,
+        timeout: 20000,
       },
       (res) => {
         if (res.statusCode !== 200) {
-          reject(new Error(`GitHub status ${res.statusCode}`));
+          const err = new Error(`GitHub status ${res.statusCode}`);
+          err.statusCode = res.statusCode;
+          reject(err);
           res.resume();
           return;
         }
@@ -108,6 +187,83 @@ async function fetchLatestGitHubRelease() {
   });
 }
 
+/**
+ * Кешированный GitHub JSON.
+ * - обычный вызов: TTL 15 мин
+ * - force=true: сеть только если кешу ≥ 90 сек (антиспам кнопки «Проверить»)
+ * - при 403/сети: отдаём устаревший кеш, если есть
+ */
+async function githubGetJson(urlPath, { force = false } = {}) {
+  const key = githubCacheKey(urlPath);
+  const fresh = readGithubCache(key, { maxAge: GITHUB_CACHE_TTL_MS });
+  if (fresh && !force) return fresh.data;
+
+  if (force) {
+    const recent = readGithubCache(key, { maxAge: GITHUB_FORCE_MIN_INTERVAL_MS });
+    if (recent) {
+      logger.info('update', `github cache: force skipped (<${GITHUB_FORCE_MIN_INTERVAL_MS / 1000}s) ${urlPath}`);
+      return recent.data;
+    }
+  }
+
+  const existing = githubJsonInflight.get(key);
+  if (existing) return existing;
+
+  const request = githubGetJsonRaw(urlPath)
+    .then((data) => {
+      writeGithubCache(key, data);
+      return data;
+    })
+    .catch((err) => {
+      const stale = readGithubCache(key, { allowStale: true, maxAge: Number.POSITIVE_INFINITY });
+      if (stale) {
+        logger.warn(
+          'update',
+          `github cache: stale after ${err?.message ?? err} (${urlPath})`,
+        );
+        return stale.data;
+      }
+      throw err;
+    })
+    .finally(() => {
+      githubJsonInflight.delete(key);
+    });
+
+  githubJsonInflight.set(key, request);
+  return request;
+}
+
+async function fetchLatestGitHubRelease({ force = false } = {}) {
+  return githubGetJson('/repos/Maks1mio/anixapp/releases/latest', { force });
+}
+
+async function fetchGitHubReleaseByTag(tag, { force = false } = {}) {
+  const clean = String(tag || '').replace(/^v/i, '').trim();
+  if (!clean) throw new Error('Empty release tag');
+  // Try with and without leading v — GitHub tags are usually "v1.2.3"
+  try {
+    return await githubGetJson(`/repos/Maks1mio/anixapp/releases/tags/v${clean}`, { force });
+  } catch (first) {
+    try {
+      return await githubGetJson(`/repos/Maks1mio/anixapp/releases/tags/${clean}`, { force });
+    } catch {
+      throw first;
+    }
+  }
+}
+
+async function fetchGitHubReleasesPage(page = 1, perPage = 30, { force = false } = {}) {
+  const data = await githubGetJson(
+    `/repos/Maks1mio/anixapp/releases?per_page=${perPage}&page=${page}`,
+    { force },
+  );
+  return Array.isArray(data) ? data : [];
+}
+
+function normalizeReleaseVersion(data) {
+  return String(data?.tag_name ?? data?.name ?? '').replace(/^v/i, '').trim();
+}
+
 function isNewerAppVersion(latest, current) {
   const parse = (v) => String(v).replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0);
   const a = parse(latest);
@@ -121,12 +277,17 @@ function isNewerAppVersion(latest, current) {
   return false;
 }
 
-ipcMain.handle('app:checkForUpdate', async (_, currentVersion) => {
+ipcMain.handle('app:checkForUpdate', async (_, currentVersion, force) => {
   try {
-    const data = await fetchLatestGitHubRelease();
-    const latest = String(data.tag_name ?? data.name ?? '').replace(/^v/i, '').trim();
-    const current = String(currentVersion ?? '').trim();
+    const data = await fetchLatestGitHubRelease({ force: !!force });
+    const latest = normalizeReleaseVersion(data);
+    const current = String(currentVersion ?? '').trim().replace(/^v/i, '');
     if (!latest || !current || !isNewerAppVersion(latest, current)) return null;
+    // Нет установщика под текущую ОС — обновление не предлагаем
+    if (!releaseHasInstallAsset(data)) {
+      logger.warn('update', `checkForUpdate: no ${getUpdateAssetLabel()} in v${latest}`);
+      return null;
+    }
     return {
       version: latest,
       url: data.html_url ?? 'https://github.com/Maks1mio/anixapp/releases',
@@ -138,34 +299,74 @@ ipcMain.handle('app:checkForUpdate', async (_, currentVersion) => {
   }
 });
 
-async function fetchLatestInstallerUrl() {
-  const data = await fetchLatestGitHubRelease();
-  const assets = Array.isArray(data.assets) ? data.assets : [];
-  const pattern = getUpdateAssetPattern();
-  const asset = assets.find((a) => typeof a.browser_download_url === 'string' && pattern.test(a.browser_download_url));
-  if (!asset) {
-    throw new Error(`No ${getUpdateAssetLabel()} asset in latest release`);
+/** Список релизов GitHub для выбора версии (stable = без prerelease). */
+ipcMain.handle('app:listAppReleases', async (_, currentVersion, channel, force) => {
+  try {
+    const current = String(currentVersion ?? app.getVersion() ?? '').replace(/^v/i, '').trim();
+    const wantBeta = String(channel || 'stable').toLowerCase() === 'beta';
+    const platformLabel = getPlatformLabel();
+    const rows = await fetchGitHubReleasesPage(1, 40, { force: !!force });
+    return rows
+      .map((data) => {
+        const version = normalizeReleaseVersion(data);
+        if (!version) return null;
+        const prerelease = looksPrereleaseVersion(version, !!data.prerelease);
+        if (wantBeta ? !prerelease : prerelease) return null;
+        const asset = pickInstallAsset(data);
+        const hasAsset = !!asset?.browser_download_url;
+        return {
+          version,
+          tag: String(data.tag_name ?? `v${version}`),
+          name: typeof data.name === 'string' ? data.name : version,
+          publishedAt: typeof data.published_at === 'string' ? data.published_at : null,
+          prerelease,
+          draft: !!data.draft,
+          url: data.html_url ?? 'https://github.com/Maks1mio/anixapp/releases',
+          hasAsset,
+          platformLabel,
+          assetLabel: getUpdateAssetLabel(),
+          channel: wantBeta ? 'beta' : 'stable',
+          source: 'github',
+          downloadUrl: hasAsset ? asset.browser_download_url : null,
+          isCurrent: version === current,
+          isNewer: current ? isNewerAppVersion(version, current) : false,
+          isOlder: current ? isNewerAppVersion(current, version) : false,
+        };
+      })
+      .filter((r) => r && !r.draft);
+  } catch (err) {
+    logger.warn('update', `listAppReleases: ${err?.message ?? err}`);
+    throw err;
   }
-  return asset.browser_download_url;
+});
+
+async function fetchInstallerUrl(versionOrNull) {
+  const data = versionOrNull
+    ? await fetchGitHubReleaseByTag(versionOrNull)
+    : await fetchLatestGitHubRelease();
+  return pickInstallAssetUrl(data);
 }
 
-async function downloadInstaller() {
+async function downloadInstaller(versionOrNull, downloadUrlOverride) {
   const path = require('path');
   const fs = require('fs');
   const https = require('https');
+  const http = require('http');
 
   let file = null;
   let destPath = null;
 
   try {
     state.updateDownloadState = { state: 'downloading', received: 0, total: 0 };
-    sendUpdateProgress();
+    sendUpdateProgress({ targetVersion: versionOrNull ? String(versionOrNull).replace(/^v/i, '') : null });
 
-    const downloadUrl = await fetchLatestInstallerUrl();
+    const downloadUrl = downloadUrlOverride
+      ? String(downloadUrlOverride)
+      : await fetchInstallerUrl(versionOrNull || null);
     const updatesDir = path.join(app.getPath('userData'), 'updates');
     if (!fs.existsSync(updatesDir)) fs.mkdirSync(updatesDir, { recursive: true });
 
-    const fileName = path.basename(downloadUrl.split('?')[0] || 'AnixApp-Setup.exe');
+    const fileName = path.basename(downloadUrl.split('?')[0] || 'AnixApp-Setup.exe') || 'AnixApp-Setup.exe';
     destPath = path.join(updatesDir, fileName);
 
     // Remove stale partial downloads
@@ -183,7 +384,8 @@ async function downloadInstaller() {
 
       const maxRedirects = 5;
       function doRequest(url, redirectsLeft) {
-        const req = https.get(
+        const lib = String(url).startsWith('http://') ? http : https;
+        const req = lib.get(
           url,
           { headers: { 'User-Agent': 'AnixApp-Updater' } },
           (res) => {
@@ -230,7 +432,9 @@ async function downloadInstaller() {
 
     state.pendingInstallerPath = destPath;
     state.updateDownloadState.state = 'ready';
-    sendUpdateProgress();
+    sendUpdateProgress({
+      targetVersion: versionOrNull ? String(versionOrNull).replace(/^v/i, '') : null,
+    });
   } catch (e) {
     console.error('Updater download error', e);
     state.updateDownloadState = { state: 'error', received: 0, total: 0 };
@@ -242,10 +446,19 @@ async function downloadInstaller() {
   }
 }
 
-ipcMain.handle('app:startUpdateDownload', async () => {
+ipcMain.handle('app:startUpdateDownload', async (_, versionOrOpts, maybeUrl) => {
   if (state.updateDownloadState.state === 'downloading') return;
+  let target = null;
+  let downloadUrl = null;
+  if (versionOrOpts && typeof versionOrOpts === 'object') {
+    target = versionOrOpts.version != null ? String(versionOrOpts.version).trim() : null;
+    downloadUrl = versionOrOpts.downloadUrl != null ? String(versionOrOpts.downloadUrl).trim() : null;
+  } else {
+    target = versionOrOpts != null && String(versionOrOpts).trim() ? String(versionOrOpts).trim() : null;
+    downloadUrl = maybeUrl != null && String(maybeUrl).trim() ? String(maybeUrl).trim() : null;
+  }
   // downloadInstaller is a floating promise — catch here so unhandled rejection never crashes main.
-  downloadInstaller().catch((e) => {
+  downloadInstaller(target, downloadUrl).catch((e) => {
     console.error('Updater unexpected error', e);
     state.updateDownloadState = { state: 'error', received: 0, total: 0 };
     sendUpdateProgress({ errorMessage: String(e) });
@@ -265,6 +478,19 @@ ipcMain.handle('app:installUpdate', async () => {
       const child = spawn(state.pendingInstallerPath, [], { detached: true, stdio: 'ignore', shell: false });
       child.unref();
       isQuitting = true;
+      app.quit();
+      return;
+    }
+
+    // ── macOS: открываем .dmg — пользователь перетаскивает AnixApp в «Программы» ──
+    if (process.platform === 'darwin') {
+      const err = await shell.openPath(state.pendingInstallerPath);
+      if (err) {
+        sendUpdateProgress({ state: 'error', errorMessage: `Не удалось открыть образ: ${err}` });
+        return;
+      }
+      // Запущенное приложение нельзя заменить в «Программах» — закрываемся
+      state.isQuitting = true;
       app.quit();
       return;
     }

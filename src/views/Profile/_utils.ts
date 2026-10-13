@@ -98,3 +98,108 @@ export function fmtLastSeen(ts: number): string {
   const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
   return `был(а) в сети ${date.getDate()} ${months[date.getMonth()]} в ${time}`;
 }
+
+/** «14 сент. в 23:00» — дата окончания бана */
+export function fmtBanUntil(ts: number): string {
+  if (!ts) return '';
+  const date = new Date(ts < 1e12 ? ts * 1000 : ts);
+  const months = ['янв.', 'фев.', 'мар.', 'апр.', 'мая', 'июн.', 'июл.', 'авг.', 'сен.', 'окт.', 'нояб.', 'дек.'];
+  const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  return `${date.getDate()} ${months[date.getMonth()]} в ${time}`;
+}
+
+export type ProfileBanFields = {
+  is_banned?: boolean;
+  is_perm_banned?: boolean;
+  ban_expires?: number | null;
+  ban_reason?: string | null;
+};
+
+type ResolvedProfileBan =
+  | { active: false }
+  | {
+      active: true;
+      perm: boolean;
+      reason: string;
+      expiresRaw: number;
+      expiresMs: number;
+    };
+
+function asBanFields(
+  profile: ProfileBanFields | Record<string, unknown>,
+): ProfileBanFields {
+  return profile as ProfileBanFields;
+}
+
+function resolveProfileBan(
+  profile: ProfileBanFields | Record<string, unknown> | null | undefined,
+): ResolvedProfileBan {
+  if (!profile) return { active: false };
+
+  const p = asBanFields(profile);
+  const perm = !!p.is_perm_banned;
+  const expiresRaw = Number(p.ban_expires ?? 0);
+  const expiresMs = expiresRaw > 0 ? (expiresRaw < 1e12 ? expiresRaw * 1000 : expiresRaw) : 0;
+  const tempActive = expiresMs > Date.now();
+  const flagged = !!p.is_banned || perm;
+
+  if (!flagged && !tempActive) return { active: false };
+  if (!perm && expiresMs > 0 && expiresMs <= Date.now() && !p.is_banned) return { active: false };
+
+  const reason = String(p.ban_reason ?? '').trim() || 'нарушение правил';
+  return { active: true, perm, reason, expiresRaw, expiresMs };
+}
+
+function fmtBanRemaining(expiresMs: number): string {
+  const remaining = expiresMs - Date.now();
+  if (remaining <= 0) return '';
+
+  const min = Math.max(1, Math.floor(remaining / 60000));
+  const hours = Math.floor(remaining / 3600000);
+  const days = Math.floor(remaining / 86400000);
+
+  if (days >= 1) return `ещё ${days} ${ruPlural(days, 'день', 'дня', 'дней')}`;
+  if (hours >= 1) return `ещё ${hours} ${ruPlural(hours, 'час', 'часа', 'часов')}`;
+  return `ещё ${min} ${ruPlural(min, 'минута', 'минуты', 'минут')}`;
+}
+
+export function isProfileBanned(
+  profile: ProfileBanFields | Record<string, unknown> | null | undefined,
+): boolean {
+  return resolveProfileBan(profile).active;
+}
+
+/** Текст плашки бана или `null`, если пользователь не заблокирован. */
+export function getProfileBanNotice(
+  profile: ProfileBanFields | Record<string, unknown> | null | undefined,
+): string | null {
+  const ban = resolveProfileBan(profile);
+  if (!ban.active) return null;
+
+  if (ban.perm) {
+    return `Пользователь был заблокирован навсегда за ${ban.reason}`;
+  }
+
+  const until = ban.expiresRaw > 0 ? fmtBanUntil(ban.expiresRaw) : '';
+  if (until) {
+    return `Пользователь был заблокирован за ${ban.reason} до ${until}`;
+  }
+  return `Пользователь был заблокирован за ${ban.reason}`;
+}
+
+/** Короткий срок бана для списков: «навсегда», «ещё 3 дня». */
+export function getProfileBanDurationLabel(
+  profile: ProfileBanFields | Record<string, unknown> | null | undefined,
+): string | null {
+  const ban = resolveProfileBan(profile);
+  if (!ban.active) return null;
+  if (ban.perm) return 'навсегда';
+
+  const remaining = fmtBanRemaining(ban.expiresMs);
+  if (remaining) return remaining;
+  if (ban.expiresRaw > 0) {
+    const until = fmtBanUntil(ban.expiresRaw);
+    return until ? `до ${until}` : 'бан';
+  }
+  return 'навсегда';
+}

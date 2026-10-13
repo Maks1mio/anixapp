@@ -4,9 +4,16 @@ const { BookmarkType } = require('anixapi');
 
 const AUTH_FILE = 'auth.json';
 const DEFAULT_BASE_URL = 'https://api-s.anixsekai.com';
+/** Хост редактора статей (картинки и embed), не основной API. */
+const EDITOR_ORIGIN = 'https://editor.anixsekai.com';
+/** Резервный прокси AnixApp (не выбирать как основной эндпоинт). */
+const BACKUP_API_PROXY = 'https://api.anixapp.com/anixart-api';
+/** Нерезолвящийся хост — только dev, не сохранять в проде. */
+const DEV_DOWN_API_ENDPOINT = 'https://api-down.anixart.invalid';
 const LOG_DIR = 'logs';
 
-const ANIXART_UA = 'AnixartApp/9.0 BETA 19-26073118 (Android 9; SDK 28; x86_64; ROG ASUS AI2201_B; ru)';
+/** Anixart 10.0. В anixapi по умолчанию всё ещё 9.0 — передаём явно при new Anixart(...). */
+const ANIXART_UA = 'AnixartApp/10.0-26090418 (Android 14; SDK 34; x86_64; ROG ASUS AI2201_B; ru)';
 
 const VIDEO_HOSTS = [
   'anixis.com', 'aniqart.com', 'aniqit.com', 'video.sibnet.ru', 'sibnet.ru',
@@ -46,6 +53,9 @@ const DISCORD_RPC_PAGE_KEYS = [
 module.exports = {
   AUTH_FILE,
   DEFAULT_BASE_URL,
+  EDITOR_ORIGIN,
+  BACKUP_API_PROXY,
+  DEV_DOWN_API_ENDPOINT,
   LOG_DIR,
   ANIXART_UA,
   VIDEO_HOSTS,

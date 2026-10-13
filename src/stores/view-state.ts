@@ -14,6 +14,9 @@ export interface ViewStateEntry<T = unknown> {
 const MAX_ENTRIES = 32;
 const cache = new Map<string, ViewStateEntry>();
 
+/** Пока true — saveViewState* не пишут (soft refresh remount не должен вернуть stale snapshot). */
+let persistBlocked = false;
+
 /** Активный экран регистрирует свой ключ — captureActiveScroll() сохранит scroll по нему */
 let activeScrollKeyGetter: (() => string) | null = null;
 let scrollRestorePending = false;
@@ -66,7 +69,24 @@ export function buildViewStateKey(path?: string, extra?: Record<string, string |
 }
 
 export function saveViewState<T>(key: string, data: T, scrollTop = 0): void {
+  if (persistBlocked) {
+    logViewState('save-blocked', key, { scrollTop, ...summarizeViewData(data) });
+    return;
+  }
   touchKey(key, { data, scrollTop, savedAt: Date.now() });
+}
+
+/** Soft refresh: не давать onDestroy/beforeNavigate вернуть устаревший снимок. */
+export function blockViewStatePersist(): void {
+  persistBlocked = true;
+}
+
+export function unblockViewStatePersist(): void {
+  persistBlocked = false;
+}
+
+export function isViewStatePersistBlocked(): boolean {
+  return persistBlocked;
 }
 
 /** Залогировать восстановление снимка (вызывать из экрана при cache hit) */
@@ -119,6 +139,11 @@ export function registerActiveScrollKey(getter: () => string): () => void {
       activeScrollKeyGetter = null;
     }
   };
+}
+
+/** Есть ли у текущего экрана зарегистрированный ключ кэша (иначе capture запишет scroll не туда). */
+export function hasActiveScrollKey(): boolean {
+  return activeScrollKeyGetter != null;
 }
 
 /** Сохранить scroll уходящего экрана (до сброса DOM) */

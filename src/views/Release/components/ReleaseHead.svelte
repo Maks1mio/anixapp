@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import Select from '../../../components/Select.svelte';
   import type { SelectOption } from '../../../components/select';
   import {
@@ -6,14 +7,24 @@
     iconFlag,
     iconMessageCircle,
     iconChevronDown,
+    iconBellPlus,
+    iconBellRing,
+    iconMoreVertical,
   } from '../../../components/icons';
+  import { showToast } from '../../../stores/toast';
+  import { portal } from '../../../actions/portal';
+  import MobileDownloadFlow from '../../../components/MobileDownloadFlow.svelte';
+  import { downloadsAvailable } from '../../../native/anix-downloads';
+  import { iconDownload, iconShare } from '../../../components/icons';
   import TitleInfoTrigger from '../../../components/TitleInfoTrigger.svelte';
   import ReleaseMetaInfoIcon from './ReleaseMetaInfoIcon.svelte';
   import type { ReleaseMetaInfoRow } from '../_metaInfo';
   import { openReleaseMetaSearch } from '../../../utils/releaseMetaSearch';
   import type { ListStatusId } from '../_types';
   import { openImageLightbox, formatVoteCount } from '../_utils';
+import { requestOpenExternal } from '../../../utils/external-link';
   import { toPosterDisplayUrl } from '../../../utils/posterUrl';
+  import { isMobileMode } from '../../../platform/mobile';
 
   interface Props {
     posterUrl:       string;
@@ -37,10 +48,14 @@
     episodeAddedText: string | null;
     currentStatus:   ListStatusId | null;
     selectOptions:   SelectOption[];
+    notifyEnabled?:  boolean;
+    showNotify?:     boolean;
     onToggleFavorite: () => void;
     onWatch:          () => void;
     onSetStatus:      (v: string) => void;
     onToggleDesc:     () => void;
+    onOpenNotify?:    () => void;
+    airDate?:          Snippet;
     /** TV: широкая шапка и кнопка статуса вместо Select */
     tvMode?:           boolean;
     statusButtonLabel?: string;
@@ -54,7 +69,11 @@
     noteHtml, descHtml, descClean, descNeedsTruncate, descCollapsed,
     metaInfoRows, playBtnText, playBtnDisabled, episodeAddedText,
     currentStatus, selectOptions,
+    notifyEnabled = false,
+    showNotify = false,
     onToggleFavorite, onWatch, onSetStatus, onToggleDesc,
+    onOpenNotify,
+    airDate,
     tvMode = false,
     statusButtonLabel = 'В список',
     onOpenStatusPicker,
@@ -62,30 +81,65 @@
 
   const displayPosterUrl = $derived(toPosterDisplayUrl(posterUrl, 'releaseHero'));
 
-  let isWide = $state(
-    tvMode || (typeof window !== 'undefined' ? window.matchMedia('(min-width: 961px)').matches : true),
+  let mqWide = $state(
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 961px)').matches : true,
   );
+  const isWide = $derived(tvMode || mqWide);
 
   const favLabel = $derived(
     favoritesCount > 0 ? formatVoteCount(favoritesCount).replace(/\s/g, ' ') : '',
   );
 
   $effect(() => {
-    if (tvMode) {
-      isWide = true;
-      return;
-    }
+    if (tvMode) return;
     const mq = window.matchMedia('(min-width: 961px)');
     const update = () => {
-      isWide = mq.matches;
+      mqWide = mq.matches;
     };
     update();
     mq.addEventListener('change', update);
     return () => mq.removeEventListener('change', update);
   });
 
+  let moreOpen = $state(false);
+  let downloadOpen = $state(false);
+  function currentReleaseId(): number {
+    return parseInt(/release\/(\d+)/.exec(window.location.pathname)?.[1] ?? '0', 10);
+  }
+
+  /** Телефон: «⋮» рядом с «Воспроизвести» — поделиться ссылкой на релиз. */
+  async function shareRelease() {
+    const id = /release\/(\d+)/.exec(window.location.pathname)?.[1];
+    if (!id) return;
+    const url = `https://anixart.app/release/${id}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: titleRu || title, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      showToast('Ссылка скопирована');
+    } catch { /* пользователь закрыл диалог */ }
+  }
+
   function scrollToComments() {
     document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /**
+   * Ссылки внутри описания/примечания (сырой HTML от API) перехватываем и отдаём
+   * в `requestOpenExternal`: доверенные — модалка подтверждения, остальные — тост.
+   * Без этого клик уходил в навигацию фрейма, и Electron открывал сайт во внешнем
+   * браузере в обход проверки хостов.
+   */
+  function onRichTextClick(e: MouseEvent) {
+    const target = e.target instanceof Element ? e.target.closest('a') : null;
+    if (!target) return;
+    const href = target.getAttribute('href');
+    e.preventDefault();
+    e.stopPropagation();
+    if (!href) return;
+    requestOpenExternal(href);
   }
 </script>
 
@@ -96,11 +150,11 @@
     data-tv-release-poster
     role={posterUrl ? 'button' : undefined}
     tabindex={posterUrl ? 0 : undefined}
-    onclick={(e) => posterUrl && openImageLightbox(posterUrl, e.currentTarget as HTMLElement)}
+    onclick={(e) => posterUrl && openImageLightbox(displayPosterUrl || posterUrl, e.currentTarget as HTMLElement)}
     onkeydown={(e) => {
       if (e.key === 'Enter' && posterUrl) {
         e.preventDefault();
-        openImageLightbox(posterUrl, e.currentTarget as HTMLElement);
+        openImageLightbox(displayPosterUrl || posterUrl, e.currentTarget as HTMLElement);
       }
     }}
   >
@@ -165,7 +219,7 @@
         <Select
           options={selectOptions}
           value={currentStatus ?? ''}
-          placeholder="Не в списке"
+          placeholder={isMobileMode() ? 'Не смотрю' : 'Не в списке'}
           onChange={onSetStatus}
         />
       {/if}
@@ -182,6 +236,20 @@
         <span class="release-page__actions-chip-label">{favLabel}</span>
       {/if}
     </button>
+
+    {#if showNotify}
+      <button
+        type="button"
+        class="release-page__actions-chip release-page__actions-chip--notify{notifyEnabled ? ' release-page__actions-chip--notify-on' : ''}"
+        title={notifyEnabled ? 'Уведомления о сериях включены' : 'Настроить уведомления о сериях'}
+        aria-label={notifyEnabled ? 'Уведомления о сериях включены' : 'Настроить уведомления о сериях'}
+        onclick={() => onOpenNotify?.()}
+      >
+        <span class="release-page__actions-chip-icon">
+          {@html notifyEnabled ? iconBellRing(18, true) : iconBellPlus(18)}
+        </span>
+      </button>
+    {/if}
 
     <button
       type="button"
@@ -211,6 +279,11 @@
           {/if}
           <span class="release-page__btn-label">{playBtnText}</span>
         </button>
+        {#if isMobileMode()}
+          <button type="button" class="release-page__more" aria-label="Ещё" onclick={() => (moreOpen = true)}>
+            {@html iconMoreVertical(22)}
+          </button>
+        {/if}
       </div>
     </div>
 
@@ -229,7 +302,9 @@
             <ReleaseMetaInfoIcon kind={row.kind} country={row.country} />
             <span class="release-page__meta-info-text">
               {#each row.segments as segment, index (index)}
-                {#if segment.query != null && segment.searchBy != null}
+                {#if segment.airCalendar}
+                  {@render airDate?.()}
+                {:else if segment.query != null && segment.searchBy != null}
                   <button
                     type="button"
                     class="release-page__meta-info-link"
@@ -254,12 +329,13 @@
         на свой страх и риск — видео может не открыться или быть ограничено источником.
       </div>
     {:else if noteHtml}
-      <div class="release-page__note">{@html noteHtml}</div>
+      <div class="release-page__note" onclick={onRichTextClick}>{@html noteHtml}</div>
     {/if}
 
     {#if descClean}
       <div
         class="release-page__desc{descCollapsed && descNeedsTruncate ? ' release-page__desc--collapsed' : ''}"
+        onclick={onRichTextClick}
       >
         {@html descHtml}
       </div>
@@ -273,6 +349,10 @@
 {/snippet}
 
 <div class="release-page__head" class:release-page__head--narrow={!isWide}>
+  {#if isMobileMode() && displayPosterUrl}
+    <!-- Телефон: размытая обложка за шапкой, как в референсе -->
+    <div class="m-release-bg" aria-hidden="true" style="background-image:url({displayPosterUrl})"></div>
+  {/if}
   <div class="release-page__head-top">
     <div class="release-page__head-intro">
       {#if !isWide}
@@ -305,3 +385,27 @@
     {@render bodyBlock()}
   {/if}
 </div>
+
+{#if moreOpen}
+  <div class="m-sheet-scrim" role="presentation" use:portal>
+    <button type="button" class="m-sheet-scrim__bg" aria-label="Закрыть" onclick={() => (moreOpen = false)}></button>
+    <div class="m-sheet-menu" role="menu">
+      {#if downloadsAvailable()}
+        <button type="button" role="menuitem" onclick={() => { moreOpen = false; downloadOpen = true; }}>
+          {@html iconDownload(22)}<span>Скачать серии…</span>
+        </button>
+      {/if}
+      <button type="button" role="menuitem" onclick={() => { moreOpen = false; void shareRelease(); }}>
+        {@html iconShare(22)}<span>Поделиться</span>
+      </button>
+    </div>
+  </div>
+{/if}
+
+{#if downloadOpen}
+  <MobileDownloadFlow
+    releaseId={currentReleaseId()}
+    releaseTitle={titleRu || title}
+    onClose={() => (downloadOpen = false)}
+  />
+{/if}

@@ -1,16 +1,18 @@
 <script lang="ts">
   import { toCdnProxyUrl } from '../utils/posterUrl';
 
-  const MAX_RETRIES = 2;
-  const RETRY_MS = [1200, 3000];
+  const MAX_RETRIES = 12;
+  const RETRY_MS = [800, 1200, 1800, 2500, 3500, 4500, 6000, 7000, 8000, 9000, 10000, 12000];
 
   interface Props {
     src?: string | null;
     label?: string;
+    /** `circle` — пользователь; `channel` — канал (скругление 8px). */
+    shape?: 'circle' | 'channel';
     class?: string;
   }
 
-  let { src = '', label = '?', class: className = '' }: Props = $props();
+  let { src = '', label = '?', shape = 'circle', class: className = '' }: Props = $props();
 
   let attempt = $state(0);
   let loaded = $state(false);
@@ -80,7 +82,10 @@
   }
 </script>
 
-<span class="user-avatar {className}">
+<span
+  class="user-avatar {className}"
+  class:user-avatar--channel={shape === 'channel'}
+>
   {#if showSkeleton}
     <span class="user-avatar__skeleton" aria-hidden="true"></span>
   {/if}

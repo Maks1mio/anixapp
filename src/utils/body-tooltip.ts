@@ -113,6 +113,8 @@ function cleanup(): void {
 /** Call from any Electron window entry point. */
 export function initTooltipSystem(): void {
   if (listenersBound) return;
+  // На телефоне нет hover: эмулированный mouseenter после тапа показывал бы подсказку поверх кнопки.
+  if (document.documentElement.classList.contains('mobile-mode')) return;
   listenersBound = true;
   document.body.addEventListener('mouseenter', onEnter, true);
   document.body.addEventListener('mouseleave', onLeave, true);

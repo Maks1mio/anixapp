@@ -1,24 +1,28 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import type { Snippet } from 'svelte';
-  import { navigate, navigateSearchTab, navigateSidebarTab } from '../stores/navigation';
-  import { activeSidebarTab, isSidebarTabActive } from '../stores/tab-navigation';
+  import { navigate, goBack, goForward, navigateSidebarTab } from '../stores/navigation';
   import { openAdminArea, restoreAdminSession, checkTeamMembership, isTeamMember } from '../stores/admin';
-  import { openLobbyModal, openNotificationsModal, openSettingsModal } from '../stores/modals';
+  import { toggleNotificationsModal, openSettingsModal, settingsModalOpen, settingsBossFightLock } from '../stores/modals';
   import { isAuthenticated, requireAuth } from '../stores/auth';
   import { ensureProfileId } from '../utils/profile';
   import { bindSearchHotkeys } from '../search-controller';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
-  import { iconHome, iconBookmark, iconCompass, iconFlame, iconLayoutGrid, iconDownload, iconNewspaper, iconSignal } from '../components/icons';
-  import { downloads, activeDownloadsCount, downloadsOverallProgress } from '../stores/downloads';
+  import { downloads } from '../stores/downloads';
 
   import TitleBar from '../components/TitleBar.svelte';
   import LobbyNowWatching from '../components/LobbyNowWatching.svelte';
   import SidebarSchedulePanel from '../components/SidebarSchedulePanel.svelte';
   import SidebarProfilePanel from '../components/SidebarProfilePanel.svelte';
+  import SettingsModal from '../components/SettingsModal.svelte';
+  import SidebarPanelResizeHandle from '../components/SidebarPanelResizeHandle.svelte';
   import SidebarPins from '../components/SidebarPins.svelte';
+  import SidebarNavRail from '../components/SidebarNavRail.svelte';
   import Page from '../components/Page.svelte';
   import UiV2Tooltip from '../components/uikit-v2/UiV2Tooltip.svelte';
+  import UiV2MediaLightbox from '../components/uikit-v2/UiV2MediaLightbox.svelte';
+  import { feedMediaLightbox } from '../utils/feed-media-lightbox';
+  import { requestOpenExternal } from '../utils/external-link';
   import { initSidebarPins } from '../stores/sidebar-pins';
   import {
     profilePanelOpen,
@@ -26,6 +30,18 @@
     resetProfilePanelHistory,
     toggleProfilePanel,
   } from '../stores/profile-panel';
+  import {
+    getProfilePanelWidthPx,
+    getSchedulePanelWidthPx,
+    setProfilePanelWidthPx,
+    setSchedulePanelWidthPx,
+    getSidebarNavChromeSide,
+    getSidebarNavEntriesForSide,
+    getSidebarPinsPlacement,
+    type SidebarNavRailEntry,
+  } from '../prefs';
+  import { SIDEBAR_NAV_ITEMS, type SidebarPinsPlacement } from '../constants/sidebar-nav';
+  import { isMac } from '../utils/platform';
 
   interface Props {
     children?: Snippet;
@@ -35,28 +51,35 @@
 
   let { children, currentPath = '/', onConnectionRetry }: Props = $props();
 
-  const SIDEBAR_NAV = [
-    { href: '/', label: 'Главная', icon: iconHome(18) },
-    { href: '/overview', label: 'Обзор', icon: iconCompass(18) },
-    { href: '/fluo', label: 'Fluo', icon: iconSignal(18) },
-    { href: '/feed', label: 'Лента', icon: iconNewspaper(18) },
-    { href: '/overview/popular', label: 'Популярное', icon: iconFlame(18) },
-    { href: '/collections', label: 'Коллекции', icon: iconLayoutGrid(18) },
-    { href: '/bookmarks', label: 'Закладки', icon: iconBookmark(18) },
-    { href: '/downloads', label: 'Загрузки', icon: iconDownload(18) },
-  ];
+  let leftNavEntries = $state<SidebarNavRailEntry[]>(getSidebarNavEntriesForSide('left'));
+  let rightNavEntries = $state<SidebarNavRailEntry[]>(getSidebarNavEntriesForSide('right'));
+  let pinsPlacement = $state<SidebarPinsPlacement>(getSidebarPinsPlacement());
+  let navChromeSide = $state<'left' | 'right'>(getSidebarNavChromeSide());
+  const showLeftSidebar = $derived(leftNavEntries.length > 0 || pinsPlacement === 'left');
+  const showRightSidebar = $derived(rightNavEntries.length > 0 || pinsPlacement === 'right');
 
-  const downloadsBadge = $derived($activeDownloadsCount);
-  const dlProgress = $derived($downloadsOverallProgress);
-  const showDlProgress = $derived(dlProgress > 0 && downloadsBadge > 0);
-  const dlRingOffset = $derived(100 - dlProgress);
+  function syncSidebarNavPrefs() {
+    leftNavEntries = getSidebarNavEntriesForSide('left');
+    rightNavEntries = getSidebarNavEntriesForSide('right');
+    navChromeSide = getSidebarNavChromeSide();
+  }
+
+  function syncPinsPlacement() {
+    pinsPlacement = getSidebarPinsPlacement();
+  }
 
   onMount(() => {
     const cleanupDl = downloads.init();
     const cleanupPins = initSidebarPins();
+    syncSidebarNavPrefs();
+    syncPinsPlacement();
+    window.addEventListener('anix:sidebarNavPrefsChanged', syncSidebarNavPrefs);
+    window.addEventListener('anix:sidebarPinsPrefsChanged', syncPinsPlacement);
     return () => {
       cleanupDl?.();
       cleanupPins();
+      window.removeEventListener('anix:sidebarNavPrefsChanged', syncSidebarNavPrefs);
+      window.removeEventListener('anix:sidebarPinsPrefsChanged', syncPinsPlacement);
     };
   });
 
@@ -72,10 +95,20 @@
   let profileActive = $state(false);
   let profileCloseTimer: ReturnType<typeof setTimeout> | null = null;
   let panelUserId = $state<number | null>(null);
+  let settingsVisible = $state(false);
+  let settingsActive = $state(false);
+  let settingsCloseTimer: ReturnType<typeof setTimeout> | null = null;
   /** После анимации закрытия профиля открыть расписание */
   let openScheduleAfterProfileClose = $state(false);
   /** После анимации закрытия расписания открыть профиль */
   let openProfileAfterScheduleClose = $state<number | null>(null);
+  let openSettingsAfterProfileClose = $state(false);
+  let openSettingsAfterScheduleClose = $state(false);
+  let openScheduleAfterSettingsClose = $state(false);
+  let openProfileAfterSettingsClose = $state<number | null>(null);
+
+  let schedulePanelWidthPx = $state(getSchedulePanelWidthPx());
+  let profilePanelWidthPx = $state(getProfilePanelWidthPx());
 
   function clearScheduleCloseTimer() {
     if (scheduleCloseTimer != null) {
@@ -91,9 +124,21 @@
     }
   }
 
+  function clearSettingsCloseTimer() {
+    if (settingsCloseTimer != null) {
+      clearTimeout(settingsCloseTimer);
+      settingsCloseTimer = null;
+    }
+  }
+
   function finishScheduleClose() {
     if (!scheduleActive) scheduleVisible = false;
     clearScheduleCloseTimer();
+    if (openSettingsAfterScheduleClose) {
+      openSettingsAfterScheduleClose = false;
+      actuallyOpenSettings();
+      return;
+    }
     const pendingId = openProfileAfterScheduleClose;
     if (pendingId != null) {
       openProfileAfterScheduleClose = null;
@@ -109,9 +154,29 @@
       resetProfilePanelHistory();
     }
     clearProfileCloseTimer();
+    if (openSettingsAfterProfileClose) {
+      openSettingsAfterProfileClose = false;
+      actuallyOpenSettings();
+      return;
+    }
     if (openScheduleAfterProfileClose) {
       openScheduleAfterProfileClose = false;
       actuallyOpenSchedule();
+    }
+  }
+
+  function finishSettingsClose() {
+    if (!settingsActive) settingsVisible = false;
+    clearSettingsCloseTimer();
+    if (openScheduleAfterSettingsClose) {
+      openScheduleAfterSettingsClose = false;
+      actuallyOpenSchedule();
+      return;
+    }
+    const pendingId = openProfileAfterSettingsClose;
+    if (pendingId != null) {
+      openProfileAfterSettingsClose = null;
+      actuallyOpenProfile(pendingId);
     }
   }
 
@@ -127,6 +192,14 @@
   }
 
   function openSchedule() {
+    openSettingsAfterProfileClose = false;
+    openSettingsAfterScheduleClose = false;
+    openProfileAfterSettingsClose = null;
+    if (settingsVisible) {
+      openScheduleAfterSettingsClose = true;
+      closeSettings(false);
+      return;
+    }
     if (profileVisible) {
       // Сначала анимация закрытия профиля, потом расписание
       openScheduleAfterProfileClose = true;
@@ -169,6 +242,14 @@
 
   function openProfile(userId: number) {
     openScheduleAfterProfileClose = false;
+    openSettingsAfterProfileClose = false;
+    openSettingsAfterScheduleClose = false;
+    openScheduleAfterSettingsClose = false;
+    if (settingsVisible) {
+      openProfileAfterSettingsClose = userId;
+      closeSettings(false);
+      return;
+    }
     if (scheduleVisible) {
       // Сначала анимация закрытия расписания, потом профиль
       openProfileAfterScheduleClose = userId;
@@ -200,6 +281,59 @@
     profileCloseTimer = setTimeout(finishProfileClose, SCHEDULE_ANIM_MS + 50);
   }
 
+  function actuallyOpenSettings() {
+    clearSettingsCloseTimer();
+    settingsModalOpen.set(true);
+    if (settingsVisible && settingsActive) return;
+    settingsVisible = true;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        settingsActive = true;
+      });
+    });
+  }
+
+  function openSettings() {
+    openScheduleAfterProfileClose = false;
+    openProfileAfterScheduleClose = null;
+    openScheduleAfterSettingsClose = false;
+    openProfileAfterSettingsClose = null;
+    if (settingsVisible && settingsActive) return;
+    if (profileVisible) {
+      openSettingsAfterProfileClose = true;
+      openSettingsAfterScheduleClose = false;
+      closeProfile(false);
+      return;
+    }
+    if (scheduleVisible) {
+      openSettingsAfterScheduleClose = true;
+      openSettingsAfterProfileClose = false;
+      closeSchedule(false);
+      return;
+    }
+    actuallyOpenSettings();
+  }
+
+  function closeSettings(immediate = false) {
+    if ($settingsBossFightLock) return;
+    if (!settingsVisible) return;
+    if (!settingsActive && !immediate) return;
+    settingsActive = false;
+    settingsModalOpen.set(false);
+    clearSettingsCloseTimer();
+    if (immediate) {
+      settingsVisible = false;
+      const pendingSchedule = openScheduleAfterSettingsClose;
+      const pendingProfile = openProfileAfterSettingsClose;
+      openScheduleAfterSettingsClose = false;
+      openProfileAfterSettingsClose = null;
+      if (pendingSchedule) actuallyOpenSchedule();
+      else if (pendingProfile != null) actuallyOpenProfile(pendingProfile);
+      return;
+    }
+    settingsCloseTimer = setTimeout(finishSettingsClose, SCHEDULE_ANIM_MS + 50);
+  }
+
   function toggleSchedule() {
     if (scheduleVisible && scheduleActive) closeSchedule();
     else openSchedule();
@@ -217,16 +351,20 @@
     if (!profileActive) finishProfileClose();
   }
 
-  const sidebarContextTab = $derived($activeSidebarTab);
-  const searchTabActive = $derived(sidebarContextTab === 'search');
-
-  function isActive(href: string): boolean {
-    void sidebarContextTab;
-    return isSidebarTabActive(href, currentPath ?? '');
+  function onSettingsTransitionEnd(e: TransitionEvent) {
+    if (e.target !== e.currentTarget) return;
+    if (e.propertyName !== 'width') return;
+    if (!settingsActive) finishSettingsClose();
   }
 
   const isChatPage = $derived(/^\/announcement\/[^/]+\/chat$/.test(currentPath ?? ''));
-  const pageExtraClass = $derived(isChatPage ? 'page--chat' : undefined);
+  const isFeedPage = $derived((currentPath ?? '') === '/feed');
+  const pageExtraClass = $derived(
+    [isChatPage ? 'page--chat' : '', isFeedPage ? 'page--feed' : '']
+      .filter(Boolean)
+      .join(' ') || undefined,
+  );
+  const mediaPreviewOpen = $derived($feedMediaLightbox != null);
 
   $effect(() => {
     if (currentPath === '/schedule') {
@@ -235,9 +373,22 @@
     }
   });
 
+  $effect(() => {
+    if ($settingsModalOpen) openSettings();
+    else if (settingsVisible && settingsActive) closeSettings();
+  });
+
   onMount(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       // Профиль закрывается только крестиком или расписанием — Esc только для расписания
+      if (e.key === 'Escape' && mediaPreviewOpen) return;
+      if (e.key === 'Escape' && settingsVisible && settingsActive) {
+        if ($settingsBossFightLock) {
+          e.preventDefault();
+          return;
+        }
+        closeSettings();
+      }
       if (e.key === 'Escape' && scheduleVisible && scheduleActive) closeSchedule();
     };
     window.addEventListener('keydown', onKeyDown);
@@ -249,6 +400,28 @@
     const onProfilePanelClose = () => closeProfile();
     window.addEventListener('anix:profilePanelOpen', onProfilePanelOpen);
     window.addEventListener('anix:profilePanelClose', onProfilePanelClose);
+
+    // macOS: «Настройки…» из меню приложения — только открывает, повторное нажатие не закрывает
+    const onMenuOpenSettings = () => {
+      if (!$settingsModalOpen) openSettingsModal();
+    };
+    window.addEventListener('app:openSettings', onMenuOpenSettings);
+
+    // macOS: меню «Переход» — разделы те же, что в боковой панели
+    const onMenuNavigate = (e: Event) => {
+      const detail = (e as CustomEvent<{ action?: string; id?: string }>).detail;
+      if (detail?.action === 'back') return goBack();
+      if (detail?.action === 'forward') return goForward();
+      const item = SIDEBAR_NAV_ITEMS.find((i) => i.id === detail?.id);
+      if (!item) return;
+      if (item.href === '/bookmarks' && !requireAuth()) return;
+      navigateSidebarTab(item.href);
+    };
+    window.addEventListener('app:menuNavigate', onMenuNavigate);
+    if (isMac) {
+      window.electron?.setAppMenuNav?.(SIDEBAR_NAV_ITEMS.map(({ id, label }) => ({ id, label })));
+    }
+    window.dispatchEvent(new CustomEvent('app:menuReady'));
 
     bindSearchHotkeys();
     void restoreAdminSession();
@@ -288,6 +461,8 @@
 
     return () => {
       window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('app:openSettings', onMenuOpenSettings);
+      window.removeEventListener('app:menuNavigate', onMenuNavigate);
       window.removeEventListener('anix:profileUpdated', onProfileUpdated);
       window.removeEventListener('anix:profilePanelOpen', onProfilePanelOpen);
       window.removeEventListener('anix:profilePanelClose', onProfilePanelClose);
@@ -305,167 +480,233 @@
   }
 </script>
 
+{#snippet sidebarChrome(side: 'left' | 'right')}
+  {@const tipSide = side === 'right' ? 'left' : 'right'}
+  <div class="sidebar__bottom">
+    {#if $isTeamMember}
+      <UiV2Tooltip text="Команда" placement={tipSide} class="sidebar__tooltip">
+        <button
+          type="button"
+          class="sidebar__link sidebar__link--social sidebar__link--admin"
+          class:sidebar__link--active={currentPath.startsWith('/admin')}
+          aria-label="Команда"
+          onclick={(e) => {
+            closeSchedule();
+            openAdminArea();
+            (e.currentTarget as HTMLElement).blur();
+          }}
+        >
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </button>
+      </UiV2Tooltip>
+    {/if}
+    <UiV2Tooltip text="Discord" placement={tipSide} class="sidebar__tooltip">
+      <button
+        type="button"
+        class="sidebar__link sidebar__link--social sidebar__link--discord"
+        aria-label="Discord"
+        onclick={(e) => {
+          requestOpenExternal('https://discord.gg/qdFMFxzU9A');
+          (e.currentTarget as HTMLElement).blur();
+        }}
+      >
+        <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+        </svg>
+      </button>
+    </UiV2Tooltip>
+    <UiV2Tooltip text="Telegram" placement={tipSide} class="sidebar__tooltip">
+      <button
+        type="button"
+        class="sidebar__link sidebar__link--social sidebar__link--telegram"
+        aria-label="Telegram"
+        onclick={(e) => {
+          requestOpenExternal('https://t.me/anixapp');
+          (e.currentTarget as HTMLElement).blur();
+        }}
+      >
+        <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+        </svg>
+      </button>
+    </UiV2Tooltip>
+    <UiV2Tooltip text="Boosty" placement={tipSide} class="sidebar__tooltip">
+      <button
+        type="button"
+        class="sidebar__link sidebar__link--social sidebar__link--boosty"
+        aria-label="Boosty"
+        onclick={(e) => {
+          requestOpenExternal('https://boosty.to/evt');
+          (e.currentTarget as HTMLElement).blur();
+        }}
+      >
+        <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <path d="M13.5 2L4 13.5h7L8.5 22 20 10.5h-7L13.5 2z"/>
+        </svg>
+      </button>
+    </UiV2Tooltip>
+  </div>
+{/snippet}
+
 <div class="layout">
   <TitleBar
-    onLobby={() => openLobbyModal()}
     onSchedule={toggleSchedule}
     scheduleOpen={scheduleActive}
     onNotifications={() => {
       if (!requireAuth()) return;
-      openNotificationsModal();
+      toggleNotificationsModal();
     }}
     onSettings={() => openSettingsModal()}
+    settingsOpen={settingsActive}
     onProfile={onProfileClick}
-    onSearchTab={navigateSearchTab}
-    {searchTabActive}
     {onConnectionRetry}
   />
 
   <LobbyNowWatching />
 
   <div class="layout__body">
-    <div class="sidebar-column">
-      <aside class="sidebar">
-        <nav class="sidebar__nav">
-          {#each SIDEBAR_NAV as item}
-            <UiV2Tooltip text={item.label} placement="right" class="sidebar__tooltip">
-              <a
-                href={`#${item.href === '/' ? '/' : item.href}`}
-                class="sidebar__link"
-                class:sidebar__link--active={isActive(item.href)}
-                class:sidebar__link--downloads={item.href === '/downloads'}
-                class:sidebar__link--guest-locked={item.href === '/bookmarks' && !$isAuthenticated}
-                aria-label={item.label}
-                onclick={(e) => {
-                  closeSchedule();
-                  e.preventDefault();
-                  if (item.href === '/bookmarks' && !requireAuth()) {
-                    (e.currentTarget as HTMLElement).blur();
-                    return;
-                  }
-                  navigateSidebarTab(item.href);
-                  (e.currentTarget as HTMLElement).blur();
-                }}
-              >
-                {#if item.href === '/downloads'}
-                  <span class="sidebar-dl-wrap">
-                    {#if showDlProgress}
-                      <svg class="sidebar-dl-ring" viewBox="0 0 36 36" aria-hidden="true">
-                        <circle class="sidebar-dl-ring__bg" cx="18" cy="18" r="15" pathLength="100" />
-                        <circle
-                          class="sidebar-dl-ring__fill"
-                          cx="18"
-                          cy="18"
-                          r="15"
-                          pathLength="100"
-                          stroke-dasharray="100 100"
-                          stroke-dashoffset={dlRingOffset}
-                        />
-                      </svg>
-                    {/if}
-                    {@html item.icon}
-                  </span>
-                  {#if downloadsBadge > 0}
-                    <span class="downloads-badge">{downloadsBadge > 9 ? '9+' : downloadsBadge}</span>
-                  {/if}
-                {:else}
-                  {@html item.icon}
-                {/if}
-              </a>
-            </UiV2Tooltip>
-          {/each}
-        </nav>
-        <SidebarPins currentPath={currentPath} />
-        <div class="sidebar__bottom">
-          {#if $isTeamMember}
-            <UiV2Tooltip text="Команда" placement="right" class="sidebar__tooltip">
-              <button
-                type="button"
-                class="sidebar__link sidebar__link--social sidebar__link--admin"
-                class:sidebar__link--active={currentPath.startsWith('/admin')}
-                aria-label="Команда"
-                onclick={(e) => {
-                  closeSchedule();
-                  openAdminArea();
-                  (e.currentTarget as HTMLElement).blur();
-                }}
-              >
-                <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                </svg>
-              </button>
-            </UiV2Tooltip>
+    {#if showLeftSidebar}
+      <div class="sidebar-column">
+        <aside class="sidebar">
+          <SidebarNavRail
+            entries={leftNavEntries}
+            {currentPath}
+            side="left"
+            onNavigate={closeSchedule}
+          />
+          {#if pinsPlacement === 'left'}
+            <SidebarPins currentPath={currentPath} side="left" />
           {/if}
-          <UiV2Tooltip text="Discord" placement="right" class="sidebar__tooltip">
-            <a
-              href="https://discord.gg/qdFMFxzU9A"
-              class="sidebar__link sidebar__link--social"
-              aria-label="Discord"
-              onclick={(e) => {
-                e.preventDefault();
-                window.electron?.openExternal?.('https://discord.gg/qdFMFxzU9A');
-                (e.currentTarget as HTMLElement).blur();
-              }}
-            >
-              <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
-              </svg>
-            </a>
-          </UiV2Tooltip>
-          <UiV2Tooltip text="Boosty" placement="right" class="sidebar__tooltip">
-            <a
-              href="https://boosty.to/evt"
-              class="sidebar__link sidebar__link--social sidebar__link--boosty"
-              aria-label="Boosty"
-              onclick={(e) => {
-                e.preventDefault();
-                window.electron?.openExternal?.('https://boosty.to/evt');
-                (e.currentTarget as HTMLElement).blur();
-              }}
-            >
-              <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                <path d="M13.5 2L4 13.5h7L8.5 22 20 10.5h-7L13.5 2z"/>
-              </svg>
-            </a>
-          </UiV2Tooltip>
-        </div>
-      </aside>
-    </div>
+          {#if navChromeSide === 'left'}
+            {@render sidebarChrome('left')}
+          {/if}
+        </aside>
+      </div>
+    {/if}
 
     <main class="layout__main">
-      <div class="content-panel">
+      <div class="content-panel" class:content-panel--with-right={showRightSidebar}>
         <div class="content-panel__body">
-          <Page scrollId="content" extraClass={pageExtraClass}>
+          <Page scrollId="content" extraClass={pageExtraClass} noPadding={isFeedPage}>
             {@render children?.()}
           </Page>
         </div>
       </div>
     </main>
 
-    {#if scheduleVisible}
-      <aside
-        class="schedule-panel-wrap"
-        class:schedule-panel-wrap--open={scheduleActive}
-        aria-label="Расписание"
-        aria-hidden={!scheduleActive}
-        ontransitionend={onScheduleTransitionEnd}
-      >
-        <div class="schedule-panel-shell">
-          <SidebarSchedulePanel onClose={() => closeSchedule()} />
-        </div>
-      </aside>
-    {:else if profileVisible && panelUserId}
-      <aside
-        class="schedule-panel-wrap schedule-panel-wrap--profile"
-        class:schedule-panel-wrap--open={profileActive}
-        aria-label="Профиль"
-        aria-hidden={!profileActive}
-        ontransitionend={onProfileTransitionEnd}
-      >
-        <div class="schedule-panel-shell schedule-panel-shell--profile">
-          <SidebarProfilePanel userId={panelUserId} onClose={() => closeProfile()} />
-        </div>
-      </aside>
+    {#if showRightSidebar}
+      <div class="sidebar-column sidebar-column--right">
+        <aside class="sidebar">
+          <SidebarNavRail
+            entries={rightNavEntries}
+            {currentPath}
+            side="right"
+            onNavigate={closeSchedule}
+          />
+          {#if pinsPlacement === 'right'}
+            <SidebarPins currentPath={currentPath} side="right" />
+          {:else if navChromeSide !== 'right'}
+            <div class="sidebar__spacer" aria-hidden="true"></div>
+          {/if}
+          {#if navChromeSide === 'right'}
+            {@render sidebarChrome('right')}
+          {/if}
+        </aside>
+      </div>
     {/if}
   </div>
+
+  {#if scheduleVisible || (profileVisible && panelUserId) || settingsVisible}
+    <button
+      type="button"
+      class="schedule-panel-backdrop"
+      class:schedule-panel-backdrop--open={scheduleActive || profileActive || settingsActive}
+      class:schedule-panel-backdrop--locked={$settingsBossFightLock && settingsActive}
+      aria-label="Закрыть панель"
+      onclick={() => {
+        if ($settingsBossFightLock && settingsActive) return;
+        if (scheduleActive) closeSchedule();
+        else if (profileActive) closeProfile();
+        else if (settingsActive) closeSettings();
+      }}
+    ></button>
+  {/if}
+
+  {#if scheduleVisible}
+    <aside
+      class="schedule-panel-wrap"
+      class:schedule-panel-wrap--open={scheduleActive}
+      aria-label="Расписание"
+      aria-hidden={!scheduleActive}
+      ontransitionend={onScheduleTransitionEnd}
+    >
+      <div class="schedule-panel-shell" style={`width: ${schedulePanelWidthPx}px`}>
+        <div class="schedule-panel-shell__body">
+          <SidebarSchedulePanel onClose={() => closeSchedule()} />
+        </div>
+        <SidebarPanelResizeHandle
+          widthPx={schedulePanelWidthPx}
+          label="Ширина расписания"
+          onWidthChange={(w) => {
+            schedulePanelWidthPx = w;
+          }}
+          onWidthCommit={(w) => {
+            schedulePanelWidthPx = setSchedulePanelWidthPx(w);
+          }}
+        />
+      </div>
+    </aside>
+  {:else if profileVisible && panelUserId}
+    <aside
+      class="schedule-panel-wrap schedule-panel-wrap--profile"
+      class:schedule-panel-wrap--open={profileActive}
+      aria-label="Профиль"
+      aria-hidden={!profileActive}
+      ontransitionend={onProfileTransitionEnd}
+    >
+      <div class="schedule-panel-shell schedule-panel-shell--profile" style={`width: ${profilePanelWidthPx}px`}>
+        <div class="schedule-panel-shell__body">
+          <SidebarProfilePanel userId={panelUserId} onClose={() => closeProfile()} />
+        </div>
+        <SidebarPanelResizeHandle
+          widthPx={profilePanelWidthPx}
+          label="Ширина профиля"
+          onWidthChange={(w) => {
+            profilePanelWidthPx = w;
+          }}
+          onWidthCommit={(w) => {
+            profilePanelWidthPx = setProfilePanelWidthPx(w);
+          }}
+        />
+      </div>
+    </aside>
+  {:else if settingsVisible}
+    <aside
+      class="schedule-panel-wrap schedule-panel-wrap--profile"
+      class:schedule-panel-wrap--open={settingsActive}
+      aria-label="Настройки"
+      aria-hidden={!settingsActive}
+      ontransitionend={onSettingsTransitionEnd}
+    >
+      <div class="schedule-panel-shell schedule-panel-shell--profile" style={`width: ${profilePanelWidthPx}px`}>
+        <div class="schedule-panel-shell__body">
+          <SettingsModal onClose={() => closeSettings()} />
+        </div>
+        <SidebarPanelResizeHandle
+          widthPx={profilePanelWidthPx}
+          label="Ширина настроек"
+          onWidthChange={(w) => {
+            profilePanelWidthPx = w;
+          }}
+          onWidthCommit={(w) => {
+            profilePanelWidthPx = setProfilePanelWidthPx(w);
+          }}
+        />
+      </div>
+    </aside>
+  {/if}
+
+  <UiV2MediaLightbox />
 </div>

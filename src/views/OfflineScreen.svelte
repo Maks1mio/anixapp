@@ -36,6 +36,7 @@
             label=""
             placeholder="Выберите сервер"
             disabled={switching}
+            showAd={false}
             onChange={changeEndpoint}
           />
         </div>

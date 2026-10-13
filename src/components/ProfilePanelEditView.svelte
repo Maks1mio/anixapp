@@ -8,11 +8,17 @@
   import UiV2ChoiceSheet from './uikit-v2/UiV2ChoiceSheet.svelte';
   import UiV2OutlinedField from './uikit-v2/UiV2OutlinedField.svelte';
   import UserBadge from './UserBadge.svelte';
+  import ProfilePanelHealthView from './ProfilePanelHealthView.svelte';
+  import ProfilePanelHiddenChannelsView from './ProfilePanelHiddenChannelsView.svelte';
+  import ProfilePanelBlocklistView from './ProfilePanelBlocklistView.svelte';
+  import ProfilePanelChangeEmailView from './ProfilePanelChangeEmailView.svelte';
+  import ProfilePanelChangePasswordView from './ProfilePanelChangePasswordView.svelte';
   import { resolveBadgeImageUrl, resolveBadgeName, rememberBadgeCatalogEntries, enrichLockedBadgePreviews } from '../utils/badge';
   import { resolveJacksonRefs } from '../utils/jackson-refs';
   import { compressImageForUpload } from '../utils/compressImage';
+  import BlogCreateModal from './feed/BlogCreateModal.svelte';
 
-  type EditScreen = 'menu' | 'status' | 'nickname' | 'social' | 'badge';
+  type EditScreen = 'menu' | 'status' | 'nickname' | 'social' | 'badge' | 'health' | 'hiddenChannels' | 'blocklist' | 'email' | 'password';
   type MediaPickerKind = 'avatar' | 'cover';
 
   interface LoginHistoryItem {
@@ -41,6 +47,7 @@
     status?: string;
     badgeName?: string | null;
     badgeUrl?: string | null;
+    avatarUrl?: string;
     startScreen?: EditScreen;
     onBack: () => void;
     onProfilePatched?: (patch: Record<string, unknown>) => void;
@@ -52,6 +59,7 @@
     status = '',
     badgeName = null,
     badgeUrl = null,
+    avatarUrl = '',
     startScreen = 'menu',
     onBack,
     onProfilePatched,
@@ -132,9 +140,12 @@
   let privacyPicker = $state<{ kind: PrivacyKind; title: string } | null>(null);
   let showcasePickerOpen = $state(false);
   let mediaPicker = $state<MediaPickerKind | null>(null);
+  let blogCreateOpen = $state(false);
+  let blogCreateForCover = $state(false);
 
   let channelId = $state<number | null>(null);
   let hasCover = $state(false);
+  let emailHint = $state('');
   let avatarBanned = $state(false);
   let mediaBusy = $state(false);
   let avatarInputEl = $state<HTMLInputElement | undefined>();
@@ -323,6 +334,11 @@
       case 'nickname': return 'Изменить никнейм';
       case 'social': return 'Социальные сети';
       case 'badge': return 'Изменить значок';
+      case 'health': return 'Здоровье аккаунта';
+      case 'hiddenChannels': return 'Скрытые каналы';
+      case 'blocklist': return 'Блоклист';
+      case 'email': return 'Изменить Email';
+      case 'password': return 'Изменить пароль';
       default: return 'Редактирование';
     }
   });
@@ -378,6 +394,38 @@
     themes.map((theme) => ({ value: theme.id, label: theme.name })),
   );
 
+  async function resolveBlogChannelId(): Promise<number | null> {
+    if (channelId && channelId > 0) return channelId;
+    const api = window.anixApi?.channel;
+    if (!api) return null;
+    try {
+      const blog = api.getBlog ? await api.getBlog(profileId) : await api.info(profileId);
+      const fromBlog = Number(
+        (blog as { channel?: { id?: number } })?.channel?.id
+        ?? (blog as { blogInfo?: { channel?: { id?: number } } })?.blogInfo?.channel?.id
+        ?? 0,
+      );
+      if (fromBlog > 0) {
+        channelId = fromBlog;
+        return fromBlog;
+      }
+    } catch {
+      /* no blog yet */
+    }
+    return null;
+  }
+
+  async function openCoverPicker() {
+    if (mediaBusy) return;
+    const id = await resolveBlogChannelId();
+    if (!id) {
+      blogCreateForCover = true;
+      blogCreateOpen = true;
+      return;
+    }
+    mediaPicker = 'cover';
+  }
+
   function openAvatarPicker() {
     if (mediaBusy) return;
     if (avatarBanned) {
@@ -387,9 +435,13 @@
     mediaPicker = 'avatar';
   }
 
-  function openCoverPicker() {
-    if (mediaBusy) return;
-    mediaPicker = 'cover';
+  async function onBlogCreatedFromSettings(newId: number) {
+    if (newId > 0) channelId = newId;
+    blogCreateOpen = false;
+    if (blogCreateForCover) {
+      blogCreateForCover = false;
+      mediaPicker = 'cover';
+    }
   }
 
   function closeMediaPicker() {
@@ -480,37 +532,10 @@
   }
 
   async function ensureBlogChannelId(): Promise<number | null> {
-    if (channelId && channelId > 0) return channelId;
-    const api = window.anixApi?.channel;
-    if (!api) return null;
-
-    try {
-      const blog = api.getBlog ? await api.getBlog(profileId) : await api.info(profileId);
-      const fromBlog = Number(
-        (blog as { channel?: { id?: number } })?.channel?.id
-        ?? (blog as { blogInfo?: { channel?: { id?: number } } })?.blogInfo?.channel?.id
-        ?? 0,
-      );
-      if (fromBlog > 0) {
-        channelId = fromBlog;
-        return fromBlog;
-      }
-    } catch {
-      /* create below */
-    }
-
-    if (!api.createBlog) return null;
-    try {
-      const created = await api.createBlog();
-      if (created?.code != null && created.code !== 0) return null;
-      const id = Number(created?.channel?.id ?? 0);
-      if (id > 0) {
-        channelId = id;
-        return id;
-      }
-    } catch {
-      return null;
-    }
+    const existing = await resolveBlogChannelId();
+    if (existing) return existing;
+    blogCreateForCover = true;
+    blogCreateOpen = true;
     return null;
   }
 
@@ -544,7 +569,7 @@
     try {
       const id = await ensureBlogChannelId();
       if (!id) {
-        showToast('Не удалось подготовить канал для обложки', 'err');
+        /* диалог улучшения профиля уже открыт, либо API недоступен */
         return;
       }
       const { dataUrl, name } = await fileToDataUrl(file, 1920);
@@ -656,6 +681,11 @@
       selectedThemeId = Number(settings.selected_theme_id ?? 1) || 1;
 
       channelId = Number(settings.channel_id ?? 0) || null;
+      emailHint = String(
+        (settings as { email_hint?: string; emailHint?: string }).email_hint
+          ?? (settings as { emailHint?: string }).emailHint
+          ?? '',
+      ).trim();
       avatarBanned = !!(settings.is_change_avatar_banned);
 
       const badge = settings.badge as BadgeItem | null | undefined;
@@ -688,11 +718,11 @@
     try {
       const merged: BadgeItem[] = [];
       let page = 0;
+      const seenIds = new Set<number>();
       let totalCount = 0;
-      let totalPages = 1;
       let profileBadge: Record<string, unknown> | null = null;
 
-      while (page < totalPages) {
+      while (page <= 50) {
         const res = resolveJacksonRefs(await api.getBadges(page)) as {
           content?: unknown[];
           profile?: { badge?: Record<string, unknown> };
@@ -700,31 +730,33 @@
           totalCount?: number;
           total_page_count?: number;
           totalPageCount?: number;
+          current_page?: number;
+          currentPage?: number;
         };
         const rows = Array.isArray(res?.content) ? res.content : [];
+        if (!rows.length) break;
+        const before = merged.length;
         for (const row of rows) {
           if (!row || typeof row !== 'object') continue;
           const mapped = mapBadgeRow(row as Record<string, unknown>);
-          if (mapped) merged.push(mapped);
+          if (mapped && !seenIds.has(mapped.id)) {
+            seenIds.add(mapped.id);
+            merged.push(mapped);
+          }
         }
+        if (merged.length === before) break;
 
-        totalCount = Number(
+        const nextCount = Number(
           (res as { total_count?: number; totalCount?: number }).total_count
-          ?? (res as { totalCount?: number }).totalCount
-          ?? totalCount,
+          ?? (res as { totalCount?: number }).totalCount,
         );
-        totalPages = Number(
-          (res as { total_page_count?: number; totalPageCount?: number }).total_page_count
-          ?? (res as { totalPageCount?: number }).totalPageCount
-          ?? (rows.length >= 25 ? page + 2 : page + 1),
-        );
+        if (Number.isFinite(nextCount) && nextCount > 0) totalCount = nextCount;
 
         const pb = res?.profile?.badge;
         if (pb && typeof pb === 'object') profileBadge = pb as Record<string, unknown>;
 
-        if (!rows.length) break;
+        if (totalCount > 0 && merged.length >= totalCount) break;
         page += 1;
-        if (rows.length < 25) break;
       }
 
       badges = await enrichLockedBadgePreviews(
@@ -1218,7 +1250,7 @@
           {/if}
         </span>
       </button>
-      <button type="button" class="profile-panel__edit-row" onclick={openCoverPicker} disabled={mediaBusy}>
+      <button type="button" class="profile-panel__edit-row" onclick={() => void openCoverPicker()} disabled={mediaBusy}>
         <span class="profile-panel__edit-row-title">Изменить обложку</span>
         <span class="profile-panel__edit-row-sub">{mediaBusy ? 'Загрузка…' : 'Загрузить с устройства'}</span>
       </button>
@@ -1258,11 +1290,10 @@
 
       <div class="profile-panel__edit-divider" aria-hidden="true"></div>
 
-      <button type="button" class="profile-panel__edit-row" onclick={soon}>
-        <span class="profile-panel__edit-row-title">Лента</span>
-      </button>
-      <button type="button" class="profile-panel__edit-row" onclick={soon}>
+      <h3 class="profile-panel__edit-section">Лента</h3>
+      <button type="button" class="profile-panel__edit-row" onclick={() => { screen = 'hiddenChannels'; }}>
         <span class="profile-panel__edit-row-title">Скрытые каналы</span>
+        <span class="profile-panel__edit-row-sub">Каналы и блоги, скрытые из ленты</span>
       </button>
 
       <div class="profile-panel__edit-divider" aria-hidden="true"></div>
@@ -1279,23 +1310,23 @@
           <span class="profile-panel__edit-row-sub">{privacyValueLabel(row.kind)}</span>
         </button>
       {/each}
-      <button type="button" class="profile-panel__edit-row" onclick={soon}>
+      <button type="button" class="profile-panel__edit-row" onclick={() => { screen = 'blocklist'; }}>
         <span class="profile-panel__edit-row-title">Блоклист</span>
-        <span class="profile-panel__edit-row-sub">Список пользователей, которым запрещен доступ к Вашей странице</span>
+        <span class="profile-panel__edit-row-sub">Список пользователей, которым запрещён доступ к Вашей странице</span>
       </button>
 
       <div class="profile-panel__edit-divider" aria-hidden="true"></div>
 
       <h3 class="profile-panel__edit-section">Безопасность</h3>
-      <button type="button" class="profile-panel__edit-row" onclick={soon}>
+      <button type="button" class="profile-panel__edit-row" onclick={() => (screen = 'health')}>
         <span class="profile-panel__edit-row-title">Здоровье аккаунта</span>
         <span class="profile-panel__edit-row-sub">История нарушений и ограничений</span>
       </button>
-      <button type="button" class="profile-panel__edit-row" onclick={soon}>
+      <button type="button" class="profile-panel__edit-row" onclick={() => (screen = 'email')}>
         <span class="profile-panel__edit-row-title">Изменить Email</span>
         <span class="profile-panel__edit-row-sub">Изменить Email учетной записи</span>
       </button>
-      <button type="button" class="profile-panel__edit-row" onclick={soon}>
+      <button type="button" class="profile-panel__edit-row" onclick={() => (screen = 'password')}>
         <span class="profile-panel__edit-row-title">Изменить пароль</span>
         <span class="profile-panel__edit-row-sub">Изменить пароль учетной записи</span>
       </button>
@@ -1343,6 +1374,16 @@
         <span class="profile-panel__edit-row-sub">Запросить удаление аккаунта или отменить ранее созданный запрос</span>
       </button>
     </div>
+  {:else if screen === 'health'}
+    <ProfilePanelHealthView {avatarUrl} />
+  {:else if screen === 'email'}
+    <ProfilePanelChangeEmailView emailHint={emailHint} onDone={goMenu} />
+  {:else if screen === 'password'}
+    <ProfilePanelChangePasswordView onDone={goMenu} />
+  {:else if screen === 'hiddenChannels'}
+    <ProfilePanelHiddenChannelsView />
+  {:else if screen === 'blocklist'}
+    <ProfilePanelBlocklistView />
   {:else if screen === 'status'}
     <div class="profile-panel__edit-form">
       <UiV2OutlinedField
@@ -1566,6 +1607,15 @@
       onSelect={(v) => void onMediaPickerSelect(v)}
     />
   {/if}
+
+  <BlogCreateModal
+    open={blogCreateOpen}
+    onClose={() => {
+      blogCreateOpen = false;
+      blogCreateForCover = false;
+    }}
+    onCreated={onBlogCreatedFromSettings}
+  />
 
   <input
     bind:this={avatarInputEl}

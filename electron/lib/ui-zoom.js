@@ -1,13 +1,16 @@
 'use strict';
 
 const { UI_ZOOM_LEVELS } = require('./constants');
+const { BrowserWindow } = require('electron');
 const state = require('./app-state');
+const { syncTrafficLights } = require('./mac-window');
 
 function applyUiZoomToWebContents(wc, percent) {
   if (!wc || wc.isDestroyed()) return;
   try {
     wc.setZoomFactor(percent / 100);
   } catch (_) {}
+  syncTrafficLights(BrowserWindow.fromWebContents(wc), percent / 100);
 }
 
 function applyUiZoom(percent) {

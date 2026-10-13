@@ -3,6 +3,10 @@ import { resolveJacksonRefs } from './jackson-refs';
 
 export interface ParsedNotification {
   bodyHtml: string;
+  /** Plain body without message (for spoiler header). */
+  bodyLeadHtml?: string;
+  /** Spoilered comment message (plain). */
+  spoilerText?: string;
   timeStr: string;
   isNew: boolean;
   image: string;
@@ -46,15 +50,30 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function stripHtml(raw: string): string {
+  return decodeHtmlEntities(
+    raw
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim(),
+  );
+}
+
+function decodeHtmlEntities(raw: string): string {
   return raw
-    .replace(/<[^>]+>/g, ' ')
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex: string) => {
+      const code = Number.parseInt(hex, 16);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : '';
+    })
+    .replace(/&#(\d+);/g, (_, dec: string) => {
+      const code = Number(dec);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : '';
+    })
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
     .replace(/&quot;/gi, '"')
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/&apos;/gi, "'");
 }
 
 /** Plain preview from article payload blocks (Anixart-compatible). */
@@ -82,6 +101,34 @@ export function extractArticlePreview(payload: unknown, maxLen = 150): string {
   const joined = parts.join(' ').trim();
   if (!joined) return '';
   return joined.length > maxLen ? `${joined.slice(0, maxLen).trim()}…` : joined;
+}
+
+export type NotificationFilterId =
+  | 'all'
+  | 'episode'
+  | 'article'
+  | 'release'
+  | 'friend'
+  | 'comment';
+
+/** Category for filter chips (Android notifications_filter menu). */
+export function notificationFilterId(rawInput: unknown): Exclude<NotificationFilterId, 'all'> | 'other' {
+  const raw = asRecord(resolveJacksonRefs(rawInput)) ?? {};
+  const type = String(raw.type || '');
+  if (type === 'episode') return 'episode';
+  if (type === 'article') return 'article';
+  if (type === 'relatedRelease') return 'release';
+  if (type === 'friend') return 'friend';
+  if (
+    type === 'releaseComment' ||
+    type === 'collectionComment' ||
+    type === 'articleComment' ||
+    type === 'myCollection' ||
+    type === 'myArticle'
+  ) {
+    return 'comment';
+  }
+  return 'other';
 }
 
 /** Relative / calendar time like Anixart mobile. */
@@ -222,8 +269,9 @@ export function parseNotification(rawInput: unknown): ParsedNotification {
         asRecord(raw.article)?.title ||
         ''
     );
+    const isSpoiler = !!(comment?.is_spoiler || comment?.spoiler || comment?.isSpoiler);
     let bodyHtml = `Новый комментарий от ${boldText(login)}`;
-    if (message) bodyHtml += `: ${escapeHtml(message.slice(0, 120))}`;
+    if (!isSpoiler && message) bodyHtml += `: ${escapeHtml(message.slice(0, 120))}`;
     else if (title) bodyHtml += ` к ${boldQuoted(title)}`;
 
     const release = asRecord(raw.release) ?? asRecord(comment?.release);
@@ -232,6 +280,8 @@ export function parseNotification(rawInput: unknown): ParsedNotification {
 
     return {
       bodyHtml,
+      bodyLeadHtml: `Новый комментарий от ${boldText(login)}`,
+      spoilerText: isSpoiler && message ? message.slice(0, 240) : undefined,
       timeStr,
       isNew,
       image: cdnImage(profile?.avatar),

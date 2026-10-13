@@ -6,6 +6,8 @@
   import { mapCollectionCard } from '../utils/collection';
   import { resolveJacksonRefs } from '../utils/jackson-refs';
   import { setDiscordContext, refreshDiscordPresence } from '../services/discord-presence';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
   import type { CollectionCardData } from '../components/CollectionCard.svelte';
 
   interface Props { id?: number; }
@@ -36,7 +38,7 @@
 
     isLoading = true;
     const nextPage = page;
-    if (nextPage === 0 && items.length === 0) loadState = 'loading';
+    if (nextPage === 0 && items.length === 0 && loadState !== 'error') loadState = 'loading';
 
     try {
       const data = (await window.anixApi.collection.profileCollections(profileId, nextPage)) as {
@@ -57,7 +59,7 @@
       requestAnimationFrame(checkIfNeedsMore);
     } catch (err) {
       if (items.length === 0) {
-        errorMsg = String(err);
+        errorMsg = headlineFromLoadError(err);
         loadState = 'error';
       }
     } finally {
@@ -126,22 +128,7 @@
   {#if loadState === 'loading' && items.length === 0}
     <div class="discover-page__loading">Загрузка…</div>
   {:else if loadState === 'error'}
-    <div class="discover-page__error">
-      <p>{errorMsg || 'Не удалось загрузить коллекции'}</p>
-      <button
-        type="button"
-        class="discover-page__retry"
-        onclick={() => {
-          items = [];
-          page = 0;
-          hasMore = true;
-          loadState = 'loading';
-          void loadPage();
-        }}
-      >
-        Повторить
-      </button>
-    </div>
+    <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadPage()} />
   {:else if loadState === 'empty'}
     <div class="discover-page__empty">Коллекций пока нет</div>
   {:else}

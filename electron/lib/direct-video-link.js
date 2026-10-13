@@ -44,8 +44,17 @@ const SIBNET_PAGE_HEADERS = {
   'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8',
 };
 
-function empty() {
-  return { directUrl: null, quality: null, qualityMap: {}, downloadHeaders: {}, skip: null };
+function empty(extra = {}) {
+  return { directUrl: null, quality: null, qualityMap: {}, downloadHeaders: {}, skip: null, ...extra };
+}
+
+/** Libria iframe.php → 404 / картинка https://anixart.libria.fun/404/404.png (тайтл удалён). */
+function isLibriaUnavailableHtml(html, status) {
+  if (status === 404) return true;
+  if (!html || typeof html !== 'string') return false;
+  if (/\/404\/404\.png|libria\.fun\/404\//i.test(html)) return true;
+  if (/"file"\s*:/.test(html)) return false;
+  return /v-theme--dark[\s\S]*404\.png|title>\s*Not Found|<img[^>]+404\.png/i.test(html);
 }
 
 function toAbs(src) {
@@ -112,13 +121,14 @@ function resultFromMap(qualityMap, headers, extra = {}) {
   }
   const best = pickBest(cleaned);
   const directUrl = best ? cleaned[best] : null;
-  if (!directUrl) return { ...empty(), skip: extra.skip || null };
+  if (!directUrl) return { ...empty(), skip: extra.skip || null, error: extra.error || null };
   return {
     directUrl,
     quality: best,
     qualityMap: cleaned,
     downloadHeaders: headers || {},
     skip: extra.skip || null,
+    error: null,
   };
 }
 
@@ -216,6 +226,9 @@ function parseLibriaFileField(raw) {
   return null;
 }
 
+/**
+ * @returns {Promise<{ map: Record<string, string>|null, unavailable: boolean }>}
+ */
 async function scrapeAnilibriaDirectFiles(embedUrl, epNum) {
   try {
     const res = await fetch(embedUrl, {
@@ -226,25 +239,26 @@ async function scrapeAnilibriaDirectFiles(embedUrl, epNum) {
       },
       signal: AbortSignal.timeout(15_000),
     });
-    if (!res.ok) return null;
-    const html = await res.text();
-    if (/v-theme--dark[\s\S]*404\.png|title>\s*Not Found/i.test(html) && !/"file"\s*:/.test(html)) {
-      return null;
+    const html = res.ok || res.status === 404 ? await res.text().catch(() => '') : '';
+    if (isLibriaUnavailableHtml(html, res.status)) {
+      return { map: null, unavailable: true };
     }
+    if (!res.ok) return { map: null, unavailable: false };
     const blockRe = new RegExp(`"s${epNum}"[^]*?"file":"(.*?)"`, 's');
     const blockMatch = blockRe.exec(html);
     if (blockMatch?.[1]) {
       const parsed = parseLibriaFileField(blockMatch[1]);
-      if (parsed) return parsed;
+      if (parsed) return { map: parsed, unavailable: false };
     }
     // Современный iframe: несколько "file" подряд по сериям — берём epNum-й
     const files = [...html.matchAll(/"file"\s*:\s*"((?:\\.|[^"\\])*)"/g)].map((x) => x[1]);
     if (files.length) {
       const pick = files[epNum - 1] || files[0];
-      return parseLibriaFileField(pick);
+      const parsed = parseLibriaFileField(pick);
+      if (parsed) return { map: parsed, unavailable: false };
     }
   } catch { /* ignore */ }
-  return null;
+  return { map: null, unavailable: false };
 }
 
 function libriaIframeCandidates(url, releaseId, epOrdinal) {
@@ -279,11 +293,20 @@ async function getLibriaDirectLink(url, host) {
     : ['https://anilibria.top/api/v1/anime/releases', 'https://aniliberty.top/api/v1/anime/releases'];
 
   const scrapePromise = (async () => {
+    let unavailableHits = 0;
+    let candidates = 0;
     for (const candidate of libriaIframeCandidates(url, releaseId, epOrdinal)) {
-      const map = await scrapeAnilibriaDirectFiles(candidate, epNum);
-      if (map && Object.keys(map).length) return map;
+      candidates += 1;
+      const scraped = await scrapeAnilibriaDirectFiles(candidate, epNum);
+      if (scraped.unavailable) unavailableHits += 1;
+      if (scraped.map && Object.keys(scraped.map).length) {
+        return { map: scraped.map, unavailable: false };
+      }
     }
-    return null;
+    return {
+      map: null,
+      unavailable: candidates > 0 && unavailableHits === candidates,
+    };
   })();
 
   const apiPromise = (async () => {
@@ -293,26 +316,37 @@ async function getLibriaDirectLink(url, host) {
           headers: { Accept: 'application/json', 'User-Agent': BROWSER_UA },
           signal: AbortSignal.timeout(15_000),
         });
+        if (r.status === 404) return { __missing: true };
         if (r.ok) return await r.json();
       } catch { /* next host */ }
     }
     return null;
   })();
 
-  const [directMap, apiBody] = await Promise.all([scrapePromise, apiPromise]);
+  const [scraped, apiBody] = await Promise.all([scrapePromise, apiPromise]);
+  if (apiBody?.__missing) {
+    return empty({ error: 'libria-release-missing', skip: null });
+  }
+  const directMap = scraped?.map || null;
   const ep = (apiBody?.episodes || []).find((e) => String(e.ordinal) === String(epNum));
   const skip = skipFromLibriaEpisode(ep);
 
   if (directMap && Object.keys(directMap).length) {
     return resultFromMap(directMap, headers, { skip });
   }
-  if (!ep) return { ...empty(), skip };
 
   const qualityMap = {};
-  if (ep.hls_1080) qualityMap['1080'] = toAbs(ep.hls_1080);
-  if (ep.hls_720) qualityMap['720'] = toAbs(ep.hls_720);
-  if (ep.hls_480) qualityMap['480'] = toAbs(ep.hls_480);
-  return resultFromMap(qualityMap, headers, { skip });
+  if (ep?.hls_1080) qualityMap['1080'] = toAbs(ep.hls_1080);
+  if (ep?.hls_720) qualityMap['720'] = toAbs(ep.hls_720);
+  if (ep?.hls_480) qualityMap['480'] = toAbs(ep.hls_480);
+  if (Object.keys(qualityMap).length) {
+    return resultFromMap(qualityMap, headers, { skip });
+  }
+
+  if (scraped?.unavailable || !ep) {
+    return empty({ error: 'libria-release-missing', skip });
+  }
+  return empty({ skip });
 }
 
 function normalizeParserMap(links) {

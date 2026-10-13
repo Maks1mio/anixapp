@@ -14,6 +14,7 @@
   import UiV2RoundButton from './UiV2RoundButton.svelte';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from './UiV2PopupMenu.svelte';
   import { showToast } from '../../stores/toast';
+  import { isMobileMode } from '../../platform/mobile';
   import {
     buildReleaseDefaultMenuItems,
     copyTextToClipboard,
@@ -23,9 +24,10 @@
   import { parseAltTitles } from '../../utils/titleInfo';
   import { formatHistoryViewTime } from '../../utils/historyFormat';
   import { isReleaseAnnounce } from '../../utils/release-card';
-  import { toPosterDisplayUrl } from '../../utils/posterUrl';
+  import { toPosterDisplayUrl, type PosterThumbPreset } from '../../utils/posterUrl';
   import { isTvMode } from '../../platform/tv';
   import { tvLazyPoster } from '../../actions/tvLazyPoster';
+  import PosterImage from '../PosterImage.svelte';
 
   export type UiV2AnimeCardVariant = 'vertical' | 'horizontal';
 
@@ -278,13 +280,11 @@
   const rate = $derived(ratingLabel(rating));
   const dur = $derived(durationLabel(duration));
   const descriptionText = $derived(description ? withEllipsis(description) : null);
+  const posterThumb = $derived<PosterThumbPreset>(
+    variant === 'horizontal' ? 'cardHorizontal' : 'cardVertical',
+  );
   const displayPosterUrl = $derived(
-    posterUrl
-      ? toPosterDisplayUrl(
-          posterUrl,
-          variant === 'horizontal' ? 'cardHorizontal' : 'cardVertical',
-        )
-      : null,
+    posterUrl ? toPosterDisplayUrl(posterUrl, posterThumb) : null,
   );
   const deferPoster = isTvMode();
   const myVoteValue = $derived(
@@ -309,6 +309,8 @@
 
   const horizontalMeta = $derived.by((): string => {
     if (historyMetaParts.length) return historyMetaParts.join(' · ');
+    // Мобильный список: коротко, как в референсе («19 эп • 4.9★»); год/страна/статус — на странице релиза.
+    if (isMobileMode()) return ep || status || '';
     return [
       ep,
       year != null && year !== '' ? String(year) : null,
@@ -494,7 +496,7 @@
         {#if deferPoster}
           <img alt="" decoding="async" use:tvLazyPoster={displayPosterUrl} />
         {:else}
-          <img src={displayPosterUrl} alt="" loading="lazy" decoding="async" />
+          <PosterImage src={posterUrl} thumb={posterThumb} alt="" loading="lazy" />
         {/if}
       {:else}
         <span class="uiv2-anime-card__poster-fallback" aria-hidden="true"></span>
@@ -533,21 +535,24 @@
       <h3 class="uiv2-anime-card__title">{title}</h3>
       {#if isAnnounce}
         <p class="uiv2-anime-card__meta">
-          <span class="uiv2-anime-card__meta-text">Анонс{seasonLabel ? ` ${seasonLabel}` : ''}</span>
+          <span class="uiv2-anime-card__meta-left">
+            <span class="uiv2-anime-card__meta-text">Анонс{seasonLabel ? ` ${seasonLabel}` : ''}</span>
+          </span>
           {#if localFavorite}
             <span class="uiv2-anime-card__favorite" aria-label="В избранном">{@html iconFlag(12, true)}</span>
           {/if}
         </p>
       {:else if verticalMetaLeft.length || showSiteRating || myVoteValue != null || localFavorite}
         <p class="uiv2-anime-card__meta">
-          {#each verticalMetaLeft as part, i (part)}
-            {#if i > 0}<span class="uiv2-anime-card__meta-sep" aria-hidden="true">·</span>{/if}
-            <span class="uiv2-anime-card__meta-text">{part}</span>
-          {/each}
+          {#if verticalMetaLeft.length}
+            <span class="uiv2-anime-card__meta-left">
+              {#each verticalMetaLeft as part, i (part)}
+                {#if i > 0}<span class="uiv2-anime-card__meta-sep" aria-hidden="true">·</span>{/if}
+                <span class="uiv2-anime-card__meta-text">{part}</span>
+              {/each}
+            </span>
+          {/if}
           {#if myVoteValue != null}
-            {#if verticalMetaLeft.length}
-              <span class="uiv2-anime-card__meta-sep" aria-hidden="true">·</span>
-            {/if}
             <span class="uiv2-anime-card__my-vote" title="Моя оценка" aria-label="Оценка {myVoteValue} из 5">
               <span class="uiv2-anime-card__my-vote-stars">
                 {#each [1, 2, 3, 4, 5] as n (n)}
@@ -560,9 +565,6 @@
               </span>
             </span>
           {:else if showSiteRating && rate}
-            {#if verticalMetaLeft.length}
-              <span class="uiv2-anime-card__meta-sep" aria-hidden="true">·</span>
-            {/if}
             <span class="uiv2-anime-card__score uiv2-anime-card__score--inline">
               <span class="uiv2-anime-card__score-star" aria-hidden="true">{@html iconStar(11)}</span>
               <span class="uiv2-anime-card__score-value">{rate}</span>
@@ -593,7 +595,7 @@
           {#if deferPoster}
             <img alt="" decoding="async" use:tvLazyPoster={displayPosterUrl} />
           {:else}
-            <img src={displayPosterUrl} alt="" loading="lazy" decoding="async" />
+            <PosterImage src={posterUrl} thumb={posterThumb} alt="" loading="lazy" />
           {/if}
         {:else}
           <span class="uiv2-anime-card__poster-fallback" aria-hidden="true"></span>

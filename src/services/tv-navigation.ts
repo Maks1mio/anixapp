@@ -39,6 +39,7 @@ const FOCUS_SKIP = [
 
 const OVERLAY_ROOT = [
   '.release-lightbox',
+  '.uiv2-media-lightbox',
   '[role=dialog]',
   '.watch-panel',
   '.custom-select__menu',
@@ -46,6 +47,7 @@ const OVERLAY_ROOT = [
 ].join(',');
 
 const FOCUS_PRIORITY = [
+  '.uiv2-media-lightbox__tool[aria-label="Закрыть"]',
   '.release-lightbox__close',
   '.tv-release-page__shot-nav',
   '.tv-release-page__dialog-close',
@@ -486,7 +488,7 @@ function focusElement(el: HTMLElement, sticky = false, preserveScroll = false): 
     }
   }
   stickyFocus = sticky ? el : null;
-  if (isInMain(el) && !el.closest('.release-lightbox, .tv-release-page__dialog')) {
+  if (isInMain(el) && !el.closest('.release-lightbox, .uiv2-media-lightbox, .tv-release-page__dialog')) {
     lastContentFocus = el;
   }
   setRailEngaged(isInRail(el));
@@ -885,9 +887,13 @@ function handleBack(): void {
     return;
   }
 
-  const lightbox = document.querySelector('.release-lightbox');
+  const lightbox =
+    document.querySelector('.uiv2-media-lightbox')
+    ?? document.querySelector('.release-lightbox');
   if (lightbox && isVisible(lightbox)) {
-    const closeBtn = lightbox.querySelector<HTMLElement>('.release-lightbox__close');
+    const closeBtn =
+      lightbox.querySelector<HTMLElement>('.uiv2-media-lightbox__tool[aria-label="Закрыть"]')
+      ?? lightbox.querySelector<HTMLElement>('.release-lightbox__close');
     if (closeBtn) {
       closeBtn.click();
       return;
@@ -1090,6 +1096,7 @@ function onActivateKeydown(event: KeyboardEvent): void {
   }
 
   const activatesOnEnter = [
+    '.uiv2-media-lightbox__tool[aria-label="Закрыть"]',
     '.release-lightbox__close',
     '.uiv2-anime-card[role="button"]',
     '.tv-category-see-all[role="button"]',

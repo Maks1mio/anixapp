@@ -22,8 +22,11 @@ export function resolveFriendButtonState(
   profileId: number,
   selfId: number,
   friendStatus: number | null | undefined,
-  options?: { requestsDisallowed?: boolean; isBlocked?: boolean },
+  options?: { requestsDisallowed?: boolean; isBlocked?: boolean; isMeBlocked?: boolean },
 ): FriendButtonState {
+  if (options?.isMeBlocked) {
+    return { action: 'none', label: 'Добавить в друзья', disabled: true };
+  }
   if (options?.isBlocked) {
     return { action: 'none', label: 'Пользователь заблокирован', disabled: true };
   }

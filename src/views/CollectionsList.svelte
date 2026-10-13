@@ -4,6 +4,8 @@
   import UiV2CollectionCardSkeleton from '../components/uikit-v2/UiV2CollectionCardSkeleton.svelte';
   import CollectionsHeaderActions from '../components/collections/CollectionsHeaderActions.svelte';
   import CollectionsSortSelect from '../components/collections/CollectionsSortSelect.svelte';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
   import { iconSearch } from '../components/icons';
   import { navigate } from '../stores/navigation';
   import {
@@ -81,7 +83,7 @@
 
     isLoading = true;
     const nextPage = page;
-    if (nextPage === initialCollectionListPage(listSort) && previousPage === initialCollectionPreviousPage() && items.length === 0) {
+    if (nextPage === initialCollectionListPage(listSort) && previousPage === initialCollectionPreviousPage() && items.length === 0 && loadState !== 'error') {
       loadState = 'loading';
     }
 
@@ -129,7 +131,7 @@
       requestAnimationFrame(checkIfNeedsMore);
     } catch (err) {
       if (items.length === 0) {
-        errorMsg = String(err);
+        errorMsg = headlineFromLoadError(err);
         loadState = 'error';
       }
     } finally {
@@ -229,19 +231,7 @@
       <UiV2CollectionCardSkeleton count={6} />
     </div>
   {:else if loadState === 'error'}
-    <div class="discover-page__error">
-      <p>{errorMsg || 'Не удалось загрузить коллекции'}</p>
-      <button
-        type="button"
-        class="discover-page__retry"
-        onclick={() => {
-          resetList();
-          void loadPage();
-        }}
-      >
-        Повторить
-      </button>
-    </div>
+    <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadPage()} />
   {:else if loadState === 'empty'}
     <div class="discover-page__empty">Коллекций пока нет</div>
   {:else}

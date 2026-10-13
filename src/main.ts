@@ -1,20 +1,22 @@
 import './styles/main.scss';
 import { mount } from 'svelte';
 import App from './App.svelte';
-import { initRendererLogging } from './services/logger';
 import './services/lobby-action-log';
 import { installWindowFluo } from './fluo';
 import { initWebAnixApi } from './services/anix-api-web';
 import { applyTvDefaults, isTvMode } from './platform/tv';
+import { applyMobileDefaults, isMobileMode } from './platform/mobile';
 import { initTvNavigation } from './services/tv-navigation';
 import { startDebugMetrics } from './services/debug-metrics';
 import { initWebGpuAvailability } from './utils/webgpu-availability.svelte';
 
 void import('flag-icons/css/flag-icons.min.css');
 
-// Init renderer-side logging before anything else
-initRendererLogging();
 installWindowFluo();
+
+if (isMobileMode()) {
+  applyMobileDefaults();
+}
 
 if (isTvMode()) {
   applyTvDefaults();
@@ -22,8 +24,13 @@ if (isTvMode()) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  void Promise.all([initWebAnixApi(), initWebGpuAvailability()]).finally(() => {
-    if (isTvMode()) initTvNavigation();
-    mount(App, { target: document.getElementById('app')! });
-  });
+  // WebGPU не блокирует первый кадр — probe в фоне (Anime4K / плеер подхватят статус).
+  void initWebGpuAvailability();
+
+  void initWebAnixApi()
+    .catch(() => false)
+    .finally(() => {
+      if (isTvMode()) initTvNavigation();
+      mount(App, { target: document.getElementById('app')! });
+    });
 });

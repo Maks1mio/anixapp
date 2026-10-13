@@ -1,4 +1,5 @@
 @use 'variables' as *;
+@use 'fonts-pc';
 @use 'titlebar';
 @use 'layout';
 @use 'page';
@@ -19,7 +20,6 @@
 @use 'profile-ui';
 @use 'uikit-v2-theme';
 @use 'profile-panel';
-@use 'user-profile-modal';
 @use 'watch-modal';
 @use 'watch';
 @use 'uikit';
@@ -33,6 +33,9 @@
 @use 'downloads';
 @use 'feed';
 @use 'tv';
+@use 'mobile-tokens';
+@use 'mobile-components';
+@use 'mobile-overrides';
 
 *,
 *::before,
@@ -115,3 +118,4 @@ img {
   height: auto;
   display: block;
 }
+

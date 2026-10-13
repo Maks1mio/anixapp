@@ -58,7 +58,7 @@
   ];
 
   const ROLE_TEMPLATES: Record<'admin' | 'editor', string[]> = {
-    admin: ['manage_announcements', 'delete_any_comment', 'manage_staff', 'manage_overview'],
+    admin: ['manage_announcements', 'delete_any_comment', 'manage_staff', 'manage_overview', 'manage_ads'],
     editor: ['manage_announcements', 'delete_any_comment'],
   };
 

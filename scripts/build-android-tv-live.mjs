@@ -62,15 +62,12 @@ run(gradlew, ['assembleDebug'], androidDir);
 const apkSrc = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
 const outDir = path.join(root, 'release');
 mkdirSync(outDir, { recursive: true });
-const apkDest = path.join(outDir, 'AnixApp-TV-live-debug.apk');
 if (!existsSync(apkSrc)) {
   console.error('APK not found:', apkSrc);
   process.exit(1);
 }
-copyFileSync(apkSrc, apkDest);
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
-const versioned = path.join(outDir, `AnixApp-TV-${pkg.version}-live-debug.apk`);
-copyFileSync(apkSrc, versioned);
+const apkDest = path.join(outDir, `AnixApp-TV-${pkg.version}-alpha-live.apk`);
+copyFileSync(apkSrc, apkDest);
 console.log('✓ APK:', apkDest);
-console.log('✓ APK:', versioned);
 console.log(`✓ Открывает: ${liveUrl}`);

@@ -3,6 +3,7 @@ import { resolveCdnAssetUrl } from './posterUrl';
 import { resolveBadgeName, resolveBadgeImageUrl } from './badge';
 import { COMMENT_SORT_OPTIONS } from '../types/comment';
 import { resolveJacksonEntity, resolveJacksonRefs } from './jackson-refs';
+import { normalizeLinkHref } from './external-link';
 
 export { COMMENT_SORT_OPTIONS };
 export type { CommentSort };
@@ -15,8 +16,58 @@ const MONTHS_SHORT = [
   'июл.', 'авг.', 'сен.', 'окт.', 'нояб.', 'дек.',
 ];
 
+const COMMENT_URL_RE = /https?:\/\/[^\s<>"']+/gi;
+const TRAILING_URL_PUNCT_RE = /[),.!?;:…»"'”’]+$/u;
+
 function pad2(n: number): string {
   return n < 10 ? `0${n}` : String(n);
+}
+
+function escapeCommentText(raw: string): string {
+  return raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function escapeCommentAttr(raw: string): string {
+  return escapeCommentText(raw).replace(/"/g, '&quot;');
+}
+
+/**
+ * Экранирует текст комментария и делает http(s)-ссылки кликабельными.
+ * Anixart-ссылки обрабатываются через requestOpenExternal → внутри приложения.
+ */
+export function formatCommentHtml(raw: string): string {
+  const text = String(raw ?? '');
+  if (!text) return '';
+
+  let out = '';
+  let last = 0;
+  COMMENT_URL_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = COMMENT_URL_RE.exec(text)) !== null) {
+    out += escapeCommentText(text.slice(last, match.index));
+
+    let url = match[0];
+    let trailing = '';
+    const punct = TRAILING_URL_PUNCT_RE.exec(url);
+    if (punct) {
+      trailing = punct[0];
+      url = url.slice(0, -trailing.length);
+    }
+
+    const href = normalizeLinkHref(url);
+    if (href && url) {
+      out += `<a href="${escapeCommentAttr(href)}" class="uiv2-comment__link uiv2-ext-link-inline" rel="noopener noreferrer">${escapeCommentText(url)}</a>`;
+      out += escapeCommentText(trailing);
+    } else {
+      out += escapeCommentText(match[0]);
+    }
+    last = match.index + match[0].length;
+  }
+  out += escapeCommentText(text.slice(last));
+  return out;
 }
 
 /** Mobile-style: «10 июн. в 15:24» */
@@ -76,18 +127,24 @@ export function normalizeCommentProfile(
 }
 
 export function normalizeComment(raw: Record<string, unknown>, root?: unknown): CommentData {
-  const vote = raw.vote ?? raw.user_vote ?? 0;
+  const voteRaw = raw.vote ?? raw.user_vote ?? 0;
+  const voteNum = Number(voteRaw);
+  const vote = Number.isFinite(voteNum) ? voteNum : 0;
   const profileRaw = resolveJacksonEntity(raw.profile, root ?? raw)
     ?? (raw.profile && typeof raw.profile === 'object' && !Array.isArray(raw.profile)
       ? raw.profile as Record<string, unknown>
       : undefined);
 
+  let timestamp = Number(raw.timestamp ?? 0);
+  // На всякий случай: если пришли миллисекунды
+  if (timestamp > 1e12) timestamp = Math.floor(timestamp / 1000);
+
   return {
     id: raw.id as number,
     message: String(raw.message ?? ''),
-    timestamp: (raw.timestamp as number) ?? 0,
+    timestamp,
     voteCount: Number(raw.vote_count ?? raw.voteCount ?? 0),
-    userVote: (typeof vote === 'number' ? vote : 0) as CommentVoteValue,
+    userVote: (vote === 1 || vote === 2 ? vote : 0) as CommentVoteValue,
     isSpoiler: !!(raw.is_spoiler ?? raw.isSpoiler),
     isEdited: !!(raw.is_edited ?? raw.isEdited),
     isDeleted: !!(raw.is_deleted ?? raw.isDeleted),
@@ -234,7 +291,7 @@ export function mapProfileCommentPreview(
       ?? article?.channelId
       ?? 0,
     );
-    if (articleId && channelId) targetPath = `/channel/${channelId}/article/${articleId}`;
+    if (articleId && channelId) targetPath = `/article/${articleId}`;
     targetTitle = String(article?.title ?? article?.embeddable_title ?? article?.embeddableTitle ?? '').trim();
   } else {
     const releaseId = entityNumericId(release);
@@ -288,6 +345,20 @@ export function formatVoteCountDisplay(count: number): string {
 export function nextVote(current: CommentVoteValue, action: 'up' | 'down'): CommentVoteValue {
   if (action === 'up') return current === 2 ? 0 : 2;
   return current === 1 ? 0 : 1;
+}
+
+/**
+ * Что отправить в `/comment/vote/{id}/{vote}`.
+ * API — тоггл: повторный Like/Dislike снимает голос. Значение `0` не принимается (код 1).
+ */
+export function apiVotePayload(
+  prev: CommentVoteValue,
+  next: CommentVoteValue,
+): 1 | 2 {
+  if (next === 1 || next === 2) return next;
+  // Снятие: шлём прежний голос ещё раз
+  if (prev === 1 || prev === 2) return prev;
+  return 2;
 }
 
 export function applyVoteDelta(

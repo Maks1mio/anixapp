@@ -1,11 +1,26 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
   import { navigate } from '../stores/navigation';
+  import { handleUserProfileClick } from '../stores/user-profile';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import { resolveBadgeName, resolveProfileBadgeUrl } from '../utils/badge';
   import { setDiscordContext, refreshDiscordPresence } from '../services/discord-presence';
   import Tabs from '../components/Tabs.svelte';
   import UserBadge from '../components/UserBadge.svelte';
+  import Checkbox from '../components/Checkbox.svelte';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
+  import {
+    getProfileBanDurationLabel,
+    getProfileBanNotice,
+    type ProfileBanFields,
+  } from './Profile/_utils';
+  import {
+    createFriendBanScanner,
+    isCheckedFriendBanned,
+    mergeBanFields,
+    type FriendBanScanner,
+  } from '../services/friends-ban-scan';
 
   interface Props {
     id?: number;
@@ -42,6 +57,26 @@
   let errorMsg = $state('');
   let showEnd = $state(false);
   let wrapEl: HTMLElement | undefined = $state();
+  let showBannedOnly = $state(false);
+  let banFieldsById = $state<Record<number, ProfileBanFields>>({});
+  let banCheckedCount = $state(0);
+  let banScanTotal = $state(0);
+  let banScanRunning = $state(false);
+  let banScanner: FriendBanScanner | null = null;
+
+  const friendsWithBan = $derived(
+    friends.map((fr) => mergeBanFields(fr, banFieldsById[Number(fr.id)])),
+  );
+  const bannedFriends = $derived(
+    friendsWithBan.filter((fr) => isCheckedFriendBanned(fr, banFieldsById)),
+  );
+  const visibleFriends = $derived(showBannedOnly ? bannedFriends : friendsWithBan);
+  const scanningBanned = $derived(
+    showBannedOnly && (banScanRunning || isLoading || hasMore) && loadState !== 'error',
+  );
+  const scanLabel = $derived(
+    `ищем… ${banCheckedCount}/${banScanTotal || friendCount || friends.length || '…'}`,
+  );
 
   let scrollEl: HTMLElement | null = null;
   let scrollListener: (() => void) | null = null;
@@ -89,7 +124,7 @@
     if (isLoading || (!hasMore && append)) return;
     isLoading = true;
     if (!append) {
-      loadState = 'loading';
+      if (loadState !== 'error') loadState = 'loading';
       currentPage = 0;
       hasMore = true;
       friends = [];
@@ -117,8 +152,9 @@
       currentPage += 1;
       isLoading = false;
       attachInfiniteScroll();
+      if (showBannedOnly && hasMore) void load(true);
     } catch (err) {
-      errorMsg = String(err);
+      errorMsg = headlineFromLoadError(err);
       loadState = 'error';
       isLoading = false;
     }
@@ -142,7 +178,44 @@
     if (window.anixApi) await load(false);
   });
 
+  $effect(() => {
+    if (!showBannedOnly) return;
+    untrack(() => {
+      if (!isLoading && hasMore && loadState === 'ready') void load(true);
+    });
+  });
+
+  $effect(() => {
+    const enabled = showBannedOnly;
+    const ids = friends
+      .map((fr) => Number(fr.id))
+      .filter((id) => Number.isFinite(id) && id > 0);
+    const totalHint = (friendCount ?? 0) > 0 ? friendCount! : ids.length;
+
+    untrack(() => {
+      if (!enabled) {
+        banScanner?.abort();
+        banScanner = null;
+        banScanRunning = false;
+        return;
+      }
+      banScanRunning = true;
+      if (!ids.length) return;
+      if (!banScanner) {
+        banScanner = createFriendBanScanner((state) => {
+          banScanRunning = state.scanning;
+          banCheckedCount = state.checkedCount;
+          banScanTotal = state.friendsTotal;
+          banFieldsById = state.fieldsById;
+        });
+      }
+      banScanner.scan(ids, totalHint);
+    });
+  });
+
   onDestroy(() => {
+    banScanner?.abort();
+    banScanner = null;
     if (scrollEl && scrollListener) scrollEl.removeEventListener('scroll', scrollListener);
   });
 </script>
@@ -158,8 +231,19 @@
 
     <Tabs tabs={profileTabs} activeId="friends" onChange={onProfileTabChange} />
 
+    <div class="profile-friends__toolbar">
+      {#if scanningBanned}
+        <span class="profile-friends__scan" aria-live="polite">{scanLabel}</span>
+      {/if}
+      <Checkbox
+        className="profile-friends__ban-filter"
+        bind:checked={showBannedOnly}
+        label="Забаненные"
+      />
+    </div>
+
     <div class="search-page__results">
-      {#if isMyProfilePage && recommendations.length}
+      {#if isMyProfilePage && recommendations.length && !showBannedOnly}
         <section class="profile-friends__recs">
           <h2 class="profile-friends__recs-title">Рекомендации</h2>
           <div class="search-page__profiles">
@@ -168,7 +252,7 @@
               <button
                 type="button"
                 class="search-page__profile"
-                onclick={() => navigate(`/profile/${fr.id}`)}
+                onclick={(event) => handleUserProfileClick(fr.id, event)}
               >
                 <div
                   class="search-page__profile-avatar"
@@ -189,17 +273,23 @@
       {#if loadState === 'loading'}
         <div class="search-page__loading">Загрузка…</div>
       {:else if loadState === 'error'}
-        <p class="search-page__error">Ошибка: {errorMsg}</p>
+        <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void load(false)} />
       {:else if loadState === 'empty'}
-        <p class="search-page__empty">Ничего не найдено</p>
+        <p class="search-page__empty">{showBannedOnly ? 'Нет забаненных друзей' : 'Ничего не найдено'}</p>
+      {:else if showBannedOnly && !visibleFriends.length}
+        <p class="search-page__empty" aria-live="polite">
+          {scanningBanned ? scanLabel : 'Нет забаненных друзей'}
+        </p>
       {:else}
         <div class="search-page__profiles">
-          {#each friends as fr}
+          {#each visibleFriends as fr}
             {@const badgeUrl = resolveProfileBadgeUrl(fr as Record<string, unknown>)}
+            {@const banLabel = getProfileBanDurationLabel(fr)}
+            {@const banNotice = getProfileBanNotice(fr)}
             <button
               type="button"
               class="search-page__profile"
-              onclick={() => navigate(`/profile/${fr.id}`)}
+              onclick={(event) => handleUserProfileClick(fr.id, event)}
             >
               <div
                 class="search-page__profile-avatar"
@@ -209,6 +299,9 @@
                 <span class="search-page__profile-name-row">
                   <span class="search-page__profile-name">{fr.login || ''}</span>
                   <UserBadge url={badgeUrl} name={resolveBadgeName(fr.badge)} size="sm" />
+                  {#if banLabel}
+                    <span class="search-page__profile-ban" title={banNotice ?? undefined}>{banLabel}</span>
+                  {/if}
                 </span>
                 {#if fr.friend_count != null}
                   <span class="search-page__profile-status">{fr.friend_count} друзей</span>
@@ -222,10 +315,12 @@
         </div>
       {/if}
 
-      {#if showEnd && loadState === 'ready'}
+      {#if showEnd && loadState === 'ready' && !showBannedOnly}
         <div class="search-page__end">это всё :)</div>
-      {:else if isLoading && loadState === 'ready'}
+      {:else if loadState === 'ready' && isLoading && !scanningBanned}
         <div class="search-page__loading">Загрузка…</div>
+      {:else if loadState === 'ready' && scanningBanned && visibleFriends.length}
+        <div class="search-page__loading">{scanLabel}</div>
       {/if}
     </div>
   </div>

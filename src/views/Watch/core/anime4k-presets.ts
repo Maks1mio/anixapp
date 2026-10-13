@@ -1,12 +1,18 @@
 /**
- * Anime4K пресеты как в AnixPlayer (тип × нагрузка), маппинг на anime4k-webgpu.
+ * Anime4K пресеты как в AnixPlayer (тип × нагрузка S/M/L).
  *
- * APK использует mpv + GLSL (Restore_CNN_{S,M,L} / Soft / Denoise).
- * В Electron те же ярлыки ведут на ModeA/B/C/AA/BB; S/M/L нет у Mode-пресетов —
- * «Максимум» переключает на двойной пайплайн (AA/BB/CA).
+ * APK: Mode A/B/C/A+/B+/C+ × Quality FAST(S)/BALANCED(M)/HIGH(L).
+ * PC: те же цепочки на anime4k-webgpu (M/VL/UL — ближайшие к S/M/L).
  */
 
-export type Anime4kType = 'off' | 'sharp' | 'balance' | 'clean' | 'sharpPlus' | 'balancePlus';
+import {
+  encodeAnixPlayerMode,
+  decodeAnixPlayerMode,
+  isAnixPlayerMode,
+  type AnixPlayerType,
+} from '../../../utils/anime4k-anixplayer';
+
+export type Anime4kType = 'off' | AnixPlayerType;
 export type Anime4kIntensity = 'easy' | 'optimal' | 'max';
 /** Целевая высота буфера апскейла; auto = под размер окна. */
 export type Anime4kTargetRes = 'auto' | '1080' | '1440' | '2160';
@@ -42,12 +48,13 @@ export const ANIME4K_TYPES: Anime4kTypeOption[] = [
   { id: 'clean', label: 'Очистка', hint: 'Denoise' },
   { id: 'sharpPlus', label: 'Чёткость+', hint: 'Двойной Restore' },
   { id: 'balancePlus', label: 'Баланс+', hint: 'Двойной Soft' },
+  { id: 'cleanPlus', label: 'Очистка+', hint: 'Denoise + Restore' },
 ];
 
 export const ANIME4K_INTENSITIES: Anime4kIntensityOption[] = [
-  { id: 'easy', label: 'Легко' },
-  { id: 'optimal', label: 'Оптимально' },
-  { id: 'max', label: 'Максимум' },
+  { id: 'easy', label: 'Легко' },       // S ≈ M в webgpu
+  { id: 'optimal', label: 'Оптимально' }, // M ≈ VL
+  { id: 'max', label: 'Максимум' },     // L ≈ UL
 ];
 
 export const ANIME4K_TARGET_RES: Anime4kTargetResOption[] = [
@@ -70,43 +77,36 @@ export const DEFAULT_ANIME4K_PRESET: Anime4kPreset = {
 
 export const DEFAULT_ANIME4K_TARGET_RES: Anime4kTargetRes = '1080';
 
-const BASE_MODE: Record<Exclude<Anime4kType, 'off'>, number> = {
-  sharp: 14,       // ModeA
-  balance: 15,     // ModeB
-  clean: 16,       // ModeC
-  sharpPlus: 17,   // ModeAA
-  balancePlus: 18, // ModeBB
-};
-
-const MAX_MODE: Record<Exclude<Anime4kType, 'off'>, number> = {
-  sharp: 17,       // ModeAA
-  balance: 18,     // ModeBB
-  clean: 19,       // ModeCA
-  sharpPlus: 17,
-  balancePlus: 18,
+/** Legacy ModeA–CA → базовый тип (без учёта S/M/L). */
+const LEGACY_MODE_TYPE: Record<number, AnixPlayerType> = {
+  14: 'sharp',
+  15: 'balance',
+  16: 'clean',
+  17: 'sharpPlus',
+  18: 'balancePlus',
+  19: 'cleanPlus',
 };
 
 export function mapAnime4kPreset(preset: Anime4kPreset): { enabled: boolean; mode: number } {
-  if (preset.type === 'off') return { enabled: false, mode: 15 };
-  const mode = preset.intensity === 'max' ? MAX_MODE[preset.type] : BASE_MODE[preset.type];
-  return { enabled: true, mode };
+  if (preset.type === 'off') return { enabled: false, mode: encodeAnixPlayerMode('balance', 'optimal') };
+  return {
+    enabled: true,
+    mode: encodeAnixPlayerMode(preset.type, preset.intensity),
+  };
 }
 
 export function presetFromLegacy(upscaleEnabled: boolean, upscaleMode: number): Anime4kPreset {
   if (!upscaleEnabled) return { ...DEFAULT_ANIME4K_PRESET };
-  const intensity: Anime4kIntensity = upscaleMode === 17 || upscaleMode === 18 || upscaleMode === 19
-    ? 'max'
-    : 'optimal';
-  switch (upscaleMode) {
-    case 14: return { type: 'sharp', intensity };
-    case 16: return { type: 'clean', intensity };
-    case 17: return { type: 'sharpPlus', intensity: 'optimal' };
-    case 18: return { type: 'balancePlus', intensity: 'optimal' };
-    case 19: return { type: 'clean', intensity: 'max' };
-    case 15:
-    default:
-      return { type: 'balance', intensity: intensity === 'max' ? 'max' : 'optimal' };
+
+  const decoded = decodeAnixPlayerMode(upscaleMode);
+  if (decoded) return decoded;
+
+  const type = LEGACY_MODE_TYPE[upscaleMode];
+  if (type) {
+    return { type, intensity: 'optimal' };
   }
+
+  return { type: 'balance', intensity: 'optimal' };
 }
 
 export function isAnime4kType(value: unknown): value is Anime4kType {
@@ -142,3 +142,5 @@ export function normalizeAnime4kPreset(
   }
   return presetFromLegacy(raw.upscaleEnabled === true, typeof raw.upscaleMode === 'number' ? raw.upscaleMode : 15);
 }
+
+export { isAnixPlayerMode, decodeAnixPlayerMode };

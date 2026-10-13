@@ -1,4 +1,3 @@
-@use 'sass:color';
 @use 'variables' as *;
 
 .notifications-modal-overlay {
@@ -8,22 +7,25 @@
   display: flex;
   align-items: flex-start;
   justify-content: flex-end;
-  padding: 3rem 1.5rem 1.5rem;
+  padding: 3rem 1.25rem 1.25rem;
   background: transparent;
   pointer-events: auto;
 }
 
 .notifications-modal-panel {
-  width: 400px;
-  max-width: 100%;
-  max-height: min(720px, calc(100vh - 4.5rem));
-  background: $color-surface;
-  border: 1px solid $color-border;
-  border-radius: $radius-lg;
-  box-shadow: $shadow;
+  width: min(420px, calc(100vw - 1.5rem));
+  max-height: min(740px, calc(100vh - 4.25rem));
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  border-radius: var(--uikit-v2-radius-lg, 16px);
+  border: 1px solid color-mix(in srgb, var(--uikit-v2-border, #{$color-border}) 88%, transparent);
+  background: var(--uikit-v2-surface, #{$color-surface});
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.38),
+    0 0 0 1px color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 4%, transparent);
+  color: var(--uikit-v2-text, #{$color-text});
+  font-family: var(--uikit-v2-font, inherit);
   transform: translateY(-6px);
   opacity: 0;
   transition: transform 0.18s ease, opacity 0.18s ease;
@@ -44,47 +46,424 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 0.9rem;
-  border-bottom: 1px solid $color-border;
+  gap: 0.55rem;
+  padding: 0.65rem 0.65rem 0.65rem 0.85rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--uikit-v2-border, #{$color-border}) 85%, transparent);
   flex-shrink: 0;
+}
+
+.notifications-modal__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .notifications-modal__heading {
   margin: 0;
-  font-size: 0.95rem;
-  font-weight: 600;
+  flex: 1;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--uikit-v2-text, #{$color-text});
 }
 
-.notifications-modal__close {
-  width: 1.75rem;
-  height: 1.75rem;
-  padding: 0;
-  border-radius: $radius-md;
-  background: transparent;
-  color: $color-text-muted;
-  cursor: pointer;
-  position: relative;
-  transition: background $transition, color $transition;
+.notifications-modal__back-chevron {
+  display: block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-left: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  margin-left: 0.15rem;
+}
 
-  &::before,
-  &::after {
-    content: '';
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 0.9rem;
-    height: 2px;
-    background: currentColor;
-    transform: translate(-50%, -50%) rotate(45deg);
+.uiv2-tabs.notifications-modal__tabs {
+  margin: 0 0.85rem 0.35rem;
+  padding: 0.2rem 0 0.4rem;
+  border-bottom-color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 8%, transparent);
+  /* совпадает с панелью; перебивает --uikit-v2-bg у fade-градиентов */
+  --uikit-v2-bg: var(--uikit-v2-surface, #{$color-surface});
+  background: var(--uikit-v2-surface, #{$color-surface});
+  flex-shrink: 0;
+}
+
+.notifications-modal__settings {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0.5rem 0.85rem 1.25rem;
+}
+
+.notifications-modal__pref-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.notifications-modal__pref-section-title {
+  margin: 0 0 0.35rem;
+  padding: 0 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
+}
+
+.notifications-modal__pref-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.7rem 0.25rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--uikit-v2-border, #{$color-border}) 70%, transparent);
+  background: transparent;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: default;
+
+  &:last-child {
+    border-bottom: 0;
   }
-  &::after {
-    transform: translate(-50%, -50%) rotate(-45deg);
+
+  &--click {
+    cursor: pointer;
+
+    &:hover .notifications-modal__pref-label {
+      color: var(--uikit-v2-accent, #{$color-accent});
+    }
+
+    &:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
   }
+}
+
+.notifications-modal__pref-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.notifications-modal__pref-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--uikit-v2-text, #{$color-text});
+}
+
+.notifications-modal__pref-hint {
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
+}
+
+.notifications-modal__pref-chevron {
+  flex-shrink: 0;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
+  display: inline-flex;
+}
+
+.notifications-modal__pref-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.75rem 0.25rem;
+  border: 0;
+  background: transparent;
+  color: var(--uikit-v2-text, #{$color-text});
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
 
   &:hover {
-    background: $color-surface-hover;
-    color: $color-text;
+    color: var(--uikit-v2-accent, #{$color-accent});
   }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+.notifications-modal__scope-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+  padding: 0.35rem 0 0.65rem;
+}
+
+.notifications-modal__scope-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.75rem 0.4rem 0.65rem;
+  border-radius: 14px;
+  border: 1.5px solid color-mix(in srgb, var(--uikit-v2-border, #{$color-border}) 90%, transparent);
+  background: color-mix(in srgb, var(--uikit-v2-surface-2, #{$color-surface}) 88%, transparent);
+  color: var(--uikit-v2-text, #{$color-text});
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+
+  &:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 45%, transparent);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  &--on {
+    border-color: color-mix(in srgb, var(--uikit-v2-accent, #c4b5fd) 85%, white 15%);
+    background: color-mix(in srgb, var(--uikit-v2-accent, #c4b5fd) 12%, transparent);
+  }
+}
+
+.notifications-modal__scope-icon {
+  display: inline-flex;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
+  opacity: 0.9;
+}
+
+.notifications-modal__scope-label {
+  font-size: 0.68rem;
+  line-height: 1.25;
+  font-weight: 500;
+  text-align: center;
+  color: var(--uikit-v2-text, #{$color-text});
+}
+
+.notifications-modal__release-prefs {
+  display: flex;
+  flex-direction: column;
+  min-height: 220px;
+  padding: 0.35rem 0.85rem 1rem;
+}
+
+.notifications-modal__release-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.notifications-modal__release-item {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.notifications-modal__release-poster {
+  width: 68px;
+  height: 96px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--uikit-v2-muted, #{$color-text-muted}) 22%, transparent);
+  background-size: cover;
+  background-position: center;
+}
+
+.notifications-modal__release-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.notifications-modal__release-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--uikit-v2-text, #{$color-text});
+}
+
+.notifications-modal__release-meta,
+.notifications-modal__release-voice {
+  font-size: 0.75rem;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
+}
+
+.notifications-modal__release-btn {
+  align-self: flex-start;
+  margin-top: 0.45rem;
+  padding: 0.45rem 0.95rem;
+  border-radius: 999px;
+  border: 0;
+  background: color-mix(in srgb, var(--uikit-v2-surface-2, #{$color-surface}) 70%, #fff 6%);
+  color: var(--uikit-v2-text, #{$color-text});
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--uikit-v2-accent, #c4b5fd) 18%, transparent);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+.notif-check-dialog-overlay,
+.release-notify-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10040;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.notif-check-dialog,
+.release-notify-modal {
+  width: min(360px, 100%);
+  max-height: min(70vh, 520px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 22px;
+  border: 1px solid color-mix(in srgb, var(--uikit-v2-border, #{$color-border}) 80%, transparent);
+  background: var(--uikit-v2-surface, #1a1a1a);
+  color: var(--uikit-v2-text, #{$color-text});
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.notif-check-dialog__title,
+.release-notify-modal__title {
+  margin: 0;
+  padding: 1.1rem 1.15rem 0.65rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.notif-check-dialog__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  --uiv2-scroll-offset: 6px;
+}
+
+.notif-check-dialog__list {
+  display: flex;
+  flex-direction: column;
+}
+.notif-check-dialog__row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.7rem 0.85rem;
+  font-size: 0.92rem;
+  cursor: pointer;
+
+  input {
+    width: 1.05rem;
+    height: 1.05rem;
+    accent-color: var(--uikit-v2-accent, #c4b5fd);
+  }
+}
+
+.notif-check-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  padding: 0.65rem 0.85rem 0.85rem;
+  border-top: 1px solid color-mix(in srgb, var(--uikit-v2-border, #{$color-border}) 75%, transparent);
+}
+
+.notif-check-dialog__btn {
+  border: 0;
+  background: transparent;
+  color: var(--uikit-v2-text, #{$color-text});
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+  border-radius: 8px;
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--uikit-v2-muted, #{$color-text-muted}) 12%, transparent);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  &--primary {
+    color: var(--uikit-v2-accent, #c4b5fd);
+  }
+}
+
+.release-notify-modal__options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.35rem 1rem 1.15rem;
+}
+
+.release-notify-modal__option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.85rem 0.95rem;
+  border-radius: 14px;
+  border: 1.5px solid color-mix(in srgb, var(--uikit-v2-border, #{$color-border}) 85%, transparent);
+  background: transparent;
+  color: var(--uikit-v2-text, #{$color-text});
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--uikit-v2-muted, #{$color-text-muted}) 10%, transparent);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &--on {
+    border-color: color-mix(in srgb, #fff 78%, transparent);
+    background: color-mix(in srgb, var(--uikit-v2-muted, #{$color-text-muted}) 14%, transparent);
+  }
+}
+
+.release-notify-modal__option-icon {
+  display: inline-flex;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
+}
+
+.release-notify-modal__option-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.release-notify-modal__option-chevron {
+  display: inline-flex;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
 }
 
 .notifications-modal__body {
@@ -98,62 +477,157 @@
 .notifications-modal__page {
   flex: 1;
   min-height: 0;
-  --page-scrollbar-offset: 1px;
+  --page-scrollbar-offset: 2px;
 }
 
-.notifications-modal__loading,
-.notifications-modal__empty,
-.notifications-modal__error {
-  margin: 0.4rem 0.5rem 0.5rem;
-  font-size: 0.85rem;
-  color: $color-text-muted;
+.notifications-modal__state {
+  margin: 2.5rem 1.25rem;
+  text-align: center;
+  font-size: 0.88rem;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
+  line-height: 1.4;
+}
+
+.notifications-modal__state--empty {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.notifications-modal__state-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--uikit-v2-text, #{$color-text});
+}
+
+.notifications-modal__state-desc {
+  margin: 0;
+  max-width: 16rem;
+  font-size: 0.82rem;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
+}
+
+.notifications-modal__state--error {
+  color: color-mix(in srgb, var(--uikit-v2-danger, #{$color-error}) 80%, var(--uikit-v2-text, #{$color-text}));
 }
 
 .notifications-modal__list {
   display: flex;
   flex-direction: column;
+  padding: 0.15rem 0 0.5rem;
 }
 
+.notifications-modal__list--skeleton {
+  padding-top: 0.35rem;
+}
+
+.notifications-modal__skel {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  width: 100%;
+  padding: 0.65rem 1rem;
+  pointer-events: none;
+}
+
+.notifications-modal__skel-avatar {
+  flex-shrink: 0;
+  width: 3.5rem;
+  height: 3.5rem;
+  margin-right: 1rem;
+  margin-top: 0.15rem;
+  border-radius: 50%;
+}
+
+.notifications-modal__skel-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-top: 0.25rem;
+}
+
+.notifications-modal__skel-line {
+  height: 0.72rem;
+  max-width: 100%;
+}
+
+.notifications-modal__skel-time {
+  width: 4.5rem;
+  height: 0.58rem;
+  margin-top: 0.15rem;
+  opacity: 0.85;
+}
+
+/* Android item_notification: 16dp sides, 10dp vertical, 56dp avatar + type badge */
 .notifications-modal__item {
   display: flex;
   align-items: flex-start;
+  gap: 0;
   width: 100%;
-  padding: 0.7rem 0.85rem;
+  padding: 0.65rem 1rem;
+  border: none;
   border-radius: 0;
   background: transparent;
   color: inherit;
   text-align: left;
-  border: none;
   cursor: pointer;
-  transition: background $transition;
+  font: inherit;
+  transition: background 0.15s ease;
 
   &:hover {
-    background: $color-surface-hover;
+    background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 5%, transparent);
+  }
+
+  &:focus-visible {
+    outline: none;
+    background: color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 10%, transparent);
   }
 }
 
 .notifications-modal__item--new {
-  background: color-mix(in srgb, var(--color-accent, #{$color-accent}) 6%, transparent);
+  background: color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 5%, transparent);
+
+  &:hover {
+    background: color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 9%, transparent);
+  }
+}
+
+.notifications-modal__avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 4rem;
+  height: 4rem;
+  margin-right: 1rem;
+  margin-top: 0.15rem;
 }
 
 .notifications-modal__thumb {
-  width: 44px;
-  height: 44px;
+  width: 3.5rem;
+  height: 3.5rem;
   border-radius: 50%;
   background-size: cover;
   background-position: center;
-  background-color: $color-surface-hover;
-  flex-shrink: 0;
-  margin-right: 0.75rem;
-  position: relative;
+  background-color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 8%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 8%, transparent);
 }
 
 .notifications-modal__thumb--placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.8rem;
-  color: $color-text-muted;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
+}
+
+.notifications-modal__main {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
 }
 
 .notifications-modal__content {
@@ -162,45 +636,66 @@
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  padding-top: 0.05rem;
+  padding-top: 0.1rem;
 }
 
 .notifications-modal__text {
-  font-size: 0.84rem;
+  font-size: 0.875rem;
   font-weight: 400;
-  line-height: 1.35;
-  color: $color-text;
+  line-height: 1.4;
+  color: var(--uikit-v2-text, #{$color-text});
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-word;
 
   b {
     font-weight: 650;
-    color: $color-text;
+    color: var(--uikit-v2-text, #{$color-text});
+  }
+
+  &--muted {
+    color: var(--uikit-v2-muted, #{$color-text-muted});
+
+    b {
+      color: var(--uikit-v2-muted, #{$color-text-muted});
+      font-weight: 600;
+    }
   }
 }
 
 .notifications-modal__time {
-  font-size: 0.75rem;
-  line-height: 1.2;
-  color: $color-text-muted;
+  margin-top: 0.1rem;
+  font-size: 0.78rem;
+  line-height: 1.25;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
+}
+
+/* Android is_new dot on the right */
+.notifications-modal__dot {
+  flex-shrink: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-top: 0.45rem;
+  border-radius: 50%;
+  background: var(--uikit-v2-accent, #{$color-accent});
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 22%, transparent);
 }
 
 .notifications-modal__marker {
   position: absolute;
-  right: -2px;
-  bottom: -2px;
-  width: 18px;
-  height: 18px;
+  right: 0;
+  bottom: 0.15rem;
+  width: 1.55rem;
+  height: 1.55rem;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 0 0 2px $color-surface;
+  box-shadow: 0 0 0 2.5px var(--uikit-v2-surface, #{$color-surface});
 
   .icon {
-    width: 10px;
-    height: 10px;
+    width: 0.8rem;
+    height: 0.8rem;
   }
 }
 
@@ -210,14 +705,14 @@
 }
 
 .notifications-modal__marker--article {
-  border-radius: 5px;
+  border-radius: 0.4rem;
   background: #f59e0b;
   color: #fff;
 }
 
 .notifications-modal__marker--related {
   background: #f6a623;
-  color: #000;
+  color: #111;
 }
 
 .notifications-modal__marker--friend {
@@ -226,8 +721,8 @@
 }
 
 .notifications-modal__marker--friend-accept {
-  background: $color-success;
-  color: #000;
+  background: var(--uikit-v2-success, #{$color-success});
+  color: #111;
 }
 
 .notifications-modal__marker--comment {
@@ -235,26 +730,92 @@
   color: #fff;
 }
 
-.notifications-modal__item--app-update {
-  cursor: pointer;
-}
-
 .notifications-modal__marker--update {
-  background: $color-accent;
-  color: #000;
+  background: var(--uikit-v2-accent, #{$color-accent});
+  color: #111;
 }
 
 .notifications-modal__marker--update-ready {
-  background: $color-success;
-  color: #000;
+  background: var(--uikit-v2-success, #{$color-success});
+  color: #111;
+}
+
+.notifications-modal__spoiler {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  margin-top: 0.15rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--uikit-v2-border, #{$color-border}) 80%, transparent);
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 9%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 50%, transparent);
+    outline-offset: 1px;
+  }
+}
+
+.notifications-modal__spoiler-hint,
+.notifications-modal__spoiler-action {
+  font-size: 0.78rem;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
+}
+
+.notifications-modal__spoiler-action {
+  font-weight: 650;
+  color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 82%, transparent);
+}
+
+.notifications-modal__spoiler-body {
+  margin-top: 0.2rem;
+  font-size: 0.84rem;
+  line-height: 1.4;
+  color: var(--uikit-v2-text, #{$color-text});
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.notifications-modal__spoiler-hide {
+  align-self: flex-start;
+  margin: 0.15rem 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+
+  &:hover {
+    color: var(--uikit-v2-text, #{$color-text});
+  }
+}
+
+.notifications-modal__item--app-update {
+  cursor: default;
+}
+
+button.notifications-modal__item--app-update {
+  cursor: pointer;
 }
 
 .notifications-modal__progress {
-  margin-top: 0.35rem;
+  margin-top: 0.4rem;
   width: 100%;
   height: 5px;
   border-radius: 999px;
-  background: $color-surface;
+  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 10%, transparent);
   overflow: hidden;
 }
 
@@ -264,9 +825,22 @@
   border-radius: inherit;
   background: linear-gradient(
     90deg,
-    $color-accent 0%,
-    color-mix(in srgb, var(--color-accent, #{$color-accent}) 70%, white) 50%,
-    $color-accent 100%
+    var(--uikit-v2-accent, #{$color-accent}) 0%,
+    color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 70%, white) 50%,
+    var(--uikit-v2-accent, #{$color-accent}) 100%
   );
   transition: width 0.2s ease;
+}
+
+/* legacy close (removed from markup, keep noop if referenced) */
+.notifications-modal__close {
+  display: none;
+}
+
+.notifications-modal__loading,
+.notifications-modal__empty,
+.notifications-modal__error {
+  margin: 0.4rem 0.5rem 0.5rem;
+  font-size: 0.85rem;
+  color: var(--uikit-v2-muted, #{$color-text-muted});
 }

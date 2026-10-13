@@ -119,7 +119,7 @@
   let dragAnchorStart = 0;
   let dragAnchorEnd = 0;
   let dragSegIndex = -1;
-  let transitionDragIndex = -1;
+  let transitionDragIndex = $state(-1);
   let transitionDragStartX = 0;
   let transitionDragStartCf = 0;
   let activeTransitionIndex = $state<number | null>(null);
@@ -1388,12 +1388,15 @@
             </div>
             {#each segments as seg, i (i)}
               {@const extend = segOverlapExtendPct(i)}
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div
                 class="ove-timeline__fragment"
                 class:ove-timeline__fragment--active={activeSegIndex === i}
                 style:left="{segLeftPct(seg)}%"
                 style:width="calc({segWidthPct(seg)}% + {extend}%)"
                 title="Фрагмент {i + 1}: {formatTimeSec(seg.start)} — {formatTimeSec(seg.end)}"
+                role="button"
+                tabindex="0"
                 onpointerdown={(e) => onFragPointerDown(e, i)}
               >
                 {#if activeSegIndex === i}
@@ -1494,10 +1497,12 @@
             Клипы накладываются друг на друга. Тяни зону перехода или меняй длительность наложения.
           </p>
 
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             class="ove-preview-montage"
             class:ove-preview-montage--empty={segments.length === 0}
             bind:this={previewTimelineEl}
+            role="presentation"
             onpointermove={onPreviewTimelineMove}
             onpointerup={onPreviewTimelineUp}
             onpointercancel={onPreviewTimelineUp}

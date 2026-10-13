@@ -112,15 +112,22 @@ async function requestAnyAdapter(): Promise<GPUAdapter | null> {
   const gpu = navigator.gpu;
   if (!gpu?.requestAdapter) return null;
 
-  const optionsList: ExtendedAdapterOptions[] = [
-    { compatibilityMode: true },
-    { powerPreference: 'high-performance', compatibilityMode: true },
-    { powerPreference: 'high-performance' },
-    { powerPreference: 'low-power' },
-    {},
-    { forceFallbackAdapter: true },
-    { compatibilityMode: true, forceFallbackAdapter: true },
-  ];
+  const optionsList: ExtendedAdapterOptions[] = isCapacitorNative()
+    ? [
+        { compatibilityMode: true },
+        { powerPreference: 'high-performance', compatibilityMode: true },
+        { powerPreference: 'high-performance' },
+        { powerPreference: 'low-power' },
+        {},
+        { forceFallbackAdapter: true },
+        { compatibilityMode: true, forceFallbackAdapter: true },
+      ]
+    : [
+        // Desktop/Electron: сначала быстрые варианты без длинной цепочки fallback
+        { powerPreference: 'high-performance' },
+        {},
+        { powerPreference: 'low-power' },
+      ];
 
   for (const options of optionsList) {
     try {

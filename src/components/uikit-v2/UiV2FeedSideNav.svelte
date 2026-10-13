@@ -9,6 +9,8 @@
     id: number | null;
     label: string;
     avatar?: string | null;
+    fresh?: boolean;
+    isBlog?: boolean;
   };
 
   type Props = {
@@ -61,11 +63,14 @@
               type="button"
               class="uiv2-feed-side__topic"
               class:uiv2-feed-side__topic--active={activeTopicId === topic.id}
+              class:uiv2-feed-side__topic--dim={activeTopicId != null && activeTopicId !== topic.id}
               onclick={() => onTopic?.(topic.id)}
             >
               <span
                 class="uiv2-feed-side__topic-avatar"
+                class:uiv2-feed-side__topic-avatar--channel={!topic.isBlog}
                 class:uiv2-feed-side__topic-avatar--empty={!topic.avatar}
+                class:uiv2-feed-side__topic-avatar--fresh={!!topic.fresh}
                 style={topic.avatar ? `background-image:url('${topic.avatar}')` : undefined}
                 aria-hidden="true"
               ></span>

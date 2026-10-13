@@ -1,5 +1,8 @@
 // ── Theme system ──────────────────────────────────────────────────────────────
 
+import { isMobileMode } from '../platform/mobile';
+import { isTvMode } from '../platform/tv';
+
 export interface ThemeVars {
   colorBg:           string;
   colorSurface:      string;
@@ -21,7 +24,7 @@ export interface Theme {
 
 // ── Built-in themes ───────────────────────────────────────────────────────────
 
-const FONT_DEFAULT = "Calibri, 'Segoe UI', Candara, system-ui, -apple-system, sans-serif";
+const FONT_DEFAULT = "'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif";
 
 /** Official dark theme vars (from the app design). */
 const DARK_VARS: ThemeVars = {
@@ -172,6 +175,8 @@ function isLightTheme(v: ThemeVars): boolean {
 }
 
 export function applyTheme(theme: Theme): void {
+  // Мобильный режим: фиксированная тёмная палитра из токенов .m-* (см. _mobile-tokens.scss), темы desktop не применяем.
+  if (isMobileMode()) return;
   // For 'auto', resolve the actual theme based on OS preference
   const effective = theme.id === 'auto' ? resolveAutoTheme() : theme;
 
@@ -185,7 +190,10 @@ export function applyTheme(theme: Theme): void {
   root.style.setProperty('--color-text-muted',    v.colorTextMuted);
   root.style.setProperty('--color-accent',        v.colorAccent);
   root.style.setProperty('--color-accent-hover',  v.colorAccentHover);
-  root.style.setProperty('--font-sans',           v.fontFamily);
+  // TV держит Hirro Sans (applyTvDefaults / html.tv-mode) — не перетираем темой.
+  if (!isTvMode()) {
+    root.style.setProperty('--font-sans', v.fontFamily);
+  }
 
   const light = isLightTheme(v);
   root.dataset.themeMode = light ? 'light' : 'dark';
@@ -217,7 +225,8 @@ const SEED_KEYS: Array<keyof ThemeVars> = [
  * Index 0xFF (255) = font not in list → not encoded.
  */
 export const SEED_FONTS: readonly string[] = [
-  // Системные
+  // Системные / встроенные
+  "'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif",
   "'Segoe UI', system-ui, -apple-system, sans-serif",
   'system-ui, -apple-system, sans-serif',
   'Arial, Helvetica, sans-serif',

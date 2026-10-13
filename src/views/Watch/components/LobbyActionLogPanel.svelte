@@ -6,9 +6,8 @@
     subscribeLobbyActionLog,
     formatLobbyActionLine,
     downloadLobbyActionLog,
-    copyLobbyLogsFolderPath,
   } from '../../../services/lobby-action-log';
-  import { iconDownload, iconFolder, iconCopy } from '../../../components/icons';
+  import { iconDownload } from '../../../components/icons';
   import UiV2Button from '../../../components/uikit-v2/UiV2Button.svelte';
   import { uiv2CustomScroll } from '../../../actions/uiv2CustomScroll';
 
@@ -22,9 +21,6 @@
   let filterOrigin = $state<'all' | LobbyActionOrigin>('all');
   let filterText = $state('');
   let logViewport: HTMLDivElement | null = $state(null);
-  let pathHint = $state('');
-  let lobbyFileHint = $state('');
-  let pathCopied = $state(false);
   let downloadDone = $state(false);
 
   const filtered = $derived(
@@ -55,19 +51,8 @@
     window.setTimeout(() => { downloadDone = false; }, 1800);
   }
 
-  async function handleCopyPath() {
-    const res = await copyLobbyLogsFolderPath();
-    pathHint = res.path;
-    pathCopied = res.copied;
-    window.setTimeout(() => { pathCopied = false; }, 2200);
-  }
-
   onMount(() => {
     subscribeLobbyActionLog((list) => { entries = list; });
-    (window.electron as { logGetLobbyPath?: () => Promise<string | null> } | undefined)
-      ?.logGetLobbyPath?.()
-      .then((p) => { if (p) lobbyFileHint = p; })
-      .catch(() => {});
   });
 </script>
 
@@ -76,9 +61,6 @@
     <div>
       <h3 class="watch-lobby-log__title">Журнал действий</h3>
       <p class="watch-lobby-log__hint">Локальные, серверные и действия других участников</p>
-      {#if lobbyFileHint}
-        <p class="watch-lobby-log__file" title={lobbyFileHint}>Файл: {lobbyFileHint}</p>
-      {/if}
     </div>
     <button type="button" class="watch-lobby-log__close" onclick={onclose} aria-label="Закрыть журнал">×</button>
   </header>
@@ -137,20 +119,5 @@
     >
       {#snippet icon()}{@html iconDownload(14)}{/snippet}
     </UiV2Button>
-    <UiV2Button
-      label={pathCopied ? 'Путь скопирован' : 'Путь к логам'}
-      variant="ghost"
-      size="sm"
-      onclick={handleCopyPath}
-    >
-      {#snippet icon()}{@html iconFolder(14)}{/snippet}
-    </UiV2Button>
   </footer>
-
-  {#if pathHint}
-    <p class="watch-lobby-log__path" title={pathHint}>
-      {@html iconCopy(12)}
-      <span>{pathHint}</span>
-    </p>
-  {/if}
 </section>

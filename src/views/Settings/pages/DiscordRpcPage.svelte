@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import UiV2Toggle from '../../../components/uikit-v2/UiV2Toggle.svelte';
+  import UiV2SettingsRow from '../../../components/uikit-v2/UiV2SettingsRow.svelte';
   import {
     type DiscordRpcPageSettings,
     type DiscordRpcSettings,
@@ -83,7 +85,7 @@
     if (!window.electron?.getSettings) return;
     hasElectron = true;
     const raw = await window.electron.getSettings();
-    settings = normalizeDiscordRpcSettings(raw as Record<string, unknown>);
+    settings = normalizeDiscordRpcSettings(raw as unknown as Record<string, unknown>);
     loaded = true;
   }
 
@@ -97,7 +99,7 @@
   function savePage(
     key: keyof DiscordRpcPageSettings,
     checked: boolean,
-    group?: PageGroup,
+    _group?: PageGroup,
   ) {
     if (key === 'discordRpcPageProfile' && !checked) {
       save({
@@ -119,207 +121,152 @@
   onMount(() => void loadSettings());
 </script>
 
-<div class="settings-modal-content discord-rpc-settings">
+<div class="uiv2-settings">
   {#if !hasElectron}
-    <p class="settings-account-coming-soon">Статус Discord работает только в десктоп-приложении AnixApp.</p>
+    <p class="uiv2-settings__status">Статус Discord работает только в десктоп-приложении AnixApp.</p>
   {:else if !loaded}
-    <div class="discord-rpc-settings__loading">Загрузка…</div>
+    <p class="uiv2-settings__status">Загрузка…</p>
   {:else}
-    <div class="settings-section">
-      <p class="settings-section__label">Основное</p>
-      <div class="settings-section__body">
-        <div class="settings-row">
-          <div class="settings-row__info">
-            <div class="settings-row__label">Статус в Discord</div>
-            <div class="settings-row__desc">
-              Показывать в профиле Discord, чем вы заняты в AnixApp. Нужен запущенный Discord на этом ПК.
-            </div>
-          </div>
-          <div class="settings-row__control">
-            <label class="settings-toggle-switch" aria-label="Статус в Discord">
-              <input
-                type="checkbox"
-                checked={settings.discordRpcEnabled}
-                onchange={(e) => save({ discordRpcEnabled: (e.target as HTMLInputElement).checked })}
-              />
-              <span class="settings-toggle-switch__track"></span>
-              <span class="settings-toggle-switch__thumb"></span>
-            </label>
-          </div>
-        </div>
+    <section class="uiv2-settings__block">
+      <h3 class="uiv2-settings__title">Основное</h3>
+      <div class="uiv2-settings__group">
+        <UiV2SettingsRow
+          title="Статус в Discord"
+          desc="Показывать в профиле Discord, чем вы заняты в AnixApp. Нужен запущенный Discord на этом ПК."
+        >
+          <UiV2Toggle
+            label="Статус в Discord"
+            checked={settings.discordRpcEnabled}
+            onChange={(checked) => save({ discordRpcEnabled: checked })}
+          />
+        </UiV2SettingsRow>
 
-        <div class="settings-row">
-          <div class="settings-row__info">
-            <div class="settings-row__label">Где вы в приложении</div>
-            <div class="settings-row__desc">
-              Показывать текущий раздел в статусе. Если выключить — в Discord будет просто «AnixApp · В приложении».
-            </div>
-          </div>
-          <div class="settings-row__control">
-            <label class="settings-toggle-switch" aria-label="Где вы в приложении">
-              <input
-                type="checkbox"
-                checked={settings.discordRpcShowBrowsing}
-                disabled={!settings.discordRpcEnabled}
-                onchange={(e) => save({ discordRpcShowBrowsing: (e.target as HTMLInputElement).checked })}
-              />
-              <span class="settings-toggle-switch__track"></span>
-              <span class="settings-toggle-switch__thumb"></span>
-            </label>
-          </div>
-        </div>
+        <UiV2SettingsRow
+          title="Где вы в приложении"
+          desc="Показывать текущий раздел в статусе. Если выключить — в Discord будет просто «AnixApp · В приложении»."
+        >
+          <UiV2Toggle
+            label="Где вы в приложении"
+            checked={settings.discordRpcShowBrowsing}
+            disabled={!settings.discordRpcEnabled}
+            onChange={(checked) => save({ discordRpcShowBrowsing: checked })}
+          />
+        </UiV2SettingsRow>
       </div>
-    </div>
+    </section>
 
-    <div class="settings-section">
-      <p class="settings-section__label">Разделы приложения</p>
-      <p class="discord-rpc-settings__section-desc">
+    <section class="uiv2-settings__block">
+      <h3 class="uiv2-settings__title">Разделы приложения</h3>
+      <p class="uiv2-settings__desc">
         Выберите экраны, для которых Discord будет показывать отдельный статус. Неактивные разделы отображаются как «в приложении».
       </p>
-      <div class="settings-section__body discord-rpc-settings__pages">
-        {#each PAGE_GROUPS as group}
-          <section class="discord-rpc-settings__group">
-            <h3 class="discord-rpc-settings__group-title">{group.label}</h3>
-            <ul
-              class="discord-rpc-settings__grid"
-              class:discord-rpc-settings__grid--single={group.singleColumn}
-            >
-              {#each group.items as item}
-                {@const itemDisabled = isPageItemDisabled(item, group)}
-                {@const itemChecked = itemDisabled && item.nested ? false : settings[item.key]}
-                <li
-                  class="discord-rpc-settings__item"
-                  class:discord-rpc-settings__item--nested={item.nested}
-                >
-                  <label class="discord-rpc-settings__item-label">
-                    <input
-                      type="checkbox"
-                      class="discord-rpc-settings__checkbox"
-                      checked={itemChecked}
-                      disabled={itemDisabled}
-                      onchange={(e) => savePage(item.key, (e.target as HTMLInputElement).checked, group)}
-                    />
-                    <span class="discord-rpc-settings__item-text">
-                      <span class="discord-rpc-settings__item-name">{item.label}</span>
-                      {#if item.hint}
-                        <span class="discord-rpc-settings__item-hint">{item.hint}</span>
-                      {/if}
-                    </span>
-                  </label>
-                </li>
-              {/each}
-            </ul>
-          </section>
-        {/each}
+      <div class="uiv2-settings__group uiv2-settings__group--pad">
+        <div class="uiv2-settings__pages">
+          {#each PAGE_GROUPS as group}
+            <section class="uiv2-settings__pages-group">
+              <h4 class="uiv2-settings__subhead">{group.label}</h4>
+              <ul
+                class="uiv2-settings__check-grid"
+                class:uiv2-settings__check-grid--single={group.singleColumn}
+              >
+                {#each group.items as item}
+                  {@const itemDisabled = isPageItemDisabled(item, group)}
+                  {@const itemChecked = itemDisabled && item.nested ? false : settings[item.key]}
+                  <li
+                    class="uiv2-settings__check-item"
+                    class:uiv2-settings__check-item--nested={item.nested}
+                  >
+                    <label class="uiv2-settings__check">
+                      <input
+                        type="checkbox"
+                        checked={itemChecked}
+                        disabled={itemDisabled}
+                        onchange={(e) => savePage(item.key, (e.currentTarget as HTMLInputElement).checked, group)}
+                      />
+                      <span class="uiv2-settings__check-box" aria-hidden="true"></span>
+                      <span class="uiv2-settings__check-text">
+                        <span class="uiv2-settings__check-name">{item.label}</span>
+                        {#if item.hint}
+                          <span class="uiv2-settings__check-hint">{item.hint}</span>
+                        {/if}
+                      </span>
+                    </label>
+                  </li>
+                {/each}
+              </ul>
+            </section>
+          {/each}
+        </div>
       </div>
-    </div>
+    </section>
 
-    <div class="settings-section">
-      <p class="settings-section__label">Плеер и лобби</p>
-      <div class="settings-section__body">
-        <div class="settings-row">
-          <div class="settings-row__info">
-            <div class="settings-row__label">Текущая серия</div>
-            <div class="settings-row__desc">
-              Название аниме и номер серии, пока идёт воспроизведение в плеере.
-            </div>
-          </div>
-          <div class="settings-row__control">
-            <label class="settings-toggle-switch" aria-label="Текущая серия">
-              <input
-                type="checkbox"
-                checked={settings.discordRpcShowWatching}
-                disabled={!settings.discordRpcEnabled}
-                onchange={(e) => save({ discordRpcShowWatching: (e.target as HTMLInputElement).checked })}
-              />
-              <span class="settings-toggle-switch__track"></span>
-              <span class="settings-toggle-switch__thumb"></span>
-            </label>
-          </div>
-        </div>
+    <section class="uiv2-settings__block">
+      <h3 class="uiv2-settings__title">Плеер и лобби</h3>
+      <div class="uiv2-settings__group">
+        <UiV2SettingsRow
+          title="Текущая серия"
+          desc="Название аниме и номер серии, пока идёт воспроизведение в плеере."
+        >
+          <UiV2Toggle
+            label="Текущая серия"
+            checked={settings.discordRpcShowWatching}
+            disabled={!settings.discordRpcEnabled}
+            onChange={(checked) => save({ discordRpcShowWatching: checked })}
+          />
+        </UiV2SettingsRow>
 
-        <div class="settings-row">
-          <div class="settings-row__info">
-            <div class="settings-row__label">Полоса прогресса</div>
-            <div class="settings-row__desc">Таймер серии в Discord во время воспроизведения.</div>
-          </div>
-          <div class="settings-row__control">
-            <label class="settings-toggle-switch" aria-label="Полоса прогресса">
-              <input
-                type="checkbox"
-                checked={settings.discordRpcShowProgress}
-                disabled={!settings.discordRpcEnabled || !settings.discordRpcShowWatching}
-                onchange={(e) => save({ discordRpcShowProgress: (e.target as HTMLInputElement).checked })}
-              />
-              <span class="settings-toggle-switch__track"></span>
-              <span class="settings-toggle-switch__thumb"></span>
-            </label>
-          </div>
-        </div>
+        <UiV2SettingsRow
+          title="Полоса прогресса"
+          desc="Таймер серии в Discord во время воспроизведения."
+        >
+          <UiV2Toggle
+            label="Полоса прогресса"
+            checked={settings.discordRpcShowProgress}
+            disabled={!settings.discordRpcEnabled || !settings.discordRpcShowWatching}
+            onChange={(checked) => save({ discordRpcShowProgress: checked })}
+          />
+        </UiV2SettingsRow>
 
-        <div class="settings-row">
-          <div class="settings-row__info">
-            <div class="settings-row__label">Озвучка и плеер</div>
-            <div class="settings-row__desc">Студия озвучки или источник видео в подписи к статусу.</div>
-          </div>
-          <div class="settings-row__control">
-            <label class="settings-toggle-switch" aria-label="Озвучка и плеер">
-              <input
-                type="checkbox"
-                checked={settings.discordRpcShowDubber}
-                disabled={!settings.discordRpcEnabled || !settings.discordRpcShowWatching}
-                onchange={(e) => save({ discordRpcShowDubber: (e.target as HTMLInputElement).checked })}
-              />
-              <span class="settings-toggle-switch__track"></span>
-              <span class="settings-toggle-switch__thumb"></span>
-            </label>
-          </div>
-        </div>
+        <UiV2SettingsRow
+          title="Озвучка и плеер"
+          desc="Студия озвучки или источник видео в подписи к статусу."
+        >
+          <UiV2Toggle
+            label="Озвучка и плеер"
+            checked={settings.discordRpcShowDubber}
+            disabled={!settings.discordRpcEnabled || !settings.discordRpcShowWatching}
+            onChange={(checked) => save({ discordRpcShowDubber: checked })}
+          />
+        </UiV2SettingsRow>
 
-        <div class="settings-row">
-          <div class="settings-row__info">
-            <div class="settings-row__label">Обложки и аватары</div>
-            <div class="settings-row__desc">Постер аниме или аватар профиля вместо логотипа AnixApp.</div>
-          </div>
-          <div class="settings-row__control">
-            <label class="settings-toggle-switch" aria-label="Обложки и аватары">
-              <input
-                type="checkbox"
-                checked={settings.discordRpcShowImages}
-                disabled={!settings.discordRpcEnabled}
-                onchange={(e) => save({ discordRpcShowImages: (e.target as HTMLInputElement).checked })}
-              />
-              <span class="settings-toggle-switch__track"></span>
-              <span class="settings-toggle-switch__thumb"></span>
-            </label>
-          </div>
-        </div>
+        <UiV2SettingsRow
+          title="Обложки и аватары"
+          desc="Постер аниме или аватар профиля вместо логотипа AnixApp."
+        >
+          <UiV2Toggle
+            label="Обложки и аватары"
+            checked={settings.discordRpcShowImages}
+            disabled={!settings.discordRpcEnabled}
+            onChange={(checked) => save({ discordRpcShowImages: checked })}
+          />
+        </UiV2SettingsRow>
 
-        <div class="settings-row">
-          <div class="settings-row__info">
-            <div class="settings-row__label">Приглашение в лобби</div>
-            <div class="settings-row__desc">
-              Кнопка «Присоединиться» в Discord, когда вы в лобби совместного просмотра.
-            </div>
-          </div>
-          <div class="settings-row__control">
-            <label class="settings-toggle-switch" aria-label="Приглашение в лобби">
-              <input
-                type="checkbox"
-                checked={settings.discordRpcShowParty}
-                disabled={!settings.discordRpcEnabled}
-                onchange={(e) => save({ discordRpcShowParty: (e.target as HTMLInputElement).checked })}
-              />
-              <span class="settings-toggle-switch__track"></span>
-              <span class="settings-toggle-switch__thumb"></span>
-            </label>
-          </div>
-        </div>
+        <UiV2SettingsRow
+          title="Приглашение в лобби"
+          desc="Кнопка «Присоединиться» в Discord, когда вы в лобби совместного просмотра."
+        >
+          <UiV2Toggle
+            label="Приглашение в лобби"
+            checked={settings.discordRpcShowParty}
+            disabled={!settings.discordRpcEnabled}
+            onChange={(checked) => save({ discordRpcShowParty: checked })}
+          />
+        </UiV2SettingsRow>
 
-        <p class="discord-rpc-settings__note">
+        <p class="uiv2-settings__note">
           Друзья увидят кнопку «Присоединиться» только если вы уже в лобби и эта опция включена.
         </p>
       </div>
-    </div>
+    </section>
   {/if}
 </div>

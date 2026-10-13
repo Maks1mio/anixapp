@@ -41,11 +41,28 @@ function hostUrlPatterns(hosts) {
   return hosts.flatMap((h) => [`*://*.${h}/*`, `*://${h}/*`]);
 }
 
+/** Chromium net::ERR_CERT_DATE_INVALID — просроченный/ещё не начавшийся сертификат. */
+const CERT_DATE_INVALID = -201;
+
+function allowExpiredAnixartCdnCerts(ses) {
+  ses.setCertificateVerifyProc((request, callback) => {
+    const host = String(request?.hostname || '').replace(/^www\./, '').toLowerCase();
+    const dateInvalid = Number(request?.errorCode) === CERT_DATE_INVALID
+      || /CERT_DATE_INVALID/i.test(String(request?.verificationResult || ''));
+    if (dateInvalid && hostMatchesList(host, ANIXART_CDN_HOSTS)) {
+      callback(0);
+      return;
+    }
+    callback(-3);
+  });
+}
+
 function setupSessionRequestHeaders() {
   const { loadExtraVideoHostsFromConfig } = require('../lib/extra-video-hosts');
   loadExtraVideoHostsFromConfig();
 
   const ses = session.defaultSession;
+  allowExpiredAnixartCdnCerts(ses);
   const cdnPatterns = hostUrlPatterns(ANIXART_CDN_HOSTS);
   const videoPatterns = hostUrlPatterns(VIDEO_HOSTS);
 
@@ -79,6 +96,18 @@ function setupSessionRequestHeaders() {
       upsertHeader(requestHeaders, 'Referer', 'https://api.studiomir.club/');
     } else if (host.includes('rutube')) {
       upsertHeader(requestHeaders, 'Referer', 'https://rutube.ru/');
+    } else if (
+      host === 'kodikplayer.com'
+      || host === 'kodik.info'
+      || host === 'aniqit.com'
+      || host === 'anixis.com'
+      || host === 'aniqart.com'
+      || host.endsWith('.kodikplayer.com')
+      || host.endsWith('.aniqit.com')
+    ) {
+      // Embed из player.html (127.0.0.1) без Referer → Kodik 500; как на anixart.tv.
+      upsertHeader(requestHeaders, 'Referer', ANIXART_SITE_REFERER);
+      upsertHeader(requestHeaders, 'User-Agent', BROWSER_UA);
     } else if (host.endsWith('kodik-cdn.com') || host.includes('kodik-storage') || host.includes('solodcdn') || host.includes('zerocdn') || host.includes('animedia')) {
       upsertHeader(requestHeaders, 'Referer', 'https://kodikplayer.com/');
       // Progressive /s/m/ edges на solodcdn стабильнее с браузерным UA (как SwiftPlayer).

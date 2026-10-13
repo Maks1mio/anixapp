@@ -1,6 +1,8 @@
 <script lang="ts">
   import { iconChevronLeft, iconChevronRight } from '../icons';
   import type { UiV2FeedPostMedia } from './UiV2FeedPost.svelte';
+  import { openFeedMediaLightbox } from '../../utils/feed-media-lightbox';
+  import { toCdnProxyUrl, toFeedImageUrl } from '../../utils/posterUrl';
 
   type Props = {
     items: UiV2FeedPostMedia[];
@@ -12,8 +14,25 @@
   let canPrev = $state(false);
   let canNext = $state(false);
 
-  const useGallery = $derived(items.length >= 2 && items.length <= 4);
-  const useCarousel = $derived(items.length >= 5);
+  /** 2–6 — плитки; 7+ — карусель. */
+  const GALLERY_MAX = 6;
+  const useGallery = $derived(items.length >= 2 && items.length <= GALLERY_MAX);
+  const useCarousel = $derived(items.length > GALLERY_MAX);
+  /** В плитке больше 4 — показываем 4 ячейки, на последней «+N». */
+  const TILE_VISIBLE_MAX = 4;
+  const galleryItems = $derived(
+    useGallery && items.length > TILE_VISIBLE_MAX
+      ? items.slice(0, TILE_VISIBLE_MAX)
+      : items,
+  );
+  const galleryOverflow = $derived(
+    useGallery ? Math.max(0, items.length - TILE_VISIBLE_MAX) : 0,
+  );
+  const galleryMod = $derived(
+    useGallery
+      ? Math.min(items.length, TILE_VISIBLE_MAX)
+      : items.length,
+  );
 
   function updateScrollState() {
     const el = scroller;
@@ -40,6 +59,12 @@
     return item.kind === 'gif';
   }
 
+  function previewAt(index: number, e: MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    openFeedMediaLightbox(items, index, e.currentTarget as HTMLElement);
+  }
+
   $effect(() => {
     items;
     scroller;
@@ -47,11 +72,12 @@
   });
 </script>
 
-{#snippet mediaNode(item: UiV2FeedPostMedia, className = '')}
+{#snippet mediaNode(item: UiV2FeedPostMedia, className = '', tile = false)}
   {#if item.kind === 'video'}
+    <!-- svelte-ignore a11y_media_has_caption -->
     <video
       class={className}
-      src={item.url}
+      src={toCdnProxyUrl(item.url) || item.url}
       muted
       playsinline
       loop
@@ -59,7 +85,13 @@
       preload="metadata"
     ></video>
   {:else}
-    <img class={className} src={item.url} alt="" loading="lazy" decoding="async" />
+    <img
+      class={className}
+      src={toFeedImageUrl(item.url, tile ? 'tile' : 'full')}
+      alt=""
+      loading="lazy"
+      decoding="async"
+    />
   {/if}
 {/snippet}
 
@@ -67,45 +99,92 @@
   <!-- no media -->
 {:else if items.length === 1}
   {@const item = items[0]}
-  <div class="uiv2-feed-post__media uiv2-feed-post__media--single">
+  <button
+    type="button"
+    class="uiv2-feed-post__media uiv2-feed-post__media--single"
+    data-post-action
+    aria-label="Открыть изображение"
+    onclick={(e) => previewAt(0, e)}
+  >
+    {#if item.kind === 'video'}
+      <!-- svelte-ignore a11y_media_has_caption -->
+      <video
+        class="uiv2-feed-post__media-blur"
+        src={toCdnProxyUrl(item.url) || item.url}
+        muted
+        playsinline
+        loop
+        autoplay
+        preload="metadata"
+        aria-hidden="true"
+        tabindex="-1"
+      ></video>
+    {:else}
+      <img
+        class="uiv2-feed-post__media-blur"
+        src={toFeedImageUrl(item.url, 'tile')}
+        alt=""
+        aria-hidden="true"
+        loading="lazy"
+        decoding="async"
+      />
+    {/if}
     {@render mediaNode(item, 'uiv2-feed-post__media-img')}
     {#if showGifBadge(item)}
       <span class="uiv2-feed-post__media-badge">GIF</span>
     {/if}
-  </div>
+  </button>
 {:else if useGallery}
   <div
-    class="uiv2-feed-post__gallery uiv2-feed-post__gallery--{items.length}"
+    class="uiv2-feed-post__gallery uiv2-feed-post__gallery--{galleryMod}"
     role="group"
     aria-label="Изображения записи"
+    data-post-action
   >
-    {#each items as item, i (item.url + i)}
-      <div class="uiv2-feed-post__gallery-cell">
-        {@render mediaNode(item, 'uiv2-feed-post__gallery-img')}
-        {#if showGifBadge(item)}
+    {#each galleryItems as item, i (item.url + i)}
+      {@const isLastOverflow = galleryOverflow > 0 && i === galleryItems.length - 1}
+      <button
+        type="button"
+        class="uiv2-feed-post__gallery-cell"
+        aria-label={
+          isLastOverflow
+            ? `Открыть изображение ${i + 1}, ещё ${galleryOverflow}`
+            : `Открыть изображение ${i + 1}`
+        }
+        onclick={(e) => previewAt(i, e)}
+      >
+        {@render mediaNode(item, 'uiv2-feed-post__gallery-img', true)}
+        {#if isLastOverflow}
+          <span class="uiv2-feed-post__gallery-more" aria-hidden="true">+{galleryOverflow}</span>
+        {:else if showGifBadge(item)}
           <span class="uiv2-feed-post__media-badge">GIF</span>
         {/if}
-      </div>
+      </button>
     {/each}
   </div>
-{:else}
-  <div class="uiv2-feed-post__carousel-wrap">
+{:else if useCarousel}
+  <div class="uiv2-feed-post__carousel-wrap" data-post-action>
     <div
       class="uiv2-feed-post__carousel"
       bind:this={scroller}
       onscroll={updateScrollState}
     >
       {#each items as item, i (item.url + i)}
-        <div class="uiv2-feed-post__carousel-slide">
-          {@render mediaNode(item, 'uiv2-feed-post__carousel-img')}
+        <button
+          type="button"
+          class="uiv2-feed-post__carousel-slide"
+          aria-label={`Открыть изображение ${i + 1}`}
+          onclick={(e) => previewAt(i, e)}
+        >
+          {@render mediaNode(item, 'uiv2-feed-post__carousel-img', true)}
           {#if showGifBadge(item)}
             <span class="uiv2-feed-post__media-badge">GIF</span>
           {/if}
-        </div>
+        </button>
       {/each}
     </div>
 
-    {#if useCarousel && (canPrev || canNext)}
+    {#if canPrev || canNext}
       <div class="uiv2-feed-post__carousel-nav-row">
         <button
           type="button"
@@ -116,6 +195,7 @@
         >
           {@html iconChevronLeft(18)}
         </button>
+        <span class="uiv2-feed-post__carousel-count">{items.length}</span>
         <button
           type="button"
           class="uiv2-feed-post__carousel-nav"

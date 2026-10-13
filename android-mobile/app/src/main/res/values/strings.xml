@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Anix Mobile</string>
+    <string name="title_activity_main">Anix Mobile</string>
+    <string name="package_name">com.mobileapp.anix</string>
+    <string name="custom_url_scheme">com.mobileapp.anix</string>
+</resources>

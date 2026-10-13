@@ -1,29 +1,38 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import { resolve } from 'path';
+import { fileURLToPath } from 'url';
 import { svelte, vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { anixWebBridgePlugin } from './vite/anix-web-bridge-plugin.mjs';
+
+const rootDir = import.meta.dirname ?? fileURLToPath(new URL('.', import.meta.url));
 
 const devPort = Number(process.env.ANIXAPP_DEV_PORT)
   || (process.env.VITE_TV_MODE === '1' || process.env.VITE_TV_MODE === 'true' ? 5174 : 5173);
 
-export default defineConfig(({ command }) => {
+export default defineConfig(({ command, mode }) => {
   const tvMode = process.env.VITE_TV_MODE === '1' || process.env.VITE_TV_MODE === 'true';
   const outDir = process.env.ANIXAPP_OUT_DIR || 'dist';
   const webBase = process.env.ANIXAPP_WEB_BASE === '/' || process.env.ANIXAPP_TV_WEB === '1';
+  // Ключ резервного прокси (x-anixapp-proxy-key) попадает только в мобильный бандл; без него клиент работает по прямым хостам
+  const mobileBuild = process.env.VITE_MOBILE_MODE === '1' || process.env.VITE_MOBILE_MODE === 'true';
+  const proxyKey = mobileBuild
+    ? (process.env.ANIXART_PROXY_APP_KEY || loadEnv(mode, rootDir, '').ANIXART_PROXY_APP_KEY || '')
+    : '';
 
   return {
-  root: __dirname,
+  root: rootDir,
   // Dev: absolute `/` so SPA routes (/watch, /release/…) don't 404 Vite deps.
   // Build: `./` so Electron file:// / Capacitor still resolves assets.
   base: command === 'serve' || webBase ? '/' : './',
   appType: 'spa',
+  define: { __ANIXART_PROXY_KEY__: JSON.stringify(proxyKey) },
   plugins: [svelte({ preprocess: vitePreprocess() }), anixWebBridgePlugin()],
   resolve: {
     alias: {
       // binauralfir@0.1.2 has invalid `"exports": "BinauralFIR"` — bypass for Vite 8 / rolldown.
-      binauralfir: resolve(__dirname, 'node_modules/binauralfir/dist/binaural-fir.js'),
+      binauralfir: resolve(rootDir, 'node_modules/binauralfir/dist/binaural-fir.js'),
       ...(tvMode
-        ? { 'form-data': resolve(__dirname, 'src/native/form-data-stub.ts') }
+        ? { 'form-data': resolve(rootDir, 'src/native/form-data-stub.ts') }
         : {}),
     },
   },
@@ -41,13 +50,13 @@ export default defineConfig(({ command }) => {
     cssTarget: 'chrome150',
     rollupOptions: {
       input: outDir === 'dist-android' || webBase
-        ? [resolve(__dirname, 'index.html')]
+        ? [resolve(rootDir, 'index.html')]
         : [
-            resolve(__dirname, 'index.html'),
-            resolve(__dirname, 'player.html'),
-            resolve(__dirname, 'theme-editor.html'),
-            resolve(__dirname, 'upscale-tool.html'),
-            resolve(__dirname, 'overview-video-editor.html'),
+            resolve(rootDir, 'index.html'),
+            resolve(rootDir, 'player.html'),
+            resolve(rootDir, 'theme-editor.html'),
+            resolve(rootDir, 'upscale-tool.html'),
+            resolve(rootDir, 'overview-video-editor.html'),
           ],
       output: {
         manualChunks(id) {

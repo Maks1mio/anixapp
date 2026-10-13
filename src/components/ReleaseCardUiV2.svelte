@@ -12,6 +12,7 @@
   import { notifyFavoritesChanged } from '../utils/favorites-events';
   import { applyReleaseListStatus } from '../utils/release-list-status';
   import type { ReleaseCardData } from '../types/release';
+  import { formatReleaseEpisodes } from '../utils/release-card';
 
   interface Props {
     data: ReleaseCardData;
@@ -96,7 +97,7 @@
   {title}
   releaseId={id}
   posterUrl={toCdnProxyUrl(data.poster || '')}
-  episodes={data.episodesReleased ?? data.episodesTotal ?? null}
+  episodes={formatReleaseEpisodes(data.episodesReleased, data.episodesTotal) || null}
   year={data.year}
   country={data.country}
   rating={data.rating}

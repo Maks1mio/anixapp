@@ -1,9 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
+  import { isMac } from './utils/platform';
   import {
     appScreen,
     syncAuthStatus,
+    resolveAuth,
+    authReady,
     isAuthenticated,
     loginPromptOpen,
     closeLoginPrompt,
@@ -16,11 +19,13 @@
     setConnectionOk,
     setConnectionProblem,
   } from './stores/connection';
-  import { currentPath, navigate } from './stores/navigation';
-  import { openLobbyModal, settingsModalOpen, lobbyModalOpen, lobbyModalInitialCode, notificationsModalOpen, watchModalOpen, watchModalReleaseId, watchModalReleaseTitle, lobbyCurrentPlayback, isPlayerWindowOpen, lobbyWatchingPeerIds } from './stores/modals';
+  import { currentPath, navigate, replacePath, seedAnixHistory } from './stores/navigation';
+  import { focusFeedArticle, focusFeedChannel } from './stores/feed-focus';
+  import { settingsModalOpen, notificationsModalOpen, watchModalOpen, watchModalReleaseId, watchModalReleaseTitle, lobbyCurrentPlayback, isPlayerWindowOpen, lobbyWatchingPeerIds } from './stores/modals';
   import { sendPlayerViewActive } from './services/lobby-ws';
   import { getPath, getSearchParams } from './router';
-  import { captureActiveScroll, resetScrollAfterRouteChange } from './stores/view-state';
+  import { captureActiveScroll, hasActiveScrollKey, resetScrollAfterRouteChange } from './stores/view-state';
+  import { getSidebarDefaultNavHref } from './prefs';
   import { initTabNavigation, recordTabNavigation } from './stores/tab-navigation';
   import { initTheme, applyThemeById } from './services/themes';
   import { initAnixbackEndpoint } from './services/anixback-endpoint';
@@ -40,17 +45,20 @@
     scheduleDiscordPresenceSync,
   } from './services/discord-presence';
   import { openProfilePanel } from './stores/profile-panel';
+  import { openProfileFromPath } from './stores/user-profile';
 
   import Layout from './layout/Layout.svelte';
   import TvLayout from './layout/TvLayout.svelte';
   import { isTvMode } from './platform/tv';
+  import { isMobileMode } from './platform/mobile';
+  import MobileLayout from './layout/MobileLayout.svelte';
+  import MobileDownloads from './views/MobileDownloads.svelte';
   import Login from './views/Login.svelte';
   import Home from './views/Home.svelte';
   import Overview from './views/Overview.svelte';
   import FluoPage from './views/Fluo/page.svelte';
   import Feed from './views/Feed.svelte';
-  import Article from './views/Article.svelte';
-  import Channel from './views/Channel.svelte';
+  import FeedComposerWindow from './views/FeedComposerWindow.svelte';
   import Popular from './views/Popular.svelte';
   import CollectionsList from './views/CollectionsList.svelte';
   import MyCollections from './views/MyCollections.svelte';
@@ -62,7 +70,6 @@
   import Release from './views/Release/page.svelte';
   import Related from './views/Related.svelte';
   import Bookmarks from './views/Bookmarks.svelte';
-  import Profile from './views/Profile/page.svelte';
   import ProfileFriends from './views/ProfileFriends.svelte';
   import ProfileCollections from './views/ProfileCollections.svelte';
   import ProfileComments from './views/ProfileComments.svelte';
@@ -92,9 +99,9 @@
   import { isEmbeddedWebPlayer } from './utils/watch-nav';
 
   import SettingsModal from './components/SettingsModal.svelte';
-  import LobbyModal from './components/LobbyModal.svelte';
   import NotificationsModal from './components/NotificationsModal.svelte';
   import WatchModal from './components/WatchModal.svelte';
+  import UiV2ExternalLinkConfirm from './components/uikit-v2/UiV2ExternalLinkConfirm.svelte';
   import Toast from './components/Toast.svelte';
   import TvDebugMetrics from './components/tv/TvDebugMetrics.svelte';
 
@@ -122,6 +129,8 @@
   isPlayerWindowOpen.subscribe(v => { _isPlayerOpen = v; });
 
   let bookmarksUserId = $state<number | undefined>(undefined);
+  /** Soft refresh: remount route content without reloading the Electron window. */
+  let pageRefreshKey = $state(0);
 
   function bookmarksUserFromRoute(route: string): number | undefined {
     const pathOnly = route.split('?')[0] || '';
@@ -162,6 +171,33 @@
     }
   });
 
+  // Старый полноэкранный профиль: открыть панель и уйти с маршрута
+  $effect(() => {
+    const route = path;
+    if (!openProfileFromPath(route)) return;
+    queueMicrotask(() => replacePath('/'));
+  });
+
+  // /article/:id больше нет — открываем запись в ленте
+  $effect(() => {
+    const m = articleMatch;
+    if (!m) return;
+    const id = parseInt(m[1], 10);
+    if (!(id > 0)) return;
+    focusFeedArticle(id);
+    queueMicrotask(() => replacePath('/feed'));
+  });
+
+  // /channel/:id — группа в правом блоке ленты, без отдельной страницы
+  $effect(() => {
+    const m = channelMatch;
+    if (!m) return;
+    const id = parseInt(m[1], 10);
+    if (!(id > 0)) return;
+    focusFeedChannel(id);
+    queueMicrotask(() => replacePath('/feed'));
+  });
+
   $effect(() => {
     if ($appScreen !== 'main') return;
     const routePath = path;
@@ -177,6 +213,7 @@
 
   // Гость открыл раздел, которому нужен аккаунт
   $effect(() => {
+    if (!$authReady) return;
     if ($appScreen !== 'main') return;
     if ($isAuthenticated) return;
     if (!pathRequiresAuth(path)) return;
@@ -198,9 +235,6 @@
   const releaseCommentsMatch = $derived(path.match(/^\/release\/(\d+)\/comments$/));
   const releaseMatch          = $derived(path.match(/^\/release\/(\d+)$/));
   const relatedMatch          = $derived(path.match(/^\/release\/(\d+)\/related$/));
-  const profileMatch          = $derived(path.match(/^\/profile\/(\d+)$/));
-  const profilePageId         = $derived(profileMatch?.[1] ? parseInt(profileMatch[1], 10) : undefined);
-  const isProfileMainRoute    = $derived(path === '/profile' || profilePageId != null);
   const profileVotesMatch     = $derived(path.match(/^\/profile\/(\d+)\/votes$/));
   const profileFriendsMatch   = $derived(path.match(/^\/profile\/(\d+)\/friends$/));
   const profileCollectionsMatch = $derived(path.match(/^\/profile\/(\d+)\/collections$/));
@@ -221,6 +255,7 @@
   const collectionPickReturn  = $derived(getSearchParams().get('return') || '/collections/create');
   const announcementChatMatch = $derived(path.match(/^\/announcement\/([^/]+)\/chat$/));
   const isWatchRoute = $derived(path === '/watch');
+  const isComposerWindow = $derived(path === '/feed/composer');
 
   // ── App screen state machine ───────────────────────────────────────────────
   let offlineRetryTimer: number | null = null;
@@ -240,31 +275,19 @@
     if (!window.anixApi) return;
     setConnectionChecking();
     try {
+      const auth = await resolveAuth();
       await window.anixApi.client.checkConnection();
-      let hasToken = false;
-      let authKnown = false;
-      try {
-        const status = await window.anixApi.auth.getStatus();
-        hasToken = !!status?.hasToken;
-        isAuthenticated.set(hasToken);
-        authKnown = true;
-      } catch {
-        // Аккаунт не удалось определить — не открываем логин
-        authKnown = false;
-      }
       clearRetry();
       setConnectionOk();
       notifyAuthChanged();
       appScreen.set('main');
-      // Логин только если точно нет токена, не при сбое определения сессии
-      if (authKnown && !hasToken) openLoginPrompt();
+      if (auth.known && !auth.hasToken) openLoginPrompt();
     } catch {
       setConnectionProblem();
       // Плохое соединение — без окна входа; сессию читаем локально
       try {
-        const status = await window.anixApi.auth.getStatus();
-        isAuthenticated.set(!!status?.hasToken);
-        if (status?.hasToken) notifyAuthChanged();
+        const auth = await resolveAuth();
+        if (auth.hasToken) notifyAuthChanged();
       } catch {
         /* ignore */
       }
@@ -284,25 +307,56 @@
   }
 
   onMount(() => {
+    if (getPath() === '/feed/composer') {
+      initTooltipSystem();
+      appScreen.set('main');
+      void resolveAuth().then((auth) => {
+        if (auth.hasToken) notifyAuthChanged();
+      });
+      return;
+    }
+
     initTooltipSystem();
+    seedAnixHistory();
     const stopBookmarksSync = initBookmarksChangeSync();
     void initAnixbackEndpoint();
 
+    // Стартовый раздел из настроек навигации (только если открыли «корень»).
+    {
+      const bootPath = getPath();
+      const defaultHref = getSidebarDefaultNavHref();
+      if ((bootPath === '/' || bootPath === '') && defaultHref !== '/') {
+        replacePath(defaultHref);
+        path = getPath();
+        currentPath.set(path);
+      }
+    }
+
     if (!window.anixApi) {
+      authReady.set(true);
       appScreen.set('login');
       return () => stopBookmarksSync();
     }
 
     // Routing listeners
     const onNav = () => {
-      window.dispatchEvent(new CustomEvent('anix:beforeNavigate', { detail: { to: getPath() } }));
-      captureActiveScroll();
-      path = getPath();
+      const nextPath = getPath();
+      const pathChanged = nextPath !== path;
+      if (pathChanged) {
+        window.dispatchEvent(new CustomEvent('anix:beforeNavigate', { detail: { to: nextPath } }));
+        // URL уже сменился на целевой: без ключа уходящего экрана capture записал бы его scroll
+        // (например 0 у страницы релиза) в кэш целевого списка и затёр сохранённую позицию.
+        if (hasActiveScrollKey()) captureActiveScroll();
+      }
+      path = nextPath;
       recordTabNavigation(path);
       currentPath.set(path);
       syncSearchParams();
-      resetScrollAfterRouteChange();
-      window.dispatchEvent(new CustomEvent('anix:navigate', { detail: path }));
+      if (pathChanged) resetScrollAfterRouteChange();
+      // «Назад/вперёд» (в т.ч. Mouse4): передаём путь вместе с query (?tab=…), иначе экраны со
+      // вкладками в URL (Закладки) принимают это за переход на корень и открывают вкладку по умолчанию.
+      const query = getSearchParams().toString();
+      window.dispatchEvent(new CustomEvent('anix:navigate', { detail: query ? `${path}?${query}` : path }));
     };
     const onAnixNavigate = (e: Event) => {
       const detail = (e as CustomEvent).detail;
@@ -455,9 +509,25 @@
       }) as EventListener],
 
       ['lobby:createFromPlayer', ((e: CustomEvent) => {
-        const seed = e.detail && typeof e.detail === 'object' ? e.detail : null;
-        void createLobbyRoomAndOpenPlayer(seed).catch(() => {
-          window.electron?.sendLobbyChooserErrorToPlayer?.('Не удалось создать комнату. Попробуйте ещё раз.');
+        const detail = e.detail && typeof e.detail === 'object' ? e.detail as Record<string, unknown> : null;
+        let seed: Record<string, unknown> | null = null;
+        let options = {};
+        if (detail) {
+          if ('playback' in detail || 'options' in detail) {
+            seed = (detail.playback && typeof detail.playback === 'object'
+              ? detail.playback
+              : null) as Record<string, unknown> | null;
+            options = (detail.options && typeof detail.options === 'object'
+              ? detail.options
+              : {}) as Record<string, unknown>;
+          } else {
+            seed = detail;
+          }
+        }
+        void createLobbyRoomAndOpenPlayer(seed as any, options as any).catch((err: unknown) => {
+          window.electron?.sendLobbyChooserErrorToPlayer?.(
+            err instanceof Error ? err.message : 'Не удалось создать комнату. Попробуйте ещё раз.',
+          );
         });
       }) as EventListener],
 
@@ -667,8 +737,9 @@
       }) as EventListener],
 
       ['discord:joinLobby', ((e: CustomEvent) => {
-        const { roomCode } = e.detail ?? {};
-        if (roomCode) openLobbyModal(roomCode);
+        const roomCode = String(e.detail?.roomCode ?? '').trim();
+        if (!roomCode) return;
+        void joinLobbyRoomAndOpenPlayer(roomCode).catch(() => {});
       }) as EventListener],
     ];
 
@@ -719,7 +790,9 @@
     }
 
     function handleZoomKeydown(e: KeyboardEvent) {
-      if (!e.ctrlKey || !window.electron?.saveSettings) return;
+      // На macOS масштаб меняется по ⌘ + / ⌘ −, как принято в системе.
+      const mod = e.ctrlKey || (isMac && e.metaKey);
+      if (!mod || !window.electron?.saveSettings) return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
@@ -735,42 +808,23 @@
 
     window.addEventListener('keydown', handleZoomKeydown);
 
-    // Initial boot — UI сразу main, проблемы сети только баннером
+    // Auth сначала (локальный токен), потом сеть — страницы ждут authReady
     setConnectionChecking();
-    window.anixApi.client.checkConnection()
-      .then(async () => {
-        let hasToken = false;
-        let authKnown = false;
-        try {
-          const status = await window.anixApi!.auth.getStatus();
-          hasToken = !!status?.hasToken;
-          isAuthenticated.set(hasToken);
-          authKnown = true;
-        } catch {
-          authKnown = false;
-        }
+    void (async () => {
+      const auth = await resolveAuth();
+      if (auth.hasToken) notifyAuthChanged();
+
+      try {
+        await window.anixApi!.client.checkConnection();
         setConnectionOk();
-        notifyAuthChanged();
-        window.setTimeout(() => {
-          appScreen.set('main');
-          if (authKnown && !hasToken) openLoginPrompt();
-        }, 500);
-      })
-      .catch(async () => {
+        if (auth.known && !auth.hasToken) openLoginPrompt();
+      } catch {
         setConnectionProblem();
-        appScreen.set('main');
-        // Плохое соединение — не показываем окно входа, сессию читаем локально
-        try {
-          const status = await window.anixApi!.auth.getStatus();
-          isAuthenticated.set(!!status?.hasToken);
-          if (status?.hasToken) notifyAuthChanged();
-        } catch {
-          /* ignore */
-        }
         if (offlineRetryTimer === null) {
           offlineRetryTimer = window.setInterval(checkAndShow, 7000);
         }
-      });
+      }
+    })();
 
     const onBrowserOffline = () => setConnectionProblem();
     const onBrowserOnline = () => {
@@ -779,6 +833,11 @@
     };
     window.addEventListener('offline', onBrowserOffline);
     window.addEventListener('online', onBrowserOnline);
+
+    const onSoftRefresh = () => {
+      pageRefreshKey += 1;
+    };
+    window.addEventListener('anix:refresh-page', onSoftRefresh);
 
     return () => {
       window.removeEventListener('hashchange', onNav);
@@ -789,6 +848,7 @@
       window.removeEventListener('keydown', handleZoomKeydown);
       window.removeEventListener('offline', onBrowserOffline);
       window.removeEventListener('online', onBrowserOnline);
+      window.removeEventListener('anix:refresh-page', onSoftRefresh);
       unsubAppScreen();
       unsubPlayerView();
       clearRetry();
@@ -915,10 +975,6 @@
       {#key profileCollectionsId}
         <ProfileCollections id={profileCollectionsId} />
       {/key}
-    {:else if isProfileMainRoute}
-      {#key path}
-        <Profile id={profilePageId} />
-      {/key}
     {:else if collectionEditMatch}
       {#key collectionEditMatch[1]}
         <CollectionEditor editId={parseInt(collectionEditMatch[1], 10)} />
@@ -941,16 +997,8 @@
       <Overview />
     {:else if path === '/fluo'}
       <FluoPage />
-    {:else if path === '/feed'}
+    {:else if path === '/feed' || articleMatch || channelMatch}
       <Feed />
-    {:else if articleMatch}
-      {#key articleMatch[1]}
-        <Article id={parseInt(articleMatch[1], 10)} />
-      {/key}
-    {:else if channelMatch}
-      {#key channelMatch[1]}
-        <Channel id={parseInt(channelMatch[1], 10)} />
-      {/key}
     {:else if path === '/overview/popular'}
       <Popular />
     {:else if path === '/schedule'}
@@ -980,7 +1028,7 @@
     {:else if path === '/search'}
       <Search q={searchQ} tab={searchTab} {searchBy} />
     {:else if path === '/downloads'}
-      <Downloads />
+      {#if isMobileMode()}<MobileDownloads />{:else}<Downloads />{/if}
     {:else if path === '/uikit'}
       <Uikit />
     {:else if path === '/uikit-v2'}
@@ -990,7 +1038,15 @@
     {/if}
 {/snippet}
 
-{#if $appScreen === 'login'}
+{#if isComposerWindow}
+  <FeedComposerWindow />
+
+{:else if !$authReady}
+  <div class="app-auth-boot" aria-busy="true" aria-live="polite">
+    <p class="app-auth-boot__label">Загрузка…</p>
+  </div>
+
+{:else if $appScreen === 'login'}
   <!-- Нет anixApi (браузер без моста) -->
   <Login
     onSuccess={() => { void onLoginSuccess(); appScreen.set('main'); }}
@@ -999,29 +1055,19 @@
     onConnectionRetry={checkAndShow}
   />
   {#if $settingsModalOpen}
-    <SettingsModal onClose={() => settingsModalOpen.set(false)} />
+    <SettingsModal onClose={() => settingsModalOpen.set(false)} standalone flushTop />
   {/if}
 
 {:else if isWatchRoute && !isTvMode()}
   <WebPlayerShell />
 
-{:else}
-  {#if isTvMode()}
-    <TvLayout currentPath={path} immersive={isWatchRoute}>
-      {@render tvRoutes()}
-    </TvLayout>
-  {:else}
-    <Layout currentPath={path} onConnectionRetry={checkAndShow}>
+{:else if isMobileMode()}
+  <MobileLayout currentPath={path}>
+    {#key pageRefreshKey}
       {@render appRoutes()}
-    </Layout>
-  {/if}
+    {/key}
+  </MobileLayout>
 
-  {#if $settingsModalOpen}
-    <SettingsModal onClose={() => settingsModalOpen.set(false)} />
-  {/if}
-  {#if $lobbyModalOpen}
-    <LobbyModal initialCode={$lobbyModalInitialCode ?? undefined} onClose={() => lobbyModalOpen.set(false)} />
-  {/if}
   {#if $notificationsModalOpen}
     <NotificationsModal onClose={() => notificationsModalOpen.set(false)} />
   {/if}
@@ -1032,6 +1078,41 @@
       onClose={() => watchModalOpen.set(false)}
     />
   {/if}
+  <UiV2ExternalLinkConfirm />
+  {#if $loginPromptOpen}
+    <Login
+      overlay
+      allowGuest
+      onSuccess={() => void onLoginSuccess()}
+      onDismiss={dismissLoginPrompt}
+      onConnectionRetry={checkAndShow}
+    />
+  {/if}
+
+{:else}
+  {#if isTvMode()}
+    <TvLayout currentPath={path} immersive={isWatchRoute}>
+      {@render tvRoutes()}
+    </TvLayout>
+  {:else}
+    <Layout currentPath={path} onConnectionRetry={checkAndShow}>
+      {#key pageRefreshKey}
+        {@render appRoutes()}
+      {/key}
+    </Layout>
+  {/if}
+
+  {#if $notificationsModalOpen}
+    <NotificationsModal onClose={() => notificationsModalOpen.set(false)} />
+  {/if}
+  {#if $watchModalOpen}
+    <WatchModal
+      releaseId={$watchModalReleaseId}
+      releaseTitle={$watchModalReleaseTitle}
+      onClose={() => watchModalOpen.set(false)}
+    />
+  {/if}
+  <UiV2ExternalLinkConfirm />
   {#if $loginPromptOpen}
     <Login
       overlay
@@ -1047,3 +1128,19 @@
 {#if isTvMode()}
   <TvDebugMetrics />
 {/if}
+
+<style>
+  .app-auth-boot {
+    display: grid;
+    place-items: center;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: #0a0a0a;
+    color: #9a9a9a;
+    font: 500 0.95rem/1.4 system-ui, sans-serif;
+  }
+
+  .app-auth-boot__label {
+    margin: 0;
+  }
+</style>

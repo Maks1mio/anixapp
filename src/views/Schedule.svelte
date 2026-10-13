@@ -1,12 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import OverviewReleaseCarousel from '../components/overview/OverviewReleaseCarousel.svelte';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import {
     SCHEDULE_DAYS,
     fetchSchedule,
     scheduleHasReleases,
   } from '../utils/schedule';
   import type { ReleaseCardData } from '../types/release';
+  import { headlineFromLoadError } from '../utils/content-load-error';
 
   let loadState = $state<'loading' | 'error' | 'empty' | 'ready'>('loading');
   let errorMsg = $state('');
@@ -19,13 +21,13 @@
       return;
     }
 
-    loadState = 'loading';
+    if (loadState !== 'error') loadState = 'loading';
     try {
       const mapped = await fetchSchedule();
       scheduleByDay = mapped;
       loadState = scheduleHasReleases(mapped) ? 'ready' : 'empty';
     } catch (err) {
-      errorMsg = String(err);
+      errorMsg = headlineFromLoadError(err);
       loadState = 'error';
     }
   }
@@ -44,10 +46,7 @@
   {#if loadState === 'loading'}
     <div class="discover-page__loading">Загрузка…</div>
   {:else if loadState === 'error'}
-    <div class="discover-page__error">
-      <p>{errorMsg || 'Не удалось загрузить расписание'}</p>
-      <button type="button" class="discover-page__retry" onclick={() => void loadSchedule()}>Повторить</button>
-    </div>
+    <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadSchedule()} />
   {:else if loadState === 'empty'}
     <div class="discover-page__empty">Расписание пока пусто</div>
   {:else}

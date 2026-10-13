@@ -1,5 +1,6 @@
 <script lang="ts">
   import { navigate } from '../../stores/navigation';
+  import { handleUserProfileClick } from '../../stores/user-profile';
   import UiV2CommentThread, {
     type UiV2CommentNode,
   } from '../uikit-v2/UiV2CommentThread.svelte';
@@ -31,7 +32,7 @@
   );
 
   function openProfile(node: UiV2CommentNode) {
-    if (node.profile.id) navigate(`/profile/${node.profile.id}`);
+    handleUserProfileClick(node.profile.id);
   }
 
   function openRelease(node: UiV2CommentNode) {

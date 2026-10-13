@@ -386,7 +386,7 @@ function setWatching({ title, ep, sourceName, dubberName, paused, currentTime, d
   const srcStr = displayName ? ` · ${displayName}` : '';
   const stateText = safeStr(truncate(`${epStr}${srcStr}`) || 'Смотрит аниме');
 
-  const poster = _rpcOptions.showImages ? (posterUrl || _lastPosterUrl || 'logo') : 'logo';
+  const poster = _imageKey(posterUrl || _lastPosterUrl);
   if (posterUrl && _rpcOptions.showImages) _lastPosterUrl = posterUrl;
 
   const activity = {

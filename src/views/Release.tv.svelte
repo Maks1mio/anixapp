@@ -13,11 +13,14 @@
   import { notifyFavoritesChanged } from '../utils/favorites-events';
   import { enrichBlockedRelease } from '../services/release-geo-bypass';
   import { extractHistoryEpisodeInfo } from '../utils/historyFormat';
-  import { isReleaseAnnounce } from '../utils/release-card';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
+  import { formatReleaseEpisodes, isReleaseAnnounce } from '../utils/release-card';
   import { applyReleaseListStatus } from '../utils/release-list-status';
   import { isCapacitorNative } from '../native/anix-api-native';
   import {
     ReleaseHead,
+    ReleaseAirCalendar,
     ReleaseRating,
     ReleaseScreenshots,
     ReleaseRelated,
@@ -26,6 +29,7 @@
   import { LIST_STATUSES, type ListStatusId } from './Release/_types';
   import type { ReleaseMetaInfoRow } from './Release/_metaInfo';
   import {
+    buildCategorySegments,
     buildCreditsSegments,
     buildGenreSegments,
     buildSourceSegments,
@@ -124,6 +128,8 @@
   const duration = $derived(release?.duration as number | null | undefined);
   const season = $derived(release?.season as number | null | undefined);
   const seasonName = $derived(getSeasonName(season));
+  const airedOnDate = $derived(release?.aired_on_date as number | null | undefined);
+  const broadcast = $derived(typeof release?.broadcast === 'number' ? release.broadcast as number : null);
   const isViewBlocked = $derived(!!(release?.is_view_blocked));
   const hasEpisodesReleased = $derived(typeof episodesReleased === 'number' && episodesReleased > 0);
   const releaseId = $derived(release?.id as number | undefined);
@@ -158,17 +164,16 @@
       });
     }
 
-    let epText = '';
-    if (episodesReleased != null && episodesTotal != null && episodesTotal > 0) epText = `${episodesReleased} из ${episodesTotal} эп.`;
-    else if (episodesReleased != null) epText = `${episodesReleased} эп.`;
-    else if (episodesTotal != null) epText = `${episodesTotal} эп.`;
+    let epText = formatReleaseEpisodes(episodesReleased, episodesTotal);
     if (duration && duration > 0) epText += epText ? ` по ~${duration} мин.` : `~${duration} мин.`;
     if (epText) rows.push({ kind: 'episodes', segments: plainMetaSegments(epText) });
 
-    const catParts: string[] = [];
-    if (categoryName) catParts.push(categoryName);
-    if (statusName) catParts.push(statusName);
-    if (catParts.length) rows.push({ kind: 'category', segments: plainMetaSegments(catParts.join(', ')) });
+    const catSegments = buildCategorySegments(
+      categoryName,
+      statusName,
+      statusId === 2 || statusId === 3 || /^выходит$/i.test(statusName),
+    );
+    if (catSegments.length) rows.push({ kind: 'category', segments: catSegments });
 
     const creditSegments = buildCreditsSegments(studio, author, director);
     if (creditSegments.length) rows.push({ kind: 'credits', segments: creditSegments });
@@ -323,23 +328,13 @@
     void refreshReleaseData();
   }
 
-  onMount(async () => {
-    window.addEventListener('anix:bookmarksChanged', onBookmarksChanged);
-    window.addEventListener('keydown', onOverlayKeys, true);
-
-    if (tvOpenTarget) {
-      void tick().then(async () => {
-        await runTvReleaseOpenAnimation(id);
-        focusTvReleasePage();
-      });
-    }
-
+  async function loadRelease() {
     if (!window.anixApi) {
       errorMsg = 'API недоступно.';
       loadState = 'error';
       return;
     }
-
+    if (loadState !== 'error') loadState = 'loading';
     try {
       const historyResumePromise = loadHistoryResume(id).catch(() => null);
       const data = await window.anixApi.release.info(id, true) as { release?: Record<string, unknown> } | Record<string, unknown>;
@@ -363,9 +358,23 @@
         if (resume?.episode || resume?.dubber) historyResume = resume;
       });
     } catch (err) {
-      errorMsg = String(err);
+      errorMsg = headlineFromLoadError(err);
       loadState = 'error';
     }
+  }
+
+  onMount(() => {
+    window.addEventListener('anix:bookmarksChanged', onBookmarksChanged);
+    window.addEventListener('keydown', onOverlayKeys, true);
+
+    if (tvOpenTarget) {
+      void tick().then(async () => {
+        await runTvReleaseOpenAnimation(id);
+        focusTvReleasePage();
+      });
+    }
+
+    void loadRelease();
   });
 
   onDestroy(() => {
@@ -395,7 +404,7 @@
 
   {:else if loadState === 'error'}
     <div class="tv-release-page__shell">
-      <p class="tv-page__status">Ошибка: {errorMsg}</p>
+      <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadRelease()} />
     </div>
 
   {:else if release}
@@ -431,7 +440,19 @@
           onWatch={handleWatch}
           onSetStatus={setStatus}
           onToggleDesc={() => { descCollapsed = !descCollapsed; }}
-          />
+          >
+            {#snippet airDate()}
+              <ReleaseAirCalendar
+                releaseId={id}
+                {broadcast}
+                {airedOnDate}
+                {episodesReleased}
+                {episodesTotal}
+                {statusId}
+                fallback={statusName || 'Выходит'}
+              />
+            {/snippet}
+          </ReleaseHead>
         </div>
 
         <div class="tv-release-page__body" data-tv-home-rails>

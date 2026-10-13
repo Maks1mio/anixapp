@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Anixart, BookmarkSortType, BookmarkType, DefaultResult } from 'anixapi';
 import { attachLegacyEndpoints } from './legacy-endpoints';
+import { attachApiFailover, installProxyKeyFetch, isProxyUrl, proxyKey } from './api-failover';
+import { ANIXART_UA, attachAnixErrorMessages, enrichAnixError } from './anix-errors';
 import { isTvMode } from '../platform/tv';
 import { tvBridgeInvokeUrl } from '../constants/tv-bridge';
 
@@ -59,9 +61,11 @@ export function createBrowserAnixBridge() {
 
   function loadConfig(): NativeConfig {
     const raw = readJson<Partial<NativeConfig>>(CONFIG_KEY, {});
+    // Сохранённый прокси без ключа заведомо отвечает 403 — возвращаемся на прямой хост
+    const savedBase = raw.baseUrl && !(isProxyUrl(raw.baseUrl) && !proxyKey()) ? raw.baseUrl : DEFAULT_BASE_URL;
     return {
       token: raw.token ?? null,
-      baseUrl: raw.baseUrl || DEFAULT_BASE_URL,
+      baseUrl: savedBase,
       profileId: raw.profileId ?? null,
       profileLogin: raw.profileLogin ?? null,
       profileAvatar: raw.profileAvatar ?? null,
@@ -77,10 +81,19 @@ export function createBrowserAnixBridge() {
 
   function createClient({ baseUrl, token }: { baseUrl?: string; token?: string | null } = {}) {
     const cfg = loadConfig();
-    return attachLegacyEndpoints(new Anixart({
+    installProxyKeyFetch();
+    const client = attachLegacyEndpoints(new Anixart({
       baseUrl: baseUrl ?? cfg.baseUrl,
       token: token ?? cfg.token ?? undefined,
+      userAgent: ANIXART_UA,
     }) as any);
+    // Автопереключение между прямыми хостами и резервным прокси; рабочий адрес сохраняем без сброса клиента
+    attachApiFailover(client, (base) => {
+      try {
+        localStorage.setItem(CONFIG_KEY, JSON.stringify({ ...loadConfig(), baseUrl: base }));
+      } catch { /* ignore */ }
+    });
+    return attachAnixErrorMessages(client);
   }
 
   function getClient() {
@@ -182,10 +195,36 @@ export function createBrowserAnixBridge() {
       c.saveConfig({ baseUrl: String(baseUrl || DEFAULT_BASE_URL) });
       return { ok: true };
     },
+    'anix:getBackupProxy': async () => ({
+      enabled: true,
+      url: 'https://api.anixapp.com/anixart-api',
+      active: false,
+      stickyUntil: null,
+    }),
+    'anix:setBackupProxyEnabled': async (_c, [enabled]) => ({
+      enabled: enabled !== false,
+      url: 'https://api.anixapp.com/anixart-api',
+      active: false,
+      stickyUntil: null,
+    }),
     'anix:pingBaseUrl': async (_c, [baseUrl]) => {
       const url = String(baseUrl || DEFAULT_BASE_URL).replace(/\/$/, '');
-      const res = await fetch(`${url}/`);
-      return { ok: res.ok, status: res.status };
+      if (url.includes('.invalid')) return { ok: false, latencyMs: null };
+      const started = performance.now();
+      try {
+        // Любой HTTP-ответ (даже 403/404 на корне) значит «хост достижим»; не отвечает — сеть/блокировка.
+        const res = await Promise.race([
+          fetch(`${url}/`, { method: 'GET', cache: 'no-store' }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000)),
+        ]);
+        return { ok: res.status > 0 && res.status < 500, status: res.status, latencyMs: Math.round(performance.now() - started) };
+      } catch {
+        return { ok: false, latencyMs: null };
+      }
+    },
+    'anix:endpointGeo': async (_c, [baseUrl]) => {
+      const { staticEndpointCountry } = await import('../utils/endpointCountry');
+      return staticEndpointCountry(String(baseUrl || ''));
     },
     'anix:testOffline': async () => {
       throw new Error('TypeError: fetch failed (test)');
@@ -238,7 +277,16 @@ export function createBrowserAnixBridge() {
       c.getClient().endpoints.release.episodeUpdates?.(toPositiveInt(releaseId), page)),
     'anix:getDirectVideoLink': async (_c, args) => {
       const embedUrl = String(args?.[0] || '');
-      // TV web prod: Kodik resolve on api.anixapp.com (tv.anixapp.com static nginx → 405 on POST).
+      // Prefer AnixBack server-side resolve (stable IP / headers for Kodik etc.).
+      try {
+        const { resolveViaAnixback } = await import('../services/stream-resolve');
+        const remote = await resolveViaAnixback(embedUrl);
+        if (remote?.directUrl) return remote;
+        if (remote?.error === 'libria-release-missing') return remote;
+      } catch (e) {
+        console.warn('[stream] anixback resolve failed:', e);
+      }
+      // TV web prod: dedicated bridge invoke if /api/stream unavailable on older deploy.
       if (import.meta.env.PROD && isTvMode()) {
         const res = await fetch(tvBridgeInvokeUrl(), {
           method: 'POST',
@@ -256,7 +304,17 @@ export function createBrowserAnixBridge() {
     },
     'anix:randomRelease': h((c, extended = true) => c.getClient().endpoints.release.getRandomRelease(extended)),
     'anix:latestFeed': h((c, page = 0) => c.getClient().endpoints.feed.latest(page)),
-    'anix:myFeed': h((c, page = 0, opts = {}) => c.getClient().endpoints.feed.my?.(page, opts) ?? c.getClient().endpoints.feed.latest(page)),
+    'anix:myFeed': h((c, page = 0, opts = {}) => {
+      const channelId = opts?.channelId != null && Number(opts.channelId) > 0
+        ? Number(opts.channelId)
+        : undefined;
+      const date = Number.isFinite(Number(opts?.date)) ? Number(opts.date) : 0;
+      const query = {
+        date,
+        ...(channelId != null ? { channel_id: channelId } : {}),
+      };
+      return c.getClient().endpoints.feed.feed(page, query);
+    }),
     'anix:discoverRecommendations': async (c, [page = -1, previousPage = -1]) =>
       c.getClient().endpoints.discover.getRecommendations(page, previousPage),
     'anix:discoverInteresting': async (c) => c.getClient().endpoints.discover.interesting(),
@@ -287,12 +345,115 @@ export function createBrowserAnixBridge() {
     },
     'anix:articleById': h((c, id) => c.getClient().endpoints.channel.getArticle(id)),
     'anix:articleVote': h((c, id, vote) => c.getClient().endpoints.article.vote(id, vote)),
+    'anix:articleCreate': h((c, channelId, body) =>
+      c.getClient().endpoints.article.create(channelId, body)),
+    'anix:articleSuggestionCreate': h((c, channelId, body) =>
+      c.getClient().endpoints.articleSuggestion.create(channelId, body)),
+    'anix:articleSuggestions': h((c, page = 0, opts = {}) => {
+      const channelId = Number((opts as { channelId?: number; channel_id?: number })?.channelId
+        ?? (opts as { channelId?: number; channel_id?: number })?.channel_id
+        ?? 0);
+      return c.getClient().endpoints.articleSuggestion.articleSuggestions(page, {
+        channel_id: channelId > 0 ? channelId : undefined,
+      });
+    }),
+    'anix:articleSuggestionDelete': h((c, suggestionId) =>
+      c.getClient().endpoints.articleSuggestion.delete(suggestionId)),
+    'anix:articleUploadImage': async () => {
+      throw new Error('Загрузка изображений на Android TV пока не поддерживается');
+    },
+    'anix:articleGenerateEmbed': h((c, type, mediaToken, url) =>
+      c.getClient().endpoints.article.generateEmbedData(type, mediaToken, url)),
+    'anix:articleCommentsPopular': h((c, id) =>
+      c.getClient().endpoints.articleComment.commentsPopular(id)),
+    'anix:articleComments': h((c, id, page = 0, sort = 2) =>
+      c.getClient().endpoints.articleComment.comments(id, page, { sort })),
+    'anix:articleCommentAdd': h((c, id, body) =>
+      c.getClient().endpoints.articleComment.add(id, body)),
+    'anix:articleCommentReplies': h((c, commentId, page = 0, sort = 2) =>
+      c.getClient().endpoints.articleComment.replies(commentId, page, { sort })),
+    'anix:articleCommentVote': h(async (c, commentId, vote) => {
+      const res = await c.getClient().endpoints.articleComment.vote(commentId, vote);
+      if (res?.code != null && res.code !== 0) {
+        throw new Error(String(res.code ?? 'article comment vote failed'));
+      }
+      return res;
+    }),
+    'anix:articleCommentVotes': h((c, commentId, page = 0, sort = 0) =>
+      c.getClient().endpoints.articleComment.votes(commentId, page, { sort })),
+    'anix:articleCommentEdit': h(async (c, commentId, body) => {
+      const res = await c.getClient().endpoints.articleComment.edit(commentId, {
+        message: body.message,
+        spoiler: !!(body.spoiler ?? body.isSpoiler),
+      });
+      if (res?.code != null && res.code !== 0) {
+        throw new Error(String(res.code ?? 'article comment edit failed'));
+      }
+      return res;
+    }),
+    'anix:articleCommentDelete': h(async (c, commentId) => {
+      const res = await c.getClient().endpoints.articleComment.delete(commentId);
+      if (res?.code != null && res.code !== 0) {
+        throw new Error(String(res.code ?? 'article comment delete failed'));
+      }
+      return res;
+    }),
     'anix:channelById': h((c, id) => c.getClient().endpoints.channel.info(id)),
     'anix:channelArticles': h((c, channelId, page = 0) => c.getClient().endpoints.channel.articles(channelId, page)),
     'anix:channelSubscribe': h((c, channelId) => c.getClient().endpoints.channel.subscribe(channelId)),
     'anix:channelUnsubscribe': h((c, channelId) => c.getClient().endpoints.channel.unsubscribe(channelId)),
-    'anix:channelSubscriptions': h((c, page = 0) => c.getClient().endpoints.channel.subscriptions(page)),
+    'anix:channelMute': h((c, channelId) => c.getClient().endpoints.channel.mute(channelId)),
+    'anix:channelUnmute': h((c, channelId) => c.getClient().endpoints.channel.unmute(channelId)),
+    'anix:channelMutes': h((c, page = 0) => c.getClient().endpoints.channel.mutes(page)),
+    'anix:profileBlockList': h((c, page = 0) =>
+      c.getClient().endpoints.profileBlockList.blockList(page)),
+    'anix:profileBlockListAdd': h((c, profileId) =>
+      c.getClient().endpoints.profileBlockList.addToBlockList(profileId)),
+    'anix:profileBlockListRemove': h((c, profileId) =>
+      c.getClient().endpoints.profileBlockList.removeFromBlockList(profileId)),
+    'anix:reportArticleReasons': h((c) => c.getClient().endpoints.report.articleReasons()),
+    'anix:reportArticle': h((c, body) => c.getClient().endpoints.report.article(body)),
+    'anix:reportChannelReasons': h((c) => c.getClient().endpoints.report.channelReasons()),
+    'anix:reportChannel': h((c, body) => c.getClient().endpoints.report.channel(body)),
+    'anix:channelSubscriptions': h((c, page = 0, opts = {}) => {
+      const query: Record<string, number> = {};
+      if (typeof (opts as { sort?: number })?.sort === 'number') {
+        query.sort = (opts as { sort: number }).sort;
+      }
+      return c.getClient().endpoints.channel.subscriptions(page, query);
+    }),
+    'anix:channelAll': h((c, page = 0, opts = {}) => {
+      const body: Record<string, unknown> = {};
+      if (typeof (opts as { isBlog?: boolean })?.isBlog === 'boolean') {
+        body.is_blog = (opts as { isBlog: boolean }).isBlog;
+      }
+      if (typeof (opts as { isSubscribed?: boolean })?.isSubscribed === 'boolean') {
+        body.is_subscribed = (opts as { isSubscribed: boolean }).isSubscribed;
+      }
+      if (typeof (opts as { permission?: number })?.permission === 'number') {
+        body.permission = (opts as { permission: number }).permission;
+      }
+      if (typeof (opts as { sort?: number })?.sort === 'number') {
+        body.sort = (opts as { sort: number }).sort;
+      }
+      return c.getClient().endpoints.channel.channels(page, body);
+    }),
+    'anix:channelRecommendations': h((c, page = 0, opts = {}) => {
+      const query: Record<string, boolean> = {};
+      if (typeof (opts as { isBlog?: boolean })?.isBlog === 'boolean') {
+        query.is_blog = (opts as { isBlog: boolean }).isBlog;
+      }
+      if (typeof (opts as { excludeSubscribed?: boolean })?.excludeSubscribed === 'boolean') {
+        query.exclude_subscribed = (opts as { excludeSubscribed: boolean }).excludeSubscribed;
+      }
+      return c.getClient().endpoints.channel.recommendations(page, query);
+    }),
     'anix:channelEditorAll': h((c) => c.getClient().endpoints.channel.editorAvailableAll()),
+    'anix:channelEditorAvailable': h((c, channelId, opts = {}) =>
+      c.getClient().endpoints.channel.editorAvailable(channelId, {
+        is_suggestion: !!(opts as { isSuggestion?: boolean })?.isSuggestion,
+        is_edit_mode: !!(opts as { isEditMode?: boolean })?.isEditMode,
+      })),
     'anix:channelBlog': h((c, id) => c.getClient().endpoints.channel.getBlog(id)),
     'anix:profileById': h((c, id) => c.getClient().endpoints.profile.info(id)),
     'anix:collectionById': h((c, id) => c.getClient().endpoints.collection.info(id)),
@@ -342,6 +503,53 @@ export function createBrowserAnixBridge() {
     'anix:notificationsAll': h((c, page = 0) => c.getClient().endpoints.notification.getNotifications(page)),
     'anix:notificationsCount': h((c) => c.getClient().endpoints.notification.countNotifications()),
     'anix:notificationsRead': h((c) => c.getClient().endpoints.notification.read()),
+    'anix:notificationPreferenceMy': h((c) => c.getClient().endpoints.notificationPreference.my()),
+    'anix:notificationPreferenceEdit': h((c, type) =>
+      c.getClient().endpoints.notificationPreference.edit(String(type || ''))),
+    'anix:notificationPreferenceEditStatus': h(async (c, statuses) => {
+      const list = Array.isArray(statuses)
+        ? statuses.map((n) => Number(n)).filter((n) => Number.isFinite(n))
+        : [];
+      try {
+        return await c.getClient().endpoints.notificationPreference.editStatus({
+          profileStatusNotificationPreferences: list,
+        });
+      } catch (err) {
+        if (String(err?.message || err || '').includes('empty response')) return { code: 0 };
+        throw err;
+      }
+    }),
+    'anix:notificationPreferenceEditType': h(async (c, typeIds) => {
+      const list = Array.isArray(typeIds)
+        ? typeIds.map((n) => Number(n)).filter((n) => Number.isFinite(n))
+        : [];
+      try {
+        return await c.getClient().endpoints.notificationPreference.editType({
+          profileTypeNotificationPreferences: list,
+        });
+      } catch (err) {
+        if (String(err?.message || err || '').includes('empty response')) return { code: 0 };
+        throw err;
+      }
+    }),
+    'anix:notificationPreferenceReleaseTypes': h((c, releaseId) =>
+      c.getClient().endpoints.notificationPreference.releaseTypes(Number(releaseId))),
+    'anix:notificationPreferenceEditReleaseTypes': h(async (c, releaseId, typeIds) => {
+      const list = Array.isArray(typeIds)
+        ? typeIds.map((n) => Number(n)).filter((n) => Number.isFinite(n))
+        : [];
+      try {
+        return await c.getClient().endpoints.notificationPreference.editReleaseTypes({
+          release_id: Number(releaseId),
+          profile_release_type_notification_preferences: list,
+        });
+      } catch (err) {
+        if (String(err?.message || err || '').includes('empty response')) return { code: 0 };
+        throw err;
+      }
+    }),
+    'anix:notificationPreferenceReleases': h((c, page = 0) =>
+      c.getClient().endpoints.notificationPreference.releases(Number(page) || 0)),
     'anix:history': h((c, page = 0) => c.getClient().endpoints.release.getHistory(page)),
     'anix:deleteFromHistory': h((c, releaseId) => c.getClient().endpoints.history.delete(releaseId)),
     'anix:addToHistory': h((c, releaseId, sourceId, episodePosition) =>
@@ -372,6 +580,11 @@ export function createBrowserAnixBridge() {
     'anix:profileFavoriteVideos': h((c, profileId, page = 0) =>
       c.getClient().endpoints.profile.getFavoriteVideos(profileId, page)),
     'anix:getProfileSettings': h((c) => c.getClient().endpoints.settings.getCurrentProfileSettings()),
+    'anix:profileHealthStatus': h((c) => c.getClient().endpoints.profileHealth.status()),
+    'anix:profileHealthAccount': h((c, page = 0) => c.getClient().endpoints.profileHealth.account(page)),
+    'anix:profileHealthContent': h((c, page = 0) => c.getClient().endpoints.profileHealth.content(page)),
+    'anix:profileHealthEnforcement': h((c, id) => c.getClient().endpoints.profileHealth.enforcement(id)),
+    'anix:profileHealthAppeal': h((c, id, body) => c.getClient().endpoints.profileHealth.appeal(id, body)),
     'anix:setStatus': h((c, status) => c.getClient().endpoints.settings.setStatus(status)),
     'anix:getSocial': h((c) => c.getClient().endpoints.settings.getSocial()),
     'anix:setSocial': h((c, data) => c.getClient().endpoints.settings.setSocial(data)),
@@ -381,6 +594,20 @@ export function createBrowserAnixBridge() {
     'anix:setPrivacyFriendRequests': h((c, state) => c.getClient().endpoints.settings.setPrivacyFriendRequests(state)),
     'anix:getLoginInfo': h((c) => c.getClient().endpoints.settings.getLoginInfo()),
     'anix:changeLogin': h((c, newLogin) => c.getClient().endpoints.settings.changeLogin(newLogin)),
+    'anix:changeEmail': h((c, data) => c.getClient().endpoints.settings.changeEmail(data)),
+    'anix:changeEmailResend': h((c, data) => c.getClient().endpoints.settings.changeEmailResend(data)),
+    'anix:changeEmailVerify': h((c, data) => c.getClient().endpoints.settings.changeEmailVerify(data)),
+    'anix:changePassword': h(async (c, data) => {
+      const res = await c.getClient().endpoints.settings.changePassword(data);
+      const token = typeof res?.token === 'string' ? res.token.trim() : '';
+      const ok = res && (res.code === 0 || res.code === undefined) && token;
+      if (ok) {
+        const cfg = c.loadConfig();
+        c.saveConfig({ token });
+        c.resetClient();
+      }
+      return res;
+    }),
     'anix:getBadges': h((c, page = 0) => c.getClient().endpoints.settings.getBadges(page)),
     'anix:setBadge': h((c, id) => c.getClient().endpoints.settings.setBadge(id)),
     'anix:removeBadge': h((c) => c.getClient().endpoints.settings.removeBadge()),
@@ -394,6 +621,17 @@ export function createBrowserAnixBridge() {
     },
     'anix:channelDeleteCover': h((c, channelId) => c.getClient().endpoints.channel.deleteCover(channelId)),
     'anix:channelCreateBlog': h((c) => c.getClient().endpoints.channel.createBlog()),
+    'anix:channelCreate': h((c, body) => c.getClient().endpoints.channel.create({
+      title: String(body?.title ?? '').trim(),
+      description: String(body?.description ?? '').trim(),
+      is_commenting_enabled: body?.is_commenting_enabled !== false,
+      is_article_suggestion_enabled: body?.is_article_suggestion_enabled !== false,
+    })),
+    'anix:configToggles': h((c) => c.getClient().endpoints.config.toggles({
+      version_code: 26080522,
+      is_beta: true,
+      is_api_alt: false,
+    })),
     'anix:loginHistory': h((c, profileId, page = 0) => c.getClient().endpoints.profile.loginHistory?.(profileId, page)),
     'anix:searchReleases': h((c, query, page = 0, searchBy = 0) =>
       c.getClient().endpoints.search.releases({ query, page, searchBy })),
@@ -403,6 +641,15 @@ export function createBrowserAnixBridge() {
       c.getClient().endpoints.search.collections({ query, page })),
     'anix:searchProfileList': h((c, status, query, page = 0, searchBy = 0) =>
       c.getClient().endpoints.search.profileList?.({ status, query, page, searchBy })),
+    'anix:searchFeed': h((c, query, page = 0, searchBy = 0) =>
+      c.getClient().endpoints.search.feedSearch(page, { query, page, searchBy })),
+    'anix:searchChannelSubscribers': h((c, channelId, page = 0, query = '') =>
+      c.getClient().endpoints.search.channelSubscribersSearch(channelId, page, {
+        query: String(query ?? ''),
+        page,
+        searchBy: 0,
+        channel_id: Number(channelId),
+      })),
     'anix:addToFavorites': h((c, releaseId) => c.getClient().endpoints.release.addFavorite(releaseId)),
     'anix:removeFromFavorites': h((c, releaseId) => c.getClient().endpoints.release.removeFavorite(releaseId)),
     'anix:setListStatus': h(async (c, releaseId, statusId) => {
@@ -441,7 +688,11 @@ export function createBrowserAnixBridge() {
   async function invoke(channel: string, args: unknown[] = []) {
     const handler = HANDLERS[channel];
     if (!handler) throw new Error(`Unknown channel: ${channel}`);
-    return handler(ctx(), args);
+    try {
+      return await handler(ctx(), args);
+    } catch (err) {
+      throw enrichAnixError(err);
+    }
   }
 
   return { invoke, loadConfig, saveConfig };

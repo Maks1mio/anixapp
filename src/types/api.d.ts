@@ -46,6 +46,49 @@ export interface AnixApi {
     getBaseUrl: () => Promise<string>;
     setBaseUrl: (baseUrl: string) => Promise<void>;
     pingBaseUrl: (baseUrl: string) => Promise<any>;
+    endpointGeo: (baseUrl: string) => Promise<{
+      countryCode?: string | null;
+      countryName?: string | null;
+      ip?: string | null;
+    }>;
+    getBackupProxy: () => Promise<{
+      enabled: boolean;
+      url: string;
+      active: boolean;
+      stickyUntil: number | null;
+      connections?: number | null;
+      tunnel?: {
+        mode?: string | null;
+        ready?: boolean;
+        label?: string | null;
+        serverHost?: string | null;
+        serverIp?: string | null;
+        countryHint?: string | null;
+        latencyMs?: number | null;
+        exitIp?: string | null;
+        lastUpstream?: string | null;
+        error?: string | null;
+      } | null;
+    }>;
+    setBackupProxyEnabled: (enabled: boolean) => Promise<{
+      enabled: boolean;
+      url: string;
+      active: boolean;
+      stickyUntil: number | null;
+      connections?: number | null;
+      tunnel?: {
+        mode?: string | null;
+        ready?: boolean;
+        label?: string | null;
+        serverHost?: string | null;
+        serverIp?: string | null;
+        countryHint?: string | null;
+        latencyMs?: number | null;
+        exitIp?: string | null;
+        lastUpstream?: string | null;
+        error?: string | null;
+      } | null;
+    }>;
     getAuthStatus: () => Promise<{ hasToken: boolean }>;
     checkConnection: () => Promise<boolean>;
     testOffline: () => Promise<void>;
@@ -143,6 +186,19 @@ export interface AnixApi {
     getCollectionComments: (profileId: number, page?: number, sort?: number) => Promise<{ content?: Record<string, unknown>[] }>;
     getArticleComments: (profileId: number, page?: number, sort?: number) => Promise<{ content?: Record<string, unknown>[] }>;
     getFavoriteVideos: (profileId: number, page?: number) => Promise<{ content?: Record<string, unknown>[] }>;
+    blockList: (page?: number) => Promise<{
+      content?: Array<{
+        id?: number;
+        login?: string;
+        avatar?: string | null;
+        is_online?: boolean;
+        badge?: unknown;
+      }>;
+      total_page_count?: number;
+      total_count?: number;
+    }>;
+    blockAdd: (profileId: number) => Promise<{ code?: number }>;
+    blockRemove: (profileId: number) => Promise<{ code?: number }>;
   };
 
   release: {
@@ -188,6 +244,7 @@ export interface AnixApi {
       qualityMap?: Record<string, string>;
       downloadHeaders?: Record<string, string>;
       skip?: { opening?: { start: number; end: number } | null; ending?: { start: number; end: number } | null } | null;
+      error?: string | null;
     }>;
     getVideos: (releaseId: number) => Promise<{
       blocks?: Array<{ category?: { id: number; name: string }; videos?: unknown[] }>;
@@ -289,6 +346,19 @@ export interface AnixApi {
       collections: (query: string, page?: number) => Promise<any>;
       /** Поиск в своём списке статуса (Смотрю / В планах / …) */
       profileList: (status: number, query: string, page?: number, searchBy?: number) => Promise<any>;
+      /** Глобальный поиск по ленте: записи, каналы, блоги, теги. */
+      feed: (query: string, page?: number, searchBy?: number) => Promise<{
+        code?: number;
+        articles?: { content?: unknown[]; total_page_count?: number; current_page?: number; total_count?: number };
+        channels?: { content?: unknown[]; total_count?: number };
+        blogs?: { content?: unknown[]; total_count?: number };
+        tags?: { content?: unknown[] };
+      }>;
+      channelSubscribers: (
+        channelId: number,
+        page?: number,
+        query?: string,
+      ) => Promise<{ content?: unknown[]; total_count?: number; total_page_count?: number }>;
     };
 
   collection: {
@@ -324,12 +394,66 @@ export interface AnixApi {
   };
 
   channel: {
-    info: (id: number) => Promise<{ channel?: unknown }>;
+    info: (id: number) => Promise<{ channel?: unknown; suggestion_count?: number }>;
     getBlog?: (id: number) => Promise<{ channel?: unknown; blogInfo?: unknown }>;
     articles: (channelId: number, page?: number) => Promise<{ content?: unknown[]; total_page_count?: number }>;
     subscribe: (channelId: number) => Promise<{ code?: number }>;
     unsubscribe: (channelId: number) => Promise<{ code?: number }>;
-    subscriptions: (page?: number) => Promise<{
+    mute: (channelId: number) => Promise<{ code?: number }>;
+    unmute: (channelId: number) => Promise<{ code?: number }>;
+    mutes: (page?: number) => Promise<{
+      content?: Array<{
+        id: number;
+        title?: string;
+        avatar?: string | null;
+        is_blog?: boolean;
+        is_verified?: boolean;
+        subscriber_count?: number;
+      }>;
+      total_page_count?: number;
+      total_count?: number;
+    }>;
+    subscriptions: (
+      page?: number,
+      opts?: { sort?: number },
+    ) => Promise<{
+        content?: Array<{
+          id: number;
+          title?: string;
+          avatar?: string | null;
+          is_blog?: boolean;
+          is_verified?: boolean;
+          is_subscribed?: boolean;
+          subscriber_count?: number;
+        }>;
+        total_page_count?: number;
+      }>;
+      /** POST channel/all/{page} — каталог каналов как на Android. */
+      all: (
+        page?: number,
+        opts?: {
+          isBlog?: boolean | null;
+          isSubscribed?: boolean | null;
+          permission?: number | null;
+          sort?: number;
+        },
+      ) => Promise<{
+        content?: Array<{
+          id: number;
+          title?: string;
+          avatar?: string | null;
+          is_blog?: boolean;
+          is_verified?: boolean;
+          is_subscribed?: boolean;
+          subscriber_count?: number;
+        }>;
+        total_page_count?: number;
+        total_count?: number;
+      }>;
+    recommendations: (
+      page?: number,
+      opts?: { isBlog?: boolean; excludeSubscribed?: boolean },
+    ) => Promise<{
       content?: Array<{
         id: number;
         title?: string;
@@ -340,8 +464,13 @@ export interface AnixApi {
         subscriber_count?: number;
       }>;
       total_page_count?: number;
+      total_count?: number;
     }>;
     editorAll: () => Promise<{ channels?: Array<{ id: number; title: string; avatar?: string | null; subscriber_count?: number; is_blog?: boolean }> }>;
+    editorAvailable: (
+      channelId: number,
+      opts?: { isSuggestion?: boolean; isEditMode?: boolean },
+    ) => Promise<{ code?: number; media_upload_token?: string }>;
     uploadCover: (
       channelId: number,
       imageBase64: string,
@@ -349,12 +478,45 @@ export interface AnixApi {
     ) => Promise<{ code?: number; url?: string }>;
     deleteCover: (channelId: number) => Promise<{ code?: number; url?: string }>;
     createBlog: () => Promise<{ code?: number; channel?: { id?: number; cover?: string } }>;
+    create: (body: {
+      title: string;
+      description: string;
+      is_commenting_enabled?: boolean;
+      is_article_suggestion_enabled?: boolean;
+    }) => Promise<{
+      code?: number;
+      channel?: { id?: number; title?: string; avatar?: string | null; is_blog?: boolean };
+    }>;
+  };
+
+  config: {
+    /** GET config/toggles — в т.ч. minBlogCreateRatingScore */
+    toggles: () => Promise<{
+      code?: number;
+      minBlogCreateRatingScore?: number;
+      min_blog_create_rating_score?: number;
+      [key: string]: unknown;
+    }>;
   };
 
   notification: {
     all: (page?: number) => Promise<any>;
     count: () => Promise<any>;
     read: () => Promise<any>;
+    preference?: {
+      my: () => Promise<Record<string, unknown>>;
+      edit: (type: string) => Promise<unknown>;
+      editStatus: (statuses: number[]) => Promise<unknown>;
+      editType: (typeIds: number[]) => Promise<unknown>;
+      releaseTypes: (releaseId: number) => Promise<{
+        profile_release_type_notification_preferences?: Array<{
+          type?: { id?: number; name?: string };
+        }>;
+        [key: string]: unknown;
+      }>;
+      editReleaseTypes: (releaseId: number, typeIds: number[]) => Promise<unknown>;
+      releases: (page?: number) => Promise<{ content?: unknown[]; [key: string]: unknown }>;
+    };
   };
 
   history: {
@@ -372,15 +534,152 @@ export interface AnixApi {
   article: {
     info: (id: number) => Promise<{ article?: unknown }>;
     vote: (id: number, vote: number) => Promise<{ code?: number }>;
+    create: (
+      channelId: number,
+      body: {
+        is_signed: boolean;
+        repost_article_id: number | null;
+        payload: {
+          time: number;
+          version: string;
+          blocks: Array<{
+            id: string;
+            type: string;
+            name: string;
+            data: Record<string, unknown>;
+          }>;
+          block_count: number;
+        };
+      },
+    ) => Promise<{ code?: number; article?: { id?: number } }>;
+    edit: (
+      articleId: number,
+      body: {
+        is_signed: boolean;
+        repost_article_id: number | null;
+        payload: {
+          time: number;
+          version: string;
+          blocks: Array<{
+            id: string;
+            type: string;
+            name: string;
+            data: Record<string, unknown>;
+          }>;
+          block_count: number;
+        };
+      },
+    ) => Promise<{ code?: number; article?: { id?: number } }>;
+    createSuggestion: (
+      channelId: number,
+      body: {
+        is_signed: boolean;
+        payload: {
+          time: number;
+          version: string;
+          blocks: Array<{
+            id: string;
+            type: string;
+            name: string;
+            data: Record<string, unknown>;
+          }>;
+          block_count: number;
+        };
+      },
+    ) => Promise<{ code?: number; article?: { id?: number } }>;
+    suggestions: (
+      page?: number,
+      opts?: { channelId?: number },
+    ) => Promise<{
+      content?: unknown[];
+      total_page_count?: number;
+      total_count?: number;
+    }>;
+    deleteSuggestion: (suggestionId: number) => Promise<{ code?: number }>;
+    uploadImage: (
+      mediaToken: string,
+      imageBase64: string,
+      fileName?: string,
+      uploadId?: string,
+    ) => Promise<{
+      code?: number;
+      success?: number;
+      aborted?: boolean;
+      file?: {
+        id?: string;
+        url?: string;
+        hash?: string;
+        width?: number;
+        height?: number;
+      };
+    }>;
+    abortUpload?: (uploadId: string) => void;
+    generateEmbed: (
+      type: 'youtube' | 'vk' | 'link',
+      mediaToken: string,
+      url: string,
+    ) => Promise<{
+      code?: number;
+      success?: number;
+      hash?: string;
+      embed?: string | null;
+      image?: string | null;
+      title?: string | null;
+      description?: string | null;
+      site_name?: string | null;
+      width?: number | null;
+      height?: number | null;
+      url?: string;
+    }>;
     delete: (id: number) => Promise<{ code?: number }>;
     mute: (id: number) => Promise<{ code?: number }>;
     unmute: (id: number) => Promise<{ code?: number }>;
     setPinned: (id: number, isPinned: boolean) => Promise<{ code?: number }>;
+    commentsPopular: (id: number) => Promise<{ content?: unknown[]; total_count?: number }>;
+    comments: (
+      id: number,
+      page?: number,
+      sort?: number,
+    ) => Promise<{ content?: unknown[]; total_count?: number; total_page_count?: number }>;
+    commentAdd: (
+      id: number,
+      body: {
+        message: string;
+        isSpoiler: boolean;
+        parentCommentId?: number | null;
+        replyToProfileId?: number | null;
+      },
+    ) => Promise<{ code?: number; comment?: unknown }>;
+    commentReplies: (
+      commentId: number,
+      page?: number,
+      sort?: number,
+    ) => Promise<{ content?: unknown[]; total_count?: number }>;
+    /** 0 = снять, 1 = дизлайк, 2 = лайк */
+    commentVote: (commentId: number, vote: number) => Promise<{ code?: number }>;
+    /** sort: 0 = все, 1 = отрицательные, 2 = положительные */
+    commentVotes: (
+      commentId: number,
+      page?: number,
+      sort?: number,
+    ) => Promise<{ content?: Array<Record<string, unknown> & { vote?: number }> }>;
+    commentEdit: (
+      commentId: number,
+      body: { message: string; isSpoiler?: boolean; spoiler?: boolean },
+    ) => Promise<{ code?: number }>;
+    commentDelete: (commentId: number) => Promise<{ code?: number }>;
   };
 
   report: {
     articleReasons: () => Promise<Array<{ id: number; title?: string; name?: string; text?: string }>>;
     submitArticle: (body: {
+      entity_id?: number;
+      reason?: number;
+      reason_id?: number;
+      message?: string;
+    }) => Promise<{ code?: number }>;
+    channelReasons: () => Promise<Array<{ id: number; title?: string; name?: string; text?: string }>>;
+    submitChannel: (body: {
       entity_id?: number;
       reason?: number;
       reason_id?: number;
@@ -426,6 +725,8 @@ export interface AnixApi {
       is_change_login_banned: boolean;
       is_change_avatar_banned: boolean;
       channel_id: number;
+      email_hint?: string;
+      emailHint?: string;
       available_themes?: { id: number; name?: string }[];
       selected_theme_id?: number;
       badge?: {
@@ -465,6 +766,26 @@ export interface AnixApi {
       next_change_avaliable_at: number;
     }>;
     changeLogin: (newLogin: string) => Promise<{ code?: number }>;
+    changeEmail: (data: {
+      current_email: string;
+      current_password: string;
+      new_email: string;
+    }) => Promise<{ code?: number; hash?: string; timestamp_expires?: number }>;
+    changeEmailResend: (data: {
+      new_email: string;
+      current_email: string;
+      current_password: string;
+      hash: string;
+    }) => Promise<{ code?: number; timestamp_expires?: number }>;
+    changeEmailVerify: (data: {
+      new_email: string;
+      code: number;
+      hash: string;
+    }) => Promise<{ code?: number }>;
+    changePassword: (data: {
+      current: string;
+      new: string;
+    }) => Promise<{ code?: number; token?: string }>;
     getBadges: (page?: number) => Promise<{
       code?: number;
       content?: Array<{
@@ -510,6 +831,22 @@ export interface AnixApi {
       ban_change_avatar_expires?: number;
     }>;
     deleteAvatar: () => Promise<{ code?: number; avatar?: string }>;
+  };
+
+  profileHealth: {
+    status: () => Promise<{
+      code?: number;
+      ban_count?: number;
+      ban_for_3_month_count?: number;
+      last_ban_timestamp?: number;
+      last_ban_expires?: number;
+      blog_suspension_expires?: number;
+      blog_mute_expires?: number;
+    }>;
+    account: (page?: number) => Promise<unknown>;
+    content: (page?: number) => Promise<unknown>;
+    enforcement: (id: number) => Promise<{ code?: number; enforcement?: Record<string, unknown> | null }>;
+    appeal: (id: number, body: { message: string }) => Promise<{ code?: number }>;
   };
 }
 

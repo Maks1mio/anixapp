@@ -1,8 +1,10 @@
 <script lang="ts">
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import ReleaseCardsGridSkeleton from '../components/ReleaseCardsGridSkeleton.svelte';
+  import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import HomeCustomFilterView from '../components/HomeCustomFilterView.svelte';
   import HomeTabRenameModal from '../components/HomeTabRenameModal.svelte';
+  import { headlineFromLoadError } from '../utils/content-load-error';
   import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../stores/navigation';
   import { requireAuth } from '../stores/auth';
@@ -45,6 +47,8 @@
     beginScrollRestore,
     logViewStateRestore,
     logViewStateMiss,
+    removeViewState,
+    isViewStatePersistBlocked,
     type ViewStateEntry,
   } from '../stores/view-state';
 
@@ -243,7 +247,7 @@
 
     isLoading = true;
     const nextPage = page;
-    if (nextPage === 0) loadState = 'loading';
+    if (nextPage === 0 && loadState !== 'error') loadState = 'loading';
 
     try {
       const data = await window.anixApi.release.filter(nextPage, getFilterArgs(activeTab), true) as any;
@@ -259,7 +263,7 @@
       requestAnimationFrame(checkIfNeedsMore);
     } catch (err) {
       if (nextPage === 0) {
-        errorMsg = String(err);
+        errorMsg = headlineFromLoadError(err);
         loadState = 'error';
       }
     } finally {
@@ -416,6 +420,21 @@
     }
   }
 
+  function forceRefreshHome() {
+    for (const tabId of HOME_TAB_IDS) {
+      removeViewState(HOME_VIEW_KEY(tabId));
+    }
+    resetList();
+    errorMsg = '';
+    void loadAnnouncements();
+    if (activeTab === 'my' && !isHomeCustomTabConfigured(customTabData)) {
+      loadState = 'unconfigured';
+      return;
+    }
+    loadState = 'loading';
+    void loadPage();
+  }
+
   function onLayoutChanged() {
     items = [...items];
   }
@@ -428,9 +447,11 @@
     window.addEventListener('anix:beforeNavigate', onBeforeNavigate);
     window.addEventListener('anix:cardLayoutChanged', onLayoutChanged);
     window.addEventListener('anix:homeCustomTabChanged', onHomeCustomTabChangedEvent);
+    window.addEventListener('anix:refresh-page', forceRefreshHome);
     void loadAnnouncements();
 
-    const cached = findBestHomeCache();
+    // Soft refresh remount: не поднимать stale snapshot из кэша.
+    const cached = isViewStatePersistBlocked() ? null : findBestHomeCache();
     if (cached?.data && cached.data.items.length > 0) {
       activeTab = cached.data.activeTab;
       applyHomeSnapshot(cached.data);
@@ -460,6 +481,7 @@
 
   onDestroy(() => {
     window.removeEventListener('anix:beforeNavigate', onBeforeNavigate);
+    window.removeEventListener('anix:refresh-page', forceRefreshHome);
     unregisterScrollKey?.();
     unregisterScrollKey = null;
     saveViewStateData(HOME_VIEW_KEY(activeTab), homeSnapshot());
@@ -531,7 +553,7 @@
           <ReleaseCardsGridSkeleton />
         </div>
       {:else if loadState === 'error'}
-        <p class="home-list__error">Ошибка: {errorMsg}</p>
+        <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadPage()} />
       {:else if loadState === 'empty'}
         <p class="home-list__empty">Здесь пока ничего нет.</p>
       {:else}

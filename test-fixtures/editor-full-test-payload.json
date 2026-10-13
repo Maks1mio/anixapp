@@ -1,0 +1,189 @@
+{
+  "time": 1789510885497,
+  "version": "2.29.0-rc.1",
+  "blocks": [
+    {
+      "id": "hdrDesConnet",
+      "type": "header",
+      "name": "header",
+      "data": {
+        "text": "ПОДВАЛ DESCONNET'A — ТЕСТ РЕДАКТОРА",
+        "text_length": 36,
+        "level": 3
+      }
+    },
+    {
+      "id": "pIntroPlain",
+      "type": "paragraph",
+      "name": "paragraph",
+      "data": {
+        "text": "Это тестовое предложение записи. Не для публикации вручную — проверка Code/Block, форматирования и всех блоков.",
+        "text_length": 110
+      }
+    },
+    {
+      "id": "pInlineFmt",
+      "type": "paragraph",
+      "name": "paragraph",
+      "data": {
+        "text": "<b>Жирный</b>, <i>курсив</i>, <b><i>жирный+курсив</i></b> и <i><a href=\"https://anixart-app.com\">ссылка на текст</a></i>.",
+        "text_length": 120
+      }
+    },
+    {
+      "id": "qTestQuote",
+      "type": "quote",
+      "name": "quote",
+      "data": {
+        "text": "Цитата для проверки блока quote и подписи.",
+        "caption": "DesConnet · тест",
+        "alignment": "left",
+        "text_length": 42,
+        "caption_length": 16
+      }
+    },
+    {
+      "id": "listOrdered",
+      "type": "list",
+      "name": "list",
+      "data": {
+        "style": "ordered",
+        "items": [
+          "Нумерованный пункт 1",
+          "Нумерованный пункт 2",
+          "<b>Пункт с жирным</b>"
+        ],
+        "item_count": 3
+      }
+    },
+    {
+      "id": "delimOne",
+      "type": "delimiter",
+      "name": "delimiter",
+      "data": {}
+    },
+    {
+      "id": "listBullet",
+      "type": "list",
+      "name": "list",
+      "data": {
+        "style": "unordered",
+        "items": [
+          "Маркер A",
+          "Маркер B",
+          "<i>Маркер с курсивом</i>"
+        ],
+        "item_count": 3
+      }
+    },
+    {
+      "id": "mediaTriple",
+      "type": "media",
+      "name": "media",
+      "data": {
+        "items": [
+          {
+            "id": "29c591b8-dcda-4cde-beca-439430f4a79c",
+            "url": "https://s3.anixmirai.com/images/29c591b8-dcda-4cde-beca-439430f4a79c_uavCH.png",
+            "hash": "8618af83b66788612ec18c22713fba0083671016",
+            "width": 867,
+            "height": 1230
+          },
+          {
+            "id": "20dbbba3-c009-48be-a5cf-237976436b9a",
+            "url": "https://s3.anixmirai.com/images/20dbbba3-c009-48be-a5cf-237976436b9a_wo2GJ.png",
+            "hash": "f1ca81c7dc5cb55a29b24790542ae821ae37588d",
+            "width": 1140,
+            "height": 723
+          },
+          {
+            "id": "5d3d79b9-054a-45f8-9d82-a931a2c01053",
+            "url": "https://s3.anixmirai.com/images/5d3d79b9-054a-45f8-9d82-a931a2c01053_b7c49.png",
+            "hash": "e28488dd0f3d4eaf89c6efd01e1104623e61b05a",
+            "width": 1200,
+            "height": 1728
+          }
+        ],
+        "item_count": 3
+      }
+    },
+    {
+      "id": "pAfterMedia",
+      "type": "paragraph",
+      "name": "paragraph",
+      "data": {
+        "text": "Текст между медиа-блоками — проверка порядка блоков.",
+        "text_length": 52
+      }
+    },
+    {
+      "id": "mediaSingle",
+      "type": "media",
+      "name": "media",
+      "data": {
+        "items": [
+          {
+            "id": "ee782774-abd0-459c-a4c1-5b944302aa00",
+            "url": "https://s3.anixmirai.com/images/ee782774-abd0-459c-a4c1-5b944302aa00_YHgfS.jpg",
+            "hash": "c778a9f2484a88dae73f63c28322309a5a32d82e",
+            "width": 915,
+            "height": 1280
+          }
+        ],
+        "item_count": 1
+      }
+    },
+    {
+      "id": "hdrSecond",
+      "type": "header",
+      "name": "header",
+      "data": {
+        "text": "Ещё один заголовок",
+        "text_length": 18,
+        "level": 3
+      }
+    },
+    {
+      "id": "pLinkPlain",
+      "type": "paragraph",
+      "name": "paragraph",
+      "data": {
+        "text": "Обычный абзац после второго заголовка.",
+        "text_length": 38
+      }
+    },
+    {
+      "id": "embedLink",
+      "type": "embed",
+      "name": "embed",
+      "data": {
+        "hash": "f807a40da9856f38c53db354aacc6933775b23e5",
+        "embed": null,
+        "image": "https://anixart-app.com/assets/images/website-banner.png",
+        "site_name": "Anixart",
+        "title": "Anixart - официальный сайт аниме приложения",
+        "description": "Аниксарт это мобильное приложение, которое поможет вам ознакомиться с самыми разнообразными работами японской мультипликации. Открывайте для себя новые произведения, составляйте списки просмотра, смотрите онлайн, участвуйте в обсуждениях и многое другое!",
+        "width": 1200,
+        "height": 630,
+        "url": "https://anixart-app.com",
+        "service": "link"
+      }
+    },
+    {
+      "id": "delimTwo",
+      "type": "delimiter",
+      "name": "delimiter",
+      "data": {}
+    },
+    {
+      "id": "pFooter",
+      "type": "paragraph",
+      "name": "paragraph",
+      "data": {
+        "text": "Конец теста · Подвал DesConnet'a · предложение записи.",
+        "text_length": 54
+      }
+    }
+  ],
+  "block_count": 15
+}

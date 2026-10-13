@@ -1,0 +1,168 @@
+# Сборка Android APK (TV + телефон) и прикрепление к уже созданному релизу.
+#
+# Запускается автоматически после завершения workflow "Release" (сборка десктопа),
+# а также вручную. Отдельный workflow, чтобы APK собирались после релиза, а не в нём.
+#
+# Важно: APK собираются из ревизии, в которой лежит workflow (обычно main),
+# а тег из resolve-tag используется только для прикрепления файлов к релизу.
+# Так фиксы CI/скриптов не требуют пересоздания тега.
+name: Release Android APK
+
+on:
+  # После успешного завершения основного релиза — соберём APK и приложим к тому же тегу.
+  workflow_run:
+    workflows: ['Release']
+    types: [completed]
+  # Ручной запуск: указать тег существующего релиза (или trim-тег без 'v').
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Тег релиза, к которому прикрепить APK (например v0.1.59)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  resolve-tag:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.out.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: out
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="$INPUT_TAG"
+          else
+            # head_branch для push тега — сам тег; если пусто, ищем тег по коммиту релиза.
+            TAG="$RUN_HEAD_BRANCH"
+            if [ -z "$TAG" ] || ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+              git fetch --tags --force
+              TAG="$(git tag --points-at "$RUN_HEAD_SHA" | head -n1)"
+            fi
+          fi
+          if [ -z "$TAG" ]; then
+            echo "::error::Не удалось определить тег релиза"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Release tag: $TAG"
+
+  build-android-tv:
+    needs: resolve-tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+
+      - name: Install Android SDK components
+        run: |
+          SDKMANAGER="${ANDROID_HOME:-$ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" --install 'platforms;android-36' 'build-tools;36.0.0' 'platform-tools'
+
+      - name: Set version from release tag
+        run: node scripts/set-version-from-tag.js
+        env:
+          RELEASE_TAG: ${{ needs.resolve-tag.outputs.tag }}
+
+      - run: yarn install --frozen-lockfile
+
+      - name: Build Android TV APK
+        run: yarn build:android-tv
+        env:
+          ANIXART_PROXY_APP_KEY: ${{ secrets.ANIXART_PROXY_APP_KEY }}
+          ANIXBACK_PROXY_TARGET: ${{ secrets.ANIXBACK_PROXY_TARGET }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-tv-apk
+          path: release/*.apk
+
+  build-android-mobile:
+    needs: resolve-tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+
+      - name: Install Android SDK components
+        run: |
+          SDKMANAGER="${ANDROID_HOME:-$ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" --install 'platforms;android-36' 'build-tools;36.0.0' 'platform-tools'
+
+      - name: Set version from release tag
+        run: node scripts/set-version-from-tag.js
+        env:
+          RELEASE_TAG: ${{ needs.resolve-tag.outputs.tag }}
+
+      - run: yarn install --frozen-lockfile
+
+      - name: Build Android (phone) APK
+        run: yarn build:android-mobile
+        env:
+          ANIXART_PROXY_APP_KEY: ${{ secrets.ANIXART_PROXY_APP_KEY }}
+          ANIXBACK_PROXY_TARGET: ${{ secrets.ANIXBACK_PROXY_TARGET }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-mobile-apk
+          path: release/*.apk
+
+  attach-to-release:
+    needs: [resolve-tag, build-android-tv, build-android-mobile]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: apk
+          merge-multiple: true
+
+      - name: List APKs
+        run: ls -la apk/
+
+      - name: Attach APK to existing release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.resolve-tag.outputs.tag }}
+          files: apk/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

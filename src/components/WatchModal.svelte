@@ -10,7 +10,29 @@
     resolveDownloadWithSiblingFallback,
   } from '../utils/download-queue-client';
   import { navigate } from '../stores/navigation';
-  import { openInAppPlayer } from '../utils/watch-nav';
+  import { isMobileMode } from '../platform/mobile';
+  import { showToast } from '../stores/toast';
+  import MobilePlayerChooser from './MobilePlayerChooser.svelte';
+  import DesktopPlayerChooser from './DesktopPlayerChooser.svelte';
+  import ExternalPlaylistRangeSheet from './ExternalPlaylistRangeSheet.svelte';
+  import ExternalPlaylistProgressOverlay from './ExternalPlaylistProgressOverlay.svelte';
+  import MobileDownloadFlow from './MobileDownloadFlow.svelte';
+  import { downloadItems, watchDownloads, episodeStatus, hasActiveDownloads } from '../stores/mobile-downloads';
+  import { downloadsAvailable } from '../native/anix-downloads';
+  import { queueEpisodes, getDownloadQuality, type QueueEp } from '../utils/mobile-download-actions';
+  import {
+    getMobilePlayerPrefs,
+    setMobilePlayerPrefs,
+    launchWithKind,
+    needsExternalPlaylistRange,
+    type ExternalPlaylistWindow,
+    type MobilePlayerKind,
+  } from '../utils/mobile-player';
+  import {
+    getPreferredExternalPlayerId,
+    setPreferredExternalPlayerId,
+    type ExternalPlayerId,
+  } from '../utils/player-integration';
   import Page from './Page.svelte';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import { infiniteScroll } from '../actions/infiniteScroll';
@@ -31,7 +53,13 @@
     iconX,
     iconPin,
   } from './icons';
-  import { episodeDisplayNumber } from '../utils/episode-display';
+  import {
+    episodeDisplayNumber,
+    episodeListDisplayNumbers,
+    episodeListDisplayTotal,
+    episodeListDisplayTotalLabel,
+    epWordRu,
+  } from '../utils/episode-display';
   import { formatDubberQuality, isDubberNovelty, readLastEpisodeTypeUpdateId, sortDubbersPinnedFirst } from '../utils/dubber-meta';
   import { listPlayableDubberSources, NO_EPISODE_PICK_OTHER_DUB } from '../utils/dubber-sources';
   import { isTvMode } from '../platform/tv';
@@ -120,7 +148,7 @@
   type VariantFilter = 'all' | 'voice' | 'sub';
 
   let modalView = $state<ModalView>('variants');
-  let variantFilter = $state<VariantFilter>('voice');
+  let variantFilter = $state<VariantFilter>(isMobileMode() ? 'all' : 'voice');
   let sourcesLoading = $state(true);
   let sourcesError = $state('');
   let dubbers = $state<Dubber[]>([]);
@@ -230,14 +258,15 @@
   }
 
   function epWord(n: number): string {
-    const mod10 = n % 10;
-    const mod100 = n % 100;
-    if (mod10 === 1 && mod100 !== 11) return 'эпизод';
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'эпизода';
-    return 'эпизодов';
+    return epWordRu(n);
   }
 
+  /** Живой итог по загруженному списку (последний номер), иначе поле API. */
+  const liveEpisodeTotal = $derived(episodeListDisplayTotal(episodes));
+  const liveEpisodeTotalLabel = $derived(episodeListDisplayTotalLabel(episodes));
+
   function dubberEpisodeLabel(d: Dubber): string {
+    if (selectedDubber?.id === d.id && liveEpisodeTotalLabel) return liveEpisodeTotalLabel;
     const count = normalizeEpisodeCount(d as Record<string, unknown>);
     return count != null ? `${count} ${epWord(count)}` : '';
   }
@@ -402,7 +431,176 @@
     scheduleFocusTvOverlayContent(24);
   }
 
+  // ── Телефон: «Выберите вариант» → «Выберите серию» → «Выберите плеер» ──────────────────────────
+  const isMobile = isMobileMode();
+  function playerKindLabel(k: MobilePlayerKind): string {
+    return k === 'web' ? 'Веб-плеер' : k === 'anix' ? 'АниксПлеер' : k === 'external' ? 'Сторонний' : 'Встроенный';
+  }
+  let stopDlWatch: (() => void) | null = null;
+  let chooserEp = $state<number | null>(null);
+  /** ПК: серия, ожидающая выбора плеера в диалоге. */
+  let desktopChooserEp = $state<number | null>(null);
+  /** ПК: серия ждёт выбора размера плейлиста для VLC/mpv. */
+  let externalRangeEp = $state<number | null>(null);
+  let externalProgress = $state<{ done: number; total: number } | null>(null);
+  let externalAbort: AbortController | null = null;
+  /** Выбранный сторонний плеер для текущего запуска (vlc / mpv). */
+  let pendingExternalPlayerId = $state<ExternalPlayerId | null>(null);
+  /** Окно «Выберите плеер» открыто только для смены плеера по умолчанию (без запуска серии). */
+  let chooserSettings = $state(false);
+  let playerLabel = $state(playerKindLabel(getMobilePlayerPrefs().kind));
+  const HINT_KEYS = { variants: 'anix:hint:watch-variants', episodes: 'anix:hint:watch-episodes' } as const;
+  function hintHidden(key: string): boolean {
+    try { return localStorage.getItem(key) === '1'; } catch { return false; }
+  }
+  let hintVariantsHidden = $state(isMobile && hintHidden(HINT_KEYS.variants));
+  let hintEpisodesHidden = $state(isMobile && hintHidden(HINT_KEYS.episodes));
+  function hideHint(which: 'variants' | 'episodes') {
+    try { localStorage.setItem(HINT_KEYS[which], '1'); } catch { /* ignore */ }
+    if (which === 'variants') hintVariantsHidden = true; else hintEpisodesHidden = true;
+  }
+
+  function cancelExternalPlaylistPrep() {
+    externalAbort?.abort();
+    externalAbort = null;
+    externalProgress = null;
+    externalRangeEp = null;
+  }
+
+  function watchLaunchParams(epPosition: number) {
+    return {
+      releaseId,
+      sourceId: selectedSource!.id,
+      ep: epPosition,
+      title: releaseTitle,
+      sourceName: selectedSource!.name,
+      dubberId: selectedDubber?.id,
+      dubberName: selectedDubber?.name,
+    };
+  }
+
+  async function runExternalWithWindow(epPosition: number, playlistWindow: ExternalPlaylistWindow) {
+    if (!selectedSource) return;
+    cancelExternalPlaylistPrep();
+    const ac = new AbortController();
+    externalAbort = ac;
+    externalProgress = { done: 0, total: 0 };
+    const playerId = pendingExternalPlayerId || getPreferredExternalPlayerId() || undefined;
+    try {
+      const r = await launchWithKind('external', watchLaunchParams(epPosition), {
+        playlistWindow,
+        signal: ac.signal,
+        playerId,
+        onProgress: (p) => {
+          if (externalAbort === ac) externalProgress = { done: p.done, total: p.total };
+        },
+        episodeMeta: episodes.map((ep) => ({
+          position: Number(ep.position),
+          name: typeof ep.name === 'string' ? ep.name : '',
+          url: typeof ep.url === 'string' ? ep.url : '',
+        })),
+      });
+      if (r.cancelled) return;
+      if (r.started) {
+        void markEpisodeWatched(epPosition);
+        close();
+      } else if (r.message) {
+        showToast(r.message);
+      }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      showToast(e instanceof Error ? e.message : 'Не удалось запустить плеер');
+    } finally {
+      if (externalAbort === ac) {
+        externalAbort = null;
+        externalProgress = null;
+      }
+    }
+  }
+
+  async function startWithKind(kind: MobilePlayerKind, epPosition: number) {
+    if (!selectedSource) return;
+    if (kind === 'external') {
+      pendingExternalPlayerId = getPreferredExternalPlayerId();
+      if (needsExternalPlaylistRange(episodes.length)) {
+        externalRangeEp = epPosition;
+        return;
+      }
+      await runExternalWithWindow(epPosition, 'all');
+      return;
+    }
+    try {
+      const r = await launchWithKind(kind, watchLaunchParams(epPosition));
+      if (r.started) {
+        void markEpisodeWatched(epPosition);
+        close();
+      } else if (r.message) {
+        showToast(r.message);
+      }
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Не удалось запустить плеер');
+    }
+  }
+
+  function startMobileEpisode(epPosition: number) {
+    const prefs = getMobilePlayerPrefs();
+    if (prefs.ask) chooserEp = epPosition;
+    else void startWithKind(prefs.kind, epPosition);
+  }
+
+  /** ПК: запуск серии выбранным плеером (web / builtin / external). */
+  async function startDesktopEpisode(kind: MobilePlayerKind, epPosition: number, playerId?: ExternalPlayerId) {
+    if (!selectedSource) return;
+    if (kind === 'external') {
+      pendingExternalPlayerId = playerId || getPreferredExternalPlayerId();
+      if (needsExternalPlaylistRange(episodes.length)) {
+        externalRangeEp = epPosition;
+        return;
+      }
+      await runExternalWithWindow(epPosition, 'all');
+      return;
+    }
+    pendingExternalPlayerId = null;
+    try {
+      const r = await launchWithKind(kind, watchLaunchParams(epPosition));
+      if (r.started) {
+        void markEpisodeWatched(epPosition);
+        close();
+      } else if (r.message) {
+        showToast(r.message);
+      }
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Не удалось запустить плеер');
+    }
+  }
+
+  function onDesktopChooserDone(kind: MobilePlayerKind, remember: boolean, playerId?: ExternalPlayerId) {
+    const ep = desktopChooserEp;
+    desktopChooserEp = null;
+    if (remember) {
+      setMobilePlayerPrefs({ kind, ask: false });
+      if (kind === 'external' && playerId) setPreferredExternalPlayerId(playerId);
+    }
+    if (ep != null) void startDesktopEpisode(kind, ep, playerId);
+  }
+
+  function onExternalRangeChosen(window: ExternalPlaylistWindow) {
+    const ep = externalRangeEp;
+    externalRangeEp = null;
+    if (ep != null) void runExternalWithWindow(ep, window);
+  }
+
+  function onChooserDone(kind: MobilePlayerKind, ask: boolean) {
+    const ep = chooserEp;
+    chooserEp = null;
+    setMobilePlayerPrefs({ kind, ask });
+    chooserSettings = false;
+    playerLabel = playerKindLabel(kind);
+    if (ep != null) void startWithKind(kind, ep);
+  }
+
   function backFromNestedView() {
+    if (modalView === 'variants') { close(); return; }
     if (modalView === 'episodes') {
       modalView = 'variants';
       optionsOpen = false;
@@ -416,6 +614,9 @@
   }
 
   function sourceLabel(source: Source): string {
+    if (selectedSourceId === source.id && liveEpisodeTotal > 0) {
+      return `${source.name} · ${liveEpisodeTotal} эп.`;
+    }
     const count = normalizeEpisodeCount(source as Record<string, unknown>);
     return count != null ? `${source.name} · ${count} эп.` : source.name;
   }
@@ -515,18 +716,10 @@
     };
 
     const doOpenPlayer = () => {
-      void openInAppPlayer({
-        releaseId,
-        sourceId: selectedSource.id,
-        ep: epPosition,
-        title: releaseTitle,
-        sourceName: selectedSource.name,
-        dubberId: selectedDubber?.id,
-        dubberName: selectedDubber?.name,
-      }).then(() => {
-        void markEpisodeWatched(epPosition);
-        close();
-      }).catch(() => {});
+      if (isMobile) { startMobileEpisode(epPosition); return; }
+      const prefs = getMobilePlayerPrefs();
+      if (prefs.ask) desktopChooserEp = epPosition;
+      else void startDesktopEpisode(prefs.kind === 'anix' ? 'builtin' : prefs.kind, epPosition);
     };
 
     if (isInLobbyWithOthers()) {
@@ -679,8 +872,67 @@
     void refreshDownloadedState();
   }
 
+  // ── Телефон: нативные загрузки (Media3) ────────────────────────────────────────────────────
+  let dlDialog = $state(false);
+  let dlBusy = $state('');
+
+  function mobileDlItem(position: number) {
+    if (!selectedSource || !selectedDubber) return undefined;
+    return episodeStatus($downloadItems, releaseId, selectedSource.id, selectedDubber.id, position);
+  }
+
+  const mobileDoneCount = $derived(
+    isMobile ? episodes.filter((e) => mobileDlItem(e.position)?.state === 'completed').length : 0,
+  );
+  const mobileMissing = $derived(
+    isMobile ? episodes.filter((e) => !mobileDlItem(e.position) || mobileDlItem(e.position)?.state === 'failed').length : 0,
+  );
+
+  async function mobileQueue(list: Episode[], quality: string) {
+    if (!selectedSource || !selectedDubber || list.length === 0) return;
+    dlBusy = `Подготовка: ${list.length}…`;
+    const eps: QueueEp[] = list.map((e) => ({ position: e.position, name: e.name || `${e.position} серия`, url: e.url }));
+    const res = await queueEpisodes(
+      {
+        releaseId,
+        releaseTitle,
+        sourceId: selectedSource.id,
+        sourceName: selectedSource.name,
+        dubberId: selectedDubber.id,
+        dubberName: selectedDubber.name,
+        episodesTotal: episodes.length,
+      },
+      eps,
+      quality,
+      (done, total) => { dlBusy = `Подготовка: ${done} из ${total}`; },
+    );
+    dlBusy = '';
+    if (res.failed > 0 && res.queued === 0) {
+      showToast(res.error ? `Не удалось: ${res.error}` : 'Не удалось поставить в очередь');
+    } else {
+      showToast(res.queued > 0 ? `Загрузка начата: ${res.queued} ${res.queued === 1 ? 'серия' : res.queued < 5 ? 'серии' : 'серий'}` : 'Эти серии уже в загрузках');
+    }
+  }
+
+  function onDlConfirm(quality: string, onlyMissing: boolean) {
+    dlDialog = false;
+    const list = onlyMissing
+      ? episodes.filter((e) => !mobileDlItem(e.position) || mobileDlItem(e.position)?.state === 'failed')
+      : episodes;
+    void mobileQueue(list, quality);
+  }
+
   async function downloadEpisode(ep: Episode, event?: MouseEvent) {
     event?.stopPropagation();
+    if (isMobile) {
+      const st = mobileDlItem(ep.position)?.state;
+      if (st === 'completed' || st === 'queued' || st === 'downloading') {
+        showToast(st === 'completed' ? 'Серия уже скачана' : 'Серия уже в загрузках');
+        return;
+      }
+      void mobileQueue([ep], getDownloadQuality());
+      return;
+    }
     if (actionBusy) return;
 
     const run = async () => {
@@ -710,6 +962,7 @@
   }
 
   async function downloadAllEpisodes() {
+    if (isMobile) { if (episodes.length > 0) dlDialog = true; return; }
     if (episodes.length === 0 || actionBusy) return;
 
     const already = episodes.filter((ep) => isEpisodeDownloaded(ep.position));
@@ -722,7 +975,7 @@
       }
       actionBusy = 'download-all';
       optionsOpen = false;
-      downloadStatus = `Подготовка ${list.length} серий…`;
+      downloadStatus = `Подготовка ${liveEpisodeTotal || list.length} серий…`;
       try {
         await queueDownloads(list);
         downloadStatus = `Добавлено в загрузки: ${list.length}`;
@@ -785,6 +1038,7 @@
   }
 
   onMount(() => {
+    stopDlWatch = isMobile ? watchDownloads() : null;
     document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', handleKeydown);
     focusTvModalContent();
@@ -855,6 +1109,9 @@
   });
 
   onDestroy(() => {
+    // отписка от загрузок выполняется ниже вместе с остальной очисткой
+    stopDlWatch?.();
+    cancelExternalPlaylistPrep();
     saveWatchModalState({
       releaseId,
       modalView,
@@ -875,7 +1132,7 @@
 
   <div class="watch-modal__panel">
     <div class="watch-modal__head">
-      {#if modalView !== 'variants'}
+      {#if modalView !== 'variants' || isMobile}
         <button type="button" class="watch-modal__head-back" aria-label="Назад" onclick={backFromNestedView}>
           {@html backIconSvg}
         </button>
@@ -884,19 +1141,25 @@
         <h2 class="watch-modal__title">
           {#if modalView === 'updates'}
             Статистика добавления
+          {:else if isMobile && modalView === 'episodes'}
+            Выберите серию
           {:else if modalView === 'episodes' && selectedDubber}
             {selectedDubber.name}
+          {:else if isMobile}
+            Выберите вариант
           {:else}
             Смотреть
           {/if}
         </h2>
         {#if modalView === 'variants'}
-          <p class="watch-modal__subtitle">{releaseTitle}</p>
+          {#if !isMobile}<p class="watch-modal__subtitle">{releaseTitle}</p>{/if}
+        {:else if isMobile && modalView === 'episodes'}
+          {#if selectedSource}<p class="watch-modal__subtitle">Источник {selectedSource.name}</p>{/if}
         {:else if modalView === 'episodes' && selectedDubber}
           {@const viewCountRaw = selectedDubber.view_count ?? selectedDubber.viewCount ?? 0}
           {@const viewCount = typeof viewCountRaw === 'number' ? viewCountRaw : parseInt(String(viewCountRaw), 10) || 0}
           <p class="watch-modal__subtitle">
-            {formatNum(viewCount)} просмотров · {isSubDubber(selectedDubber) ? 'субтитры' : 'озвучка'} · {dubberEpisodeLabel(selectedDubber)}
+            {formatNum(viewCount)} просмотров · {isSubDubber(selectedDubber) ? 'субтитры' : 'озвучка'} · {liveEpisodeTotalLabel || dubberEpisodeLabel(selectedDubber)}
           </p>
         {/if}
       </div>
@@ -973,6 +1236,31 @@
         {:else}
           <Page noPadding extraClass="watch-modal__page page--scroll-area">
             <div class="watch-modal__episodes-view">
+              {#if isMobile && selectedDubber}
+                <h3 class="watch-modal__group-title">{selectedDubber.name}</h3>
+              {/if}
+              {#if isMobile && downloadsAvailable()}
+                <div class="watch-modal__dl-bar">
+                  <button type="button" class="watch-modal__dl-all" disabled={!!dlBusy || episodes.length === 0} onclick={downloadAllEpisodes}>
+                    {@html downloadIconSvg}
+                    <span>{dlBusy || (mobileDoneCount === episodes.length && episodes.length > 0 ? 'Все серии скачаны' : mobileDoneCount > 0 ? `Скачать остальные (${mobileMissing})` : `Скачать все серии (${liveEpisodeTotal || episodes.length})`)}</span>
+                  </button>
+                  <button type="button" class="watch-modal__dl-open" onclick={() => { close(); navigate('/downloads'); }}>
+                    Загрузки{#if $hasActiveDownloads}<i class="watch-modal__dl-dot"></i>{/if}
+                  </button>
+                </div>
+              {/if}
+              {#if isMobile}
+                <button type="button" class="watch-modal__player-pick" onclick={() => (chooserSettings = true)}>
+                  <span>Плеер: <b>{playerLabel}</b></span><span class="watch-modal__player-pick-act">Изменить</span>
+                </button>
+              {/if}
+              {#if isMobile && !hintEpisodesHidden}
+                <div class="watch-modal__hint">
+                  <p>Если серия не запускается ни через какой видеоплеер, попробуйте сменить источник, если это доступно. Любая реклама в видео к приложению отношения не имеет.</p>
+                  <button type="button" aria-label="Скрыть подсказку" onclick={() => hideHint('episodes')}>{@html closeIconSvg}</button>
+                </div>
+              {/if}
               {#if sources.length > 1}
                 <div class="watch-modal__source-pills" aria-label="Источники">
                   {#each sources as source (source.id)}
@@ -1028,7 +1316,8 @@
               <div class="watch-modal__episodes" bind:this={episodesListEl}>
                 {#each filteredEpisodes as ep (ep.position)}
                   {@const watched = isEpisodeWatched(ep)}
-                  {@const downloaded = isEpisodeDownloaded(ep.position)}
+                  {@const dlItem = isMobile ? mobileDlItem(ep.position) : undefined}
+                  {@const downloaded = isMobile ? dlItem?.state === 'completed' : isEpisodeDownloaded(ep.position)}
                   {@const displayNum = episodeDisplayNumber(ep, episodes)}
                   {@const unnumbered = displayNum == null}
                   <article
@@ -1066,6 +1355,10 @@
                       >
                         {#if downloaded}
                           {@html downloadedIconSvg}
+                        {:else if dlItem && (dlItem.state === 'downloading' || dlItem.state === 'queued' || dlItem.state === 'restarting')}
+                          <span class="watch-modal__dl-ring" style="--p:{Math.round(dlItem.percent)}" title={dlItem.state === 'queued' ? 'В очереди' : `${Math.round(dlItem.percent)}%`}></span>
+                        {:else if dlItem?.state === 'failed'}
+                          <span class="watch-modal__dl-fail" title="Ошибка — нажмите, чтобы повторить">!</span>
                         {:else}
                           {@html downloadIconSvg}
                         {/if}
@@ -1110,6 +1403,13 @@
                 onclick={() => variantFilter = 'sub'}
               >Субтитры</button>
             </div>
+
+            {#if isMobile && !hintVariantsHidden}
+              <div class="watch-modal__hint">
+                <p>Напротив каждого варианта озвучки указано общее количество доступных серий. Статистика просмотров обновляется ежедневно.</p>
+                <button type="button" aria-label="Скрыть подсказку" onclick={() => hideHint('variants')}>{@html closeIconSvg}</button>
+              </div>
+            {/if}
 
             <div class="watch-modal__variant-list">
               {#if filteredDubbers.length === 0}
@@ -1183,6 +1483,48 @@
         </Page>
       {/if}
     </div>
+
+    {#if dlDialog}
+      <MobileDownloadFlow
+        {releaseId}
+        {releaseTitle}
+        preDubberId={selectedDubber?.id}
+        preSourceId={selectedSource?.id}
+        onClose={() => (dlDialog = false)}
+      />
+    {/if}
+
+    {#if chooserEp !== null || chooserSettings}
+      <MobilePlayerChooser onChoose={onChooserDone} onClose={() => { chooserEp = null; chooserSettings = false; }} />
+    {/if}
+
+    {#if !isMobile && desktopChooserEp !== null}
+      <DesktopPlayerChooser onChoose={onDesktopChooserDone} onClose={() => (desktopChooserEp = null)} />
+    {/if}
+
+    {#if externalRangeEp !== null && externalProgress === null}
+      {@const rangeEp = episodes.find((ep) => ep.position === externalRangeEp)}
+      {@const rangeCurrent = (rangeEp ? episodeDisplayNumber(rangeEp, episodes) : null) ?? externalRangeEp}
+      <ExternalPlaylistRangeSheet
+        currentEp={rangeCurrent}
+        positions={episodeListDisplayNumbers(episodes)}
+        onChoose={onExternalRangeChosen}
+        onClose={() => {
+          const ep = externalRangeEp;
+          externalRangeEp = null;
+          // Назад к выбору плеера / источника
+          if (ep != null && !isMobile) desktopChooserEp = ep;
+        }}
+      />
+    {/if}
+
+    {#if externalProgress}
+      <ExternalPlaylistProgressOverlay
+        done={externalProgress.done}
+        total={externalProgress.total}
+        onCancel={cancelExternalPlaylistPrep}
+      />
+    {/if}
 
     {#if showConfirm}
       <div class="watch-modal__confirm">

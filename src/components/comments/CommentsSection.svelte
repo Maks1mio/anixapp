@@ -12,8 +12,8 @@
     type UiV2CommentComposerPayload,
   } from '../uikit-v2/UiV2CommentComposer.svelte';
   import CommentsLoadSentinel from './CommentsLoadSentinel.svelte';
-  import type { CommentData } from '../../types/comment';
-  import { normalizeComment, normalizeCommentsFromResponse, buildReleaseCommentAddBody } from '../../utils/comment';
+  import type { CommentData, CommentVoteValue } from '../../types/comment';
+  import { normalizeComment, normalizeCommentsFromResponse, buildReleaseCommentAddBody, apiVotePayload } from '../../utils/comment';
   import { resolveJacksonRefs } from '../../utils/jackson-refs';
   import {
     appendUiV2CommentReply,
@@ -134,7 +134,11 @@
     );
     if (!window.anixApi?.comments?.release || !prev) return;
     const id = typeof updated.id === 'number' ? updated.id : Number(updated.id);
-    window.anixApi.comments.release.vote(id, updated.userVote ?? 0).catch(() => {
+    const apiVote = apiVotePayload(
+      (prev.userVote ?? 0) as CommentVoteValue,
+      (updated.userVote ?? 0) as CommentVoteValue,
+    );
+    window.anixApi.comments.release.vote(id, apiVote).catch(() => {
       syncItems(
         patchUiV2CommentNode(nodes, updated.id, {
           userVote: prev.userVote,

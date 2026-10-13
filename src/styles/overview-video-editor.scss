@@ -762,3 +762,14 @@ html, body {
   text-align: center;
   color: $color-text-muted;
 }
+
+// macOS: нативные кнопки окна слева.
+.platform-darwin {
+  .ove-titlebar__controls {
+    display: none;
+  }
+
+  &:not(.window-fullscreen) .ove-titlebar {
+    padding-left: var(--traffic-lights-inset, 98px);
+  }
+}

@@ -1,20 +1,27 @@
 'use strict';
 
 const { ipcMain } = require('electron');
+const { HttpError } = require('anixapi');
+const { formatAnixError, enrichAnixError, anixErrorLogMeta } = require('./anix-errors');
 
 function createIpcHelpers({ isDev, logger, state }) {
   function handleAnixError(err, context) {
-    const msg = err && err.message ? String(err.message) : String(err);
+    enrichAnixError(err);
+    const msg = formatAnixError(err);
+    const isHttp = (typeof HttpError === 'function' && err instanceof HttpError) || err?.name === 'HttpError';
     const isNetwork =
-      msg.includes('fetch failed') ||
-      msg.includes('ENOTFOUND') ||
-      msg.includes('ECONNREFUSED') ||
-      msg.includes('ECONNRESET') ||
-      msg.includes('ETIMEDOUT');
+      (isHttp && (err.status === 0 || /Нет связи|network error|fetch failed/i.test(msg)))
+      || msg.includes('fetch failed')
+      || msg.includes('ENOTFOUND')
+      || msg.includes('ECONNREFUSED')
+      || msg.includes('ECONNRESET')
+      || msg.includes('ETIMEDOUT')
+      || /Нет связи с сервером/.test(msg);
 
     logger.error('api', `${context}: ${msg}`, {
       context,
       network: isNetwork,
+      ...anixErrorLogMeta(err),
       stack: err && err.stack ? String(err.stack).slice(0, 600) : undefined,
     });
 
@@ -42,9 +49,11 @@ function createIpcHelpers({ isDev, logger, state }) {
         if (isDev) logger.ipc(channel, '←', { ms: Date.now() - t0 });
         return result;
       } catch (err) {
-        const msg = err && err.message ? String(err.message) : String(err);
+        enrichAnixError(err);
+        const msg = formatAnixError(err);
         logger.error('ipc', `${channel} failed: ${msg}`, {
           ms: isDev ? Date.now() - t0 : undefined,
+          ...anixErrorLogMeta(err),
           stack: err && err.stack ? String(err.stack).slice(0, 400) : undefined,
         });
         throw err;

@@ -5,6 +5,7 @@ const fs = require('fs');
 const { BrowserWindow, ipcMain, app } = require('electron');
 const state = require('../lib/app-state');
 const { getDevServerOrigin } = require('../lib/dev-server');
+const { macTitleBarOptions, setupMacWindow } = require('../lib/mac-window');
 
 function register(deps) {
   const { isDev, applyUiZoom, electronDir, getIconPath, config } = deps;
@@ -24,6 +25,7 @@ function createThemeEditorWindow(themeId, isNew) {
     minHeight: 440,
     frame: false,
     titleBarStyle: 'hidden',
+    ...macTitleBarOptions(44),
     title: 'AnixApp — Редактор темы',
     show: false,
     resizable: true,
@@ -34,6 +36,7 @@ function createThemeEditorWindow(themeId, isNew) {
     },
     ...(iconPath && { icon: iconPath }),
   });
+  setupMacWindow(state.themeEditorWindow, 44);
   state.themeEditorWindow.on('closed', () => { state.themeEditorWindow = null; });
   state.themeEditorWindow.once('ready-to-show', () => {
     applyUiZoom(config.getUiZoom());
@@ -73,6 +76,7 @@ function createUpscaleToolWindow() {
     title: 'Предпросмотр моделей',
     backgroundColor: '#0e0e0e',
     frame: false,
+    ...macTitleBarOptions(),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(electronDir, 'preload.js'),
@@ -81,6 +85,7 @@ function createUpscaleToolWindow() {
     },
     ...(_toolIcon && { icon: _toolIcon }),
   });
+  setupMacWindow(state.upscaleToolWindow);
   state.upscaleToolWindow.on('closed', () => { state.upscaleToolWindow = null; });
   state.upscaleToolWindow.once('ready-to-show', () => {
     applyUiZoom(config.getUiZoom());
@@ -116,6 +121,7 @@ function createOverviewVideoEditorWindow() {
     title: 'AnixApp — Редактор видео (Обзор)',
     backgroundColor: '#0e0e0e',
     frame: false,
+    ...macTitleBarOptions(36),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(electronDir, 'preload.js'),
@@ -124,6 +130,7 @@ function createOverviewVideoEditorWindow() {
     },
     ...(_icon && { icon: _icon }),
   });
+  setupMacWindow(state.overviewEditorWindow, 36);
   state.overviewEditorWindow.on('closed', () => { state.overviewEditorWindow = null; });
   state.overviewEditorWindow.once('ready-to-show', () => {
     applyUiZoom(config.getUiZoom());
@@ -159,6 +166,7 @@ function createAdminPanelWindow() {
     minHeight: 640,
     frame: false,
     titleBarStyle: 'hidden',
+    ...macTitleBarOptions(),
     title: 'AnixApp — Панель управления',
     backgroundColor: '#0d0d0d',
     show: false,
@@ -172,6 +180,7 @@ function createAdminPanelWindow() {
     },
     ...(iconPath && { icon: iconPath }),
   });
+  setupMacWindow(state.adminPanelWindow);
   state.adminPanelWindow.on('closed', () => { state.adminPanelWindow = null; });
   state.adminPanelWindow.once('ready-to-show', () => {
     applyUiZoom(config.getUiZoom());
@@ -189,6 +198,114 @@ function createAdminPanelWindow() {
 
 ipcMain.handle('admin:openWindow', () => {
   createAdminPanelWindow();
+});
+
+// ——— Article composer window ———
+
+function composerWindowTitle(payload) {
+  if (payload?.isSuggestion) return 'AnixApp — Предложение записи';
+  if (payload?.editArticle?.id) return 'AnixApp — Редактирование';
+  if (payload?.repostArticle?.id) return 'AnixApp — Репост';
+  return 'AnixApp — Новая запись';
+}
+
+function createComposerWindow(payload) {
+  state.composerPayload = payload ?? null;
+  if (state.composerWindow && !state.composerWindow.isDestroyed()) {
+    try {
+      state.composerWindow.setTitle(composerWindowTitle(state.composerPayload));
+    } catch {
+      /* ignore */
+    }
+    state.composerWindow.webContents.send('composer:setPayload', state.composerPayload);
+    state.composerWindow.focus();
+    return;
+  }
+  const iconPath = getIconPath();
+  state.composerAllowClose = false;
+  state.composerWindow = new BrowserWindow({
+    width: 920,
+    height: 760,
+    minWidth: 720,
+    minHeight: 560,
+    frame: false,
+    titleBarStyle: 'hidden',
+    ...macTitleBarOptions(),
+    title: composerWindowTitle(state.composerPayload),
+    backgroundColor: '#121212',
+    show: false,
+    resizable: true,
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(electronDir, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+    ...(iconPath && { icon: iconPath }),
+  });
+  setupMacWindow(state.composerWindow);
+  state.composerWindow.on('closed', () => {
+    state.composerWindow = null;
+    state.composerPayload = null;
+    state.composerAllowClose = false;
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      state.mainWindow.webContents.send('composer:closed');
+    }
+  });
+  state.composerWindow.on('close', (e) => {
+    if (state.composerAllowClose) return;
+    e.preventDefault();
+    if (state.composerWindow && !state.composerWindow.isDestroyed()) {
+      state.composerWindow.webContents.send('composer:requestClose');
+    }
+  });
+  state.composerWindow.once('ready-to-show', () => {
+    applyUiZoom(config.getUiZoom());
+    state.composerWindow.show();
+  });
+  state.composerWindow.on('maximize', () => {
+    if (state.composerWindow) state.composerWindow.webContents.send('tool:windowState', { isMaximized: true });
+  });
+  state.composerWindow.on('unmaximize', () => {
+    if (state.composerWindow) state.composerWindow.webContents.send('tool:windowState', { isMaximized: false });
+  });
+
+  if (isDev) {
+    state.composerWindow.loadURL(`${getDevServerOrigin()}/#/feed/composer?standalone=1`);
+  } else {
+    state.composerWindow.loadFile(path.join(electronDir, '../dist/index.html'), {
+      hash: '/feed/composer?standalone=1',
+    });
+  }
+}
+
+ipcMain.handle('composer:open', (_, payload) => {
+  createComposerWindow(payload ?? {});
+});
+
+ipcMain.handle('composer:getPayload', () => state.composerPayload);
+
+ipcMain.handle('composer:isStandaloneWindow', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  return !!(state.composerWindow && win && win.id === state.composerWindow.id);
+});
+
+ipcMain.on('composer:readyToClose', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  state.composerAllowClose = true;
+  if (win && !win.isDestroyed()) win.close();
+});
+
+ipcMain.on('composer:published', (_, data) => {
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    state.mainWindow.webContents.send('composer:published', data ?? null);
+  }
+});
+
+ipcMain.on('composer:draftsChanged', () => {
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    state.mainWindow.webContents.send('composer:draftsChanged');
+  }
 });
 
 ipcMain.handle('admin:isStandaloneWindow', (event) => {

@@ -1,7 +1,31 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webFrame } = require('electron');
+
+// macOS: нативные кнопки окна слева — рендерер прячет свои и сдвигает тайтлбар (.platform-darwin).
+// Отступ задан в px экрана, поэтому делим на масштаб интерфейса.
+if (process.platform === 'darwin') {
+  const TRAFFIC_LIGHTS_INSET = 98;
+  const applyTrafficLightsInset = () => {
+    const root = document.documentElement;
+    if (!root) return;
+    root.classList.add('platform-darwin');
+    const zoom = webFrame.getZoomFactor() || 1;
+    root.style.setProperty('--traffic-lights-inset', `${Math.round(TRAFFIC_LIGHTS_INSET / zoom)}px`);
+  };
+  applyTrafficLightsInset();
+  window.addEventListener('DOMContentLoaded', applyTrafficLightsInset);
+  window.addEventListener('resize', applyTrafficLightsInset);
+  ipcRenderer.on('window:fullscreen', (_, isFullscreen) => {
+    document.documentElement?.classList.toggle('window-fullscreen', !!isFullscreen);
+  });
+}
 
 ipcRenderer.on('player:fullscreen', (_, isFullscreen) => {
   window.dispatchEvent(new CustomEvent('player-fullscreen', { detail: isFullscreen }));
+});
+
+ipcRenderer.on('player:windowTitle', (_, title) => {
+  const label = typeof title === 'string' && title.trim() ? title.trim() : 'AnixApp';
+  document.title = label;
 });
 
 ipcRenderer.on('player:applySync', (_, playback) => {
@@ -27,8 +51,8 @@ ipcRenderer.on('lobby:voteFromPlayer', (_, data) => {
   window.dispatchEvent(new CustomEvent('lobby:voteFromPlayer', { detail: data }));
 });
 
-ipcRenderer.on('lobby:createFromPlayer', (_, playback) => {
-  window.dispatchEvent(new CustomEvent('lobby:createFromPlayer', { detail: playback ?? null }));
+ipcRenderer.on('lobby:createFromPlayer', (_, payload) => {
+  window.dispatchEvent(new CustomEvent('lobby:createFromPlayer', { detail: payload ?? null }));
 });
 
 ipcRenderer.on('lobby:joinFromPlayer', (_, code) => {
@@ -98,8 +122,44 @@ ipcRenderer.on('app:update-progress', (_, payload) => {
   window.dispatchEvent(new CustomEvent('app-update-progress', { detail: payload }));
 });
 
+// macOS: пункты «Настройки…» и «Переход» в меню приложения.
+// Событие может прийти раньше, чем смонтируется интерфейс, — тогда ждём сигнала app:menuReady.
+let menuListenerReady = false;
+let pendingOpenSettings = false;
+let pendingMenuNavigate = null;
+window.addEventListener('app:menuReady', () => {
+  menuListenerReady = true;
+  if (pendingOpenSettings) {
+    pendingOpenSettings = false;
+    window.dispatchEvent(new CustomEvent('app:openSettings'));
+  }
+  if (pendingMenuNavigate) {
+    const detail = pendingMenuNavigate;
+    pendingMenuNavigate = null;
+    window.dispatchEvent(new CustomEvent('app:menuNavigate', { detail }));
+  }
+});
+ipcRenderer.on('app:menuNavigate', (_, payload) => {
+  if (!menuListenerReady) {
+    pendingMenuNavigate = payload ?? null;
+    return;
+  }
+  window.dispatchEvent(new CustomEvent('app:menuNavigate', { detail: payload }));
+});
+ipcRenderer.on('app:openSettings', () => {
+  if (!menuListenerReady) {
+    pendingOpenSettings = true;
+    return;
+  }
+  window.dispatchEvent(new CustomEvent('app:openSettings'));
+});
+
 ipcRenderer.on('anix:offline', (_, payload) => {
   window.dispatchEvent(new CustomEvent('anix:offline', { detail: payload }));
+});
+
+ipcRenderer.on('anix:backupProxy', (_, payload) => {
+  window.dispatchEvent(new CustomEvent('anix:backupProxy', { detail: payload }));
 });
 
 // Discord RPC: join lobby via Discord party invite
@@ -146,11 +206,13 @@ ipcRenderer.on('anix:deepLink', (_, payload) => {
 });
 
 contextBridge.exposeInMainWorld('electron', {
+  platform: process.platform,
   consumePendingDeepLink: () => {
     const payload = pendingDeepLinkPayload;
     pendingDeepLinkPayload = null;
     return payload;
   },
+  setAppMenuNav: (items) => ipcRenderer.send('app:setMenuNav', items),
   getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
   getVersions: () => ipcRenderer.invoke('app:getVersions'),
   getDeviceId: () => ipcRenderer.invoke('app:getDeviceId'),
@@ -169,8 +231,12 @@ contextBridge.exposeInMainWorld('electron', {
   closePlayerWindow: () => ipcRenderer.send('player:close'),
   togglePlayerFullScreen: () => ipcRenderer.invoke('player:toggleFullScreen'),
   togglePlayerAlwaysOnTop: () => ipcRenderer.invoke('player:toggleAlwaysOnTop'),
+  setPlayerWindowTitle: (payload) => ipcRenderer.send('player:setWindowTitle', payload),
   isPlayerOpen: () => ipcRenderer.invoke('player:isOpen'),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+  listExternalPlayers: () => ipcRenderer.invoke('player:listExternal'),
+  openExternalPlayer: (url, headers) => ipcRenderer.invoke('player:openExternal', url, headers),
+  setCursorScreenPos: (x, y) => ipcRenderer.invoke('cursor:setScreenPos', { x, y }),
   startTvLanLogin: () => ipcRenderer.invoke('tvLan:start'),
   stopTvLanLogin: () => ipcRenderer.invoke('tvLan:stop'),
   onTvLanCredentials: (cb) => {
@@ -181,12 +247,14 @@ contextBridge.exposeInMainWorld('electron', {
   setExtraVideoHosts: (hosts) => ipcRenderer.invoke('video:setExtraHosts', hosts),
   addExtraVideoHosts: (hosts) => ipcRenderer.invoke('video:addExtraHosts', hosts),
   fetchCdnJson: (url) => ipcRenderer.invoke('cdn:fetchJson', url),
+  fetchRemoteImage: (url) => ipcRenderer.invoke('cdn:fetchImage', url),
   downloadEpisodes: (payload) => ipcRenderer.invoke('episode-download:download', payload),
   queueEpisodeDownloads: (payload) => ipcRenderer.invoke('episode-download:queue', payload),
   getDownloadSettings: () => ipcRenderer.invoke('downloads:getSettings'),
   saveDownloadSettings: (payload) => ipcRenderer.invoke('downloads:saveSettings', payload),
   resetDownloadDirectory: () => ipcRenderer.invoke('downloads:resetDirectory'),
   getFfmpegStatus: () => ipcRenderer.invoke('downloads:getFfmpegStatus'),
+  getFfmpegInstallState: () => ipcRenderer.invoke('downloads:getFfmpegInstallState'),
   installFfmpeg: () => ipcRenderer.invoke('downloads:installFfmpeg'),
   openFfmpegPage: () => ipcRenderer.invoke('downloads:openFfmpegPage'),
   pickDownloadDirectory: () => ipcRenderer.invoke('downloads:pickDirectory'),
@@ -215,8 +283,12 @@ contextBridge.exposeInMainWorld('electron', {
   syncPlayerState: (playback) => ipcRenderer.send('player:syncState', playback),
   sendPlayerState: (playback) => ipcRenderer.send('player:stateChanged', playback),
   sendFluoPreview: (payload) => ipcRenderer.send('fluo:previewFromPlayer', payload),
-  startUpdateDownload: () => ipcRenderer.invoke('app:startUpdateDownload'),
-  checkForUpdate: (currentVersion) => ipcRenderer.invoke('app:checkForUpdate', currentVersion),
+  startUpdateDownload: (versionOrOpts, downloadUrl) =>
+    ipcRenderer.invoke('app:startUpdateDownload', versionOrOpts, downloadUrl),
+  checkForUpdate: (currentVersion, force) =>
+    ipcRenderer.invoke('app:checkForUpdate', currentVersion, !!force),
+  listAppReleases: (currentVersion, channel, force) =>
+    ipcRenderer.invoke('app:listAppReleases', currentVersion, channel, !!force),
   installUpdate: () => ipcRenderer.invoke('app:installUpdate'),
   getLinuxInstallType: () => ipcRenderer.invoke('app:getLinuxInstallType'),
   getSettings: () => ipcRenderer.invoke('app:getSettings'),
@@ -234,7 +306,7 @@ contextBridge.exposeInMainWorld('electron', {
   sendLobbyChatToPlayer: (msg) => ipcRenderer.send('lobby:chatToPlayer', msg),
   sendLobbyChatHistoryToPlayer: (messages) => ipcRenderer.send('lobby:chatHistoryToPlayer', messages ?? []),
   sendLobbyChooserErrorToPlayer: (msg) => ipcRenderer.send('lobby:chooserErrorToPlayer', msg),
-  lobbyCreateFromPlayer: (playback) => ipcRenderer.send('lobby:createFromPlayer', playback ?? null),
+  lobbyCreateFromPlayer: (payload) => ipcRenderer.send('lobby:createFromPlayer', payload ?? null),
   lobbyJoinFromPlayer: (code) => ipcRenderer.send('lobby:joinFromPlayer', code),
   lobbyLeaveFromPlayer: () => ipcRenderer.send('lobby:leaveFromPlayer'),
   lobbyChatFromPlayer: (text) => ipcRenderer.send('lobby:chatFromPlayer', text),
@@ -271,18 +343,28 @@ contextBridge.exposeInMainWorld('electron', {
   overviewEditorDone: () => ipcRenderer.send('overview-editor:done'),
   openAdminPanelWindow: () => ipcRenderer.invoke('admin:openWindow'),
   isAdminPanelWindow: () => ipcRenderer.invoke('admin:isStandaloneWindow'),
+  openComposerWindow: (payload) => ipcRenderer.invoke('composer:open', payload ?? {}),
+  getComposerPayload: () => ipcRenderer.invoke('composer:getPayload'),
+  isComposerWindow: () => ipcRenderer.invoke('composer:isStandaloneWindow'),
+  composerReadyToClose: () => ipcRenderer.send('composer:readyToClose'),
+  composerPublished: (data) => ipcRenderer.send('composer:published', data ?? null),
+  composerDraftsChanged: () => ipcRenderer.send('composer:draftsChanged'),
+  // Diagnostics (console + network from all windows)
+  diagnosticsGet: (opts) => ipcRenderer.invoke('diagnostics:get', opts ?? {}),
+  diagnosticsStats: () => ipcRenderer.invoke('diagnostics:stats'),
+  diagnosticsClear: () => ipcRenderer.invoke('diagnostics:clear'),
+  diagnosticsSubscribe: () => ipcRenderer.invoke('diagnostics:subscribe'),
+  diagnosticsUnsubscribe: () => ipcRenderer.invoke('diagnostics:unsubscribe'),
+  diagnosticsExportZip: () => ipcRenderer.invoke('diagnostics:exportZip'),
+  diagnosticsPaths: () => ipcRenderer.invoke('diagnostics:paths'),
+  diagnosticsOpenDir: () => ipcRenderer.invoke('diagnostics:openDir'),
+  diagnosticsReveal: (filePath) => ipcRenderer.invoke('diagnostics:reveal', filePath),
+  onDiagnosticsEntry: (cb) => {
+    const handler = (_e, entry) => cb(entry);
+    ipcRenderer.on('diagnostics:entry', handler);
+    return () => ipcRenderer.removeListener('diagnostics:entry', handler);
+  },
   // Logging
-  logRenderer:      (entry) => ipcRenderer.invoke('log:renderer', entry),
-  logGetSessions:   ()      => ipcRenderer.invoke('log:getSessions'),
-  logGetSessionLog: (sessionId, file, limit) => ipcRenderer.invoke('log:getSessionLog', sessionId, file, limit),
-  logGetSystemInfo: ()      => ipcRenderer.invoke('log:getSystemInfo'),
-  logCollectZip:    ()      => ipcRenderer.invoke('log:collectZip'),
-  logOpenZip:       (p)     => ipcRenderer.invoke('log:openZip', p),
-  logOpenFolder:    ()      => ipcRenderer.invoke('log:openFolder'),
-  logGetFolderPath: ()      => ipcRenderer.invoke('log:getFolderPath'),
-  logGetSessionDir: ()      => ipcRenderer.invoke('log:getSessionDir'),
-  logGetLobbyPath:  ()      => ipcRenderer.invoke('log:getLobbyPath'),
-  logLobbyLine:     (line)  => ipcRenderer.invoke('log:lobbyLine', line),
   sendLobbyActionLogToPlayer: (entry) => ipcRenderer.send('lobby:actionLogToPlayer', entry),
 });
 
@@ -334,6 +416,30 @@ ipcRenderer.on('overview-editor:done', () => {
   window.dispatchEvent(new CustomEvent('anix:overviewEditorDone'));
 });
 
+ipcRenderer.on('composer:setPayload', (_, payload) => {
+  window.dispatchEvent(new CustomEvent('anix:composer-payload', { detail: payload ?? null }));
+});
+
+ipcRenderer.on('composer:requestClose', () => {
+  window.dispatchEvent(new CustomEvent('anix:composer-request-close'));
+});
+
+ipcRenderer.on('composer:published', (_, data) => {
+  window.dispatchEvent(new CustomEvent('anix:composer-published', { detail: data ?? null }));
+});
+
+ipcRenderer.on('composer:draftsChanged', () => {
+  window.dispatchEvent(new CustomEvent('anix:feed-drafts-changed'));
+});
+
+ipcRenderer.on('composer:closed', () => {
+  window.dispatchEvent(new CustomEvent('anix:composer-closed'));
+});
+
+ipcRenderer.on('anix:articleUploadProgress', (_, data) => {
+  window.dispatchEvent(new CustomEvent('anix:article-upload-progress', { detail: data ?? null }));
+});
+
 // ── Structured API (anixApi) — grouped endpoints like AniDesk ──
 contextBridge.exposeInMainWorld('anixApi', {
   client: {
@@ -342,6 +448,9 @@ contextBridge.exposeInMainWorld('anixApi', {
     getBaseUrl: () => ipcRenderer.invoke('anix:getBaseUrl'),
     setBaseUrl: (baseUrl) => ipcRenderer.invoke('anix:setBaseUrl', baseUrl),
     pingBaseUrl: (baseUrl) => ipcRenderer.invoke('anix:pingBaseUrl', baseUrl),
+    endpointGeo: (baseUrl) => ipcRenderer.invoke('anix:endpointGeo', baseUrl),
+    getBackupProxy: () => ipcRenderer.invoke('anix:getBackupProxy'),
+    setBackupProxyEnabled: (enabled) => ipcRenderer.invoke('anix:setBackupProxyEnabled', enabled),
     getAuthStatus: () => ipcRenderer.invoke('anix:getAuthStatus'),
     checkConnection: () => ipcRenderer.invoke('anix:checkConnection'),
     testOffline: () => ipcRenderer.invoke('anix:testOffline'),
@@ -397,6 +506,9 @@ contextBridge.exposeInMainWorld('anixApi', {
       ipcRenderer.invoke('anix:profileArticleComments', profileId, page, sort),
     getFavoriteVideos: (profileId, page = 0) =>
       ipcRenderer.invoke('anix:profileFavoriteVideos', profileId, page),
+    blockList: (page = 0) => ipcRenderer.invoke('anix:profileBlockList', page),
+    blockAdd: (profileId) => ipcRenderer.invoke('anix:profileBlockListAdd', profileId),
+    blockRemove: (profileId) => ipcRenderer.invoke('anix:profileBlockListRemove', profileId),
   },
 
   release: {
@@ -470,6 +582,10 @@ contextBridge.exposeInMainWorld('anixApi', {
     collections: (query, page = 0) => ipcRenderer.invoke('anix:searchCollections', query, page),
     profileList: (status, query, page = 0, searchBy = 0) =>
       ipcRenderer.invoke('anix:searchProfileList', status, query, page, searchBy),
+    feed: (query, page = 0, searchBy = 0) =>
+      ipcRenderer.invoke('anix:searchFeed', query, page, searchBy),
+    channelSubscribers: (channelId, page = 0, query = '') =>
+      ipcRenderer.invoke('anix:searchChannelSubscribers', channelId, page, query),
   },
 
   collection: {
@@ -499,18 +615,41 @@ contextBridge.exposeInMainWorld('anixApi', {
     articles: (channelId, page = 0) => ipcRenderer.invoke('anix:channelArticles', channelId, page),
     subscribe: (channelId) => ipcRenderer.invoke('anix:channelSubscribe', channelId),
     unsubscribe: (channelId) => ipcRenderer.invoke('anix:channelUnsubscribe', channelId),
-    subscriptions: (page = 0) => ipcRenderer.invoke('anix:channelSubscriptions', page),
+    mute: (channelId) => ipcRenderer.invoke('anix:channelMute', channelId),
+    unmute: (channelId) => ipcRenderer.invoke('anix:channelUnmute', channelId),
+    mutes: (page = 0) => ipcRenderer.invoke('anix:channelMutes', page),
+    subscriptions: (page = 0, opts) => ipcRenderer.invoke('anix:channelSubscriptions', page, opts ?? {}),
+    all: (page = 0, opts) => ipcRenderer.invoke('anix:channelAll', page, opts ?? {}),
+    recommendations: (page = 0, opts) =>
+      ipcRenderer.invoke('anix:channelRecommendations', page, opts ?? {}),
     editorAll: () => ipcRenderer.invoke('anix:channelEditorAll'),
+    editorAvailable: (channelId, opts) =>
+      ipcRenderer.invoke('anix:channelEditorAvailable', channelId, opts ?? {}),
     uploadCover: (channelId, imageBase64, fileName) =>
       ipcRenderer.invoke('anix:channelUploadCover', channelId, imageBase64, fileName),
     deleteCover: (channelId) => ipcRenderer.invoke('anix:channelDeleteCover', channelId),
     createBlog: () => ipcRenderer.invoke('anix:channelCreateBlog'),
+    create: (body) => ipcRenderer.invoke('anix:channelCreate', body),
+  },
+
+  config: {
+    toggles: () => ipcRenderer.invoke('anix:configToggles'),
   },
 
   notification: {
     all: (page = 0) => ipcRenderer.invoke('anix:notificationsAll', page),
     count: () => ipcRenderer.invoke('anix:notificationsCount'),
     read: () => ipcRenderer.invoke('anix:notificationsRead'),
+    preference: {
+      my: () => ipcRenderer.invoke('anix:notificationPreferenceMy'),
+      edit: (type) => ipcRenderer.invoke('anix:notificationPreferenceEdit', type),
+      editStatus: (statuses) => ipcRenderer.invoke('anix:notificationPreferenceEditStatus', statuses),
+      editType: (typeIds) => ipcRenderer.invoke('anix:notificationPreferenceEditType', typeIds),
+      releaseTypes: (releaseId) => ipcRenderer.invoke('anix:notificationPreferenceReleaseTypes', releaseId),
+      editReleaseTypes: (releaseId, typeIds) =>
+        ipcRenderer.invoke('anix:notificationPreferenceEditReleaseTypes', releaseId, typeIds),
+      releases: (page = 0) => ipcRenderer.invoke('anix:notificationPreferenceReleases', page),
+    },
   },
 
   history: {
@@ -529,15 +668,44 @@ contextBridge.exposeInMainWorld('anixApi', {
   article: {
     info: (id) => ipcRenderer.invoke('anix:articleById', id),
     vote: (id, vote) => ipcRenderer.invoke('anix:articleVote', id, vote),
+    create: (channelId, body) => ipcRenderer.invoke('anix:articleCreate', channelId, body),
+    edit: (articleId, body) => ipcRenderer.invoke('anix:articleEdit', articleId, body),
+    createSuggestion: (channelId, body) =>
+      ipcRenderer.invoke('anix:articleSuggestionCreate', channelId, body),
+    suggestions: (page = 0, opts) =>
+      ipcRenderer.invoke('anix:articleSuggestions', page, opts ?? {}),
+    deleteSuggestion: (suggestionId) =>
+      ipcRenderer.invoke('anix:articleSuggestionDelete', suggestionId),
+    uploadImage: (mediaToken, imageBase64, fileName, uploadId) =>
+      ipcRenderer.invoke('anix:articleUploadImage', mediaToken, imageBase64, fileName, uploadId ?? ''),
+    abortUpload: (uploadId) => ipcRenderer.send('anix:articleUploadAbort', uploadId),
+    generateEmbed: (type, mediaToken, url) =>
+      ipcRenderer.invoke('anix:articleGenerateEmbed', type, mediaToken, url),
     delete: (id) => ipcRenderer.invoke('anix:articleDelete', id),
     mute: (id) => ipcRenderer.invoke('anix:articleMute', id),
     unmute: (id) => ipcRenderer.invoke('anix:articleUnmute', id),
     setPinned: (id, isPinned) => ipcRenderer.invoke('anix:articlePin', id, isPinned),
+    commentsPopular: (id) => ipcRenderer.invoke('anix:articleCommentsPopular', id),
+    comments: (id, page = 0, sort = 2) =>
+      ipcRenderer.invoke('anix:articleComments', id, page, sort),
+    commentAdd: (id, body) => ipcRenderer.invoke('anix:articleCommentAdd', id, body),
+    commentReplies: (commentId, page = 0, sort = 2) =>
+      ipcRenderer.invoke('anix:articleCommentReplies', commentId, page, sort),
+    commentVote: (commentId, vote) =>
+      ipcRenderer.invoke('anix:articleCommentVote', commentId, vote),
+    commentVotes: (commentId, page = 0, sort = 0) =>
+      ipcRenderer.invoke('anix:articleCommentVotes', commentId, page, sort),
+    commentEdit: (commentId, body) =>
+      ipcRenderer.invoke('anix:articleCommentEdit', commentId, body),
+    commentDelete: (commentId) =>
+      ipcRenderer.invoke('anix:articleCommentDelete', commentId),
   },
 
   report: {
     articleReasons: () => ipcRenderer.invoke('anix:reportArticleReasons'),
     submitArticle: (body) => ipcRenderer.invoke('anix:reportArticle', body),
+    channelReasons: () => ipcRenderer.invoke('anix:reportChannelReasons'),
+    submitChannel: (body) => ipcRenderer.invoke('anix:reportChannel', body),
   },
 
   home: {
@@ -556,11 +724,23 @@ contextBridge.exposeInMainWorld('anixApi', {
     setPrivacyFriendRequests: (state) => ipcRenderer.invoke('anix:setPrivacyFriendRequests', state),
     getLoginInfo: () => ipcRenderer.invoke('anix:getLoginInfo'),
     changeLogin: (newLogin) => ipcRenderer.invoke('anix:changeLogin', newLogin),
+    changeEmail: (data) => ipcRenderer.invoke('anix:changeEmail', data),
+    changeEmailResend: (data) => ipcRenderer.invoke('anix:changeEmailResend', data),
+    changeEmailVerify: (data) => ipcRenderer.invoke('anix:changeEmailVerify', data),
+    changePassword: (data) => ipcRenderer.invoke('anix:changePassword', data),
     getBadges: (page = 0) => ipcRenderer.invoke('anix:getBadges', page),
     setBadge: (id) => ipcRenderer.invoke('anix:setBadge', id),
     removeBadge: () => ipcRenderer.invoke('anix:removeBadge'),
     selectTheme: (id) => ipcRenderer.invoke('anix:selectTheme', id),
     setAvatar: (imageBase64, fileName) => ipcRenderer.invoke('anix:setAvatar', imageBase64, fileName),
     deleteAvatar: () => ipcRenderer.invoke('anix:deleteAvatar'),
+  },
+
+  profileHealth: {
+    status: () => ipcRenderer.invoke('anix:profileHealthStatus'),
+    account: (page = 0) => ipcRenderer.invoke('anix:profileHealthAccount', page),
+    content: (page = 0) => ipcRenderer.invoke('anix:profileHealthContent', page),
+    enforcement: (id) => ipcRenderer.invoke('anix:profileHealthEnforcement', id),
+    appeal: (id, body) => ipcRenderer.invoke('anix:profileHealthAppeal', id, body),
   },
 });

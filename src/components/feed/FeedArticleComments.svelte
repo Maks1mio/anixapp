@@ -1,0 +1,312 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import UiV2CommentComposer, {
+    type UiV2CommentComposerPayload,
+  } from '../uikit-v2/UiV2CommentComposer.svelte';
+  import UiV2CommentThread, {
+    type UiV2CommentNode,
+  } from '../uikit-v2/UiV2CommentThread.svelte';
+  import { requireAuth } from '../../stores/auth';
+  import { handleUserProfileClick } from '../../stores/user-profile';
+  import {
+    buildReleaseCommentAddBody,
+    normalizeComment,
+    normalizeCommentsFromResponse,
+    apiVotePayload,
+  } from '../../utils/comment';
+  import type { CommentVoteValue } from '../../types/comment';
+  import {
+    appendUiV2CommentReply,
+    commentDataToUiV2Node,
+    patchUiV2CommentNode,
+    setUiV2CommentReplies,
+    uiV2NodeToCommentData,
+  } from '../../utils/comment-v2';
+  import { formatCommentsCountShort, uiV2NodeToFeedLastComment } from '../../utils/feed-top-comment';
+  import type { UiV2FeedPostLastComment } from '../uikit-v2/UiV2FeedPost.svelte';
+  import { resolveJacksonRefs } from '../../utils/jackson-refs';
+
+  type Props = {
+    articleId: number;
+    totalCount?: number;
+    focusComposer?: boolean;
+    onCountChange?: (count: number) => void;
+    /** Актуальный комментарий для превью в свёрнутом посте. */
+    onPreviewCommentChange?: (comment: UiV2FeedPostLastComment | null) => void;
+    onClose?: () => void;
+  };
+
+  let {
+    articleId,
+    totalCount = 0,
+    focusComposer = false,
+    onCountChange,
+    onPreviewCommentChange,
+    onClose,
+  }: Props = $props();
+
+  let nodes = $state<UiV2CommentNode[]>([]);
+  let loading = $state(true);
+  let submitting = $state(false);
+  let selfProfileId = $state<number | null>(null);
+  let knownTotal = $state(0);
+  let rootEl = $state<HTMLElement | null>(null);
+
+  $effect(() => {
+    knownTotal = Math.max(0, Number(totalCount) || 0);
+  });
+
+  function emitPreview(list: UiV2CommentNode[] = nodes) {
+    const preview = uiV2NodeToFeedLastComment(list[0] ?? null);
+    onPreviewCommentChange?.(preview);
+  }
+
+  async function loadComments() {
+    loading = true;
+    try {
+      const api = window.anixApi?.article;
+      const res = api?.comments
+        ? await api.comments(articleId, 0, 2)
+        : await api?.commentsPopular?.(articleId);
+      const list = normalizeCommentsFromResponse(
+        (res ?? {}) as Record<string, unknown>,
+      );
+      nodes = list.map((c) => commentDataToUiV2Node(c));
+      emitPreview(nodes);
+      const apiTotal = Number(
+        (res as { total_count?: number } | undefined)?.total_count,
+      );
+      if (Number.isFinite(apiTotal) && apiTotal > 0) {
+        knownTotal = apiTotal;
+        onCountChange?.(apiTotal);
+      } else if (list.length > knownTotal) {
+        knownTotal = list.length;
+        onCountChange?.(list.length);
+      }
+    } catch {
+      nodes = [];
+      emitPreview([]);
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function loadReplies(node: UiV2CommentNode) {
+    const commentId = typeof node.id === 'number' ? node.id : Number(node.id);
+    if (!Number.isFinite(commentId) || !window.anixApi?.article?.commentReplies) return;
+    try {
+      const data = await window.anixApi.article.commentReplies(commentId, 0, 2);
+      const list = normalizeCommentsFromResponse(data as Record<string, unknown>);
+      const replies = list.map((c) => commentDataToUiV2Node(c));
+      nodes = setUiV2CommentReplies(nodes, node.id, replies);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function submitNew(
+    payload: UiV2CommentComposerPayload,
+    parent: UiV2CommentNode | null = null,
+  ) {
+    if (!requireAuth() || !window.anixApi?.article?.commentAdd) return;
+    submitting = true;
+    try {
+      const replyTarget = parent ? uiV2NodeToCommentData(parent) : null;
+      const res = (await window.anixApi.article.commentAdd(
+        articleId,
+        buildReleaseCommentAddBody(payload, { replyTarget }),
+      )) as { code?: number; comment?: Record<string, unknown> };
+      if (res.code != null && res.code !== 0) return;
+      if (res.comment) {
+        const resolved = resolveJacksonRefs(res) as Record<string, unknown>;
+        const raw = (resolved.comment ?? res.comment) as Record<string, unknown>;
+        const added = commentDataToUiV2Node(normalizeComment(raw, resolved));
+        if (parent) {
+          nodes = appendUiV2CommentReply(nodes, parent.id, added);
+          emitPreview(nodes);
+        } else {
+          nodes = [added, ...nodes];
+          emitPreview(nodes);
+        }
+        knownTotal += 1;
+        onCountChange?.(knownTotal);
+      } else {
+        await loadComments();
+        knownTotal += 1;
+        onCountChange?.(knownTotal);
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      submitting = false;
+    }
+  }
+
+  async function submitTop(payload: UiV2CommentComposerPayload) {
+    await submitNew(payload, null);
+  }
+
+  async function submitReply(node: UiV2CommentNode, payload: UiV2CommentComposerPayload) {
+    await submitNew(payload, node);
+  }
+
+  function openAuthor(node: UiV2CommentNode) {
+    const id = Number(node.profile.id);
+    if (id > 0) handleUserProfileClick(id);
+  }
+
+  function findNode(list: UiV2CommentNode[], id: number | string): UiV2CommentNode | null {
+    for (const n of list) {
+      if (n.id === id) return n;
+      if (n.replies?.length) {
+        const found = findNode(n.replies, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  function handleVote(updated: UiV2CommentNode) {
+    if (!requireAuth()) return;
+    const prev = findNode(nodes, updated.id);
+    nodes = patchUiV2CommentNode(nodes, updated.id, {
+      userVote: updated.userVote,
+      voteCount: updated.voteCount,
+    });
+    emitPreview(nodes);
+    if (!window.anixApi?.article?.commentVote || !prev) return;
+    const id = typeof updated.id === 'number' ? updated.id : Number(updated.id);
+    const apiVote = apiVotePayload(
+      (prev.userVote ?? 0) as CommentVoteValue,
+      (updated.userVote ?? 0) as CommentVoteValue,
+    );
+    window.anixApi.article.commentVote(id, apiVote).catch(() => {
+      nodes = patchUiV2CommentNode(nodes, updated.id, {
+        userVote: prev.userVote,
+        voteCount: prev.voteCount,
+      });
+      emitPreview(nodes);
+    });
+  }
+
+  async function handleEdit(node: UiV2CommentNode, payload: UiV2CommentComposerPayload) {
+    if (!requireAuth() || !window.anixApi?.article?.commentEdit) return;
+    const prev = findNode(nodes, node.id);
+    if (!prev) return;
+    const id = typeof node.id === 'number' ? node.id : Number(node.id);
+
+    nodes = patchUiV2CommentNode(nodes, node.id, {
+      message: payload.message,
+      isSpoiler: payload.isSpoiler,
+      isEdited: true,
+    });
+    emitPreview(nodes);
+
+    try {
+      await window.anixApi.article.commentEdit(id, {
+        message: payload.message,
+        isSpoiler: payload.isSpoiler,
+      });
+    } catch {
+      nodes = patchUiV2CommentNode(nodes, node.id, {
+        message: prev.message,
+        isSpoiler: prev.isSpoiler,
+        isEdited: prev.isEdited,
+      });
+      emitPreview(nodes);
+    }
+  }
+
+  async function handleDelete(node: UiV2CommentNode) {
+    if (!requireAuth() || !window.anixApi?.article?.commentDelete) return;
+    const prev = findNode(nodes, node.id);
+    if (!prev) return;
+    const id = typeof node.id === 'number' ? node.id : Number(node.id);
+
+    nodes = patchUiV2CommentNode(nodes, node.id, {
+      isDeleted: true,
+      message: '',
+    });
+    knownTotal = Math.max(0, knownTotal - 1);
+    onCountChange?.(knownTotal);
+    emitPreview(nodes);
+
+    try {
+      await window.anixApi.article.commentDelete(id);
+    } catch {
+      nodes = patchUiV2CommentNode(nodes, node.id, {
+        isDeleted: prev.isDeleted,
+        message: prev.message,
+      });
+      knownTotal += 1;
+      onCountChange?.(knownTotal);
+      emitPreview(nodes);
+    }
+  }
+
+  onMount(() => {
+    void loadComments();
+    void window.anixApi?.profile?.self?.().then((data: { profile?: { id?: number } }) => {
+      selfProfileId = data?.profile?.id ?? null;
+    });
+    if (focusComposer) {
+      queueMicrotask(() => {
+        rootEl
+          ?.querySelector<HTMLTextAreaElement>(
+            '#feed-article-comments-composer textarea, #feed-article-comments-composer [id^="uiv2-composer-"]',
+          )
+          ?.focus();
+      });
+    }
+  });
+</script>
+
+<section
+  class="feed-article-comments"
+  bind:this={rootEl}
+  id="feed-article-comments-{articleId}"
+  aria-label="Комментарии"
+>
+  <header class="feed-article-comments__head">
+    <div class="feed-article-comments__heading">
+      <h3 class="feed-article-comments__title">Комментарии</h3>
+      {#if knownTotal > 0}
+        <span class="feed-article-comments__count">{formatCommentsCountShort(knownTotal)}</span>
+      {/if}
+    </div>
+    {#if onClose}
+      <button type="button" class="feed-article-comments__close" onclick={onClose}>
+        Свернуть
+      </button>
+    {/if}
+  </header>
+
+  <div class="feed-article-comments__composer" id="feed-article-comments-composer">
+    <UiV2CommentComposer
+      busy={submitting}
+      requireLogin={true}
+      autofocus={focusComposer}
+      fieldLabel="Введите текст комментария"
+      onSubmit={submitTop}
+    />
+  </div>
+
+  {#if loading}
+    <p class="feed-article-comments__empty">Загрузка…</p>
+  {:else if nodes.length === 0}
+    <p class="feed-article-comments__empty">Комментариев пока нет</p>
+  {:else}
+    <UiV2CommentThread
+      {nodes}
+      {selfProfileId}
+      enableInlineReply={true}
+      reactionsSource="article"
+      onAuthorClick={openAuthor}
+      onLoadReplies={loadReplies}
+      onSubmitReply={submitReply}
+      onVote={handleVote}
+      onEdit={handleEdit}
+      onDelete={handleDelete}
+    />
+  {/if}
+</section>

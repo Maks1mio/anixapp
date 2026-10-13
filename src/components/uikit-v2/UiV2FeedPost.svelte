@@ -1,11 +1,38 @@
 <script lang="ts">
-  import UiV2Button from './UiV2Button.svelte';
-  import UiV2FeedPostMedia from './UiV2FeedPostMedia.svelte';
+  import UiV2FeedPostMediaView from './UiV2FeedPostMedia.svelte';
+  import UiV2ArticleBlocks from './UiV2ArticleBlocks.svelte';
+  import UiV2FeedPostEmbed from './UiV2FeedPostEmbed.svelte';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from './UiV2PopupMenu.svelte';
   import UiV2RoundButton from './UiV2RoundButton.svelte';
+  import UiV2Tooltip from './UiV2Tooltip.svelte';
   import UserAvatar from '../UserAvatar.svelte';
   import UserBadge from '../UserBadge.svelte';
-  import { iconMessageCircle, iconHeart, iconShare, iconMoreHorizontal } from '../icons';
+  import {
+    iconMoreHorizontal,
+    iconRepost,
+    iconThumbsUp,
+    iconThumbsDown,
+    iconPlus,
+    iconPin,
+  } from '../icons';
+  import {
+    ARTICLE_VOTE_MINUS,
+    ARTICLE_VOTE_PLUS,
+    normalizeArticleVote,
+    type ArticleVoteValue,
+  } from '../../utils/feed-article';
+  import type { ArticleFormatBlock } from '../../utils/article-block-format';
+  import { formatCommentsCountShort } from '../../utils/feed-top-comment';
+
+  function ruRepostLabel(count: number): string {
+    const n = Math.max(0, Math.floor(Number(count) || 0));
+    const abs = n % 100;
+    const d = abs % 10;
+    if (abs > 10 && abs < 20) return `${n} репостов`;
+    if (d === 1) return `${n} репост`;
+    if (d >= 2 && d <= 4) return `${n} репоста`;
+    return `${n} репостов`;
+  }
 
   export type UiV2FeedPostMedia = {
     url: string;
@@ -23,13 +50,46 @@
     isBlog?: boolean;
   };
 
+  export type UiV2FeedPostTextBlock = ArticleFormatBlock;
+
+  export type UiV2FeedPostBodyBlock =
+    | UiV2FeedPostTextBlock
+    | { kind: 'media'; items: UiV2FeedPostMedia[] }
+    | {
+        kind: 'embed';
+        title?: string;
+        description?: string;
+        image?: string;
+        url?: string;
+        siteName?: string;
+      };
+
   export type UiV2FeedPostRepost = {
     channel: UiV2FeedPostChannel;
     timeStr?: string;
     headline?: string;
     preview?: string;
+    beforeBlocks?: UiV2FeedPostTextBlock[];
+    afterBlocks?: UiV2FeedPostTextBlock[];
+    /** Текст и медиа репоста в исходном порядке. */
+    bodyBlocks?: UiV2FeedPostBodyBlock[];
     media?: UiV2FeedPostMedia[];
     missing?: boolean;
+  };
+
+  export type UiV2FeedPostLastComment = {
+    author: string;
+    avatar?: string | null;
+    text: string;
+    timeStr?: string;
+    isSpoiler?: boolean;
+    voteCount?: number;
+  };
+
+  export type UiV2FeedPostSignedAuthor = {
+    id: number;
+    login: string;
+    avatar?: string | null;
   };
 
   export type UiV2FeedPostData = {
@@ -38,12 +98,30 @@
     timeStr?: string;
     headline?: string;
     preview?: string;
+    /** Текст после медиа (fallback без structured blocks). */
+    moreText?: string;
+    /** Структурированные блоки до медиа (цитаты, списки, абзацы). */
+    beforeBlocks?: UiV2FeedPostTextBlock[];
+    /** Структурированные блоки после медиа. */
+    afterBlocks?: UiV2FeedPostTextBlock[];
+    /** Текст и медиа поста в исходном порядке блоков. */
+    bodyBlocks?: UiV2FeedPostBodyBlock[];
+    /** Есть скрытый хвост (в т.ч. когда API не прислал остальные блоки). */
+    canExpand?: boolean;
     media?: UiV2FeedPostMedia[];
+    tags?: string[];
     voteCount?: number;
     commentCount?: number;
+    repostCount?: number;
+    vote?: ArticleVoteValue;
     voted?: boolean;
+    lastComment?: UiV2FeedPostLastComment | null;
     repost?: UiV2FeedPostRepost | null;
     containsRepost?: boolean;
+    /** Подпись автора при is_signed. */
+    signedAuthor?: UiV2FeedPostSignedAuthor | null;
+    /** Закреплённый пост канала/блога. */
+    isPinned?: boolean;
   };
 
   type Props = {
@@ -54,12 +132,24 @@
     onclick?: (data: UiV2FeedPostData) => void;
     onAuthor?: (data: UiV2FeedPostData, e: MouseEvent) => void;
     onChannel?: (channelId: number) => void;
-    onVote?: (data: UiV2FeedPostData, nextVote: 0 | 1) => void | Promise<void>;
+    onVote?: (data: UiV2FeedPostData, nextVote: ArticleVoteValue) => void | Promise<void>;
     onSubscribe?: (channelId: number, nextSubscribed: boolean) => void | Promise<void>;
+    onShare?: (data: UiV2FeedPostData) => void | Promise<void>;
     onRepostClick?: (data: UiV2FeedPostData) => void;
     onRepostChannel?: (channelId: number) => void;
+    onSignedAuthor?: (authorId: number, e: MouseEvent) => void;
     menuItems?: UiV2PopupMenuItem[];
     onMenuSelect?: (id: string) => void | Promise<void>;
+    /** Подгрузить полный payload, если в ленте только превью. */
+    onNeedMore?: () => void | Promise<void>;
+    /** Раскрыты ли комментарии под постом. */
+    commentsExpanded?: boolean;
+    /** Аватар текущего пользователя для пустого превью. */
+    selfAvatar?: string | null;
+    /** Открыть комментарии под постом (`write` — сразу фокус в поле). */
+    onOpenComments?: (mode?: 'view' | 'write') => void;
+    /** Только просмотр: без голосов, репоста и комментариев. */
+    staticPreview?: boolean;
     class?: string;
   };
 
@@ -73,10 +163,17 @@
     onChannel,
     onVote,
     onSubscribe,
+    onShare,
     onRepostClick,
     onRepostChannel,
+    onSignedAuthor,
     menuItems = [],
     onMenuSelect,
+    onNeedMore,
+    commentsExpanded = false,
+    selfAvatar = null,
+    onOpenComments,
+    staticPreview = false,
     class: className = '',
   }: Props = $props();
 
@@ -85,19 +182,42 @@
   let menuY = $state(0);
   let menuPlacement = $state<'point' | 'anchor'>('anchor');
   let menuAnchorEl = $state<HTMLElement | null>(null);
+  let moreBusy = $state(false);
+  let fetchedMoreForId = $state<string | number | null>(null);
 
   const channel = $derived(data.channel);
   const displayName = $derived(channel.title?.trim() || 'Канал');
   const media = $derived(data.media ?? []);
-  const votes = $derived(Math.max(0, Number(data.voteCount ?? 0)));
+  const votes = $derived(Number(data.voteCount ?? 0));
   const comments = $derived(Math.max(0, Number(data.commentCount ?? 0)));
-  const voted = $derived(!!data.voted);
+  const shares = $derived(Math.max(0, Number(data.repostCount ?? 0)));
+  const myVote = $derived(
+    data.vote === ARTICLE_VOTE_PLUS || data.vote === ARTICLE_VOTE_MINUS
+      ? data.vote
+      : normalizeArticleVote(data.voted ? ARTICLE_VOTE_PLUS : 0),
+  );
   const subscribed = $derived(!!channel.isSubscribed);
-  const showSubscribeBtn = $derived(
-    showSubscribe && !!channel.id && onSubscribe != null,
+  const showFollowBadge = $derived(
+    showSubscribe && !subscribed && !!channel.id && onSubscribe != null,
   );
   const hasMenu = $derived(menuItems.length > 0 && onMenuSelect != null);
-  const headHasActions = $derived(showSubscribeBtn || hasMenu);
+  const headHasActions = $derived(hasMenu);
+  const preview = $derived((data.preview ?? '').trim());
+  const moreText = $derived((data.moreText ?? '').trim());
+  const beforeBlocks = $derived(data.beforeBlocks ?? []);
+  const afterBlocks = $derived(data.afterBlocks ?? []);
+  const bodyBlocks = $derived(data.bodyBlocks ?? []);
+  const hasBodyBlocks = $derived(bodyBlocks.length > 0);
+  const hasStructuredBefore = $derived(beforeBlocks.length > 0);
+  const hasStructuredAfter = $derived(afterBlocks.length > 0);
+  const signedAuthor = $derived(data.signedAuthor ?? null);
+  const showExpandControl = $derived(!!data.canExpand || moreBusy);
+  const shownPreview = $derived(hasBodyBlocks || hasStructuredBefore ? '' : preview);
+  const shownMoreText = $derived(hasBodyBlocks || hasStructuredAfter ? '' : moreText);
+  const lastComment = $derived(data.lastComment ?? null);
+  const scoreClass = $derived(
+    votes > 0 ? 'is-plus' : votes < 0 ? 'is-minus' : '',
+  );
 
   const repost = $derived(data.repost ?? null);
   const hasRepost = $derived(!!repost || !!data.containsRepost);
@@ -105,6 +225,13 @@
   const repostChannelTitle = $derived(repostChannel?.title?.trim() || 'Канал');
   const repostAvatar = $derived(repostChannel?.avatar?.trim() || '');
   const repostMedia = $derived(repost?.media ?? []);
+  const repostBefore = $derived(repost?.beforeBlocks ?? []);
+  const repostAfter = $derived(repost?.afterBlocks ?? []);
+  const repostBodyBlocks = $derived(repost?.bodyBlocks ?? []);
+  const hasRepostBodyBlocks = $derived(repostBodyBlocks.length > 0);
+  const hasRepostBlocks = $derived(
+    hasRepostBodyBlocks || repostBefore.length > 0 || repostAfter.length > 0,
+  );
 
   function openPost() {
     onclick?.(data);
@@ -130,19 +257,66 @@
     if (repostChannel?.id) onRepostChannel?.(repostChannel.id);
   }
 
-  async function toggleVote(e: MouseEvent) {
+  async function setVote(e: MouseEvent, next: ArticleVoteValue) {
     e.stopPropagation();
     if (voteBusy || !onVote) {
       openPost();
       return;
     }
-    await onVote(data, voted ? 0 : 1);
+    const resolved = myVote === next ? 0 : next;
+    await onVote(data, resolved);
   }
 
   async function toggleSubscribe(e: MouseEvent) {
     e.stopPropagation();
     if (!channel.id || subscribeBusy || !onSubscribe) return;
     await onSubscribe(channel.id, !subscribed);
+  }
+
+  async function sharePost(e: MouseEvent) {
+    e.stopPropagation();
+    if (onShare) {
+      await onShare(data);
+      return;
+    }
+    // Заглушка: создание репоста ещё не подключено.
+  }
+
+  async function togglePreview(e: MouseEvent) {
+    e.stopPropagation();
+    if (!onNeedMore || moreBusy) return;
+    moreBusy = true;
+    fetchedMoreForId = data.id;
+    try {
+      await onNeedMore();
+    } finally {
+      moreBusy = false;
+    }
+  }
+
+  $effect(() => {
+    const id = data.id;
+    if (!data.canExpand || !onNeedMore) return;
+    if (fetchedMoreForId === id) return;
+    fetchedMoreForId = id;
+    moreBusy = true;
+    void Promise.resolve(onNeedMore()).finally(() => {
+      moreBusy = false;
+    });
+  });
+
+  function openComments(e: MouseEvent, mode: 'view' | 'write' = 'view') {
+    e.stopPropagation();
+    if (onOpenComments) {
+      onOpenComments(mode);
+      return;
+    }
+    openPost();
+  }
+
+  function openSignedAuthor(e: MouseEvent) {
+    e.stopPropagation();
+    if (signedAuthor?.id) onSignedAuthor?.(signedAuthor.id, e);
   }
 
   function openMenu(e: MouseEvent) {
@@ -189,147 +363,340 @@
   }
 </script>
 
+<!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions -->
 <article
   class="uiv2-feed-post {className}"
-  class:uiv2-feed-post--openable={!!onclick}
+  class:uiv2-feed-post--openable={!!onclick && !staticPreview}
+  class:uiv2-feed-post--static={staticPreview}
   oncontextmenu={onContextMenu}
   onclick={onCardClick}
   onkeydown={onOpenKeydown}
   tabindex={onclick ? 0 : undefined}
   role={onclick ? 'link' : undefined}
 >
-  <div class="uiv2-feed-post__layout">
-    <button
-      type="button"
-      class="uiv2-feed-post__avatar"
-      aria-label={displayName}
-      onclick={openAuthor}
-    >
-      <UserAvatar src={channel.avatar} label={displayName} />
-    </button>
-
-    <div class="uiv2-feed-post__column">
-      <header
-        class="uiv2-feed-post__head"
-        class:uiv2-feed-post__head--with-sub={showSubscribeBtn}
-        class:uiv2-feed-post__head--with-menu={hasMenu}
+  <header
+    class="uiv2-feed-post__head"
+    class:uiv2-feed-post__head--with-menu={hasMenu}
+  >
+    <div class="uiv2-feed-post__avatar-wrap">
+      <button
+        type="button"
+        class="uiv2-feed-post__avatar"
+        class:uiv2-feed-post__avatar--channel={!channel.isBlog}
+        aria-label={displayName}
+        onclick={openAuthor}
       >
-        <div class="uiv2-feed-post__head-start">
-          <div class="uiv2-feed-post__head-line">
-            <button type="button" class="uiv2-feed-post__author" onclick={openAuthor}>
-              {displayName}
-              <UserBadge
-                url={channel.badgeUrl}
-                name={channel.badgeName}
-                size="sm"
-                class="uiv2-feed-post__badge"
-              />
-              {#if channel.isVerified}
-                <span class="uiv2-feed-post__verified" title="Подтверждённый канал" aria-hidden="true">✓</span>
-              {/if}
-            </button>
-          </div>
+        <UserAvatar
+          src={channel.avatar}
+          label={displayName}
+          shape={channel.isBlog ? 'circle' : 'channel'}
+        />
+      </button>
+      {#if showFollowBadge}
+        <UiV2Tooltip
+          text="подписаться"
+          tone="danger"
+          placement="bottom"
+          showDelay={80}
+          class="uiv2-feed-post__follow-tip"
+        >
+          <button
+            type="button"
+            class="uiv2-feed-post__follow"
+            aria-label="Подписаться"
+            disabled={subscribeBusy}
+            onclick={toggleSubscribe}
+          >
+            {@html iconPlus(12)}
+          </button>
+        </UiV2Tooltip>
+      {/if}
+    </div>
+
+    <div class="uiv2-feed-post__head-start">
+      <button type="button" class="uiv2-feed-post__author" onclick={openAuthor}>
+        {displayName}
+        <UserBadge
+          url={channel.badgeUrl}
+          name={channel.badgeName}
+          size="sm"
+          class="uiv2-feed-post__badge"
+        />
+        {#if channel.isVerified}
+          <span class="uiv2-feed-post__verified" title="Подтверждённый канал" aria-hidden="true">✓</span>
+        {/if}
+      </button>
+      {#if data.isPinned || data.timeStr}
+        <div class="uiv2-feed-post__meta">
+          {#if data.isPinned}
+            <span class="uiv2-feed-post__pinned" title="Закреплено">
+              <span class="uiv2-feed-post__pinned-icon" aria-hidden="true">{@html iconPin(12)}</span>
+              <span>Закреплено</span>
+            </span>
+          {/if}
+          {#if data.isPinned && data.timeStr}
+            <span class="uiv2-feed-post__meta-sep" aria-hidden="true">·</span>
+          {/if}
           {#if data.timeStr}
             <time class="uiv2-feed-post__time">{data.timeStr}</time>
           {/if}
         </div>
+      {/if}
+    </div>
 
-        {#if headHasActions}
-          <div class="uiv2-feed-post__head-actions" data-post-action>
-            {#if showSubscribeBtn}
-              <UiV2Button
-                size="sm"
-                variant={subscribed ? 'chrome' : 'primary'}
-                label={subscribed ? 'Вы подписаны' : 'Подписаться'}
-                disabled={subscribeBusy}
-                onclick={toggleSubscribe}
-              />
-            {/if}
-            {#if hasMenu}
-              <UiV2RoundButton
-                size="sm"
-                label="Ещё"
-                class="uiv2-feed-post__more"
-                ariaHaspopup="menu"
-                ariaExpanded={menuOpen}
-                onclick={openMenu}
-              >
-                {@html iconMoreHorizontal(16)}
-              </UiV2RoundButton>
-            {/if}
-          </div>
-        {/if}
-      </header>
-
-      <div class="uiv2-feed-post__body">
-        {#if data.headline || data.preview}
-          <div class="uiv2-feed-post__text-copy">
-            {#if data.headline}
-              <p class="uiv2-feed-post__headline">{data.headline}</p>
-            {/if}
-            {#if data.preview}
-              <p class="uiv2-feed-post__text">{data.preview}</p>
-            {/if}
-          </div>
-        {/if}
-
-        {#if !hasRepost && media.length > 0}
-          <UiV2FeedPostMedia items={media} />
-        {/if}
-
-        {#if hasRepost}
-          <div class="uiv2-feed-post__repost">
-            {#if repost && !repost.missing}
-              <button type="button" class="uiv2-feed-post__repost-meta" onclick={openRepostChannel}>
-                <span class="uiv2-feed-post__repost-icon" aria-hidden="true">{@html iconShare(14)}</span>
-                <span
-                  class="uiv2-feed-post__repost-avatar"
-                  class:uiv2-feed-post__repost-avatar--empty={!repostAvatar}
-                  style={repostAvatar ? `background-image:url('${repostAvatar}')` : undefined}
-                  aria-hidden="true"
-                ></span>
-                <span class="uiv2-feed-post__repost-title">{repostChannelTitle}</span>
-                {#if repost.timeStr}
-                  <span class="uiv2-feed-post__repost-time">{repost.timeStr}</span>
-                {/if}
-              </button>
-              <button type="button" class="uiv2-feed-post__repost-body" onclick={openRepost}>
-                {#if repost.headline}
-                  <p class="uiv2-feed-post__headline uiv2-feed-post__headline--sm">{repost.headline}</p>
-                {/if}
-                {#if repost.preview}
-                  <p class="uiv2-feed-post__text">{repost.preview}</p>
-                {/if}
-                {#if repostMedia.length > 0}
-                  <UiV2FeedPostMedia items={repostMedia} />
-                {/if}
-              </button>
-            {:else}
-              <p class="uiv2-feed-post__repost-missing">Репост недоступен</p>
-            {/if}
-          </div>
+    {#if headHasActions}
+      <div class="uiv2-feed-post__head-actions" data-post-action>
+        {#if hasMenu}
+          <UiV2RoundButton
+            size="sm"
+            label="Ещё"
+            class="uiv2-feed-post__more"
+            ariaHaspopup="menu"
+            ariaExpanded={menuOpen}
+            onclick={openMenu}
+          >
+            {@html iconMoreHorizontal(16)}
+          </UiV2RoundButton>
         {/if}
       </div>
+    {/if}
+  </header>
 
-      <footer class="uiv2-feed-post__foot" data-post-action>
+  <div class="uiv2-feed-post__body">
+    {#if hasBodyBlocks}
+      {#if data.headline}
+        <div class="uiv2-feed-post__text-copy">
+          <p class="uiv2-feed-post__headline">{data.headline}</p>
+        </div>
+      {/if}
+      {#each bodyBlocks as block, i (i)}
+        {#if block.kind === 'media'}
+          <UiV2FeedPostMediaView items={block.items} />
+        {:else if block.kind === 'embed'}
+          <div class="uiv2-feed-post__embed-wrap">
+            <UiV2FeedPostEmbed
+              title={block.title}
+              description={block.description}
+              image={block.image}
+              url={block.url}
+              siteName={block.siteName}
+            />
+          </div>
+        {:else}
+          <div class="uiv2-feed-post__text-copy">
+            <UiV2ArticleBlocks blocks={[block]} />
+          </div>
+        {/if}
+      {/each}
+      {#if showExpandControl}
+        <div class="uiv2-feed-post__text-copy">
+          <button
+            type="button"
+            class="uiv2-feed-post__more-link"
+            disabled={moreBusy}
+            onclick={togglePreview}
+          >
+            {moreBusy ? 'Загрузка…' : 'Показать ещё'}
+          </button>
+        </div>
+      {/if}
+    {:else}
+      {#if data.headline || hasStructuredBefore || shownPreview || showExpandControl}
+        <div class="uiv2-feed-post__text-copy">
+          {#if data.headline}
+            <p class="uiv2-feed-post__headline">{data.headline}</p>
+          {/if}
+          {#if hasStructuredBefore}
+            <UiV2ArticleBlocks blocks={beforeBlocks} />
+          {:else if shownPreview}
+            <p class="uiv2-feed-post__text">{shownPreview}</p>
+          {/if}
+          {#if showExpandControl}
+            <button
+              type="button"
+              class="uiv2-feed-post__more-link"
+              disabled={moreBusy}
+              onclick={togglePreview}
+            >
+              {moreBusy ? 'Загрузка…' : 'Показать ещё'}
+            </button>
+          {/if}
+        </div>
+      {/if}
+
+      {#if media.length > 0}
+        <UiV2FeedPostMediaView items={media} />
+      {/if}
+
+      {#if hasStructuredAfter}
+        <div class="uiv2-feed-post__text-copy">
+          <UiV2ArticleBlocks blocks={afterBlocks} />
+        </div>
+      {:else if shownMoreText}
+        <div class="uiv2-feed-post__text-copy">
+          <p class="uiv2-feed-post__text">{shownMoreText}</p>
+        </div>
+      {/if}
+    {/if}
+
+    {#if signedAuthor?.login}
+      <div class="uiv2-feed-post__signed" data-post-action>
+        <span class="uiv2-feed-post__signed-label">Автор:</span>
         <button
           type="button"
-          class="uiv2-feed-post__stat"
-          class:uiv2-feed-post__stat--active={voted}
-          title={voted ? 'Убрать оценку' : 'Оценить'}
-          disabled={voteBusy}
-          onclick={toggleVote}
-        >
-          {@html iconHeart(15)}
-          <span>{votes}</span>
-        </button>
-        <button type="button" class="uiv2-feed-post__stat" title="Комментарии" onclick={openPost}>
-          {@html iconMessageCircle(15)}
-          <span>{comments}</span>
-        </button>
-      </footer>
-    </div>
+          class="uiv2-feed-post__signed-name"
+          onclick={openSignedAuthor}
+        >{signedAuthor.login}</button>
+      </div>
+    {/if}
+
+    {#if hasRepost}
+      <div class="uiv2-feed-post__repost">
+        {#if repost && !repost.missing}
+          <button type="button" class="uiv2-feed-post__repost-meta" onclick={openRepostChannel}>
+            <span class="uiv2-feed-post__repost-icon" aria-hidden="true">{@html iconRepost(14)}</span>
+            <span
+              class="uiv2-feed-post__repost-avatar"
+              class:uiv2-feed-post__repost-avatar--channel={!repostChannel?.isBlog}
+              class:uiv2-feed-post__repost-avatar--empty={!repostAvatar}
+              style={repostAvatar ? `background-image:url('${repostAvatar}')` : undefined}
+              aria-hidden="true"
+            ></span>
+            <span class="uiv2-feed-post__repost-title">{repostChannelTitle}</span>
+            {#if repost.timeStr}
+              <span class="uiv2-feed-post__repost-time">{repost.timeStr}</span>
+            {/if}
+          </button>
+          <div class="uiv2-feed-post__repost-body">
+            {#if hasRepostBodyBlocks}
+              {#each repostBodyBlocks as block, i (i)}
+                {#if block.kind === 'media'}
+                  <UiV2FeedPostMediaView items={block.items} />
+                {:else if block.kind === 'embed'}
+                  <UiV2FeedPostEmbed
+                    title={block.title}
+                    description={block.description}
+                    image={block.image}
+                    url={block.url}
+                    siteName={block.siteName}
+                  />
+                {:else}
+                  <button type="button" class="uiv2-feed-post__repost-copy" onclick={openRepost}>
+                    <UiV2ArticleBlocks blocks={[block]} />
+                  </button>
+                {/if}
+              {/each}
+            {:else if hasRepostBlocks}
+              {#if repostBefore.length > 0}
+                <button type="button" class="uiv2-feed-post__repost-copy" onclick={openRepost}>
+                  <UiV2ArticleBlocks blocks={repostBefore} />
+                </button>
+              {/if}
+              {#if repostMedia.length > 0}
+                <UiV2FeedPostMediaView items={repostMedia} />
+              {/if}
+              {#if repostAfter.length > 0}
+                <button type="button" class="uiv2-feed-post__repost-copy" onclick={openRepost}>
+                  <UiV2ArticleBlocks blocks={repostAfter} />
+                </button>
+              {/if}
+            {:else if repost?.preview}
+              <button type="button" class="uiv2-feed-post__repost-copy" onclick={openRepost}>
+                <p class="uiv2-feed-post__text">{repost.preview}</p>
+              </button>
+              {#if repostMedia.length > 0}
+                <UiV2FeedPostMediaView items={repostMedia} />
+              {/if}
+            {:else if repostMedia.length > 0}
+              <UiV2FeedPostMediaView items={repostMedia} />
+            {/if}
+          </div>
+        {:else}
+          <p class="uiv2-feed-post__repost-missing">Репост недоступен</p>
+        {/if}
+      </div>
+    {/if}
   </div>
+
+  {#if !staticPreview}
+  <footer class="uiv2-feed-post__foot" data-post-action>
+    <button
+      type="button"
+      class="uiv2-feed-post__repost-count"
+      onclick={sharePost}
+    >
+      {@html iconRepost(16)}
+      <span>{ruRepostLabel(shares)}</span>
+    </button>
+    <div
+      class="uiv2-feed-post__votes"
+      class:uiv2-feed-post__votes--plus={votes > 0}
+      class:uiv2-feed-post__votes--minus={votes < 0}
+    >
+      <button
+        type="button"
+        class="uiv2-feed-post__vote"
+        class:uiv2-feed-post__vote--down={myVote === ARTICLE_VOTE_MINUS}
+        aria-pressed={myVote === ARTICLE_VOTE_MINUS}
+        aria-label="Минус"
+        disabled={voteBusy}
+        onclick={(e) => setVote(e, ARTICLE_VOTE_MINUS)}
+      >
+        {@html iconThumbsDown(16)}
+      </button>
+      <span class="uiv2-feed-post__score {scoreClass}">{votes}</span>
+      <button
+        type="button"
+        class="uiv2-feed-post__vote"
+        class:uiv2-feed-post__vote--up={myVote === ARTICLE_VOTE_PLUS}
+        aria-pressed={myVote === ARTICLE_VOTE_PLUS}
+        aria-label="Плюс"
+        disabled={voteBusy}
+        onclick={(e) => setVote(e, ARTICLE_VOTE_PLUS)}
+      >
+        {@html iconThumbsUp(16)}
+      </button>
+    </div>
+  </footer>
+
+  {#if !commentsExpanded}
+    <button
+      type="button"
+      class="uiv2-feed-post__comments-teaser"
+      data-post-action
+      aria-expanded="false"
+      onclick={(e) => openComments(e, lastComment && comments > 0 ? 'view' : 'write')}
+    >
+      <span class="uiv2-feed-post__comments-teaser-head">
+        <span class="uiv2-feed-post__comments-teaser-title">Комментарии</span>
+        {#if comments > 0}
+          <span class="uiv2-feed-post__comments-teaser-count">{formatCommentsCountShort(comments)}</span>
+        {/if}
+      </span>
+      {#if lastComment && comments > 0}
+        <span class="uiv2-feed-post__comments-teaser-preview">
+          <span class="uiv2-feed-post__comments-teaser-avatar" aria-hidden="true">
+            <UserAvatar src={lastComment.avatar} label={lastComment.author} />
+          </span>
+          <span class="uiv2-feed-post__comments-teaser-text" class:is-spoiler={lastComment.isSpoiler}>
+            {lastComment.text}
+          </span>
+        </span>
+      {:else if comments > 0}
+        <span class="uiv2-feed-post__comments-teaser-preview uiv2-feed-post__comments-teaser-preview--write">
+          <span class="uiv2-feed-post__comments-teaser-placeholder">Открыть комментарии</span>
+        </span>
+      {:else}
+        <span class="uiv2-feed-post__comments-teaser-preview uiv2-feed-post__comments-teaser-preview--write">
+          <span class="uiv2-feed-post__comments-teaser-avatar" aria-hidden="true">
+            <UserAvatar src={selfAvatar} label="Вы" />
+          </span>
+          <span class="uiv2-feed-post__comments-teaser-placeholder">Написать комментарий</span>
+        </span>
+      {/if}
+    </button>
+  {/if}
+  {/if}
 </article>
 
 <UiV2PopupMenu

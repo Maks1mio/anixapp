@@ -29,6 +29,8 @@ export class PlayerState {
   overlayVisible = $state(true);
   /** Смена серии/тайтла: поверх видео постер и «Загрузка…». */
   switching      = $state(false);
+  /** Mid-watch soft reconnect (сеть/stall) — не error UI. */
+  reconnecting   = $state(false);
 
   // ── Playback settings ───────────────────────────────────────────────────
   playbackRate       = $state(1);

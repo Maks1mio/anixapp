@@ -1,0 +1,139 @@
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Мобильные токены дизайна. Активны только под `html.mobile-mode` — desktop и TV не затрагиваются.
+//
+// Основа — стоковая палитра Material 3 dark (роли neutral/secondary/primary) на чисто чёрном фоне.
+// Нейтральный каркас M3 общий для многих приложений; узнаваемость конкретного бренда (акцент, маскот)
+// здесь НЕ воспроизводится: акцент — временный из набора M3 (primary #D0BCFF), потом заменяется одной строкой.
+//
+// Значения сняты по референс-скринам (1272×2772 px ≈ 433×943 dp, 1 dp ≈ 2.94 px); строки с «≈» уточняются
+// наложением на странице-эталоне (mobile-reference.html).
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+@font-face {
+  font-family: 'Onest';
+  src: url('../assets/fonts/onest/Onest-Variable.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+html.mobile-mode {
+  // ── Палитра (M3 dark baseline на чёрном) ─────────────────────────────────────────────────
+  --m-bg: #000000;
+  --m-surface-block: #0d0d0d;      // белый 5% поверх чёрного — разделители блоков, карточки
+  --m-surface-chip: #1a1a1a;       // чипы/теги («скоро», «зима 2027 г.»)
+  --m-surface-sheet: #161616;      // шторки, диалоги
+  --m-surface-raised: #1f1f1f;
+
+  --m-text: #e6e1e5;               // M3 onSurface
+  --m-text-2: #9f9f9f;             // вторичный: метаданные, подписи секций
+  --m-text-3: #767676;             // третичный: описания, подсказки, неактивные иконки
+  --m-text-tab: #8a888b;           // неактивный таб
+  --m-nav-idle: #626262;           // неактивный пункт навбара
+
+  --m-outline: #565656;            // обводка полей (1dp)
+  --m-outline-variant: #424242;    // обводка плиток/выбора (md grey 800)
+  --m-divider: #1c1c1c;
+
+  --m-secondary-container: #494458; // M3 secondaryContainer — активная пилюля навбара
+  --m-on-secondary-container: #e8def8;
+  --m-primary: #d0bcff;             // M3 primary — временный акцент
+  --m-on-primary: #381e72;
+  --m-fill-button: #e0e0e0;         // залитая кнопка «Применить»
+  --m-on-fill-button: #111111;
+  --m-danger: #f2b8b5;              // M3 error (80)
+  --m-badge-dot: var(--m-primary);
+
+  // Статусы списков (легенда профиля, бейджи на постерах)
+  --m-st-watching: #6fa873;
+  --m-st-planned: #a76fac;
+  --m-st-completed: #6974ac;
+  --m-st-hold: #db9d3a;
+  --m-st-dropped: #c24e4e;
+  --m-online: #6fa873;
+
+  // Скелетоны: вертикальный градиент, без мерцания (режим экономии ресурсов отключает анимацию)
+  --m-skeleton-top: #606060;
+  --m-skeleton-bottom: #424242;
+
+  // ── Радиусы ─────────────────────────────────────────────────────────────────────────────
+  --m-radius-xs: 4px;              // ≈ поля ввода (дропдауны)
+  --m-radius-sm: 8px;              // чипы, теги
+  --m-radius-md: 12px;             // постеры
+  --m-radius-lg: 16px;             // баннеры (≈)
+  --m-radius-xl: 28px;             // шторки сверху (≈)
+  --m-radius-pill: 999px;          // кнопки, навбар-индикатор, табы-чипы
+
+  // ── Отступы (шкала, dp = css px) ────────────────────────────────────────────────────────
+  --m-space-1: 4px;
+  --m-space-2: 8px;
+  --m-space-3: 12px;
+  --m-space-4: 16px;               // край экрана
+  --m-space-5: 24px;               // постер ↔ текст
+  --m-space-6: 34px;               // вертикальный шаг между релизами в списке (замер по скрину: 34dp)
+  --m-gutter: var(--m-space-4);
+
+  // ── Размеры ─────────────────────────────────────────────────────────────────────────────
+  --m-touch: 44px;                 // минимальная тач-цель
+  --m-poster-w: 100px;             // постер списка ≈106×156 (≈2:3)
+  --m-poster-h: 150px;
+  --m-nav-h: 80px;
+  --m-nav-pill-w: 64px;
+  --m-nav-pill-h: 32px;
+  --m-field-h: 50px;
+  --m-status-bar: 25px;            // высота системной строки состояния (для эталона; на устройстве — safe-area)
+  --m-topbar-offset: 28px;         // отступ верхней панели от строки состояния (замер)
+  --m-safe-bottom: 15px;           // нижний inset жестовой навигации (для эталона; на устройстве — env())
+
+  // ── Типографика ─────────────────────────────────────────────────────────────────────────
+  --m-font: 'Onest', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --m-fs-screen-title: 18px;       // «Настройки вкладки», «Внешний вид»
+  --m-fs-title: 17px;              // заголовок релиза (жирный)
+  --m-fs-meta: 14px;               // «19 эп • 4.9★»
+  --m-fs-body: 13px;               // описание
+  --m-lh-body: 18px;
+  --m-fs-label: 13px;              // подписи секций в формах
+  --m-fs-nav: 12px;
+  --m-fs-tab: 14px;
+
+  // ── Переопределение глобальных токенов проекта (они питают весь uikit-v2) ────────────────
+  --color-bg: var(--m-bg);
+  --color-surface: var(--m-surface-block);
+  --color-surface-hover: var(--m-surface-raised);
+  --color-border: var(--m-divider);
+  --color-text: var(--m-text);
+  --color-text-muted: var(--m-text-2);
+  --color-accent: var(--m-primary);
+  --color-accent-hover: var(--m-on-secondary-container);
+  --color-success: var(--m-st-watching);
+  --color-error: var(--m-st-dropped);
+  --font-sans: var(--m-font);
+
+  // ── Точечные переопределения производных токенов uikit-v2 ───────────────────────────────
+  // (в desktop они выводятся через color-mix от цвета текста; на мобильном берём измеренные значения)
+  --uikit-v2-font: var(--m-font);
+  --uikit-v2-radius: var(--m-radius-md);
+  --uiv2-fg-strong: var(--m-text);
+  --uiv2-fg-soft: var(--m-text-2);
+  --uiv2-fg-muted: var(--m-text-3);
+  --uiv2-border-strong: var(--m-outline);
+  --uiv2-border-subtle: var(--m-divider);
+  --uiv2-surface-subtle: var(--m-surface-block);
+  --uiv2-surface-raised: var(--m-surface-chip);
+  --uiv2-hover-bg: transparent;     // hover-эффектов на мобильном нет; состояние нажатия — :active
+  --uiv2-hover-subtle: transparent;
+  --uiv2-skeleton-base: var(--m-skeleton-bottom);
+  --uiv2-skeleton-highlight: var(--m-skeleton-top);
+  --uiv2-chrome-active-bg: var(--m-secondary-container);
+  --uiv2-chrome-active-fg: var(--m-on-secondary-container);
+  --uiv2-panel-bg: var(--m-surface-sheet);
+  --uiv2-panel-border: transparent;
+  --uiv2-overlay: rgba(0, 0, 0, 0.6);
+
+  color-scheme: dark;
+  background: var(--m-bg);
+  color: var(--m-text);
+  font-family: var(--m-font);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}

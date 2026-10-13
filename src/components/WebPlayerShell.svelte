@@ -1,19 +1,45 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import Watch from '../views/Watch.svelte';
   import { navigate } from '../stores/navigation';
 
+  /** Телефон (Capacitor): страница просмотра — всегда альбомная и без системных панелей. */
+  function setOrientation(mode: 'landscape' | 'portrait') {
+    const plugin = (window as unknown as { Capacitor?: { Plugins?: { AnixPlayer?: { setOrientation?: (o: { mode: string }) => Promise<unknown> } } } })
+      .Capacitor?.Plugins?.AnixPlayer;
+    void plugin?.setOrientation?.({ mode })?.catch?.(() => {});
+  }
+
+  onMount(() => {
+    if (!document.documentElement.classList.contains('mobile-native')) return;
+    setOrientation('landscape');
+    return () => setOrientation('portrait');
+  });
+
+  /**
+   * Назад из плеера — шаг по истории (а не navigate на релиз): иначе в истории остаётся цепочка
+   * «релиз → плеер → релиз», и жест «назад» со страницы релиза снова открывал плеер.
+   * Если подряд лежат несколько записей /watch (смена серии), проматываем их все.
+   */
   function goBack() {
-    const params = new URLSearchParams(window.location.hash.split('?')[1] || window.location.search.slice(1));
+    const params = new URLSearchParams(window.location.search.slice(1));
     const releaseId = params.get('releaseId');
-    if (releaseId) {
-      navigate(`/release/${releaseId}`);
+    if (window.history.length <= 1) {
+      navigate(releaseId ? `/release/${releaseId}` : '/');
       return;
     }
-    if (window.history.length > 1) {
-      window.history.back();
-      return;
-    }
-    navigate('/');
+    let hops = 0;
+    const onPop = () => {
+      if (window.location.pathname === '/watch' && hops < 6) {
+        hops += 1;
+        window.history.back();
+      } else {
+        window.removeEventListener('popstate', onPop);
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    window.setTimeout(() => window.removeEventListener('popstate', onPop), 2500);
+    window.history.back();
   }
 </script>
 

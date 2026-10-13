@@ -3,6 +3,7 @@
   import type { OverviewBanner } from '../../utils/overview';
   import PosterImage from '../PosterImage.svelte';
   import ReleaseCarouselNav from '../../views/Release/components/ReleaseCarouselNav.svelte';
+  import { requestOpenExternal } from '../../utils/external-link';
 
   interface Props {
     items: OverviewBanner[];
@@ -20,7 +21,7 @@
       return;
     }
     if (banner.type === 2) {
-      window.electron?.openExternal?.(action);
+      requestOpenExternal(action);
       return;
     }
     if (banner.type === 3) {

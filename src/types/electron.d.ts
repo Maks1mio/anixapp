@@ -33,6 +33,30 @@ export interface AppUpdateProgress {
   errorMessage?: string;
   /** Тип установки на Linux: 'appimage' | 'pacman' | 'deb' | 'flatpak' | null */
   installType?: string | null;
+  /** Версия, которую качаем (если выбрана вручную). */
+  targetVersion?: string | null;
+}
+
+export interface AppReleaseInfo {
+  version: string;
+  tag: string;
+  name: string;
+  publishedAt: string | null;
+  prerelease: boolean;
+  draft: boolean;
+  url: string;
+  hasAsset: boolean;
+  isCurrent: boolean;
+  isNewer: boolean;
+  isOlder: boolean;
+  channel?: 'stable' | 'beta';
+  source?: 'github' | 'anixback';
+  downloadUrl?: string | null;
+  id?: string;
+  /** Платформа, для которой искали ассет (Linux / Windows / macOS) */
+  platformLabel?: string;
+  /** Ожидаемые расширения ассета */
+  assetLabel?: string;
 }
 
 export interface DevBridgeStatus {
@@ -49,7 +73,10 @@ export interface DevBridgeStatus {
 declare global {
   interface Window {
     electron?: {
+      platform?: string;
       consumePendingDeepLink?: () => { type?: string; id?: number; url?: string; title?: string; referer?: string; pageUrl?: string; cookies?: string } | null;
+      /** macOS: разделы для меню «Переход» в строке меню. */
+      setAppMenuNav?: (items: { id: string; label: string }[]) => void;
       getAppVersion: () => Promise<string>;
       getVersions: () => Promise<{
         app: string;
@@ -61,12 +88,60 @@ declare global {
         anixartjs: string;
       }>;
       window: ElectronWindowAPI;
-      openPlayerWindow: (params: { releaseId: string; sourceId: string; ep: string; title: string; sourceName: string; dubberId?: string; localFile?: string; externalUrl?: string; referer?: string; pageUrl?: string; cookies?: string; lobbyIdle?: boolean; currentTime?: number; paused?: boolean; applyRoomPlayback?: boolean }) => Promise<void>;
+      openPlayerWindow: (params: {
+        releaseId: string;
+        sourceId: string;
+        ep: string;
+        title: string;
+        sourceName: string;
+        dubberId?: string;
+        dubberName?: string;
+        localFile?: string;
+        externalUrl?: string;
+        referer?: string;
+        pageUrl?: string;
+        cookies?: string;
+        lobbyIdle?: boolean;
+        currentTime?: number;
+        paused?: boolean;
+        applyRoomPlayback?: boolean;
+        /** Веб-плеер: открыть HTML-плеер источника (Kodik) в отдельном окне. */
+        sourceWeb?: boolean;
+        /** Опциональный hint URL; свежая ссылка всё равно берётся в main. */
+        sourceEmbedUrl?: string;
+      }) => Promise<void>;
       closePlayerWindow: () => void;
       togglePlayerFullScreen: () => Promise<boolean>;
       togglePlayerAlwaysOnTop: () => Promise<boolean>;
+      setPlayerWindowTitle?: (payload: { title?: string; episode?: string }) => void;
       isPlayerOpen: () => Promise<boolean>;
       openExternal: (url: string) => void;
+      /** Установленные/известные сторонние плееры (player-integration). */
+      listExternalPlayers?: (opts?: { fresh?: boolean }) => Promise<{
+        players: Array<{
+          id: string;
+          label: string;
+          description: string;
+          installed: boolean;
+          path?: string | null;
+        }>;
+        installedCount: number;
+      }>;
+      openExternalPlayer?: (
+        urlOrOpts: string | {
+          url: string;
+          headers?: Record<string, string>;
+          title?: string;
+          /** Плейлист серий для VLC/mpv (.m3u с #EXTINF). */
+          playlist?: Array<{ url: string; title: string }>;
+          startIndex?: number;
+          /** Предпочтительный плеер из player-integration (`vlc` | `mpv` | …). */
+          playerId?: string;
+        },
+        headers?: Record<string, string>,
+      ) => Promise<{ ok: boolean; reason?: string; player?: string; playlist?: number }>;
+      /** Warp OS mouse cursor (Windows). Screen coordinates. */
+      setCursorScreenPos?: (x: number, y: number) => Promise<boolean>;
       startTvLanLogin?: () => Promise<{ url: string | null; error?: string }>;
       stopTvLanLogin?: () => Promise<boolean>;
       onTvLanCredentials?: (cb: (detail: { login: string; password: string }) => void) => () => void;
@@ -74,6 +149,7 @@ declare global {
       addExtraVideoHosts?: (hosts: string[]) => Promise<string[]>;
       /** JSON с Anixart CDN (Lottie-бейджи) через main — без fetch(anix-cdn://) */
       fetchCdnJson?: (url: string) => Promise<unknown | null>;
+      fetchRemoteImage?: (url: string) => Promise<{ mimeType: string; data: Uint8Array } | null>;
       downloadEpisodes?: (payload: {
         title?: string;
         items: Array<{
@@ -144,8 +220,14 @@ declare global {
         installDir?: string;
         downloadPage?: string;
       }>;
+      getFfmpegInstallState?: () => Promise<{
+        busy: boolean;
+        received: number;
+        total: number;
+      }>;
       installFfmpeg?: () => Promise<{
         ok: boolean;
+        busy?: boolean;
         path?: string;
         source?: string;
         openedPage?: boolean;
@@ -246,12 +328,23 @@ declare global {
       syncPlayerState: (playback: LobbyPlaybackPayload) => void;
       sendPlayerState: (playback: LobbyPlaybackPayload) => void;
       sendFluoPreview?: (payload: { dataUrl: string; duration?: number }) => void;
-      startUpdateDownload?: () => Promise<void>;
-      checkForUpdate?: (currentVersion: string) => Promise<{
+      startUpdateDownload?: (
+        versionOrOpts?: string | { version?: string; downloadUrl?: string },
+        downloadUrl?: string,
+      ) => Promise<void>;
+      checkForUpdate?: (
+        currentVersion: string,
+        force?: boolean,
+      ) => Promise<{
         version: string;
         url: string;
         body: string | null;
       } | null>;
+      listAppReleases?: (
+        currentVersion?: string,
+        channel?: 'stable' | 'beta',
+        force?: boolean,
+      ) => Promise<AppReleaseInfo[]>;
       installUpdate?: () => Promise<void>;
       getLinuxInstallType?: () => Promise<string | null>;
       getDeviceId: () => Promise<string>;
@@ -299,7 +392,10 @@ declare global {
       sendLobbyChatToPlayer?: (msg: Record<string, unknown>) => void;
       sendLobbyChatHistoryToPlayer?: (messages: unknown[]) => void;
       sendLobbyChooserErrorToPlayer?: (msg: string) => void;
-      lobbyCreateFromPlayer?: (playback?: Record<string, unknown> | null) => void;
+      lobbyCreateFromPlayer?: (payload?: {
+        playback?: Record<string, unknown> | null;
+        options?: Record<string, unknown>;
+      } | Record<string, unknown> | null) => void;
       lobbyJoinFromPlayer?: (code: string) => void;
       lobbyLeaveFromPlayer?: () => void;
       lobbyChatFromPlayer?: (text: string) => void;
@@ -334,18 +430,63 @@ declare global {
       overviewEditorDone?: () => void;
       openAdminPanelWindow?: () => Promise<void>;
       isAdminPanelWindow?: () => Promise<boolean>;
-      // Logging (diagnostics)
-      logRenderer?: (entry: { level?: string; ch?: string; msg?: string; data?: unknown }) => Promise<void>;
-      logGetSessions?: () => Promise<Array<{ id: string; ts: string }>>;
-      logGetSessionLog?: (sessionId: string, file: string, limit?: number) => Promise<Array<Record<string, unknown>>>;
-      logGetSystemInfo?: () => Promise<Record<string, unknown>>;
-      logCollectZip?: () => Promise<{ ok: boolean; path?: string; error?: string }>;
-      logOpenZip?: (path: string) => Promise<void>;
-      logOpenFolder?: () => Promise<void>;
-      logGetFolderPath?: () => Promise<string | null>;
-      logGetSessionDir?: () => Promise<string | null>;
-      logGetLobbyPath?: () => Promise<string | null>;
-      logLobbyLine?: (line: string) => Promise<void>;
+      openComposerWindow?: (payload: {
+        channelId?: number | null;
+        draftId?: string | null;
+        repostArticle?: unknown;
+        editArticle?: unknown;
+        isSuggestion?: boolean;
+        channels?: Array<{
+          id: number;
+          title: string;
+          avatar?: string | null;
+          is_blog?: boolean;
+        }>;
+      }) => Promise<void>;
+      getComposerPayload?: () => Promise<{
+        channelId?: number | null;
+        draftId?: string | null;
+        repostArticle?: unknown;
+        editArticle?: unknown;
+        isSuggestion?: boolean;
+        channels?: Array<{
+          id: number;
+          title: string;
+          avatar?: string | null;
+          is_blog?: boolean;
+        }>;
+      } | null>;
+      isComposerWindow?: () => Promise<boolean>;
+      composerReadyToClose?: () => void;
+      composerPublished?: (data: { articleId?: number; channelId?: number } | null) => void;
+      composerDraftsChanged?: () => void;
+      diagnosticsGet?: (opts?: {
+        channel?: string;
+        level?: string;
+        limit?: number;
+        sinceId?: string;
+      }) => Promise<Array<Record<string, unknown>>>;
+      diagnosticsStats?: () => Promise<{
+        total: number;
+        max: number;
+        subscribers: number;
+        byChannel: Record<string, number>;
+        byLevel: Record<string, number>;
+      }>;
+      diagnosticsClear?: () => Promise<{ ok: boolean; count: number }>;
+      diagnosticsSubscribe?: () => Promise<{ ok: boolean; count: number }>;
+      diagnosticsUnsubscribe?: () => Promise<{ ok: boolean }>;
+      diagnosticsExportZip?: () => Promise<{
+        ok: boolean;
+        canceled?: boolean;
+        path?: string;
+        count?: number;
+        deviceSummary?: { os?: string; cpu?: string; ramGb?: number };
+      }>;
+      diagnosticsPaths?: () => Promise<{ dir: string; file: string; zipDefaultDir: string }>;
+      diagnosticsOpenDir?: () => Promise<{ ok: boolean; path?: string }>;
+      diagnosticsReveal?: (filePath: string) => Promise<{ ok: boolean }>;
+      onDiagnosticsEntry?: (cb: (entry: Record<string, unknown>) => void) => () => void;
       sendLobbyActionLogToPlayer?: (entry: Record<string, unknown>) => void;
     };
   }

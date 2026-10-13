@@ -92,9 +92,30 @@ export function releaseCardTitle(data: ReleaseCardData): string {
   return data.titleRu || data.titleEn || data.titleAlt || 'Без названия';
 }
 
+function asEpisodeCount(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
+  return value;
+}
+
+/** Как в Anixart: «11 из 12 эп», «11 из ? эп», «? из 12 эп»; если вышло всё — «12 эп». */
+export function formatReleaseEpisodes(
+  released?: number | null,
+  total?: number | null,
+): string {
+  const r = asEpisodeCount(released);
+  const t = asEpisodeCount(total);
+  const totalKnown = t != null && t > 0 ? t : null;
+  if (r != null && totalKnown != null && r === totalKnown) return `${totalKnown} эп`;
+  if (r != null && totalKnown != null) return `${r} из ${totalKnown} эп`;
+  if (r != null) return `${r} из ? эп`;
+  if (totalKnown != null) return `? из ${totalKnown} эп`;
+  return '';
+}
+
 export function releaseCardMeta(data: ReleaseCardData): string {
   const parts: string[] = [];
-  if (data.episodesTotal) parts.push(`${data.episodesTotal} эп`);
+  const episodes = formatReleaseEpisodes(data.episodesReleased, data.episodesTotal);
+  if (episodes) parts.push(episodes);
   if (typeof data.rating === 'number') parts.push(`${data.rating.toFixed(1)} ★`);
   return parts.join(' • ');
 }

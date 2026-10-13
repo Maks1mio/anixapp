@@ -17,7 +17,7 @@ ipcMain.on('window:maximize', (event) => {
   else win.maximize();
 });
 ipcMain.on('window:close', (event) => {
-  const win = BrowserWindow.fromWebContents(event.sender) || state.mainWindow;
+    const win = BrowserWindow.fromWebContents(event.sender) || state.mainWindow;
   if (config.getMinimizeToTray() && win === state.mainWindow) {
     win?.hide();
   } else {

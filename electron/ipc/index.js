@@ -21,6 +21,7 @@ function registerAll(deps) {
   require('./extra-video-hosts').register();
   require('./shell-logs').register();
   require('./cdn').register();
+  require('./cursor').register();
   require('../services/updater').register();
   require('../windows/tools').register(deps);
 }

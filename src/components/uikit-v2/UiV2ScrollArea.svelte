@@ -12,6 +12,7 @@
     viewportClass?: string;
     /** Внутренний padding viewport (CSS value) */
     padding?: string;
+    onscroll?: (e: Event) => void;
     children?: Snippet;
   };
 
@@ -21,6 +22,7 @@
     class: className = '',
     viewportClass = '',
     padding,
+    onscroll,
     children,
   }: Props = $props();
 
@@ -49,6 +51,7 @@
     style={viewportStyle}
     data-uiv2-scroll
     data-page-scroll
+    {onscroll}
   >
     {@render children?.()}
   </div>

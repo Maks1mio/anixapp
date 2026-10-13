@@ -18,14 +18,14 @@
           <UiV2Skeleton tag="div" class="uiv2-feed-post-skeleton__line uiv2-feed-post-skeleton__line--title" rounded="sm" />
           <UiV2Skeleton tag="div" class="uiv2-feed-post-skeleton__line uiv2-feed-post-skeleton__line--time" rounded="sm" />
         </div>
-        <div class="uiv2-feed-post-skeleton__body">
-          <UiV2Skeleton tag="div" class="uiv2-feed-post-skeleton__line" rounded="sm" />
-          <UiV2Skeleton tag="div" class="uiv2-feed-post-skeleton__line uiv2-feed-post-skeleton__line--short" rounded="sm" />
-          <UiV2Skeleton tag="div" class="uiv2-feed-post-skeleton__media" rounded="lg" />
-        </div>
+      </div>
+      <div class="uiv2-feed-post-skeleton__body">
+        <UiV2Skeleton tag="div" class="uiv2-feed-post-skeleton__line" rounded="sm" />
+        <UiV2Skeleton tag="div" class="uiv2-feed-post-skeleton__line uiv2-feed-post-skeleton__line--short" rounded="sm" />
+        <UiV2Skeleton tag="div" class="uiv2-feed-post-skeleton__media" rounded="none" />
         <div class="uiv2-feed-post-skeleton__foot">
-          <UiV2Skeleton tag="div" class="uiv2-feed-post-skeleton__chip" rounded="sm" />
-          <UiV2Skeleton tag="div" class="uiv2-feed-post-skeleton__chip" rounded="sm" />
+          <UiV2Skeleton tag="div" class="uiv2-feed-post-skeleton__chip" rounded="full" />
+          <UiV2Skeleton tag="div" class="uiv2-feed-post-skeleton__chip" rounded="full" />
         </div>
       </div>
     </article>

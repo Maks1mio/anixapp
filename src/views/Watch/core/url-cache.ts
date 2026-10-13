@@ -7,9 +7,13 @@ const TTL_SIGNED_MS = 90 * 1000;
 const cache = new Map<string, { result: ResolvedEpisodeMedia; expires: number }>();
 const inflight = new Map<string, Promise<ResolvedEpisodeMedia>>();
 
-function cacheKey(embedUrl: string): string {
+function cacheKey(embedUrl: string, iframe: boolean, sourceWebPlayer: boolean): string {
   const raw = embedUrl.startsWith('http') ? embedUrl : `https:${embedUrl}`;
-  return stripKodikQueryParams(raw);
+  return `${stripKodikQueryParams(raw)}|iframe:${iframe ? 1 : 0}|sourceWeb:${sourceWebPlayer ? 1 : 0}`;
+}
+
+function isSourceWebPlayer(): boolean {
+  return typeof window !== 'undefined' && /[?&]webplayer=1/.test(window.location.search);
 }
 
 function ttlForKey(key: string): number {
@@ -18,11 +22,13 @@ function ttlForKey(key: string): number {
 }
 
 function isUsable(result: ResolvedEpisodeMedia): boolean {
-  return !!(result.useVideo && result.playUrl);
+  if (!result.playUrl) return false;
+  if (isSourceWebPlayer()) return !result.useVideo;
+  return !!result.useVideo;
 }
 
 export function peekQualityMap(embedUrl: string): Record<string, string> | null {
-  const hit = cache.get(cacheKey(embedUrl));
+  const hit = cache.get(cacheKey(embedUrl, false, isSourceWebPlayer()));
   if (!hit || hit.expires <= Date.now()) return null;
   return hit.result.qualityMap;
 }
@@ -32,7 +38,8 @@ export async function resolveEpisodeUrlCached(
   iframe: boolean,
   maxAttempts = 4,
 ): Promise<ResolvedEpisodeMedia> {
-  const key = cacheKey(embedUrl);
+  const sourceWebPlayer = isSourceWebPlayer();
+  const key = cacheKey(embedUrl, iframe, sourceWebPlayer);
   const hit = cache.get(key);
   if (hit && hit.expires > Date.now() && isUsable(hit.result)) return hit.result;
 
@@ -65,5 +72,5 @@ export function invalidateEpisodeUrlCache(embedUrl?: string): void {
     cache.clear();
     return;
   }
-  cache.delete(cacheKey(embedUrl));
+  cache.delete(cacheKey(embedUrl, false, isSourceWebPlayer()));
 }

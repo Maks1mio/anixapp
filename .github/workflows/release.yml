@@ -19,6 +19,9 @@ jobs:
           node-version: 22
           cache: yarn
 
+      - name: Set version from tag
+        run: node scripts/set-version-from-tag.js
+
       - run: yarn install --frozen-lockfile
 
       - run: yarn build:win
@@ -26,6 +29,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_GIPHY_API_KEY: ${{ secrets.VITE_GIPHY_API_KEY }}
           FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          ANIXART_PROXY_APP_KEY: ${{ secrets.ANIXART_PROXY_APP_KEY }}
+          ANIXBACK_PROXY_TARGET: ${{ secrets.ANIXBACK_PROXY_TARGET }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -46,6 +51,9 @@ jobs:
           node-version: 22
           cache: yarn
 
+      - name: Set version from tag
+        run: node scripts/set-version-from-tag.js
+
       - run: yarn install --frozen-lockfile
 
       - run: yarn build:linux-deb
@@ -53,6 +61,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_GIPHY_API_KEY: ${{ secrets.VITE_GIPHY_API_KEY }}
           FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          ANIXART_PROXY_APP_KEY: ${{ secrets.ANIXART_PROXY_APP_KEY }}
+          ANIXBACK_PROXY_TARGET: ${{ secrets.ANIXBACK_PROXY_TARGET }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -70,6 +80,9 @@ jobs:
           node-version: 22
           cache: yarn
 
+      - name: Set version from tag
+        run: node scripts/set-version-from-tag.js
+
       - run: yarn install --frozen-lockfile
 
       - run: yarn build:linux-appimage
@@ -77,6 +90,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_GIPHY_API_KEY: ${{ secrets.VITE_GIPHY_API_KEY }}
           FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          ANIXART_PROXY_APP_KEY: ${{ secrets.ANIXART_PROXY_APP_KEY }}
+          ANIXBACK_PROXY_TARGET: ${{ secrets.ANIXBACK_PROXY_TARGET }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -97,6 +112,9 @@ jobs:
           pacman -S --noconfirm base-devel nodejs npm git fakeroot libxcrypt-compat
           npm install -g yarn
 
+      - name: Set version from tag
+        run: node scripts/set-version-from-tag.js
+
       - name: Create non-root build user
         run: |
           useradd -m builder
@@ -110,9 +128,13 @@ jobs:
         env:
           FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
           VITE_GIPHY_API_KEY: ${{ secrets.VITE_GIPHY_API_KEY }}
+          ANIXART_PROXY_APP_KEY: ${{ secrets.ANIXART_PROXY_APP_KEY }}
+          ANIXBACK_PROXY_TARGET: ${{ secrets.ANIXBACK_PROXY_TARGET }}
         run: |
           printf 'FIREBASE_API_KEY=%s\n' "$FIREBASE_API_KEY" > .env
           printf 'VITE_GIPHY_API_KEY=%s\n' "$VITE_GIPHY_API_KEY" >> .env
+          printf 'ANIXART_PROXY_APP_KEY=%s\n' "$ANIXART_PROXY_APP_KEY" >> .env
+          printf 'ANIXBACK_PROXY_TARGET=%s\n' "$ANIXBACK_PROXY_TARGET" >> .env
           chown builder:builder .env
 
       - name: Build Arch package
@@ -121,6 +143,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_GIPHY_API_KEY: ${{ secrets.VITE_GIPHY_API_KEY }}
           FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          ANIXART_PROXY_APP_KEY: ${{ secrets.ANIXART_PROXY_APP_KEY }}
+          ANIXBACK_PROXY_TARGET: ${{ secrets.ANIXBACK_PROXY_TARGET }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -129,9 +153,42 @@ jobs:
             release/*.pacman
             release/*.pkg.tar.zst
 
+  # ── macOS (.dmg, arm64 + x64) ───────────────────────────────
+  build-macos:
+    strategy:
+      matrix:
+        # Нативная сборка под каждую архитектуру: ffmpeg-static ставит бинарник только для хоста
+        os: [macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+
+      - name: Set version from tag
+        run: node scripts/set-version-from-tag.js
+
+      - run: yarn install --frozen-lockfile
+
+      - run: yarn build:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_GIPHY_API_KEY: ${{ secrets.VITE_GIPHY_API_KEY }}
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          ANIXART_PROXY_APP_KEY: ${{ secrets.ANIXART_PROXY_APP_KEY }}
+          ANIXBACK_PROXY_TARGET: ${{ secrets.ANIXBACK_PROXY_TARGET }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.os }}-artifacts
+          path: release/*.dmg
+
   # ── Create GitHub Release ───────────────────────────────────
   create-release:
-    needs: [build-windows, build-linux-deb, build-linux-appimage, build-linux-arch]
+    needs: [build-windows, build-linux-deb, build-linux-appimage, build-linux-arch, build-macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

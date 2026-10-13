@@ -869,6 +869,14 @@ img.poster-image--loaded {
   color: $color-text;
   white-space: pre-wrap;
   word-break: break-word;
+
+  a,
+  .uiv2-comment__link {
+    color: $color-accent;
+    text-decoration: underline;
+    text-underline-offset: 0.12em;
+    word-break: break-all;
+  }
 }
 
 .overview-comment-week__spoiler {

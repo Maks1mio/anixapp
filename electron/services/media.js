@@ -7,6 +7,7 @@ const { session, net, dialog, shell, app, ipcMain } = require('electron');
 const { BROWSER_UA } = require('../cdn-proxy');
 const { ANIXART_UA } = require('../lib/constants');
 const { getDirectVideoLink, isHtmlPlayerPage } = require('../lib/direct-video-link');
+const { resolveViaAnixback } = require('../lib/stream-resolve-remote');
 const config = require('../lib/config-store');
 const state = require('../lib/app-state');
 const { formatDownloadError, extractRawMessage } = require('../lib/download-errors');
@@ -14,6 +15,7 @@ const downloadQueue = require('../lib/download-queue');
 const { nodeFetchBuffer } = downloadQueue;
 const { saveFolderMeta, getFolderMeta, parseEpisodeFromFilename } = require('../lib/download-meta');
 const { writeSkipSidecar, readSkipSidecar, normalizeSkipMarks } = require('../lib/skip-marks');
+const { isPathInside, isTraversalSegment } = require('../lib/safe-path');
 const { migrateLibraryLayout } = require('../lib/library-migrate');
 const { fastDownloadHls } = require('../lib/fast-hls-download');
 const ffmpegInstall = require('../lib/ffmpeg-install');
@@ -53,7 +55,16 @@ async function refreshDownloadUrl(job) {
     if (!embed || typeof embed !== 'string') return null;
     const embedUrl = embed.startsWith('http') ? embed : `https:${embed}`;
 
-    const direct = await getDirectVideoLink(embedUrl);
+    const direct = await (async () => {
+      try {
+        const { resolveViaAnixback } = require('./stream-resolve-remote');
+        const remote = await resolveViaAnixback(embedUrl);
+        if (remote?.directUrl) return remote;
+      } catch (e) {
+        console.warn('[stream] anixback resolve failed in download refresh:', e?.message || e);
+      }
+      return getDirectVideoLink(embedUrl);
+    })();
     let url = direct?.directUrl || '';
     if (!url) return null;
     url = String(url)
@@ -408,7 +419,18 @@ async function downloadWithFfmpeg(inputUrl, outputPath, headers = {}, onProgress
 }
 
 ipcMain.handle('anix:getDirectVideoLink', async (_, embedUrl) => {
-  return getDirectVideoLink(embedUrl);
+  const url = String(embedUrl || '').trim();
+  if (!url) {
+    return { directUrl: null, quality: null, qualityMap: {}, downloadHeaders: {}, skip: null, error: null };
+  }
+  try {
+    const remote = await resolveViaAnixback(url);
+    if (remote?.directUrl) return remote;
+    if (remote?.error === 'libria-release-missing') return remote;
+  } catch (e) {
+    console.warn('[stream] anixback resolve failed, local fallback:', e?.message || e);
+  }
+  return getDirectVideoLink(url);
 });
 
 function getDefaultDownloadDirectory() {
@@ -457,15 +479,17 @@ function resolveDownloadSubDir(baseDir, folder) {
   const parts = String(folder)
     .split(/[/\\]+/)
     .map((p) => sanitizeDownloadDirName(p))
-    .filter(Boolean);
-  return parts.length ? path.join(baseDir, ...parts) : baseDir;
+    // sanitizeDownloadDirName не трогает точки: ".." иначе выводил бы запись за пределы папки загрузок
+    .filter((p) => p && !isTraversalSegment(p));
+  const dir = parts.length ? path.join(baseDir, ...parts) : baseDir;
+  return isPathInside(baseDir, dir) ? dir : baseDir;
 }
 
 function titleKeyFromFolder(folder) {
   const parts = String(folder || '')
     .split(/[/\\]+/)
     .map((p) => sanitizeDownloadDirName(p))
-    .filter(Boolean);
+    .filter((p) => p && !isTraversalSegment(p));
   return parts[0] || '';
 }
 
@@ -731,16 +755,49 @@ ipcMain.handle('downloads:getFfmpegStatus', async () => {
   return ffmpegInstall.getFfmpegStatus(ffmpegCacheRef);
 });
 
-ipcMain.handle('downloads:installFfmpeg', async (event) => {
-  const sendProgress = (received, total) => {
-    try {
-      event.sender.send('downloads:ffmpeg-install-progress', { received, total });
-    } catch (_) {}
-  };
+const ffmpegInstallRuntime = {
+  busy: false,
+  received: 0,
+  total: 0,
+};
+
+function broadcastFfmpegProgress(received, total) {
+  ffmpegInstallRuntime.received = received;
+  ffmpegInstallRuntime.total = total;
+  try {
+    const { BrowserWindow } = require('electron');
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (win.isDestroyed()) continue;
+      try {
+        win.webContents.send('downloads:ffmpeg-install-progress', { received, total });
+      } catch (_) {}
+    }
+  } catch (_) {}
+}
+
+ipcMain.handle('downloads:getFfmpegInstallState', async () => ({
+  busy: ffmpegInstallRuntime.busy,
+  received: ffmpegInstallRuntime.received,
+  total: ffmpegInstallRuntime.total,
+}));
+
+ipcMain.handle('downloads:installFfmpeg', async () => {
+  if (ffmpegInstallRuntime.busy) {
+    return { ok: false, busy: true, error: 'FFmpeg уже скачивается' };
+  }
+  ffmpegInstallRuntime.busy = true;
+  ffmpegInstallRuntime.received = 0;
+  ffmpegInstallRuntime.total = 0;
   ffmpegCacheRef.value = undefined;
-  const result = await ffmpegInstall.installFfmpeg(ffmpegCacheRef, sendProgress);
-  state.ffmpegPathCache = result.path ?? null;
-  return result;
+  try {
+    const result = await ffmpegInstall.installFfmpeg(ffmpegCacheRef, broadcastFfmpegProgress);
+    state.ffmpegPathCache = result.path ?? null;
+    return result;
+  } finally {
+    ffmpegInstallRuntime.busy = false;
+    ffmpegInstallRuntime.received = 0;
+    ffmpegInstallRuntime.total = 0;
+  }
 });
 
 ipcMain.handle('downloads:openFfmpegPage', async () => {
@@ -759,19 +816,28 @@ ipcMain.handle('downloads:pickDirectory', async () => {
   return { ok: true, directory: result.filePaths[0] };
 });
 
+const OPENABLE_VIDEO_EXT = new Set(['.mp4', '.mkv', '.webm', '.mov', '.m4v', '.avi', '.ts']);
+
+/** Путь допустим для shell-действий, только если он внутри папки загрузок. */
+function insideDownloadRoot(p) {
+  return typeof p === 'string' && p.trim() !== '' && isPathInside(getDownloadDirectory(), p);
+}
+
 ipcMain.handle('downloads:openDirectory', async (_, dir) => {
   const target = typeof dir === 'string' && dir.trim() ? dir : getDownloadDirectory();
+  if (!insideDownloadRoot(target)) return;
   await shell.openPath(target);
 });
 
 ipcMain.handle('downloads:showFile', (_, filePath) => {
-  if (typeof filePath === 'string' && filePath.trim()) {
+  if (insideDownloadRoot(filePath)) {
     shell.showItemInFolder(filePath);
   }
 });
 
 ipcMain.handle('downloads:openFile', (_, filePath) => {
-  if (typeof filePath === 'string' && filePath.trim()) {
+  // shell.openPath запускает файл как исполняемый/ассоциированный: только видео внутри папки загрузок
+  if (insideDownloadRoot(filePath) && OPENABLE_VIDEO_EXT.has(path.extname(filePath).toLowerCase())) {
     shell.openPath(filePath);
   }
 });
@@ -790,7 +856,7 @@ ipcMain.handle('downloads:deleteFile', (_, filePath) => {
   if (typeof filePath !== 'string' || !filePath) return { ok: false, error: 'bad-path' };
   const root = path.resolve(getDownloadDirectory());
   const resolved = path.resolve(filePath);
-  if (!resolved.startsWith(root + path.sep) && resolved !== root) {
+  if (!isPathInside(root, resolved)) {
     return { ok: false, error: 'outside-root' };
   }
   try {
@@ -820,7 +886,7 @@ ipcMain.handle('downloads:deleteGroup', (_, groupName) => {
   const target = path.join(root, sanitizeDownloadDirName(groupName));
   const resolved = path.resolve(target);
   const rootRes = path.resolve(root);
-  if (!resolved.startsWith(rootRes + path.sep)) return { ok: false, error: 'outside-root' };
+  if (resolved === rootRes || !isPathInside(rootRes, resolved)) return { ok: false, error: 'outside-root' };
   try {
     if (fs.existsSync(resolved)) {
       fs.rmSync(resolved, { recursive: true, force: true });
@@ -847,13 +913,13 @@ ipcMain.handle('downloads:deleteGroup', (_, groupName) => {
 ipcMain.handle('downloads:listByRelease', (_, releaseId) => listDownloadsForRelease(releaseId));
 
 ipcMain.handle('downloads:readSkipMarks', (_, filePath) => {
-  if (typeof filePath !== 'string' || !filePath) return null;
+  if (!insideDownloadRoot(filePath)) return null;
   return readSkipSidecar(filePath);
 });
 
 ipcMain.handle('downloads:saveSkipMarks', (_, payload) => {
   const filePath = typeof payload?.filePath === 'string' ? payload.filePath : '';
-  if (!filePath) return { ok: false };
+  if (!insideDownloadRoot(filePath)) return { ok: false };
   return { ok: writeSkipSidecar(filePath, payload?.skip) };
 });
 

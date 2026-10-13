@@ -76,6 +76,54 @@ body.player-fullscreen .player-titlebar {
   font-size: 0.9375rem;
   font-weight: 600;
   color: $color-text-muted;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: min(70vw, 720px);
+}
+
+body.player-pip .player-titlebar {
+  height: 28px;
+  min-height: 28px;
+}
+
+body.player-pip .player-titlebar__logo {
+  display: none;
+}
+
+body.player-pip .player-titlebar__drag {
+  padding: 0 0.45rem;
+  min-width: 0;
+  flex: 1;
+}
+
+body.player-pip .player-titlebar__title {
+  font-size: 0.75rem;
+  max-width: none;
+}
+
+body.player-pip .player-titlebar__btn {
+  width: 32px;
+  height: 28px;
+}
+
+body.player-pip .player-titlebar__btn--pin {
+  display: none;
+}
+
+@media (max-width: 420px) {
+  .player-titlebar__logo {
+    display: none;
+  }
+
+  .player-titlebar__drag {
+    padding: 0 0.6rem;
+    min-width: 0;
+  }
+
+  .player-titlebar__title {
+    font-size: 0.8rem;
+  }
 }
 
 .player-titlebar__controls {
@@ -107,6 +155,13 @@ body.player-fullscreen .player-titlebar {
   svg { width: 15px; height: 15px; }
 }
 
+.player-titlebar__btn--min {
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
 .player-titlebar__btn--pin-active {
   color: $color-text;
 }
@@ -132,5 +187,17 @@ body.player-fullscreen .player-titlebar {
 
   &::after {
     transform: translate(-50%, -50%) rotate(-45deg);
+  }
+}
+
+// macOS: нативные кнопки окна слева — оставляем только «поверх всех окон».
+.platform-darwin {
+  .player-titlebar__btn--min,
+  .player-titlebar__btn--close {
+    display: none;
+  }
+
+  &:not(.window-fullscreen) .player-titlebar__drag {
+    padding-left: var(--traffic-lights-inset, 98px);
   }
 }

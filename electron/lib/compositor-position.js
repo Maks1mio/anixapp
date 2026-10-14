@@ -37,6 +37,11 @@ const BANNER_WINDOW_TITLE = 'anix-banner-stack';
  */
 const POSITION_RETRY_GAP_MS = 90;
 const POSITION_MAX_ATTEMPTS = 7;
+/**
+ * Для бэкендов без подтверждения (kwin): нельзя отличить «окно ещё не замаплено»
+ * от успеха, поэтому делаем пару повторов на поздний маппинг и считаем успехом.
+ */
+const POSITION_UNCONFIRMED_ATTEMPTS = 3;
 
 let warnedUnsupported = false;
 
@@ -77,6 +82,9 @@ function loadBackends() {
  * Команда повторяется, пока бэкенд не подтвердит, что окно найдено: сразу после
  * show окна ещё нет в списке композитора, а по `hyprctl eval` промах не отличить
  * от успеха (всегда "ok"). Повтор идемпотентен — бэкенды шлют абсолютные координаты.
+ * Бэкенды без подтверждения (`confirmsPlacement: false`, kwin) прогоняют
+ * ограниченное число попыток и затем считаются успешными — иначе контент ждал бы
+ * полный лимит повторов.
  *
  * Координаты x/y — Electron DIP; бэкенд сам приводит их к своей системе
  * (физические пиксели: sway/hyprland, логические: kwin/gnome) через scaleFactor.
@@ -118,26 +126,41 @@ function positionWindowOnCompositor(title, x, y, scaleFactor, onDone) {
 
   const args = { pid: process.pid, title, x, y, scaleFactor };
   let settled = false;
+  let sawError = false;
   const finish = (ok) => {
     if (settled) return;
     settled = true;
     done(ok);
   };
+  // Бэкенды без подтверждения (kwin): «окно не найдено» и успех неразличимы,
+  // поэтому ограничиваемся парой повторов и затем считаем позицию выставленной.
+  const confirms = backend.confirmsPlacement !== false;
+  const maxAttempts = confirms ? POSITION_MAX_ATTEMPTS : POSITION_UNCONFIRMED_ATTEMPTS;
   const attempt = (n) => {
     if (settled) return;
+    let handled = false;
+    const afterAttempt = (err) => {
+      if (settled || handled) return;
+      handled = true;
+      if (err) sawError = true;
+      // Подтверждающий бэкенд: null — окно найдено и перемещено, финишируем сразу;
+      // ошибка — окно ещё не замаплено, ретраим.
+      if (confirms && !err) { finish(true); return; }
+      // Неподтверждающий (kwin): успех и «окно не найдено» неразличимы, поэтому
+      // прогоняем ВСЕ попытки (окно могло не замапиться) и затем считаем позицию
+      // выставленной. Команда идемпотентна — повтор безопасен. Если при этом
+      // упала сама диспетчеризация — честно сообщаем неуспех.
+      if (n + 1 < maxAttempts) {
+        const t = setTimeout(() => attempt(n + 1), POSITION_RETRY_GAP_MS);
+        t.unref?.();
+      } else {
+        finish(!confirms && !sawError);
+      }
+    };
     try {
-      backend.moveWindow(args, (err) => {
-        if (settled) return;
-        if (!err) { finish(true); return; }
-        if (n + 1 < POSITION_MAX_ATTEMPTS) {
-          const t = setTimeout(() => attempt(n + 1), POSITION_RETRY_GAP_MS);
-          t.unref?.();
-        } else {
-          finish(false);
-        }
-      });
+      backend.moveWindow(args, afterAttempt);
     } catch {
-      finish(false);
+      afterAttempt(new Error('backend threw'));
     }
   };
   attempt(0);
@@ -241,6 +264,7 @@ module.exports = {
   BANNER_WINDOW_TITLE,
   POSITION_RETRY_GAP_MS,
   POSITION_MAX_ATTEMPTS,
+  POSITION_UNCONFIRMED_ATTEMPTS,
   resolveOzonePlatform,
   hasCompositorBackend,
   resolveFocusedMonitor,

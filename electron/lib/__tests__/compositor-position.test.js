@@ -8,6 +8,7 @@ const {
   positionWindowOnCompositor,
   hasCompositorBackend,
   POSITION_MAX_ATTEMPTS,
+  POSITION_UNCONFIRMED_ATTEMPTS,
 } = require('../compositor-position');
 
 describe('compositor-position facade', () => {
@@ -200,6 +201,48 @@ describe('positionWindowOnCompositor retry', () => {
       assert.equal(calls, POSITION_MAX_ATTEMPTS, 'attempts capped');
     } finally {
       hypr.moveWindow = real;
+    }
+  });
+});
+
+describe('positionWindowOnCompositor: non-confirming backend (kwin-like)', () => {
+  const saved = {};
+  const KEYS = ['WAYLAND_DISPLAY', 'XDG_SESSION_TYPE', 'HYPRLAND_INSTANCE_SIGNATURE'];
+  beforeEach(() => {
+    for (const key of KEYS) {
+      saved[key] = process.env[key];
+      delete process.env[key];
+    }
+  });
+  afterEach(() => {
+    for (const key of KEYS) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
+  });
+
+  it('runs a bounded number of attempts even on immediate "success", then onDone(true)', async () => {
+    process.env.WAYLAND_DISPLAY = 'wayland-1';
+    process.env.XDG_SESSION_TYPE = 'wayland';
+    process.env.HYPRLAND_INSTANCE_SIGNATURE = 'sig_test';
+
+    const hypr = require('../compositor-position/hyprland');
+    const realMove = hypr.moveWindow;
+    const realConfirms = hypr.confirmsPlacement;
+    let calls = 0;
+    // Бэкенд сообщает «успех» сразу (как kwin: Script.run всегда успешен) — фасад
+    // всё равно обязан прогнать все попытки, иначе окно могло не замапиться.
+    hypr.moveWindow = (args, cb) => { calls += 1; cb(null); return true; };
+    hypr.confirmsPlacement = false;
+    try {
+      const ok = await new Promise((resolve) => {
+        positionWindowOnCompositor(BANNER_WINDOW_TITLE, 5, 6, 1, resolve);
+      });
+      assert.equal(ok, true, 'onDone(true) after bounded attempts');
+      assert.equal(calls, POSITION_UNCONFIRMED_ATTEMPTS, 'bounded attempts, not one');
+    } finally {
+      hypr.moveWindow = realMove;
+      hypr.confirmsPlacement = realConfirms;
     }
   });
 });

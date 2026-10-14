@@ -70,6 +70,7 @@ function buildBannerRuleLua(title) {
 
 module.exports = {
   id: 'hyprland',
+  confirmsPlacement: true,
   buildHyprlandPositionLua,
   buildBannerRuleLua,
 
@@ -116,7 +117,7 @@ module.exports = {
    * @param {{pid:number,title:string}} args
    * @param {(monitor: {x:number,y:number,width:number,height:number,scale:number}|null)=>void} cb
    */
-  getWindowMonitor({ pid, title }, cb) {
+  getWindowMonitor({ pid, title } = {}, cb) {
     const done = (m) => { if (typeof cb === 'function') cb(m); };
     execFile('hyprctl', ['-j', 'clients'], { timeout: 2000 }, (err, stdout) => {
       if (err) { done(null); return; }
@@ -176,7 +177,7 @@ module.exports = {
    *   ошибка — если окно ещё не замаплено (повторяемо) или hyprctl упал
    * @returns {boolean} true, если команда композитору отправлена
    */
-  moveWindow({ pid, title, x, y, scaleFactor }, cb) {
+  moveWindow({ pid, title, x, y, scaleFactor } = {}, cb) {
     const lua = buildHyprlandPositionLua({ pid, title, x, y, scaleFactor });
     // repl, а не eval: возвращает значение скрипта ("moved"/"nomatch"), тогда как
     // eval всегда печатает "ok" и не отличает промах от успеха.

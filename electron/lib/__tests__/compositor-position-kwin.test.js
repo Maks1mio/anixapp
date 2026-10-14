@@ -227,7 +227,54 @@ describe('moveWindow', () => {
   });
 });
 
+describe('kwin banner rule + monitor contract', () => {
+  it('buildBannerRuleScript strips decoration/skipTaskbar/keepAbove by caption', () => {
+    const script = kwin.buildBannerRuleScript(BANNER_WINDOW_TITLE);
+    assert.ok(script.includes(`var TITLE = ${JSON.stringify(BANNER_WINDOW_TITLE)};`), 'title');
+    assert.ok(script.includes('w.noBorder = true'), 'no border');
+    assert.ok(script.includes('w.skipTaskbar = true'), 'skip taskbar');
+    assert.ok(script.includes('w.skipPager = true'), 'skip pager');
+    assert.ok(script.includes('w.keepAbove = true'), 'keep above');
+    assert.ok(script.includes('w.onAllDesktops = true'), 'all desktops');
+  });
+
+  it('buildBannerRuleScript escapes quotes in title (no script injection)', () => {
+    const script = kwin.buildBannerRuleScript('x"; malicious(); var y="');
+    assert.ok(script.includes('\\"'), 'quotes escaped');
+    assert.ok(!script.includes('TITLE = "x";'), 'literal not broken out');
+  });
+
+  it('exposes the full backend contract', () => {
+    assert.equal(kwin.id, 'kwin');
+    for (const fn of ['moveWindow', 'getFocusedMonitor', 'getWindowMonitor', 'applyBannerRule']) {
+      assert.equal(typeof kwin[fn], 'function', `${fn} exported`);
+    }
+  });
+
+  it('monitor lookups degrade to null (KWin не отдаёт геометрию в Node)', () => {
+    let got = 'unset';
+    kwin.getFocusedMonitor((m) => { got = m; });
+    assert.equal(got, null);
+    kwin.getWindowMonitor({ pid: 1, title: 'x' }, (m) => { got = m; });
+    assert.equal(got, null);
+  });
+
+  it('moveWindow invokes cb(null) once the script dispatch completes', async () => {
+    // Стаб gdbus отдаёт (int32 7,) на все вызовы → цепочка unload/load/run успешна.
+    const err = await new Promise((resolve) => {
+      kwin.moveWindow({ pid: 4242, title: BANNER_WINDOW_TITLE, x: 1, y: 2 }, resolve);
+    });
+    assert.equal(err, null);
+  });
+});
+
 after(() => {
   cp.execFile = realExecFile;
-  fs.rmSync(path.join(os.tmpdir(), 'anix-kwin-position-0.js'), { force: true });
+  // Сносим ВСЕ tmp-скрипты бэкенда: иначе файл, оставленный одним тестом,
+  // ломает `writtenPaths()[0]` в другом при повторном прогоне.
+  for (const f of fs.readdirSync(os.tmpdir())) {
+    if (f.startsWith('anix-kwin-position-')) {
+      fs.rmSync(path.join(os.tmpdir(), f), { force: true });
+    }
+  }
 });

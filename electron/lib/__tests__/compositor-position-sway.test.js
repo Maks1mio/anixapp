@@ -138,3 +138,43 @@ describe('sway.moveWindow', () => {
     );
   });
 });
+
+describe('sway monitor helpers', () => {
+  it('outputToMonitor maps rect/scale and zeroes reserved', () => {
+    const m = sway.outputToMonitor({
+      name: 'DP-1',
+      rect: { x: 10, y: 20, width: 1920, height: 1080 },
+      scale: 1.5,
+    });
+    assert.deepEqual(m, {
+      x: 10, y: 20, width: 1920, height: 1080, scale: 1.5, reserved: [0, 0, 0, 0],
+    });
+  });
+
+  it('outputToMonitor returns null without rect / for bad scale', () => {
+    assert.equal(sway.outputToMonitor(null), null);
+    assert.equal(sway.outputToMonitor({ name: 'DP-1' }), null);
+    assert.equal(sway.outputToMonitor({ rect: { x: 0, y: 0, width: 1, height: 1 } }).scale, 1);
+  });
+
+  it('findTreeNode walks nested + floating nodes by pid + name', () => {
+    const tree = {
+      nodes: [
+        { pid: 1, name: 'other', rect: { x: 0, y: 0, width: 10, height: 10 } },
+        { nodes: [{ pid: 42, name: 'anix-banner-stack', rect: { x: 5, y: 6, width: 7, height: 8 } }] },
+      ],
+      floating_nodes: [],
+    };
+    const hit = sway.findTreeNode(tree, 42, 'anix-banner-stack');
+    assert.ok(hit, 'found nested node');
+    assert.equal(hit.rect.x, 5);
+    assert.equal(sway.findTreeNode(tree, 999, 'nope'), null);
+  });
+
+  it('exposes the full backend contract', () => {
+    assert.equal(sway.id, 'sway');
+    for (const fn of ['moveWindow', 'getFocusedMonitor', 'getWindowMonitor', 'applyBannerRule']) {
+      assert.equal(typeof sway[fn], 'function', `${fn} exported`);
+    }
+  });
+});

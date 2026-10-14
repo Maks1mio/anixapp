@@ -83,7 +83,7 @@ function isAvailable() {
  * frameGeometry включает декорации; у frameless-баннера совпадает с клиентской
  * геометрией Electron. Размер дублирует Electron setBounds — идемпотентно.
  */
-function buildScript({ pid, title, x, y, width, height, scaleFactor: _scaleFactor }) {
+function buildScript({ pid, title, x, y, width: _width, height: _height, scaleFactor: _scaleFactor } = {}) {
   // _scaleFactor осознанно не используется — см. docblock про логические пиксели.
   const n = (v) => Math.round(Number(v) || 0);
   const qPid = Math.max(0, n(pid));
@@ -106,6 +106,13 @@ function buildScript({ pid, title, x, y, width, height, scaleFactor: _scaleFacto
     '    var w = windows[i];',
     '    if (!w || w.pid !== PID || w.caption !== TITLE) continue;',
     '    try { if (typeof w.tile !== "undefined") w.tile = null; } catch (e) {} // выкинуть из кастомного тайла',
+    // Декорации/фокус — здесь же: applyBannerRule вызывается до маппинга окна,
+    // когда его ещё нет в windowList; а move-скрипт идёт по факту нахождения окна.
+    '    try { w.noBorder = true; } catch (e) {}',
+    '    try { w.skipTaskbar = true; } catch (e) {}',
+    '    try { w.skipPager = true; } catch (e) {}',
+    '    try { w.keepAbove = true; } catch (e) {}',
+    '    try { w.onAllDesktops = true; } catch (e) {}',
     // ПРОВЕРЕНО на живом kwin_wayland 6.7.5: Qt в области видимости скриптов НЕ определён
     // ("ReferenceError: Qt is not defined"), frameGeometry присваивается plain-объектом.
     // Бэкенд position-only: размер не трогаем (держит Electron setBounds).
@@ -150,8 +157,12 @@ function gdbus(argv, callback) {
 /**
  * Цепочка unload → load → run. Ошибки: unload молча (скрипта может ещё не быть),
  * load/run — warnOnce. Формат ответа loadScript `(int32 <id>,)` парсим рыхло.
+ * @param {string} scriptPath
+ * @param {string} scriptName
+ * @param {(err:Error|null)=>void} [cb]
  */
-function dispatch(scriptPath, scriptName) {
+function dispatch(scriptPath, scriptName, cb) {
+  const done = (e) => { if (typeof cb === 'function') cb(e || null); };
   const unloadArgv = [
     'call',
     '--session',
@@ -166,7 +177,7 @@ function dispatch(scriptPath, scriptName) {
         ? `kwin loadScript failed: ${loadErr.message}`
         : (String(stderr || '').trim() ? `kwin loadScript stderr: ${String(stderr).trim()}` : '');
       if (loadMessage) warnOnce(loadMessage);
-      if (loadErr) return;
+      if (loadErr) { done(loadErr); return; }
       // Рыхлый парс: "(int32 7,)" → 7. ПРОВЕРЕНО на живом kwin_wayland 6.7.5.
       // Основной шаблон — явный int32; fallback — последнее число в ответе (голый
       // /-?\d+/ нельзя: он ловит "32" из слова "int32").
@@ -176,6 +187,7 @@ function dispatch(scriptPath, scriptName) {
       const id = int32 ? Number(int32[1]) : (numbers ? Number(numbers[numbers.length - 1]) : Number.NaN);
       if (!Number.isInteger(id) || id < 0) {
         warnOnce(`kwin loadScript: no script id in gdbus output: ${String(stdout || '').trim()}`);
+        done(new Error('kwin: no script id'));
         return;
       }
       gdbus([
@@ -189,21 +201,24 @@ function dispatch(scriptPath, scriptName) {
           ? `kwin Script.run failed: ${runErr.message}`
           : (String(runStderr || '').trim() ? `kwin Script.run stderr: ${String(runStderr).trim()}` : '');
         if (runMessage) warnOnce(runMessage);
+        done(runErr || null);
       });
     });
   });
 }
 
-let writtenScript = null;
+const writtenScripts = new Map(); // scriptName -> { path, content }
 
 /**
  * Записывает скрипт во временный файл безопасно: путь непредсказуем (random
  * суффикс), флаг 'wx' отказывается следовать за симлинком/перезаписывать —
  * классическую атаку через предсказуемый файл в /tmp это закрывает. Контент
  * меняется каждый вызов (координаты), поэтому пишем всегда, файл на каждый
- * процесс свой (pid в имени). Возвращает фактический путь для loadScript.
+ * процесс свой (pid в имени). Кэш — по имени скрипта, чтобы move- и rule-скрипты
+ * не выбивали друг друга. Возвращает фактический путь для loadScript.
  */
-function ensureScriptFile(pid, script) {
+function ensureScriptFile(scriptName, pid, script) {
+  const prev = writtenScripts.get(scriptName) || null;
   const write = (suffix) => {
     const scriptPath = path.join(os.tmpdir(), `anix-kwin-position-${pid}-${suffix}.js`);
     const fd = fs.openSync(scriptPath, 'wx', 0o600);
@@ -216,23 +231,23 @@ function ensureScriptFile(pid, script) {
     fs.closeSync(fd);
     return scriptPath;
   };
-  if (writtenScript && writtenScript.content === script) {
+  if (prev && prev.content === script) {
     // tmp-cleaner мог снести файл между вызовами — кэш валидируем доступом.
     try {
-      fs.accessSync(writtenScript.path);
-      return writtenScript.path;
+      fs.accessSync(prev.path);
+      return prev.path;
     } catch { /* ENOENT и пр. — перезапишем */ }
   }
-  if (writtenScript) {
+  if (prev) {
     // Старый файл сносим отложенно: его loadScript ещё может читаться в полёте.
-    const oldPath = writtenScript.path;
+    const oldPath = prev.path;
     const cleanup = setTimeout(() => fs.unlink(oldPath, () => {}), GDBUS_TIMEOUT_MS * 2);
     cleanup.unref?.();
   }
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
       const scriptPath = write(`${process.pid.toString(36)}${Math.random().toString(36).slice(2, 6)}`);
-      writtenScript = { path: scriptPath, content: script };
+      writtenScripts.set(scriptName, { path: scriptPath, content: script });
       return scriptPath;
     } catch (e) {
       if ((e && e.code) !== 'EEXIST') throw e;
@@ -244,32 +259,114 @@ function ensureScriptFile(pid, script) {
 }
 
 /**
+ * JS-источник правила окна баннера: без рамки/декораций, не в таскбаре/пейджере,
+ * поверх всех. KWin не даёт per-window отключение анимаций через scripting API,
+ * поэтому гасим хотя бы рамку и фокус-поведение. Чистая функция — под тестом.
+ */
+function buildBannerRuleScript(title) {
+  const qTitle = JSON.stringify(String(title ?? ''));
+  return [
+    '// generated by anix — правило окна баннера, не редактировать',
+    '(function () {',
+    "  'use strict';",
+    `  var TITLE = ${qTitle};`,
+    '  var windows = null;',
+    '  try {',
+    "    if (typeof workspace === 'undefined') return;",
+    "    if (typeof workspace.windowList === 'function') windows = workspace.windowList();",
+    "    else if (typeof workspace.clientList === 'function') windows = workspace.clientList();",
+    '  } catch (e) { return; }',
+    '  if (!windows) return;',
+    '  for (var i = 0; i < windows.length; i++) {',
+    '    var w = windows[i];',
+    '    if (!w || w.caption !== TITLE) continue;',
+    '    try { w.noBorder = true; } catch (e) {}',
+    '    try { w.skipTaskbar = true; } catch (e) {}',
+    '    try { w.skipPager = true; } catch (e) {}',
+    '    try { w.keepAbove = true; } catch (e) {}',
+    '    try { w.onAllDesktops = true; } catch (e) {}',
+    '  }',
+    '})();',
+    '',
+  ].join('\n');
+}
+
+/**
  * Позиционирует окно баннера через KWin scripting. Безопасно вызывать всегда:
  * вне KWin-сессии вызывающий сюда не заходит, ошибки D-Bus — warn один раз.
  *
- * Повтор при первом show окна — забота фасада (единый RETRY_DELAY_MS).
+ * ВАЖНО про `cb`: KWin scripting API не возвращает результат скрипта
+ * (`Script.run` успешен, даже если окно не найдено), поэтому достоверно
+ * подтвердить перемещение нельзя. Бэкенд помечен `confirmsPlacement: false`:
+ * фасад для таких бэкендов делает пару повторов (на случай позднего маппинга) и
+ * затем считает позицию выставленной. `cb(err)` здесь означает только сбой
+ * диспетчеризации, не «окно не найдено».
  *
+ * @param {{pid:number,title:string,x:number,y:number,scaleFactor?:number}} args
+ * @param {(err:Error|null)=>void} [cb]
  * @returns {boolean} true, если скрипт записан и диспетчеризация запущена
  */
-function moveWindow({ pid, title, x, y, scaleFactor } = {}) {
+function moveWindow({ pid, title, x, y, scaleFactor } = {}, cb) {
   try {
     const p = Math.max(0, Math.round(Number(pid) || 0));
     const script = buildScript({ pid: p, title, x, y, scaleFactor });
-    const scriptPath = ensureScriptFile(p, script);
     const scriptName = `anix-position-${p}`;
-    dispatch(scriptPath, scriptName);
+    const scriptPath = ensureScriptFile(scriptName, p, script);
+    dispatch(scriptPath, scriptName, cb);
     return true;
   } catch (err) {
     const message = `kwin moveWindow failed: ${err && err.message}`;
     warnOnce(message);
+    if (typeof cb === 'function') cb(err);
     return false;
   }
 }
 
+/**
+ * Правило окна баннера: без рамки/декораций, не в таскбаре, поверх. Через
+ * KWin scripting (frameGeometry-скрипт идёт тем же путём load/run).
+ * @param {string} title
+ * @param {(err:Error|null)=>void} [cb]
+ */
+function applyBannerRule(title, cb) {
+  try {
+    const script = buildBannerRuleScript(title);
+    const scriptName = `anix-banner-rule-${process.pid}`;
+    const scriptPath = ensureScriptFile(scriptName, process.pid, script);
+    dispatch(scriptPath, scriptName, cb);
+    return true;
+  } catch (err) {
+    const message = `kwin banner rule failed: ${err && err.message}`;
+    warnOnce(message);
+    if (typeof cb === 'function') cb(err);
+    return false;
+  }
+}
+
+/**
+ * KWin scripting API не отдаёт геометрию мониторов/фокус в Node без своего
+ * D-Bus-сервиса, поэтому выбор экрана best-effort: null → фасад берёт primary.
+ * @param {(monitor: object|null)=>void} cb
+ */
+function getFocusedMonitor(cb) {
+  if (typeof cb === 'function') cb(null);
+}
+
+/** См. getFocusedMonitor: на KWin монитор окна из Node не узнать. */
+function getWindowMonitor(_args, cb) {
+  if (typeof cb === 'function') cb(null);
+}
+
 module.exports = {
   id: 'kwin',
+  // KWin не умеет подтверждать, что скрипт нашёл окно (Script.run всегда успешен).
+  confirmsPlacement: false,
   isAvailable,
   buildScript,
+  buildBannerRuleScript,
   buildDispatchArgv,
   moveWindow,
+  applyBannerRule,
+  getFocusedMonitor,
+  getWindowMonitor,
 };

@@ -275,3 +275,64 @@ describe('isAvailable', () => {
     assert.equal(gnome.isAvailable(), false);
   });
 });
+
+describe('gnome.parseMonitorPayload', () => {
+  it('parses "x,y,w,h,scale"', () => {
+    assert.deepEqual(gnome.parseMonitorPayload('1920,0,2560,1440,1'), {
+      x: 1920, y: 0, width: 2560, height: 1440, scale: 1, reserved: [0, 0, 0, 0],
+    });
+  });
+
+  it('scale defaults to 1 when missing/zero', () => {
+    assert.equal(gnome.parseMonitorPayload('0,0,800,600').scale, 1);
+    assert.equal(gnome.parseMonitorPayload('0,0,800,600,0').scale, 1);
+  });
+
+  it('derives reserved in PHYSICAL px (× scale) for the shared consumer', () => {
+    // monitor 0,0 1280x720 @2; work area 0,27 1280x693 → top panel 27 logical
+    // → 54 physical (effectiveWorkArea делит на scale и получает 27 DIP).
+    assert.deepEqual(
+      gnome.parseMonitorPayload('0,0,1280,720,2,0,27,1280,693').reserved,
+      [0, 54, 0, 0],
+    );
+  });
+
+  it('returns null on malformed payloads', () => {
+    assert.equal(gnome.parseMonitorPayload('no-match'), null);
+    assert.equal(gnome.parseMonitorPayload('1,2,3'), null);
+    assert.equal(gnome.parseMonitorPayload(null), null);
+    assert.equal(gnome.parseMonitorPayload('a,b,c,d'), null);
+  });
+});
+
+describe('gnome eval scripts', () => {
+  it('focused-monitor script returns geometry + scale, try/catch guarded', () => {
+    const s = gnome.buildFocusedMonitorScript();
+    assert.ok(s.includes('get_focus_window'), 'uses focus window');
+    assert.ok(s.includes('get_monitor_geometry'), 'reads monitor geometry');
+    assert.ok(s.includes('get_primary_monitor'), 'primary fallback');
+    assert.ok(s.includes("catch (e) { return 'error: '"), 'guarded');
+  });
+
+  it('window-monitor script matches pid + title and is guarded', () => {
+    const s = gnome.buildWindowMonitorScript({ pid: 42, title: 'anix "banner"' });
+    assert.ok(s.includes('var pid = 42;'), 'pid embedded');
+    assert.ok(s.includes("var title = 'anix \"banner\"';"), 'title escaped');
+    assert.ok(s.includes('get_monitor_geometry'), 'geometry');
+    assert.ok(s.includes("return 'no-match';"), 'no-match path');
+  });
+
+  it('banner-rule script sets skip_taskbar/above/all-workspaces by title', () => {
+    const s = gnome.buildBannerRuleScript('anix-banner-stack');
+    assert.ok(s.includes('mw.skip_taskbar = true'), 'skip taskbar');
+    assert.ok(s.includes('mw.make_above()'), 'above');
+    assert.ok(s.includes('mw.on_all_workspaces = true'), 'all workspaces');
+  });
+
+  it('exposes the full backend contract', () => {
+    assert.equal(gnome.id, 'gnome');
+    for (const fn of ['moveWindow', 'getFocusedMonitor', 'getWindowMonitor', 'applyBannerRule']) {
+      assert.equal(typeof gnome[fn], 'function', `${fn} exported`);
+    }
+  });
+});

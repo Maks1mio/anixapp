@@ -833,12 +833,15 @@
   }
 
   function goBack() {
-    if (releaseId) {
-      navigate(`/release/${releaseId}`);
-      return;
-    }
+    // Возврат из плеера: шагаем назад по истории, чтобы попасть на уже
+    // открытую страницу тайтла. Иначе пушится новая запись /release/:id и
+    // следующий «Назад» снова возвращает в плеер.
     if (window.history.length > 1) {
       window.history.back();
+      return;
+    }
+    if (releaseId) {
+      navigate(`/release/${releaseId}`);
       return;
     }
     navigate('/');

@@ -22,8 +22,8 @@ html.tv-mode {
   /* Не calc(Npx * var) — LightningCSS в build съедает px и font-size становится невалидным. */
   font-size: #{$tv-base-font-px}px;
   --tv-ui-scale: 1;
-  --font-sans: 'Hirro Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --uikit-v2-font: 'Hirro Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans: 'Inter', 'Hirro Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --uikit-v2-font: 'Inter', 'Hirro Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --tv-rail-collapsed-w: #{$tv-rail-collapsed};
   --tv-rail-expanded-w: #{$tv-rail-expanded};
   --tv-rail-backdrop-expanded-w: #{$tv-rail-backdrop-expanded};
@@ -338,7 +338,8 @@ html.tv-mode #app {
     display: block;
     width: $tv-rail-icon-size;
     height: $tv-rail-icon-size;
-    stroke-width: 2.35px;
+    // Толщину штриха не фиксируем в px: атрибут stroke-width внутри SVG
+    // масштабируется вместе с размером, как в десктопной версии.
   }
 
   .tv-layout__rail-item--active &,
@@ -973,8 +974,9 @@ html.tv-mode .tv-home .tv-category-see-all__icon {
 }
 
 html.tv-mode .tv-home .tv-category-see-all__icon svg {
-  width: #{28 * $tv-card-scale}px;
-  height: #{28 * $tv-card-scale}px;
+  // rem, а не px: иконка масштабируется вместе с UI (как остальные svg в TV-режиме).
+  width: calc(28 * #{$tv-card-scale} / 18 * 1rem);
+  height: calc(28 * #{$tv-card-scale} / 18 * 1rem);
 }
 
 html.tv-mode .tv-home .tv-category-see-all__text {
@@ -1306,44 +1308,469 @@ html.tv-mode .tv-release-page .release-page {
   box-sizing: border-box;
 }
 
-html.tv-mode .tv-release-page .release-page__head {
-  grid-template-columns: minmax(0, var(--tv-release-poster-w)) minmax(0, 1fr);
-  gap: 1rem 1.5rem;
-  margin-bottom: 1.25rem;
-  padding: 0
-    max(var(--tv-release-pad-end), env(safe-area-inset-right, 0px))
-    0
-    var(--tv-home-content-left);
-}
-
-html.tv-mode .tv-release-page .release-page__head-aside-play {
-  top: 0;
+/* ——— TV release hero: 1:1 с макетом Figma «relese» (2049×1085) ———
+   Перевод в rem: design px / 19.2094 (1920 / 2049 × 18). */
+html.tv-mode .tv-release-hero {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 2.863rem 6.455rem 2.863rem 2.863rem;
 }
 
-html.tv-mode .tv-release-page .release-page__poster {
-  width: var(--tv-release-poster-w);
-  border-radius: var(--uiv2-anime-radius, 12px);
+html.tv-mode .tv-release-hero__art {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 48.02%;
+  height: 90.6%;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
 }
 
-html.tv-mode .tv-release-page .release-page__title {
-  font-size: var(--tv-home-title-size);
-  line-height: 1.25;
+/* Радиальный градиент макета: прозрачный в правом верхнем углу → #0d0d0d в левом нижнем. */
+html.tv-mode .tv-release-hero__art-scrim {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 100% 0%, rgba(13, 13, 13, 0) 0%, #0d0d0d 70.6%);
 }
 
-html.tv-mode .tv-release-page .release-page__meta-info-row {
-  font-size: 0.98rem;
-  line-height: 1.45;
+html.tv-mode .tv-release-hero__main {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 57.055rem;
+  max-width: 100%;
 }
 
-html.tv-mode .tv-release-page .release-page__btn--play {
-  width: 100%;
-  min-height: 2.85rem;
-  font-size: 1rem;
+html.tv-mode .tv-release-hero__title {
+  margin: 0;
+  font-size: 3.384rem;
+  font-weight: 800;
+  line-height: 1.21;
+  color: #ffffff;
+  overflow-wrap: anywhere;
 }
 
-html.tv-mode .tv-release-page .release-page__actions-chip {
-  min-height: 2.45rem;
+html.tv-mode .tv-release-hero__sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.521rem;
+  margin-top: 0.781rem;
+  min-height: 1.405rem;
+  font-size: 1.145rem;
+  font-weight: 600;
+  line-height: 1.21;
+  color: #cdcdcd;
+}
+
+html.tv-mode .tv-release-hero__age {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.729rem;
+  border-radius: 0.703rem;
+  font-size: 1.145rem;
+  font-weight: 800;
+  line-height: 1.21;
+  color: #ff4d4d;
+  background: rgba(146, 43, 43, 0.45);
+}
+
+html.tv-mode .tv-release-hero__facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.041rem;
+  margin-top: 0.781rem;
+  font-size: 1.145rem;
+  font-weight: 600;
+  line-height: 1.21;
+  color: #cdcdcd;
+}
+
+html.tv-mode .tv-release-hero__score {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.729rem;
+  border-radius: 0.703rem;
+  font-size: 1.145rem;
+  font-weight: 800;
+  line-height: 1.21;
+  color: #40ff40;
+  background: rgba(32, 132, 32, 0.45);
+}
+
+html.tv-mode .tv-release-hero__genres {
+  margin: 0.26rem 0 0;
+  font-size: 1.145rem;
+  font-weight: 600;
+  line-height: 1.21;
+  color: #cdcdcd;
+}
+
+html.tv-mode .tv-release-hero__desc {
+  margin-top: 2.186rem;
+  padding: 0.781rem 1.562rem;
+  border-radius: 1.562rem;
+  background: #1d1d1d;
+  font-size: 1.041rem;
+  font-weight: 600;
+  line-height: 1.21;
+  color: rgba(255, 255, 255, 0.65);
+
+  p {
+    margin: 0;
+  }
+}
+
+html.tv-mode .tv-release-hero__desc--collapsed .tv-release-hero__desc-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+html.tv-mode .tv-release-hero__more {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0.781rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.3rem;
+  background: none;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+html.tv-mode .tv-release-hero__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.093rem;
+  margin-top: 0.521rem;
+  padding: 0.781rem 1.562rem;
+  border-radius: 1.562rem;
+  background: rgba(255, 193, 107, 0.1);
+  font-size: 1.041rem;
+  font-weight: 600;
+  line-height: 1.21;
+  color: #ffc16b;
+}
+
+html.tv-mode .tv-release-hero__note-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 1.51rem;
+  height: 1.51rem;
+  margin-top: 0.32rem;
+
+  svg {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+html.tv-mode .tv-release-hero__note--warn {
+  background: rgba(255, 107, 107, 0.12);
+  color: #ffb4b4;
+}
+
+html.tv-mode .tv-release-hero__bar {
+  position: relative;
+  z-index: 1;
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.729rem;
+}
+
+html.tv-mode .tv-release-hero__cards {
+  display: flex;
+  gap: 0.729rem;
+}
+
+html.tv-mode .tv-release-hero__card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.26rem;
+  min-height: 4.945rem;
+  padding: 0.781rem 5.4rem 0.781rem 1.562rem;
+  border: 0;
+  border-radius: 1.562rem;
+  background: #1d1d1d;
+  color: #ffffff;
+  text-align: left;
+  cursor: pointer;
+}
+
+html.tv-mode .tv-release-hero__card--status {
+  min-width: 14.472rem;
+}
+
+html.tv-mode .tv-release-hero__card--vote {
+  min-width: 16.398rem;
+}
+
+html.tv-mode .tv-release-hero__card--disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+html.tv-mode .tv-release-hero__card-label {
+  font-size: 1.302rem;
+  font-weight: 800;
+  line-height: 1.21;
+  color: #ffffff;
+}
+
+html.tv-mode .tv-release-hero__card-value {
+  font-size: 1.302rem;
+  font-weight: 600;
+  line-height: 1.21;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+html.tv-mode .tv-release-hero__card-icon {
+  position: absolute;
+  right: 1.562rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  color: rgba(255, 255, 255, 0.75);
+
+  svg {
+    width: 2.811rem;
+    height: 2.811rem;
+  }
+}
+
+html.tv-mode .tv-release-hero__card-icon--star {
+  color: rgba(255, 255, 255, 0.9);
+
+  svg {
+    width: 2.134rem;
+    height: 2.134rem;
+  }
+}
+
+html.tv-mode .tv-release-hero__card-icon--on {
+  color: #ffc44d;
+}
+
+html.tv-mode .tv-release-hero__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.729rem;
+}
+
+html.tv-mode .tv-release-hero__play {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.26rem;
+  width: 25.925rem;
+  min-height: 4.945rem;
+  padding: 0.781rem 1.562rem;
+  border: 0;
+  border-radius: 1.562rem;
+  background: #cf3434;
+  color: #ffffff;
+  text-align: left;
+  cursor: pointer;
+}
+
+html.tv-mode .tv-release-hero__play--disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+html.tv-mode .tv-release-hero__play-title {
+  font-size: 1.302rem;
+  font-weight: 800;
+  line-height: 1.21;
+}
+
+html.tv-mode .tv-release-hero__play-sub {
+  font-size: 1.302rem;
+  font-weight: 600;
+  line-height: 1.21;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+html.tv-mode .tv-release-hero__quality {
+  position: absolute;
+  top: 0.781rem;
+  right: 1.562rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.156rem 0.521rem;
+  border-radius: 0.521rem;
+  background: rgba(29, 29, 29, 0.45);
+  font-size: 1.041rem;
+  font-weight: 800;
+  line-height: 1.21;
+  color: #ffffff;
+}
+
+html.tv-mode .tv-release-hero__fav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 4.945rem;
+  height: 4.945rem;
+  padding: 0;
+  border: 0;
+  border-radius: 1.562rem;
+  background: #1d1d1d;
+  color: #ffffff;
+  cursor: pointer;
+
+  svg {
+    display: block;
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+}
+
+html.tv-mode .tv-release-hero__fav--on {
+  color: #cf3434;
+
+  svg {
+    fill: currentColor;
+  }
+}
+
+html.tv-mode .tv-release-hero__credits {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  max-width: 48.048rem;
+  font-size: 1.145rem;
+  font-weight: 600;
+  line-height: 1.21;
+  color: #cdcdcd;
+}
+
+html.tv-mode .tv-release-hero__credit-value {
+  overflow-wrap: anywhere;
+}
+
+html.tv-mode .tv-release-hero__play[data-tv-focus='true'],
+html.tv-mode .tv-release-hero__play:focus-visible,
+html.tv-mode .tv-release-hero__card[data-tv-focus='true'],
+html.tv-mode .tv-release-hero__card:focus-visible,
+html.tv-mode .tv-release-hero__fav[data-tv-focus='true'],
+html.tv-mode .tv-release-hero__fav:focus-visible,
+html.tv-mode .tv-release-hero__more[data-tv-focus='true'],
+html.tv-mode .tv-release-hero__more:focus-visible {
+  outline: 3px solid #fff !important;
+  outline-offset: 3px !important;
+}
+
+/* Контент проявляется после полёта постера из карточки (см. tv-release-transition). */
+html.tv-mode[data-tv-release-opening]:not([data-tv-release-opened='true']) .tv-release-hero__main,
+html.tv-mode[data-tv-release-opening]:not([data-tv-release-opened='true']) .tv-release-hero__bar {
+  opacity: 0;
+}
+
+html.tv-mode[data-tv-release-opened='true'] .tv-release-hero__main,
+html.tv-mode[data-tv-release-opened='true'] .tv-release-hero__bar {
+  opacity: 1;
+  transition: opacity 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html.tv-mode .tv-release-page__vote-panel {
+  width: min(46rem, 100%);
+  padding: 3rem 2rem 2.6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+html.tv-mode .tv-release-page__vote-title {
+  margin: 0 0 2.6rem;
+  text-align: center;
+  font-size: 3.38rem;
+  font-weight: 800;
+  line-height: 1.21;
+  color: var(--uikit-v2-text, #{$color-text});
+}
+
+html.tv-mode .tv-release-page__vote-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3.77rem;
+}
+
+html.tv-mode .tv-release-page__vote-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 6.17rem;
+  height: 6.17rem;
+  padding: 0;
+  border: 0;
+  border-radius: 1.95rem;
+  background: #1d1d1d;
+  color: var(--uikit-v2-text, #{$color-text});
+  cursor: pointer;
+
+  svg {
+    width: 1.95rem;
+    height: 1.95rem;
+  }
+}
+
+html.tv-mode .tv-release-page__vote-count {
+  margin: 2.6rem 0 0;
+  text-align: center;
+  font-size: 1.62rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+html.tv-mode .tv-release-page__vote-stars {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3.77rem;
+  margin: 0;
+}
+
+html.tv-mode .tv-release-page__vote-stars .tv-release-page__star {
+  width: 2.66rem;
+  height: 2.66rem;
+
+  svg {
+    width: 2.66rem;
+    height: 2.66rem;
+  }
 }
 
 html.tv-mode .tv-release-page__body {
@@ -1382,17 +1809,6 @@ html.tv-mode .release-lightbox__close:focus-visible {
   outline: 3px solid #fff !important;
   outline-offset: 4px;
   background: rgba(0, 0, 0, 0.9);
-}
-
-html.tv-mode .tv-release-page .release-page__actions-status {
-  .uiv2-select {
-    width: 100%;
-  }
-
-  .uiv2-select__field:has(.uiv2-select__trigger[data-tv-focus='true']) {
-    border-color: #fff;
-    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
-  }
 }
 
 html.tv-mode .tv-release-page .release-page__section,
@@ -1581,8 +1997,9 @@ html.tv-mode .tv-release-page__shell {
   overflow: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
-  padding-top: calc(env(safe-area-inset-top, 0px) + var(--tv-home-pad-top));
-  padding-bottom: max(var(--tv-home-pad-bottom), env(safe-area-inset-bottom, 0px), 2.5rem);
+  /* Отступы макета живут в .tv-release-hero; здесь только безопасные зоны. */
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   scrollbar-width: none;
   background: var(--uikit-v2-bg, #{$color-bg});
 
@@ -1872,6 +2289,8 @@ html.tv-mode .tv-release-page__video-card[data-tv-focus='true'],
 html.tv-mode .tv-release-page__video-card:focus-visible,
 .tv-release-page__dialog-close[data-tv-focus='true'],
 .tv-release-page__dialog-close:focus-visible,
+.tv-release-page__vote-close[data-tv-focus='true'],
+.tv-release-page__vote-close:focus-visible,
 .tv-release-page__dialog-item[data-tv-focus='true'],
 .tv-release-page__dialog-item:focus-visible,
 .tv-release-page__shot-nav[data-tv-focus='true'],
@@ -2015,14 +2434,14 @@ html.tv-mode .tv-release-page__star {
   padding: 0;
   border: 0;
   border-radius: 0.55rem;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.45);
+  background: transparent;
+  color: #e4e4e4;
   cursor: pointer;
 }
 
 html.tv-mode .tv-release-page__star--on {
   color: #ffc44d;
-  background: rgba(255, 196, 77, 0.14);
+  background: transparent;
 }
 
 html.tv-mode .tv-release-page__hint {
@@ -2251,6 +2670,11 @@ html.tv-mode .tv-release-page__shell--skeleton .tv-release-page__main {
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
   cursor: pointer;
+
+  svg {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
 }
 
 .tv-release-page__dialog-close--overlay {

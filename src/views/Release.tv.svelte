@@ -2,45 +2,28 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import { requireAuth } from '../stores/auth';
   import { openWatchModal } from '../stores/modals';
-  import { buildPosterUrl, buildScreenshotUrl, toPosterDisplayUrl } from '../utils/posterUrl';
+  import { buildPosterUrl, toPosterDisplayUrl } from '../utils/posterUrl';
   import {
     getTvReleaseOpenTarget,
     runTvReleaseOpenAnimation,
   } from '../services/tv-release-transition';
   import { focusTvReleasePage, restoreTvFocus, scheduleFocusTvOverlayContent } from '../services/tv-navigation';
-  import { iconX } from '../components/icons';
-  import type { SelectOption } from '../components/select';
-  import { notifyFavoritesChanged } from '../utils/favorites-events';
+  import { iconStar, iconX } from '../components/icons';
+  import { notifyFavoritesChanged, notifyVotesChanged } from '../utils/favorites-events';
   import { enrichBlockedRelease } from '../services/release-geo-bypass';
   import { extractHistoryEpisodeInfo } from '../utils/historyFormat';
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import { headlineFromLoadError } from '../utils/content-load-error';
   import { formatReleaseEpisodes, isReleaseAnnounce } from '../utils/release-card';
+  import { formatEveryWeekdayShort, weekdayKeyFromBroadcast } from '../utils/release-air-calendar';
+  import { formatDubberQuality } from '../utils/dubber-meta';
   import { applyReleaseListStatus } from '../utils/release-list-status';
   import { isCapacitorNative } from '../native/anix-api-native';
+  import ReleaseHeadTv from './Release/components/ReleaseHeadTv.svelte';
+  import { LIST_STATUSES, type ListStatusId, type ReleaseCreditRow } from './Release/_types';
   import {
-    ReleaseHead,
-    ReleaseAirCalendar,
-    ReleaseRating,
-    ReleaseScreenshots,
-    ReleaseRelated,
-    ReleaseRecommendations,
-  } from './Release/components';
-  import { LIST_STATUSES, type ListStatusId } from './Release/_types';
-  import type { ReleaseMetaInfoRow } from './Release/_metaInfo';
-  import {
-    buildCategorySegments,
-    buildCreditsSegments,
-    buildGenreSegments,
-    buildSourceSegments,
-    plainMetaSegments,
-  } from './Release/_metaInfo';
-  import {
-    formatEpisodeAdded,
-    formatVoteCount,
     getAgeRateText,
     getSeasonName,
-    mapCardData,
     numToStatusId,
     sanitizeRichHtml,
     stripHtmlToText,
@@ -65,6 +48,12 @@
   let descCollapsed = $state(true);
   let statusOpen = $state(false);
   let statusReturnFocus = $state<HTMLElement | null>(null);
+  let voteOpen = $state(false);
+  let voteBusy = $state(false);
+  let voteHover = $state(0);
+  let voteReturnFocus = $state<HTMLElement | null>(null);
+  /** «1080P / QHD» — качества озвучек, как в макете на кнопке «Смотреть». */
+  let qualityLabels = $state<string[]>([]);
 
   const posterUrl = $derived.by(() => {
     if (!release) return tvOpenTarget?.posterUrl ?? '';
@@ -79,7 +68,6 @@
 
   const titleRu = $derived((release?.title_ru ?? '') as string);
   const titleOriginal = $derived((release?.title_original ?? '') as string);
-  const titleAlt = $derived((release?.title_alt ?? '') as string);
   const title = $derived(titleRu || titleOriginal || tvOpenTarget?.title || 'Без названия');
 
   const desc = $derived((release?.description ?? '') as string);
@@ -91,18 +79,7 @@
     return release?.note ? sanitizeRichHtml(release.note as string) : '';
   });
 
-  const vote1 = $derived((release?.vote_1_count ?? 0) as number);
-  const vote2 = $derived((release?.vote_2_count ?? 0) as number);
-  const vote3 = $derived((release?.vote_3_count ?? 0) as number);
-  const vote4 = $derived((release?.vote_4_count ?? 0) as number);
-  const vote5 = $derived((release?.vote_5_count ?? 0) as number);
   const yourVote = $derived(Math.max(0, Number(release?.your_vote ?? 0) || 0));
-  const watchingCount = $derived((release?.watching_count ?? 0) as number);
-  const planCount = $derived((release?.plan_count ?? 0) as number);
-  const completedCount = $derived((release?.completed_count ?? 0) as number);
-  const holdOnCount = $derived((release?.hold_on_count ?? 0) as number);
-  const droppedCount = $derived((release?.dropped_count ?? 0) as number);
-
   const gradeRaw = $derived(release?.grade ?? release?.rating);
   const grade = $derived(typeof gradeRaw === 'number' && !Number.isNaN(gradeRaw) ? gradeRaw : null);
   const voteCount = $derived(typeof release?.vote_count === 'number' ? release.vote_count as number : 0);
@@ -116,10 +93,12 @@
   const statusId = $derived((release?.status as { id?: number } | undefined)?.id);
   const isAnnounce = $derived(isReleaseAnnounce(statusName, statusId));
   const canVote = $derived(!isAnnounce && release?.rating_available !== false);
+  /** Предпросмотр звёзд: при наведении показываем оценку под курсором, иначе — свою. */
+  const voteDisplay = $derived(voteHover > 0 ? voteHover : yourVote);
+  const voteCountLabel = $derived(voteCount > 0 ? `${voteCount.toLocaleString('ru-RU')} голосов` : '');
   const studio = $derived((release?.studio ?? '') as string);
   const source = $derived((release?.source ?? '') as string);
   const genres = $derived((release?.genres ?? '') as string);
-  const categoryName = $derived((release?.category as { name?: string } | undefined)?.name ?? '');
   const author = $derived((release?.author ?? '') as string);
   const director = $derived((release?.director ?? '') as string);
   const isAdult = $derived(!!(release?.is_adult));
@@ -128,58 +107,30 @@
   const duration = $derived(release?.duration as number | null | undefined);
   const season = $derived(release?.season as number | null | undefined);
   const seasonName = $derived(getSeasonName(season));
-  const airedOnDate = $derived(release?.aired_on_date as number | null | undefined);
   const broadcast = $derived(typeof release?.broadcast === 'number' ? release.broadcast as number : null);
   const isViewBlocked = $derived(!!(release?.is_view_blocked));
   const hasEpisodesReleased = $derived(typeof episodesReleased === 'number' && episodesReleased > 0);
   const releaseId = $derived(release?.id as number | undefined);
 
-  const screenshots = $derived.by(() => {
-    if (!release) return [] as string[];
-    const si = release.screenshot_images as string[] | undefined;
-    if (si?.length) return si.map((u) => buildScreenshotUrl(u));
-    return ((release.screenshots as string[] | undefined) ?? []).map((u) => buildScreenshotUrl(u));
-  });
-
-  const related = $derived(release?.related as { id?: number; name_ru?: string } | null | undefined);
-  const relatedCards = $derived(((release?.related_releases ?? []) as Record<string, unknown>[]).map(mapCardData));
-  const recommendedCards = $derived(((release?.recommended_releases ?? []) as Record<string, unknown>[]).map(mapCardData));
-
-  const selectOptions = $derived([
-    { value: '', label: 'Не в списке' },
-    ...LIST_STATUSES.map((s) => ({ value: s.id, label: s.label })),
-  ] as SelectOption[]);
-
-  const metaInfoRows = $derived.by((): ReleaseMetaInfoRow[] => {
-    const rows: ReleaseMetaInfoRow[] = [];
+  const episodesText = $derived(formatReleaseEpisodes(episodesReleased, episodesTotal));
+  const durationText = $derived(duration && duration > 0 ? `~${duration} мин` : '');
+  const isAiring = $derived(statusId === 2 || /^выходит$/i.test(statusName));
+  const broadcastText = $derived(isAiring ? formatEveryWeekdayShort(weekdayKeyFromBroadcast(broadcast)) : '');
+  const countrySeasonYear = $derived.by(() => {
     const parts: string[] = [];
     if (country) parts.push(country);
     if (seasonName && year) parts.push(`${seasonName} ${year} г.`);
     else if (year) parts.push(`${year} г.`);
-    if (parts.length) {
-      rows.push({
-        kind: 'country',
-        segments: plainMetaSegments(parts.join(', ')),
-        country: country || undefined,
-      });
-    }
+    return parts.join(', ');
+  });
 
-    let epText = formatReleaseEpisodes(episodesReleased, episodesTotal);
-    if (duration && duration > 0) epText += epText ? ` по ~${duration} мин.` : `~${duration} мин.`;
-    if (epText) rows.push({ kind: 'episodes', segments: plainMetaSegments(epText) });
-
-    const catSegments = buildCategorySegments(
-      categoryName,
-      statusName,
-      statusId === 2 || statusId === 3 || /^выходит$/i.test(statusName),
-    );
-    if (catSegments.length) rows.push({ kind: 'category', segments: catSegments });
-
-    const creditSegments = buildCreditsSegments(studio, author, director);
-    if (creditSegments.length) rows.push({ kind: 'credits', segments: creditSegments });
-
-    if (source) rows.push({ kind: 'source', segments: buildSourceSegments(source) });
-    if (genres) rows.push({ kind: 'genres', segments: buildGenreSegments(genres) });
+  const creditRows = $derived.by((): ReleaseCreditRow[] => {
+    const rows: ReleaseCreditRow[] = [];
+    if (source) rows.push({ label: 'Источник', value: source });
+    if (studio) rows.push({ label: 'Студия', value: studio });
+    if (author && director) rows.push({ label: 'Автор', value: `${author}, режиссёр ${director}` });
+    else if (author) rows.push({ label: 'Автор', value: author });
+    else if (director) rows.push({ label: 'Режиссёр', value: director });
     return rows;
   });
 
@@ -230,26 +181,40 @@
     };
   });
 
-  const playBtnText = $derived.by(() => {
-    if (isViewBlocked || hasEpisodesReleased) {
-      if (resumeInfo.episode && resumeInfo.dubber) return `${resumeInfo.episode} · ${resumeInfo.dubber}`;
-      if (resumeInfo.episode) return `Продолжить · ${resumeInfo.episode}`;
-      if (resumeInfo.dubber) return `Продолжить · ${resumeInfo.dubber}`;
-      return 'Смотреть';
-    }
-    return 'Скоро';
+  const playSubtitle = $derived.by(() => {
+    if (resumeInfo.episode && resumeInfo.dubber) return `${resumeInfo.episode} · ${resumeInfo.dubber}`;
+    return resumeInfo.episode || resumeInfo.dubber || '';
   });
 
   const playBtnDisabled = $derived(!isViewBlocked && !hasEpisodesReleased);
 
-  const episodeAddedText = $derived.by(() => {
-    if (playBtnDisabled) return null;
-    return formatEpisodeAdded(release?.episode_last_update);
-  });
-
   const statusLabel = $derived(
     LIST_STATUSES.find((item) => item.id === currentStatus)?.label ?? 'Не в списке',
   );
+
+  async function loadQualityLabels(releaseIdVal: number) {
+    const api = window.anixApi?.release;
+    if (!api?.getDubbers) {
+      qualityLabels = [];
+      return;
+    }
+    try {
+      const data = await api.getDubbers(releaseIdVal) as { types?: Array<{ quality?: number }> } | null | undefined;
+      const byRank = new Map<number, string>();
+      for (const item of data?.types ?? []) {
+        const rank = Number(item?.quality);
+        const label = formatDubberQuality(item?.quality);
+        if (!label || !Number.isFinite(rank) || byRank.has(rank)) continue;
+        byRank.set(rank, label);
+      }
+      qualityLabels = [...byRank.entries()]
+        .sort((a, b) => b[0] - a[0])
+        .slice(0, 2)
+        .map(([, label]) => label);
+    } catch {
+      qualityLabels = [];
+    }
+  }
 
   async function toggleFavorite() {
     if (!requireAuth() || !window.anixApi || !releaseId) return;
@@ -297,6 +262,66 @@
     closeStatusPicker();
   }
 
+  function openVotePicker() {
+    if (!canVote || !requireAuth()) return;
+    const focused = document.querySelector<HTMLElement>('[data-tv-focus="true"]');
+    voteReturnFocus = focused ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    voteHover = 0;
+    voteOpen = true;
+    scheduleFocusTvOverlayContent(20);
+  }
+
+  function closeVotePicker() {
+    voteOpen = false;
+    voteHover = 0;
+    const target = voteReturnFocus;
+    voteReturnFocus = null;
+    restoreTvFocus(target);
+  }
+
+  /** Крестик в окне оценки: снять свою оценку, если она есть, иначе просто закрыть. */
+  async function onVoteCloseClick() {
+    if (yourVote > 0) {
+      await removeVote();
+      return;
+    }
+    closeVotePicker();
+  }
+
+  async function submitVote(stars: number) {
+    if (!canVote || !requireAuth() || !window.anixApi || !releaseId || voteBusy) return;
+    // Оставляем ту же оценку — ничего не меняем, просто закрываем окно.
+    if (yourVote === stars) {
+      closeVotePicker();
+      return;
+    }
+    voteBusy = true;
+    try {
+      if (yourVote > 0) await window.anixApi.release.deleteVote(releaseId);
+      await window.anixApi.release.vote(releaseId, stars);
+      notifyVotesChanged({ releaseId });
+      await refreshReleaseData();
+    } catch { /* ignore */ }
+    finally {
+      voteBusy = false;
+    }
+    closeVotePicker();
+  }
+
+  async function removeVote() {
+    if (!requireAuth() || !window.anixApi || !releaseId || voteBusy) return;
+    voteBusy = true;
+    try {
+      await window.anixApi.release.deleteVote(releaseId);
+      notifyVotesChanged({ releaseId });
+      await refreshReleaseData();
+    } catch { /* ignore */ }
+    finally {
+      voteBusy = false;
+    }
+    closeVotePicker();
+  }
+
   async function refreshReleaseData() {
     if (!window.anixApi) return;
     try {
@@ -315,10 +340,17 @@
 
   function onOverlayKeys(event: KeyboardEvent) {
     const isBack = event.key === 'Escape' || event.key === 'Back' || event.key === 'BrowserBack';
-    if (statusOpen && isBack) {
+    if (!isBack) return;
+    if (statusOpen) {
       event.preventDefault();
       event.stopPropagation();
       closeStatusPicker();
+      return;
+    }
+    if (voteOpen) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeVotePicker();
     }
   }
 
@@ -335,6 +367,7 @@
       return;
     }
     if (loadState !== 'error') loadState = 'loading';
+    qualityLabels = [];
     try {
       const historyResumePromise = loadHistoryResume(id).catch(() => null);
       const data = await window.anixApi.release.info(id, true) as { release?: Record<string, unknown> } | Record<string, unknown>;
@@ -353,6 +386,11 @@
       loadState = 'ready';
       await tick();
       focusTvReleasePage();
+
+      const episodesReleasedVal = enriched.episodes_released as number | null | undefined;
+      if (typeof episodesReleasedVal === 'number' && episodesReleasedVal > 0) {
+        void loadQualityLabels(id);
+      }
 
       void historyResumePromise.then((resume) => {
         if (resume?.episode || resume?.dubber) historyResume = resume;
@@ -386,15 +424,19 @@
 <div class="tv-release-page" class:tv-release-page--enter={!!tvOpenTarget} class:tv-release-page--cheap={cheapVisuals}>
   {#if loadState === 'loading' && tvOpenTarget}
     <div class="tv-release-page__shell tv-release-page__shell--skeleton" aria-busy="true">
-      <section class="release-page">
-        <div class="release-page__head">
-          <div class="release-page__head-aside-play">
-            <div class="release-page__poster" data-tv-release-poster>
-              <img src={toPosterDisplayUrl(tvOpenTarget.posterUrl, 'releaseHero')} alt={tvOpenTarget.title} decoding="async" fetchpriority="high" />
-            </div>
-          </div>
+      <div class="tv-release-hero tv-release-hero--skeleton">
+        <div class="tv-release-hero__art" data-tv-release-poster aria-hidden="true">
+          {#if tvOpenTarget.posterUrl}
+            <img
+              src={toPosterDisplayUrl(tvOpenTarget.posterUrl, 'releaseHero')}
+              alt=""
+              decoding="async"
+              fetchpriority="high"
+            />
+          {/if}
+          <div class="tv-release-hero__art-scrim"></div>
         </div>
-      </section>
+      </div>
     </div>
 
   {:else if loadState === 'loading'}
@@ -409,90 +451,40 @@
 
   {:else if release}
     <div class="tv-release-page__shell">
-      <section class="release-page release-page--tv">
-        <div data-tv-release-section="hero">
-          <ReleaseHead
-          tvMode
-          {posterUrl}
-          {title}
-          {titleRu}
-          {titleOriginal}
-          {titleAlt}
-          {ageRateText}
-          {ageIsRestricted}
-          {isFavorite}
-          {favoritesCount}
-          {isViewBlocked}
-          {noteHtml}
-          {descHtml}
-          {descClean}
-          {descNeedsTruncate}
-          {descCollapsed}
-          {metaInfoRows}
-          {playBtnText}
-          {playBtnDisabled}
-          {episodeAddedText}
-          {currentStatus}
-          {selectOptions}
-          statusButtonLabel={statusLabel}
-          onOpenStatusPicker={openStatusPicker}
-          onToggleFavorite={toggleFavorite}
-          onWatch={handleWatch}
-          onSetStatus={setStatus}
-          onToggleDesc={() => { descCollapsed = !descCollapsed; }}
-          >
-            {#snippet airDate()}
-              <ReleaseAirCalendar
-                releaseId={id}
-                {broadcast}
-                {airedOnDate}
-                {episodesReleased}
-                {episodesTotal}
-                {statusId}
-                fallback={statusName || 'Выходит'}
-              />
-            {/snippet}
-          </ReleaseHead>
-        </div>
-
-        <div class="tv-release-page__body" data-tv-home-rails>
-          <div data-tv-release-section="rating">
-            <ReleaseRating
-              releaseId={id}
-              {grade}
-              {hasRating}
-              {voteCount}
-              {vote1}
-              {vote2}
-              {vote3}
-              {vote4}
-              {vote5}
-              {yourVote}
-              {watchingCount}
-              {planCount}
-              {completedCount}
-              {holdOnCount}
-              {droppedCount}
-              {canVote}
-              onRefresh={refreshReleaseData}
-            />
-          </div>
-
-          {#if screenshots.length > 0}
-            <div data-tv-release-section="screenshots">
-              <ReleaseScreenshots {screenshots} />
-            </div>
-          {/if}
-
-          {#if relatedCards.length > 0 && related?.id}
-            <ReleaseRelated releaseId={id} relatedId={related.id} items={relatedCards} tvMode />
-          {/if}
-
-          {#if recommendedCards.length > 0}
-            <ReleaseRecommendations items={recommendedCards} tvMode />
-          {/if}
-        </div>
-      </section>
+      <ReleaseHeadTv
+        artUrl={posterUrl}
+        {title}
+        {titleOriginal}
+        {ageRateText}
+        {ageIsRestricted}
+        {grade}
+        {hasRating}
+        {episodesText}
+        {broadcastText}
+        {durationText}
+        {countrySeasonYear}
+        {genres}
+        {descHtml}
+        {descClean}
+        {descNeedsTruncate}
+        {descCollapsed}
+        {noteHtml}
+        {isViewBlocked}
+        {statusLabel}
+        {voteCount}
+        {yourVote}
+        {canVote}
+        playDisabled={playBtnDisabled}
+        {playSubtitle}
+        {qualityLabels}
+        {isFavorite}
+        credits={creditRows}
+        onOpenStatusPicker={openStatusPicker}
+        onOpenVotePicker={openVotePicker}
+        onWatch={handleWatch}
+        onToggleFavorite={toggleFavorite}
+        onToggleDesc={() => { descCollapsed = !descCollapsed; }}
+      />
     </div>
   {/if}
 </div>
@@ -538,6 +530,63 @@
           </button>
         {/each}
       </div>
+    </div>
+  </div>
+{/if}
+
+{#if voteOpen}
+  <div
+    class="tv-release-page__dialog"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Оценить"
+    tabindex="-1"
+    onclick={(event) => { if (event.target === event.currentTarget) closeVotePicker(); }}
+    onkeydown={(event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+      }
+    }}
+  >
+    <div class="tv-release-page__dialog-panel tv-release-page__vote-panel">
+      <h2 class="tv-release-page__vote-title">Оценить релиз</h2>
+
+      <div class="tv-release-page__vote-row">
+        <button
+          type="button"
+          class="tv-release-page__vote-close"
+          aria-label={yourVote > 0 ? 'Убрать оценку' : 'Закрыть'}
+          disabled={voteBusy}
+          onclick={() => void onVoteCloseClick()}
+        >
+          {@html iconX(24)}
+        </button>
+
+        <div
+          class="tv-release-page__vote-stars"
+          role="group"
+          aria-label="Поставить оценку"
+          onmouseleave={() => { voteHover = 0; }}
+        >
+          {#each [1, 2, 3, 4, 5] as star (star)}
+            <button
+              type="button"
+              class="tv-release-page__star"
+              class:tv-release-page__star--on={star <= voteDisplay}
+              disabled={voteBusy}
+              aria-label="{star} из 5"
+              onmouseenter={() => { voteHover = star; }}
+              onclick={() => void submitVote(star)}
+            >
+              {@html iconStar(44, star <= voteDisplay)}
+            </button>
+          {/each}
+        </div>
+      </div>
+
+      {#if voteCountLabel}
+        <p class="tv-release-page__vote-count">{voteCountLabel}</p>
+      {/if}
     </div>
   </div>
 {/if}

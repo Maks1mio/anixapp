@@ -50,6 +50,9 @@ const FOCUS_PRIORITY = [
   '.uiv2-media-lightbox__tool[aria-label="Закрыть"]',
   '.release-lightbox__close',
   '.tv-release-page__shot-nav',
+  '.tv-release-page__star--current',
+  '.tv-release-page__star',
+  '.tv-release-page__vote-close',
   '.tv-release-page__dialog-close',
   '.watch-panel__ep-row--active',
   '.watch-modal__filter--active',
@@ -68,6 +71,9 @@ const FOCUS_PRIORITY = [
   '.watch-page__ctrl-btn',
   '.watch-page__gui-overlay button',
   'button.zh__play',
+  '.tv-release-hero__play',
+  '.tv-release-hero__card',
+  '.tv-release-hero__fav',
   '.release-page__btn--play',
   '.release-page__actions-chip',
   '.tv-release-page__play',
@@ -165,7 +171,7 @@ function focusTvReleaseHero(): boolean {
   const page = document.querySelector(TV_RELEASE_PAGE_SEL);
   if (!page) return false;
   const play = page.querySelector<HTMLElement>(
-    '.release-page__btn--play:not([disabled]), .tv-release-page__play:not([disabled])',
+    '.tv-release-hero__play:not([disabled]), .release-page__btn--play:not([disabled]), .tv-release-page__play:not([disabled])',
   );
   if (play) {
     focusElement(play);
@@ -1115,6 +1121,10 @@ function onActivateKeydown(event: KeyboardEvent): void {
     '.tv-release-page__video-card',
     '.tv-release-page__dialog-item',
     '.tv-release-page__dialog-close',
+    '.tv-release-hero__play',
+    '.tv-release-hero__card',
+    '.tv-release-hero__fav',
+    '.tv-release-hero__more',
     '.release-page__btn--play',
     '.release-page__actions-chip',
     '.release-page__actions-status .uiv2-select__trigger',

@@ -19,8 +19,14 @@ if (isMobileMode()) {
 }
 
 if (isTvMode()) {
-  applyTvDefaults();
-  startDebugMetrics();
+  // Страница пары для телефона (?ref=…) — обычный мобильный размер шрифта,
+  // TV-масштаб 1920×1080 на телефоне сделал бы текст нечитаемым.
+  const isPairPage = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).has('ref');
+  if (!isPairPage) {
+    applyTvDefaults();
+    startDebugMetrics();
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

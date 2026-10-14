@@ -110,20 +110,24 @@ function animatePosterTo(target: DOMRect, targetRadius: string): Promise<void> {
   if (!poster || !pending) return Promise.resolve();
 
   const from = pending.sourceRect;
-  const dx = target.left - from.left;
-  const dy = target.top - from.top;
-  const sx = from.width > 0 ? target.width / from.width : 1;
-  const sy = from.height > 0 ? target.height / from.height : 1;
-
   const fromRadius = pending.borderRadius;
+  // Анимируем геометрию, а не transform: постер карточки портретный, цель на
+  // странице релиза — широкая (арт справа). Масштаб по осям дал бы искажение,
+  // а при изменении width/height img с object-fit: cover плавно меняет кроп.
   const animation = poster.animate(
     [
       {
-        transform: 'translate(0px, 0px) scale(1, 1)',
+        left: `${from.left}px`,
+        top: `${from.top}px`,
+        width: `${from.width}px`,
+        height: `${from.height}px`,
         borderRadius: fromRadius,
       },
       {
-        transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`,
+        left: `${target.left}px`,
+        top: `${target.top}px`,
+        width: `${target.width}px`,
+        height: `${target.height}px`,
         borderRadius: targetRadius,
       },
     ],

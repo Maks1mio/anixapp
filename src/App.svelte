@@ -91,6 +91,7 @@
   import BookmarksTv from './views/Bookmarks.tv.svelte';
   import SearchTv from './views/Search.tv.svelte';
   import ReleaseTv from './views/Release.tv.svelte';
+  import TvPairPage from './views/TvPairPage.svelte';
   import TvFallback from './views/TvFallback.svelte';
   import TvKeepAlive from './components/tv/TvKeepAlive.svelte';
   import TvPlayerShell from './components/tv/TvPlayerShell.svelte';
@@ -109,6 +110,8 @@
 
   // ── Routing state ─────────────────────────────────────────────────────────
   let path = $state(getPath());
+  /** Страница пары для телефона: tv.anixapp.com/?ref=… (QR с телевизора). */
+  const pairRef = $derived(getSearchParams().get('ref')?.trim() ?? '');
   let searchQ = $state('');
   let searchTab = $state<'releases' | 'profiles' | 'collections'>('releases');
   let searchBy = $state(0);
@@ -255,6 +258,8 @@
   const collectionPickReturn  = $derived(getSearchParams().get('return') || '/collections/create');
   const announcementChatMatch = $derived(path.match(/^\/announcement\/([^/]+)\/chat$/));
   const isWatchRoute = $derived(path === '/watch');
+  /** Страница релиза на TV — фуллскрин по макету (без левой панели). */
+  const isReleaseRoute = $derived(/^\/release\/\d+$/.test(path));
   const isComposerWindow = $derived(path === '/feed/composer');
 
   // ── App screen state machine ───────────────────────────────────────────────
@@ -1038,7 +1043,10 @@
     {/if}
 {/snippet}
 
-{#if isComposerWindow}
+{#if pairRef}
+  <TvPairPage ref={pairRef} />
+
+{:else if isComposerWindow}
   <FeedComposerWindow />
 
 {:else if !$authReady}
@@ -1091,7 +1099,7 @@
 
 {:else}
   {#if isTvMode()}
-    <TvLayout currentPath={path} immersive={isWatchRoute}>
+    <TvLayout currentPath={path} immersive={isWatchRoute || isReleaseRoute}>
       {@render tvRoutes()}
     </TvLayout>
   {:else}

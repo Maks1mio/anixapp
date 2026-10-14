@@ -100,6 +100,7 @@
   let screen = $state<EditScreen>('menu');
   $effect(() => {
     screen = startScreen;
+    if (startScreen === 'badge') void loadBadges();
   });
   let loadState = $state<'loading' | 'ready' | 'error'>('loading');
 

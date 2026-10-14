@@ -330,7 +330,8 @@ ipcMain.handle('tool:minimize', (event) => {
 ipcMain.handle('tool:toggleMaximize', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win) return;
-  win.isMaximized() ? win.unmaximize() : win.maximize();
+  if (win.isMaximized()) win.unmaximize();
+  else win.maximize();
 });
 ipcMain.handle('tool:close', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);

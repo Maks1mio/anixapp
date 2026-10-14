@@ -5,16 +5,20 @@
     iconCheck,
     iconChevronLeft,
     iconChevronRight,
+    iconClipboardList,
     iconCopy,
     iconInfo,
+    iconMessageCircle,
     iconMoreHorizontal,
     iconPin,
+    iconPlay,
     iconPlus,
     iconSettings,
     iconSlidersHorizontal,
     iconShuffle,
     iconShare,
     iconTrash2,
+    iconUser,
     iconX,
     iconFlame,
     iconNewspaper,
@@ -71,6 +75,17 @@
   import type { FeedArticle } from '../types/feed';
   import { showToast } from '../stores/toast';
   import { handleUserProfileClick } from '../stores/user-profile';
+  import {
+    previewNotificationCorner,
+    endNotificationCornerPreview,
+    saveDeviceNotificationSettings,
+    hasDeviceNotifications,
+  } from '../stores/device-notifications';
+  import {
+    BANNER_STYLE_OPTIONS,
+    type NotificationBannerStyle,
+  } from '../utils/notification-kinds';
+  import type { NotificationBannerPosition } from '../types/electron';
   import { normalizeCommentProfile, normalizeCommentsFromResponse } from '../utils/comment';
   import { resolveJacksonEntity } from '../utils/jackson-refs';
   import { mapOverviewCommentWeek } from '../utils/overview';
@@ -87,7 +102,17 @@
     formatPlaybackRate,
   } from '../utils/player-hotkeys';
 
-  type SectionId = 'tokens' | 'type' | 'controls' | 'surfaces' | 'cards' | 'posts' | 'comments' | 'menu' | 'release-friends';
+  type SectionId =
+    | 'tokens'
+    | 'type'
+    | 'controls'
+    | 'surfaces'
+    | 'cards'
+    | 'posts'
+    | 'comments'
+    | 'menu'
+    | 'release-friends'
+    | 'notifications';
 
   const sections: { id: SectionId; title: string; desc: string }[] = [
     { id: 'tokens', title: 'Токены', desc: 'Цвета, радиусы, тени — основа V2' },
@@ -99,8 +124,9 @@
     { id: 'comments', title: 'Комментарии', desc: 'Треды, спойлеры, голоса, глубокая вложенность' },
     { id: 'menu', title: 'Popup Menu', desc: 'Вложенные меню, тоглы, копирование без закрытия' },
     { id: 'release-friends', title: 'Друзья на релизе', desc: 'Блок друзей на странице тайтла: статусы, поиск, сетка' },
+    { id: 'notifications', title: 'Уведомления', desc: 'Колокольчик и оверлей-баннеры — с аватарами друзей' },
   ];
-  let active: SectionId = $state('release-friends');
+  let active: SectionId = $state('notifications');
   let feedDemoNavId = $state('latest');
   let feedDemoTopicId = $state<number | null>(null);
   let feedDemoPosts = $state(structuredClone(UIV2_FEED_POST_DEMO));
@@ -166,6 +192,278 @@
   let releaseFriendsChecked = $state(8);
   let releaseFriendsTotal = $state(24);
   let releaseFriendsScanTimer: ReturnType<typeof setInterval> | null = null;
+
+  const NOTIF_DEMO_POSTER = 'https://s.anixmirai.com/posters/VPHehhgSpJ9VRap8e2VpahnZPYyaof.jpg';
+
+  type NotifDemoPerson = { id: number; name: string; image: string };
+  type NotifDemoAnime = { title: string; image: string };
+  type NotifDemoKind =
+    | 'episode'
+    | 'article'
+    | 'friend'
+    | 'friend-accept'
+    | 'comment'
+    | 'related';
+  type NotifDemoItem = {
+    id: string;
+    kind: NotifDemoKind;
+    typeLabel: string;
+    /** Короткий заголовок оверлей-баннера */
+    title: string;
+    bodyHtml: string;
+    /** Плоский текст для оверлея / системного тоста */
+    bodyPlain: string;
+    image: string;
+    timeStr: string;
+    isNew: boolean;
+  };
+
+  let notifFriends = $state<NotifDemoPerson[]>([]);
+  let notifFavorites = $state<NotifDemoAnime[]>([]);
+  let notifFriendsStatus = $state<'idle' | 'loading' | 'ready' | 'empty' | 'error'>('idle');
+  let notifSelfName = $state('');
+  let notifSelfId = $state(0);
+  let notifOverlayStyle = $state<NotificationBannerStyle>('compact');
+  let notifOverlayCorner = $state<NotificationBannerPosition>('bottom-right');
+
+  function personImage(raw: unknown): string {
+    if (typeof raw !== 'string' || !raw.trim()) return NOTIF_DEMO_POSTER;
+    return resolveCdnAssetUrl(raw) || NOTIF_DEMO_POSTER;
+  }
+
+  function escapeDemo(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function boldDemo(value: string): string {
+    return `<b>${escapeDemo(value)}</b>`;
+  }
+
+  function boldQuotedDemo(value: string): string {
+    return `<b>«${escapeDemo(value)}»</b>`;
+  }
+
+  function shuffleInPlace<T>(arr: T[]): T[] {
+    for (let i = arr.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = arr[i]!;
+      arr[i] = arr[j]!;
+      arr[j] = tmp;
+    }
+    return arr;
+  }
+
+  function pickFriend(people: NotifDemoPerson[], index: number): NotifDemoPerson {
+    if (!people.length) {
+      return { id: 0, name: 'AnixUser', image: NOTIF_DEMO_POSTER };
+    }
+    return people[index % people.length]!;
+  }
+
+  function pickAnime(list: NotifDemoAnime[], index: number, fallbackTitle: string): NotifDemoAnime {
+    if (!list.length) {
+      return { title: fallbackTitle, image: NOTIF_DEMO_POSTER };
+    }
+    return list[index % list.length]!;
+  }
+
+  function buildNotifDemos(people: NotifDemoPerson[], favorites: NotifDemoAnime[]): NotifDemoItem[] {
+    const friendsOnly = people.filter((p) => p.id !== notifSelfId);
+    const selfPerson = people.find((p) => p.id === notifSelfId)
+      ?? (notifSelfName
+        ? { id: notifSelfId, name: notifSelfName, image: NOTIF_DEMO_POSTER }
+        : pickFriend(people, 0));
+    const a = selfPerson;
+    const b = pickFriend(friendsOnly.length ? friendsOnly : people, 0);
+    const c = pickFriend(friendsOnly.length ? friendsOnly : people, 1);
+    const d = pickFriend(friendsOnly.length ? friendsOnly : people, 2);
+    const favPool = shuffleInPlace([...favorites]);
+    const ep = pickAnime(favPool, 0, 'Необъятный океан 3');
+    const rel = pickAnime(favPool, favPool.length > 1 ? 1 : 0, 'Кае не страшно');
+    return [
+      {
+        id: 'demo-episode',
+        kind: 'episode',
+        typeLabel: 'Серии',
+        title: 'Серия',
+        bodyHtml: `Вышла ${boldQuotedDemo('11 серия')} релиза ${boldQuotedDemo(ep.title)} в варианте ${boldQuotedDemo('JAM CLUB')} на источнике «Kodik»`,
+        bodyPlain: `Вышла «11 серия» «${ep.title}» · JAM CLUB · Kodik`,
+        image: ep.image,
+        timeStr: '1 ч назад',
+        isNew: true,
+      },
+      {
+        id: 'demo-article',
+        kind: 'article',
+        typeLabel: 'Записи',
+        title: 'Запись',
+        bodyHtml: `Новая запись ${boldQuotedDemo(a.name)}: Аниме Б-800 против аниме утконоса`,
+        bodyPlain: `«${a.name}»: свежий пост в ленте`,
+        image: a.image,
+        timeStr: '22 мин назад',
+        isNew: true,
+      },
+      {
+        id: 'demo-friend-accept',
+        kind: 'friend-accept',
+        typeLabel: 'Друзья',
+        title: 'Друзья',
+        bodyHtml: `Пользователь ${boldDemo(b.name)} внёс вас в список своих друзей`,
+        bodyPlain: `«${b.name}» добавил вас в друзья`,
+        image: b.image,
+        timeStr: '1 ч назад',
+        isNew: true,
+      },
+      {
+        id: 'demo-friend',
+        kind: 'friend',
+        typeLabel: 'Друзья',
+        title: 'Друзья',
+        bodyHtml: `Пользователь ${boldDemo(c.name)} хочет внести вас в список друзей`,
+        bodyPlain: `«${c.name}» хочет добавить вас в друзья`,
+        image: c.image,
+        timeStr: 'вчера',
+        isNew: false,
+      },
+      {
+        id: 'demo-comment',
+        kind: 'comment',
+        typeLabel: 'Комменты',
+        title: 'Комментарий',
+        bodyHtml: `Новый комментарий от ${boldDemo(d.name)}: ${escapeDemo(notifSelfName || 'друг')}, привет! зацени серию`,
+        bodyPlain: `«${d.name}»: ${notifSelfName || 'друг'}, привет! зацени серию`,
+        image: d.image,
+        timeStr: '26 сент. в 19:54',
+        isNew: false,
+      },
+      {
+        id: 'demo-related',
+        kind: 'related',
+        typeLabel: 'Релизы',
+        title: 'Релиз',
+        bodyHtml: `В приложение была добавлена страница релиза ${boldQuotedDemo(rel.title)}`,
+        bodyPlain: `Добавлена страница релиза «${rel.title}»`,
+        image: rel.image,
+        timeStr: '3 ч назад',
+        isNew: false,
+      },
+    ];
+  }
+
+  const notifDemos = $derived(buildNotifDemos(notifFriends, notifFavorites));
+
+  const OVERLAY_CORNERS: { id: NotificationBannerPosition; label: string }[] = [
+    { id: 'top-left', label: '↖' },
+    { id: 'top-right', label: '↗' },
+    { id: 'bottom-left', label: '↙' },
+    { id: 'bottom-right', label: '↘' },
+  ];
+
+  async function showOverlayOnScreen() {
+    if (!hasDeviceNotifications()) {
+      showToast('Оверлей доступен только в Electron', 'info');
+      return;
+    }
+    // Тот же текст, что в превью UI Kit (не укороченный bodyPlain)
+    const items = notifDemos.map((n) => ({
+      title: n.title,
+      body: n.bodyHtml.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(),
+      kind: n.kind,
+      image: n.image,
+      time: Date.now() - 3_600_000,
+    }));
+    await saveDeviceNotificationSettings({ bannerStyle: notifOverlayStyle });
+    await previewNotificationCorner(notifOverlayCorner, items);
+  }
+
+  function hideOverlayOnScreen() {
+    if (!hasDeviceNotifications()) return;
+    void endNotificationCornerPreview();
+  }
+
+  function notifMarkerHtml(kind: NotifDemoKind): string {
+    switch (kind) {
+      case 'episode':
+        return `<span class="notifications-modal__marker notifications-modal__marker--episode">${iconPlay(14)}</span>`;
+      case 'article':
+        return `<span class="notifications-modal__marker notifications-modal__marker--article">${iconClipboardList(13)}</span>`;
+      case 'related':
+        return `<span class="notifications-modal__marker notifications-modal__marker--related">${iconBookmark(14)}</span>`;
+      case 'friend':
+        return `<span class="notifications-modal__marker notifications-modal__marker--friend">${iconUser(13, true)}</span>`;
+      case 'friend-accept':
+        return `<span class="notifications-modal__marker notifications-modal__marker--friend-accept">${iconCheck(13)}</span>`;
+      case 'comment':
+        return `<span class="notifications-modal__marker notifications-modal__marker--comment">${iconMessageCircle(13)}</span>`;
+      default:
+        return '';
+    }
+  }
+
+  async function loadNotifFriendsDemo(): Promise<void> {
+    if (notifFriendsStatus === 'loading') return;
+    notifFriendsStatus = 'loading';
+    try {
+      const selfRes = await window.anixApi?.profile?.self?.() as {
+        profile?: { id?: number; login?: string; avatar?: string };
+      } | null;
+      const self = selfRes?.profile;
+      notifSelfName = typeof self?.login === 'string' ? self.login : '';
+      notifSelfId = Number(self?.id) || 0;
+      const people: NotifDemoPerson[] = [];
+      const seen = new Set<number>();
+      if (self?.id != null && self.login) {
+        const id = Number(self.id);
+        seen.add(id);
+        people.push({ id, name: self.login, image: personImage(self.avatar) });
+      }
+      const uid = Number(self?.id);
+      if (Number.isFinite(uid) && uid > 0) {
+        const friendsRes = await window.anixApi?.profile?.getFriends?.(uid, 0) as {
+          content?: Array<{ id?: number; login?: string; avatar?: string }>;
+        } | null;
+        for (const fr of friendsRes?.content ?? []) {
+          const id = Number(fr?.id);
+          const login = typeof fr?.login === 'string' ? fr.login.trim() : '';
+          if (!login || !Number.isFinite(id) || seen.has(id)) continue;
+          seen.add(id);
+          people.push({ id, name: login, image: personImage(fr?.avatar) });
+        }
+      }
+
+      const favs: NotifDemoAnime[] = [];
+      try {
+        const favRes = await window.anixApi?.favorites?.all?.(0, 1, 0, 0) as {
+          content?: unknown[];
+          releases?: unknown[];
+        } | null;
+        const rows = (favRes?.content ?? favRes?.releases ?? []) as Array<Record<string, unknown>>;
+        for (const raw of rows) {
+          const release = (raw?.release && typeof raw.release === 'object'
+            ? raw.release
+            : raw) as Record<string, unknown>;
+          const title = String(release?.title_ru || release?.title || raw?.title_ru || '').trim();
+          const image = personImage(release?.image || release?.poster || raw?.image);
+          if (!title) continue;
+          favs.push({ title, image });
+        }
+      } catch {
+        /* избранное опционально */
+      }
+
+      notifFriends = people;
+      notifFavorites = favs;
+      notifFriendsStatus = people.length || favs.length ? 'ready' : 'empty';
+    } catch {
+      notifFriends = [];
+      notifFavorites = [];
+      notifFriendsStatus = 'error';
+    }
+  }
 
   function stopReleaseFriendsDemoScan() {
     if (releaseFriendsScanTimer) {
@@ -1129,9 +1427,15 @@
   $effect(() => {
     if (active === 'cards') void loadAnimeCards();
   });
+
+  $effect(() => {
+    if (active === 'notifications' && notifFriendsStatus === 'idle') {
+      void loadNotifFriendsDemo();
+    }
+  });
 </script>
 
-<div class="view view-uikit-v2" class:view-uikit-v2--wide={active === 'cards' || active === 'comments' || active === 'posts' || active === 'release-friends'}>
+<div class="view view-uikit-v2" class:view-uikit-v2--wide={active === 'cards' || active === 'comments' || active === 'posts' || active === 'release-friends' || active === 'notifications'}>
   <header class="uikit-v2-header">
     <div class="uikit-v2-header__top">
       <button type="button" class="uikit-v2-back" onclick={() => navigate('/')}>
@@ -2063,6 +2367,185 @@
           <div class="uikit-v2-demo-block">
             <h3 class="uikit-v2-demo-block__title">Пусто</h3>
             <UiV2ReleaseFriends friends={[]} />
+          </div>
+        {:else if s.id === 'notifications'}
+          <div class="uikit-v2-demo-block">
+            <h3 class="uikit-v2-demo-block__title">Друзья в демо</h3>
+            <p class="uikit-v2-demo-block__desc">
+              Друзья — в заявках/комментах; серии и релизы — случайные постеры из избранного
+              {#if notifFavorites.length} ({notifFavorites.length}){/if}.
+              {#if notifSelfName}
+                Ты: <b>{notifSelfName}</b>.
+              {/if}
+            </p>
+            <div class="uikit-v2-notif-friends">
+              {#if notifFriendsStatus === 'loading' || notifFriendsStatus === 'idle'}
+                <p class="uikit-v2-demo-block__desc">Загружаем друзей…</p>
+              {:else if notifFriendsStatus === 'error'}
+                <p class="uikit-v2-demo-block__desc">Не удалось загрузить друзей — показаны запасные имена.</p>
+                <UiV2Button variant="chrome" size="sm" label="Повторить" onclick={() => { notifFriendsStatus = 'idle'; void loadNotifFriendsDemo(); }} />
+              {:else if notifFriendsStatus === 'empty'}
+                <p class="uikit-v2-demo-block__desc">Друзей нет — в карточках ниже запасные плейсхолдеры.</p>
+              {:else}
+                <div class="uikit-v2-notif-friends__row" role="list">
+                  {#each notifFriends.filter((p) => p.id !== notifSelfId).slice(0, 16) as fr (fr.id)}
+                    <div class="uikit-v2-notif-friends__chip" role="listitem" title={fr.name}>
+                      <span
+                        class="uikit-v2-notif-friends__avatar"
+                        style="background-image:url('{fr.image}')"
+                      ></span>
+                      <span class="uikit-v2-notif-friends__name">{fr.name}</span>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          </div>
+
+          <div class="uikit-v2-demo-block">
+            <h3 class="uikit-v2-demo-block__title">Оверлей на экране</h3>
+            <p class="uikit-v2-demo-block__desc">
+              Баннеры поверх окон — те же, что всплывают из настроек уведомлений. Типы с аватарами друзей.
+            </p>
+            <div class="uikit-v2-notif-overlay-toolbar">
+              <div class="uikit-v2-notif-overlay-toolbar__group" role="radiogroup" aria-label="Стиль баннера">
+                {#each BANNER_STYLE_OPTIONS as opt (opt.value)}
+                  <button
+                    type="button"
+                    class="uikit-v2-notif-overlay-toolbar__chip"
+                    class:uikit-v2-notif-overlay-toolbar__chip--on={notifOverlayStyle === opt.value}
+                    onclick={() => { notifOverlayStyle = opt.value; }}
+                  >{opt.label}</button>
+                {/each}
+              </div>
+              <div class="uikit-v2-notif-overlay-toolbar__group" role="radiogroup" aria-label="Угол превью на экране">
+                {#each OVERLAY_CORNERS as c (c.id)}
+                  <button
+                    type="button"
+                    class="uikit-v2-notif-overlay-toolbar__chip"
+                    class:uikit-v2-notif-overlay-toolbar__chip--on={notifOverlayCorner === c.id}
+                    aria-label={c.id}
+                    onclick={() => { notifOverlayCorner = c.id; }}
+                  >{c.label}</button>
+                {/each}
+              </div>
+              <UiV2Button
+                variant="primary"
+                size="sm"
+                label="Показать на экране"
+                onclick={showOverlayOnScreen}
+              />
+              <UiV2Button
+                variant="chrome"
+                size="sm"
+                label="Скрыть все"
+                onclick={hideOverlayOnScreen}
+              />
+            </div>
+
+            <div class="uikit-v2-notif-overlay-stage" data-style={notifOverlayStyle} data-corner={notifOverlayCorner}>
+              <div
+                class="uikit-v2-notif-overlay-stack"
+                class:uikit-v2-notif-overlay-stack--right={notifOverlayCorner.endsWith('right')}
+                class:uikit-v2-notif-overlay-stack--left={notifOverlayCorner.endsWith('left')}
+                class:uikit-v2-notif-overlay-stack--top={notifOverlayCorner.startsWith('top')}
+                class:uikit-v2-notif-overlay-stack--bottom={notifOverlayCorner.startsWith('bottom')}
+                data-corner={notifOverlayCorner}
+              >
+                {#each notifDemos as n, i (n.id + '-overlay-' + notifOverlayStyle + '-' + notifOverlayCorner)}
+                  {@const fullMedia = n.kind === 'episode' || n.kind === 'related'}
+                  <div class="uiv2-notif-toast-shell" style="animation-delay: {i * 50}ms">
+                    <article
+                      class="uiv2-notif-toast uiv2-notif-toast--{notifOverlayStyle}"
+                      class:uiv2-notif-toast--full-media={notifOverlayStyle === 'full' && fullMedia}
+                      class:uiv2-notif-toast--full-social={notifOverlayStyle === 'full' && !fullMedia}
+                      data-kind={n.kind}
+                    >
+                      {#if notifOverlayStyle === 'full' && fullMedia}
+                        <span class="uiv2-notif-toast__media" style="background-image:url('{n.image}')"></span>
+                        <span class="uiv2-notif-toast__scrim" aria-hidden="true"></span>
+                      {:else if notifOverlayStyle === 'full'}
+                        <span class="uiv2-notif-toast__avatar" style="background-image:url('{n.image}')"></span>
+                      {:else if notifOverlayStyle === 'compact'}
+                        <span class="uiv2-notif-toast__wash" style="background-image:url('{n.image}')" aria-hidden="true"></span>
+                        <span class="uiv2-notif-toast__tint" aria-hidden="true"></span>
+                        <span class="uiv2-notif-toast__thumb" style="background-image:url('{n.image}')"></span>
+                      {:else}
+                        <span class="uiv2-notif-toast__wash" style="background-image:url('{n.image}')" aria-hidden="true"></span>
+                        <span class="uiv2-notif-toast__tint" aria-hidden="true"></span>
+                      {/if}
+                      <span class="uiv2-notif-toast__main">
+                        <span class="uiv2-notif-toast__kind">{n.title}</span>
+                        <span class="uiv2-notif-toast__body">{@html n.bodyHtml}</span>
+                        {#if notifOverlayStyle === 'full'}
+                          <span class="uiv2-notif-toast__time">{n.timeStr}</span>
+                        {/if}
+                      </span>
+                      <span class="uiv2-notif-toast__close" aria-hidden="true">
+                        {@html iconX(16)}
+                      </span>
+                    </article>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          </div>
+
+          <div class="uikit-v2-demo-block">
+            <h3 class="uikit-v2-demo-block__title">Все типы в колокольчике</h3>
+            <p class="uikit-v2-demo-block__desc">
+              Серии, записи, друзья (заявка / принятие), комментарии, релизы — как в списке уведомлений.
+            </p>
+            <div class="uikit-v2-notif-panel notifications-modal__list">
+              {#each notifDemos as n (n.id)}
+                <div
+                  class="notifications-modal__item"
+                  class:notifications-modal__item--new={n.isNew}
+                  role="listitem"
+                >
+                  <div class="notifications-modal__avatar-wrap">
+                    {#if n.image}
+                      <div
+                        class="notifications-modal__thumb"
+                        style="background-image:url('{n.image}');"
+                      ></div>
+                    {:else}
+                      <div class="notifications-modal__thumb notifications-modal__thumb--placeholder"></div>
+                    {/if}
+                    {@html notifMarkerHtml(n.kind)}
+                  </div>
+                  <div class="notifications-modal__main">
+                    <div class="notifications-modal__content">
+                      <div class="uikit-v2-notif-panel__type">{n.typeLabel}</div>
+                      <div class="notifications-modal__text">{@html n.bodyHtml}</div>
+                      <div class="notifications-modal__time">{n.timeStr}</div>
+                    </div>
+                    {#if n.isNew}
+                      <span class="notifications-modal__dot" aria-label="Новое"></span>
+                    {/if}
+                  </div>
+                </div>
+              {/each}
+            </div>
+          </div>
+
+          <div class="uikit-v2-demo-block">
+            <h3 class="uikit-v2-demo-block__title">Маркеры типов</h3>
+            <p class="uikit-v2-demo-block__desc">Цветные бейджи на аватаре — как в колокольчике.</p>
+            <div class="uikit-v2-notif-markers">
+              {#each notifDemos as n (n.id + '-marker')}
+                <div class="uikit-v2-notif-markers__item">
+                  <div class="notifications-modal__avatar-wrap">
+                    <div
+                      class="notifications-modal__thumb"
+                      style="background-image:url('{n.image}');"
+                    ></div>
+                    {@html notifMarkerHtml(n.kind)}
+                  </div>
+                  <span>{n.typeLabel}</span>
+                </div>
+              {/each}
+            </div>
           </div>
         {/if}
       </section>

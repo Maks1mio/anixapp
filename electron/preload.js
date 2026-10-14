@@ -122,6 +122,10 @@ ipcRenderer.on('app:update-progress', (_, payload) => {
   window.dispatchEvent(new CustomEvent('app-update-progress', { detail: payload }));
 });
 
+ipcRenderer.on('notification-sound:playInApp', (_, payload) => {
+  window.dispatchEvent(new CustomEvent('anix:notificationSound', { detail: payload ?? {} }));
+});
+
 // macOS: пункты «Настройки…» и «Переход» в меню приложения.
 // Событие может прийти раньше, чем смонтируется интерфейс, — тогда ждём сигнала app:menuReady.
 let menuListenerReady = false;
@@ -293,6 +297,22 @@ contextBridge.exposeInMainWorld('electron', {
   getLinuxInstallType: () => ipcRenderer.invoke('app:getLinuxInstallType'),
   getSettings: () => ipcRenderer.invoke('app:getSettings'),
   saveSettings: (settings) => ipcRenderer.invoke('app:saveSettings', settings),
+  notifications: {
+    show: (payload) => ipcRenderer.invoke('notifications:show', payload ?? {}),
+    test: (kind) => ipcRenderer.invoke('notifications:test', kind),
+    getSettings: () => ipcRenderer.invoke('notifications:getSettings'),
+    saveSettings: (patch) => ipcRenderer.invoke('notifications:saveSettings', patch ?? {}),
+    listSounds: () => ipcRenderer.invoke('notifications:listSounds'),
+    previewSound: (soundId) => ipcRenderer.invoke('notifications:previewSound', soundId),
+    clear: () => ipcRenderer.invoke('notifications:clear'),
+    /** Живой превью угла / кастомный стек на реальном экране. */
+    previewCorner: (position, items) =>
+      ipcRenderer.invoke('notifications:previewCorner', position, items ?? null),
+    endPreviewCorner: () => ipcRenderer.invoke('notifications:endPreviewCorner'),
+    /** Статус FCM push (как на Android). */
+    fcmStatus: () => ipcRenderer.invoke('notifications:fcmStatus'),
+    fcmSync: () => ipcRenderer.invoke('notifications:fcmSync'),
+  },
   getDevBridgeStatus: () => ipcRenderer.invoke('dev:getBridgeStatus'),
   setDevBridgeEnabled: (enabled) => ipcRenderer.invoke('dev:setBridgeEnabled', enabled),
   regenerateDevBridgeToken: () => ipcRenderer.invoke('dev:regenerateBridgeToken'),

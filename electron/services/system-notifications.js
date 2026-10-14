@@ -161,7 +161,11 @@ async function resolveToastIconPath(image, fallbackPath) {
     let img = nativeImage.createFromBuffer(buffer);
     if (img.isEmpty()) return fallbackPath || undefined;
     const size = img.getSize();
-    if (size.width > 128 || size.height > 128) {
+    if (process.platform === 'darwin') {
+      // macOS сам обрезает миниатюру под квадрат и показывает картинку целиком
+      // в раскрытом уведомлении — уменьшаем с сохранением пропорций.
+      if (size.width > 512) img = img.resize({ width: 512, quality: 'better' });
+    } else if (size.width > 128 || size.height > 128) {
       img = img.resize({ width: 128, height: 128, quality: 'better' });
     }
     const hash = crypto.createHash('sha1').update(https).digest('hex').slice(0, 16);

@@ -21,6 +21,10 @@ const { app, BrowserWindow, shell } = require('electron');
 const APP_DISPLAY_NAME = 'AnixApp';
 const APP_USER_MODEL_ID = 'com.anixapp.client';
 app.setName(APP_DISPLAY_NAME);
+// setName меняет и путь userData: оставляем прежнюю папку «anixapp», иначе на Linux
+// после обновления теряются данные, а на macOS не показываются картинки в уведомлениях
+// (путь с «AnixApp» не совпадает по регистру с папкой на диске).
+app.setPath('userData', path.join(app.getPath('appData'), 'anixapp'));
 try { process.title = APP_DISPLAY_NAME; } catch { /* ignore */ }
 if (process.platform === 'win32') {
   app.setAppUserModelId(APP_USER_MODEL_ID);

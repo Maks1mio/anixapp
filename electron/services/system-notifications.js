@@ -35,6 +35,14 @@ const {
   getSoundsDir,
   soundAssetUrl,
 } = require('../lib/notification-sound-protocol');
+const {
+  BANNER_WINDOW_TITLE,
+  positionWindowOnCompositor,
+  hasCompositorBackend,
+  resolveFocusedMonitor,
+  resolveWindowMonitor,
+  applyBannerWindowRule,
+} = require('../lib/compositor-position');
 
 const BANNER_WIDTH = 400;
 const BANNER_HEIGHT = 128;
@@ -249,6 +257,8 @@ function createService(deps) {
       hasShadow: false,
       acceptFirstMouse: true,
       alwaysOnTop: true,
+      // Фиксированный title — ключ поиска окна в композиторе (Hyprland/sway).
+      title: BANNER_WINDOW_TITLE,
       ...(iconPath && { icon: iconPath }),
       webPreferences: {
         preload: path.join(electronDir, 'notification-banner-preload.js'),
@@ -257,10 +267,17 @@ function createService(deps) {
         sandbox: false,
       },
     });
+    // <title> из notification-banner.html иначе перезапишет title окна, и матч
+    // по title в compositor-position перестанет срабатывать.
+    bannerWindow.on('page-title-updated', (event) => event.preventDefault());
     bannerWindow.setAlwaysOnTop(true, 'screen-saver');
     bannerWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     // Пустота окна прозрачна для кликов; над карточкой включаем снова из рендерера.
     bannerWindow.setIgnoreMouseEvents(true, { forward: true });
+
+    // Hyprland рисует свою рамку/тень вокруг прозрачного floating-окна и анимирует
+    // его перемещение (видно как «телепорт») — гасим это правилом композитора.
+    if (isCompositorMode()) applyBannerWindowRule();
 
     bannerWindow.webContents.once('did-finish-load', () => {
       bannerReady = true;
@@ -269,6 +286,9 @@ function createService(deps) {
     bannerWindow.on('closed', () => {
       bannerWindow = null;
       bannerReady = false;
+      compositorSent = null;
+      cachedBannerTarget = null;
+      bannerPlacementPending = false;
     });
 
     const url = bannerUrl();
@@ -284,6 +304,26 @@ function createService(deps) {
 
   /** Текущая высота окна баннеров (в px). */
   let bannerHeight = BANNER_HEIGHT;
+
+  /**
+   * Native Wayland: позицию окна задаёт композитор, асинхронно и уже после
+   * появления окна. Чтобы это не выглядело как телепорт, окно показываем пустым,
+   * ждём перемещения композитором и только потом шлём контент (см. flushBanners).
+   * Высоту держим фиксированной под настройки — иначе рост стека в нижних углах
+   * меняет y и окно приходится двигать на каждом уведомлении (лаг + дёрганье).
+   */
+  let compositorMode = null;
+  /** { win, x, y } последней отправленной композитору позиции. */
+  let compositorSent = null;
+  /** true — показываем окно и ждём перемещения композитором, контент ещё не отправлен. */
+  let bannerPlacementPending = false;
+
+  function isCompositorMode() {
+    if (compositorMode === null) {
+      try { compositorMode = hasCompositorBackend(); } catch { compositorMode = false; }
+    }
+    return compositorMode;
+  }
 
   /**
    * Превью угла из настроек: { position, items } | null.
@@ -359,8 +399,19 @@ function createService(deps) {
 
   async function showCornerPreviewItems(position, items, stackH) {
     const gen = cornerPreviewGen;
+    // Показываем окно пустым, ждём постановки в угол композитором и только потом
+    // шлём контент — иначе превью мелькает в центре (телепорт в угол).
+    cornerPreview = { position, items: [] };
+    if (bannerReady) flushBanners();
+    await new Promise((resolve) => {
+      let settled = false;
+      const done = () => { if (!settled) { settled = true; resolve(); } };
+      positionBannerWindow(stackH, done, null, true);
+      const guard = setTimeout(done, 2500);
+      guard.unref?.();
+    });
+    if (gen !== cornerPreviewGen) return;
     cornerPreview = { position, items: items.map((it) => ({ ...it, image: '' })) };
-    positionBannerWindow(stackH);
     if (bannerReady) flushBanners();
     const hydrated = await hydrateBannerItemImages(items);
     if (gen !== cornerPreviewGen) return;
@@ -369,45 +420,187 @@ function createService(deps) {
   }
 
   /**
-   * Расположить окно баннеров на экране.
-   * @param {number} height — желаемая высота окна в px
+   * Запасной выбор экрана (не-Wayland, либо композитор не ответил): окно
+   * приложения → под курсором → primary. На Windows/macOS/X11 позиции реальны.
+   * @returns {{display: Electron.Display, area: Electron.Rectangle}}
    */
-  function positionBannerWindow(height) {
-    if (!bannerWindow || bannerWindow.isDestroyed()) return;
+  function bannerDisplayFallback() {
+    let d = null;
+    try {
+      const win = state.mainWindow;
+      if (win && !win.isDestroyed()) d = screen.getDisplayMatching(win.getBounds());
+    } catch { /* ignore */ }
+    if (!d) {
+      try { d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()); } catch { /* ignore */ }
+    }
+    if (!d) d = screen.getPrimaryDisplay();
+    return { display: d, area: d.workArea || d.bounds };
+  }
+
+  /** Экран+рабочая область, выбранные последним resolveBannerDisplay (кэш на время показа). */
+  let cachedBannerTarget = null;
+
+  /** Electron-дисплей по геометрии монитора композитора (x,y — layout-координаты). */
+  function matchDisplayByGeometry(mon) {
+    try {
+      return screen.getAllDisplays().find(
+        (d) => Math.abs(d.bounds.x - mon.x) <= 2 && Math.abs(d.bounds.y - mon.y) <= 2,
+      ) || null;
+    } catch { return null; }
+  }
+
+  /**
+   * Рабочая область экрана с учётом reserved композитора. Electron про reserved
+   * (панель сверху/снизу) не знает — workArea приходит на весь монитор, поэтому
+   * верхние углы заезжали под бар. reserved — физические px, приводим к DIP.
+   */
+  function effectiveWorkArea(display, mon) {
+    const base = display.workArea || display.bounds;
+    const r = mon && Array.isArray(mon.reserved) ? mon.reserved : null;
+    if (!r) return base;
+    const scale = Number(mon.scale) > 0 ? Number(mon.scale) : 1;
+    const px = (v) => Math.round((Number(v) || 0) / scale);
+    const [left, top, right, bottom] = [px(r[0]), px(r[1]), px(r[2]), px(r[3])];
+    return {
+      x: display.bounds.x + left,
+      y: display.bounds.y + top,
+      width: Math.max(1, display.bounds.width - left - right),
+      height: Math.max(1, display.bounds.height - top - bottom),
+    };
+  }
+
+  /**
+   * Выбрать экран+рабочую область для баннера. На native Wayland позицию окна/
+   * курсора не узнать (Electron отдаёт 0,0), поэтому спрашиваем композитор: сначала
+   * монитор главного окна приложения, затем фокусный, затем — запасной вариант.
+   * @param {(target: {display: Electron.Display, area: Electron.Rectangle}) => void} cb
+   */
+  function resolveBannerDisplay(cb) {
+    if (isCompositorMode()) {
+      const finishWith = (mon) => {
+        const d = mon ? matchDisplayByGeometry(mon) : null;
+        cachedBannerTarget = d
+          ? { display: d, area: effectiveWorkArea(d, mon) }
+          : bannerDisplayFallback();
+        cb(cachedBannerTarget);
+      };
+      let title = '';
+      try {
+        const win = state.mainWindow;
+        if (win && !win.isDestroyed()) title = String(win.getTitle() || '');
+      } catch { /* ignore */ }
+      if (title) {
+        resolveWindowMonitor({ pid: process.pid, title }, (mon) => {
+          if (mon) { finishWith(mon); return; }
+          resolveFocusedMonitor(finishWith);
+        });
+        return;
+      }
+      resolveFocusedMonitor(finishWith);
+      return;
+    }
+    cachedBannerTarget = bannerDisplayFallback();
+    cb(cachedBannerTarget);
+  }
+
+  /**
+   * Расположить окно баннеров. Экран выбирает сам: на новом показе — заново
+   * (через resolveBannerDisplay), в пределах показа — из кэша.
+   * @param {number} height
+   * @param {(ok:boolean)=>void} [onDone]
+   * @param {{display: Electron.Display, area: Electron.Rectangle}} [targetOverride]
+   * @param {boolean} [showFirst] — показать окно сразу после задания размера
+   *   (до перемещения композитором): размер не меняется уже на экране.
+   */
+  function positionBannerWindow(height, onDone, targetOverride, showFirst) {
+    if (!bannerWindow || bannerWindow.isDestroyed()) {
+      if (typeof onDone === 'function') onDone(false);
+      return;
+    }
+    if (targetOverride || cachedBannerTarget) {
+      placeBannerWindow(height, onDone, targetOverride || cachedBannerTarget, showFirst);
+      return;
+    }
+    resolveBannerDisplay((target) => {
+      if (!bannerWindow || bannerWindow.isDestroyed()) {
+        if (typeof onDone === 'function') onDone(false);
+        return;
+      }
+      placeBannerWindow(height, onDone, target, showFirst);
+    });
+  }
+
+  function placeBannerWindow(height, onDone, target, showFirst) {
     const settings = config.getNotificationSettings();
     const position = resolveBannerPosition(settings);
     const { alwaysOnTop } = settings;
-    const display = screen.getPrimaryDisplay();
-    const area = display.workArea;
+    const display = target.display;
+    const area = target.area;
     const width = BANNER_WIDTH;
-    const h = Math.max(BANNER_HEIGHT, Math.round(height || bannerHeight));
+    const compositor = isCompositorMode();
+    // Native Wayland: высота фиксирована на всю рабочую область, а не по контенту.
+    // Иначе нижние углы требуют перемещения окна при каждом росте стека (телепорт),
+    // а оценка высоты по карточкам врёт (карточки выше константы STYLE_HEIGHT) →
+    // обрезка. Контент внутри прижимается к верхнему/нижнему краю через flex-стек.
+    const h = compositor
+      ? Math.max(BANNER_HEIGHT, area.height - BANNER_MARGIN * 2)
+      : Math.max(BANNER_HEIGHT, Math.round(height || bannerHeight));
     bannerHeight = h;
 
     let x = area.x + area.width - width - BANNER_MARGIN;
     let y = area.y + BANNER_MARGIN;
 
-    switch (position) {
-      case 'top-left':
-        x = area.x + BANNER_MARGIN;
-        y = area.y + BANNER_MARGIN;
-        break;
-      case 'bottom-left':
-        x = area.x + BANNER_MARGIN;
-        y = area.y + area.height - h - BANNER_MARGIN;
-        break;
-      case 'bottom-right':
-        x = area.x + area.width - width - BANNER_MARGIN;
-        y = area.y + area.height - h - BANNER_MARGIN;
-        break;
-      case 'top-right':
-      default:
-        x = area.x + area.width - width - BANNER_MARGIN;
-        y = area.y + BANNER_MARGIN;
-        break;
+    if (compositor) {
+      // y одинаков для верхних и нижних углов — прижимает контент сам flex-контейнер.
+      x = position.endsWith('-left')
+        ? area.x + BANNER_MARGIN
+        : area.x + area.width - width - BANNER_MARGIN;
+      y = area.y + BANNER_MARGIN;
+    } else {
+      switch (position) {
+        case 'top-left':
+          x = area.x + BANNER_MARGIN;
+          y = area.y + BANNER_MARGIN;
+          break;
+        case 'bottom-left':
+          x = area.x + BANNER_MARGIN;
+          y = area.y + area.height - h - BANNER_MARGIN;
+          break;
+        case 'bottom-right':
+          x = area.x + area.width - width - BANNER_MARGIN;
+          y = area.y + area.height - h - BANNER_MARGIN;
+          break;
+        case 'top-right':
+        default:
+          x = area.x + area.width - width - BANNER_MARGIN;
+          y = area.y + BANNER_MARGIN;
+          break;
+      }
     }
 
-    bannerWindow.setBounds({ x: Math.round(x), y: Math.round(y), width, height: h });
+    const bx = Math.round(x);
+    const by = Math.round(y);
+    bannerWindow.setBounds({ x: bx, y: by, width, height: h });
     bannerWindow.setAlwaysOnTop(!!alwaysOnTop, 'screen-saver');
+    // Показываем сразу после задания размера: иначе окно маппится с прежней
+    // высотой и ресайзится уже на экране (дёрганье).
+    if (showFirst && !bannerWindow.isVisible()) bannerWindow.showInactive();
+    if (!compositor) {
+      if (typeof onDone === 'function') onDone(true);
+      return;
+    }
+    // Wayland (xdg-shell) игнорирует x/y из setBounds — окно уехало бы в центр.
+    // Отдаём координаты композитору, но только когда точка реально сменилась:
+    // flushBanners зовёт это на каждый чих, а hyprctl — процесс → лаги и дёрганье.
+    if (compositorSent
+      && compositorSent.win === bannerWindow
+      && compositorSent.x === bx
+      && compositorSent.y === by) {
+      if (typeof onDone === 'function') onDone(true);
+      return;
+    }
+    compositorSent = { win: bannerWindow, x: bx, y: by };
+    positionWindowOnCompositor(BANNER_WINDOW_TITLE, bx, by, display.scaleFactor, onDone);
   }
 
   // ——— Отправка контента в баннерное окно ———
@@ -429,6 +622,27 @@ function createService(deps) {
     const desiredHeight = visible > 0
       ? STACK_PADDING * 2 + visible * styleH + (visible - 1) * gap
       : styleH + STACK_PADDING * 2;
+    const compositor = isCompositorMode();
+
+    // Native Wayland: новое окно композитор ставит в центр и перемещает только
+    // после появления. Показываем пустым, ждём перемещения и лишь потом шлём
+    // контент — иначе первый кадр мелькает в центре (телепорт).
+    if (compositor && visible > 0 && !bannerWindow.isVisible() && !compositorSent) {
+      if (bannerPlacementPending) return;
+      bannerPlacementPending = true;
+      const finish = () => {
+        if (!bannerPlacementPending) return;
+        bannerPlacementPending = false;
+        if (bannerWindow && !bannerWindow.isDestroyed()) flushBanners();
+      };
+      // showFirst: размер задаётся и окно показывается до перемещения композитором,
+      // а контент уходит только после него (finish).
+      positionBannerWindow(bannerHeight, finish, null, true);
+      // Страховка, если callback от композитора не придёт.
+      const guard = setTimeout(finish, 2500);
+      guard.unref?.();
+      return;
+    }
 
     // Сначала контент — leave/FLIP в рендерере; высоту окна не уменьшаем резко (мерцание).
     bannerWindow.webContents.send('notification-banner:update', {
@@ -448,8 +662,11 @@ function createService(deps) {
 
     if (visible > 0) {
       if (!bannerWindow.isVisible()) bannerWindow.showInactive();
-      // Только рост — уменьшение bounds на нижних углах двигает весь стек.
-      if (desiredHeight > bannerHeight) {
+      if (compositor) {
+        // Высота фиксирована, позицию держит композитор: рост стека окно не двигает.
+        positionBannerWindow(bannerHeight);
+      } else if (desiredHeight > bannerHeight) {
+        // Только рост — уменьшение bounds на нижних углах двигает весь стек.
         positionBannerWindow(desiredHeight);
       } else if (desiredHeight === bannerHeight) {
         positionBannerWindow(desiredHeight);
@@ -466,6 +683,11 @@ function createService(deps) {
         if (queue.length === 0 && !cornerPreview && bannerWindow && !bannerWindow.isDestroyed()) {
           bannerWindow.hide();
           bannerHeight = BANNER_HEIGHT;
+          // Скрыли — на следующем показе композитор снова поставит окно в центр,
+          // позицию и экран надо выбрать заново.
+          compositorSent = null;
+          cachedBannerTarget = null;
+          bannerPlacementPending = false;
           try {
             const { position: pos, alwaysOnTop } = config.getNotificationSettings();
             void pos;
@@ -546,6 +768,8 @@ function createService(deps) {
       if (queue.length === 0) {
         bannerWindow.hide();
         bannerHeight = BANNER_HEIGHT;
+        compositorSent = null;
+        cachedBannerTarget = null;
       } else if (bannerReady) {
         flushBanners();
       }
@@ -1064,6 +1288,8 @@ function createService(deps) {
     });
     ipcMain.on('notification-banner:height', (_, height) => {
       if (!bannerWindow || bannerWindow.isDestroyed()) return;
+      // Native Wayland: высота фиксирована под настройки — рост контента её не меняет.
+      if (isCompositorMode()) return;
       const h = Math.max(BANNER_HEIGHT, Math.round(Number(height) || BANNER_HEIGHT));
       // Только увеличиваем — уменьшение bounds на нижних углах даёт мерцание.
       if (h > bannerHeight) positionBannerWindow(h);
@@ -1084,6 +1310,8 @@ function createService(deps) {
     clearBanners();
     if (bannerWindow && !bannerWindow.isDestroyed()) bannerWindow.destroy();
     bannerWindow = null;
+    compositorSent = null;
+    bannerPlacementPending = false;
     if (soundWindow && !soundWindow.isDestroyed()) soundWindow.destroy();
     soundWindow = null;
     liveNative.clear();

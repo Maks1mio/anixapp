@@ -13,6 +13,7 @@
   import { iconHome, iconPencil, iconShuffle, iconSlidersHorizontal } from '../components/icons';
   import type { ReleaseCardData } from '../types/release';
   import { mapReleaseRawToCard } from '../utils/release-card';
+  import { toIpcArgs } from '../utils/ipc-args';
   import { fetchAnnouncements, type Announcement } from '../services/announcements';
   import AnnouncementBanner from '../components/AnnouncementBanner.svelte';
   import {
@@ -250,7 +251,7 @@
     if (nextPage === 0 && loadState !== 'error') loadState = 'loading';
 
     try {
-      const data = await window.anixApi.release.filter(nextPage, getFilterArgs(activeTab), true) as any;
+      const data = await window.anixApi.release.filter(nextPage, toIpcArgs(getFilterArgs(activeTab)), true) as any;
       const content = (data?.content ?? []) as Record<string, unknown>[];
       if (!content.length) {
         hasMore = false;

@@ -56,6 +56,7 @@
   import Login from './views/Login.svelte';
   import Home from './views/Home.svelte';
   import Overview from './views/Overview.svelte';
+  import Schedule from './views/Schedule.svelte';
   import FluoPage from './views/Fluo/page.svelte';
   import Feed from './views/Feed.svelte';
   import FeedComposerWindow from './views/FeedComposerWindow.svelte';
@@ -1002,7 +1003,8 @@
     {:else if path === '/overview/popular'}
       <Popular />
     {:else if path === '/schedule'}
-      <Overview />
+      <!-- Android: в мобильном «Обзоре» нет блока расписания — отдельный экран (ПК — как у автора) -->
+      {#if isMobileMode()}<Schedule />{:else}<Overview />{/if}
     {:else if path === '/collections'}
       <CollectionsList week={collectionsWeek} />
     {:else if path === '/catalog'}

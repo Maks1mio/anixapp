@@ -217,7 +217,7 @@ import { requestOpenExternal } from '../../../utils/external-link';
 
 {#snippet actionsBlock()}
   <div class="release-page__actions">
-    <div class="release-page__actions-status">
+    <div class="release-page__actions-status" data-status={currentStatus || undefined}>
       {#if tvMode}
         <div class="uiv2-select">
           <div class="uiv2-select__field">

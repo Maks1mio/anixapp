@@ -740,3 +740,86 @@ html.mobile-mode {
     padding: var(--m-space-4) var(--m-gutter) calc(var(--m-space-4) + env(safe-area-inset-bottom)) !important;
   }
 }
+
+// ── Расписание (отдельный экран на Android) ──
+html.mobile-mode {
+  .view-schedule { padding: 0 !important; }
+  .view-schedule .schedule-page { gap: var(--m-space-5); padding-bottom: var(--m-space-5); }
+  .view-schedule .schedule-day__title {
+    margin: 0 0 var(--m-space-3) !important;
+    padding: 0 calc(var(--m-gutter) + env(safe-area-inset-left));
+    font: 700 20px/1.25 var(--m-font) !important;
+    color: var(--m-text);
+  }
+  .view-schedule .uiv2-carousel { margin: 0 !important; padding-left: var(--m-gutter) !important; padding-right: var(--m-gutter) !important; scroll-padding-inline: var(--m-gutter); }
+  .view-schedule .discover-page__loading, .view-schedule .discover-page__empty { padding: var(--m-space-6) var(--m-gutter); text-align: center; color: var(--m-text-2); }
+}
+
+// ── Подложка под строкой состояния ──
+// На части телефонов (новый WebView) страница рисуется и под строкой состояния: при прокрутке шапка
+// («Поиск в закладках») уезжала под часы и значки. Закрываем эту полосу цветом темы. Где страница
+// под строку не заходит, env(safe-area-inset-top) = 0 и подложки нет.
+html.mobile-mode body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top);
+  background: var(--m-bg);
+  z-index: 9000;
+  pointer-events: none;
+}
+
+// ── Закладки: шапка с аватаром, поиск, вкладки и сетка стояли без полей и обрезались справа ──
+html.mobile-mode {
+  .view-bookmarks { padding: 0 !important; max-width: none !important; overflow-x: hidden; }
+  .view-bookmarks .bookmarks__user-header,
+  .view-bookmarks .bookmarks__search,
+  .view-bookmarks .bookmarks__collections {
+    margin-left: calc(var(--m-gutter) + env(safe-area-inset-left)) !important;
+    margin-right: calc(var(--m-gutter) + env(safe-area-inset-right)) !important;
+    box-sizing: border-box;
+    min-width: 0;
+  }
+  .view-bookmarks .bookmarks__user-header { padding-top: var(--m-space-3); gap: var(--m-space-3); }
+  .view-bookmarks .bookmarks__user { flex: 1 1 auto; min-width: 0; }
+  .view-bookmarks .bookmarks__user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .view-bookmarks .bookmarks__user-actions { flex: none; gap: var(--m-space-2); }
+  .view-bookmarks .bookmarks__user-actions .bookmarks-toolbar__icon-btn { width: 44px !important; height: 44px !important; }
+  .view-bookmarks .bookmarks__search { height: 48px; border-radius: 24px !important; }
+  .view-bookmarks .bookmarks__tabs { padding-left: var(--m-gutter); padding-right: var(--m-gutter); scroll-padding-inline: var(--m-gutter); }
+}
+
+// ── Цвет категории списка (как в статистике профиля): Смотрю — зелёный, В планах — розовый,
+// Просмотрено — синий, Отложено — оранжевый, Брошено — красный. Текст плашек подобран по контрасту ≥ 4.5:1.
+html.mobile-mode {
+  .uiv2-anime-card__status-badge {
+    color: #1c1b1f !important;
+    font-weight: 700 !important;
+    text-shadow: none !important;
+    &--watching { background: var(--st-watching) !important; }
+    &--planned { background: var(--st-planned) !important; }
+    &--completed { background: var(--st-completed) !important; }
+    &--on-hold { background: var(--st-on_hold) !important; }
+    &--dropped { background: var(--st-dropped) !important; color: #fff !important; }
+  }
+
+  // Кнопка статуса на релизе: рамка, текст и шеврон — в цвет выбранной категории
+  @each $st in (watching, planned, completed, on_hold, dropped) {
+    .release-page__actions-status[data-status='#{$st}'] {
+      .uiv2-select__trigger {
+        border-color: var(--st-#{$st}) !important;
+        background: color-mix(in srgb, var(--st-#{$st}) 16%, transparent) !important;
+      }
+      .uiv2-select__chevron { color: var(--st-#{$st}) !important; }
+    }
+  }
+}
+html.mobile-mode[data-m-theme='light'] .uiv2-anime-card__status-badge--dropped { color: #1c1b1f !important; }
+
+// Ленты на телефоне листаются пальцем: без стрелок, затемнений по краям и полосы прокрутки ПК
+html.mobile-mode {
+  .uiv2-carousel__nav, .release-page__carousel-fade, .release-page__carousel-arrow,
+  .uiv2-scroll-area__h-track { display: none !important; }
+}

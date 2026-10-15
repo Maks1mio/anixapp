@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isMobileMode } from '../platform/mobile';
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import ReleaseCardsGridSkeleton from '../components/ReleaseCardsGridSkeleton.svelte';
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
@@ -499,12 +500,29 @@
       {/each}
     </div>
   {/if}
+  <!-- «Случайный релиз» у вкладок — только на ПК; на Android «Рандом» есть в «Обзоре» -->
+  {#snippet homeRandomAction()}
+    <div class="bookmarks-toolbar">
+      <button
+        type="button"
+        class="uiv2-tabs__tool-btn"
+        title="Случайный релиз"
+        aria-label="Случайный релиз"
+        disabled={randomLoading}
+        onclick={handleRandom}
+      >
+        {@html iconShuffle(18)}
+      </button>
+    </div>
+  {/snippet}
+
   <Tabs
     tabs={homeTabs}
     activeId={activeTab}
     onChange={(id) => setActiveTab(id as HomeTabId)}
     onTabContextMenu={handleTabContextMenu}
     rootClassName="bookmarks__tabs releases-type"
+    rightActions={isMobileMode() ? undefined : homeRandomAction}
   >
     {#snippet leftActions()}
       <button
@@ -518,20 +536,6 @@
       >
         {@html iconSlidersHorizontal(18)}
       </button>
-    {/snippet}
-    {#snippet rightActions()}
-      <div class="bookmarks-toolbar">
-        <button
-          type="button"
-          class="uiv2-tabs__tool-btn"
-          title="Случайный релиз"
-          aria-label="Случайный релиз"
-          disabled={randomLoading}
-          onclick={handleRandom}
-        >
-          {@html iconShuffle(18)}
-        </button>
-      </div>
     {/snippet}
   </Tabs>
 

@@ -839,3 +839,13 @@ html.mobile-mode {
   }
   .uiv2-collection__card * { box-shadow: none !important; }
 }
+html.mobile-mode {
+  // «Уведомления»: текст пустого состояния и список стояли вплотную к левому краю
+  .view-notifications .notifications__content {
+    padding-left: calc(var(--m-gutter) + env(safe-area-inset-left)) !important;
+    padding-right: calc(var(--m-gutter) + env(safe-area-inset-right)) !important;
+  }
+  .view-notifications .notifications__empty, .view-notifications .notifications__loading {
+    padding: var(--m-space-6) 0; text-align: center; color: var(--m-text-2); font-size: 15px;
+  }
+}

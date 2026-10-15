@@ -71,11 +71,10 @@ html.mobile-mode {
     .uiv2-anime-card__more-slot { flex: none; margin: -6px -8px 0 0; }
     .uiv2-anime-card__more { color: var(--m-text-2) !important; }
 
-    .uiv2-anime-card__stats { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--m-space-2); margin: 2px 0 0; color: var(--m-text-2); font-size: var(--m-fs-meta); }
+    .uiv2-anime-card__stats { display: flex; flex-wrap: wrap; align-items: center; gap: var(--m-space-1) var(--m-space-3); margin: 2px 0 0; color: var(--m-text-2); font-size: var(--m-fs-meta); }
     .uiv2-anime-card__score-count { display: none; }
     .uiv2-anime-card__meta { order: 1; }
     .uiv2-anime-card__score { order: 2; display: inline-flex; flex-direction: row-reverse; align-items: center; gap: 2px; }
-    .uiv2-anime-card__score ~ .uiv2-anime-card__meta::after { content: '•'; margin-left: var(--m-space-2); }
     .uiv2-anime-card__score { color: var(--m-text-2) !important; }
     .uiv2-anime-card__score-star { color: var(--m-text-2) !important; }
     .uiv2-anime-card__score-value { color: var(--m-text-2) !important; font-weight: 400; }

@@ -819,6 +819,23 @@ html.mobile-mode[data-m-theme='light'] .uiv2-anime-card__status-badge--dropped {
 
 // Ленты на телефоне листаются пальцем: без стрелок, затемнений по краям и полосы прокрутки ПК
 html.mobile-mode {
-  .uiv2-carousel__nav, .release-page__carousel-fade, .release-page__carousel-arrow,
+  // ВНИМАНИЕ: .uiv2-carousel__nav — обёртка самой ленты с карточками, её не скрывать
+  .release-page__carousel-fade, .release-page__carousel-arrow,
   .uiv2-scroll-area__h-track { display: none !important; }
+}
+html.mobile-mode {
+  // Коллекции в закладках: на телефоне 2 колонки (с полями одна колонка на минимальной ширине давала огромные карточки),
+  // на планшете — сколько поместится
+  .view-bookmarks .bookmarks__collections { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: var(--m-space-3) !important; }
+  @media (min-width: 600px) {
+    .view-bookmarks .bookmarks__collections { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important; }
+  }
+}
+html.mobile-mode {
+  // Карточки коллекций: тяжёлая тень ПК (0 12px 28px) в светлой теме сливалась в серую полосу — тонкая рамка
+  .uiv2-collection__card {
+    box-shadow: none !important;
+    border: 1px solid var(--m-outline-variant) !important;
+  }
+  .uiv2-collection__card * { box-shadow: none !important; }
 }

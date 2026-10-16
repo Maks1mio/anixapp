@@ -25,26 +25,88 @@ export function getSeasonName(season: number | null | undefined): string {
   }
 }
 
+/**
+ * HTML с сервера (описание, заметка релиза) разбирается в инертном документе DOMParser: там не
+ * грузятся картинки и не срабатывают обработчики (onerror и т. п.). Присваивание innerHTML элементу
+ * живого документа выполняло `<img src=x onerror=…>` ещё до очистки.
+ */
+function parseInert(html: string): Document {
+  return new DOMParser().parseFromString(String(html), 'text/html');
+}
+
 export function stripHtmlToText(html: string): string {
   if (!html) return '';
-  const tmp = document.createElement('div');
-  tmp.innerHTML = html.replace(/<br\s*\/?>/gi, '\n');
-  return (tmp.textContent || tmp.innerText || '').trim();
+  const doc = parseInert(html.replace(/<br\s*\/?>/gi, '\n'));
+  return (doc.body.textContent || '').trim();
+}
+
+/** Разрешённые теги (остальные — разворачиваются в текст) и атрибуты. */
+const RICH_ALLOWED_TAGS = new Set([
+  'a', 'b', 'strong', 'i', 'em', 'u', 's', 'strike', 'del', 'br', 'p', 'span', 'div',
+  'ul', 'ol', 'li', 'blockquote', 'code', 'pre', 'h1', 'h2', 'h3', 'h4', 'sub', 'sup', 'small', 'hr',
+]);
+/** Удаляются вместе с содержимым. */
+const RICH_DROP_TAGS = new Set([
+  'script', 'style', 'iframe', 'frame', 'frameset', 'object', 'embed', 'applet', 'video', 'audio',
+  'source', 'track', 'img', 'picture', 'svg', 'math', 'form', 'input', 'button', 'select', 'textarea',
+  'option', 'link', 'meta', 'base', 'template', 'noscript', 'canvas', 'map', 'area', 'portal',
+]);
+
+/** Только http(s), mailto и относительные пути; управляющие символы и пробелы внутри схемы не обходят проверку. */
+function safeHref(value: string): string | null {
+  const v = value.replace(/[\u0000-\u0020\u007f-\u009f]/g, '');
+  if (!v) return null;
+  if (v.startsWith('/') && !v.startsWith('//')) return value.trim();
+  if (v.startsWith('#')) return value.trim();
+  try {
+    const u = new URL(v);
+    return u.protocol === 'http:' || u.protocol === 'https:' || u.protocol === 'mailto:' ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeNode(node: Node, doc: Document): void {
+  for (const child of [...node.childNodes]) {
+    if (child.nodeType === Node.COMMENT_NODE) {
+      child.remove();
+      continue;
+    }
+    if (child.nodeType !== Node.ELEMENT_NODE) continue;
+    const el = child as Element;
+    const tag = el.localName.toLowerCase();
+    if (RICH_DROP_TAGS.has(tag) || el.namespaceURI !== 'http://www.w3.org/1999/xhtml') {
+      el.remove();
+      continue;
+    }
+    sanitizeNode(el, doc);
+    if (!RICH_ALLOWED_TAGS.has(tag)) {
+      // Неизвестный тег: оставляем только содержимое
+      el.replaceWith(...[...el.childNodes]);
+      continue;
+    }
+    for (const attr of [...el.attributes]) {
+      const name = attr.name.toLowerCase();
+      if (tag === 'a' && name === 'href') {
+        const href = safeHref(attr.value);
+        if (href) el.setAttribute('href', href);
+        else el.removeAttribute('href');
+      } else if (name !== 'class' && name !== 'title' && !(tag === 'a' && name === 'target')) {
+        el.removeAttribute(attr.name);
+      }
+    }
+    if (tag === 'a') {
+      el.setAttribute('rel', 'noopener noreferrer nofollow');
+      if (el.getAttribute('target') !== '_blank') el.removeAttribute('target');
+    }
+  }
 }
 
 export function sanitizeRichHtml(raw: string): string {
   if (!raw) return '';
-  const root = document.createElement('div');
-  root.innerHTML = raw;
-  const DENY = ['script','iframe','object','embed','video','audio','form','input','button','link','meta','style','img','svg'];
-  DENY.forEach(tag => root.querySelectorAll(tag).forEach(el => el.remove()));
-  root.querySelectorAll('*').forEach(el => {
-    for (const attr of [...el.attributes]) {
-      if (attr.name.startsWith('on')) { el.removeAttribute(attr.name); continue; }
-      if (attr.name === 'href' && /^\s*javascript:/i.test(attr.value)) el.removeAttribute(attr.name);
-    }
-  });
-  return root.innerHTML;
+  const doc = parseInert(raw);
+  sanitizeNode(doc.body, doc);
+  return doc.body.innerHTML;
 }
 
 export function formatVoteCount(n: number): string {

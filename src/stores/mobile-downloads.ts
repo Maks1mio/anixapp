@@ -164,5 +164,7 @@ export function initConnectivity(): void {
   window.addEventListener('offline', () => isOnline.set(false));
   try { void native()?.addListener?.('network', () => void poll()); } catch { /* ignore */ }
   void poll();
-  setInterval(() => void poll(), 2500);
+  // Страховка к событиям сети; в фоне не опрашиваем — при возврате проверим сразу
+  setInterval(() => { if (!document.hidden) void poll(); }, 2500);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) void poll(); });
 }

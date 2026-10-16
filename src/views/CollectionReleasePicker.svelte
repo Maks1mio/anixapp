@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageScrollElement } from '../platform/mobile';
   import { onMount, onDestroy } from 'svelte';
   import { iconArrowLeft, iconClock, iconSearch } from '../components/icons';
   import { navigate } from '../stores/navigation';
@@ -122,7 +123,7 @@
   }
 
   function attachScroll() {
-    const el = (wrapEl?.closest('.page__scroll') as HTMLElement | null)
+    const el = pageScrollElement(wrapEl)
       ?? document.getElementById('content');
     if (!el) return;
     scrollEl = el;

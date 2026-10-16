@@ -1,7 +1,8 @@
 <script lang="ts">
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
-  import { iconX } from './icons';
+  import { iconX, iconArrowLeft } from './icons';
+  import { isMobileMode } from '../platform/mobile';
   import {
     profilePanelBack,
     profilePanelForward,
@@ -22,6 +23,12 @@
   let { userId, onClose }: Props = $props();
 
   let slideReady = $state(false);
+  /** Android: шапка «← Профиль» (как в Anixart); «назад» ведёт к предыдущему профилю или закрывает. */
+  const mobileUi = isMobileMode();
+  function mobileBack() {
+    if (multi && activeIndex > 0) profilePanelBack();
+    else onClose();
+  }
 
   const history = $derived($profilePanelHistory);
   const historyIndex = $derived($profilePanelHistoryIndex);
@@ -61,6 +68,14 @@
   role="dialog"
   aria-label="Профиль"
 >
+  {#if mobileUi}
+    {#if innerView === 'overview'}
+      <header class="m-set-bar m-pbar">
+        <button type="button" class="m-set-bar__back" onclick={mobileBack} aria-label="Назад">{@html iconArrowLeft(24)}</button>
+        <h1 class="m-set-bar__title">Профиль</h1>
+      </header>
+    {/if}
+  {:else}
   <header class="profile-panel__chrome" class:profile-panel__chrome--multi={showHistoryNav}>
     {#if showHistoryNav}
       <div class="profile-panel__nav-slot" transition:fly={{ y: -10, duration: 300, easing: cubicOut }}>
@@ -80,6 +95,7 @@
       </UiV2RoundButton>
     </div>
   </header>
+  {/if}
 
   <div class="profile-panel__viewport">
     <div

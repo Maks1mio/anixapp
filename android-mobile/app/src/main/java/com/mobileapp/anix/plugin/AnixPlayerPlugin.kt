@@ -27,6 +27,7 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.mobileapp.anix.download.AnixDownloadService
+import com.mobileapp.anix.log.AppLog
 import com.mobileapp.anix.media.HeaderStore
 import com.mobileapp.anix.media.MediaEngine
 import com.mobileapp.anix.net.AnixBackClient
@@ -35,6 +36,7 @@ import com.mobileapp.anix.ui.PlayerActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 /**
@@ -49,6 +51,9 @@ class AnixPlayerPlugin : Plugin() {
 
     private val dlListener = object : DownloadManager.Listener {
         override fun onDownloadChanged(downloadManager: DownloadManager, download: Download, finalException: Exception?) {
+            if (download.state == Download.STATE_FAILED) {
+                AppLog.e("download", "Загрузка ${download.request.id} не удалась (причина ${download.failureReason})", finalException)
+            }
             notifyListeners("downloadState", download.toJs(finalException?.message))
         }
 
@@ -69,6 +74,70 @@ class AnixPlayerPlugin : Plugin() {
         cm.registerDefaultNetworkCallback(cb)
         netCallback = cb
         resumePendingDownloads()
+        AppLog.listener = logListener
+    }
+
+    private val logListener: (AppLog.Entry) -> Unit = { e -> notifyListeners("nativeLog", e.toJs()) }
+
+    private fun AppLog.Entry.toJs() = JSObject()
+        .put("ts", ts).put("level", level).put("channel", channel).put("message", message)
+
+    // --- Журнал ------------------------------------------------------------------------------
+
+    /** {level, channel, message} — запись из веба в logcat (тег AnixApp), чтобы видеть всё в одном месте. */
+    @PluginMethod
+    fun nativeLog(call: PluginCall) {
+        val msg = "[${call.getString("channel") ?: "app"}] ${call.getString("message") ?: ""}"
+        when (call.getString("level")) {
+            "error" -> android.util.Log.e("AnixApp/web", msg)
+            "warn" -> android.util.Log.w("AnixApp/web", msg)
+            else -> android.util.Log.i("AnixApp/web", msg)
+        }
+        call.resolve()
+    }
+
+    /** Нативные записи, накопленные, пока веб не слушал (например, во время просмотра). {entries: [...]} */
+    @PluginMethod
+    fun nativeLogs(call: PluginCall) {
+        call.resolve(JSObject().put("entries", JSArray(AppLog.drain().map { it.toJs() })))
+    }
+
+    /**
+     * Почему процесс приложения завершался раньше (Android 11+): вылет, ANR, нехватка памяти, закрыт пользователем.
+     * {exits: [{ts, reason, description, importance}]}
+     */
+    @PluginMethod
+    fun exitReasons(call: PluginCall) {
+        val out = JSArray()
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            runCatching { am.getHistoricalProcessExitReasons(context.packageName, 0, 10) }.getOrDefault(emptyList()).forEach { x ->
+                val reason = when (x.reason) {
+                    android.app.ApplicationExitInfo.REASON_CRASH -> "crash"
+                    android.app.ApplicationExitInfo.REASON_CRASH_NATIVE -> "crash_native"
+                    android.app.ApplicationExitInfo.REASON_ANR -> "anr"
+                    android.app.ApplicationExitInfo.REASON_LOW_MEMORY -> "low_memory"
+                    android.app.ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "excessive_resource"
+                    android.app.ApplicationExitInfo.REASON_USER_REQUESTED -> "user_requested"
+                    android.app.ApplicationExitInfo.REASON_USER_STOPPED -> "user_stopped"
+                    android.app.ApplicationExitInfo.REASON_SIGNALED -> "signaled"
+                    android.app.ApplicationExitInfo.REASON_EXIT_SELF -> "exit_self"
+                    android.app.ApplicationExitInfo.REASON_DEPENDENCY_DIED -> "dependency_died"
+                    android.app.ApplicationExitInfo.REASON_PERMISSION_CHANGE -> "permission_change"
+                    android.app.ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "init_failure"
+                    else -> "other"
+                }
+                out.put(JSObject().put("ts", x.timestamp).put("reason", reason)
+                    .put("description", x.description ?: "").put("importance", x.importance))
+            }
+        }
+        val res = JSObject().put("exits", out)
+        val prefs = context.getSharedPreferences("anix_log", Context.MODE_PRIVATE)
+        prefs.getString("last_crash", null)?.let { trace ->
+            res.put("lastCrash", JSObject().put("ts", prefs.getLong("last_crash_ts", 0L)).put("trace", trace))
+            prefs.edit().remove("last_crash").remove("last_crash_ts").apply()
+        }
+        call.resolve(res)
     }
 
     /** Приложение запущено заново (процесс мог умереть) — докачиваем незавершённое, пока не вернули сеть/сервис. */
@@ -83,7 +152,135 @@ class AnixPlayerPlugin : Plugin() {
         }
     }
 
+    // --- Системные полосы под тему ------------------------------------------------------------
+
+    /** Последние цвета от веба: Capacitor SystemBars сбрасывает фон окна на чёрный при повороте. */
+    private var barsTop: Int? = null
+    private var barsBottom: Int? = null
+    private var barsLight = false
+
+    /** Фон под строкой состояния (верх) и под жестовой панелью (низ) + тёмные/светлые значки. */
+    private class SystemBarsDrawable(private val top: Int, private val bottom: Int, private val bottomInset: () -> Int) :
+        android.graphics.drawable.Drawable() {
+        private val paint = android.graphics.Paint()
+        override fun draw(canvas: android.graphics.Canvas) {
+            val b = bounds
+            val split = (b.bottom - bottomInset()).coerceIn(b.top, b.bottom)
+            paint.color = top
+            canvas.drawRect(b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), split.toFloat(), paint)
+            paint.color = bottom
+            canvas.drawRect(b.left.toFloat(), split.toFloat(), b.right.toFloat(), b.bottom.toFloat(), paint)
+        }
+        override fun setAlpha(alpha: Int) {}
+        override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) {}
+        @Deprecated("Deprecated in Java")
+        override fun getOpacity() = android.graphics.PixelFormat.OPAQUE
+    }
+
+    private fun applySystemBars() {
+        val top = barsTop ?: return
+        val bottom = barsBottom ?: top
+        val window = activity.window
+        val decor = window.decorView
+        decor.background = SystemBarsDrawable(top, bottom) {
+            androidx.core.view.ViewCompat.getRootWindowInsets(decor)
+                ?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom ?: 0
+        }
+        WindowCompat.getInsetsController(window, decor).apply {
+            isAppearanceLightStatusBars = barsLight
+            isAppearanceLightNavigationBars = barsLight
+        }
+    }
+
+    /** {top: "#rrggbb", bottom?: "#rrggbb", light: boolean} — цвета системных полос по теме приложения. */
+    @PluginMethod
+    fun setSystemBars(call: PluginCall) {
+        val top = runCatching { android.graphics.Color.parseColor(call.getString("top")) }.getOrNull()
+        if (top == null) { call.reject("top обязателен"); return }
+        barsTop = top
+        barsBottom = runCatching { android.graphics.Color.parseColor(call.getString("bottom")) }.getOrNull()
+        barsLight = call.getBoolean("light") ?: false
+        activity.runOnUiThread { applySystemBars(); call.resolve() }
+    }
+
+    override fun handleOnConfigurationChanged(newConfig: android.content.res.Configuration?) {
+        super.handleOnConfigurationChanged(newConfig)
+        // После SystemBars (он ставит чёрный windowBackground) — возвращаем свои цвета
+        activity.window.decorView.post { applySystemBars() }
+    }
+
+    override fun handleOnResume() {
+        super.handleOnResume()
+        activity.window.decorView.post { applySystemBars() }
+    }
+
+    // --- Веб-плеер источника -----------------------------------------------------------------
+
+    /** {url, referer?, title?} — веб-плеер на весь экран (страница-обёртка верхним уровнем). Резолвится по закрытию: {closed, seconds}. */
+    @PluginMethod
+    fun openWebPlayer(call: PluginCall) {
+        val url = call.getString("url")
+        if (!isNetworkUrl(url)) { call.reject("Недопустимая ссылка"); return }
+        val intent = Intent(context, com.mobileapp.anix.ui.WebPlayerActivity::class.java)
+            .putExtra(com.mobileapp.anix.ui.WebPlayerActivity.EXTRA_URL, url)
+            .putExtra(com.mobileapp.anix.ui.WebPlayerActivity.EXTRA_REFERER, call.getString("referer"))
+            .putExtra(com.mobileapp.anix.ui.WebPlayerActivity.EXTRA_TITLE, call.getString("title"))
+        startActivityForResult(call, intent, "webPlayerResult")
+    }
+
+    @ActivityCallback
+    private fun webPlayerResult(call: PluginCall?, result: ActivityResult) {
+        val secs = result.data?.getIntExtra(com.mobileapp.anix.ui.WebPlayerActivity.RESULT_SECONDS, 0) ?: 0
+        call?.resolve(JSObject().put("closed", true).put("seconds", secs))
+    }
+
+    // --- Журнал: «Поделиться» ----------------------------------------------------------------
+
+    /** {text, title?} — системное «Поделиться» (Telegram, почта, заметки) текстом журнала. */
+    @PluginMethod
+    fun shareText(call: PluginCall) {
+        val text = call.getString("text")
+        if (text.isNullOrEmpty()) { call.reject("text обязателен"); return }
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+            putExtra(Intent.EXTRA_SUBJECT, call.getString("title") ?: "Журнал AnixApp")
+        }
+        try {
+            activity.startActivity(Intent.createChooser(send, call.getString("title") ?: "Журнал AnixApp"))
+            call.resolve()
+        } catch (e: Exception) {
+            call.reject("Не удалось открыть «Поделиться»: " + e.message)
+        }
+    }
+
+    // --- Язык АниксПлеера ---------------------------------------------------------------------
+
+    /**
+     * Системный экран «Язык приложения» для официального АниксПлеера (Android 13+; он поддерживает en/ru).
+     * Ниже Android 13 — карточка приложения: язык там совпадает с системным. {opened: "locale"|"details"|"none"}
+     */
+    @PluginMethod
+    fun openAnixPlayerLanguage(call: PluginCall) {
+        if (installedVersion(officialAnixPlayer) == null) { call.resolve(JSObject().put("opened", "none")); return }
+        val uri = Uri.fromParts("package", officialAnixPlayer, null)
+        val tries = buildList {
+            if (android.os.Build.VERSION.SDK_INT >= 33) add("locale" to Intent(android.provider.Settings.ACTION_APP_LOCALE_SETTINGS, uri))
+            add("details" to Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, uri))
+        }
+        for ((kind, intent) in tries) {
+            try {
+                activity.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                call.resolve(JSObject().put("opened", kind)); return
+            } catch (_: Exception) { /* следующий вариант */ }
+        }
+        call.resolve(JSObject().put("opened", "none"))
+    }
+
     override fun handleOnDestroy() {
+        // AppLog — синглтон процесса: без сброса он держал бы плагин, мост и Activity после закрытия
+        if (AppLog.listener === logListener) AppLog.listener = null
+        scope.cancel()
         MediaEngine.downloadManager.removeListener(dlListener)
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         netCallback?.let { runCatching { cm.unregisterNetworkCallback(it) } }
@@ -114,10 +311,11 @@ class AnixPlayerPlugin : Plugin() {
         val act = activity
         if (act == null) { call.resolve(); return }
         act.runOnUiThread {
+            // Вне плеера — обычный поворот (телефон/планшет, с учётом системной блокировки поворота).
             act.requestedOrientation = if (landscape) {
                 ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             } else {
-                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                ActivityInfo.SCREEN_ORIENTATION_FULL_USER
             }
             val controller = WindowCompat.getInsetsController(act.window, act.window.decorView)
             if (landscape) {
@@ -158,18 +356,88 @@ class AnixPlayerPlugin : Plugin() {
 
     // --- Внешние плееры ----------------------------------------------------------------------
 
-    private val anixPlayerPackages = listOf("com.anixapp.player", "com.anixapp.player.debug")
+    /** Официальный АниксПлеер (Anixart, на базе mpv) — протокол как у Anixart 10.0. */
+    private val officialAnixPlayer = "com.swiftsoft.anixart.player"
+    /** Наш форк mpvEx (AnixApp Player) — Intent API из docs/INTENT_API.md; запасной вариант. */
+    private val ownAnixPlayerPackages = listOf("com.anixapp.player", "com.anixapp.player.debug")
+
+    private fun installedVersion(pkg: String): Long? = try {
+        val info = context.packageManager.getPackageInfo(pkg, 0)
+        if (android.os.Build.VERSION.SDK_INT >= 28) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()
+    } catch (_: PackageManager.NameNotFoundException) { null }
+
+    private fun isNetworkUrl(url: String?): Boolean {
+        val scheme = url?.let { Uri.parse(it).scheme?.lowercase() }
+        return scheme == "https" || scheme == "http"
+    }
+
+    /** {installed, versionCode?, abis} — установлен ли официальный АниксПлеер (для кнопки «Установить/Обновить»). */
+    @PluginMethod
+    fun anixPlayerStatus(call: PluginCall) {
+        val out = JSObject()
+        val v = installedVersion(officialAnixPlayer)
+        out.put("installed", v != null)
+        if (v != null) out.put("versionCode", v)
+        out.put("ownInstalled", ownAnixPlayerPackages.any { installedVersion(it) != null })
+        out.put("abis", JSArray(android.os.Build.SUPPORTED_ABIS.toList()))
+        call.resolve(out)
+    }
+
+    /**
+     * Официальный АниксПлеер: ACTION_VIEW c плейлистом (video_list) — те же extras, что передаёт Anixart 10.0.
+     * Стартовая серия = элемент video_list, совпадающий с data. Позиции — в миллисекундах.
+     */
+    private fun buildOfficialAnixIntent(call: PluginCall, url: String, title: String?, headers: Array<String>?, startMs: Long): Intent? {
+        val items = call.getArray("playlist")?.toList<org.json.JSONObject>().orEmpty()
+            .filter { isNetworkUrl(it.optString("url")) }
+        val urls = if (items.isEmpty()) listOf(url) else items.map { it.getString("url") }
+        var start = call.getInt("startIndex") ?: urls.indexOf(url)
+        if (start !in urls.indices) start = 0
+        val uris = urls.map { Uri.parse(it) }.toTypedArray()
+        val names = Array(urls.size) { i -> items.getOrNull(i)?.optString("name").orEmpty().ifBlank { title.orEmpty() } }
+        val infos = Array(urls.size) { i -> items.getOrNull(i)?.optString("info").orEmpty() }
+        val thumb = call.getString("thumbnail")?.takeIf { isNetworkUrl(it) }.orEmpty()
+        val qualities = org.json.JSONArray()
+        for (i in urls.indices) qualities.put(items.getOrNull(i)?.optJSONObject("qualities") ?: org.json.JSONObject())
+        val positions = IntArray(urls.size) { i ->
+            val ms = items.getOrNull(i)?.optLong("positionMs", 0L) ?: 0L
+            (if (i == start && startMs > 0) startMs else ms).coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+        }
+        return Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uris[start], "video/*")
+            setPackage(officialAnixPlayer)
+            putExtra("video_list", uris)
+            putExtra("video_list.name", names)
+            putExtra("video_list.info", infos)
+            putExtra("video_list.thumbnail", Array(urls.size) { thumb })
+            headers?.let { putExtra("headers", it) }
+            title?.let { putExtra("title", it) }
+            putExtra("playlist_qualities", qualities.toString())
+            call.getString("selectedQuality")?.let { putExtra("selected_quality", it) }
+            putExtra("playlist_positions", positions)
+            // Честно представляемся своим пакетом: плеер это поле не проверяет
+            putExtra("host_package_name", context.packageName)
+            try {
+                val pi = context.packageManager.getPackageInfo(context.packageName, 0)
+                putExtra("host_version_code", (if (android.os.Build.VERSION.SDK_INT >= 28) pi.longVersionCode else @Suppress("DEPRECATION") pi.versionCode.toLong()).toInt())
+                putExtra("host_version_name", pi.versionName)
+            } catch (_: Exception) { /* не критично */ }
+        }
+    }
 
     /**
      * Открыть серию во внешнем плеере.
-     * {mode: "anix"|"chooser", url, title?, label?, mime?, headers?: [name,value,…], startMs?}
-     * "anix" — наш AnixApp Player по Intent API (docs/INTENT_API.md); если не установлен → {installed:false}.
+     * {mode: "anix"|"chooser", url, title?, label?, mime?, headers?: [name,value,…], startMs?,
+     *  playlist?: [{url, name?, info?, qualities?: {"720p": url}, positionMs?}], startIndex?, selectedQuality?, thumbnail?}
+     * "anix" — официальный АниксПлеер (протокол Anixart), иначе наш AnixApp Player; если нет ни одного → {installed:false}.
      * "chooser" — системный выбор любого видеоплеера (ACTION_VIEW).
      */
     @PluginMethod
     fun openExternalPlayer(call: PluginCall) {
         val url = call.getString("url")
         if (url.isNullOrBlank()) { call.reject("url обязателен"); return }
+        // Только сетевые потоки: file:// и content:// (в т.ч. наш FileProvider) другим приложениям не отдаём
+        if (!isNetworkUrl(url)) { call.reject("Недопустимая ссылка"); return }
         val mode = call.getString("mode") ?: "chooser"
         val title = call.getString("title")
         val headers = call.getArray("headers")?.toList<String>()?.toTypedArray()
@@ -178,10 +446,14 @@ class AnixPlayerPlugin : Plugin() {
             setDataAndType(Uri.parse(url), call.getString("mime") ?: "video/*")
         }
         val intent: Intent
-        if (mode == "anix") {
-            val pkg = anixPlayerPackages.firstOrNull { p ->
-                try { context.packageManager.getPackageInfo(p, 0); true } catch (_: PackageManager.NameNotFoundException) { false }
+        if (mode == "anix" && installedVersion(officialAnixPlayer) != null) {
+            intent = try {
+                buildOfficialAnixIntent(call, url, title, headers, startMs)!!
+            } catch (e: Exception) {
+                call.reject("Не удалось подготовить плейлист: " + e.message); return
             }
+        } else if (mode == "anix") {
+            val pkg = ownAnixPlayerPackages.firstOrNull { installedVersion(it) != null }
             if (pkg == null) { call.resolve(JSObject().put("installed", false)); return }
             intent = view.setClassName(pkg, "com.anixapp.player.ui.player.PlayerActivity").apply {
                 title?.let { putExtra("com.anixapp.player.extra.TITLE", it) }
@@ -198,6 +470,7 @@ class AnixPlayerPlugin : Plugin() {
             }
             intent = Intent.createChooser(v, title ?: "Открыть в плеере")
         }
+        android.util.Log.i("AnixApp", "openExternalPlayer mode=$mode pkg=${intent.`package` ?: intent.component?.packageName ?: "chooser"}")
         try {
             startActivityForResult(call, intent, "externalPlayerResult")
         } catch (e: Exception) {
@@ -209,6 +482,9 @@ class AnixPlayerPlugin : Plugin() {
     private fun externalPlayerResult(call: PluginCall?, result: ActivityResult) {
         val d = result.data
         val out = JSObject().put("installed", true).put("closed", true)
+            // -1 = RESULT_OK; 0 без данных — плеер закрыт без ответа (вылет, ANR «Закрыть», смахнули из недавних)
+            .put("resultCode", result.resultCode)
+            .put("hasData", d != null)
         val pos = d?.getLongExtra("com.anixapp.player.extra.RESULT_POSITION_MS", -1L) ?: -1L
         if (pos >= 0) {
             out.put("positionMs", pos)
@@ -217,6 +493,16 @@ class AnixPlayerPlugin : Plugin() {
         } else if (d?.hasExtra("position") == true) {
             out.put("positionMs", d.getIntExtra("position", 0).toLong())
             out.put("durationMs", d.getIntExtra("duration", 0).toLong())
+        }
+        // Официальный АниксПлеер: на какой серии плейлиста остановились и позиции (мс) по сериям
+        if (d?.hasExtra("playlist_position") == true) {
+            out.put("playlistPosition", d.getIntExtra("playlist_position", -1))
+            val idx = d.getIntArrayExtra("playlist_resume_indices")
+            val vals = d.getIntArrayExtra("playlist_resume_values")
+            if (idx != null && vals != null && idx.size == vals.size) {
+                out.put("resumeIndices", JSArray(idx.toList()))
+                out.put("resumeValuesMs", JSArray(vals.toList()))
+            }
         }
         call?.resolve(out)
     }
@@ -229,16 +515,39 @@ class AnixPlayerPlugin : Plugin() {
         val key = call.getString("key")?.replace(Regex("[^A-Za-z0-9_-]"), "_")
         val url = call.getString("url")
         if (key.isNullOrBlank() || url.isNullOrBlank()) { call.reject("key и url обязательны"); return }
+        // Только https-картинки разумного размера: file://, jar:, http и ответы не-изображения отклоняются
+        if (!url.startsWith("https://", ignoreCase = true)) { call.reject("savePoster: только https"); return }
         scope.launch(Dispatchers.IO) {
             try {
                 val dir = java.io.File(context.filesDir, "posters").apply { mkdirs() }
                 val file = java.io.File(dir, "$key.img")
                 if (!file.exists() || file.length() == 0L) {
-                    val conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+                    val conn = (java.net.URL(url).openConnection() as javax.net.ssl.HttpsURLConnection).apply {
                         connectTimeout = 15_000; readTimeout = 20_000; instanceFollowRedirects = true
                     }
-                    conn.inputStream.use { input -> file.outputStream().use { input.copyTo(it) } }
-                    conn.disconnect()
+                    try {
+                        if (conn.responseCode !in 200..299) throw java.io.IOException("HTTP ${conn.responseCode}")
+                        if (conn.contentType?.startsWith("image/") != true) throw java.io.IOException("не изображение")
+                        val limit = 10L * 1024 * 1024
+                        if (conn.contentLengthLong > limit) throw java.io.IOException("слишком большой файл")
+                        val tmp = java.io.File(dir, "$key.part")
+                        conn.inputStream.use { input ->
+                            tmp.outputStream().use { out ->
+                                val buf = ByteArray(16 * 1024)
+                                var total = 0L
+                                while (true) {
+                                    val n = input.read(buf)
+                                    if (n < 0) break
+                                    total += n
+                                    if (total > limit) throw java.io.IOException("слишком большой файл")
+                                    out.write(buf, 0, n)
+                                }
+                            }
+                        }
+                        if (!tmp.renameTo(file)) { tmp.copyTo(file, overwrite = true); tmp.delete() }
+                    } finally {
+                        conn.disconnect()
+                    }
                 }
                 call.resolve(JSObject().put("path", file.absolutePath))
             } catch (e: Exception) {
@@ -295,7 +604,9 @@ class AnixPlayerPlugin : Plugin() {
             return
         }
         val preferred = call.getString("quality")
-        val hostOverride = call.getString("hostOverride")
+        // Тестовый хук: подмена хоста загрузки только в отладочной сборке
+        val debuggable = (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        val hostOverride = call.getString("hostOverride")?.takeIf { debuggable }
         scope.launch {
             try {
                 val r = AnixBackClient.resolve(embed)
@@ -358,6 +669,23 @@ class AnixPlayerPlugin : Plugin() {
             while (c.moveToNext()) arr.put(c.download.toJs(null))
         }
         call.resolve(JSObject().put("downloads", arr))
+    }
+
+    @PluginMethod
+    fun removeAllDownloads(call: PluginCall) {
+        DownloadService.sendRemoveAllDownloads(context, AnixDownloadService::class.java, false)
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun downloadSettings(call: PluginCall) {
+        call.resolve(JSObject().put("wifiOnly", MediaEngine.isWifiOnly()))
+    }
+
+    @PluginMethod
+    fun setDownloadSettings(call: PluginCall) {
+        call.getBoolean("wifiOnly")?.let { MediaEngine.setWifiOnly(it) }
+        call.resolve(JSObject().put("wifiOnly", MediaEngine.isWifiOnly()))
     }
 
     @PluginMethod

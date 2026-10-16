@@ -15,7 +15,10 @@
   import { portal } from '../../../actions/portal';
   import MobileDownloadFlow from '../../../components/MobileDownloadFlow.svelte';
   import { downloadsAvailable } from '../../../native/anix-downloads';
-  import { iconDownload, iconShare } from '../../../components/icons';
+  import { iconDownload, iconShare, iconUsers } from '../../../components/icons';
+  import FluoCreateRoomModal from '../../../components/FluoCreateRoomModal.svelte';
+  import { createLobbyRoomAndOpenPlayer } from '../../../utils/lobby-player';
+  import type { FluoCreateRoomOptions } from '../../../fluo/types';
   import TitleInfoTrigger from '../../../components/TitleInfoTrigger.svelte';
   import ReleaseMetaInfoIcon from './ReleaseMetaInfoIcon.svelte';
   import type { ReleaseMetaInfoRow } from '../_metaInfo';
@@ -103,6 +106,27 @@ import { requestOpenExternal } from '../../../utils/external-link';
 
   let moreOpen = $state(false);
   let downloadOpen = $state(false);
+  let roomOpen = $state(false);
+  let roomBusy = $state(false);
+  let roomHint = $state('');
+
+  /** «Смотреть вместе»: комната Fluo сразу с этим релизом (серия 1, источник выберет плеер комнаты). */
+  async function createRoomForRelease(options: FluoCreateRoomOptions) {
+    roomBusy = true;
+    roomHint = '';
+    try {
+      await createLobbyRoomAndOpenPlayer(
+        { releaseId: String(currentReleaseId()), ep: '1', title: titleRu || title, posterUrl, paused: true, currentTime: 0 },
+        options,
+      );
+      roomOpen = false;
+    } catch (err: unknown) {
+      roomHint = err instanceof Error ? err.message : 'Не удалось создать комнату';
+    } finally {
+      roomBusy = false;
+    }
+  }
+
   function currentReleaseId(): number {
     return parseInt(/release\/(\d+)/.exec(window.location.pathname)?.[1] ?? '0', 10);
   }
@@ -193,7 +217,7 @@ import { requestOpenExternal } from '../../../utils/external-link';
 
 {#snippet actionsBlock()}
   <div class="release-page__actions">
-    <div class="release-page__actions-status">
+    <div class="release-page__actions-status" data-status={currentStatus || undefined}>
       {#if tvMode}
         <div class="uiv2-select">
           <div class="uiv2-select__field">
@@ -395,10 +419,20 @@ import { requestOpenExternal } from '../../../utils/external-link';
           {@html iconDownload(22)}<span>Скачать серии…</span>
         </button>
       {/if}
+      <button type="button" role="menuitem" onclick={() => { moreOpen = false; roomHint = ''; roomOpen = true; }}>
+        {@html iconUsers(22)}<span>Смотреть вместе</span>
+      </button>
       <button type="button" role="menuitem" onclick={() => { moreOpen = false; void shareRelease(); }}>
         {@html iconShare(22)}<span>Поделиться</span>
       </button>
     </div>
+  </div>
+{/if}
+
+{#if roomOpen}
+  <!-- portal: у .view-release есть transform — без выноса в body fixed-окно уезжает за экран -->
+  <div use:portal>
+    <FluoCreateRoomModal busy={roomBusy} hint={roomHint} onClose={() => (roomOpen = false)} onSubmit={createRoomForRelease} />
   </div>
 {/if}
 

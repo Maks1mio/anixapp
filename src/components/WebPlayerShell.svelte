@@ -4,7 +4,7 @@
   import { navigate } from '../stores/navigation';
 
   /** Телефон (Capacitor): страница просмотра — всегда альбомная и без системных панелей. */
-  function setOrientation(mode: 'landscape' | 'portrait') {
+  function setOrientation(mode: 'landscape' | 'auto') {
     const plugin = (window as unknown as { Capacitor?: { Plugins?: { AnixPlayer?: { setOrientation?: (o: { mode: string }) => Promise<unknown> } } } })
       .Capacitor?.Plugins?.AnixPlayer;
     void plugin?.setOrientation?.({ mode })?.catch?.(() => {});
@@ -13,7 +13,7 @@
   onMount(() => {
     if (!document.documentElement.classList.contains('mobile-native')) return;
     setOrientation('landscape');
-    return () => setOrientation('portrait');
+    return () => setOrientation('auto');
   });
 
   /**

@@ -35,6 +35,7 @@ import {
   Film,
   Flag,
   Globe,
+  Languages,
   GripVertical,
   Heading,
   Heart,
@@ -259,6 +260,11 @@ export function iconFilm(size = 20): string {
 /** Глобус */
 export function iconGlobe(size = 16): string {
   return toSvg(Globe, size);
+}
+
+/** Языки */
+export function iconLanguages(size = 16): string {
+  return toSvg(Languages, size);
 }
 
 /** Телевизор */

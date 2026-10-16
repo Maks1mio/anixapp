@@ -69,3 +69,6 @@ temp/
 
 .tmp-kodik-dl/
 
+
+# Веб-сборка Android (build-android-mobile.mjs)
+/dist-mobile/

@@ -14,6 +14,19 @@ html.mobile-mode {
     font-size: var(--m-fs-body);
     line-height: 1.35;
     -webkit-font-smoothing: antialiased;
+    // Как в нативном приложении: долгое нажатие/проведение пальцем не выделяет текст и не открывает меню копирования.
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  input,
+  textarea,
+  select,
+  [contenteditable]:not([contenteditable='false']) {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
   }
 
   .m-screen {
@@ -278,7 +291,7 @@ html.mobile-mode {
     display: flex;
     height: calc(var(--m-nav-h) + env(safe-area-inset-bottom));
     padding-bottom: env(safe-area-inset-bottom);
-    background: rgba(5, 5, 5, 0.94);
+    background: var(--m-navbar-bg);
     backdrop-filter: blur(12px);
   }
 
@@ -488,7 +501,7 @@ html.mobile-mode {
       align-items: center;
       justify-content: center;
     }
-    &--on &__box { border-color: var(--m-on-secondary-container); background: #1b1b1f; }
+    &--on &__box { border-color: var(--m-on-secondary-container); background: var(--m-surface-raised); }
     &--on { color: var(--m-text); }
     &__check {
       position: absolute;
@@ -523,6 +536,12 @@ html.mobile-mode {
     // замер: баннер ≈324dp (75% ширины экрана), следующий выглядывает
     flex: 0 0 calc((100% + 2 * var(--m-gutter)) * 0.75);
     scroll-snap-align: start;
+    // Баннер — <button>: без этого Chromium центрирует содержимое по вертикали, и картинки
+    // карточек с подписью разной длины стоят «лесенкой».
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    text-align: left;
     &__img {
       width: 100%;
       aspect-ratio: 16 / 9;
@@ -530,6 +549,15 @@ html.mobile-mode {
       overflow: hidden;
       background: linear-gradient(135deg, #3b2f5a, #1c3b52);
       img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    }
+    // Подписи — не больше двух строк: высота ленты баннеров = самой высокой карточке, длинная
+    // подпись одного баннера давала пустоту под остальными.
+    &__title, &__sub {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
     }
     &__title { margin: var(--m-space-3) var(--m-space-2) 0; font-size: 15px; font-weight: 500; }
     &__sub { margin: var(--m-space-1) var(--m-space-2) 0; font-size: 13px; color: var(--m-text-2); }
@@ -624,4 +652,418 @@ html.mobile-mode {
   @media (hover: none) {
     *:hover { transition: none; }
   }
+}
+
+// ── Меню настроек (Android): группы-карточки, строка = иконка + название/подпись + стрелка ────
+html.mobile-mode {
+  // Панель настроек/профиля с ПК (выезжает справа, фикс. ширина, ручка ширины, разделитель) —
+  // здесь это полноэкранный раздел: на всю область, от левого края.
+  .m-fullscreen .schedule-panel-backdrop,
+  .m-fullscreen .schedule-panel-resize {
+    display: none;
+  }
+
+  .m-fullscreen .schedule-panel-wrap {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    transform: none;
+    justify-content: flex-start;
+  }
+
+  .m-fullscreen .schedule-panel-shell {
+    width: 100% !important;
+    margin: 0;
+    border: 0 !important;
+    box-shadow: none !important;
+
+    &::before { display: none; }
+  }
+
+  // Верхняя панель раздела настроек: стрелка выровнена по краю контента (4 + (48−24)/2 = 16 px)
+  .m-set-bar {
+    position: sticky;
+    z-index: 2;
+    top: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--m-space-1);
+    min-height: 64px;
+    padding: 0 var(--m-space-1);
+    background: var(--m-bg);
+  }
+
+  .m-set-bar__back {
+    @extend .m-btn-reset;
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    color: var(--m-text);
+
+    &:active { background: color-mix(in srgb, var(--m-text) 10%, transparent); }
+    :is(svg) { width: 24px; height: 24px; }
+  }
+
+  .m-set-bar__title {
+    margin: 0;
+    overflow: hidden;
+    font-size: 22px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .m-set {
+    display: flex;
+    flex-direction: column;
+    padding: var(--m-space-2) var(--m-gutter) var(--m-space-6);
+  }
+
+  .m-set__group {
+    margin: var(--m-space-5) var(--m-space-1) var(--m-space-2);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--m-text-2);
+
+    &:first-child { margin-top: var(--m-space-2); }
+  }
+
+  .m-set__card {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: var(--m-radius-lg);
+    background: var(--m-surface-block);
+  }
+
+  .m-set__row {
+    @extend .m-btn-reset;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--m-space-4);
+    min-height: 68px;
+    padding: var(--m-space-3) var(--m-space-4);
+    text-align: left;
+
+    &:active { background: color-mix(in srgb, var(--m-text) 6%, transparent); }
+
+    // Разделитель между строками — с отступом под иконку
+    & + &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: calc(var(--m-space-4) + 40px + var(--m-space-4));
+      right: 0;
+      height: 1px;
+      background: var(--m-divider);
+    }
+  }
+
+  .m-set__icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--m-surface-chip);
+    color: var(--m-text);
+
+    :is(svg) { width: 22px; height: 22px; }
+  }
+
+  .m-set__text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .m-set__title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--m-text);
+  }
+
+  .m-set__sub {
+    overflow: hidden;
+    font-size: 14px;
+    color: var(--m-text-2);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .m-set__chevron {
+    display: grid;
+    flex: none;
+    color: var(--m-text-3);
+
+    :is(svg) { width: 20px; height: 20px; }
+  }
+
+  .m-set__footer {
+    display: flex;
+    align-items: center;
+    gap: var(--m-space-2);
+    margin: var(--m-space-5) var(--m-space-1) 0;
+    font-size: 13px;
+    color: var(--m-text-3);
+  }
+
+  .m-set__link {
+    @extend .m-btn-reset;
+    min-height: 32px;
+    color: var(--m-text-2);
+    text-decoration: underline;
+  }
+}
+
+// ── Статистика профиля: полоса «часть целого» + легенда + плитки итогов ──────────────────────
+// Цвета статусов проверены валидатором dataviz (CVD-различимость, светлота, контраст) отдельно
+// для тёмных и светлой темы. Текст — в цветах текста, цвет несёт только метка.
+html.mobile-mode {
+  --st-watching: #1fae55;
+  --st-planned: #ec4899;
+  --st-completed: #3b82f6;
+  --st-on_hold: #c8800c;
+  --st-dropped: #e11d48;
+
+  &[data-m-theme='light'] {
+    --st-watching: #22c55e;
+    --st-planned: #ec4899;
+    --st-completed: #3b82f6;
+    --st-on_hold: #f59e0b;
+    --st-dropped: #ef4444;
+  }
+
+  @each $st in (watching, planned, completed, on_hold, dropped) {
+    .m-stats [data-status='#{$st}'] { background: var(--st-#{$st}); }
+    .m-stats .m-stats__arc[data-status='#{$st}'] { stroke: var(--st-#{$st}); }
+  }
+
+  .m-stats {
+    align-self: stretch;
+    box-sizing: border-box;
+    width: 100%;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--m-space-4);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .m-stats__main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--m-space-4);
+  }
+
+  .m-stats__legend { display: flex; flex-direction: column; min-width: 0; }
+
+  .m-stats__item {
+    @extend .m-btn-reset;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 34px;
+    text-align: left;
+
+    &:disabled { opacity: 0.55; }
+    &:active:not(:disabled) { opacity: 0.7; }
+  }
+
+  .m-stats__swatch { flex: none; width: 14px; height: 14px; border-radius: 50%; }
+  .m-stats__label { font-size: 15px; color: var(--m-text-2); }
+  .m-stats__count { font-size: 15px; font-weight: 700; color: var(--m-text); }
+
+  // Кольцо как в Anixart: толстое, без подписи в центре; 2 px фона между сегментами
+  .m-stats__donut {
+    flex: none;
+    width: min(140px, 38%);
+    aspect-ratio: 1;
+
+    svg { display: block; width: 100%; height: 100%; }
+  }
+
+  .m-stats__arc { fill: none; stroke-width: 24; background: none !important; }
+
+  .m-stats__lines {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    p { margin: 0; font-size: 15px; line-height: 1.4; color: var(--m-text); }
+    strong { font-weight: 700; }
+  }
+
+  .m-stats__line-label { font-weight: 700; color: var(--m-text); }
+  .m-stats__line-text { color: var(--m-text-2); }
+
+  .m-stats__more {
+    @extend .m-btn-reset;
+    align-self: center;
+    min-height: 44px;
+    padding: 0 var(--m-space-4);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--m-text);
+  }
+}
+
+// ── Профиль на Android (как в Anixart) ───────────────────────────────────────────────────────
+html.mobile-mode {
+  // Разделы профиля отделены полосой фона, а не карточками
+  .m-psec,
+  .m-ptabs {
+    padding: var(--m-space-4) var(--m-gutter);
+    border-top: 8px solid color-mix(in srgb, var(--m-text) 7%, transparent);
+  }
+
+  .m-psec__title { margin: 0 0 var(--m-space-3); font-size: 20px; font-weight: 700; color: var(--m-text); }
+
+  // Вкладки-чипы: горизонтальная прокрутка, выбранная — с заливкой
+  .m-ptabs__bar {
+    display: flex;
+    gap: var(--m-space-2);
+    margin: 0 calc(-1 * var(--m-gutter)) var(--m-space-4);
+    padding: 0 var(--m-gutter);
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar { display: none; }
+  }
+
+  .m-ptabs__chip {
+    @extend .m-btn-reset;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--m-space-2);
+    min-height: 40px;
+    padding: 0 var(--m-space-4);
+    border: 1px solid var(--m-outline-variant);
+    border-radius: 12px;
+    font-size: 15px;
+    color: var(--m-text-2);
+
+    :is(svg) { width: 18px; height: 18px; }
+  }
+
+  .m-ptabs__chip--on {
+    border-color: var(--m-text);
+    background: var(--m-surface-chip);
+    color: var(--m-text);
+  }
+
+  .m-ptabs__empty { margin: var(--m-space-5) 0; text-align: center; font-size: 15px; color: var(--m-text-2); }
+
+  // Строка превью: постер + название + мета
+  .m-ptabs__row {
+    @extend .m-btn-reset;
+    display: flex;
+    align-items: center;
+    gap: var(--m-space-4);
+    width: 100%;
+    padding: var(--m-space-2) 0;
+    text-align: left;
+
+    &:active { opacity: 0.75; }
+  }
+
+  .m-ptabs__poster {
+    flex: none;
+    width: 52px;
+    aspect-ratio: 2 / 3;
+    overflow: hidden;
+    border-radius: 8px;
+    background: var(--m-surface-chip);
+
+    :is(img, .poster-image__fallback) { width: 100%; height: 100%; object-fit: cover; display: block; }
+  }
+
+  .m-ptabs__poster--wide { width: 96px; aspect-ratio: 16 / 9; }
+
+  .m-ptabs__text { display: flex; flex: 1; flex-direction: column; gap: 6px; min-width: 0; }
+  .m-ptabs__title { font-size: 16px; color: var(--m-text); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .m-ptabs__meta { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--m-text-2); }
+  .m-ptabs__meta--clamp { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+  .m-ptabs__stars { display: inline-flex; gap: 2px; }
+  .m-ptabs__star { display: inline-grid; color: var(--m-text-3); :is(svg) { width: 16px; height: 16px; } }
+  .m-ptabs__star--on { color: var(--m-text); }
+
+  // Комментарий
+  .m-ptabs__comment {
+    @extend .m-btn-reset;
+    display: flex;
+    flex-direction: column;
+    gap: var(--m-space-2);
+    width: 100%;
+    margin-bottom: var(--m-space-3);
+    padding: var(--m-space-3) var(--m-space-4);
+    border: 1px solid var(--m-outline-variant);
+    border-radius: 16px;
+    text-align: left;
+  }
+
+  .m-ptabs__c-head { display: flex; align-items: center; gap: var(--m-space-3); }
+  .m-ptabs__avatar { flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--m-surface-chip) center / cover; }
+  .m-ptabs__c-who { display: flex; flex-direction: column; min-width: 0; }
+  .m-ptabs__c-login { font-size: 15px; font-weight: 600; color: var(--m-text); }
+  .m-ptabs__c-to { font-weight: 400; color: var(--m-text-2); font-size: 13px; }
+  .m-ptabs__c-release { font-size: 13px; color: var(--m-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .m-ptabs__c-text { font-size: 15px; line-height: 1.4; color: var(--m-text); display: -webkit-box; -webkit-line-clamp: 6; line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+  .m-ptabs__c-foot { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--m-text-2); }
+  .m-ptabs__c-likes { padding: 2px 8px; border-radius: 6px; background: color-mix(in srgb, #22c55e 18%, transparent); color: #22c55e; font-weight: 700; }
+
+  .m-ptabs__all {
+    @extend .m-btn-reset;
+    display: block;
+    margin: var(--m-space-2) auto 0;
+    min-height: 44px;
+    padding: 0 var(--m-space-4);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--m-text);
+  }
+
+  // Динамика: столбики по дням, число сверху, дата снизу (повёрнута, как в Anixart)
+  .m-dyn {
+    margin: 0 calc(-1 * var(--m-gutter));
+    padding: 0 var(--m-gutter);
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar { display: none; }
+  }
+
+  .m-dyn__plot { display: flex; gap: 14px; width: max-content; padding-bottom: var(--m-space-2); }
+  .m-dyn__col { display: flex; flex-direction: column; align-items: center; width: 30px; }
+
+  .m-dyn__box {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    height: 150px;
+  }
+
+  .m-dyn__value { font-size: 14px; font-weight: 600; color: var(--m-text-2); margin-bottom: 4px; }
+  .m-dyn__bar { width: 26px; border-radius: 6px 6px 2px 2px; background: color-mix(in srgb, var(--m-text) 82%, transparent); }
+  .m-dyn__date { margin-top: 16px; font-size: 12px; color: var(--m-text-2); transform: rotate(-60deg); white-space: nowrap; }
+
+  // Шапка профиля: пустой баннер не показываем (как в Anixart — аватар на фоне)
+  .m-fullscreen--profile .profile-panel__banner--empty { display: none; }
+  // Без баннера аватару не на что «наезжать» — убираем отрицательный отступ (иначе уходит под шапку)
+  .m-fullscreen--profile .profile-panel__banner--empty ~ .profile-panel__head .profile-panel__identity {
+    margin-top: var(--m-space-4);
+  }
+  .m-pbar { border-bottom: 1px solid var(--m-divider); }
 }

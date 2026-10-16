@@ -3,6 +3,10 @@
   import { fmtWatchedTime } from '../../_utils';
   import { profileShowcaseBackground } from '../../../../utils/profile-showcase-theme';
   import { toCdnProxyUrl } from '../../../../utils/posterUrl';
+  import { isMobileMode } from '../../../../platform/mobile';
+
+  /** Android: статистика полосой «часть целого» + легенда с числами + плитки итогов (вместо «пирога»). */
+  const mobileUi = isMobileMode();
 
   interface Props {
     profile: Record<string, unknown>;
@@ -116,6 +120,57 @@
     </svg>`;
   }
 
+  type StatusKey = 'watching' | 'planned' | 'completed' | 'on_hold' | 'dropped';
+  const statusTotal = $derived(statusItems.reduce((sum, i) => sum + i.value, 0));
+  const statusShares = $derived(
+    statusItems.map((i) => ({
+      ...i,
+      key: i.tab as StatusKey,
+      pct: statusTotal ? (i.value / statusTotal) * 100 : 0,
+    })),
+  );
+  /** Кольцо: сегменты по окружности (viewBox 100), между сегментами 2 px фона. */
+  const DONUT_R = 38; // толщина 24 → внешний край ровно 50 (граница viewBox)
+  const DONUT_C = 2 * Math.PI * DONUT_R;
+  const donutSegs = $derived.by(() => {
+    const parts = statusShares.filter((x) => x.value > 0);
+    const gap = parts.length > 1 ? 2 : 0;
+    let acc = 0;
+    return parts.map((x) => {
+      const len = (x.value / statusTotal) * DONUT_C;
+      const seg = { key: x.key, dash: Math.max(len - gap, 0.6), offset: -acc };
+      acc += len;
+      return seg;
+    });
+  });
+  let prefsOpen = $state(false);
+
+  const barLabel = $derived(
+    statusShares.map((s) => `${s.label} ${s.value} (${Math.round(s.pct)}%)`).join(', '),
+  );
+  /** Для плитки: «111 дней 21 час» → «111 д 21 ч» (полная форма — в подсказке). */
+  const watchTimeShort = $derived(
+    watchTimeLabel
+      .replace(/\s(дней|дня|день)/g, ' д')
+      .replace(/\s(часов|часа|час)/g, ' ч')
+      .replace(/\s(минут|минуты|минута)/g, ' мин'),
+  );
+  const prefChips = $derived.by(() => {
+    type Pref = { name?: string; percentage?: number; percent?: number };
+    const rows: { label: string; chips: string[] }[] = [];
+    const add = (items: Pref[] | undefined, label: string) => {
+      const chips = (items ?? [])
+        .slice(0, 4)
+        .map((g) => `${g.name ?? ''} ${Math.round(Number(g.percentage ?? g.percent ?? 0))}%`.trim())
+        .filter(Boolean);
+      if (chips.length) rows.push({ label, chips });
+    };
+    add(profile.preferred_genres as Pref[] | undefined, 'Жанры');
+    add(profile.preferred_audiences as Pref[] | undefined, 'Аудитория');
+    add(profile.preferred_themes as Pref[] | undefined, 'Тематика');
+    return rows;
+  });
+
   // API: watched_time в минутах (35524 → «24 дня 16 часов»)
   const watchTimeLabel = $derived.by(() => {
     const min = Number(profile.watched_time ?? 0);
@@ -143,6 +198,58 @@
   }
 </script>
 
+{#if mobileUi}
+<!-- Android: раскладка как в Anixart — легенда слева, кольцо справа, предпочтения и итоги строками -->
+<section class="m-stats" aria-label="Статистика">
+  <div class="m-stats__main">
+    <div class="m-stats__legend">
+      {#each statusShares as s (s.key)}
+        <button type="button" class="m-stats__item" disabled={s.value <= 0} onclick={() => openList(s.tab)}>
+          <span class="m-stats__swatch" data-status={s.key} aria-hidden="true"></span>
+          <span class="m-stats__label">{s.label}</span>
+          <span class="m-stats__count">{s.value.toLocaleString('ru-RU')}</span>
+        </button>
+      {/each}
+    </div>
+
+    {#if statusTotal > 0}
+      <div class="m-stats__donut" role="img" aria-label={barLabel}>
+        <svg viewBox="0 0 100 100" aria-hidden="true">
+          {#each donutSegs as seg (seg.key)}
+            <circle
+              class="m-stats__arc"
+              data-status={seg.key}
+              cx="50" cy="50" r={DONUT_R}
+              stroke-dasharray="{seg.dash} {DONUT_C}"
+              stroke-dashoffset={seg.offset}
+              transform="rotate(-90 50 50)"
+            />
+          {/each}
+        </svg>
+      </div>
+    {/if}
+  </div>
+
+  {#if preferredBlocks.length}
+    <div class="m-stats__lines">
+      {#each preferredBlocks as block (block.label)}
+        <p><span class="m-stats__line-label">{block.label}:</span> <span class="m-stats__line-text">{block.text}</span></p>
+      {/each}
+    </div>
+  {/if}
+
+  {#if episodesLabel || watchTimeLabel}
+    <div class="m-stats__lines">
+      {#if episodesLabel}<p><span class="m-stats__line-text">Просмотрено серий:</span> <strong>{episodesLabel}</strong></p>{/if}
+      {#if watchTimeLabel}<p><span class="m-stats__line-text">Время просмотра:</span> <strong>~ {watchTimeLabel}</strong></p>{/if}
+    </div>
+  {/if}
+
+  {#if showMoreLink}
+    <button type="button" class="m-stats__more" onclick={() => openList('completed')}>Показать списки</button>
+  {/if}
+</section>
+{:else}
 <div
   class="profile-v2__stats"
   class:profile-v2__stats--themed={!!showcaseBg}
@@ -196,3 +303,4 @@
     </button>
   {/if}
 </div>
+{/if}

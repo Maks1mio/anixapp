@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageScrollElement } from '../platform/mobile';
   import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../stores/navigation';
   import { posterUrl } from './Profile/_utils';
@@ -72,7 +73,7 @@
   }
 
   function attachScroll() {
-    const el = wrapEl?.closest('.page__scroll') as HTMLElement | null;
+    const el = pageScrollElement(wrapEl);
     if (!el) return;
     scrollEl = el;
     scrollListener = () => {

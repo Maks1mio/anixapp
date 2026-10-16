@@ -1,0 +1,157 @@
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Широкие экраны мобильного режима: планшет и телефон в альбомной ориентации (от 840 dp).
+// Телефонная вёрстка (mobile-components / mobile-overrides) не меняется — здесь только надстройки:
+// нижний таб-бар становится боковой навигационной полосой, списки — в две колонки, шторки — по центру.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+@media (min-width: 840px) {
+  html.mobile-mode {
+    --m-rail-w: 88px;
+    --m-sheet-max-w: 640px;
+
+    // ── Боковая навигационная полоса вместо нижнего таб-бара ──────────────────────────────
+    .m-navbar {
+      top: 0;
+      right: auto;
+      bottom: 0;
+      width: calc(var(--m-rail-w) + env(safe-area-inset-left));
+      height: auto;
+      flex-direction: column;
+      justify-content: center;
+      gap: var(--m-space-3);
+      padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) env(safe-area-inset-left);
+      border-right: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .m-nav-item {
+      flex: 0 0 auto;
+      padding-top: 0;
+      font-size: 12px;
+    }
+
+    // Контент сдвигается вправо на ширину полосы, нижний отступ под таб-бар больше не нужен.
+    .m-app {
+      padding-left: calc(var(--m-rail-w) + env(safe-area-inset-left));
+    }
+
+    .m-app__content,
+    .m-screen {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .m-fullscreen {
+      left: calc(var(--m-rail-w) + env(safe-area-inset-left));
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .m-topbar--float {
+      left: calc(var(--m-rail-w) + env(safe-area-inset-left) + var(--m-space-4));
+    }
+
+    // ── Лента: на всю ширину, разделы — первым столбцом у навигационной полосы (под большой палец) ──
+    .view-feed__layout,
+    .view-feed__layout--no-aside {
+      max-width: none;
+      margin: 0;
+      padding: 0 var(--m-space-5) 0 var(--m-space-4);
+      grid-template-columns: 220px minmax(0, 1fr);
+      column-gap: var(--m-space-5);
+    }
+
+    .view-feed__layout:not(.view-feed__layout--no-aside) {
+      grid-template-columns: 220px minmax(0, 1fr) minmax(260px, 300px);
+    }
+
+    // ── Экраны на всю ширину: на ПК .view ограничен 896 px — на планшете это пустые поля ──
+    .m-app__content > .view {
+      max-width: none;
+      margin-inline: 0;
+      padding-inline: var(--m-space-5);
+    }
+
+    // ── Типографика планшета: экран дальше от глаз — на ступень крупнее телефона ──────────
+    .uiv2-tabs__tab { font-size: 16px; }
+    .uiv2-anime-card__title { font-size: 16px; }
+    .uiv2-anime-card__meta-text,
+    .uiv2-anime-card__meta-sep,
+    .uiv2-anime-card__score-value { font-size: 14px; }
+    .uiv2-collection__title { font-size: 17px; }
+    .uiv2-collection__desc,
+    .uiv2-collection__stat { font-size: 14px; }
+
+    // ── Списки карточек: две колонки ──────────────────────────────────────────────────────
+    .release-cards-grid-root--wide {
+      display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: var(--m-space-6) !important;
+    }
+
+    // ── Настройки: от левого края, как остальные экраны; строки — удобной для чтения ширины ──
+    .m-fullscreen .schedule-panel-shell {
+      max-width: 768px;
+    }
+
+    .m-set {
+      padding-inline: var(--m-space-5) 0;
+    }
+
+    .m-set-bar {
+      padding-left: calc(var(--m-space-5) - 12px); // стрелка по краю контента (24 px)
+    }
+
+    // ── Шторки и меню: не во всю ширину, а по центру ──────────────────────────────────────
+    .m-sheet {
+      left: 50%;
+      right: auto;
+      width: min(100%, var(--m-sheet-max-w));
+      transform: translateX(-50%);
+    }
+
+    .m-sheet-scrim {
+      justify-content: center;
+    }
+
+    .m-sheet-menu {
+      width: min(100%, var(--m-sheet-max-w));
+    }
+  }
+}
+
+// ── Средние и широкие экраны (от 600 dp: телефон в альбомной, планшет) ─────────────────────
+// Телефонные пропорции (баннер на 75% ширины, ссылки в две колонки) здесь дают гигантский баннер
+// и разбросанные пункты — показываем несколько баннеров и ссылки плитками.
+@media (min-width: 600px) {
+  html.mobile-mode {
+    .m-banner {
+      flex-basis: calc((100% - 2 * var(--m-space-4)) / 2.4);
+    }
+
+    .m-quick {
+      grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+      gap: var(--m-space-3);
+      padding-top: var(--m-space-4);
+
+      &__item {
+        min-height: 56px;
+        padding: 0 var(--m-space-4);
+        border-radius: var(--m-radius-lg);
+        background: var(--m-surface-block);
+        gap: var(--m-space-3);
+        font-size: 15px;
+      }
+    }
+  }
+}
+
+@media (min-width: 1200px) {
+  html.mobile-mode .m-banner {
+    flex-basis: calc((100% - 3 * var(--m-space-4)) / 3.2);
+  }
+}
+
+// Телефон в альбомной ориентации: экран низкий — картинка баннера не выше ~40% высоты (16:9).
+@media (min-width: 600px) and (max-height: 500px) {
+  html.mobile-mode .m-banner {
+    flex-basis: min(calc((100% - 2 * var(--m-space-4)) / 2.4), calc(40vh * 16 / 9));
+  }
+}

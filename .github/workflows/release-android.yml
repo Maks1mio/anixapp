@@ -59,50 +59,6 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "Release tag: $TAG"
 
-  build-android-tv:
-    needs: resolve-tag
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: yarn
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - uses: android-actions/setup-android@v3
-        with:
-          packages: ''
-
-      - name: Install Android SDK components
-        run: |
-          SDKMANAGER="${ANDROID_HOME:-$ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
-          "$SDKMANAGER" --install 'platforms;android-36' 'build-tools;36.0.0' 'platform-tools'
-
-      - name: Set version from release tag
-        run: node scripts/set-version-from-tag.js
-        env:
-          RELEASE_TAG: ${{ needs.resolve-tag.outputs.tag }}
-
-      - run: yarn install --frozen-lockfile
-
-      - name: Build Android TV APK
-        run: yarn build:android-tv
-        env:
-          ANIXART_PROXY_APP_KEY: ${{ secrets.ANIXART_PROXY_APP_KEY }}
-          ANIXBACK_PROXY_TARGET: ${{ secrets.ANIXBACK_PROXY_TARGET }}
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: android-tv-apk
-          path: release/*.apk
-
   build-android-mobile:
     needs: resolve-tag
     runs-on: ubuntu-latest
@@ -148,7 +104,7 @@ jobs:
           path: release/*.apk
 
   attach-to-release:
-    needs: [resolve-tag, build-android-tv, build-android-mobile]
+    needs: [resolve-tag, build-android-mobile]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

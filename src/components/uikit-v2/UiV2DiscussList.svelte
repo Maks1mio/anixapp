@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { scoreTone } from '../../utils/score-tone';
   import {
     iconMessageCircle,
     iconMoreHorizontal,
@@ -346,7 +347,7 @@
             {#if isReleaseAnnounce(item.status, item.statusId)}
               <span class="uiv2-discuss__announce">{announceLabel(item)}</span>
             {:else if rate}
-              <span class="uiv2-discuss__score">
+              <span class="uiv2-discuss__score" data-score-tone={scoreTone(item.rating)}>
                 <span class="uiv2-discuss__score-star" aria-hidden="true">{@html iconStar(12)}</span>
                 <span class="uiv2-discuss__score-value">{rate}</span>
                 {#if item.ratingCount != null && item.ratingCount !== ''}

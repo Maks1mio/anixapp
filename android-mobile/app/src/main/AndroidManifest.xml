@@ -11,6 +11,7 @@
 
     <!-- Видимость пакетов (Android 11+): наш AnixApp Player и любые видеоплееры для «Сторонний плеер» -->
     <queries>
+        <package android:name="com.swiftsoft.anixart.player" />
         <package android:name="com.anixapp.player" />
         <package android:name="com.anixapp.player.debug" />
         <intent>
@@ -30,20 +31,29 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
-        <!-- Основное приложение: портрет по умолчанию -->
+        <!-- Основное приложение: телефон и планшет, поворот по датчику с учётом системной блокировки -->
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
-            android:screenOrientation="portrait"
+            android:screenOrientation="fullUser"
+            android:resizeableActivity="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Веб-плеер источника (Kodik и др.) на весь экран -->
+        <activity
+            android:name=".ui.WebPlayerActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:exported="false" />
 
         <!-- Нативный плеер: ландшафт, PiP -->
         <activity

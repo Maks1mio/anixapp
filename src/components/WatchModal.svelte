@@ -24,6 +24,8 @@
     getMobilePlayerPrefs,
     setMobilePlayerPrefs,
     launchWithKind,
+    getAnixPlayerStatus,
+    fetchAnixPlayerRelease,
     needsExternalPlaylistRange,
     type ExternalPlaylistWindow,
     type MobilePlayerKind,
@@ -35,6 +37,7 @@
   } from '../utils/player-integration';
   import Page from './Page.svelte';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
+  import { openExternalInBrowser } from '../utils/external-link';
   import { infiniteScroll } from '../actions/infiniteScroll';
   import {
     getWatchModalState,
@@ -518,8 +521,67 @@
     }
   }
 
+  /** Официальный АниксПлеер не установлен → ссылка на APK с сервера Anixart (под ABI устройства). */
+  function offerAnixPlayerInstall() {
+    openConfirm({
+      title: 'АниксПлеер не установлен',
+      text: 'Официальный плеер Anixart: выбор качества, Anime4K, переход к следующей серии. Скачать установочный файл с сайта Anixart?',
+      yesLabel: 'Скачать',
+      onYes: () => void (async () => {
+        const st = await getAnixPlayerStatus().catch(() => null);
+        const rel = await fetchAnixPlayerRelease(st?.abis ?? []);
+        if (rel?.downloadUrl) await openExternalInBrowser(rel.downloadUrl);
+        else showToast('Не удалось получить ссылку на АниксПлеер — проверьте соединение');
+      })(),
+    });
+  }
+
+  /** АниксПлеер: плейлист из текущей и следующих серий; по возврату отмечаем пройденные серии. */
+  async function runAnixPlayer(epPosition: number) {
+    if (!selectedSource) return;
+    cancelExternalPlaylistPrep();
+    const ac = new AbortController();
+    externalAbort = ac;
+    externalProgress = { done: 0, total: 0 };
+    try {
+      const r = await launchWithKind('anix', watchLaunchParams(epPosition), {
+        signal: ac.signal,
+        onProgress: (p) => {
+          if (externalAbort !== ac) return;
+          // Плейлист готов — убираем оверлей до открытия плеера
+          externalProgress = p.total > 0 && p.done >= p.total ? null : { done: p.done, total: p.total };
+        },
+        episodeMeta: episodes.map((ep) => ({
+          position: Number(ep.position),
+          name: typeof ep.name === 'string' ? ep.name : '',
+          url: typeof ep.url === 'string' ? ep.url : '',
+        })),
+      });
+      if (r.cancelled) return;
+      if (r.notInstalled) {
+        offerAnixPlayerInstall();
+      } else if (r.started) {
+        for (const pos of r.watchedPositions ?? [epPosition]) void markEpisodeWatched(pos);
+      } else if (r.message) {
+        showToast(r.message);
+      }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      showToast(e instanceof Error ? e.message : 'Не удалось запустить АниксПлеер');
+    } finally {
+      if (externalAbort === ac) {
+        externalAbort = null;
+        externalProgress = null;
+      }
+    }
+  }
+
   async function startWithKind(kind: MobilePlayerKind, epPosition: number) {
     if (!selectedSource) return;
+    if (kind === 'anix') {
+      await runAnixPlayer(epPosition);
+      return;
+    }
     if (kind === 'external') {
       pendingExternalPlayerId = getPreferredExternalPlayerId();
       if (needsExternalPlaylistRange(episodes.length)) {

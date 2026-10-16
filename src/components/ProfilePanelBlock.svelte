@@ -33,6 +33,11 @@
   import ProfileStatsSection from '../views/Profile/v2/components/ProfileStatsSection.svelte';
   import ProfileDynamicsSection from '../views/Profile/v2/components/ProfileDynamicsSection.svelte';
   import ProfileHistorySection from '../views/Profile/v2/components/ProfileHistorySection.svelte';
+  import MobileProfileTabs from './MobileProfileTabs.svelte';
+  import MobileDynamicsBars from './MobileDynamicsBars.svelte';
+  import { isMobileMode } from '../platform/mobile';
+  /** Android: профиль как в Anixart — вкладки-чипы, динамика столбиками, разделы без карточек. */
+  const mobileUi = isMobileMode();
   import ProfilePanelFriendsView from './ProfilePanelFriendsView.svelte';
   import ProfilePanelEditView from './ProfilePanelEditView.svelte';
   import ProfilePanelLoginHistoryView from './ProfilePanelLoginHistoryView.svelte';
@@ -367,7 +372,7 @@
       void loadCover(id);
       void loadFriendsPreview();
     } catch (err) {
-      errorMsg = String(err);
+      errorMsg = err instanceof Error ? err.message : String(err);
       loadState = 'error';
     }
   }
@@ -927,6 +932,27 @@
               {/if}
             </section>
 
+            {#if mobileUi}
+              {#if !blockedByUser}
+                <MobileProfileTabs userId={userId} profile={profile} isMyProfile={isMyProfile} statsHidden={!!profile.is_stats_hidden} />
+
+                {#if !profile.is_stats_hidden && watchDynamics.length}
+                  <section class="m-psec">
+                    <h3 class="m-psec__title">Динамика просмотра серий</h3>
+                    <MobileDynamicsBars {watchDynamics} />
+                  </section>
+                {/if}
+
+                {#if !profile.is_stats_hidden && recentHistory.length}
+                  <section class="m-psec">
+                    <h3 class="m-psec__title">Просмотрено недавно</h3>
+                    <div class="profile-panel__recent">
+                      <ProfileHistorySection items={recentHistory} />
+                    </div>
+                  </section>
+                {/if}
+              {/if}
+            {:else}
             <div class="profile-panel__tab-body">
               {#if !blockedByUser && !profile.is_stats_hidden}
                 <UiV2Card title="Статистика">
@@ -964,6 +990,7 @@
                 <p class="profile-panel__hint">Статистика скрыта настройками приватности.</p>
               {/if}
             </div>
+            {/if}
           </Page>
         </div>
 

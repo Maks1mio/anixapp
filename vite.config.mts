@@ -1,10 +1,12 @@
 import { defineConfig, loadEnv } from 'vite';
 import { resolve } from 'path';
+import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { svelte, vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { anixWebBridgePlugin } from './vite/anix-web-bridge-plugin.mjs';
 
 const rootDir = import.meta.dirname ?? fileURLToPath(new URL('.', import.meta.url));
+const readVersion = (file: string) => String(JSON.parse(readFileSync(resolve(rootDir, file), 'utf8')).version ?? '');
 
 const devPort = Number(process.env.ANIXAPP_DEV_PORT)
   || (process.env.VITE_TV_MODE === '1' || process.env.VITE_TV_MODE === 'true' ? 5174 : 5173);
@@ -15,6 +17,8 @@ export default defineConfig(({ command, mode }) => {
   const webBase = process.env.ANIXAPP_WEB_BASE === '/' || process.env.ANIXAPP_TV_WEB === '1';
   // Ключ резервного прокси (x-anixapp-proxy-key) попадает только в мобильный бандл; без него клиент работает по прямым хостам
   const mobileBuild = process.env.VITE_MOBILE_MODE === '1' || process.env.VITE_MOBILE_MODE === 'true';
+  // Android-версия нумеруется отдельно от ПК (android-version.json), чтобы обновления общего package.json её не сбивали
+  const appVersion = mobileBuild ? readVersion('android-version.json') : readVersion('package.json');
   const proxyKey = mobileBuild
     ? (process.env.ANIXART_PROXY_APP_KEY || loadEnv(mode, rootDir, '').ANIXART_PROXY_APP_KEY || '')
     : '';
@@ -25,7 +29,7 @@ export default defineConfig(({ command, mode }) => {
   // Build: `./` so Electron file:// / Capacitor still resolves assets.
   base: command === 'serve' || webBase ? '/' : './',
   appType: 'spa',
-  define: { __ANIXART_PROXY_KEY__: JSON.stringify(proxyKey) },
+  define: { __ANIXART_PROXY_KEY__: JSON.stringify(proxyKey), __APP_VERSION__: JSON.stringify(appVersion) },
   plugins: [svelte({ preprocess: vitePreprocess() }), anixWebBridgePlugin()],
   resolve: {
     alias: {

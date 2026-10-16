@@ -9,8 +9,10 @@ android {
         applicationId "com.mobileapp.anix"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Версия Android отдельно от ПК — android-version.json. versionCode = (major*10000 + minor*100 + patch)*10 + стадия
+        // (alpha 1, beta 5, rc 7, релиз 9), чтобы 1.0.0-alpha < 1.0.0-beta < 1.0.0.
+        versionCode appVersionCode()
+        versionName appVersionName()
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -26,8 +28,24 @@ android {
         compose true
         buildConfig true
     }
+    // Подпись релиза: android-mobile/keystore.properties (в git не попадает) —
+    // storeFile, storePassword, keyAlias, keyPassword. Без файла релиз собирается неподписанным.
+    def keystoreProps = new Properties()
+    def keystoreFile = rootProject.file('keystore.properties')
+    if (keystoreFile.exists()) keystoreFile.withInputStream { keystoreProps.load(it) }
+    signingConfigs {
+        if (keystoreFile.exists()) {
+            release {
+                storeFile file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            if (keystoreFile.exists()) signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
@@ -84,4 +102,18 @@ try {
     }
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
+
+def appVersionName() {
+    def v = new groovy.json.JsonSlurper().parse(rootProject.file('../android-version.json'))
+    return v.version.toString()
+}
+
+def appVersionCode() {
+    def name = appVersionName()
+    def core = name.tokenize('-')[0].tokenize('.')
+    def num = { i -> core.size() > i && core[i].isInteger() ? core[i].toInteger() : 0 }
+    def pre = name.contains('-') ? name.substring(name.indexOf('-') + 1).toLowerCase() : ''
+    def stage = pre.startsWith('alpha') ? 1 : pre.startsWith('beta') ? 5 : pre.startsWith('rc') ? 7 : (pre ? 1 : 9)
+    return (num(0) * 10000 + num(1) * 100 + num(2)) * 10 + stage
 }

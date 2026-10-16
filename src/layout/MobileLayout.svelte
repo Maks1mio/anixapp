@@ -8,9 +8,11 @@
   import type { Snippet } from 'svelte';
   import { navigate } from '../stores/navigation';
   import { notificationsModalOpen, settingsModalOpen } from '../stores/modals';
-  import { isAuthenticated, requireAuth } from '../stores/auth';
+  import { isAuthenticated, authReady, openLoginPrompt } from '../stores/auth';
+  import { showToast } from '../stores/toast';
+  import MobileGuestGate from '../components/MobileGuestGate.svelte';
   import { ensureProfileId } from '../utils/profile';
-  import { iconDownload, iconPlus, iconHome, iconCompass, iconBookmark, iconNewspaper, iconUser, iconSearch, iconSettings, iconBell } from '../components/icons';
+  import { iconDownload, iconPlus, iconHome, iconCompass, iconBookmark, iconNewspaper, iconUser, iconSearch, iconSettings, iconBell, iconArrowUp } from '../components/icons';
   import SettingsModal from '../components/SettingsModal.svelte';
   import SidebarProfilePanel from '../components/SidebarProfilePanel.svelte';
   import { profilePanelOpen, resetProfilePanelHistory } from '../stores/profile-panel';
@@ -32,6 +34,17 @@
   ];
 
   let profileOpen = $state(false);
+  /** Гость нажал «Профиль»/«Закладки» — экран с «Войти» вместо мгновенного окна входа. */
+  let guestTab = $state<'profile' | 'bookmarks' | null>(null);
+
+  /** Кнопка «Наверх»: появляется после прокрутки примерно на полтора экрана. */
+  let scrolledFar = $state(false);
+  const showToTop = $derived(scrolledFar && !floatBack && path !== '/watch');
+
+  function scrollToTop() {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+  }
   let profileUserId = $state<number | null>(null);
 
   const path = $derived((currentPath.split('?')[0] || '/').replace(/\/+$/, '') || '/');
@@ -48,12 +61,24 @@
   });
   /** Корневые экраны разделов получают верхнюю панель с поиском; остальные — панель с «назад». */
   const isRoot = $derived(rootTab !== null && path !== '/overview/popular' && path !== '/schedule');
-  const activeTab = $derived<Tab | null>(profileOpen ? 'profile' : rootTab);
+  const activeTab = $derived<Tab | null>(profileOpen ? 'profile' : guestTab ?? rootTab);
   const searchHint = $derived(
     rootTab === 'feed' ? 'Поиск записей и блогов' : rootTab === 'bookmarks' ? 'Поиск в закладках' : 'Поиск аниме',
   );
 
   function goTab(tab: (typeof TABS)[number]) {
+    // Повторное нажатие на открытую вкладку — наверх (как в Anixart и системных приложениях Android).
+    if (tab.id !== 'profile' && activeTab === tab.id && isRoot) {
+      scrollToTop();
+      return;
+    }
+    const guest = get(authReady) && !get(isAuthenticated);
+    if (guest && (tab.id === 'profile' || tab.id === 'bookmarks')) {
+      closeProfile();
+      guestTab = tab.id;
+      return;
+    }
+    guestTab = null;
     if (tab.id === 'profile') {
       void openProfile();
       return;
@@ -63,14 +88,32 @@
   }
 
   async function openProfile() {
-    if (!(await requireAuth())) return;
-    const id = await ensureProfileId();
-    if (id == null) return;
+    if (!get(isAuthenticated)) { guestTab = 'profile'; return; }
+    let id: number | null = null;
+    try { id = await ensureProfileId(); } catch { id = null; }
+    if (id == null) {
+      showToast('Не удалось загрузить профиль — сервер не отвечает, попробуйте позже', 'err');
+      return;
+    }
     profileUserId = id;
     resetProfilePanelHistory();
     profilePanelOpen.set(true);
     profileOpen = true;
   }
+
+  $effect(() => {
+    if (!$isAuthenticated || !guestTab) return;
+    const t = guestTab;
+    guestTab = null;
+    if (t === 'profile') void openProfile();
+    else navigate('/bookmarks');
+  });
+
+  // Переход на другой экран закрывает экран гостя
+  $effect(() => {
+    void path;
+    if (guestTab && path !== '/' && path !== '/bookmarks' && path !== '/overview' && path !== '/feed') guestTab = null;
+  });
 
   function closeProfile() {
     if (!profileOpen) return;
@@ -98,11 +141,22 @@
       }
     };
     const onClose = () => { profileOpen = false; };
+    let scrollRaf = 0;
+    const onScroll = () => {
+      if (scrollRaf) return;
+      scrollRaf = requestAnimationFrame(() => {
+        scrollRaf = 0;
+        scrolledFar = window.scrollY > window.innerHeight * 1.5;
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('anix:profilePanelOpen', onOpen);
     window.addEventListener('anix:profilePanelClose', onClose);
     return () => {
       stopDl();
       window.clearTimeout(offlineStart);
+      window.removeEventListener('scroll', onScroll);
+      if (scrollRaf) cancelAnimationFrame(scrollRaf);
       window.removeEventListener('anix:profilePanelOpen', onOpen);
       window.removeEventListener('anix:profilePanelClose', onClose);
     };
@@ -151,6 +205,18 @@
     {@render children?.()}
   </main>
 
+  <button
+    type="button"
+    class="m-to-top"
+    class:m-to-top--visible={showToTop}
+    onclick={scrollToTop}
+    aria-label="Наверх"
+    aria-hidden={!showToTop}
+    tabindex={showToTop ? 0 : -1}
+  >
+    {@html iconArrowUp(22)}
+  </button>
+
   <nav class="m-navbar" aria-label="Разделы">
     {#each TABS as tab (tab.id)}
       <button
@@ -164,6 +230,12 @@
       </button>
     {/each}
   </nav>
+
+  {#if guestTab}
+    <div class="m-fullscreen m-fullscreen--profile">
+      <MobileGuestGate kind={guestTab} onLogin={openLoginPrompt} />
+    </div>
+  {/if}
 
   {#if profileOpen && profileUserId != null}
     <div class="m-fullscreen m-fullscreen--profile">
@@ -209,10 +281,53 @@
     padding: 0;
     justify-content: space-between;
 
-    .m-icon-btn { width: 48px; height: 48px; border-radius: 16px; background: rgba(28, 28, 28, 0.72); color: var(--m-text); backdrop-filter: blur(6px); }
+    .m-icon-btn { width: 48px; height: 48px; border-radius: 16px; background: rgba(28, 28, 28, 0.72); color: #fff; backdrop-filter: blur(6px); }
   }
 
   .m-app { position: relative; }
+
+  /* «Наверх»: вторичная кнопка в цветах темы, над таб-баром (на планшете — в правом нижнем углу). */
+  .m-to-top {
+    position: fixed;
+    z-index: 25; /* ниже таб-бара (30) и полноэкранных панелей (50) */
+    right: calc(var(--m-space-4) + env(safe-area-inset-right));
+    bottom: calc(var(--m-nav-h) + env(safe-area-inset-bottom) + var(--m-space-4));
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: 1px solid var(--m-outline-variant);
+    border-radius: 50%;
+    background: var(--m-surface-raised);
+    color: var(--m-text);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+    opacity: 0;
+    transform: translateY(12px) scale(0.9);
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    -webkit-tap-highlight-color: transparent;
+
+    :global(svg) { width: 22px; height: 22px; }
+    &:active { filter: brightness(1.15); }
+  }
+
+  .m-to-top--visible {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  @media (min-width: 840px) {
+    .m-to-top {
+      right: calc(var(--m-space-5) + env(safe-area-inset-right));
+      bottom: calc(var(--m-space-5) + env(safe-area-inset-bottom));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .m-to-top { transform: none; transition: opacity 0.12s linear; }
+  }
 
   .m-offline {
     display: flex; align-items: center; justify-content: space-between; gap: var(--m-space-3);

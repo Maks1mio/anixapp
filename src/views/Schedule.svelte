@@ -14,6 +14,10 @@
   let errorMsg = $state('');
   let scheduleByDay = $state<Record<string, ReleaseCardData[]>>({});
 
+  /** Дни начиная с сегодняшнего (как в Anixart): сегодня — первым, с подписью «Сегодня». */
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  const orderedDays = [...SCHEDULE_DAYS.slice(todayIdx), ...SCHEDULE_DAYS.slice(0, todayIdx)];
+
   async function loadSchedule() {
     if (!window.anixApi?.release?.schedule) {
       loadState = 'error';
@@ -51,10 +55,10 @@
     <div class="discover-page__empty">Расписание пока пусто</div>
   {:else}
     <div class="schedule-page">
-      {#each SCHEDULE_DAYS as day (day.key)}
+      {#each orderedDays as day, i (day.key)}
         {#if (scheduleByDay[day.key]?.length ?? 0) > 0}
           <section class="schedule-day">
-            <h2 class="schedule-day__title">{day.label}</h2>
+            <h2 class="schedule-day__title">{i === 0 ? `Сегодня, ${day.label.toLowerCase()}` : i === 1 ? `Завтра, ${day.label.toLowerCase()}` : day.label}</h2>
             <OverviewReleaseCarousel items={scheduleByDay[day.key] ?? []} />
           </section>
         {/if}

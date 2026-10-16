@@ -8,6 +8,7 @@ import { applyTvDefaults, isTvMode } from './platform/tv';
 import { applyMobileDefaults, isMobileMode } from './platform/mobile';
 import { initTvNavigation } from './services/tv-navigation';
 import { startDebugMetrics } from './services/debug-metrics';
+import { installMobileLog } from './services/mobile-log';
 import { initWebGpuAvailability } from './utils/webgpu-availability.svelte';
 
 void import('flag-icons/css/flag-icons.min.css');
@@ -15,6 +16,7 @@ void import('flag-icons/css/flag-icons.min.css');
 installWindowFluo();
 
 if (isMobileMode()) {
+  installMobileLog();
   applyMobileDefaults();
 }
 

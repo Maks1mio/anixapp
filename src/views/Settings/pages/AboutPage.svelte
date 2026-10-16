@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isMobileMode } from '../../../platform/mobile';
   import { onMount } from 'svelte';
   import UiV2Button from '../../../components/uikit-v2/UiV2Button.svelte';
   import UserAvatar from '../../../components/UserAvatar.svelte';
@@ -21,6 +22,8 @@
       } else if (typeof (window.electron as { getAppVersion?: () => Promise<string> })?.getAppVersion === 'function') {
         const v = await (window.electron as { getAppVersion: () => Promise<string> }).getAppVersion();
         if (v) version = `v${v}`;
+      } else if (__APP_VERSION__) {
+        version = `v${__APP_VERSION__}`;
       }
     } catch {}
 
@@ -57,7 +60,7 @@
     <p class="uiv2-settings__version">{version}</p>
   </div>
   <p class="uiv2-settings__lead">
-    Неофициальный десктопный клиент для Anixart. Построен с использованием
+    Неофициальный {isMobileMode() ? 'Android-клиент' : 'десктопный клиент'} для Anixart. Построен с использованием
     <a
       href="https://github.com/Maks1mio/anixapi"
       class="uiv2-settings__link"

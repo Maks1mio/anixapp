@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isMobileMode } from '../platform/mobile';
   import type { Snippet } from 'svelte';
   import Select from './Select.svelte';
   import { iconShuffle } from './icons';
@@ -44,6 +45,8 @@
       placeholder="Сортировка"
       className="bookmarks-toolbar__sort"
     />
+    <!-- «Случайный релиз» — только на ПК; на Android «Рандом» есть в «Обзоре» -->
+    {#if !isMobileMode()}
     <button
       type="button"
       class="bookmarks-toolbar__icon-btn"
@@ -54,5 +57,6 @@
     >
       {@html iconShuffle(18)}
     </button>
+    {/if}
   </div>
 </div>

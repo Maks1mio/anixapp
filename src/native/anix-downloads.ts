@@ -48,6 +48,9 @@ interface Plugin {
   pauseDownloads?: () => Promise<void>;
   resumeDownloads?: () => Promise<void>;
   storage?: () => Promise<StorageInfo>;
+  removeAllDownloads?: () => Promise<void>;
+  downloadSettings?: () => Promise<{ wifiOnly?: boolean }>;
+  setDownloadSettings?: (o: { wifiOnly?: boolean }) => Promise<{ wifiOnly?: boolean }>;
   savePoster?: (o: { key: string; url: string }) => Promise<{ path: string }>;
   playOffline?: (o: Record<string, unknown>) => Promise<unknown>;
   networkState?: () => Promise<{ online?: boolean; connected?: boolean; metered?: boolean }>;
@@ -124,6 +127,20 @@ export async function removeDownload(downloadId: string): Promise<void> {
 
 export async function pauseAll(): Promise<void> { await plugin()?.pauseDownloads?.(); }
 export async function resumeAll(): Promise<void> { await plugin()?.resumeDownloads?.(); }
+
+/** Удалить все загрузки (файлы и записи) разом. */
+export async function removeAllDownloads(): Promise<void> {
+  await plugin()?.removeAllDownloads?.();
+}
+
+/** «Только по Wi-Fi» для загрузок (хранится в нативных настройках). */
+export async function getWifiOnly(): Promise<boolean> {
+  try { return !!(await plugin()?.downloadSettings?.())?.wifiOnly; } catch { return false; }
+}
+
+export async function setWifiOnly(value: boolean): Promise<boolean> {
+  try { return !!(await plugin()?.setDownloadSettings?.({ wifiOnly: value }))?.wifiOnly; } catch { return false; }
+}
 
 export async function storageInfo(): Promise<StorageInfo | null> {
   try { return (await plugin()?.storage?.()) ?? null; } catch { return null; }

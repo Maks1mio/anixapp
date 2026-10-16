@@ -97,7 +97,7 @@ object PlaybackCoordinator {
 
     private val listener = object : Player.Listener {
         override fun onPlayerError(error: PlaybackException) {
-            Log.w(TAG, "player error: ${error.errorCodeName} ${error.message}")
+            com.mobileapp.anix.log.AppLog.e("player", "Встроенный плеер: ошибка ${error.errorCodeName}", error)
             onWatchdog(error)
         }
 
@@ -233,7 +233,7 @@ object PlaybackCoordinator {
                 val r = AnixBackClient.resolve(ep.embedUrl)
                 applyResolved(r, index, resumeMs, preferred, s)
             } catch (e: Exception) {
-                Log.w(TAG, "resolve failed", e)
+                com.mobileapp.anix.log.AppLog.w("player", "Встроенный плеер: не удалось получить ссылку на серию", e)
                 _ui.update { it.copy(phase = Phase.Failed, message = "Не удалось получить ссылку: ${e.message}") }
             }
         }

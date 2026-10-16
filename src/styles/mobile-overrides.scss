@@ -71,11 +71,10 @@ html.mobile-mode {
     .uiv2-anime-card__more-slot { flex: none; margin: -6px -8px 0 0; }
     .uiv2-anime-card__more { color: var(--m-text-2) !important; }
 
-    .uiv2-anime-card__stats { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--m-space-2); margin: 2px 0 0; color: var(--m-text-2); font-size: var(--m-fs-meta); }
+    .uiv2-anime-card__stats { display: flex; flex-wrap: wrap; align-items: center; gap: var(--m-space-1) var(--m-space-3); margin: 2px 0 0; color: var(--m-text-2); font-size: var(--m-fs-meta); }
     .uiv2-anime-card__score-count { display: none; }
     .uiv2-anime-card__meta { order: 1; }
     .uiv2-anime-card__score { order: 2; display: inline-flex; flex-direction: row-reverse; align-items: center; gap: 2px; }
-    .uiv2-anime-card__score ~ .uiv2-anime-card__meta::after { content: '•'; margin-left: var(--m-space-2); }
     .uiv2-anime-card__score { color: var(--m-text-2) !important; }
     .uiv2-anime-card__score-star { color: var(--m-text-2) !important; }
     .uiv2-anime-card__score-value { color: var(--m-text-2) !important; font-weight: 400; }
@@ -255,6 +254,11 @@ html.mobile-mode {
     }
     &::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 45%, var(--m-bg) 100%); }
   }
+  // Светлая тема: тёмная размытая обложка под тёмным текстом даёт низкий контраст — осветляем фон
+  &[data-m-theme='light'] .m-release-bg {
+    &::before { filter: blur(30px) brightness(1.15) saturate(0.85); opacity: 0.55; }
+    &::after { background: linear-gradient(to bottom, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.2) 45%, var(--m-bg) 100%); }
+  }
   .release-page__head > *:not(.m-release-bg):not(.m-sheet-scrim):not(.m-flow-scrim) { position: relative; z-index: 1; }
   .release-page__head-top { padding: 0 !important; align-items: stretch !important; }
   .release-page__actions { width: 100%; }
@@ -327,6 +331,31 @@ html.mobile-mode {
   .release-page__meta-info-row svg { width: 20px; height: 20px; }
   .release-page__meta-info-text { display: block; text-align: left !important; font: 400 15px/1.35 var(--m-font) !important; color: var(--m-text) !important; }
   .release-page__meta-info-text a, .release-page__meta-info-link { display: inline !important; text-align: left; }
+}
+
+// ── Релиз на телефоне в альбомной ориентации: постер слева, название/действия/«Воспроизвести» справа.
+// Иначе постер на ширину экрана занимает всю высоту и до кнопок не долистать.
+@media (orientation: landscape) and (max-height: 600px) {
+  html.mobile-mode {
+    .release-page__head-top {
+      display: grid !important;
+      grid-template-columns: 168px minmax(0, 1fr);
+      grid-template-areas: 'hero brief' 'hero actions' 'hero play' 'hero .';
+      grid-template-rows: auto auto auto 1fr;
+      column-gap: var(--m-space-5);
+      padding-top: calc(env(safe-area-inset-top) + 68px) !important;
+    }
+    .release-page__head-intro { display: contents !important; }
+    .release-page__head--narrow .release-page__head-hero, .release-page__head-hero {
+      grid-area: hero; justify-content: flex-start; padding-top: 0 !important;
+    }
+    .release-page__poster { width: 168px !important; border-radius: 20px !important; }
+    .release-page__head--narrow .release-page__head-brief, .release-page__head-brief { grid-area: brief; padding-top: 0 !important; }
+    .release-page__actions { grid-area: actions; }
+    .release-page__play-slot { grid-area: play; max-width: 480px; }
+    .release-page__episode-added { text-align: left; }
+    .m-release-bg { height: 520px; }
+  }
 }
 
 // ── Загрузки в окне «Выберите серию» ──
@@ -440,4 +469,383 @@ html.mobile-mode {
 html.mobile-mode.m-scroll-lock { &, body { overflow: hidden !important; touch-action: none; } }
 html.mobile-mode {
   .m-flow__body, .m-sheet-menu, .m-flow__dubs { overscroll-behavior: contain; touch-action: pan-y; }
+}
+
+// ── Светлая тема: элементы, рассчитанные на тёмный фон ──
+html.mobile-mode[data-m-theme='light'] {
+  // «Воспроизвести»: светло-серая кнопка на белом почти не видна — делаем основной тёмной
+  .release-page__btn--play { background: var(--m-text) !important; color: var(--m-bg) !important; }
+  // Подпись об условиях на экране входа: белый текст с тенью на светлом градиенте не читается
+  .auth-legal__text { color: var(--m-text-2); text-shadow: none; }
+  .auth-legal__link { color: var(--m-text); text-shadow: none; text-decoration-color: currentColor; }
+}
+
+// ── Релиз: все блоки под шапкой — с единым боковым полем (раньше «Видео», «Рейтинг», статистика,
+// рекомендации и комментарии стояли вплотную к краям экрана). Карусели — от края до края с полем внутри.
+html.mobile-mode {
+  .release-page > .release-page__section,
+  .release-page > .release-page__recommended,
+  .release-page > .anix-comments {
+    padding-left: calc(var(--m-gutter) + env(safe-area-inset-left)) !important;
+    padding-right: calc(var(--m-gutter) + env(safe-area-inset-right)) !important;
+    box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .release-page .release-page__carousel-scroll,
+  .release-page .uiv2-carousel {
+    margin-left: calc(-1 * var(--m-gutter)) !important;
+    margin-right: calc(-1 * var(--m-gutter)) !important;
+    padding-left: var(--m-gutter) !important;
+    padding-right: var(--m-gutter) !important;
+    scroll-padding-inline: var(--m-gutter);
+    max-width: none;
+  }
+}
+
+// «О проекте» / условия: на низких экранах (320 dp, альбомная) окно не влезало и кнопки обрезались —
+// ограничиваем высоту экраном, прокручивается только текст.
+html.mobile-mode {
+  .auth-terms-modal__panel,
+  .auth-terms-modal__panel--compact {
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
+  }
+  .auth-terms-modal__body--compact,
+  .auth-terms-modal__scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto !important;
+  }
+  .auth-terms-modal__head,
+  .auth-terms-modal__foot { flex: none; }
+  .auth-terms-modal__foot--split { flex-wrap: wrap; gap: var(--m-space-3); }
+}
+
+// ── Заголовки «Поиск» и «Коллекции» стояли вплотную к левому краю (у .view на телефоне нет полей,
+// поля задают сами блоки) — даём им общее боковое поле.
+html.mobile-mode {
+  .search-page__header,
+  .view-collections-list > .view-header,
+  .m-app__content > .view > .view-header {
+    padding-left: calc(var(--m-gutter) + env(safe-area-inset-left)) !important;
+    padding-right: calc(var(--m-gutter) + env(safe-area-inset-right)) !important;
+    box-sizing: border-box;
+  }
+}
+
+// ── Единые меню на телефоне и планшете ──
+// Выпадающее меню ПК (UiV2PopupMenu: «⋯» у карточек, комментарии, посты, коллекции) было мельче
+// остальных меню (строка 40 px, шрифт 15). На Android показываем его нижней шторкой
+// с теми же размерами, что «⋮» на релизе и выбор плеера: строка 56 dp, шрифт 17, значки 22, скругление 28.
+html.mobile-mode {
+  .uiv2-popup-menu {
+    pointer-events: auto;
+    background: rgba(0, 0, 0, 0.5);
+    animation: m-fade-in 0.16s ease-out;
+  }
+  .uiv2-popup-menu__panel {
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    max-height: min(75dvh, 560px) !important;
+    border-radius: 28px 28px 0 0 !important;
+    padding: var(--m-space-3) var(--m-space-2) calc(var(--m-space-3) + env(safe-area-inset-bottom)) !important;
+    background: var(--m-surface-sheet) !important;
+    color: var(--m-text) !important;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35) !important;
+    backdrop-filter: none !important;
+    transform-origin: 50% 100% !important;
+    &::before, &::after { display: none !important; }
+    // «ручка» шторки
+    &:not(.uiv2-popup-menu__panel--sub) { box-sizing: border-box; }
+  }
+  // Подменю — поверх основной шторки, такого же размера
+  .uiv2-popup-menu__panel--sub { z-index: 1; }
+  .uiv2-popup-menu__scroll { max-height: none !important; overflow-y: auto; overscroll-behavior: contain; }
+  .uiv2-popup-menu__item {
+    min-height: 56px !important;
+    padding: 0 var(--m-space-4) !important;
+    gap: var(--m-space-4) !important;
+    border-radius: 16px !important;
+    color: var(--m-text) !important;
+    font: 400 17px/1.3 var(--m-font) !important;
+  }
+  .uiv2-popup-menu__icon { width: 22px !important; height: 22px !important; color: var(--m-text-2); svg { width: 22px !important; height: 22px !important; } }
+  .uiv2-popup-menu__section-label { font: 500 13px/1.3 var(--m-font) !important; color: var(--m-text-2) !important; padding: var(--m-space-3) var(--m-space-4) var(--m-space-1) !important; }
+  .uiv2-popup-menu__header-title { font: 500 17px/1.3 var(--m-font) !important; }
+  .uiv2-popup-menu__divider { margin: var(--m-space-1) var(--m-space-4) !important; }
+
+  // Все остальные «нижние меню» — те же размеры
+  .m-sheet-menu button, .m-choice { min-height: 56px; font-size: 17px; }
+
+  // Планшет/широкий экран: шторка не на всю ширину, по центру
+  @media (min-width: 840px) {
+    .uiv2-popup-menu__panel { left: calc(50% - 280px) !important; right: auto !important; width: 560px !important; }
+    .m-sheet-menu { max-width: 560px; margin: 0 auto; }
+    .m-sheet { max-width: 560px; margin: 0 auto; }
+  }
+}
+@keyframes m-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+// Находки прогона по размерам экранов:
+html.mobile-mode {
+  // 320–360 dp: «Все / Озвучки / Субтитры» не влезали — ряд прокручивается по горизонтали
+  .watch-modal__filters { overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; &::-webkit-scrollbar { display: none; } }
+  // «Коллекции»: кнопки «Создать…» и сортировка — с тем же боковым полем, что заголовок
+  .view-collections-list > .collections-header-actions,
+  .view-collections-list > .collections-sort-select,
+  .view-collections-list > [class*='collections-sort'] {
+    margin-left: calc(var(--m-gutter) + env(safe-area-inset-left)) !important;
+    margin-right: calc(var(--m-gutter) + env(safe-area-inset-right)) !important;
+  }
+}
+
+// ── Единый стандарт размеров (Material 3, телефон и планшет) ──
+// Строки списков: одна строка 56 dp, две — от 68 dp; заголовок 16, подпись 14.
+// Пункты меню и шторок: 56 dp, шрифт 16. Кнопки и фильтры: 40 dp, шрифт 14. Карточки выбора: от 64 dp, 16/13.
+html.mobile-mode {
+  // Строки настроек
+  .uiv2-settings__row { min-height: 56px; }
+  .uiv2-settings__row-title { font-size: 16px !important; line-height: 1.3 !important; }
+  .uiv2-settings__row-desc { font-size: 14px !important; line-height: 1.4 !important; }
+  // Кнопки внутри настроек и страниц («Сбросить», «Выбрать», «Поделиться» были 28 dp, шрифт 12)
+  .uiv2-settings .uiv2-btn,
+  .uiv2-settings .uiv2-btn.uiv2-btn--sm {
+    min-height: 40px !important;
+    padding: 0 16px !important;
+    font-size: 14px !important;
+    border-radius: 20px !important;
+  }
+  // «Внешний вид»: подписи вариантов и тем были 11–12 px
+  .uiv2-settings__choice { font-size: 14px !important; }
+  .uiv2-settings__theme-name { font-size: 14px !important; }
+  // Пункты меню/шторок — 56 dp, шрифт 16 (как строки списков)
+  .m-sheet-menu button, .uiv2-popup-menu__item { font-size: 16px !important; }
+  .m-choice { min-height: 56px; font-size: 16px; }
+  // Фильтры-«чипы» — 40 dp, шрифт 14
+  .watch-modal__filter { height: 40px; font-size: 14px !important; }
+}
+
+// ── Прокрутка: «ловушка» вложенной области ──
+// У uiv2-scroll-area__viewport overscroll-behavior: contain. Если область растянута по содержимому
+// (не прокручивается сама) внутри прокручиваемого экрана (профиль — .m-fullscreen), жест не доходит
+// до внешнего контейнера и страница «не мотается». На Android жест передаётся дальше;
+// удержание оставлено только в шторках/меню, где оно нужно.
+html.mobile-mode {
+  .uiv2-scroll-area__viewport { overscroll-behavior-y: auto !important; }
+  .m-sheet, .m-sheet-menu, .uiv2-popup-menu__scroll, .m-flow__body, .m-flow__dubs,
+  .m-dialog, .watch-modal__body {
+    overscroll-behavior-y: contain !important;
+  }
+}
+
+// ── Профиль: страница не прокручивалась ──
+// Внутренняя область профиля (.page__scroll) растягивалась по содержимому (1480 dp при экране 866),
+// и свайп браузер отдавал прокрутке главной страницы ПОД профилем. Теперь вся цепочка — высотой экрана,
+// прокручивается сама область профиля (как на ПК), внешний .m-fullscreen не прокручивается.
+html.mobile-mode {
+  .m-fullscreen--profile {
+    overflow: hidden !important;
+    display: flex;
+    flex-direction: column;
+  }
+  .m-fullscreen--profile > .profile-panel { flex: 1 1 auto; min-height: 0; height: auto !important; }
+  .m-fullscreen--profile .profile-panel__viewport { flex: 1 1 auto; min-height: 0; }
+  .m-fullscreen--profile .profile-panel__track,
+  .m-fullscreen--profile .profile-panel__slide,
+  .m-fullscreen--profile .profile-panel__block,
+  .m-fullscreen--profile .profile-panel__inner-viewport,
+  .m-fullscreen--profile .profile-panel__inner-track,
+  .m-fullscreen--profile .profile-panel__inner-slide,
+  .m-fullscreen--profile .profile-panel__inner-slide > .page {
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+  .m-fullscreen--profile .page__scroll {
+    flex: 1 1 auto;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain !important;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+// Горизонтальные карусели (расписание и др.): только горизонтальная прокрутка —
+// вертикальный свайп по постеру всегда уходит странице.
+html.mobile-mode {
+  .m-hscroll, .uiv2-carousel, .release-page__carousel-scroll, .m-dyn, .watch-modal__filters, .m-ptabs__bar, .m-tabs__scroll, .m-banner-track, .mdbg__filters {
+    overflow-y: hidden !important;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x pan-y;
+  }
+}
+
+// ── Fluo (совместный просмотр): верх страницы ──
+// Поле «Код комнаты» растягивалось по высоте (192 dp) и со скруглением-«таблеткой» превращалось в овал,
+// кнопки были 34 dp. Теперь: заголовок, «Создать комнату» на всю ширину, поле кода + «Войти» одной строкой, 48 dp.
+html.mobile-mode {
+  .fluo-page { padding-left: calc(var(--m-gutter) + env(safe-area-inset-left)) !important; padding-right: calc(var(--m-gutter) + env(safe-area-inset-right)) !important; }
+  .fluo-page__hero {
+    margin: 0 !important;
+    padding: var(--m-space-4) 0 var(--m-space-3) !important;
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+  .fluo-page__hero-top { display: flex !important; flex-direction: column; align-items: stretch !important; gap: var(--m-space-4); }
+  .fluo-page__brand { gap: var(--m-space-3); }
+  .fluo-page__title { font: 700 22px/1.25 var(--m-font) !important; }
+  .fluo-page__subtitle { font: 400 14px/1.4 var(--m-font) !important; color: var(--m-text-2) !important; }
+  .fluo-page__create.uiv2-btn {
+    height: 48px !important; min-height: 48px !important; width: 100%;
+    border-radius: 24px !important; font-size: 16px !important;
+  }
+  .fluo-page__toolbar {
+    display: flex !important; flex-direction: row !important; align-items: stretch !important;
+    gap: var(--m-space-2); margin-top: var(--m-space-3) !important;
+  }
+  .fluo-page__code.uiv2-pill-field {
+    flex: 1 1 auto; min-width: 0;
+    height: 48px !important; min-height: 48px !important; max-height: 48px;
+    border-radius: 24px !important;
+    padding: 0 var(--m-space-4) !important;
+    display: flex; align-items: center;
+  }
+  .fluo-page__code .uiv2-pill-field__input { font-size: 16px !important; }
+  .fluo-page__toolbar > .uiv2-btn {
+    flex: none; height: 48px !important; min-height: 48px !important;
+    padding: 0 var(--m-space-5) !important; border-radius: 24px !important; font-size: 16px !important;
+  }
+  .fluo-page__hint { font-size: 14px !important; margin-top: var(--m-space-2) !important; }
+  .fluo-page__state-title { font: 600 16px/1.3 var(--m-font) !important; }
+  .fluo-page__state-sub { font: 400 14px/1.4 var(--m-font) !important; }
+}
+
+// ── Экран входа: подпись о соглашениях наезжала на карточку на невысоких экранах ──
+// Была прибита к низу экрана поверх всего; теперь идёт под карточкой, экран прокручивается.
+html.mobile-mode {
+  .view-auth--overlay, .view-auth { overflow-y: auto !important; overscroll-behavior-y: contain; }
+  .view-auth__body { flex: 1 0 auto !important; padding-top: calc(72px + env(safe-area-inset-top)) !important; padding-bottom: var(--m-space-4) !important; }
+  .auth-legal--screen {
+    position: relative !important;
+    inset: auto !important;
+    flex: none;
+    padding: var(--m-space-4) var(--m-gutter) calc(var(--m-space-4) + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+// ── Расписание (отдельный экран на Android) ──
+html.mobile-mode {
+  .view-schedule { padding: 0 !important; }
+  .view-schedule .schedule-page { gap: var(--m-space-5); padding-bottom: var(--m-space-5); }
+  .view-schedule .schedule-day__title {
+    margin: 0 0 var(--m-space-3) !important;
+    padding: 0 calc(var(--m-gutter) + env(safe-area-inset-left));
+    font: 700 20px/1.25 var(--m-font) !important;
+    color: var(--m-text);
+  }
+  .view-schedule .uiv2-carousel { margin: 0 !important; padding-left: var(--m-gutter) !important; padding-right: var(--m-gutter) !important; scroll-padding-inline: var(--m-gutter); }
+  .view-schedule .discover-page__loading, .view-schedule .discover-page__empty { padding: var(--m-space-6) var(--m-gutter); text-align: center; color: var(--m-text-2); }
+}
+
+// ── Подложка под строкой состояния ──
+// На части телефонов (новый WebView) страница рисуется и под строкой состояния: при прокрутке шапка
+// («Поиск в закладках») уезжала под часы и значки. Закрываем эту полосу цветом темы. Где страница
+// под строку не заходит, env(safe-area-inset-top) = 0 и подложки нет.
+html.mobile-mode body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top);
+  background: var(--m-bg);
+  z-index: 9000;
+  pointer-events: none;
+}
+
+// ── Закладки: шапка с аватаром, поиск, вкладки и сетка стояли без полей и обрезались справа ──
+html.mobile-mode {
+  .view-bookmarks { padding: 0 !important; max-width: none !important; overflow-x: hidden; }
+  .view-bookmarks .bookmarks__user-header,
+  .view-bookmarks .bookmarks__search,
+  .view-bookmarks .bookmarks__collections {
+    margin-left: calc(var(--m-gutter) + env(safe-area-inset-left)) !important;
+    margin-right: calc(var(--m-gutter) + env(safe-area-inset-right)) !important;
+    box-sizing: border-box;
+    min-width: 0;
+  }
+  .view-bookmarks .bookmarks__user-header { padding-top: var(--m-space-3); gap: var(--m-space-3); }
+  .view-bookmarks .bookmarks__user { flex: 1 1 auto; min-width: 0; }
+  .view-bookmarks .bookmarks__user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .view-bookmarks .bookmarks__user-actions { flex: none; gap: var(--m-space-2); }
+  .view-bookmarks .bookmarks__user-actions .bookmarks-toolbar__icon-btn { width: 44px !important; height: 44px !important; }
+  .view-bookmarks .bookmarks__search { height: 48px; border-radius: 24px !important; }
+  .view-bookmarks .bookmarks__tabs { padding-left: var(--m-gutter); padding-right: var(--m-gutter); scroll-padding-inline: var(--m-gutter); }
+}
+
+// ── Цвет категории списка (как в статистике профиля): Смотрю — зелёный, В планах — розовый,
+// Просмотрено — синий, Отложено — оранжевый, Брошено — красный. Текст плашек подобран по контрасту ≥ 4.5:1.
+html.mobile-mode {
+  .uiv2-anime-card__status-badge {
+    color: #1c1b1f !important;
+    font-weight: 700 !important;
+    text-shadow: none !important;
+    &--watching { background: var(--st-watching) !important; }
+    &--planned { background: var(--st-planned) !important; }
+    &--completed { background: var(--st-completed) !important; }
+    &--on-hold { background: var(--st-on_hold) !important; }
+    &--dropped { background: var(--st-dropped) !important; color: #fff !important; }
+  }
+
+  // Кнопка статуса на релизе: рамка, текст и шеврон — в цвет выбранной категории
+  @each $st in (watching, planned, completed, on_hold, dropped) {
+    .release-page__actions-status[data-status='#{$st}'] {
+      .uiv2-select__trigger {
+        border-color: var(--st-#{$st}) !important;
+        background: color-mix(in srgb, var(--st-#{$st}) 16%, transparent) !important;
+      }
+      .uiv2-select__chevron { color: var(--st-#{$st}) !important; }
+    }
+  }
+}
+html.mobile-mode[data-m-theme='light'] .uiv2-anime-card__status-badge--dropped { color: #1c1b1f !important; }
+
+// Ленты на телефоне листаются пальцем: без стрелок, затемнений по краям и полосы прокрутки ПК
+html.mobile-mode {
+  // ВНИМАНИЕ: .uiv2-carousel__nav — обёртка самой ленты с карточками, её не скрывать
+  .release-page__carousel-fade, .release-page__carousel-arrow,
+  .uiv2-scroll-area__h-track { display: none !important; }
+}
+html.mobile-mode {
+  // Коллекции в закладках: на телефоне 2 колонки (с полями одна колонка на минимальной ширине давала огромные карточки),
+  // на планшете — сколько поместится
+  .view-bookmarks .bookmarks__collections { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: var(--m-space-3) !important; }
+  @media (min-width: 600px) {
+    .view-bookmarks .bookmarks__collections { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important; }
+  }
+}
+html.mobile-mode {
+  // Карточки коллекций: тяжёлая тень ПК (0 12px 28px) в светлой теме сливалась в серую полосу — тонкая рамка
+  .uiv2-collection__card {
+    box-shadow: none !important;
+    border: 1px solid var(--m-outline-variant) !important;
+  }
+  .uiv2-collection__card * { box-shadow: none !important; }
+}
+html.mobile-mode {
+  // «Уведомления»: текст пустого состояния и список стояли вплотную к левому краю
+  .view-notifications .notifications__content {
+    padding-left: calc(var(--m-gutter) + env(safe-area-inset-left)) !important;
+    padding-right: calc(var(--m-gutter) + env(safe-area-inset-right)) !important;
+  }
+  .view-notifications .notifications__empty, .view-notifications .notifications__loading {
+    padding: var(--m-space-6) 0; text-align: center; color: var(--m-text-2); font-size: 15px;
+  }
 }

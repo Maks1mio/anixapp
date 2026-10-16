@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageScrollElement } from '../platform/mobile';
   import { onMount, onDestroy } from 'svelte';
   import Tabs from '../components/Tabs.svelte';
   import TopReleaseRow from '../components/TopReleaseRow.svelte';
@@ -124,7 +125,7 @@
   }
 
   function attachScroll() {
-    const el = wrapEl?.closest('.page__scroll') as HTMLElement | null
+    const el = pageScrollElement(wrapEl)
       ?? document.getElementById('content');
     if (!el) return;
     scrollEl = el;

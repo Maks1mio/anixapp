@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageScrollElement } from '../platform/mobile';
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import ReleaseCardsGridSkeleton from '../components/ReleaseCardsGridSkeleton.svelte';
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
@@ -414,7 +415,7 @@
   let scrollListener: (() => void) | null = null;
 
   function getScrollEl(): HTMLElement | null {
-    return (wrapEl?.closest('.page__scroll') ?? document.getElementById('content')) as HTMLElement | null;
+    return pageScrollElement(wrapEl) ?? document.getElementById('content');
   }
 
   function tryLoadMoreIfNeeded() {

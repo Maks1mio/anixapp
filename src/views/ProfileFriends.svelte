@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageScrollElement } from '../platform/mobile';
   import { onMount, onDestroy, untrack } from 'svelte';
   import { navigate } from '../stores/navigation';
   import { handleUserProfileClick } from '../stores/user-profile';
@@ -108,7 +109,7 @@
 
   function attachInfiniteScroll() {
     if (scrollAttached) return;
-    const el = wrapEl?.closest('.page__scroll') as HTMLElement | null;
+    const el = pageScrollElement(wrapEl);
     if (!el) return;
     scrollAttached = true;
     scrollEl = el;

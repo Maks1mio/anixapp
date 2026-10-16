@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageScrollElement } from '../platform/mobile';
   import RelatedReleaseRow from "../components/RelatedReleaseRow.svelte";
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import { onMount, onDestroy } from 'svelte';
@@ -48,7 +49,7 @@
   let bgHeight = $state(0);
 
   function getScrollEl(): HTMLElement | null {
-    return wrapEl?.closest('.page__scroll') as HTMLElement | null;
+    return pageScrollElement(wrapEl);
   }
 
   function syncCurrentBg() {
@@ -142,7 +143,7 @@
   }
 
   function attachScroll() {
-    const el = wrapEl?.closest('.page__scroll') as HTMLElement | null;
+    const el = pageScrollElement(wrapEl);
     if (!el) return;
     scrollEl = el;
     scrollListener = () => {

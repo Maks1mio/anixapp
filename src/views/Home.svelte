@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { isMobileMode } from '../platform/mobile';
+  import { isMobileMode, pageScrollElement } from '../platform/mobile';
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import ReleaseCardsGridSkeleton from '../components/ReleaseCardsGridSkeleton.svelte';
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
@@ -279,7 +279,7 @@
   }
 
   function attachScroll() {
-    const el = wrapEl?.closest('.page__scroll') as HTMLElement | null
+    const el = pageScrollElement(wrapEl)
       ?? document.getElementById('content');
     if (!el) return;
     scrollEl = el;

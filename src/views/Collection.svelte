@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageScrollElement } from '../platform/mobile';
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import { onMount, onDestroy } from 'svelte';
   import { iconPencil, iconLock, iconTrash2 } from '../components/icons';
@@ -98,14 +99,20 @@
     }
   }
 
+  // .page__scroll — общий скролл раскладки, он живёт дольше страницы: обработчик снимаем сами
+  let detachScroll: (() => void) | null = null;
+
   function attachScroll() {
-    const scrollEl = wrapEl?.closest('.page__scroll') as HTMLElement | null;
+    const scrollEl = pageScrollElement(wrapEl);
     if (!scrollEl) return;
-    scrollEl.addEventListener('scroll', () => {
+    detachScroll?.();
+    const onScroll = () => {
       if (!hasMore || isLoadingMore) return;
       const distance = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
       if (distance < 300) loadMore();
-    });
+    };
+    scrollEl.addEventListener('scroll', onScroll, { passive: true });
+    detachScroll = () => scrollEl.removeEventListener('scroll', onScroll);
     requestAnimationFrame(() => {
       if (!hasMore || isLoadingMore) return;
       if (scrollEl.scrollHeight <= scrollEl.clientHeight + 50) loadMore();
@@ -240,6 +247,8 @@
 
   onDestroy(() => {
     window.removeEventListener('anix:cardLayoutChanged', onLayoutChanged);
+    detachScroll?.();
+    detachScroll = null;
   });
 </script>
 

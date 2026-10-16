@@ -48,7 +48,11 @@ export function renderText(
     .replace(/>/g, '&gt;')
     .replace(/\n/g, '<br>')
     .replace(/@\[(\d+)\]/g, (_, uid) => {
-      const name = profileCache[Number(uid)]?.login ?? uid;
+      // Логин чужой — экранируем, иначе он попадёт в {@html} как разметка
+      const name = String(profileCache[Number(uid)]?.login ?? uid)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
       return `<span class="dc-mention">@${name}</span>`;
     });
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageScrollElement } from '../platform/mobile';
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../stores/navigation';
@@ -88,7 +89,7 @@
 
   function attachInfiniteScroll() {
     if (scrollAttached) return;
-    const el = wrapEl?.closest('.page__scroll') as HTMLElement | null;
+    const el = pageScrollElement(wrapEl);
     if (!el) return;
     scrollAttached = true;
     scrollEl = el;

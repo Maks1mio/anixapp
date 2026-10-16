@@ -73,6 +73,9 @@ class WebPlayerActivity : AppCompatActivity() {
             settings.javaScriptCanOpenWindowsAutomatically = false
             settings.loadWithOverviewMode = true
             settings.useWideViewPort = true
+            // Страницы источников чужие: доступа к файлам и content:// приложения у них нет
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
                     val u = req.url
@@ -184,6 +187,8 @@ class WebPlayerActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         if (::web.isInitialized) {
+            // Полноэкранное видео держит свой View и колбэк WebView — отпускаем до destroy()
+            if (customView != null) web.webChromeClient?.onHideCustomView()
             (web.parent as? ViewGroup)?.removeView(web)
             web.destroy()
         }

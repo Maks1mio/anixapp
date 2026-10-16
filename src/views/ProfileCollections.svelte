@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageScrollElement } from '../platform/mobile';
   import { onMount, onDestroy } from 'svelte';
   import CollectionCard from '../components/CollectionCard.svelte';
   import { iconArrowLeft } from '../components/icons';
@@ -74,7 +75,7 @@
   }
 
   function attachScroll() {
-    const el = (wrapEl?.closest('.page__scroll') as HTMLElement | null)
+    const el = pageScrollElement(wrapEl)
       ?? document.getElementById('content');
     if (!el) return;
     scrollEl = el;

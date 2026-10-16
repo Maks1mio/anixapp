@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageScrollElement } from '../platform/mobile';
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import CollectionCard, { type CollectionCardData } from '../components/CollectionCard.svelte';
   import { onMount, onDestroy, untrack } from 'svelte';
@@ -187,7 +188,7 @@
   let unregisterScrollKey: (() => void) | null = null;
 
   function getScrollEl(): HTMLElement | null {
-    return wrapEl?.closest('.page__scroll') as HTMLElement | null;
+    return pageScrollElement(wrapEl);
   }
 
   function attachInfiniteScroll() {

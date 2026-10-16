@@ -21,3 +21,22 @@ export function applyMobileDefaults(): void {
   // Только тёмная тема: фиксируем, чтобы тема из desktop-настроек не перекрашивала мобильный UI.
   root.style.colorScheme = 'dark';
 }
+
+let windowScrollForwarded = false;
+
+/**
+ * Скролл-контейнер страницы для догрузки списков. На ПК это `.page__scroll` раскладки; на телефоне
+ * прокручивается сам документ — отдаём `document.scrollingElement` и пересылаем ему прокрутку окна
+ * событием `scroll` (у корня документа своего события нет). Метрики scrollHeight/scrollTop/clientHeight
+ * у него настоящие, поэтому код страниц не меняется.
+ */
+export function pageScrollElement(anchor: Element | null | undefined): HTMLElement | null {
+  const own = anchor?.closest<HTMLElement>('.page__scroll') ?? null;
+  if (own || !isMobileMode() || typeof document === 'undefined') return own;
+  const root = document.scrollingElement as HTMLElement | null;
+  if (root && !windowScrollForwarded) {
+    windowScrollForwarded = true;
+    window.addEventListener('scroll', () => root.dispatchEvent(new Event('scroll')), { passive: true });
+  }
+  return root;
+}

@@ -36,6 +36,7 @@ import com.mobileapp.anix.ui.PlayerActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 /**
@@ -73,8 +74,10 @@ class AnixPlayerPlugin : Plugin() {
         cm.registerDefaultNetworkCallback(cb)
         netCallback = cb
         resumePendingDownloads()
-        AppLog.listener = { e -> notifyListeners("nativeLog", e.toJs()) }
+        AppLog.listener = logListener
     }
+
+    private val logListener: (AppLog.Entry) -> Unit = { e -> notifyListeners("nativeLog", e.toJs()) }
 
     private fun AppLog.Entry.toJs() = JSObject()
         .put("ts", ts).put("level", level).put("channel", channel).put("message", message)
@@ -275,6 +278,9 @@ class AnixPlayerPlugin : Plugin() {
     }
 
     override fun handleOnDestroy() {
+        // AppLog — синглтон процесса: без сброса он держал бы плагин, мост и Activity после закрытия
+        if (AppLog.listener === logListener) AppLog.listener = null
+        scope.cancel()
         MediaEngine.downloadManager.removeListener(dlListener)
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         netCallback?.let { runCatching { cm.unregisterNetworkCallback(it) } }
@@ -598,7 +604,9 @@ class AnixPlayerPlugin : Plugin() {
             return
         }
         val preferred = call.getString("quality")
-        val hostOverride = call.getString("hostOverride")
+        // Тестовый хук: подмена хоста загрузки только в отладочной сборке
+        val debuggable = (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        val hostOverride = call.getString("hostOverride")?.takeIf { debuggable }
         scope.launch {
             try {
                 val r = AnixBackClient.resolve(embed)

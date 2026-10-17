@@ -4,11 +4,6 @@
   import { navigate } from '../../stores/navigation';
   import { PlayerCore } from '../Watch/core/PlayerCore';
   import { getFluoPlayer, installWindowFluo } from '../../fluo';
-  import {
-    webGpu,
-    initWebGpuAvailability,
-    getWebGpuUnavailableReason,
-  } from '../../utils/webgpu-availability.svelte';
   import { allowsIframeFallback, userPlaybackError } from '../Watch/_utils';
   import {
     buildTimelineSausages,
@@ -22,32 +17,17 @@
   import { setSkipAutoPref } from '../Watch/_skipPrefs';
   import { episodeDisplayNumber } from '../../utils/episode-display';
   import { scheduleFocusTvOverlayContent, focusTvWatchPlay } from '../../services/tv-navigation';
+  import { getTvWatchArt } from '../../services/tv-release-transition';
+  import { toPosterDisplayUrl } from '../../utils/posterUrl';
+  import { fade } from 'svelte/transition';
   import { isCapacitorNative } from '../../native/anix-api-native';
-  import {
-    ANIME4K_INTENSITIES,
-    ANIME4K_TARGET_RES,
-    ANIME4K_TYPES,
-    anime4kTargetHeight,
-    anime4kTargetResMenuLabel,
-    mapAnime4kPreset,
-    normalizeAnime4kPreset,
-    normalizeAnime4kTargetRes,
-    type Anime4kIntensity,
-    type Anime4kTargetRes,
-    type Anime4kType,
-  } from '../Watch/core/anime4k-presets';
-  import {
-    SURROUND_MODES,
-    normalizeSurroundMode,
-    surroundModeDisplayLabel,
-    type SurroundMode,
-  } from '../Watch/core/surround-audio';
   import {
     iconPlay,
     iconPause,
     iconSettings,
     iconFilm,
     iconChevronRight,
+    iconX,
   } from '../../components/icons';
 
   type LoadState = 'idle' | 'loading' | 'ready' | 'error';
@@ -62,10 +42,12 @@
   const sourceName = params.get('sourceName') || '';
   const dubberName = params.get('dubberName') || '';
 
+  /** Тот же арт, что в hero страницы тайтла, — экран загрузки продолжает страницу. */
+  const loadingArt = toPosterDisplayUrl(getTvWatchArt(Number(releaseId)), 'releaseHero');
+
   const core = new PlayerCore();
   const fluo = getFluoPlayer();
   installWindowFluo();
-  const a4kOk = $derived(webGpu.status === 'available');
 
   let loadState = $state<LoadState>('loading');
   let errorText = $state('');
@@ -93,24 +75,16 @@
   let skipMarks = $state<SkipMarks | null>(null);
   let skipDismissedKind = $state<SkipMarkKind | null>(null);
   let timelineFocused = $state(false);
+  /** Пошли первые кадры: до этого держим экран загрузки, а не чёрный плеер. */
+  let firstFrame = $state(false);
+  let firstFrameTimer = 0;
+  let bufferedPct = $state(0);
   let seekPreviewPct = $state(0);
+  /** Пользователь двигает ◀ ▶ — бегунок «отцеплен» от воспроизведения до OK / «Назад». */
+  let scrubbing = $state(false);
   let qualityMap = $state<Record<string, string>>({});
   let currentQuality = $state('auto');
   let playbackRate = $state(1);
-  let canvasEl = $state<HTMLCanvasElement | null>(null);
-  let upscaleCanvasOn = $state(false);
-  let upscaleCanvasEpoch = $state(0);
-  let upscaleType = $state<Anime4kType>('off');
-  let upscaleIntensity = $state<Anime4kIntensity>('optimal');
-  let upscaleTargetRes = $state<Anime4kTargetRes>('1080');
-  let upscaleEnabled = $state(false);
-  let upscaleMode = $state(15);
-  let surroundMode = $state<SurroundMode>('off');
-
-  let upscaleStartGen = 0;
-  let upscaleRestartTimer: ReturnType<typeof setTimeout> | 0 = 0;
-  let upscaleRestartTries = 0;
-  let upscaleHoldForNewFrame = false;
 
   const RATE_OPTIONS = [
     { value: 0.5, label: '0.5' },
@@ -120,10 +94,7 @@
     { value: 1.5, label: '1.5' },
   ] as const;
 
-  const AUDIO_PRESET_OPTIONS = SURROUND_MODES.filter((item) => item.id !== 'equalizer');
-
   const VOLUME_KEY = 'anixapp_player_volume';
-  const PLAYER_SETTINGS_KEY = 'anixapp_player_settings';
   const SEEK_STEP = 10;
   const TIMELINE_STEP_SEC = 5;
 
@@ -143,10 +114,27 @@
   const topMetaLine = $derived.by(() => {
     return [epLabel, dubberName, sourceName].filter(Boolean).join(' · ');
   });
+  const nextEpLabel = $derived.by(() => {
+    if (nextEp == null) return '';
+    const row = episodes.find((item) => item.position === nextEp);
+    const num = row ? episodeDisplayNumber(row, episodes) : nextEp;
+    return num != null ? `${num} серия` : 'Следующая';
+  });
+  const rateLabel = $derived(playbackRate === 1 ? '1×' : `${playbackRate}×`);
+  const qualityShort = $derived(currentQuality === 'auto' ? 'Авто' : `${Number.parseInt(currentQuality, 10) || currentQuality}p`);
   const timeCurrent = $derived(formatTime(currentTime));
   const timeRemaining = $derived(formatTime(Math.max(0, duration - currentTime)));
   const sausages = $derived(buildTimelineSausages(duration, skipMarks?.opening ?? null, skipMarks?.ending ?? null));
+  // В фокусе бегунок «замирает» на точке, где встал фокус; ◀ ▶ двигают его от неё.
   const thumbPct = $derived(timelineFocused ? seekPreviewPct : progressPct);
+  const awaitingFirstFrame = $derived(loadState === 'ready' && useVideo && !firstFrame && !switching);
+  const showLoading = $derived(loadState === 'loading' || switching || awaitingFirstFrame);
+  /** Перемотка выбрана, но ещё не подтверждена OK — разница с текущей позицией. */
+  const scrubDeltaSec = $derived(timelineFocused ? ((seekPreviewPct - progressPct) / 100) * duration : 0);
+  const scrubDeltaLabel = $derived.by(() => {
+    if (Math.abs(scrubDeltaSec) < 1) return '';
+    return `${scrubDeltaSec > 0 ? '+' : '−'}${formatTime(Math.abs(scrubDeltaSec))}`;
+  });
   const previewTime = $derived(formatTime((thumbPct / 100) * duration));
 
   const skipPrompt = $derived.by((): SkipMarkKind | null => {
@@ -223,278 +211,14 @@
 
   function bindCoreEls() {
     core.video = videoEl;
-    core.canvas = canvasEl;
+    // TV: без Anime4K — canvas апскейла не нужен.
+    core.canvas = null;
     core.iframe = iframeEl;
     fluo.bind({ video: videoEl, core });
   }
 
-  function savePlayerSettings(partial: Record<string, unknown>) {
-    if (window.electron?.saveSettings) {
-      void window.electron.saveSettings(partial);
-      return;
-    }
-    try {
-      const prev = JSON.parse(localStorage.getItem(PLAYER_SETTINGS_KEY) || '{}') as Record<string, unknown>;
-      localStorage.setItem(PLAYER_SETTINGS_KEY, JSON.stringify({ ...prev, ...partial }));
-    } catch { /* ignore */ }
-  }
-
-  function clearUpscaleRestartTimer() {
-    if (upscaleRestartTimer) {
-      clearTimeout(upscaleRestartTimer);
-      upscaleRestartTimer = 0;
-    }
-  }
-
-  function ensureVideoVisible() {
-    upscaleCanvasOn = false;
-    videoEl?.classList.remove('watch-page__video--hidden-for-upscale');
-  }
-
-  function stopUpscale() {
-    upscaleStartGen++;
-    core.stopUpscale();
-    upscaleCanvasOn = false;
-    videoEl?.classList.remove('watch-page__video--hidden-for-upscale');
-    upscaleCanvasEpoch += 1;
-  }
-
-  async function startUpscale() {
-    bindCoreEls();
-    const gen = ++upscaleStartGen;
-    if (!upscaleEnabled || !a4kOk) {
-      if (gen === upscaleStartGen) stopUpscale();
-      return;
-    }
-    if (!useVideo) return;
-    await tick();
-    if (gen !== upscaleStartGen) return;
-    bindCoreEls();
-
-    const video = videoEl;
-    const canvas = canvasEl;
-    if (!video || !canvas) return;
-    if (gen !== upscaleStartGen) return;
-    // Пока нет кадров — не прячем video под пустой canvas.
-    if (video.videoWidth < 2 || video.videoHeight < 2) return;
-
-    const wantH = anime4kTargetHeight(upscaleTargetRes);
-    const layout = core.upscale.desiredLayout({
-      video,
-      canvas,
-      aspectRatio: 'auto',
-      targetHeight: wantH,
-    });
-
-    if (
-      core.upscale.active
-      && upscaleCanvasOn
-      && layout
-      && core.upscale.matchesConfig(
-        video.videoWidth,
-        video.videoHeight,
-        upscaleMode,
-        wantH,
-        'auto',
-        layout.bufferW,
-        layout.bufferH,
-      )
-    ) {
-      core.upscale.applyCssLayout(layout, canvas, 'auto');
-      video.classList.add('watch-page__video--hidden-for-upscale');
-      return;
-    }
-
-    const ok = await core.startUpscale(upscaleEnabled, upscaleMode, 'auto', wantH);
-    if (gen !== upscaleStartGen) return;
-
-    if (ok && core.upscale.active) {
-      upscaleCanvasOn = true;
-      await tick();
-      if (gen !== upscaleStartGen) return;
-      videoEl?.classList.add('watch-page__video--hidden-for-upscale');
-    } else {
-      ensureVideoVisible();
-    }
-  }
-
-  function scheduleUpscaleRestart() {
-    if (!upscaleEnabled || !a4kOk || !useVideo) {
-      upscaleHoldForNewFrame = false;
-      ensureVideoVisible();
-      return;
-    }
-    upscaleHoldForNewFrame = false;
-    if (upscaleRestartTimer) return;
-    upscaleRestartTries = 0;
-
-    const attempt = () => {
-      upscaleRestartTimer = 0;
-      if (!upscaleEnabled || !a4kOk || !useVideo) return;
-      const video = videoEl;
-      if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || video.videoWidth < 2) {
-        if (upscaleRestartTries++ < 50) {
-          upscaleRestartTimer = window.setTimeout(attempt, 100);
-        }
-        return;
-      }
-      void startUpscale().then(() => {
-        if (core.upscale.active && upscaleCanvasOn) return;
-        if (upscaleRestartTries++ < 12) {
-          upscaleRestartTimer = window.setTimeout(attempt, 300);
-          return;
-        }
-        ensureVideoVisible();
-      });
-    };
-
-    upscaleRestartTimer = window.setTimeout(attempt, 450);
-  }
-
-  function holdUpscaleForNewSource() {
-    if (!upscaleEnabled || !a4kOk) return;
-    upscaleHoldForNewFrame = true;
-    clearUpscaleRestartTimer();
-    stopUpscale();
-  }
-
-  function applyAnime4kFromSettings(raw: Record<string, unknown>) {
-    const preset = normalizeAnime4kPreset(raw);
-    const mapped = mapAnime4kPreset(preset);
-    const targetRes = normalizeAnime4kTargetRes(raw.upscaleTargetRes);
-    upscaleType = preset.type;
-    upscaleIntensity = preset.intensity;
-    upscaleEnabled = mapped.enabled;
-    upscaleMode = mapped.mode;
-    upscaleTargetRes = targetRes;
-    if (!mapped.enabled) {
-      stopUpscale();
-      return;
-    }
-    if (useVideo) scheduleUpscaleRestart();
-  }
-
-  function applyAnime4kPreset(type: Anime4kType, intensity: Anime4kIntensity) {
-    if (!a4kOk && type !== 'off') return;
-    const mapped = mapAnime4kPreset({ type, intensity });
-    upscaleType = type;
-    upscaleIntensity = intensity;
-    upscaleEnabled = mapped.enabled;
-    upscaleMode = mapped.mode;
-    savePlayerSettings({
-      upscaleEnabled: mapped.enabled,
-      upscaleMode: mapped.mode,
-      upscaleType: type,
-      upscaleIntensity: intensity,
-      upscaleTargetRes,
-    });
-    if (mapped.enabled) void startUpscale();
-    else stopUpscale();
-    showOverlay(false);
-  }
-
-  function applyAnime4kTargetRes(res: Anime4kTargetRes) {
-    const next = normalizeAnime4kTargetRes(res);
-    if (upscaleTargetRes === next) return;
-    upscaleTargetRes = next;
-    savePlayerSettings({
-      upscaleEnabled,
-      upscaleMode,
-      upscaleType,
-      upscaleIntensity,
-      upscaleTargetRes: next,
-    });
-    if (upscaleEnabled && a4kOk) void startUpscale();
-    showOverlay(false);
-  }
-
-  async function syncSurroundAudio() {
-    if (!videoEl || !useVideo) return;
-    if (isCapacitorNative() && surroundMode === 'off') return;
-    try {
-      await core.surround.setMode(surroundMode);
-      await core.surround.attach(videoEl);
-      applyVolumeToVideo();
-      await core.surround.resume();
-    } catch { /* ignore */ }
-  }
-
-  function applySurroundMode(mode: SurroundMode) {
-    surroundMode = normalizeSurroundMode(mode);
-    savePlayerSettings({ audioSurround: surroundMode });
-    void syncSurroundAudio();
-    showOverlay(false);
-  }
-
-  function loadPlayerSettings() {
-    if (window.electron?.getSettings) {
-      void window.electron.getSettings().then((settings) => {
-        surroundMode = normalizeSurroundMode(settings?.audioSurround);
-        if (a4kOk) applyAnime4kFromSettings(settings ?? {});
-        if (videoEl && useVideo) void syncSurroundAudio();
-      }).catch(() => {});
-      return;
-    }
-    try {
-      const raw = localStorage.getItem(PLAYER_SETTINGS_KEY);
-      if (!raw) return;
-      const settings = JSON.parse(raw) as Record<string, unknown>;
-      surroundMode = normalizeSurroundMode(settings.audioSurround);
-      if (a4kOk) applyAnime4kFromSettings(settings);
-      if (videoEl && useVideo) void syncSurroundAudio();
-    } catch { /* ignore */ }
-  }
-
-  function onUpscaleSettingsChanged(event: Event) {
-    if (!a4kOk) return;
-    applyAnime4kFromSettings((event as CustomEvent<Record<string, unknown>>).detail ?? {});
-  }
-
-  function onSurroundSettingsChanged(event: Event) {
-    const mode = (event as CustomEvent<{ audioSurround?: unknown }>).detail?.audioSurround;
-    if (mode == null) return;
-    surroundMode = normalizeSurroundMode(mode);
-    void syncSurroundAudio();
-  }
-
-  function onWindowResize() {
-    if (!upscaleEnabled || !a4kOk || !videoEl || !canvasEl) return;
-    if (core.upscale.active) {
-      const layout = core.upscale.desiredLayout({
-        video: videoEl,
-        canvas: canvasEl,
-        aspectRatio: 'auto',
-        targetHeight: anime4kTargetHeight(upscaleTargetRes),
-      });
-      if (layout) core.upscale.applyCssLayout(layout, canvasEl, 'auto');
-      return;
-    }
-    scheduleUpscaleRestart();
-  }
-
   $effect(() => {
     bindCoreEls();
-  });
-
-  $effect(() => {
-    const video = videoEl;
-    if (!video) return;
-    const onMeta = () => scheduleUpscaleRestart();
-    const onData = () => {
-      if (!upscaleHoldForNewFrame) scheduleUpscaleRestart();
-    };
-    const onPlay = () => {
-      void syncSurroundAudio();
-      scheduleUpscaleRestart();
-    };
-    video.addEventListener('loadedmetadata', onMeta);
-    video.addEventListener('loadeddata', onData);
-    video.addEventListener('playing', onPlay);
-    return () => {
-      video.removeEventListener('loadedmetadata', onMeta);
-      video.removeEventListener('loadeddata', onData);
-      video.removeEventListener('playing', onPlay);
-    };
   });
 
   function readVolume(): number {
@@ -515,16 +239,90 @@
     videoEl.volume = linear;
   }
 
-  function showOverlay(autoHide = true) {
-    overlayVisible = true;
-    if (overlayTimer) window.clearTimeout(overlayTimer);
-    if (autoHide && loadState === 'ready' && !panelOpen && !settingsOpen) {
-      overlayTimer = window.setTimeout(() => {
-        overlayVisible = false;
-        void tick().then(() => focusTvWatchPlay());
-      }, 5000);
-    }
+  /**
+   * Автоскрытие интерфейса — одно правило для всех случаев:
+   * любое нажатие пульта перезапускает таймер; при воспроизведении интерфейс
+   * гаснет через 4 с, на паузе — через 8 с. Не прячем, пока открыты «Серии» /
+   * «Настройки», идёт загрузка, висит кнопка пропуска или выбрана, но не
+   * подтверждена перемотка.
+   */
+  const HIDE_PLAYING_MS = 4000;
+  const HIDE_PAUSED_MS = 8000;
+
+  function canAutoHide(): boolean {
+    if (loadState !== 'ready' || switching || !firstFrame) return false;
+    if (panelOpen || settingsOpen || skipPromptVisible) return false;
+    if (scrubbing) return false;
+    return true;
   }
+
+  function scheduleHide() {
+    if (overlayTimer) window.clearTimeout(overlayTimer);
+    overlayTimer = 0;
+    if (!overlayVisible) return;
+    overlayTimer = window.setTimeout(() => {
+      overlayTimer = 0;
+      if (!canAutoHide()) {
+        scheduleHide();
+        return;
+      }
+      hideOverlay();
+    }, paused ? HIDE_PAUSED_MS : HIDE_PLAYING_MS);
+  }
+
+  function showOverlay(_autoHide = true) {
+    overlayVisible = true;
+    scheduleHide();
+  }
+
+  function onPlayerActivity() {
+    if (overlayVisible) scheduleHide();
+  }
+
+  function markFirstFrame() {
+    if (firstFrame) return;
+    firstFrame = true;
+    if (firstFrameTimer) window.clearTimeout(firstFrameTimer);
+    firstFrameTimer = 0;
+    showOverlay();
+    void tick().then(() => focusTvWatchPlay());
+  }
+
+  $effect(() => {
+    const video = videoEl;
+    if (!video) return;
+    const onPlaying = () => markFirstFrame();
+    const onTime = () => {
+      if (video.currentTime > 0.05 && !video.paused) markFirstFrame();
+    };
+    // Автозапуск заблокирован — не держим загрузку вечно, показываем паузу.
+    const onLoaded = () => {
+      if (firstFrame || firstFrameTimer) return;
+      firstFrameTimer = window.setTimeout(() => {
+        firstFrameTimer = 0;
+        if (video.paused) markFirstFrame();
+      }, 3500);
+    };
+    // Пересчёт размеров видео-слоя при смене кадра/окна (см. .tv-watch__video в tv.scss).
+    const relayout = () => {
+      video.style.width = 'calc(100% - 1px)';
+      window.requestAnimationFrame(() => { video.style.width = ''; });
+    };
+    video.addEventListener('playing', onPlaying);
+    video.addEventListener('timeupdate', onTime);
+    video.addEventListener('loadeddata', onLoaded);
+    video.addEventListener('resize', relayout);
+    video.addEventListener('playing', relayout);
+    window.addEventListener('resize', relayout);
+    return () => {
+      video.removeEventListener('resize', relayout);
+      video.removeEventListener('playing', relayout);
+      window.removeEventListener('resize', relayout);
+      video.removeEventListener('playing', onPlaying);
+      video.removeEventListener('timeupdate', onTime);
+      video.removeEventListener('loadeddata', onLoaded);
+    };
+  });
 
   function hideOverlay() {
     overlayVisible = false;
@@ -540,6 +338,16 @@
     paused = videoEl.paused;
     currentTime = Number.isFinite(videoEl.currentTime) ? videoEl.currentTime : 0;
     duration = Number.isFinite(videoEl.duration) && videoEl.duration > 0 ? videoEl.duration : 0;
+    bufferedPct = 0;
+    if (duration > 0) {
+      const ranges = videoEl.buffered;
+      for (let i = 0; i < ranges.length; i += 1) {
+        if (ranges.start(i) <= currentTime + 0.5 && ranges.end(i) >= currentTime) {
+          bufferedPct = Math.min(100, (ranges.end(i) / duration) * 100);
+          break;
+        }
+      }
+    }
     if (skipMarks && duration > 0) {
       const clamped = clampSkipMarksToDuration(skipMarks, duration);
       if (clamped !== skipMarks) skipMarks = clamped;
@@ -590,12 +398,14 @@
     const clamped = Math.max(0, Math.min(100, pct));
     videoEl.currentTime = (clamped / 100) * videoEl.duration;
     seekPreviewPct = clamped;
+    scrubbing = false;
     syncPlaybackState();
     showOverlay();
   }
 
   function nudgeTimeline(dir: -1 | 1) {
     if (!(duration > 0)) return;
+    scrubbing = true;
     const stepPct = Math.max(0.35, (TIMELINE_STEP_SEC / duration) * 100);
     seekPreviewPct = Math.max(0, Math.min(100, seekPreviewPct + dir * stepPct));
     showOverlay(false);
@@ -603,12 +413,14 @@
 
   function onTimelineFocus() {
     timelineFocused = true;
+    scrubbing = false;
     seekPreviewPct = progressPct;
     showOverlay(false);
   }
 
   function onTimelineBlur() {
     timelineFocused = false;
+    scrubbing = false;
   }
 
   function onTimelinePointerDown(event: PointerEvent) {
@@ -640,7 +452,10 @@
     if (event.key === 'Enter' || event.key === 'NumpadEnter') {
       event.preventDefault();
       event.stopImmediatePropagation();
-      seekToPct(seekPreviewPct);
+      // Точка разошлась с видео (перемотали или видео ушло вперёд) — переходим в неё;
+      // совпадает — OK работает как пауза/плей.
+      if (scrubbing || Math.abs(scrubDeltaSec) >= 1) seekToPct(seekPreviewPct);
+      else togglePlay();
     }
   }
 
@@ -684,6 +499,11 @@
     playUrl = nextUrl;
     useVideo = nextUseVideo;
     ep = nextEp;
+    if (seekTime == null || !nextUseVideo) {
+      firstFrame = !nextUseVideo;
+      if (firstFrameTimer) window.clearTimeout(firstFrameTimer);
+      firstFrameTimer = 0;
+    }
     bindCoreEls();
     loadState = 'ready';
     switching = false;
@@ -709,8 +529,6 @@
       showError(core.origEpUrl || nextUrl);
       return;
     }
-
-    holdUpscaleForNewSource();
 
     core.applySource({
       url: nextUrl,
@@ -759,8 +577,6 @@
     });
 
     applyVolumeToVideo();
-    void syncSurroundAudio();
-    scheduleUpscaleRestart();
     startTicking();
   }
 
@@ -888,7 +704,6 @@
     if (!url) return;
     const saved = videoEl.currentTime;
     const wasPaused = videoEl.paused;
-    holdUpscaleForNewSource();
     playUrl = url;
     core.applySource({
       url,
@@ -908,8 +723,6 @@
       onReresolve: () => {},
       onWatchdogReresolve: async () => null,
     });
-    void syncSurroundAudio();
-    scheduleUpscaleRestart();
     showOverlay(false);
   }
 
@@ -941,6 +754,17 @@
   }
 
   function onHideChrome() {
+    if (scrubbing || (timelineFocused && Math.abs(scrubDeltaSec) >= 1)) {
+      scrubbing = false;
+      seekPreviewPct = progressPct;
+      showOverlay();
+      return;
+    }
+    // Пока грузится или ошибка — прятать нечего: «Назад» выходит из плеера.
+    if (loadState !== 'ready' || switching || awaitingFirstFrame) {
+      goBack();
+      return;
+    }
     hideOverlay();
   }
 
@@ -980,16 +804,13 @@
   onMount(() => {
     volume = readVolume();
     bindCoreEls();
-    void initWebGpuAvailability(true).then(() => loadPlayerSettings());
-    window.addEventListener('resize', onWindowResize);
+    window.addEventListener('keydown', onPlayerActivity, true);
     window.addEventListener('player:changeContent', onPlayerChangeContent);
     window.addEventListener('tv-watch:hide-chrome', onHideChrome);
     window.addEventListener('tv-watch:show-chrome', onShowChrome);
     window.addEventListener('tv-watch:exit', onExitPlayer);
     window.addEventListener('tv-watch:close-settings', closeSettings);
     window.addEventListener('tv-watch:seek', onTvSeek);
-    window.addEventListener('anix:upscaleChanged', onUpscaleSettingsChanged);
-    window.addEventListener('anix:surroundChanged', onSurroundSettingsChanged);
 
     void (async () => {
       try {
@@ -1001,17 +822,14 @@
     })();
 
     return () => {
-      window.removeEventListener('resize', onWindowResize);
+      window.removeEventListener('keydown', onPlayerActivity, true);
+      if (firstFrameTimer) window.clearTimeout(firstFrameTimer);
       window.removeEventListener('player:changeContent', onPlayerChangeContent);
       window.removeEventListener('tv-watch:hide-chrome', onHideChrome);
       window.removeEventListener('tv-watch:show-chrome', onShowChrome);
       window.removeEventListener('tv-watch:exit', onExitPlayer);
       window.removeEventListener('tv-watch:close-settings', closeSettings);
       window.removeEventListener('tv-watch:seek', onTvSeek);
-      window.removeEventListener('anix:upscaleChanged', onUpscaleSettingsChanged);
-      window.removeEventListener('anix:surroundChanged', onSurroundSettingsChanged);
-      clearUpscaleRestartTimer();
-      stopUpscale();
       if (overlayTimer) window.clearTimeout(overlayTimer);
       stopTicking();
       core.destroy();
@@ -1026,7 +844,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
   class="tv-watch"
-  class:tv-watch--chrome-hidden={loadState === 'ready' && !overlayVisible && !panelOpen && !settingsOpen}
+  class:tv-watch--chrome-hidden={loadState === 'ready' && !awaitingFirstFrame && !overlayVisible && !panelOpen && !settingsOpen}
   class:tv-watch--error={loadState === 'error'}
   class:tv-watch--iframe={!useVideo}
   bind:this={rootEl}
@@ -1055,19 +873,22 @@
       hidden={!useVideo || loadState === 'error' || switching}
     ></video>
 
-    {#key upscaleCanvasEpoch}
-      <canvas
-        bind:this={canvasEl}
-        class="tv-watch__upscale-canvas watch-page__upscale-canvas"
-        class:watch-page__upscale-canvas--on={upscaleCanvasOn && useVideo && loadState === 'ready' && !switching}
-        aria-hidden="true"
-      ></canvas>
-    {/key}
-
-    {#if loadState === 'loading' || switching}
-      <div class="tv-watch__loading" role="status">
-        <span class="tv-watch__spinner" aria-hidden="true"></span>
-        <span>Загрузка…</span>
+    {#if showLoading}
+      <div class="tv-watch__loading" role="status" out:fade={{ duration: 380 }}>
+        {#if loadingArt}
+          <div class="tv-watch__loading-art" aria-hidden="true">
+            <img src={loadingArt} alt="" decoding="async" />
+            <div class="tv-watch__loading-scrim"></div>
+          </div>
+        {/if}
+        <div class="tv-watch__loading-main">
+          <p class="tv-watch__loading-title">{title}</p>
+          <p class="tv-watch__loading-meta">{topMetaLine}</p>
+          <div class="tv-watch__loading-status">
+            <span class="tv-watch__spinner" aria-hidden="true"></span>
+            <span>{switching && loadState === 'ready' ? 'Переключаем серию…' : 'Загружаем серию…'}</span>
+          </div>
+        </div>
       </div>
     {/if}
 
@@ -1082,14 +903,20 @@
     {/if}
   </div>
 
-  {#if loadState === 'ready' || loadState === 'error'}
+  {#if loadState === 'ready' && paused && !overlayVisible && !panelOpen && !settingsOpen && !showLoading}
+    <div class="tv-watch__paused-badge" aria-hidden="true">{@html iconPause(22)} Пауза</div>
+  {/if}
+
+  {#if (loadState === 'ready' && !awaitingFirstFrame) || loadState === 'error'}
     <div class="tv-watch__overlay" class:tv-watch__overlay--hidden={!overlayVisible && !panelOpen && !settingsOpen}>
       {#if loadState === 'ready' && overlayVisible}
         <header class="tv-watch__top">
           <h1 class="tv-watch__top-title">{title}</h1>
-          {#if topMetaLine}
-            <p class="tv-watch__top-meta">{topMetaLine}</p>
-          {/if}
+          <div class="tv-watch__top-chips">
+            <span class="tv-watch__chip tv-watch__chip--accent">{epLabel}</span>
+            {#if dubberName}<span class="tv-watch__chip">{dubberName}</span>{/if}
+            {#if sourceName}<span class="tv-watch__chip">{sourceName}</span>{/if}
+          </div>
         </header>
       {/if}
 
@@ -1132,11 +959,7 @@
             </div>
           {/if}
 
-          <div class="tv-watch__scrub">
-            <div class="tv-watch__scrub-times">
-              <span>{timelineFocused ? previewTime : timeCurrent}</span>
-              <span>−{timeRemaining}</span>
-            </div>
+          <div class="tv-watch__scrub" class:tv-watch__scrub--active={timelineFocused}>
             <button
               type="button"
               class="tv-watch__timeline"
@@ -1146,7 +969,7 @@
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={Math.round(thumbPct)}
-              aria-valuetext={timelineFocused ? previewTime : timeCurrent}
+              aria-valuetext={scrubbing ? previewTime : timeCurrent}
               disabled={!useVideo || !(duration > 0)}
               onfocus={onTimelineFocus}
               onblur={onTimelineBlur}
@@ -1155,7 +978,8 @@
               onclick={(event) => event.preventDefault()}
             >
               <div class="tv-watch__track">
-                <div class="tv-watch__track-segments">
+                <div class="tv-watch__track-buffered" style:width="{bufferedPct}%"></div>
+                <div class="tv-watch__track-segments" aria-hidden="true">
                   {#each sausages as s (s.id)}
                     <div
                       class="tv-watch__track-segment"
@@ -1166,30 +990,68 @@
                   {/each}
                 </div>
                 <div class="tv-watch__track-played" style:width="{progressPct}%"></div>
-                <div class="tv-watch__timeline-thumb" style:left="{thumbPct}%"></div>
+                {#if timelineFocused && Math.abs(scrubDeltaSec) >= 1}
+                  <div
+                    class="tv-watch__track-scrub"
+                    style:left="{Math.min(progressPct, thumbPct)}%"
+                    style:width="{Math.abs(thumbPct - progressPct)}%"
+                  ></div>
+                {/if}
+                <div class="tv-watch__timeline-thumb" style:left="{thumbPct}%">
+                  {#if timelineFocused}
+                    <span class="tv-watch__thumb-bubble">
+                      <b>{previewTime}</b>
+                      {#if scrubDeltaLabel}<span>{scrubDeltaLabel}</span>{/if}
+                    </span>
+                  {/if}
+                </div>
               </div>
             </button>
+
+            <div class="tv-watch__scrub-times">
+              <span class="tv-watch__time">{timeCurrent}</span>
+              <span class="tv-watch__scrub-hint">
+                {#if scrubbing || Math.abs(scrubDeltaSec) >= 1}
+                  <kbd>OK</kbd> перейти · <kbd>Назад</kbd> отмена
+                {:else if timelineFocused}
+                  <kbd>◀</kbd><kbd>▶</kbd> перемотка · <kbd>OK</kbd> пауза
+                {/if}
+              </span>
+              <span class="tv-watch__time tv-watch__time--muted">{formatTime(duration)}</span>
+            </div>
           </div>
 
           <div class="tv-watch__dock-bar">
             <div class="tv-watch__dock-group">
               <button type="button" class="tv-watch__dock-btn" onclick={openPanel}>
-                <span class="tv-watch__dock-icon" aria-hidden="true">{@html iconFilm(20)}</span>
-                <span>Серии</span>
+                <span class="tv-watch__dock-icon" aria-hidden="true">{@html iconFilm(22)}</span>
+                <span class="tv-watch__dock-text">
+                  <span class="tv-watch__dock-label">Серии</span>
+                  <span class="tv-watch__dock-value">{epLabel}</span>
+                </span>
               </button>
+              {#if hasNextEp}
+                <button
+                  type="button"
+                  class="tv-watch__dock-btn"
+                  aria-label="Следующая серия"
+                  onclick={() => nextEp != null && loadEpisode(nextEp)}
+                >
+                  <span class="tv-watch__dock-text">
+                    <span class="tv-watch__dock-label">Следующая</span>
+                    <span class="tv-watch__dock-value">{nextEpLabel}</span>
+                  </span>
+                  <span class="tv-watch__dock-icon" aria-hidden="true">{@html iconChevronRight(24)}</span>
+                </button>
+              {/if}
             </div>
             <div class="tv-watch__dock-group tv-watch__dock-group--end">
-              <button type="button" class="tv-watch__dock-btn tv-watch__dock-btn--icon" aria-label="Настройки" onclick={openSettings}>
-                {@html iconSettings(22)}
-              </button>
-              <button
-                type="button"
-                class="tv-watch__dock-btn tv-watch__dock-btn--icon"
-                aria-label="Следующая серия"
-                onclick={() => nextEp != null && loadEpisode(nextEp)}
-                disabled={!hasNextEp}
-              >
-                {@html iconChevronRight(24)}
+              <button type="button" class="tv-watch__dock-btn" aria-label="Настройки" onclick={openSettings}>
+                <span class="tv-watch__dock-icon" aria-hidden="true">{@html iconSettings(22)}</span>
+                <span class="tv-watch__dock-text">
+                  <span class="tv-watch__dock-label">Настройки</span>
+                  <span class="tv-watch__dock-value">{qualityShort} · {rateLabel}</span>
+                </span>
               </button>
             </div>
           </div>
@@ -1201,6 +1063,7 @@
   {#if settingsOpen}
     <div class="tv-watch__settings" role="dialog" aria-modal="true" aria-label="Настройки воспроизведения">
       <div class="tv-watch__settings-card">
+        <h2 class="tv-watch__panel-title">Настройки</h2>
         <div class="tv-watch__settings-col">
           <h3 class="tv-watch__settings-title">Качество</h3>
           <div class="tv-watch__settings-list">
@@ -1211,16 +1074,13 @@
                 class:tv-watch__settings-item--active={currentQuality === item.id}
                 onclick={() => applyQuality(item.id)}
               >
-                {#if currentQuality === item.id}
-                  <span class="tv-watch__settings-check" aria-hidden="true">✓</span>
-                {/if}
                 <span>{item.label}</span>
               </button>
             {/each}
           </div>
         </div>
         <div class="tv-watch__settings-col">
-          <h3 class="tv-watch__settings-title">Скорость воспроизведения</h3>
+          <h3 class="tv-watch__settings-title">Скорость</h3>
           <div class="tv-watch__settings-list">
             {#each RATE_OPTIONS as item (item.value)}
               <button
@@ -1229,91 +1089,7 @@
                 class:tv-watch__settings-item--active={playbackRate === item.value}
                 onclick={() => applyPlaybackRate(item.value)}
               >
-                {#if playbackRate === item.value}
-                  <span class="tv-watch__settings-check" aria-hidden="true">✓</span>
-                {/if}
                 <span>{item.label}</span>
-              </button>
-            {/each}
-          </div>
-        </div>
-        <div class="tv-watch__settings-col tv-watch__settings-col--scroll">
-          <h3 class="tv-watch__settings-title">Anime4K</h3>
-          {#if !a4kOk}
-            <p class="tv-watch__settings-note">
-              {webGpu.status === 'pending'
-                ? 'Проверка WebGPU…'
-                : (getWebGpuUnavailableReason() ?? 'WebGPU недоступен на этом устройстве')}
-            </p>
-          {:else}
-            <p class="tv-watch__settings-subtitle">Режим</p>
-            <div class="tv-watch__settings-list">
-              {#each ANIME4K_TYPES as item (item.id)}
-                <button
-                  type="button"
-                  class="tv-watch__settings-item"
-                  class:tv-watch__settings-item--active={upscaleType === item.id}
-                  onclick={() => applyAnime4kPreset(item.id, upscaleIntensity)}
-                >
-                  {#if upscaleType === item.id}
-                    <span class="tv-watch__settings-check" aria-hidden="true">✓</span>
-                  {/if}
-                  <span>{item.recommended ? `${item.label} ★` : item.label}</span>
-                </button>
-              {/each}
-            </div>
-            <p class="tv-watch__settings-subtitle">Нагрузка</p>
-            <div class="tv-watch__settings-list">
-              {#each ANIME4K_INTENSITIES as item (item.id)}
-                <button
-                  type="button"
-                  class="tv-watch__settings-item"
-                  class:tv-watch__settings-item--active={upscaleIntensity === item.id}
-                  class:tv-watch__settings-item--disabled={upscaleType === 'off'}
-                  disabled={upscaleType === 'off'}
-                  onclick={() => applyAnime4kPreset(upscaleType, item.id)}
-                >
-                  {#if upscaleIntensity === item.id}
-                    <span class="tv-watch__settings-check" aria-hidden="true">✓</span>
-                  {/if}
-                  <span>{item.label}</span>
-                </button>
-              {/each}
-            </div>
-            <p class="tv-watch__settings-subtitle">Разрешение</p>
-            <div class="tv-watch__settings-list">
-              {#each ANIME4K_TARGET_RES as item (item.id)}
-                <button
-                  type="button"
-                  class="tv-watch__settings-item"
-                  class:tv-watch__settings-item--active={upscaleTargetRes === item.id}
-                  class:tv-watch__settings-item--disabled={upscaleType === 'off'}
-                  disabled={upscaleType === 'off'}
-                  onclick={() => applyAnime4kTargetRes(item.id)}
-                >
-                  {#if upscaleTargetRes === item.id}
-                    <span class="tv-watch__settings-check" aria-hidden="true">✓</span>
-                  {/if}
-                  <span>{anime4kTargetResMenuLabel(item.id)}</span>
-                </button>
-              {/each}
-            </div>
-          {/if}
-        </div>
-        <div class="tv-watch__settings-col tv-watch__settings-col--scroll">
-          <h3 class="tv-watch__settings-title">Звук</h3>
-          <div class="tv-watch__settings-list">
-            {#each AUDIO_PRESET_OPTIONS as item (item.id)}
-              <button
-                type="button"
-                class="tv-watch__settings-item"
-                class:tv-watch__settings-item--active={surroundMode === item.id}
-                onclick={() => applySurroundMode(item.id)}
-              >
-                {#if surroundMode === item.id}
-                  <span class="tv-watch__settings-check" aria-hidden="true">✓</span>
-                {/if}
-                <span>{surroundModeDisplayLabel(item.id, item.recommended)}</span>
               </button>
             {/each}
           </div>
@@ -1327,7 +1103,7 @@
       <header class="tv-watch__panel-head">
         <h2 class="tv-watch__panel-title">Серии</h2>
         <button type="button" class="tv-watch__btn tv-watch__btn--icon tv-watch__panel-close" aria-label="Закрыть" onclick={closePanel}>
-          ✕
+          {@html iconX(22)}
         </button>
       </header>
       <div class="tv-watch__panel-list">
@@ -1341,6 +1117,9 @@
           >
             <span class="tv-watch__ep-num">{num ?? '•'}</span>
             <span class="tv-watch__ep-name">{item.name?.trim() || (num != null ? `Серия ${num}` : 'Серия')}</span>
+            {#if item.position === ep}
+              <span class="tv-watch__ep-now">Сейчас</span>
+            {/if}
           </button>
         {:else}
           <p class="tv-watch__panel-empty">Список серий пуст</p>

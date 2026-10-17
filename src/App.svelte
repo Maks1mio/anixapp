@@ -89,13 +89,14 @@
   import FeedTv from './views/Feed.tv.svelte';
   import PopularTv from './views/Popular.tv.svelte';
   import BookmarksTv from './views/Bookmarks.tv.svelte';
+  import BookmarksListTv from './views/BookmarksList.tv.svelte';
   import SearchTv from './views/Search.tv.svelte';
   import ReleaseTv from './views/Release.tv.svelte';
   import TvPairPage from './views/TvPairPage.svelte';
   import TvFallback from './views/TvFallback.svelte';
   import TvKeepAlive from './components/tv/TvKeepAlive.svelte';
   import TvPlayerShell from './components/tv/TvPlayerShell.svelte';
-  import { rememberTvKeepAlive, tvKeepAliveKey, tvKeptCategoryIds, tvKeptReleaseIds } from './tv/keepAlive';
+  import { rememberTvKeepAlive, tvKeepAliveKey, tvKeptBookmarkListIds, tvKeptCategoryIds, tvKeptReleaseIds } from './tv/keepAlive';
   import WebPlayerShell from './components/WebPlayerShell.svelte';
   import { isEmbeddedWebPlayer } from './utils/watch-nav';
 
@@ -120,6 +121,7 @@
   let tvKept = $state<string[]>(rememberTvKeepAlive([], getPath()));
   const tvKeptCats = $derived(tvKeptCategoryIds(tvKept));
   const tvKeptReleases = $derived(tvKeptReleaseIds(tvKept));
+  const tvKeptBookmarkLists = $derived(tvKeptBookmarkListIds(tvKept));
   const tvKeepKey = $derived(tvKeepAliveKey(path));
 
   $effect(() => {
@@ -899,6 +901,12 @@
         <BookmarksTv />
       </TvKeepAlive>
     {/if}
+
+    {#each tvKeptBookmarkLists as listId (listId)}
+      <TvKeepAlive keepKey={`bm-list:${listId}`} active={path === `/bookmarks/${listId}`}>
+        <BookmarksListTv {listId} />
+      </TvKeepAlive>
+    {/each}
 
     {#if tvKept.includes('search')}
       <TvKeepAlive keepKey="search" active={path === '/search'}>

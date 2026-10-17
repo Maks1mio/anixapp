@@ -927,8 +927,9 @@ html.tv-mode .tv-category-see-all[data-tv-focus='true'] .uiv2-anime-card__poster
   opacity: 1;
 }
 
-html.tv-mode [data-tv-focus='true']:not(.tv-layout__rail-item):not(.uiv2-anime-card):not(.tv-category-see-all),
-html.tv-mode :focus-visible:not(.tv-layout__rail-item):not(.uiv2-anime-card):not(.tv-category-see-all) {
+/* Ползунок перемотки — без обводки: фокус видно по бегунку и толстой дорожке. */
+html.tv-mode [data-tv-focus='true']:not(.tv-layout__rail-item):not(.uiv2-anime-card):not(.tv-category-see-all):not(.tv-watch__timeline),
+html.tv-mode :focus-visible:not(.tv-layout__rail-item):not(.uiv2-anime-card):not(.tv-category-see-all):not(.tv-watch__timeline) {
   outline: 3px solid #fff !important;
   outline-offset: 3px !important;
   box-shadow: none !important;
@@ -1691,16 +1692,602 @@ html.tv-mode .tv-release-hero__more:focus-visible {
   outline-offset: 3px !important;
 }
 
+html.tv-mode .tv-release-hero__scroll-hint {
+  position: absolute;
+  right: 2.863rem;
+  bottom: 2.863rem;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 3.2rem;
+  padding: 0 1.1rem 0 1.4rem;
+  border-radius: 1.1rem;
+  background: rgba(29, 29, 29, 0.85);
+  font-size: 1.145rem;
+  font-weight: 700;
+  line-height: 1.21;
+  color: rgba(255, 255, 255, 0.8);
+  pointer-events: none;
+}
+
+html.tv-mode .tv-release-hero__scroll-hint {
+  animation: tv-release-scroll-hint 2.4s ease-in-out infinite;
+}
+
+html.tv-mode .tv-release-hero__scroll-hint-icon {
+  display: inline-flex;
+
+  svg {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+}
+
+/* Подсказка «вниз» мягко мигает на месте — без прыжков. */
+@keyframes tv-release-scroll-hint {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
 /* Контент проявляется после полёта постера из карточки (см. tv-release-transition). */
 html.tv-mode[data-tv-release-opening]:not([data-tv-release-opened='true']) .tv-release-hero__main,
-html.tv-mode[data-tv-release-opening]:not([data-tv-release-opened='true']) .tv-release-hero__bar {
+html.tv-mode[data-tv-release-opening]:not([data-tv-release-opened='true']) .tv-release-hero__bar,
+html.tv-mode[data-tv-release-opening]:not([data-tv-release-opened='true']) .tv-release-body {
   opacity: 0;
 }
 
 html.tv-mode[data-tv-release-opened='true'] .tv-release-hero__main,
-html.tv-mode[data-tv-release-opened='true'] .tv-release-hero__bar {
+html.tv-mode[data-tv-release-opened='true'] .tv-release-hero__bar,
+html.tv-mode[data-tv-release-opened='true'] .tv-release-body {
   opacity: 1;
   transition: opacity 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ——— TV release body: секции под hero (D-pad вниз), в стиле hero ——— */
+html.tv-mode .tv-release-body {
+  --tv-home-content-left: 2.863rem;
+  --tv-release-body-pad: 2.863rem;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2.6rem;
+  padding: 1.2rem 0 4rem;
+  background: #0d0d0d;
+}
+
+html.tv-mode .tv-release-body__section {
+  min-width: 0;
+  padding: 0 var(--tv-release-body-pad);
+}
+
+/* Ряды на всю ширину: карточки уезжают за край экрана, а не обрезаются отступом. */
+html.tv-mode .tv-release-body__section--row {
+  padding: 0;
+
+  > .tv-release-body__title {
+    padding-left: var(--tv-release-body-pad);
+  }
+}
+
+html.tv-mode .tv-release-body__title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  margin: 0 0 1rem;
+  font-size: 1.85rem;
+  font-weight: 800;
+  line-height: 1.21;
+  color: #ffffff;
+}
+
+html.tv-mode .tv-release-body__title-sub {
+  font-size: 1.145rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+html.tv-mode .tv-release-body__panel {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 1.4rem 1.8rem;
+  border: 0;
+  border-radius: 1.562rem;
+  background: #1d1d1d;
+  color: #ffffff;
+  font: inherit;
+  text-align: left;
+}
+
+html.tv-mode .tv-release-body__info {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.1rem 2.2rem;
+}
+
+html.tv-mode .tv-release-body__info-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.26rem;
+  min-width: 0;
+}
+
+html.tv-mode .tv-release-body__info-row--wide {
+  grid-column: 1 / -1;
+}
+
+html.tv-mode .tv-release-body__info-label {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.21;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+html.tv-mode .tv-release-body__info-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #ffffff;
+  overflow-wrap: anywhere;
+}
+
+html.tv-mode .tv-release-body__rating {
+  display: grid;
+  grid-template-columns: 15rem minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 2.6rem;
+  cursor: pointer;
+}
+
+html.tv-mode .tv-release-body__rating--static {
+  cursor: default;
+}
+
+html.tv-mode .tv-release-body__score {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+
+html.tv-mode .tv-release-body__score-value {
+  padding: 0.1rem 0.9rem;
+  border-radius: 0.9rem;
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1.15;
+  color: #40ff40;
+  background: rgba(32, 132, 32, 0.45);
+}
+
+html.tv-mode .tv-release-body__score-stars {
+  display: inline-flex;
+  gap: 0.2rem;
+  color: rgba(255, 255, 255, 0.25);
+
+  > span {
+    display: inline-flex;
+  }
+
+  svg {
+    width: 1.4rem;
+    height: 1.4rem;
+  }
+}
+
+html.tv-mode .tv-release-body__score-star--on {
+  color: #ffc44d;
+}
+
+html.tv-mode .tv-release-body__score-count {
+  font-size: 1.145rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+html.tv-mode .tv-release-body__your-vote {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: 0.703rem;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 1rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.75);
+
+  svg {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+}
+
+html.tv-mode .tv-release-body__your-vote--set {
+  color: #ffc44d;
+  background: rgba(255, 196, 77, 0.12);
+}
+
+html.tv-mode .tv-release-body__bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+html.tv-mode .tv-release-body__bar-row {
+  display: grid;
+  grid-template-columns: 2.6rem minmax(0, 1fr) 5.5rem;
+  align-items: center;
+  gap: 0.8rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+html.tv-mode .tv-release-body__bar-row--list {
+  grid-template-columns: 8.4rem minmax(0, 1fr) 5.5rem;
+}
+
+html.tv-mode .tv-release-body__bar-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  white-space: nowrap;
+
+  svg {
+    width: 0.95rem;
+    height: 0.95rem;
+    color: #ffc44d;
+  }
+}
+
+html.tv-mode .tv-release-body__bar-track {
+  position: relative;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+html.tv-mode .tv-release-body__bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: #ffc44d;
+}
+
+html.tv-mode .tv-release-body__bar-fill--watching { background: #40c463; }
+html.tv-mode .tv-release-body__bar-fill--planned { background: #8e7cff; }
+html.tv-mode .tv-release-body__bar-fill--completed { background: #3d9cff; }
+html.tv-mode .tv-release-body__bar-fill--on-hold { background: #ffc16b; }
+html.tv-mode .tv-release-body__bar-fill--dropped { background: #ff4d4d; }
+
+html.tv-mode .tv-release-body__bar-count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* Горизонтальные ряды (кадры, комментарии) — скроллятся D-pad'ом. */
+html.tv-mode .tv-release-body__row {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  overflow-y: visible;
+  padding: 6px var(--tv-release-body-pad);
+  scroll-padding-inline: var(--tv-release-body-pad);
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+html.tv-mode .tv-release-page .tv-release-body__shot {
+  flex: 0 0 auto;
+  width: 22rem;
+  height: 12.375rem;
+  border-radius: 1.2rem;
+  background: #1d1d1d;
+}
+
+/* Карусели карточек: фиксированная ширина вместо cqh главной. */
+html.tv-mode .tv-release-body .tv-release-carousel .uiv2-carousel__item {
+  --tv-card-w: 13rem;
+}
+
+html.tv-mode .tv-release-body .tv-release-carousel .uiv2-carousel__scroll {
+  padding-left: var(--tv-release-body-pad);
+  padding-right: var(--tv-release-body-pad);
+  scroll-padding-inline: var(--tv-release-body-pad);
+}
+
+html.tv-mode .tv-release-comment {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 0.8rem;
+  box-sizing: border-box;
+  width: 26rem;
+  height: 12.5rem;
+  padding: 1.2rem 1.4rem;
+  border: 0;
+  border-radius: 1.562rem;
+  background: #1d1d1d;
+  color: #ffffff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+html.tv-mode .tv-release-comment__head {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  min-width: 0;
+}
+
+html.tv-mode .tv-release-comment__avatar {
+  flex: 0 0 auto;
+  width: 2.8rem;
+  height: 2.8rem;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #2a2a2a;
+}
+
+html.tv-mode .tv-release-comment__avatar--empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+html.tv-mode .tv-release-comment__who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+html.tv-mode .tv-release-comment__login {
+  overflow: hidden;
+  font-size: 1.145rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.tv-mode .tv-release-comment__time {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+html.tv-mode .tv-release-comment__text {
+  display: -webkit-box;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  font-size: 1.041rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.75);
+  overflow-wrap: anywhere;
+}
+
+html.tv-mode .tv-release-comment {
+  position: relative;
+}
+
+html.tv-mode .tv-release-comment--spoiler .tv-release-comment__text {
+  filter: blur(8px);
+}
+
+html.tv-mode .tv-release-comment__spoiler {
+  position: absolute;
+  left: 1.4rem;
+  right: 1.4rem;
+  top: 50%;
+  transform: translateY(-20%);
+  padding: 0.5rem 0.8rem;
+  border-radius: 0.703rem;
+  background: rgba(13, 13, 13, 0.85);
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffc16b;
+}
+
+html.tv-mode .tv-release-comment__foot {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+html.tv-mode .tv-release-comment__votes {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #40c463;
+
+  svg {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+}
+
+html.tv-mode .tv-release-comment__votes--neg {
+  color: #ff6b6b;
+}
+
+html.tv-mode .tv-release-body__info[data-tv-focus='true'],
+html.tv-mode .tv-release-body__info:focus-visible,
+html.tv-mode .tv-release-body__rating[data-tv-focus='true'],
+html.tv-mode .tv-release-body__rating:focus-visible,
+html.tv-mode .tv-release-comment[data-tv-focus='true'],
+html.tv-mode .tv-release-comment:focus-visible,
+html.tv-mode .tv-release-page .tv-release-body__shot[data-tv-focus='true'],
+html.tv-mode .tv-release-page .tv-release-body__shot:focus-visible {
+  outline: 3px solid #fff !important;
+  outline-offset: 3px !important;
+}
+
+html.tv-mode .tv-release-body__info:focus:not([data-tv-focus='true']):not(:focus-visible) {
+  outline: none;
+}
+
+/* ——— TV: просмотр кадров (◀ ▶ листать, «Назад» — закрыть) ——— */
+.tv-shot-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  background: #0d0d0d;
+  color: #fff;
+  animation: tv-shot-viewer-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes tv-shot-viewer-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+.tv-shot-viewer__stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.4rem 4rem 1rem;
+  overflow: hidden;
+}
+
+.tv-shot-viewer__img {
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+  border-radius: 1.562rem;
+  object-fit: contain;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  animation: tv-shot-slide-next 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tv-shot-viewer__img--back {
+  animation-name: tv-shot-slide-prev;
+}
+
+@keyframes tv-shot-slide-next {
+  from { opacity: 0; transform: translateX(2.5rem); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes tv-shot-slide-prev {
+  from { opacity: 0; transform: translateX(-2.5rem); }
+  to { opacity: 1; transform: none; }
+}
+
+.tv-shot-viewer__bar {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.6rem 4rem 0.9rem;
+}
+
+.tv-shot-viewer__hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 1.145rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.tv-shot-viewer__key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 0.7rem;
+  background: #1d1d1d;
+  color: #fff;
+
+  svg {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+}
+
+.tv-shot-viewer__count {
+  margin-left: auto;
+  font-size: 1.3rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-shot-viewer__close {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 3.4rem;
+  padding: 0 1.4rem;
+  border: 0;
+  border-radius: 1.1rem;
+  background: #1d1d1d;
+  color: #fff;
+  font: inherit;
+  font-size: 1.15rem;
+  font-weight: 700;
+  cursor: pointer;
+
+  svg {
+    width: 1.3rem;
+    height: 1.3rem;
+  }
+
+  &[data-tv-focus='true'],
+  &:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 3px;
+  }
+}
+
+.tv-shot-viewer__thumbs {
+  display: flex;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0 4rem 2rem;
+  overflow: hidden;
+}
+
+.tv-shot-viewer__thumb {
+  flex: 0 0 auto;
+  width: 7.2rem;
+  height: 4.05rem;
+  border-radius: 0.7rem;
+  object-fit: cover;
+  opacity: 0.35;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.tv-shot-viewer__thumb--on {
+  opacity: 1;
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+  transform: translateY(-0.2rem);
 }
 
 html.tv-mode .tv-release-page__vote-panel {
@@ -2828,46 +3415,37 @@ html.tv-mode .tv-player-shell .tv-watch {
   object-fit: contain;
 }
 
-.tv-watch__video.watch-page__video--hidden-for-upscale {
-  visibility: hidden;
+/* Electron (Windows) выносит <video> в аппаратный overlay и рисует его без учёта
+   масштаба окна — картинка оказывается в углу (≈75% экрана). Фильтр-«пустышка»
+   запрещает overlay, кадр рисуется обычным композитором во весь экран.
+   На Android TV не нужно (там свой композитор) — не тратим GPU. */
+html.tv-mode:not(.tv-android) .tv-watch__video {
+  filter: brightness(1.0001);
 }
 
-.tv-watch__upscale-canvas.watch-page__upscale-canvas {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  display: none;
-  z-index: 1;
-  pointer-events: none;
-  object-fit: contain;
-
-  &.watch-page__upscale-canvas--on {
-    display: block;
-  }
-}
-
+/* ——— TV-плеер в стиле страницы тайтла: #1d1d1d-плашки, красный акцент, белая обводка фокуса ——— */
 .tv-watch__loading,
 .tv-watch__error {
   position: absolute;
   inset: 0;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
+  gap: 0.9rem;
   padding: 2rem;
   text-align: center;
-  background: rgba(0, 0, 0, 0.72);
-  z-index: 2;
+  background: #0d0d0d;
 }
 
 .tv-watch__spinner {
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 3.4rem;
+  height: 3.4rem;
+  margin-bottom: 0.6rem;
   border-radius: 50%;
-  border: 3px solid rgba(255, 255, 255, 0.18);
-  border-top-color: var(--uikit-v2-accent, #{$color-accent});
+  border: 4px solid rgba(255, 255, 255, 0.12);
+  border-top-color: #cf3434;
   animation: tv-watch-spin 0.9s linear infinite;
 }
 
@@ -2875,11 +3453,98 @@ html.tv-mode .tv-player-shell .tv-watch {
   to { transform: rotate(360deg); }
 }
 
-.tv-watch__error-title {
+/* Экран загрузки повторяет hero страницы тайтла (арт справа, текст слева) —
+   переход «Смотреть → плеер» без чёрной вспышки. */
+.tv-watch__loading {
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 2.863rem 6.455rem 2.863rem 2.863rem;
+  text-align: left;
+  overflow: hidden;
+}
+
+.tv-watch__loading-art {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 48.02%;
+  height: 90.6%;
+  overflow: hidden;
+  pointer-events: none;
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    animation: tv-watch-art-breathe 3.2s ease-in-out infinite;
+  }
+}
+
+.tv-watch__loading-scrim {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 100% 0%, rgba(13, 13, 13, 0) 0%, #0d0d0d 70.6%);
+}
+
+@keyframes tv-watch-art-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.72; }
+}
+
+.tv-watch__loading-main {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.781rem;
+  max-width: 57rem;
+}
+
+.tv-watch__loading-title {
   margin: 0;
-  font-size: 1.15rem;
-  line-height: 1.4;
-  max-width: 36rem;
+  font-size: 3.384rem;
+  font-weight: 800;
+  line-height: 1.21;
+  color: #fff;
+}
+
+.tv-watch__loading-meta {
+  margin: 0;
+  font-size: 1.145rem;
+  font-weight: 600;
+  color: #cdcdcd;
+}
+
+.tv-watch__loading-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.6rem;
+  min-height: 4.945rem;
+  padding: 0 1.8rem 0 1.4rem;
+  border-radius: 1.562rem;
+  background: #cf3434;
+  font-size: 1.302rem;
+  font-weight: 800;
+  color: #fff;
+
+  .tv-watch__spinner {
+    width: 1.8rem;
+    height: 1.8rem;
+    margin: 0;
+    border-width: 3px;
+    border-color: rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+  }
+}
+
+.tv-watch__error-title {
+  margin: 0 0 0.6rem;
+  max-width: 40rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.35;
 }
 
 .tv-watch__overlay {
@@ -2890,8 +3555,10 @@ html.tv-mode .tv-player-shell .tv-watch {
   flex-direction: column;
   justify-content: flex-end;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0%, transparent 28%, transparent 55%, rgba(0, 0, 0, 0.92) 100%);
-  transition: opacity 0.22s ease, visibility 0.22s ease;
+  background:
+    linear-gradient(180deg, rgba(13, 13, 13, 0.85) 0%, transparent 26%),
+    linear-gradient(0deg, rgba(13, 13, 13, 0.95) 0%, rgba(13, 13, 13, 0.6) 22%, transparent 45%);
+  transition: opacity 0.25s ease, visibility 0.25s ease;
 }
 
 .tv-watch__overlay--hidden {
@@ -2914,25 +3581,42 @@ html.tv-mode .tv-player-shell .tv-watch {
   top: 0;
   left: 0;
   right: 0;
-  padding: 2.5rem 3rem 1.25rem;
+  padding: 2.863rem 2.863rem 1.25rem;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.62) 0%, transparent 100%);
 }
 
 .tv-watch__top-title {
   margin: 0;
-  font-size: clamp(1.2rem, 2vw, 1.85rem);
-  font-weight: 700;
-  line-height: 1.25;
+  max-width: 64rem;
+  font-size: 2.4rem;
+  font-weight: 800;
+  line-height: 1.21;
+  color: #fff;
   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55);
-  max-width: min(72vw, 56rem);
 }
 
-.tv-watch__top-meta {
-  margin: 0.4rem 0 0;
-  font-size: 0.95rem;
-  color: rgba(255, 255, 255, 0.78);
-  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.45);
+.tv-watch__top-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.8rem;
+}
+
+.tv-watch__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.75rem;
+  border-radius: 0.703rem;
+  background: rgba(29, 29, 29, 0.85);
+  font-size: 1.145rem;
+  font-weight: 700;
+  line-height: 1.21;
+  color: #cdcdcd;
+}
+
+.tv-watch__chip--accent {
+  background: rgba(207, 52, 52, 0.85);
+  color: #fff;
 }
 
 .tv-watch__center {
@@ -2949,15 +3633,19 @@ html.tv-mode .tv-player-shell .tv-watch {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 5rem;
-  height: 5rem;
+  width: 6.2rem;
+  height: 6.2rem;
   border: 0;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.42);
+  background: rgba(13, 13, 13, 0.6);
   color: #fff;
-  backdrop-filter: blur(6px);
   cursor: pointer;
-  transition: opacity 0.18s ease, background 0.18s ease;
+  transition: opacity 0.18s ease, background 0.18s ease, transform 0.18s ease;
+
+  svg {
+    width: 2.6rem;
+    height: 2.6rem;
+  }
 }
 
 .tv-watch__overlay--hidden .tv-watch__center {
@@ -2969,40 +3657,23 @@ html.tv-mode .tv-player-shell .tv-watch {
   visibility: visible;
   opacity: 0;
   background: transparent;
-  backdrop-filter: none;
-}
-
-.tv-watch--chrome-hidden .tv-watch__play[data-tv-focus='true'],
-.tv-watch--chrome-hidden .tv-watch__play:focus {
-  opacity: 0;
-  outline: none;
-  background: transparent;
-  box-shadow: none;
 }
 
 .tv-watch__dock {
   margin-top: auto;
-  padding: 0 3rem 2.2rem;
+  padding: 0 2.863rem 2.4rem;
 }
 
+/* ——— Перемотка: дорожка, под ней время и подсказки; облачко — только при перемотке ——— */
 .tv-watch__scrub {
-  margin-bottom: 1.15rem;
-}
-
-.tv-watch__scrub-times {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.45rem;
-  font-size: 0.95rem;
-  font-variant-numeric: tabular-nums;
-  color: rgba(255, 255, 255, 0.92);
+  margin-bottom: 1.4rem;
 }
 
 .tv-watch__timeline {
   display: block;
   width: 100%;
-  padding: 0.55rem 0;
+  /* Сверху место под облачко с временем, чтобы ничего не прыгало. */
+  padding: 3.6rem 0 0.9rem;
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -3011,72 +3682,185 @@ html.tv-mode .tv-player-shell .tv-watch {
     opacity: 0.45;
     cursor: default;
   }
-
-  &[data-tv-focus='true'],
-  &:focus-visible {
-    outline: none;
-  }
-
-  &--focused,
-  &[data-tv-focus='true'] {
-    .tv-watch__track {
-      height: 0.42rem;
-    }
-
-    .tv-watch__timeline-thumb {
-      transform: translate(-50%, -50%) scale(1.12);
-    }
-  }
 }
 
 .tv-watch__track {
   position: relative;
-  height: 0.28rem;
+  height: 0.45rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.34);
-  overflow: visible;
+  background: rgba(255, 255, 255, 0.2);
   transition: height 0.15s ease;
 }
 
+.tv-watch__scrub--active .tv-watch__track {
+  height: 0.75rem;
+}
+
+.tv-watch__track-buffered,
+.tv-watch__track-played,
+.tv-watch__track-scrub,
 .tv-watch__track-segments {
   position: absolute;
-  inset: 0;
-  display: flex;
-  gap: 2px;
+  top: 0;
+  bottom: 0;
+  left: 0;
   border-radius: inherit;
+  pointer-events: none;
+}
+
+.tv-watch__track-buffered {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Опенинг / эндинг — жёлтые участки прямо на дорожке (под красным прогрессом). */
+.tv-watch__track-segments {
+  right: 0;
+  display: flex;
+  gap: 3px;
   overflow: hidden;
 }
 
 .tv-watch__track-segment {
   min-width: 2px;
-  border-radius: inherit;
-  background: transparent;
 
   &--opening,
   &--ending {
-    background: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 193, 107, 0.7);
   }
 }
 
 .tv-watch__track-played {
-  position: absolute;
-  inset: 0 auto 0 0;
-  border-radius: inherit;
-  background: #ff4d4d;
-  pointer-events: none;
+  background: #cf3434;
+}
+
+/* Куда перемотаем (до подтверждения OK). */
+.tv-watch__track-scrub {
+  background: rgba(255, 255, 255, 0.85);
 }
 
 .tv-watch__timeline-thumb {
   position: absolute;
   top: 50%;
-  width: 0.82rem;
-  height: 0.82rem;
+  z-index: 1;
+  width: 1.1rem;
+  height: 1.1rem;
   border-radius: 50%;
-  background: #ff4d4d;
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+  background: #cf3434;
   transform: translate(-50%, -50%);
   pointer-events: none;
-  transition: transform 0.12s ease;
+  transition: width 0.15s ease, height 0.15s ease, background 0.15s ease;
+}
+
+.tv-watch__scrub--active .tv-watch__timeline-thumb {
+  width: 1.8rem;
+  height: 1.8rem;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+
+.tv-watch__thumb-bubble {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.8rem);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 0.8rem;
+  background: #fff;
+  color: #0d0d0d;
+  font-size: 1.2rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+
+  b {
+    font-weight: 800;
+  }
+
+  span {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #cf3434;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    border: 0.4rem solid transparent;
+    border-top-color: #fff;
+    transform: translateX(-50%);
+  }
+}
+
+.tv-watch__scrub-times {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-watch__time {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.tv-watch__time--muted {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.tv-watch__scrub-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 1.8rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.65);
+
+  kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.8rem;
+    height: 1.8rem;
+    padding: 0 0.45rem;
+    border-radius: 0.5rem;
+    background: rgba(29, 29, 29, 0.9);
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #fff;
+  }
+}
+
+/* Пауза при скрытом интерфейсе — чтобы было понятно, почему кадр стоит. */
+.tv-watch__paused-badge {
+  position: absolute;
+  left: 2.863rem;
+  bottom: 2.4rem;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 1.1rem;
+  border-radius: 1.1rem;
+  background: rgba(13, 13, 13, 0.8);
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #fff;
+  pointer-events: none;
+
+  svg {
+    width: 1.3rem;
+    height: 1.3rem;
+  }
 }
 
 .tv-watch__dock-bar {
@@ -3089,243 +3873,188 @@ html.tv-mode .tv-player-shell .tv-watch {
 .tv-watch__dock-group {
   display: flex;
   align-items: center;
-  gap: 1.35rem;
-}
-
-.tv-watch__dock-group--end {
-  gap: 0.85rem;
+  gap: 0.729rem;
 }
 
 .tv-watch__dock-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
-  min-height: 2.75rem;
-  padding: 0.35rem 0.55rem;
+  gap: 0.9rem;
+  min-height: 4.4rem;
+  padding: 0.6rem 1.4rem;
   border: 0;
-  border-radius: 0.55rem;
-  background: transparent;
+  border-radius: 1.3rem;
+  background: rgba(29, 29, 29, 0.9);
   color: #fff;
   font: inherit;
-  font-size: 1rem;
-  font-weight: 500;
+  text-align: left;
   cursor: pointer;
-  transition: background 0.15s ease, opacity 0.15s ease;
+  transition: background 0.15s ease;
 
-  &:disabled {
-    opacity: 0.35;
-    cursor: default;
-  }
-
-  &:hover:not(:disabled),
-  &[data-tv-focus='true'] {
-    background: rgba(255, 255, 255, 0.12);
-  }
-
-  &--active {
-    color: #ffb07a;
-  }
-
-  &--icon {
-    justify-content: center;
-    min-width: 2.75rem;
-    padding-inline: 0.45rem;
+  &:hover:not(:disabled) {
+    background: #2a2a2a;
   }
 }
 
 .tv-watch__dock-icon {
   display: inline-flex;
-  opacity: 0.92;
+  color: rgba(255, 255, 255, 0.85);
+
+  svg {
+    width: 1.6rem;
+    height: 1.6rem;
+  }
+}
+
+.tv-watch__dock-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.tv-watch__dock-label {
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1.21;
+}
+
+.tv-watch__dock-value {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.21;
+  color: rgba(255, 255, 255, 0.65);
 }
 
 .tv-watch__skip-row {
   display: flex;
-  gap: 0.65rem;
-  margin-bottom: 0.85rem;
+  gap: 0.729rem;
+  margin-bottom: 1rem;
 }
 
 .tv-watch__skip-btn {
-  flex: 1;
-  min-height: 2.65rem;
+  min-height: 3.6rem;
+  padding: 0 1.6rem;
   border: 0;
-  border-radius: 0.55rem;
+  border-radius: 1.1rem;
   font: inherit;
-  font-size: 0.98rem;
-  font-weight: 600;
+  font-size: 1.15rem;
+  font-weight: 800;
   cursor: pointer;
 
   &--ghost {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(29, 29, 29, 0.9);
     color: #fff;
   }
 
   &--accent {
-    background: #ff4d4d;
+    background: #cf3434;
     color: #fff;
   }
 }
 
-.tv-watch__settings {
+/* Настройки и серии — боковые панели в одном стиле. */
+.tv-watch__settings,
+.tv-watch__panel {
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
   z-index: 6;
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding: 0 3rem 7.5rem;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(4px);
+  flex-direction: column;
+  width: min(32rem, 44vw);
+  background: rgba(13, 13, 13, 0.97);
+  box-shadow: -24px 0 60px rgba(0, 0, 0, 0.5);
+  animation: tv-watch-panel-in 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes tv-watch-panel-in {
+  from { opacity: 0; transform: translateX(2.5rem); }
+  to { opacity: 1; transform: none; }
 }
 
 .tv-watch__settings-card {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(10.5rem, 1fr));
-  gap: 1.75rem;
-  width: min(92vw, 74rem);
-  max-height: min(72vh, 34rem);
+  display: flex;
+  flex-direction: column;
+  gap: 1.8rem;
+  min-height: 0;
+  padding: 2.4rem 2.2rem;
   overflow: auto;
-  padding: 1.75rem 2rem;
-  border-radius: 1.1rem;
-  background: rgba(24, 24, 26, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.tv-watch__settings-col--scroll {
-  max-height: 24rem;
-  overflow-y: auto;
-  padding-right: 0.15rem;
-}
-
-.tv-watch__settings-subtitle {
-  margin: 0.85rem 0 0.35rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.38);
-}
-
-.tv-watch__settings-note {
-  margin: 0.35rem 0 0;
-  font-size: 0.92rem;
-  line-height: 1.4;
-  color: rgba(255, 255, 255, 0.62);
 }
 
 .tv-watch__settings-title {
-  margin: 0 0 0.85rem;
-  font-size: 0.78rem;
+  margin: 0 0 0.8rem;
+  font-size: 1rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.48);
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .tv-watch__settings-list {
   display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
+  flex-wrap: wrap;
+  gap: 0.6rem;
 }
 
 .tv-watch__settings-item {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
-  width: 100%;
-  min-height: 2.45rem;
-  padding: 0.35rem 0.5rem;
+  min-height: 3.4rem;
+  padding: 0 1.3rem;
   border: 0;
-  border-radius: 0.45rem;
-  background: transparent;
-  color: #fff;
+  border-radius: 1.1rem;
+  background: #1d1d1d;
+  color: rgba(255, 255, 255, 0.85);
   font: inherit;
-  font-size: 1.02rem;
-  text-align: left;
+  font-size: 1.15rem;
+  font-weight: 700;
   cursor: pointer;
 
   &--active {
-    color: #ff7a45;
+    background: #fff;
+    color: #0d0d0d;
   }
 
-  &--disabled,
   &:disabled {
     opacity: 0.42;
     cursor: not-allowed;
   }
-
-  &:hover,
-  &[data-tv-focus='true'] {
-    background: rgba(255, 255, 255, 0.08);
-  }
-}
-
-.tv-watch__settings-check {
-  width: 1rem;
-  color: #ff7a45;
-  font-weight: 800;
 }
 
 .tv-watch__btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.45rem;
-  min-height: 3rem;
-  padding: 0.55rem 1rem;
+  gap: 0.5rem;
+  min-height: 3.6rem;
+  padding: 0 1.6rem;
   border: 0;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
+  border-radius: 1.1rem;
+  background: #1d1d1d;
   color: #fff;
   font: inherit;
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 1.15rem;
+  font-weight: 700;
   cursor: pointer;
-  transition: background 0.18s ease, transform 0.18s ease;
-
-  &:hover:not(:disabled),
-  &[data-tv-focus='true'] {
-    background: rgba(255, 255, 255, 0.22);
-    transform: scale(1.03);
-  }
 
   &:disabled {
     opacity: 0.35;
     cursor: default;
   }
+
+  svg {
+    width: 1.4rem;
+    height: 1.4rem;
+  }
 }
 
 .tv-watch__btn--primary {
-  background: var(--uikit-v2-accent, #{$color-accent});
-  color: #0b0b0b;
+  background: #cf3434;
+  color: #fff;
 }
 
 .tv-watch__btn--icon {
-  min-width: 3rem;
-  padding-inline: 0.85rem;
-}
-
-.tv-watch__btn--round {
-  width: 5.25rem;
-  height: 5.25rem;
-  min-width: 5.25rem;
+  width: 3.6rem;
   padding: 0;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(8px);
-}
-
-.tv-watch__panel {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(28rem, 42vw);
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-  background: rgba(12, 12, 14, 0.96);
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.35);
 }
 
 .tv-watch__panel-head {
@@ -3333,63 +4062,125 @@ html.tv-mode .tv-player-shell .tv-watch {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1.2rem 1.25rem 0.85rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 2.4rem 2.2rem 1rem;
 }
 
 .tv-watch__panel-title {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.21;
+  color: #fff;
 }
 
 .tv-watch__panel-list {
   flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
   overflow: auto;
-  padding: 0.5rem 0;
+  padding: 0.4rem 2.2rem 2.2rem;
+  scroll-padding-block: 1.2rem;
 }
 
 .tv-watch__panel-empty {
-  margin: 1rem 1.25rem;
+  margin: 0;
+  font-size: 1.1rem;
   color: rgba(255, 255, 255, 0.65);
 }
 
 .tv-watch__ep-item {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 0.85rem;
+  gap: 1rem;
   width: 100%;
-  padding: 0.85rem 1.25rem;
+  min-height: 4.2rem;
+  padding: 0 1.3rem;
   border: 0;
-  background: transparent;
-  color: inherit;
+  border-radius: 1.3rem;
+  background: #1d1d1d;
+  color: #fff;
   text-align: left;
   font: inherit;
   cursor: pointer;
-  transition: background 0.18s ease;
-
-  &:hover,
-  &[data-tv-focus='true'] {
-    background: rgba(255, 255, 255, 0.08);
-  }
 
   &--active {
-    background: color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 14%, transparent);
+    box-shadow: inset 0 0 0 2px rgba(207, 52, 52, 0.85);
   }
 }
 
 .tv-watch__ep-num {
   flex: none;
-  width: 2.2rem;
-  text-align: center;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.72);
+  min-width: 2.2rem;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #fff;
 }
 
 .tv-watch__ep-name {
+  flex: 1;
   min-width: 0;
-  font-size: 1rem;
-  line-height: 1.35;
+  overflow: hidden;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.65);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-watch__ep-now {
+  flex: none;
+  padding: 0.15rem 0.6rem;
+  border-radius: 0.5rem;
+  background: #cf3434;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+/* Фокус — как на странице тайтла. */
+html.tv-mode .tv-watch :is(
+  .tv-watch__dock-btn,
+  .tv-watch__settings-item,
+  .tv-watch__ep-item,
+  .tv-watch__btn,
+  .tv-watch__skip-btn
+):is([data-tv-focus='true'], :focus-visible) {
+  outline: 3px solid #fff !important;
+  outline-offset: 3px !important;
+}
+
+html.tv-mode .tv-watch .tv-watch__dock-btn[data-tv-focus='true'],
+html.tv-mode .tv-watch .tv-watch__ep-item[data-tv-focus='true'],
+html.tv-mode .tv-watch .tv-watch__settings-item:not(.tv-watch__settings-item--active)[data-tv-focus='true'] {
+  background: #2a2a2a;
+}
+
+html.tv-mode .tv-watch .tv-watch__settings-item--active[data-tv-focus='true'] {
+  background: #fff;
+}
+
+html.tv-mode .tv-watch .tv-watch__timeline[data-tv-focus='true'] {
+  background: transparent;
+  outline: none !important;
+}
+
+html.tv-mode .tv-watch .tv-watch__play[data-tv-focus='true'] {
+  background: #cf3434;
+  outline: 3px solid #fff !important;
+  outline-offset: 3px !important;
+  transform: scale(1.04);
+}
+
+html.tv-mode .tv-watch.tv-watch--chrome-hidden .tv-watch__play[data-tv-focus='true'],
+html.tv-mode .tv-watch.tv-watch--chrome-hidden .tv-watch__play:focus {
+  opacity: 0;
+  background: transparent;
+  outline: none !important;
+  box-shadow: none;
+  transform: none;
 }
 
 html.tv-mode .watch-modal {
@@ -3422,6 +4213,480 @@ html.tv-mode .watch-modal__episode-card {
   min-height: 3.25rem;
 }
 
+/* ——— TV: «Смотреть» (озвучки → источники → серии) в стиле страницы релиза ——— */
+@keyframes tv-watch-modal-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes tv-watch-modal-in {
+  from { opacity: 0; transform: translateY(1.6rem); }
+  to { opacity: 1; transform: none; }
+}
+
+html.tv-mode .tv-release-hero__main,
+html.tv-mode .tv-release-hero__bar,
+html.tv-mode .tv-release-hero__scroll-hint {
+  transition: opacity 0.3s ease;
+}
+
+html.tv-mode:has(.watch-modal--tv) .tv-release-hero__main,
+html.tv-mode:has(.watch-modal--tv) .tv-release-hero__bar,
+html.tv-mode:has(.watch-modal--tv) .tv-release-hero__scroll-hint {
+  opacity: 0 !important;
+}
+/* Полноэкранная «подстраница» поверх страницы тайтла: арт справа остаётся,
+   текст hero гаснет — выглядит как переход, а не всплывающее окно. */
+html.tv-mode .watch-modal--tv {
+  padding: 0;
+
+  .watch-modal__backdrop {
+    background: linear-gradient(
+      90deg,
+      rgba(13, 13, 13, 0.98) 0%,
+      rgba(13, 13, 13, 0.94) 58%,
+      rgba(13, 13, 13, 0.55) 100%
+    );
+    backdrop-filter: none;
+    animation: tv-watch-modal-fade 0.32s ease both;
+  }
+
+  .watch-modal__panel {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    padding: 1.2rem 22rem 0 0.6rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    animation: tv-watch-modal-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .watch-modal__head {
+    gap: 1.2rem;
+    padding: 1.8rem 2.2rem 1.3rem;
+    border-bottom: 0;
+  }
+
+  .watch-modal__head-actions {
+    position: fixed;
+    top: 2.4rem;
+    right: 2.863rem;
+  }
+
+  .watch-modal__title {
+    font-size: 3rem;
+    font-weight: 800;
+    line-height: 1.21;
+    color: #ffffff;
+  }
+
+  .watch-modal__subtitle {
+    margin-top: 0.35rem;
+    font-size: 1.145rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .watch-modal__head-actions {
+    gap: 0.73rem;
+  }
+
+  .watch-modal__head-back,
+  .watch-modal__head-icon,
+  .watch-modal__close {
+    width: 3.6rem;
+    height: 3.6rem;
+    border: 0;
+    border-radius: 1.1rem;
+    background: #1d1d1d;
+    color: #ffffff;
+
+    svg {
+      width: 1.6rem;
+      height: 1.6rem;
+    }
+  }
+
+  .watch-modal__page > .uiv2-scroll-area__v-track {
+    display: none;
+  }
+
+  /* Фокусная карточка не прилипает к краю и обводка не режется. */
+  .watch-modal__page .page__scroll {
+    scroll-padding-block: 1.6rem;
+  }
+
+  .watch-modal__loading {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.65);
+  }
+
+  /* Вкладки «Все / Озвучки / Субтитры» и источники — пилюли как карточки hero. */
+  .watch-modal__filters,
+  .watch-modal__source-pills,
+  .watch-modal__tv-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.73rem;
+    margin: 0;
+    padding: 0.35rem 0.35rem 1.3rem;
+    border: 0;
+    overflow: visible;
+  }
+
+  .watch-modal__filters {
+    padding: 0.35rem 2.55rem 1.3rem;
+  }
+
+  .watch-modal__filter,
+  .watch-modal__source-pill,
+  .watch-modal__tv-action {
+    display: inline-flex;
+    align-items: center;
+    min-height: 3.6rem;
+    padding: 0 1.6rem;
+    border: 0;
+    border-radius: 1.1rem;
+    background: #1d1d1d;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 1.2rem;
+    font-weight: 700;
+    line-height: 1.21;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &::after {
+      display: none;
+    }
+  }
+
+  .watch-modal__filter--active,
+  .watch-modal__source-pill--active {
+    background: #ffffff;
+    color: #0d0d0d;
+  }
+
+  .watch-modal__tv-action--primary {
+    background: #cf3434;
+    color: #ffffff;
+    font-weight: 800;
+  }
+
+  .watch-modal__tv-action:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  .watch-modal__tv-progress {
+    margin-left: auto;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  /* Озвучки — сетка крупных карточек, удобно гонять D-pad'ом. */
+  .watch-modal__variant-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.9rem;
+    padding: 0.35rem 2.55rem 2.2rem;
+  }
+
+  .watch-modal__variant-row {
+    position: relative;
+    gap: 1.1rem;
+    min-height: 6.2rem;
+    padding: 1.1rem 1.3rem;
+    border: 0;
+    border-radius: 1.562rem;
+    background: #1d1d1d;
+    color: #ffffff;
+
+    &:hover {
+      background: #262626;
+    }
+  }
+
+  .watch-modal__variant-row--pinned {
+    background: #1d1d1d;
+  }
+
+  .watch-modal__variant-row--current {
+    box-shadow: inset 0 0 0 2px rgba(207, 52, 52, 0.85);
+  }
+
+  .watch-modal__variant-pinmark {
+    position: absolute;
+    top: 0.7rem;
+    right: 0.9rem;
+    display: inline-flex;
+    color: #cf3434;
+
+    svg {
+      width: 1.1rem;
+      height: 1.1rem;
+    }
+  }
+
+  .watch-modal__variant-avatar {
+    width: 3.8rem;
+    height: 3.8rem;
+    flex: 0 0 3.8rem;
+    border-radius: 1rem;
+
+    svg {
+      width: 1.6rem;
+      height: 1.6rem;
+    }
+  }
+
+  .watch-modal__variant-info {
+    gap: 0.35rem;
+  }
+
+  .watch-modal__variant-name {
+    font-size: 1.3rem;
+    font-weight: 800;
+    line-height: 1.21;
+  }
+
+  .watch-modal__variant-meta,
+  .watch-modal__variant-ep {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .watch-modal__quality-badge,
+  .watch-modal__new-badge {
+    font-size: 0.9rem;
+    padding: 0.12rem 0.5rem;
+    border-radius: 0.5rem;
+  }
+
+  .watch-modal__variant-views-badge {
+    align-self: flex-end;
+    font-size: 1rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.55);
+    background: transparent;
+    padding: 0;
+
+    svg {
+      width: 1.1rem;
+      height: 1.1rem;
+    }
+  }
+
+  /* Серии */
+  .watch-modal__episodes-view {
+    gap: 0;
+    padding: 0.35rem 2.2rem 2.2rem;
+  }
+
+  .watch-modal__download-status {
+    margin-bottom: 1rem;
+    font-size: 1.05rem;
+  }
+
+  .watch-modal__episodes {
+    grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+    gap: 0.9rem;
+    padding: 0.35rem;
+  }
+
+  .watch-modal__episode-card {
+    min-height: 7.4rem;
+    padding: 0;
+    border: 0;
+    border-radius: 1.3rem;
+    background: #1d1d1d;
+
+    &:hover {
+      transform: none;
+      background: #262626;
+    }
+  }
+
+  .watch-modal__episode-card--active,
+  .watch-modal__episode-card--highlight {
+    border: 0;
+    box-shadow: none;
+    background: #1d1d1d;
+  }
+
+  .watch-modal__episode-card--next {
+    box-shadow: inset 0 0 0 2px rgba(207, 52, 52, 0.85);
+  }
+
+  .watch-modal__episode-main {
+    position: relative;
+    height: 100%;
+    justify-content: space-between;
+    gap: 0.6rem;
+    padding: 1rem 1.2rem;
+    border-radius: inherit;
+  }
+
+  .watch-modal__episode-num {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #ffffff;
+  }
+
+  .watch-modal__episode-card--watched .watch-modal__episode-num {
+    color: #40c463;
+  }
+
+  .watch-modal__episode-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .watch-modal__episode-name--solo {
+    font-size: 1.2rem;
+    color: #ffffff;
+  }
+
+  .watch-modal__episode-check {
+    position: absolute;
+    top: 0.85rem;
+    right: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 50%;
+    background: rgba(64, 196, 99, 0.18);
+    color: #40c463;
+
+    svg {
+      width: 1.05rem;
+      height: 1.05rem;
+    }
+  }
+
+  /* Статистика добавления */
+  .watch-modal__updates-list {
+    padding: 0.35rem 2.2rem 2.2rem;
+  }
+
+  .watch-modal__update-row {
+    padding: 1rem 1.3rem;
+    border-radius: 1.3rem;
+    background: #1d1d1d;
+    margin-bottom: 0.6rem;
+    font-size: 1.1rem;
+  }
+
+  .watch-modal__confirm-inner {
+    padding: 2rem;
+    border-radius: 1.562rem;
+    background: #1d1d1d;
+  }
+
+  .watch-modal__confirm-title {
+    font-size: 1.6rem;
+    font-weight: 800;
+  }
+
+  .watch-modal__confirm-text {
+    font-size: 1.1rem;
+  }
+
+  .watch-modal__confirm-btn {
+    min-height: 3.4rem;
+    padding: 0 1.5rem;
+    border-radius: 1.1rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+  }
+
+  /* Фокус — как на странице релиза: белая обводка без подложки-акцента. */
+  :is(
+    .watch-modal__filter,
+    .watch-modal__source-pill,
+    .watch-modal__tv-action,
+    .watch-modal__variant-row,
+    .watch-modal__episode-main,
+    .watch-modal__head-back,
+    .watch-modal__head-icon,
+    .watch-modal__close,
+    .watch-modal__update-row,
+    .watch-modal__confirm-btn
+  ):is([data-tv-focus='true'], :focus-visible) {
+    outline: 3px solid #fff !important;
+    outline-offset: 3px !important;
+  }
+
+  .watch-modal__variant-row[data-tv-focus='true'],
+  .watch-modal__episode-main[data-tv-focus='true'],
+  .watch-modal__filter[data-tv-focus='true'],
+  .watch-modal__source-pill[data-tv-focus='true'],
+  .watch-modal__tv-action[data-tv-focus='true'] {
+    background: #2a2a2a;
+    color: #ffffff;
+  }
+
+  .watch-modal__filter--active[data-tv-focus='true'],
+  .watch-modal__source-pill--active[data-tv-focus='true'] {
+    background: #ffffff;
+    color: #0d0d0d;
+  }
+
+  .watch-modal__tv-action--primary[data-tv-focus='true'] {
+    background: #cf3434;
+  }
+
+  .watch-modal__update-row:focus:not([data-tv-focus='true']):not(:focus-visible) {
+    outline: none;
+  }
+
+  .watch-modal__tv-progress {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.2rem;
+  }
+
+  .watch-modal__tv-hint {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .watch-modal__tv-hint--end {
+    margin-left: auto;
+  }
+
+  /* Удержание OK: полоска заполняется, пока держат кнопку. */
+  [data-tv-longpress-active]::before {
+    content: '';
+    position: absolute;
+    left: 1.2rem;
+    right: 1.2rem;
+    bottom: 0.5rem;
+    z-index: 2;
+    height: 0.3rem;
+    border-radius: 999px;
+    background: #cf3434;
+    transform-origin: left center;
+    animation: tv-longpress-fill 0.55s linear forwards;
+    pointer-events: none;
+  }
+}
+
+@keyframes tv-longpress-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
 html.tv-android {
   .tv-watch__play,
   .tv-watch__settings,
@@ -3430,4 +4695,208 @@ html.tv-android {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
+}
+
+/* ——— TV: закладки (ряды как на главной) ——— */
+.tv-home-row__meta {
+  margin-left: 0.7rem;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+html.tv-mode .tv-bookmarks__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+  max-width: 46rem;
+  padding: 6rem var(--tv-home-gutter, 2rem) 2rem var(--tv-home-content-left);
+}
+
+html.tv-mode .tv-bookmarks__empty-title {
+  margin: 0;
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1.21;
+  color: #fff;
+}
+
+html.tv-mode .tv-bookmarks__empty-text {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+html.tv-mode .tv-bookmarks__login {
+  margin-top: 0.8rem;
+  min-height: 4.4rem;
+  padding: 0 2.2rem;
+  border: 0;
+  border-radius: 1.3rem;
+  background: #cf3434;
+  color: #fff;
+  font: inherit;
+  font-size: 1.3rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* ——— TV: оценка релиза — крупные звёзды, подпись «4 — Хорошо», действия отдельно ——— */
+.tv-vote {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.tv-vote__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(60rem, 100%);
+  padding: 2.6rem 2.6rem 2.2rem;
+  border-radius: 2rem;
+  background: #0d0d0d;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7);
+  text-align: center;
+  animation: tv-watch-modal-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.tv-vote__kicker {
+  margin: 0;
+  font-size: 1.145rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.tv-vote__title {
+  margin: 0.4rem 0 2rem;
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 2.2rem;
+  font-weight: 800;
+  line-height: 1.21;
+  color: #fff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-vote__stars {
+  display: flex;
+  gap: 0.9rem;
+}
+
+.tv-vote__star {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: 7.2rem;
+  height: 7.6rem;
+  padding: 0;
+  border: 0;
+  border-radius: 1.562rem;
+  background: #1d1d1d;
+  color: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+
+  svg {
+    width: 3.2rem;
+    height: 3.2rem;
+  }
+}
+
+.tv-vote__star--on {
+  color: #ffc44d;
+}
+
+.tv-vote__star-num {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Своя текущая оценка — отметка снизу. */
+.tv-vote__star--mine::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0.5rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: #cf3434;
+  transform: translateX(-50%);
+}
+
+html.tv-mode .tv-vote__star[data-tv-focus='true'] {
+  background: #2a2a2a;
+  transform: scale(1.06);
+  outline: 3px solid #fff !important;
+  outline-offset: 3px !important;
+}
+
+html.tv-mode .tv-vote__action[data-tv-focus='true'] {
+  outline: 3px solid #fff !important;
+  outline-offset: 3px !important;
+}
+
+.tv-vote__verdict {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 4rem;
+  margin: 1.6rem 0 1.4rem;
+
+  b {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #ffc44d;
+  }
+
+  span {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+  }
+}
+
+.tv-vote__actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.73rem;
+  width: 100%;
+}
+
+.tv-vote__action {
+  min-height: 3.6rem;
+  padding: 0 1.6rem;
+  border: 0;
+  border-radius: 1.1rem;
+  background: #1d1d1d;
+  color: #fff;
+  font: inherit;
+  font-size: 1.15rem;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.45;
+  }
+}
+
+html.tv-mode .tv-vote__action[data-tv-focus='true'] {
+  background: #2a2a2a;
+}
+
+.tv-vote__count {
+  margin-left: 0.8rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.45);
 }

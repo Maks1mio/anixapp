@@ -232,4 +232,10 @@
       {/if}
     </div>
   </div>
+
+  <!-- Под hero есть ещё секции (о тайтле, рейтинг, кадры…) — подсказываем пультом «вниз». -->
+  <div class="tv-release-hero__scroll-hint" aria-hidden="true">
+    <span>Подробнее</span>
+    <span class="tv-release-hero__scroll-hint-icon">{@html iconChevronDown(26)}</span>
+  </div>
 </div>

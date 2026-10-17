@@ -248,6 +248,18 @@ export async function runTvReleaseOpenAnimation(releaseId: number): Promise<void
   }
 }
 
+/** Арт тайтла для экрана загрузки TV-плеера: страница → плеер без «чёрной дыры». */
+const watchArtByRelease = new Map<number, string>();
+
+export function setTvWatchArt(releaseId: number, artUrl: string): void {
+  if (!artUrl) return;
+  watchArtByRelease.set(releaseId, artUrl);
+}
+
+export function getTvWatchArt(releaseId: number): string {
+  return watchArtByRelease.get(releaseId) ?? '';
+}
+
 export function cancelTvReleaseOpen(): void {
   if (!pending) return;
   finishTransition();

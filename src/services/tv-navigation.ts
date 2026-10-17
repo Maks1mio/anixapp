@@ -5,6 +5,11 @@ import { scrollTvCarouselItemIntoView } from '../tv/carouselScroll';
 import { cancelTvReleaseOpen } from './tv-release-transition';
 
 const FOCUS_ATTR = 'data-tv-focus';
+/** Элемент поддерживает удержание OK (см. actions/tvLongPress). */
+export const TV_LONGPRESS_ATTR = 'data-tv-longpress';
+export const TV_LONGPRESS_EVENT = 'tv-longpress';
+const TV_LONGPRESS_ACTIVE_ATTR = 'data-tv-longpress-active';
+const TV_LONGPRESS_MS = 550;
 const RAIL_SEL = '.tv-layout__rail';
 const MAIN_SEL = '.tv-layout__main';
 const TV_HOME_ROW_SEL = '[data-tv-home-row]';
@@ -47,24 +52,31 @@ const OVERLAY_ROOT = [
 ].join(',');
 
 const FOCUS_PRIORITY = [
+  '.watch-modal__confirm-btn--secondary',
+  '.watch-modal__confirm-btn',
   '.uiv2-media-lightbox__tool[aria-label="Закрыть"]',
   '.release-lightbox__close',
   '.tv-release-page__shot-nav',
+  '.tv-vote__star--start',
+  '.tv-vote__star',
   '.tv-release-page__star--current',
   '.tv-release-page__star',
   '.tv-release-page__vote-close',
   '.tv-release-page__dialog-close',
   '.watch-panel__ep-row--active',
-  '.watch-modal__filter--active',
-  '.watch-modal__filter',
+  '.watch-modal__variant-row--current',
   '.watch-modal__variant-row',
+  '.watch-modal__episode-card--next .watch-modal__episode-main',
   '.watch-modal__episode-main',
   '.watch-modal__episode-card',
+  '.watch-modal__filter--active',
+  '.watch-modal__filter',
   '.tv-watch__ep-item--active',
   '.tv-watch__ep-item',
   '.tv-watch__skip-btn',
   '.tv-watch__play',
   '.tv-watch__timeline',
+  '.tv-watch__settings-item--active',
   '.tv-watch__settings-item',
   '.tv-watch__dock-btn',
   '.watch-page__center-play-btn',
@@ -100,6 +112,37 @@ const CLOSE_SELECTORS = [
 ].join(',');
 
 let stickyFocus: HTMLElement | null = null;
+/** Идёт удержание OK: клик откладывается до keyup, по таймеру — событие удержания. */
+let longPress: { el: HTMLElement; timer: number; fired: boolean } | null = null;
+
+function cancelLongPress(): void {
+  if (!longPress) return;
+  window.clearTimeout(longPress.timer);
+  longPress.el.removeAttribute(TV_LONGPRESS_ACTIVE_ATTR);
+  longPress = null;
+}
+
+function startLongPress(el: HTMLElement): void {
+  cancelLongPress();
+  el.setAttribute(TV_LONGPRESS_ACTIVE_ATTR, '');
+  const state = { el, timer: 0, fired: false };
+  state.timer = window.setTimeout(() => {
+    state.fired = true;
+    el.removeAttribute(TV_LONGPRESS_ACTIVE_ATTR);
+    el.dispatchEvent(new CustomEvent(TV_LONGPRESS_EVENT, { bubbles: false }));
+  }, TV_LONGPRESS_MS);
+  longPress = state;
+}
+
+function onActivateKeyup(event: KeyboardEvent): void {
+  if (!longPress) return;
+  if (event.key !== 'Enter' && event.key !== 'NumpadEnter') return;
+  event.preventDefault();
+  event.stopPropagation();
+  const { el, fired } = longPress;
+  cancelLongPress();
+  if (!fired && el.isConnected) el.click();
+}
 let lastContentFocus: HTMLElement | null = null;
 let railEngaged = false;
 
@@ -114,6 +157,7 @@ const TV_HOME_CARD_SEL = [
   '.tv-category-see-all[role="button"]',
   '.tv-release-page__video-card',
   '.tv-release-page__shot',
+  '.tv-release-comment',
   '.release-page__video-thumb',
   '.release-page__video-category-card',
   '.release-page__screenshot-btn',
@@ -450,6 +494,29 @@ function scrollReleaseShellIntoView(el: HTMLElement): boolean {
   const shellRect = shell.getBoundingClientRect();
   const elRect = el.getBoundingClientRect();
   const padding = 28;
+
+  // Hero — целый экран: возвращаемся к самому верху. Секции ниже прокручиваем
+  // так, чтобы заголовок секции встал к верхнему краю (как ряды на главной).
+  const section = el.closest(TV_RELEASE_SECTION_SEL);
+  if (section instanceof HTMLElement) {
+    if (section.dataset.tvReleaseSection === 'hero') {
+      // Раскрытое описание может вытолкнуть кнопки hero ниже экрана.
+      const elBottomAbs = shell.scrollTop + elRect.bottom - shellRect.top;
+      const heroTop = elBottomAbs + padding <= shell.clientHeight ? 0 : elBottomAbs - shell.clientHeight + padding;
+      if (Math.abs(heroTop - shell.scrollTop) > 1) shell.scrollTo({ top: heroTop, behavior: 'smooth' });
+      return true;
+    }
+    const sectionRect = section.getBoundingClientRect();
+    let top = shell.scrollTop + sectionRect.top - shellRect.top - padding;
+    const elBottomFromTop = elRect.bottom - sectionRect.top;
+    if (elBottomFromTop > shellRect.height - padding * 2) {
+      top = shell.scrollTop + elRect.bottom - shellRect.bottom + padding;
+    }
+    const maxTop = Math.max(0, shell.scrollHeight - shell.clientHeight);
+    const nextTop = Math.max(0, Math.min(maxTop, top));
+    if (Math.abs(nextTop - shell.scrollTop) > 1) shell.scrollTo({ top: nextTop, behavior: 'smooth' });
+    return true;
+  }
 
   if (elRect.top < shellRect.top + padding) {
     shell.scrollTop += elRect.top - shellRect.top - padding;
@@ -825,6 +892,7 @@ function onArrowKeydown(event: KeyboardEvent): void {
   const dir = ARROW_KEYS[event.key];
   if (!dir) return;
   if (event.altKey || event.ctrlKey || event.metaKey) return;
+  cancelLongPress();
 
   const active = document.activeElement as HTMLElement | null;
   if (active?.matches('.tv-watch__timeline') && (dir === 'left' || dir === 'right')) {
@@ -916,6 +984,15 @@ function handleBack(): void {
 
   const watchModal = document.querySelector('.watch-modal');
   if (watchModal) {
+    const confirm = watchModal.querySelector('.watch-modal__confirm');
+    if (confirm && isVisible(confirm)) {
+      const cancel =
+        confirm.querySelector<HTMLElement>('.watch-modal__confirm-btn--secondary')
+        ?? confirm.querySelector<HTMLElement>('.watch-modal__confirm-btn');
+      cancel?.click();
+      return;
+    }
+
     const backBtn = watchModal.querySelector<HTMLElement>('.watch-modal__head-back');
     if (backBtn && isVisible(backBtn)) {
       backBtn.click();
@@ -1101,6 +1178,15 @@ function onActivateKeydown(event: KeyboardEvent): void {
     return;
   }
 
+  // Удержание: короткое нажатие = клик на keyup, долгое = TV_LONGPRESS_EVENT.
+  if (focused.hasAttribute(TV_LONGPRESS_ATTR)) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (longPress || event.repeat) return;
+    startLongPress(focused);
+    return;
+  }
+
   const activatesOnEnter = [
     '.uiv2-media-lightbox__tool[aria-label="Закрыть"]',
     '.release-lightbox__close',
@@ -1109,6 +1195,12 @@ function onActivateKeydown(event: KeyboardEvent): void {
     '.watch-modal__variant-row[role="button"]',
     '.watch-modal__filter',
     '.watch-modal__episode-main',
+    '.watch-modal__source-pill',
+    '.watch-modal__tv-action',
+    '.watch-modal__head-back',
+    '.watch-modal__head-icon',
+    '.watch-modal__close',
+    '.watch-modal__confirm-btn',
     '.tv-watch__dock-btn',
     '.tv-watch__play',
     '.tv-watch__settings-item',
@@ -1117,6 +1209,8 @@ function onActivateKeydown(event: KeyboardEvent): void {
     '.tv-release-page__chip',
     '.tv-release-page__more',
     '.tv-release-page__star',
+    '.tv-vote__action',
+    '.tv-vote__star',
     '.tv-release-page__shot',
     '.tv-release-page__video-card',
     '.tv-release-page__dialog-item',
@@ -1125,6 +1219,8 @@ function onActivateKeydown(event: KeyboardEvent): void {
     '.tv-release-hero__card',
     '.tv-release-hero__fav',
     '.tv-release-hero__more',
+    '.tv-release-body__rating',
+    '.tv-release-comment',
     '.release-page__btn--play',
     '.release-page__actions-chip',
     '.release-page__actions-status .uiv2-select__trigger',
@@ -1157,6 +1253,7 @@ export function initTvNavigation(): void {
 
   document.addEventListener('keydown', onArrowKeydown, true);
   document.addEventListener('keydown', onActivateKeydown, true);
+  document.addEventListener('keyup', onActivateKeyup, true);
   bindBackKeys();
   observeDom();
   watchRouteChanges();

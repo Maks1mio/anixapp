@@ -54,7 +54,14 @@ Desktop.ini
 .vite/
 .parcel-cache/
 .eslintcache
+.stylelintcache
 *.cache
+
+# Lint / check reports (локальные прогоны)
+.lint-*.txt
+.lint-eslint.txt
+.lint-stylelint.txt
+.lint-errors-only.txt
 
 # Optional: тесты и покрытие (если появятся)
 coverage/
@@ -66,6 +73,7 @@ tmp/
 temp/
 *.tmp
 *.temp
-
+.tmp-*/
 .tmp-kodik-dl/
+.tmp-eslint-pkgs/
 

@@ -73,7 +73,7 @@ function postMultipart(url, token, bytes, fileName, mime, opts = {}) {
   const uploadId = String(opts.uploadId || '');
   const onProgress = typeof opts.onProgress === 'function' ? opts.onProgress : null;
   const boundary = `----anixart${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
-  const safeName = String(fileName || 'image.jpg').replace(/[^\w.\-]+/g, '_') || 'image.jpg';
+  const safeName = String(fileName || 'image.jpg').replace(/[^\w.-]+/g, '_') || 'image.jpg';
   const head = Buffer.from(
     `--${boundary}\r\n`
     + `Content-Disposition: form-data; name="file"; filename="${safeName}"\r\n`
@@ -161,7 +161,7 @@ async function uploadArticleImage(mediaToken, file, fileName = 'image.jpg', opts
   const token = String(mediaToken || '').trim();
   if (!token) throw httpError('Нет прав на загрузку медиа в этот канал', 401, '/content/upload');
 
-  const name = String(fileName || 'image.jpg').replace(/[^\w.\-]+/g, '_') || 'image.jpg';
+  const name = String(fileName || 'image.jpg').replace(/[^\w.-]+/g, '_') || 'image.jpg';
   const bytes = toBuffer(file);
   if (!bytes.length) throw new Error('Пустой файл изображения');
 

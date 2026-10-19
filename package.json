@@ -31,6 +31,7 @@
         "build:android-mobile": "node scripts/build-android-mobile.mjs",
         "emu:tv:setup": "node scripts/setup-android-tv-emu.mjs",
         "emu:tv": "node scripts/run-android-tv-emu.mjs",
+        "live": "node scripts/live.mjs",
         "preview": "vite preview",
         "postinstall": "node scripts/ensure-eslint-typescript.js",
         "check:mojibake": "node scripts/check-mojibake.js",

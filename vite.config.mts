@@ -102,7 +102,7 @@ export default defineConfig(({ command, mode }) => {
         }
       : undefined,
     watch: {
-      ignored: ['**/release/**', '**/dist/**', '**/dist-android/**', '**/dist-tv-web/**'],
+      ignored: ['**/release/**', '**/dist/**', '**/dist-android/**', '**/dist-mobile/**', '**/dist-tv-web/**', '**/android/**', '**/android-mobile/**'],
     },
     proxy: {
       '/fluo/ws': {

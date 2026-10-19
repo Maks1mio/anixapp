@@ -3290,7 +3290,9 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   display: block;
   width: 100%;
   max-width: 16rem;
-  margin-top: clamp(-4.2rem, -12vw, -2rem);
+  // Фон-баннер над шапкой убран из разметки (3706200) — без него отрицательный отступ
+  // уводил верх постера под шапку окна при ширине ≤ 960 px (#125).
+  margin-top: 0;
   position: relative;
   z-index: 4;
 }

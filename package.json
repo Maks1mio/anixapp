@@ -75,7 +75,7 @@
         "hls.js": "^1.7.3",
         "html-to-image": "^1.11.13",
         "lottie-web": "^5.13.0",
-        "lucide": "^1.50.0"
+        "lucide": "^1.58.0"
     },
     "resolutions": {
         "axios": "^1.18.0",

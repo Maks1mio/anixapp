@@ -76,7 +76,7 @@ export function requireAuth(): boolean {
 /** Разделы, которым нужен аккаунт (гости смотрят главную/каталог/релизы) */
 export function pathRequiresAuth(path: string): boolean {
   const p = (path.split('?')[0] || '/').replace(/\/+$/, '') || '/';
-  if (p === '/bookmarks') return true;
+  if (p === '/bookmarks' || p.startsWith('/bookmarks/')) return true;
   if (p === '/notifications') return true;
   if (
     p === '/collections/my'

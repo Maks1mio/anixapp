@@ -89,12 +89,14 @@
   import FeedTv from './views/Feed.tv.svelte';
   import PopularTv from './views/Popular.tv.svelte';
   import BookmarksTv from './views/Bookmarks.tv.svelte';
+  import BookmarksListTv from './views/BookmarksList.tv.svelte';
   import SearchTv from './views/Search.tv.svelte';
   import ReleaseTv from './views/Release.tv.svelte';
+  import TvPairPage from './views/TvPairPage.svelte';
   import TvFallback from './views/TvFallback.svelte';
   import TvKeepAlive from './components/tv/TvKeepAlive.svelte';
   import TvPlayerShell from './components/tv/TvPlayerShell.svelte';
-  import { rememberTvKeepAlive, tvKeepAliveKey, tvKeptCategoryIds, tvKeptReleaseIds } from './tv/keepAlive';
+  import { rememberTvKeepAlive, tvKeepAliveKey, tvKeptBookmarkListIds, tvKeptCategoryIds, tvKeptReleaseIds } from './tv/keepAlive';
   import WebPlayerShell from './components/WebPlayerShell.svelte';
   import { isEmbeddedWebPlayer } from './utils/watch-nav';
 
@@ -109,6 +111,8 @@
 
   // ── Routing state ─────────────────────────────────────────────────────────
   let path = $state(getPath());
+  /** Страница пары для телефона: tv.anixapp.com/?ref=… (QR с телевизора). */
+  const pairRef = $derived(getSearchParams().get('ref')?.trim() ?? '');
   let searchQ = $state('');
   let searchTab = $state<'releases' | 'profiles' | 'collections'>('releases');
   let searchBy = $state(0);
@@ -117,6 +121,7 @@
   let tvKept = $state<string[]>(rememberTvKeepAlive([], getPath()));
   const tvKeptCats = $derived(tvKeptCategoryIds(tvKept));
   const tvKeptReleases = $derived(tvKeptReleaseIds(tvKept));
+  const tvKeptBookmarkLists = $derived(tvKeptBookmarkListIds(tvKept));
   const tvKeepKey = $derived(tvKeepAliveKey(path));
 
   $effect(() => {
@@ -255,6 +260,8 @@
   const collectionPickReturn  = $derived(getSearchParams().get('return') || '/collections/create');
   const announcementChatMatch = $derived(path.match(/^\/announcement\/([^/]+)\/chat$/));
   const isWatchRoute = $derived(path === '/watch');
+  /** Страница релиза на TV — фуллскрин по макету (без левой панели). */
+  const isReleaseRoute = $derived(/^\/release\/\d+$/.test(path));
   const isComposerWindow = $derived(path === '/feed/composer');
 
   // ── App screen state machine ───────────────────────────────────────────────
@@ -895,6 +902,12 @@
       </TvKeepAlive>
     {/if}
 
+    {#each tvKeptBookmarkLists as listId (listId)}
+      <TvKeepAlive keepKey={`bm-list:${listId}`} active={path === `/bookmarks/${listId}`}>
+        <BookmarksListTv {listId} />
+      </TvKeepAlive>
+    {/each}
+
     {#if tvKept.includes('search')}
       <TvKeepAlive keepKey="search" active={path === '/search'}>
         <SearchTv />
@@ -1038,7 +1051,10 @@
     {/if}
 {/snippet}
 
-{#if isComposerWindow}
+{#if pairRef}
+  <TvPairPage ref={pairRef} />
+
+{:else if isComposerWindow}
   <FeedComposerWindow />
 
 {:else if !$authReady}
@@ -1091,7 +1107,7 @@
 
 {:else}
   {#if isTvMode()}
-    <TvLayout currentPath={path} immersive={isWatchRoute}>
+    <TvLayout currentPath={path} immersive={isWatchRoute || isReleaseRoute}>
       {@render tvRoutes()}
     </TvLayout>
   {:else}

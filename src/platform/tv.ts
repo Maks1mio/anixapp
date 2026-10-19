@@ -75,9 +75,9 @@ export function applyTvDefaults(): void {
     root.classList.add('tv-android');
   }
 
-  const hirroStack = "'Hirro Sans', system-ui, -apple-system, 'Segoe UI', sans-serif";
-  root.style.setProperty('--font-sans', hirroStack);
-  root.style.setProperty('--uikit-v2-font', hirroStack);
+  const tvFontStack = "'Inter', 'Hirro Sans', system-ui, -apple-system, 'Segoe UI', sans-serif";
+  root.style.setProperty('--font-sans', tvFontStack);
+  root.style.setProperty('--uikit-v2-font', tvFontStack);
 
   initTvViewportScale();
 

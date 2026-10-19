@@ -12,6 +12,7 @@ import {
   loadHomeCustomTab,
   toFilterRequest,
 } from '../utils/homeCustomTab';
+import { toIpcArgs } from '../utils/ipc-args';
 
 export const TV_HOME_ROW_LIMIT = 8;
 export const TV_HOME_EAGER_FILTER_ROWS = 2;
@@ -95,7 +96,9 @@ export async function fetchTvHomeRowItems(
   const api = window.anixApi?.release?.filter;
   if (!api) throw new Error('release.filter unavailable');
 
-  const res = (await api(0, filterArgs, false)) as { content?: unknown } | undefined;
+  // filterArgs приходит из $state-строки главной (реактивный прокси) — Electron
+  // не умеет клонировать такое через contextBridge, поэтому отдаём «сырой» объект.
+  const res = (await api(0, toIpcArgs(filterArgs), false)) as { content?: unknown } | undefined;
   const content = Array.isArray(res?.content) ? res.content : [];
   const items: ReleaseCardData[] = [];
 

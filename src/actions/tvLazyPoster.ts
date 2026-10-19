@@ -14,12 +14,30 @@ function isAndroidTv(): boolean {
 }
 
 function maxParallel(): number {
-  return isAndroidTv() ? 4 : 6;
+  // Картинки режутся под размер карточки (нативный CDN-бридж), поэтому можно
+  // тянуть больше параллельно — 6 и на Android TV, и в веб-TV.
+  return 6;
 }
 
 function rootMargin(): string {
-  // Вертикаль · горизонталь — минимальный «peek», без лишних карточек за экраном
-  return isAndroidTv() ? '32px 56px' : '48px 96px';
+  // Вертикаль · горизонталь — небольшой запас, чтобы соседняя карточка уже грузилась.
+  return isAndroidTv() ? '48px 160px' : '48px 96px';
+}
+
+/** Зеркало CDN — запасной хост, если прямой отдал ошибку/пустышку. */
+function mirrorVariant(src: string): string | null {
+  try {
+    const parsed = new URL(src);
+    const host = parsed.hostname.replace(/^www\./, '');
+    if (host.startsWith('mirror-') || host.startsWith('mirror.')) return null;
+    const parts = host.split('.');
+    parsed.hostname = parts.length > 2
+      ? `mirror-${parts[0]}.${parts.slice(1).join('.')}`
+      : `mirror.${host}`;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
 }
 
 type Job = { img: HTMLImageElement; src: string; gen: number };
@@ -63,12 +81,28 @@ function pump() {
     if (!job) break;
     if (!job.img.isConnected || currentGen(job.img) !== job.gen) continue;
     active += 1;
-    const done = () => {
+
+    const finish = () => {
+      job.img.removeEventListener('load', onLoad);
+      job.img.removeEventListener('error', onError);
+      delete job.img.dataset.tvPosterMirror;
       active = Math.max(0, active - 1);
       pump();
     };
-    job.img.addEventListener('load', done, { once: true });
-    job.img.addEventListener('error', done, { once: true });
+    const onLoad = () => finish();
+    const onError = () => {
+      // Прямой CDN не отдал картинку — один раз пробуем зеркало.
+      const mirror = job.img.dataset.tvPosterMirror ? null : mirrorVariant(job.src);
+      if (mirror) {
+        job.img.dataset.tvPosterMirror = '1';
+        job.img.src = mirror;
+        return;
+      }
+      finish();
+    };
+
+    job.img.addEventListener('load', onLoad);
+    job.img.addEventListener('error', onError);
     job.img.src = job.src;
   }
 }

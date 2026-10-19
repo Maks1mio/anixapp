@@ -15,6 +15,12 @@
     cardVariant?: 'default' | 'history';
     showSeeAll?: boolean;
     hydrate?: boolean;
+    seeAllHref?: string;
+    seeAllText?: string;
+    /** Подпись справа от заголовка ряда (например, количество). */
+    meta?: string;
+    /** Плитка «Посмотреть всё» в начале ряда (главная) или в конце (закладки). */
+    seeAllAt?: 'start' | 'end';
   }
 
   let {
@@ -26,11 +32,15 @@
     cardVariant = 'default',
     showSeeAll = true,
     hydrate = true,
+    seeAllHref,
+    seeAllText,
+    meta = '',
+    seeAllAt = 'start',
   }: Props = $props();
 </script>
 
 <section class="tv-home-row" class:tv-home-row--shell={!hydrate} aria-label={label} data-tv-home-row data-tv-home-row-id={tabId ?? label}>
-  <h2 class="tv-home-row__title">{label}</h2>
+  <h2 class="tv-home-row__title">{label}{#if meta}<span class="tv-home-row__meta">{meta}</span>{/if}</h2>
 
   {#if !hydrate}
     <div class="tv-home-row__slot" aria-hidden="true"></div>
@@ -42,9 +52,9 @@
     <p class="tv-home-row__status">Пока пусто</p>
   {:else}
     <UiV2ReleaseCarousel measureKey={`${tabId}-${items.length}`} class="tv-release-carousel">
-      {#if tabId && showSeeAll}
+      {#if tabId && showSeeAll && seeAllAt === 'start'}
         <div class="uiv2-carousel__item">
-          <TvCategorySeeAllTile {label} {tabId} />
+          <TvCategorySeeAllTile {label} {tabId} href={seeAllHref} text={seeAllText} />
         </div>
       {/if}
       {#each items as item (item.id)}
@@ -52,6 +62,11 @@
           <ReleaseCardUiV2 data={item} variant="vertical" showMenu={false} {cardVariant} />
         </div>
       {/each}
+      {#if tabId && showSeeAll && seeAllAt === 'end'}
+        <div class="uiv2-carousel__item">
+          <TvCategorySeeAllTile {label} {tabId} href={seeAllHref} text={seeAllText} />
+        </div>
+      {/if}
     </UiV2ReleaseCarousel>
   {/if}
 </section>

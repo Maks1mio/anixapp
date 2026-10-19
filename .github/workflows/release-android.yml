@@ -93,6 +93,9 @@ jobs:
       - run: yarn install --frozen-lockfile
 
       - name: Build Android TV APK
+        # Единственный TV APK: интерфейс грузится с https://tv.anixapp.com,
+        # поэтому правки UI доезжают до пользователей через `npm run deploy:tv`,
+        # без пересборки APK и перевыпуска релиза.
         run: yarn build:android-tv
         env:
           ANIXART_PROXY_APP_KEY: ${{ secrets.ANIXART_PROXY_APP_KEY }}

@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createRequire } from 'module';
+import crypto from 'node:crypto';
 import https from 'node:https';
 
 const require = createRequire(import.meta.url);
@@ -79,6 +80,22 @@ function sendJson(res, code, payload) {
   if (res.headersSent || res.writableEnded) return;
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(payload));
+}
+
+/**
+ * Пары «ТВ ↔ телефон» для входа по QR: ТВ создаёт ref и показывает
+ * https://tv.anixapp.com/?ref=…, телефон шлёт логин/пароль, ТВ забирает их одним
+ * запросом. Живут в памяти процесса бриджа и умирают через 10 минут.
+ */
+const PAIR_TTL_MS = 10 * 60 * 1000;
+/** @type {Map<string, { createdAt: number, login: string, password: string }>} */
+const PAIR_SESSIONS = new Map();
+
+function pairPrune() {
+  const now = Date.now();
+  for (const [ref, session] of PAIR_SESSIONS) {
+    if (now - session.createdAt > PAIR_TTL_MS) PAIR_SESSIONS.delete(ref);
+  }
 }
 
 async function proxyCdnViaRelay(url) {
@@ -459,6 +476,59 @@ export function createBridgeRequestHandler(bridge) {
         }
         const data = await bridge.invoke(channel, args);
         sendJson(res, 200, { ok: true, data });
+        return;
+      }
+
+      // ── Вход на ТВ по QR: ТВ создаёт пару, телефон присылает логин/пароль ──
+      if (url.startsWith('/__anix/pair/')) {
+        pairPrune();
+
+        if (url === '/__anix/pair/create' && req.method === 'POST') {
+          const ref = crypto.randomBytes(16).toString('hex');
+          PAIR_SESSIONS.set(ref, { createdAt: Date.now(), login: '', password: '' });
+          sendJson(res, 200, { ok: true, ref, expiresIn: PAIR_TTL_MS });
+          return;
+        }
+
+        if (url === '/__anix/pair/submit' && req.method === 'POST') {
+          const body = await readBody(req);
+          const ref = String(body.ref || '').trim();
+          const login = String(body.login || '').trim();
+          const password = String(body.password || '');
+          const session = PAIR_SESSIONS.get(ref);
+          if (!session || Date.now() - session.createdAt > PAIR_TTL_MS) {
+            sendJson(res, 410, { ok: false, error: 'pair_expired' });
+            return;
+          }
+          if (!login || !password) {
+            sendJson(res, 400, { ok: false, error: 'pair_empty' });
+            return;
+          }
+          session.login = login;
+          session.password = password;
+          sendJson(res, 200, { ok: true });
+          return;
+        }
+
+        if (url.startsWith('/__anix/pair/status') && req.method === 'GET') {
+          const ref = new URL(url, 'http://localhost').searchParams.get('ref') || '';
+          const session = PAIR_SESSIONS.get(ref);
+          if (!session || Date.now() - session.createdAt > PAIR_TTL_MS) {
+            sendJson(res, 200, { ok: true, status: 'expired' });
+            return;
+          }
+          if (!session.login) {
+            sendJson(res, 200, { ok: true, status: 'pending' });
+            return;
+          }
+          // Одноразовая выдача: пароль не задерживается в памяти бриджа.
+          const payload = { ok: true, status: 'ready', login: session.login, password: session.password };
+          PAIR_SESSIONS.delete(ref);
+          sendJson(res, 200, payload);
+          return;
+        }
+
+        sendJson(res, 404, { ok: false, error: 'Not found' });
         return;
       }
 

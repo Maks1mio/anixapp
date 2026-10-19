@@ -19,6 +19,7 @@
     loadHomeCustomTab,
     toFilterRequest,
   } from '../utils/homeCustomTab';
+  import { toIpcArgs } from '../utils/ipc-args';
 
   interface Props {
     tabId: string;
@@ -80,7 +81,7 @@
       }
 
       title = tab.label;
-      const data = (await window.anixApi.release.filter(nextPage, tab.filter, true)) as {
+      const data = (await window.anixApi.release.filter(nextPage, toIpcArgs(tab.filter), true)) as {
         content?: unknown[];
       };
       const content = (data?.content ?? []) as Record<string, unknown>[];

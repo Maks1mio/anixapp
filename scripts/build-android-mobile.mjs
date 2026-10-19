@@ -14,6 +14,8 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runViteBuild } from './lib/vite-build.mjs';
+import { describeMissingAndroidEnv, findAndroidSdk, findJavaHome, javaMajor } from './lib/android-env.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const androidDir = path.join(root, 'android-mobile');
@@ -28,11 +30,14 @@ if (/[^\x00-\x7F]/.test(root)) {
   process.exit(2);
 }
 
-const sdkDir = process.env.ANDROID_HOME
-  || process.env.ANDROID_SDK_ROOT
-  || path.join(process.env.LOCALAPPDATA || '', 'Android', 'Sdk');
-// AGP 8.13 / Gradle 8.14 — JDK 21 (JBR из Android Studio на JDK 25 не подходит).
-const javaHome = process.env.JAVA_HOME || 'C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.12.101-hotspot';
+const sdkDir = findAndroidSdk();
+// AGP 8.x / Gradle 8.x — JDK 17–21 (JBR из свежей Android Studio бывает 25 и не подходит).
+const javaHome = findJavaHome();
+
+if (!sdkDir || !javaHome) {
+  console.error(describeMissingAndroidEnv({ javaHome, sdkDir }));
+  process.exit(1);
+}
 
 const env = {
   ...process.env,
@@ -48,7 +53,9 @@ function run(cmd, args, cwd = root) {
 }
 
 console.log('→ Vite (VITE_MOBILE_MODE=1) → dist-mobile');
-run('yarn', ['cross-env', 'VITE_MOBILE_MODE=1', 'ANIXAPP_OUT_DIR=dist-mobile', 'vite', 'build']);
+console.log(`  JDK: ${javaHome} (Java ${javaMajor(javaHome) || '?'})`);
+console.log(`  Android SDK: ${sdkDir}`);
+runViteBuild({ VITE_MOBILE_MODE: '1', ANIXAPP_OUT_DIR: 'dist-mobile' });
 
 // local.properties: прямые слеши, иначе \U в формате .properties съедает путь к SDK.
 writeFileSync(path.join(androidDir, 'local.properties'), `sdk.dir=${sdkDir.replace(/\\/g, '/').replace(':', '\\:')}\n`);

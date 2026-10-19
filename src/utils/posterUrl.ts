@@ -105,12 +105,30 @@ export function toCdnProxyUrl(url: string): string {
   if (typeof window !== 'undefined' && window.electron) {
     return `anix-cdn://asset/?u=${encodeURIComponent(trimmed)}`;
   }
-  if (isCapacitorWebView()) return toDirectCdnUrl(trimmed);
-  if (isTvBuild()) return toHotlinkSafeCdnUrl(trimmed);
+  // TV (APK и веб): прямой CDN-хост. Зеркало mirror-s.* часто недоступно или висит
+  // (замер: mirror-s не ответил за 10 с, s.* отдаёт те же картинки без Referer).
+  if (isCapacitorWebView() || isTvBuild()) return toDirectCdnUrl(trimmed);
   if (import.meta.env.DEV && typeof window !== 'undefined') {
     return `/__cdn/?u=${encodeURIComponent(trimmed)}`;
   }
   return trimmed;
+}
+
+/**
+ * Размерные подсказки `?w=&h=` для нативного CDN-бриджа Android TV: он режет
+ * картинку под реальный размер карточки, как Electron-прокси на ПК.
+ * Лишние query-параметры CDN игнорирует (проверено: размер ответа не меняется).
+ */
+function withSizeHint(url: string, width: number, height: number): string {
+  if (!url || !/^https?:\/\//i.test(url)) return url;
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.set('w', String(Math.max(16, Math.min(1280, Math.round(width)))));
+    parsed.searchParams.set('h', String(Math.max(16, Math.min(1280, Math.round(height)))));
+    return parsed.toString();
+  } catch {
+    return url;
+  }
 }
 
 /** Electron CDN-прокси отдаёт уже физически уменьшенную картинку нужного размера. На TV — без ресайза (меньше нагрузка). */
@@ -185,16 +203,20 @@ function displayDpr(): number {
   return Math.min(2, Math.max(1.5, Math.round(dpr * 2) / 2));
 }
 
-/** URL постера, подогнанный под реальный размер области на экране. На TV — оригинал без w/h. */
+/** URL постера, подогнанный под реальный размер области на экране. На TV — оригинал + подсказки размера. */
 export function toPosterDisplayUrl(
   url: string | null | undefined,
   preset: PosterThumbPreset = 'cardVertical',
 ): string {
   const raw = (url ?? '').trim();
   if (!raw) return '';
-  if (isTvBuild()) return toCdnProxyUrl(raw);
   const { w, h } = POSTER_THUMB_PRESETS[preset];
   const dpr = displayDpr();
+  if (isTvBuild()) {
+    // TV: размерные подсказки читает нативный CdnBridge на Android TV
+    // (веб-TV их просто игнорирует вместе с CDN).
+    return withSizeHint(toCdnProxyUrl(raw), w * dpr, h * dpr);
+  }
   return toCdnThumbnailUrl(raw, Math.round(w * dpr), Math.round(h * dpr));
 }
 

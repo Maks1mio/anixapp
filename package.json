@@ -26,13 +26,8 @@
         "build:tv:web": "cross-env VITE_TV_MODE=1 ANIXAPP_OUT_DIR=dist-tv-web ANIXAPP_WEB_BASE=/ vite build",
         "tv:bridge": "node scripts/tv-bridge-server.mjs",
         "deploy:tv": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/deploy-tv-to-server.ps1",
-        "release:tv-prod": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/deploy-tv-to-server.ps1 && cross-env SKIP_TV_WEB_BUILD=1 node scripts/build-android-tv-prod.mjs",
         "build:android-tv": "node scripts/build-android-tv.mjs",
         "build:android-mobile": "node scripts/build-android-mobile.mjs",
-        "build:android-tv-anime4k": "node scripts/build-android-tv.mjs",
-        "build:android-tv-live": "node scripts/build-android-tv-live.mjs",
-        "build:android-tv-prod": "node scripts/build-android-tv-prod.mjs",
-        "build:android-tv-remote": "node scripts/build-android-tv-remote.mjs",
         "emu:tv:setup": "node scripts/setup-android-tv-emu.mjs",
         "emu:tv": "node scripts/run-android-tv-emu.mjs",
         "preview": "vite preview"

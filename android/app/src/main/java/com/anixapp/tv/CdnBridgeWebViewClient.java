@@ -1,5 +1,8 @@
 package com.anixapp.tv;
 
+import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -8,19 +11,25 @@ import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeWebViewClient;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.FilterInputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.KeyStore;
+import java.security.MessageDigest;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.X509Certificate;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
@@ -31,6 +40,12 @@ import javax.net.ssl.X509TrustManager;
 /**
  * Anixart CDN режет картинки без Referer. Electron делает это через anix-cdn://,
  * в WebView перехватываем запрос и подставляем заголовки сайта.
+ *
+ * Дополнительно (чтобы обложки на TV грузились как на ПК):
+ * - режем картинку под размер карточки по подсказкам `?w=&h=` из JS (иначе летят
+ *   полноразмерные JPEG по 200+ КБ и тяжело декодятся на слабом чипе);
+ * - держим дисковый кеш в cacheDir/cdn-images (переживает перезапуск приложения);
+ * - отдаём Cache-Control, чтобы работал и HTTP-кеш WebView.
  */
 public class CdnBridgeWebViewClient extends BridgeWebViewClient {
     private static final String REFERER = "https://anixart.tv/";
@@ -45,7 +60,15 @@ public class CdnBridgeWebViewClient extends BridgeWebViewClient {
         "sibnet.ru", "vkuservideo.net", "okcdn.ru", "userapi.com", "mycdn.me"
     };
     private static final String KODIK_REFERER = "https://kodikplayer.com/";
-    private static final int CACHE_MAX = 96;
+    private static final int CACHE_MAX = 128;
+    /** Дисковый кеш: сколько живёт файл и сколько места занимает. */
+    private static final long DISK_TTL_MS = 14L * 24 * 60 * 60 * 1000;
+    private static final long DISK_MAX_BYTES = 160L * 1024 * 1024;
+    private static final int JPEG_QUALITY = 85;
+    /** Потолок подсказки размера: выше — уже не имеет смысла для TV-карточек. */
+    private static final int MAX_HINT_PX = 1280;
+    private static final String RESPONSE_CACHE_CONTROL = "public, max-age=604800";
+    private static final String[] DISK_EXTS = { "jpg", "png", "webp", "gif", "avif" };
 
     private static final Map<String, Cached> CACHE = new LinkedHashMap<String, Cached>(CACHE_MAX, 0.75f, true) {
         @Override
@@ -53,6 +76,9 @@ public class CdnBridgeWebViewClient extends BridgeWebViewClient {
             return size() > CACHE_MAX;
         }
     };
+
+    private static File diskDir;
+    private static final AtomicBoolean diskTrimStarted = new AtomicBoolean(false);
 
     private static class Cached {
         final String mime;
@@ -64,8 +90,28 @@ public class CdnBridgeWebViewClient extends BridgeWebViewClient {
         }
     }
 
+    private static class DiskHit {
+        final String mime;
+        final byte[] body;
+
+        DiskHit(String mime, byte[] body) {
+            this.mime = mime;
+            this.body = body;
+        }
+    }
+
     public CdnBridgeWebViewClient(Bridge bridge) {
         super(bridge);
+        try {
+            Context context = bridge.getContext();
+            if (context != null && diskDir == null) {
+                File dir = new File(context.getCacheDir(), "cdn-images");
+                if (dir.exists() || dir.mkdirs()) diskDir = dir;
+            }
+        } catch (Exception ignored) {
+            /* кеш без диска — просто медленнее */
+        }
+        startDiskTrimOnce();
     }
 
     @Override
@@ -79,7 +125,7 @@ public class CdnBridgeWebViewClient extends BridgeWebViewClient {
             if (media != null) return media;
         }
         if (isCdnHost(uri.getHost()) && looksLikeImage(uri)) {
-            WebResourceResponse proxied = fetchCdn(uri.toString());
+            WebResourceResponse proxied = fetchCdn(uri);
             if (proxied != null) return proxied;
         }
         return super.shouldInterceptRequest(view, request);
@@ -199,18 +245,32 @@ public class CdnBridgeWebViewClient extends BridgeWebViewClient {
         return false;
     }
 
-    private static WebResourceResponse fetchCdn(String url) {
+    private static WebResourceResponse fetchCdn(Uri uri) {
+        String url = uri.toString();
+        int targetW = parseHint(uri.getQueryParameter("w"));
+        int targetH = parseHint(uri.getQueryParameter("h"));
+        String fetchUrl = stripSizeHints(url);
+        String key = fetchUrl + "|" + targetW + "x" + targetH;
+
         synchronized (CACHE) {
-            Cached hit = CACHE.get(url);
+            Cached hit = CACHE.get(key);
             if (hit != null) {
-                return new WebResourceResponse(hit.mime, null, new ByteArrayInputStream(hit.body));
+                return imageResponse(hit.mime, hit.body);
             }
         }
 
-        String mirror = toMirror(url);
-        String[] order = (mirror != null && !mirror.equals(url))
-            ? new String[] { url, mirror }
-            : new String[] { url };
+        DiskHit diskHit = readDisk(key);
+        if (diskHit != null) {
+            synchronized (CACHE) {
+                CACHE.put(key, new Cached(diskHit.mime, diskHit.body));
+            }
+            return imageResponse(diskHit.mime, diskHit.body);
+        }
+
+        String mirror = toMirror(fetchUrl);
+        String[] order = (mirror != null && !mirror.equals(fetchUrl))
+            ? new String[] { fetchUrl, mirror }
+            : new String[] { fetchUrl };
 
         HttpURLConnection conn = null;
         try {
@@ -232,21 +292,242 @@ public class CdnBridgeWebViewClient extends BridgeWebViewClient {
             }
             if (code >= 400 || body == null || body.length < 400) return null;
 
-            if (mime == null || mime.isEmpty()) mime = guessMime(url);
+            if (mime == null || mime.isEmpty()) mime = guessMime(fetchUrl);
             int cut = mime.indexOf(';');
             if (cut > 0) mime = mime.substring(0, cut).trim();
             if (mime.contains("text/html") || mime.contains("application/json")) return null;
 
             byte[] stored = body;
+            String storedMime = mime;
+
+            // Режем под запрошенный размер: на TV это разница между 200 КБ и ~40 КБ
+            // на карточку (как делает Electron-прокси на ПК).
+            if (targetW > 0 && targetH > 0) {
+                byte[] resized = resizeToJpeg(body, targetW, targetH);
+                if (resized != null && resized.length > 0 && resized.length < body.length) {
+                    stored = resized;
+                    storedMime = "image/jpeg";
+                }
+            }
 
             synchronized (CACHE) {
-                CACHE.put(url, new Cached(mime, stored));
+                CACHE.put(key, new Cached(storedMime, stored));
             }
-            return new WebResourceResponse(mime, null, new ByteArrayInputStream(stored));
+            writeDisk(key, storedMime, stored);
+            return imageResponse(storedMime, stored);
         } catch (Exception ignored) {
             return null;
         } finally {
             if (conn != null) conn.disconnect();
+        }
+    }
+
+    private static WebResourceResponse imageResponse(String mime, byte[] body) {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Cache-Control", RESPONSE_CACHE_CONTROL);
+        headers.put("Content-Length", String.valueOf(body.length));
+        return new WebResourceResponse(mime, null, 200, "OK", headers, new ByteArrayInputStream(body));
+    }
+
+    /** Подсказка размера из query (`w`/`h`), 0 — если её нет или она мусорная. */
+    private static int parseHint(String value) {
+        if (value == null) return 0;
+        try {
+            int parsed = Integer.parseInt(value.trim());
+            if (parsed <= 0) return 0;
+            return Math.min(parsed, MAX_HINT_PX);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /** w/h — подсказки бриджу, в CDN их не отправляем. */
+    private static String stripSizeHints(String url) {
+        try {
+            Uri uri = Uri.parse(url);
+            if (uri.getQueryParameter("w") == null && uri.getQueryParameter("h") == null) return url;
+            Uri.Builder builder = uri.buildUpon().clearQuery();
+            for (String name : uri.getQueryParameterNames()) {
+                if ("w".equals(name) || "h".equals(name)) continue;
+                for (String value : uri.getQueryParameters(name)) {
+                    builder.appendQueryParameter(name, value);
+                }
+            }
+            return builder.build().toString();
+        } catch (Exception e) {
+            return url;
+        }
+    }
+
+    /** Уменьшает картинку под размер карточки и пережимает в JPEG. */
+    private static byte[] resizeToJpeg(byte[] src, int targetW, int targetH) {
+        try {
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            BitmapFactory.decodeByteArray(src, 0, src.length, bounds);
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null;
+
+            int sample = 1;
+            while (bounds.outWidth / (sample * 2) >= targetW && bounds.outHeight / (sample * 2) >= targetH) {
+                sample *= 2;
+            }
+
+            BitmapFactory.Options opts = new BitmapFactory.Options();
+            opts.inSampleSize = sample;
+            Bitmap bitmap = BitmapFactory.decodeByteArray(src, 0, src.length, opts);
+            if (bitmap == null) return null;
+
+            float scale = Math.max((float) targetW / bitmap.getWidth(), (float) targetH / bitmap.getHeight());
+            if (scale > 1f) scale = 1f;
+            Bitmap out = bitmap;
+            if (scale < 0.995f) {
+                int width = Math.max(1, Math.round(bitmap.getWidth() * scale));
+                int height = Math.max(1, Math.round(bitmap.getHeight() * scale));
+                out = Bitmap.createScaledBitmap(bitmap, width, height, true);
+                if (out != bitmap) bitmap.recycle();
+            }
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            out.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, buffer);
+            out.recycle();
+            return buffer.toByteArray();
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static String extForMime(String mime) {
+        if (mime == null) return "jpg";
+        String m = mime.toLowerCase(Locale.ROOT);
+        if (m.contains("png")) return "png";
+        if (m.contains("webp")) return "webp";
+        if (m.contains("gif")) return "gif";
+        if (m.contains("avif")) return "avif";
+        return "jpg";
+    }
+
+    private static String mimeForExt(String ext) {
+        if ("png".equals(ext)) return "image/png";
+        if ("webp".equals(ext)) return "image/webp";
+        if ("gif".equals(ext)) return "image/gif";
+        if ("avif".equals(ext)) return "image/avif";
+        return "image/jpeg";
+    }
+
+    private static String sha1(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-1");
+            byte[] bytes = digest.digest(value.getBytes("UTF-8"));
+            StringBuilder sb = new StringBuilder(bytes.length * 2);
+            for (byte b : bytes) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            return Integer.toHexString(value.hashCode());
+        }
+    }
+
+    private static File diskFile(String key, String ext) {
+        if (diskDir == null) return null;
+        return new File(diskDir, sha1(key) + "." + ext);
+    }
+
+    private static DiskHit readDisk(String key) {
+        if (diskDir == null) return null;
+        for (String ext : DISK_EXTS) {
+            File file = diskFile(key, ext);
+            if (file == null || !file.isFile()) continue;
+            if (System.currentTimeMillis() - file.lastModified() > DISK_TTL_MS) {
+                file.delete();
+                continue;
+            }
+            try {
+                byte[] body = readFile(file);
+                if (body != null && body.length > 0) {
+                    file.setLastModified(System.currentTimeMillis());
+                    return new DiskHit(mimeForExt(ext), body);
+                }
+            } catch (Exception ignored) {
+                /* попробуем следующий вариант расширения */
+            }
+        }
+        return null;
+    }
+
+    private static void writeDisk(String key, String mime, byte[] body) {
+        if (diskDir == null || body == null || body.length == 0) return;
+        try {
+            File file = diskFile(key, extForMime(mime));
+            if (file == null) return;
+            // Пишем через .tmp и переименовываем: оборванный процесс не оставит битый кеш.
+            File tmp = new File(file.getAbsolutePath() + ".tmp");
+            FileOutputStream out = new FileOutputStream(tmp);
+            try {
+                out.write(body);
+            } finally {
+                out.close();
+            }
+            if (!tmp.renameTo(file)) {
+                tmp.delete();
+            }
+        } catch (Exception ignored) {
+            /* кеш — не критично */
+        }
+    }
+
+    private static byte[] readFile(File file) throws Exception {
+        long length = file.length();
+        if (length <= 0 || length > 16L * 1024 * 1024) return null;
+        byte[] out = new byte[(int) length];
+        FileInputStream in = new FileInputStream(file);
+        try {
+            int offset = 0;
+            while (offset < out.length) {
+                int read = in.read(out, offset, out.length - offset);
+                if (read <= 0) break;
+                offset += read;
+            }
+            if (offset == out.length) return out;
+            byte[] trimmed = new byte[offset];
+            System.arraycopy(out, 0, trimmed, 0, offset);
+            return trimmed;
+        } finally {
+            in.close();
+        }
+    }
+
+    private static void startDiskTrimOnce() {
+        if (!diskTrimStarted.compareAndSet(false, true)) return;
+        Thread thread = new Thread(CdnBridgeWebViewClient::trimDisk);
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    /** Чистка дискового кеша: просроченное и лишнее по объёму (LRU по времени файла). */
+    private static void trimDisk() {
+        File dir = diskDir;
+        if (dir == null) return;
+        try {
+            File[] files = dir.listFiles();
+            if (files == null || files.length == 0) return;
+            long now = System.currentTimeMillis();
+            long total = 0;
+            for (File file : files) {
+                if (!file.isFile()) continue;
+                if (now - file.lastModified() > DISK_TTL_MS) {
+                    file.delete();
+                    continue;
+                }
+                total += file.length();
+            }
+            if (total <= DISK_MAX_BYTES) return;
+            Arrays.sort(files, (a, b) -> Long.compare(a.lastModified(), b.lastModified()));
+            for (File file : files) {
+                if (total <= DISK_MAX_BYTES) break;
+                if (!file.isFile()) continue;
+                long size = file.length();
+                if (file.delete()) total -= size;
+            }
+        } catch (Exception ignored) {
+            /* не мешаем работе */
         }
     }
 

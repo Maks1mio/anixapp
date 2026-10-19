@@ -13,6 +13,7 @@
   import { isTvMode } from '../platform/tv';
   import { tvLoginQrSvg } from '../utils/tv-login-qr';
   import { startTvLanLogin, stopTvLanLogin, subscribeTvLanCredentials } from '../services/tv-lan-login';
+  import { startTvPairLogin, pollTvPairCredentials } from '../services/tv-pair-login';
   import { formatAnixError } from '../native/anix-errors';
 
   const ANIXART_TERMS_URL = 'https://anixart-app.com/terms';
@@ -108,6 +109,8 @@
 
   let lanUrl = $state('');
   let lanError = $state('');
+  /** Вход по QR через сервер (tv.anixapp.com/?ref=…), а не через локальный LAN-сервер. */
+  let pairMode = $state(false);
   let qrSvg = $state('');
 
   const hasApi = typeof window !== 'undefined' && !!window.anixApi;
@@ -705,10 +708,9 @@
 
   onMount(() => {
     let stopLan: (() => void) | undefined;
-    if (tv) {
-      stopLan = subscribeTvLanCredentials(({ login: user, password: pass }) => {
-        void doSignIn(user, pass);
-      });
+    let stopPair: (() => void) | undefined;
+
+    function startLanFallback() {
       void startTvLanLogin().then((res) => {
         lanUrl = res.url ?? '';
         lanError = res.error ?? '';
@@ -719,6 +721,33 @@
             qrSvg = '';
           }
         }
+      });
+    }
+
+    if (tv) {
+      stopLan = subscribeTvLanCredentials(({ login: user, password: pass }) => {
+        void doSignIn(user, pass);
+      });
+
+      // Основной путь — пара через сервер: QR ведёт на tv.anixapp.com/?ref=…
+      // (телефону не нужна одна Wi‑Fi сеть с ТВ). Не получилось — локальный LAN-сервер.
+      void startTvPairLogin().then((res) => {
+        if ('ref' in res) {
+          pairMode = true;
+          lanUrl = res.url;
+          lanError = '';
+          try {
+            qrSvg = tvLoginQrSvg(res.url);
+          } catch {
+            qrSvg = '';
+          }
+          stopPair = pollTvPairCredentials(res.ref, ({ login: user, password: pass }) => {
+            void doSignIn(user, pass);
+          }, { expiresIn: res.expiresIn });
+          return;
+        }
+        pairMode = false;
+        startLanFallback();
       });
     }
 
@@ -772,6 +801,7 @@
       window.removeEventListener('app-update-progress', onProgress);
       if (aboutTimer) clearTimeout(aboutTimer);
       stopLan?.();
+      stopPair?.();
       void stopTvLanLogin();
     };
   });
@@ -893,12 +923,16 @@
             {/if}
           </div>
           <div class="tv-auth-pair__meta">
-            <p class="tv-auth-pair__kicker">Телефон в той же Wi‑Fi сети</p>
-            <p class="tv-auth-pair__url">{lanUrl || 'Поднимаю локальную ссылку…'}</p>
+            <p class="tv-auth-pair__kicker">{pairMode ? 'Вход по QR с телефона' : 'Телефон в той же Wi‑Fi сети'}</p>
+            <p class="tv-auth-pair__url">{lanUrl || (pairMode ? 'Создаю ссылку для телефона…' : 'Поднимаю локальную ссылку…')}</p>
             {#if lanError && !lanUrl}
-              <p class="tv-auth-pair__warn">Локальный вход недоступен — используйте логин и пароль на ТВ.</p>
+              <p class="tv-auth-pair__warn">Вход по QR недоступен — используйте логин и пароль на ТВ.</p>
             {/if}
-            <p class="tv-auth-pair__hint">Отсканируйте QR или откройте ссылку в браузере телефона.</p>
+            <p class="tv-auth-pair__hint">
+              {pairMode
+                ? 'Отсканируйте QR телефоном и войдите — телевизор получит сессию сам.'
+                : 'Отсканируйте QR или откройте ссылку в браузере телефона.'}
+            </p>
           </div>
         </div>
       {/if}

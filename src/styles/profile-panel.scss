@@ -1943,6 +1943,41 @@ $pp-btn-bg-hover: var(--pp-btn-bg-hover);
   color: $color-text;
 }
 
+.profile-panel__login-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.profile-panel__login-history-clear {
+  padding: 0.2rem 0.1rem;
+  border: none;
+  background: none;
+  color: var(--uiv2-fg-muted);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    color: var(--uiv2-fg-strong);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.profile-panel__login-history-clear--armed {
+  color: var(--uiv2-danger-fg);
+
+  &:hover:not(:disabled) {
+    color: var(--uiv2-danger-fg);
+  }
+}
+
 .profile-panel__login-history-list {
   list-style: none;
   margin: 0;

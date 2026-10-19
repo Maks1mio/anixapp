@@ -14,7 +14,7 @@ const HTTP_LABELS: Record<number, string> = {
 
 /** Anixart 10.0. В anixapi по умолчанию всё ещё 9.0 — передаём явно. */
 export const ANIXART_UA =
-  'AnixartApp/10.0-26090418 (Android 14; SDK 34; x86_64; ROG ASUS AI2201_B; ru)';
+  'AnixartApp/10.5-26101718 (Android 14; SDK 34; x86_64; ROG ASUS AI2201_B; ru)';
 
 type AnixErr = {
   name?: string;

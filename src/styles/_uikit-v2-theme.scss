@@ -140,6 +140,13 @@
   --pp-on-themed-fg: rgba(255, 255, 255, 0.9);
   --pp-on-themed-fg-muted: rgba(255, 255, 255, 0.48);
   --pp-on-themed-fg-soft: rgba(255, 255, 255, 0.78);
+
+  // Редкость значков (как badge_rarity_* в Android: тёмная тема)
+  --badge-rarity-common: #aaaaaa;
+  --badge-rarity-uncommon: #84c89e;
+  --badge-rarity-rare: #91b9f8;
+  --badge-rarity-epic: #c69ae8;
+  --badge-rarity-legendary: #e6bb6e;
 }
 
 :root[data-theme-mode='light'] {
@@ -152,6 +159,12 @@
     0 1px 0 color-mix(in srgb, #fff 85%, transparent) inset,
     0 0 0 0.5px color-mix(in srgb, var(--uikit-v2-text) 10%, transparent),
     0 12px 36px color-mix(in srgb, #000 14%, transparent);
+
+  --badge-rarity-common: #6b6b6b;
+  --badge-rarity-uncommon: #27734b;
+  --badge-rarity-rare: #3869b1;
+  --badge-rarity-epic: #8549ac;
+  --badge-rarity-legendary: #8b621d;
 }
 
 :root[data-theme-mode='dark'] {

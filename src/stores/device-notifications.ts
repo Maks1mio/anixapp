@@ -757,34 +757,39 @@ let badgePollTimer: ReturnType<typeof setInterval> | null = null;
 
 type BadgeRow = { id: number; name: string; image: string; available: boolean };
 
+function selfProfileId(): number {
+  return Number((window as { __anixProfile?: { id?: number } }).__anixProfile?.id ?? 0) || 0;
+}
+
+/** Полученные значки из коллекции профиля (Anixart 10.5: profile/{id}/badge/list). */
 async function fetchAvailableBadges(): Promise<BadgeRow[]> {
   const api = window.anixApi?.settings;
-  if (!api?.getBadges) return [];
+  const profileId = selfProfileId();
+  if (!api?.getBadgeCollection || !profileId) return [];
+  const res = resolveJacksonRefs(await api.getBadgeCollection(profileId)) as {
+    showcased?: unknown[] | null;
+    recent?: unknown[] | null;
+    sections?: Array<{ content?: unknown[] | null }> | null;
+  };
+  const rows: unknown[] = [
+    ...(res?.showcased ?? []),
+    ...(res?.recent ?? []),
+    ...(res?.sections ?? []).flatMap((s) => s?.content ?? []),
+  ];
   const out: BadgeRow[] = [];
   const seen = new Set<number>();
-  for (let page = 0; page < 20; page++) {
-    const res = resolveJacksonRefs(await api.getBadges(page)) as {
-      content?: unknown[];
-      total_page_count?: number;
-    };
-    const rows = Array.isArray(res?.content) ? res.content : [];
-    for (const raw of rows) {
-      if (!raw || typeof raw !== 'object') continue;
-      const row = raw as Record<string, unknown>;
-      const id = Number(row.id);
-      if (!Number.isFinite(id) || id <= 0 || seen.has(id)) continue;
-      const available = row.available === true || row.is_available === true;
-      if (!available) continue;
-      seen.add(id);
-      out.push({
-        id,
-        name: resolveBadgeName(row) || 'Без названия',
-        image: resolveBadgeImageUrl(row) || SAMPLE_ACHIEVEMENT_BADGE,
-        available: true,
-      });
-    }
-    const total = Math.max(1, Math.floor(Number(res?.total_page_count) || 1));
-    if (page + 1 >= total) break;
+  for (const raw of rows) {
+    if (!raw || typeof raw !== 'object') continue;
+    const row = raw as Record<string, unknown>;
+    const id = Number(row.id);
+    if (!Number.isFinite(id) || id <= 0 || seen.has(id)) continue;
+    seen.add(id);
+    out.push({
+      id,
+      name: resolveBadgeName(row) || 'Без названия',
+      image: resolveBadgeImageUrl(row) || SAMPLE_ACHIEVEMENT_BADGE,
+      available: true,
+    });
   }
   return out;
 }
@@ -795,7 +800,7 @@ async function fetchAvailableBadges(): Promise<BadgeRow[]> {
  */
 export async function pollBadgeAchievements(): Promise<void> {
   if (badgePolling || !get(isAuthenticated)) return;
-  if (!bridge() && !window.anixApi?.settings?.getBadges) return;
+  if (!bridge() && !window.anixApi?.settings?.getBadgeCollection) return;
   badgePolling = true;
   try {
     const badges = await fetchAvailableBadges();

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from 'svelte';
+  import { onMount, onDestroy, tick, untrack } from 'svelte';
   import Page from './Page.svelte';
   import {
     iconMoreHorizontal,
@@ -415,7 +415,8 @@
     const pending = get(profilePanelPendingEditScreen);
     if (!pending) return;
     profilePanelPendingEditScreen.set(null);
-    openEditView(pending);
+    // После tick: при монтировании с готовым профилем иначе следом срабатывает сброс на overview
+    void tick().then(() => openEditView(pending));
   }
 
   function closeEditView() {
@@ -462,6 +463,8 @@
     void active;
     void isMyProfile;
     void loadState;
+    // Подписка на сам стор: deep link приходит и когда панель уже открыта и загружена
+    void $profilePanelPendingEditScreen;
     consumePendingEditScreen();
   });
 
@@ -674,11 +677,15 @@
 
   $effect(() => {
     void userId;
-    panelView = 'overview';
-    closeSocialSheet();
-    closeMoreSheet();
-    if (active) setProfilePanelInnerView('overview');
-    innerSlideReady = false;
+    // Только смена профиля: без untrack эффект перезапускался от active и сбрасывал
+    // экран, открытый deep link'ом (уведомление «Новое достижение» → значки)
+    untrack(() => {
+      panelView = 'overview';
+      closeSocialSheet();
+      closeMoreSheet();
+      if (active) setProfilePanelInnerView('overview');
+      innerSlideReady = false;
+    });
     const id = requestAnimationFrame(() => {
       innerSlideReady = true;
     });

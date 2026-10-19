@@ -1447,6 +1447,71 @@ ipcMain.handle('anix:removeBadge', async () => {
   }
 });
 
+// ——— Коллекция значков (Anixart 10.5) ———
+
+ipcMain.handle('anix:getBadgeCollection', async (_, profileId, recent) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileBadge.list(profileId, recent);
+  } catch (err) {
+    handleAnixError(err, 'getBadgeCollection');
+  }
+});
+
+ipcMain.handle('anix:getBadgeSection', async (_, profileId, categoryId, page = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileBadge.section(profileId, categoryId, page);
+  } catch (err) {
+    handleAnixError(err, 'getBadgeSection');
+  }
+});
+
+ipcMain.handle('anix:pinBadge', async (_, id) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileBadge.pinToShowcase(id);
+  } catch (err) {
+    handleAnixError(err, 'pinBadge');
+  }
+});
+
+ipcMain.handle('anix:unpinBadge', async (_, id) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileBadge.unpinFromShowcase(id);
+  } catch (err) {
+    handleAnixError(err, 'unpinBadge');
+  }
+});
+
+ipcMain.handle('anix:reorderBadgeShowcase', async (_, ids) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profileBadge.reorderShowcase(ids);
+  } catch (err) {
+    handleAnixError(err, 'reorderBadgeShowcase');
+  }
+});
+
+ipcMain.handle('anix:previewBadgeCode', async (_, code) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.achievement.preview(code);
+  } catch (err) {
+    handleAnixError(err, 'previewBadgeCode');
+  }
+});
+
+ipcMain.handle('anix:claimBadgeCode', async (_, code, badgeId) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.achievement.claim(code, badgeId);
+  } catch (err) {
+    handleAnixError(err, 'claimBadgeCode');
+  }
+});
+
 ipcMain.handle('anix:selectTheme', async (_, id) => {
   try {
     const client = getAnixart();
@@ -1537,6 +1602,15 @@ ipcMain.handle('anix:loginHistory', async (_, profileId, page = 0) => {
     return await client.endpoints.profile.changeLoginHistory(profileId, page);
   } catch (err) {
     handleAnixError(err, 'loginHistory');
+  }
+});
+
+ipcMain.handle('anix:deleteLoginHistory', async () => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profilePreference.deleteLoginHistory();
+  } catch (err) {
+    handleAnixError(err, 'deleteLoginHistory');
   }
 });
 

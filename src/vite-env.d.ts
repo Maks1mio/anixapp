@@ -4,6 +4,8 @@
 /// <reference path="./types/electron.d.ts" />
 
 declare const __ANIXART_PROXY_KEY__: string | undefined;
+/** package.json version, injected by vite.config.mts. */
+declare const __ANIXAPP_VERSION__: string;
 
 interface ImportMetaEnv {
   readonly VITE_TV_MODE?: string;

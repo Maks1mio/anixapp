@@ -40,7 +40,7 @@ function shouldTryNextOrigin(res, path, originIndex, total) {
   // Admin API must stay on the selected origin (no silent failover to prod).
   if (path.startsWith('/api/admin/')) return false;
   if (res.status >= 500) return true;
-  return path.startsWith('/uploads/') && res.status === 404;
+  return (path.startsWith('/uploads/') || path.startsWith('/badges/')) && res.status === 404;
 }
 
 /** ffmpeg download / render can take minutes — never apply the short proxy timeout. */

@@ -31,6 +31,66 @@ export function resolveBadgeName(raw: unknown): string {
   return '';
 }
 
+// ── badge names by image URL ──────────────────────────────────────────────
+// Comments / feed often send a badge without its name: remember names seen elsewhere
+// (profile, badge collection) and reuse them for tooltips.
+
+const BADGE_NAMES_KEY = 'anixapp.badge-names.v1';
+const BADGE_NAMES_MAX = 500;
+let badgeNames: Record<string, string> | null = null;
+let badgeNamesSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+function badgeNameKey(url: string): string {
+  // Same badge comes via different CDN hosts, proxies (/__cdn/?u=…), query strings and
+  // sizes (comments: …/<id>/small.webp, profile: …/<id>/large.webp).
+  let raw = url.trim();
+  try {
+    raw = decodeURIComponent(raw);
+  } catch {
+    /* keep as is */
+  }
+  const badgePath = raw.match(/\/badges\/[^?#&\s]+/i)?.[0];
+  const clean = badgePath ?? raw.split(/[?#]/)[0].replace(/^https?:\/\/[^/]+/i, '');
+  return clean.replace(/\/(small|medium|large|original|anim|static)\.[a-z0-9]+$/i, '/');
+}
+
+function loadBadgeNames(): Record<string, string> {
+  if (badgeNames) return badgeNames;
+  badgeNames = {};
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(BADGE_NAMES_KEY) : null;
+    const parsed = raw ? (JSON.parse(raw) as Record<string, string>) : null;
+    if (parsed && typeof parsed === 'object') badgeNames = parsed;
+  } catch {
+    /* ignore */
+  }
+  return badgeNames;
+}
+
+export function rememberBadgeName(url: string | null | undefined, name: string | null | undefined): void {
+  const n = name?.trim();
+  if (!url?.trim() || !n) return;
+  const names = loadBadgeNames();
+  const key = badgeNameKey(url);
+  if (names[key] === n) return;
+  names[key] = n;
+  const keys = Object.keys(names);
+  if (keys.length > BADGE_NAMES_MAX) delete names[keys[0]];
+  badgeNamesSaveTimer ??= setTimeout(() => {
+    badgeNamesSaveTimer = null;
+    try {
+      localStorage.setItem(BADGE_NAMES_KEY, JSON.stringify(loadBadgeNames()));
+    } catch {
+      /* ignore quota */
+    }
+  }, 1000);
+}
+
+export function badgeNameByUrl(url: string | null | undefined): string {
+  if (!url?.trim()) return '';
+  return loadBadgeNames()[badgeNameKey(url)] ?? '';
+}
+
 /** Из профиля комментария / друга: badge | badge_url | badgeUrl */
 export function resolveProfileBadgeUrl(
   profile: Record<string, unknown> | null | undefined,

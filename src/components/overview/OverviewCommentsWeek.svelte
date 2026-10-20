@@ -20,7 +20,7 @@
       voteCount: item.voteCount,
       isSpoiler: item.isSpoiler,
       profile: {
-        id: 0,
+        id: item.profileId,
         login: item.profileLogin,
         avatar: item.profileAvatar,
         badgeUrl: item.profileBadgeUrl ?? null,

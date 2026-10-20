@@ -235,7 +235,7 @@ export function isSidebarNavLayoutViable(layout: SidebarNavLayout): boolean {
 }
 
 /**
- * Сторона «хрома» (Discord / Telegram / Boosty / Команда): слева, пока там есть вкладки;
+ * Сторона «хрома» (Discord / Telegram / Поддержать / Команда): слева, пока там есть вкладки;
  * если левая пуста — на правой.
  */
 export function getSidebarNavChromeSide(layout: SidebarNavLayout): 'left' | 'right' {

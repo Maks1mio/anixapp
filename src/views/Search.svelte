@@ -7,6 +7,7 @@
   import Tabs from '../components/Tabs.svelte';
   import ScrollArea from '../components/ScrollArea.svelte';
   import UserBadge from '../components/UserBadge.svelte';
+  import AppBadges from '../components/AppBadges.svelte';
   import UiV2SearchFranchise from '../components/uikit-v2/UiV2SearchFranchise.svelte';
   import { iconSearch } from '../components/icons';
   import { resolveBadgeName, resolveProfileBadgeUrl } from '../utils/badge';
@@ -602,6 +603,7 @@
                   <span class="search-page__profile-name-row">
                     <span class="search-page__profile-name">{p.login || ''}</span>
                     <UserBadge url={badgeUrl} name={resolveBadgeName(p.badge)} size="sm" />
+                    <AppBadges userId={p.id} size="sm" />
                   </span>
                   {#if p.status}
                     <span class="search-page__profile-status">{p.status}</span>

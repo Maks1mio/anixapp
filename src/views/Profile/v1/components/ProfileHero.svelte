@@ -4,6 +4,7 @@
   import { fmtRelative, getProfileBanNotice, isLottieBadgeUrl, posterUrl } from '../../_utils';
   import { fetchCdnJson, toCdnProxyUrl } from '../../../../utils/posterUrl';
   import { iconBan } from '../../../../components/icons';
+  import AppBadges from '../../../../components/AppBadges.svelte';
 
   interface Props {
     profile:     any;
@@ -83,14 +84,20 @@
           {#if isLottieBadgeUrl(profile.badge.image_url)}
             <span
               class="profile__badge-lottie"
-              title={profile.badge.name ?? ''}
+              title={profile.badge.name || 'Значок Anixart'}
               aria-label={profile.badge.name ?? ''}
               bind:this={badgeLottieEl}
             ></span>
           {:else}
-            <img class="profile__badge-img" src={toCdnProxyUrl(profile.badge.image_url)} alt={profile.badge.name ?? ''} />
+            <img
+              class="profile__badge-img"
+              src={toCdnProxyUrl(profile.badge.image_url)}
+              alt={profile.badge.name ?? ''}
+              title={profile.badge.name || 'Значок Anixart'}
+            />
           {/if}
         {/if}
+        <AppBadges userId={Number(profile.id)} size="md" />
 
         {#if profile.level != null}
           <span class="profile__level">{profile.level}ур</span>

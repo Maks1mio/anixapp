@@ -622,6 +622,7 @@
                             showDot={!!p.is_online}
                             badgeUrl={badgeUrl}
                             badgeName={resolveBadgeName(p.badge)}
+                            profileId={p.id}
                             onclick={(e) => {
                               void closeIsland();
                               handleUserProfileClick(p.id, e);
@@ -695,6 +696,7 @@
                             showDot={!!p.is_online}
                             badgeUrl={badgeUrl}
                             badgeName={resolveBadgeName(p.badge)}
+                            profileId={p.id}
                             onclick={(e) => {
                               void closeIsland();
                               handleUserProfileClick(p.id, e);

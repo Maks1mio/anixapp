@@ -132,6 +132,15 @@ export interface AnixApi {
     }>;
     getAuthStatus: () => Promise<{ hasToken: boolean }>;
     checkConnection: () => Promise<boolean>;
+    /** Presence ping to anixback; the bridge attaches the Anixart token. */
+    appPresence?: (payload: {
+      origin: string;
+      install_id: string;
+      platform: string;
+      version: string | null;
+      event: 'launch' | 'heartbeat' | 'quit';
+      user_id: number | null;
+    }) => Promise<{ ok: boolean; verified?: string; badge_granted?: boolean; heartbeat_sec?: number; error?: string }>;
     testOffline: () => Promise<void>;
   };
 

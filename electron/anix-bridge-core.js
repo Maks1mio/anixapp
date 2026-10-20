@@ -12,6 +12,7 @@ const { attachAnixErrorMessages, enrichAnixError } = require('./lib/anix-errors'
 const homeCustomFilter = require('./home-custom-filter');
 const { getDirectVideoLink } = require('./lib/direct-video-link');
 const { resolveViaAnixback } = require('./lib/stream-resolve-remote');
+const { sendAnixappPresence } = require('./lib/anixapp-presence');
 
 const DEFAULT_BASE_URL = 'https://api-s.anixsekai.com';
 
@@ -135,6 +136,10 @@ function createAnixBridgeCore(options = {}) {
 
   const HANDLERS = {
     'anix:getAuthStatus': async (c) => ({ hasToken: !!c.loadConfig().token }),
+    'anix:appPresence': async (c, [payload]) => {
+      const cfg = c.loadConfig();
+      return sendAnixappPresence(payload, cfg.token, cfg.profileId);
+    },
     'anix:checkConnection': async (c) => {
       const token = c.loadConfig().token;
       if (!token) return { ok: true };

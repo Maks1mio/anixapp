@@ -1,5 +1,6 @@
 <script lang="ts">
   import ReleaseCardUiV2 from '../../../components/ReleaseCardUiV2.svelte';
+  import AppBadges from '../../../components/AppBadges.svelte';
   import UiV2ReleaseCarousel from '../../../components/uikit-v2/UiV2ReleaseCarousel.svelte';
   import { tick } from 'svelte';
   import { iconChevronLeft, iconChevronRight, iconStar, iconThumbsUp, iconX } from '../../../components/icons';
@@ -307,7 +308,7 @@
                 <span class="tv-release-comment__avatar tv-release-comment__avatar--empty">{c.profile.login.slice(0, 1).toUpperCase()}</span>
               {/if}
               <span class="tv-release-comment__who">
-                <span class="tv-release-comment__login">{c.profile.login}</span>
+                <span class="tv-release-comment__login">{c.profile.login} <AppBadges userId={c.profile.id} size="sm" /></span>
                 <span class="tv-release-comment__time">
                   {formatCommentTime(c.timestamp)}{#if c.postedAtEpisode} · {c.postedAtEpisode} серия{/if}
                 </span>

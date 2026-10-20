@@ -27,6 +27,8 @@
     posterUrl,
   } from '../views/Profile/_utils';
   import { resolveJacksonRefs } from '../utils/jackson-refs';
+  import { badgeNameByUrl, rememberBadgeName } from '../utils/badge';
+  import { isSupportBadge, onSupportBadgeActivate } from '../stores/support-promo';
   import {
     hasProfilePrivacyRestrictions,
     isBlockedByProfile,
@@ -57,6 +59,8 @@
   import UiV2Card from './uikit-v2/UiV2Card.svelte';
   import { showToast } from '../stores/toast';
   import { requireAuth } from '../stores/auth';
+  import { fetchMyBadges, fetchUsersBadges, getCachedBadges, cacheBadges, visibleAppBadges, type AppBadge } from '../services/badges-api';
+  import { resolveAnixbackUploadUrl } from '../services/anixback-endpoint';
   import {
     hasProfileSocial,
     listSocialLinks,
@@ -192,6 +196,56 @@
       : [],
   );
   const badge = $derived((profile?.badge as { image_url?: string; name?: string } | null) ?? null);
+  $effect(() => {
+    if (badge?.image_url && badge.name) rememberBadgeName(badge.image_url, badge.name);
+  });
+
+  // ── Anixapp badges (anixback): only what the DB has for this profile ──────
+  // «В AnixApp» is granted server-side after a verified launch (app-presence).
+  let appBadges = $state<AppBadge[]>([]);
+  let appBadgesLoaded = $state(false);
+
+  async function loadAppBadges(): Promise<void> {
+    if (!Number.isFinite(userId) || userId <= 0) return;
+    try {
+      const cached = getCachedBadges(userId);
+      if (cached) {
+        appBadges = cached;
+        appBadgesLoaded = true;
+        return;
+      }
+      // Own profile → exact list with statuses; other profiles → bulk public API.
+      const selfId = Number((window as { __anixProfile?: { id?: number } }).__anixProfile?.id ?? 0);
+      if (selfId === userId) {
+        const me = await fetchMyBadges(userId, '');
+        appBadges = me?.badges ?? [];
+      } else {
+        const map = await fetchUsersBadges([userId]);
+        appBadges = map.get(userId) ?? [];
+      }
+      // Order comes from anixback (admin can reorder); pending purchases hidden.
+      appBadges = visibleAppBadges(appBadges);
+      cacheBadges(userId, appBadges);
+    } catch {
+      /* badges are cosmetic — never block profile */
+    } finally {
+      appBadgesLoaded = true;
+    }
+  }
+
+  $effect(() => {
+    if (loadState === 'ready' && userId > 0) void loadAppBadges();
+  });
+
+  // Badge just granted by the first verified launch → refresh own profile.
+  $effect(() => {
+    const onChanged = (e: Event) => {
+      if (Number((e as CustomEvent<{ userId?: number }>).detail?.userId) === userId) void loadAppBadges();
+    };
+    window.addEventListener('anix:appBadgesChanged', onChanged);
+    return () => window.removeEventListener('anix:appBadgesChanged', onChanged);
+  });
+
   const friendCount = $derived(Number(profile?.friend_count ?? 0));
   const blockedByUser = $derived(isBlockedByProfile(profile));
   const showPrivacy = $derived(
@@ -818,13 +872,54 @@
                       <span class="profile-panel__name-text">{login}</span>
                       {#if badge?.image_url}
                         {#if isLottieBadgeUrl(badge.image_url)}
-                          <span class="profile-panel__badge" title={badge.name ?? ''} bind:this={badgeLottieEl}></span>
+                          <span
+                            class="profile-panel__badge"
+                            title={badge.name || badgeNameByUrl(badge.image_url) || 'Значок Anixart'}
+                            bind:this={badgeLottieEl}
+                          ></span>
                         {:else}
-                          <img class="profile-panel__badge-img" src={toCdnProxyUrl(badge.image_url)} alt={badge.name ?? ''} />
+                          <img
+                            class="profile-panel__badge-img"
+                            src={toCdnProxyUrl(badge.image_url)}
+                            alt={badge.name ?? ''}
+                            title={badge.name || badgeNameByUrl(badge.image_url) || 'Значок Anixart'}
+                          />
                         {/if}
                       {/if}
                       {#if profile.is_verified}
                         <span class="profile-panel__verified" title="Подтверждён">✓</span>
+                      {/if}
+                      {#if appBadgesLoaded}
+                        {#each appBadges as ab (ab.slug)}
+                          {#if ab.status !== 'pending'}
+                            {#if isSupportBadge(ab.slug)}
+                              <span
+                                class="profile-panel__badge-hit"
+                                role="button"
+                                tabindex="0"
+                                aria-label="{ab.name} — подробнее об Anix+"
+                                onclick={onSupportBadgeActivate}
+                                onkeydown={onSupportBadgeActivate}
+                              >
+                                <img
+                                  class="profile-panel__badge-img"
+                                  src={resolveAnixbackUploadUrl(ab.image_url)}
+                                  alt={ab.name}
+                                  title={ab.name}
+                                  loading="lazy"
+                                />
+                              </span>
+                            {:else}
+                              <img
+                                class="profile-panel__badge-img"
+                                src={resolveAnixbackUploadUrl(ab.image_url)}
+                                alt={ab.name}
+                                title={ab.name}
+                                loading="lazy"
+                              />
+                            {/if}
+                          {/if}
+                        {/each}
                       {/if}
                     </h2>
 

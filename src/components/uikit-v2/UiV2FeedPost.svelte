@@ -7,6 +7,7 @@
   import UiV2Tooltip from './UiV2Tooltip.svelte';
   import UserAvatar from '../UserAvatar.svelte';
   import UserBadge from '../UserBadge.svelte';
+  import AppBadges from '../AppBadges.svelte';
   import {
     iconMoreHorizontal,
     iconRepost,
@@ -45,6 +46,8 @@
     avatar?: string | null;
     badgeUrl?: string | null;
     badgeName?: string | null;
+    /** Blog owner's Anixart profile (Anixapp badges); null for channels. */
+    profileId?: number | null;
     isVerified?: boolean;
     isSubscribed?: boolean;
     isBlog?: boolean;
@@ -422,6 +425,9 @@
           size="sm"
           class="uiv2-feed-post__badge"
         />
+        {#if channel.profileId}
+          <AppBadges userId={channel.profileId} size="sm" class="uiv2-feed-post__badge" />
+        {/if}
         {#if channel.isVerified}
           <span class="uiv2-feed-post__verified" title="Подтверждённый канал" aria-hidden="true">✓</span>
         {/if}

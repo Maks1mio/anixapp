@@ -40,6 +40,7 @@ function buildWebAnixApi(): AnixApi {
       setBackupProxyEnabled: (enabled) => invoke('anix:setBackupProxyEnabled', enabled),
       getAuthStatus: () => invoke('anix:getAuthStatus'),
       checkConnection: () => invoke('anix:checkConnection'),
+      appPresence: (payload) => invoke('anix:appPresence', payload),
       testOffline: () => invoke('anix:testOffline'),
     },
 

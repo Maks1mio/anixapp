@@ -2,6 +2,7 @@
   import { onMount, onDestroy, untrack } from 'svelte';
   import { iconMessageCircle } from './icons';
   import UserBadge from './UserBadge.svelte';
+  import AppBadges from './AppBadges.svelte';
   import Checkbox from './Checkbox.svelte';
   import { resolveBadgeName, resolveProfileBadgeUrl } from '../utils/badge';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
@@ -300,6 +301,7 @@
               <span class="profile-panel__friend-row-name">
                 {req.login || 'Без имени'}
                 <UserBadge url={badgeUrl} name={resolveBadgeName(req.badge)} size="xs" />
+                <AppBadges userId={Number(req.id)} size="xs" />
               </span>
             </button>
             <div class="profile-panel__request-actions">
@@ -343,6 +345,7 @@
               <span class="profile-panel__friend-row-name">
                 {req.login || 'Без имени'}
                 <UserBadge url={badgeUrl} name={resolveBadgeName(req.badge)} size="xs" />
+                <AppBadges userId={Number(req.id)} size="xs" />
               </span>
             </button>
             <div class="profile-panel__request-actions">
@@ -417,6 +420,7 @@
                 <span class="profile-panel__friend-row-name">
                   <span class="profile-panel__friend-row-login">{fr.login || 'Без имени'}</span>
                   <UserBadge url={badgeUrl} name={resolveBadgeName(fr.badge)} size="xs" />
+                  <AppBadges userId={Number(fr.id)} size="xs" />
                   {#if banLabel}
                     <span class="profile-panel__friend-row-ban" title={banNotice ?? undefined}>
                       {banLabel}

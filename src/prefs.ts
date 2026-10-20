@@ -510,7 +510,7 @@ export function getSidebarNavEntriesForSide(side: 'left' | 'right'): SidebarNavR
   return out;
 }
 
-/** Сторона нижнего блока (Команда / Discord / Telegram / Boosty). */
+/** Сторона нижнего блока (Команда / Discord / Telegram / Поддержать). */
 export function getSidebarNavChromeSide(): 'left' | 'right' {
   const layout = getSidebarNavLayout();
   return layout.left.length > 0 ? 'left' : 'right';

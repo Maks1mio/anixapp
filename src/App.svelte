@@ -99,6 +99,9 @@
   import { rememberTvKeepAlive, tvKeepAliveKey, tvKeptBookmarkListIds, tvKeptCategoryIds, tvKeptReleaseIds } from './tv/keepAlive';
   import WebPlayerShell from './components/WebPlayerShell.svelte';
   import { isEmbeddedWebPlayer } from './utils/watch-nav';
+  import { startAppPresence } from './services/app-presence';
+  import SupportModal from './components/SupportModal.svelte';
+  import SupportPromo from './components/SupportPromo.svelte';
 
   import SettingsModal from './components/SettingsModal.svelte';
   import NotificationsModal from './components/NotificationsModal.svelte';
@@ -347,6 +350,9 @@
       appScreen.set('login');
       return () => stopBookmarksSync();
     }
+
+    // Launch/heartbeat → «В AnixApp» badge + analytics (not from embedded player windows).
+    if (!isEmbeddedWebPlayer()) startAppPresence();
 
     // Routing listeners
     const onNav = () => {
@@ -1146,6 +1152,11 @@
 {/if}
 
 <Toast />
+<!-- Anix+: модалка (алмаз в боковой панели) и одноразовое уведомление после входа -->
+{#if !isTvMode() && !isEmbeddedWebPlayer() && path !== '/feed/composer'}
+  <SupportModal />
+  <SupportPromo />
+{/if}
 {#if isTvMode()}
   <TvDebugMetrics />
 {/if}

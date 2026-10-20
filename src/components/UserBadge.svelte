@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { fetchCdnJson, toCdnProxyUrl } from '../utils/posterUrl';
-  import { isLottieBadgeUrl } from '../utils/badge';
+  import { badgeNameByUrl, isLottieBadgeUrl, rememberBadgeName } from '../utils/badge';
 
   type Size = 'xs' | 'sm' | 'md' | 'lg';
 
@@ -27,7 +27,13 @@
 
   const src = $derived(url?.trim() ? url.trim() : '');
   const isLottie = $derived(!!src && isLottieBadgeUrl(src));
-  const title = $derived(showTooltip ? (name?.trim() || '') : '');
+  // API often omits the name (comments, feed): fall back to a name seen with the same image.
+  const resolvedName = $derived(name?.trim() || badgeNameByUrl(src) || (src ? 'Значок Anixart' : ''));
+  const title = $derived(showTooltip ? resolvedName : '');
+
+  $effect(() => {
+    if (src && name?.trim()) rememberBadgeName(src, name);
+  });
 
   function destroyAnim() {
     if (anim?.destroy) anim.destroy();

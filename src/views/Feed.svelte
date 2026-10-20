@@ -2,6 +2,7 @@
   import { onMount, onDestroy, tick } from 'svelte';
   import UiV2Card from '../components/uikit-v2/UiV2Card.svelte';
   import UiV2Button from '../components/uikit-v2/UiV2Button.svelte';
+  import AppBadges from '../components/AppBadges.svelte';
   import UiV2Select, { type UiV2SelectOption } from '../components/uikit-v2/UiV2Select.svelte';
   import FeedArticleCard from '../components/feed/FeedArticleCard.svelte';
   import UiV2FeedPostSkeleton from '../components/uikit-v2/UiV2FeedPostSkeleton.svelte';
@@ -2582,6 +2583,9 @@
           <span class="feed-channel-bar__meta">
             <span class="feed-channel-bar__title">
               {asideChannel.title || (asideChannel.is_blog ? 'Блог' : 'Группа')}
+              {#if asideChannel.is_blog && asideChannel.blog_profile_id}
+                <AppBadges userId={asideChannel.blog_profile_id} size="sm" />
+              {/if}
             </span>
             <span class="feed-channel-bar__sub">
               {channelSubscriberCount(asideChannel)} подп.

@@ -57,12 +57,21 @@ function item(raw: unknown): SnapItem | null {
 
 function items(res: unknown): SnapItem[] {
   const r = rec(res);
-  const content = Array.isArray(r?.content) ? r.content : Array.isArray(r?.releases) ? r.releases : [];
+  const content = [r?.content, r?.releases, r?.history, r?.favorites].find((x): x is unknown[] => Array.isArray(x)) ?? [];
   return content.map(item).filter((x): x is SnapItem => x != null).slice(0, PER_LIST);
 }
 
 function selfProfileId(): number {
   return Number((window as { __anixProfile?: { id?: number } }).__anixProfile?.id ?? 0) || 0;
+}
+
+/** `__anixProfile` is set by the layout, but the agent tab can open first — ask the bridge as a fallback. */
+async function resolveProfileId(): Promise<number> {
+  const direct = selfProfileId();
+  if (direct) return direct;
+  const pending = window.anixApi?.profile?.self?.();
+  const self = pending ? await pending.catch(() => null) : null;
+  return Number(rec(rec(self)?.profile)?.id ?? 0) || 0;
 }
 
 async function collect(profileId: number): Promise<AgentProfileSnapshot | null> {
@@ -80,7 +89,9 @@ async function collect(profileId: number): Promise<AgentProfileSnapshot | null> 
     safe(api.favorites?.all?.(0)),
     safe(api.history?.all?.(0)),
   ]);
-  const p = rec(rec(info)?.profile) ?? {};
+  const p = rec(rec(info)?.profile);
+  // Don't cache an empty snapshot when the profile request itself failed.
+  if (!p) return null;
   return {
     login: typeof p.login === 'string' ? p.login : null,
     counts: {
@@ -111,7 +122,7 @@ async function collect(profileId: number): Promise<AgentProfileSnapshot | null> 
 
 /** Current user's snapshot (cached); null when not logged in or the API is unavailable. */
 export async function getAgentProfileSnapshot(): Promise<AgentProfileSnapshot | null> {
-  const profileId = selfProfileId();
+  const profileId = await resolveProfileId();
   if (!profileId) return null;
   if (cache && cache.profileId === profileId && Date.now() - cache.at < TTL_MS) return cache.data;
   inFlight ??= collect(profileId)

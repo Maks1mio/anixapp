@@ -40,11 +40,11 @@
     label: string;
     color: string;
   }[] = [
-    { id: 'watching', label: 'Смотрю', color: '#22c55e' },
-    { id: 'planned', label: 'В планах', color: '#c084fc' },
-    { id: 'completed', label: 'Просмотрено', color: '#60a5fa' },
-    { id: 'on_hold', label: 'Отложено', color: '#fb923c' },
-    { id: 'dropped', label: 'Брошено', color: '#ef4444' },
+    { id: 'watching', label: 'Смотрю', color: '#6fa873' },
+    { id: 'planned', label: 'В планах', color: '#a76fac' },
+    { id: 'completed', label: 'Просмотрено', color: '#6974ac' },
+    { id: 'on_hold', label: 'Отложено', color: '#d29742' },
+    { id: 'dropped', label: 'Брошено', color: '#c24e4d' },
   ];
 
   type Props = {
@@ -727,11 +727,11 @@
     color: var(--uikit-v2-muted);
   }
 
-  .uiv2-release-friends__status--watching { color: #22c55e; }
-  .uiv2-release-friends__status--planned { color: #c084fc; }
-  .uiv2-release-friends__status--completed { color: #60a5fa; }
-  .uiv2-release-friends__status--on_hold { color: #fb923c; }
-  .uiv2-release-friends__status--dropped { color: #ef4444; }
+  .uiv2-release-friends__status--watching { color: #6fa873; }
+  .uiv2-release-friends__status--planned { color: #a76fac; }
+  .uiv2-release-friends__status--completed { color: #6974ac; }
+  .uiv2-release-friends__status--on_hold { color: #d29742; }
+  .uiv2-release-friends__status--dropped { color: #c24e4d; }
 
   .uiv2-release-friends__hint {
     margin: 0;

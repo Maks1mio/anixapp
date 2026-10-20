@@ -63,11 +63,11 @@
   const showcaseStyle = $derived(showcaseBg ? `background:${showcaseBg}` : undefined);
 
   const statusItems = $derived([
-    { label: 'Смотрю', value: Number(profile.watching_count ?? 0), color: '#22c55e', tab: 'watching' as ListTab },
-    { label: 'В планах', value: Number(profile.plan_count ?? 0), color: '#a855f7', tab: 'planned' as ListTab },
-    { label: 'Просмотрено', value: Number(profile.completed_count ?? 0), color: '#3b82f6', tab: 'completed' as ListTab },
-    { label: 'Отложено', value: Number(profile.hold_on_count ?? 0), color: '#f59e0b', tab: 'on_hold' as ListTab },
-    { label: 'Брошено', value: Number(profile.dropped_count ?? 0), color: '#ef4444', tab: 'dropped' as ListTab },
+    { label: 'Смотрю', value: Number(profile.watching_count ?? 0), color: '#6fa873', tab: 'watching' as ListTab },
+    { label: 'В планах', value: Number(profile.plan_count ?? 0), color: '#a76fac', tab: 'planned' as ListTab },
+    { label: 'Просмотрено', value: Number(profile.completed_count ?? 0), color: '#6974ac', tab: 'completed' as ListTab },
+    { label: 'Отложено', value: Number(profile.hold_on_count ?? 0), color: '#d29742', tab: 'on_hold' as ListTab },
+    { label: 'Брошено', value: Number(profile.dropped_count ?? 0), color: '#c24e4d', tab: 'dropped' as ListTab },
   ]);
 
   const listItems = $derived([

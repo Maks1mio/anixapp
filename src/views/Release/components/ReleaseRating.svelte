@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { onMount } from 'svelte';
   import { requireAuth } from '../../../stores/auth';
   import { resolveCdnAssetUrl } from '../../../utils/posterUrl';
@@ -53,6 +53,9 @@
 
   const totalList = $derived(watchingCount + planCount + completedCount + holdOnCount + droppedCount);
   const lp = (n: number) => totalList > 0 ? (n / totalList) * 100 : 0;
+  const ratingText = $derived(
+    grade != null && hasRating ? grade.toFixed(2).replace(/\.?0+$/, '') : '—',
+  );
   const hasYourVote = $derived(yourVote > 0);
   const showPicker = $derived(canVote && (!hasYourVote || picking));
   const displayStars = $derived(showPicker ? (hoverStar || 0) : yourVote);
@@ -108,90 +111,90 @@
 <div class="release-page__section release-page__rating-block">
   <h2 class="release-page__block-title">Рейтинг</h2>
 
-  <div class="release-page__rating-content">
-    <div class="release-page__rating-main">
+  <div class="release-page__rating-layout">
+    <div class="release-page__rating-content">
       <div class="release-page__rating-summary">
         <div class="release-page__rating-value">
-          {grade != null && hasRating ? grade.toFixed(2) : '—'}
+          {ratingText}
         </div>
         {#if voteCount > 0}
           <div class="release-page__rating-votes-label">{voteCount.toLocaleString('ru-RU')} голосов</div>
         {/if}
       </div>
 
-      <div
-        class="release-page__rating-vote"
-        class:release-page__rating-vote--busy={busy}
-        class:release-page__rating-vote--disabled={!canVote}
-      >
-        <div
-          class="release-page__rating-vote-avatar{profileAvatar ? ' release-page__rating-vote-avatar--img' : ''}"
-          style={profileAvatar ? `background-image:url(${profileAvatar})` : ''}
-          aria-hidden="true"
-        ></div>
-
-        <div class="release-page__rating-vote-body">
-          {#if !canVote}
-            <div class="release-page__rating-vote-stars" aria-hidden="true">
-              {#each [1, 2, 3, 4, 5] as star}
-                <span class="release-page__rating-vote-star">
-                  {@html iconStar(18, false)}
-                </span>
-              {/each}
+      <div class="release-page__rating-bars">
+        {#each [5, 4, 3, 2, 1] as star}
+          {@const v = star === 5 ? vote5 : star === 4 ? vote4 : star === 3 ? vote3 : star === 2 ? vote2 : vote1}
+          {@const pct = voteCount > 0 ? (v / voteCount) * 100 : 0}
+          <div class="release-page__rating-bar-row">
+            <span class="release-page__rating-bar-label">{star}</span>
+            <div class="release-page__rating-bar-track">
+              <div class="release-page__rating-bar-fill" style="width:{pct}%"></div>
             </div>
-            <span class="release-page__rating-vote-hint">Оценка недоступна для анонса</span>
-          {:else if showPicker}
-            <div
-              class="release-page__rating-stars"
-              role="group"
-              aria-label="Поставить оценку"
-              onmouseleave={() => { hoverStar = 0; }}
-            >
-              {#each [1, 2, 3, 4, 5] as star}
-                <button
-                  type="button"
-                  class="release-page__rating-star"
-                  class:release-page__rating-star--active={star <= displayStars}
-                  disabled={busy}
-                  aria-label="{star} из 5"
-                  onmouseenter={() => { hoverStar = star; }}
-                  onclick={() => submitVote(star)}
-                >
-                  {@html iconStar(20, star <= displayStars)}
-                </button>
-              {/each}
-            </div>
-            <span class="release-page__rating-vote-hint">Нажмите на звезду</span>
-          {:else}
-            <div class="release-page__rating-vote-stars" aria-hidden="true">
-              {#each [1, 2, 3, 4, 5] as star}
-                <span class="release-page__rating-vote-star" class:release-page__rating-vote-star--active={star <= yourVote}>
-                  {@html iconStar(18, star <= yourVote)}
-                </span>
-              {/each}
-            </div>
-            <div class="release-page__rating-vote-meta">
-              <span class="release-page__rating-vote-label">Вы проголосовали</span>
-              <button type="button" class="release-page__rating-vote-change" disabled={busy} onclick={startChangeVote}>
-                Изменить
-              </button>
-            </div>
-          {/if}
-        </div>
+          </div>
+        {/each}
       </div>
     </div>
 
-    <div class="release-page__rating-bars">
-      {#each [5, 4, 3, 2, 1] as star}
-        {@const v = star === 5 ? vote5 : star === 4 ? vote4 : star === 3 ? vote3 : star === 2 ? vote2 : vote1}
-        {@const pct = voteCount > 0 ? (v / voteCount) * 100 : 0}
-        <div class="release-page__rating-bar-row">
-          <span class="release-page__rating-bar-label">{star}</span>
-          <div class="release-page__rating-bar-track">
-            <div class="release-page__rating-bar-fill" style="width:{pct}%"></div>
+    <div
+      class="release-page__rating-vote"
+      class:release-page__rating-vote--busy={busy}
+      class:release-page__rating-vote--disabled={!canVote}
+    >
+      <div
+        class="release-page__rating-vote-avatar{profileAvatar ? ' release-page__rating-vote-avatar--img' : ''}"
+        style={profileAvatar ? `background-image:url(${profileAvatar})` : ''}
+        aria-hidden="true"
+      ></div>
+
+      <div class="release-page__rating-vote-body">
+        <span class="release-page__rating-vote-title">Ваша оценка</span>
+        {#if !canVote}
+          <div class="release-page__rating-vote-stars" aria-hidden="true">
+            {#each [1, 2, 3, 4, 5] as star}
+              <span class="release-page__rating-vote-star">
+                {@html iconStar(34, false)}
+              </span>
+            {/each}
           </div>
-        </div>
-      {/each}
+          <span class="release-page__rating-vote-hint">Оценка недоступна для анонса</span>
+        {:else if showPicker}
+          <div
+            class="release-page__rating-stars"
+            role="group"
+            aria-label="Поставить оценку"
+            onmouseleave={() => { hoverStar = 0; }}
+          >
+            {#each [1, 2, 3, 4, 5] as star}
+              <button
+                type="button"
+                class="release-page__rating-star"
+                class:release-page__rating-star--active={star <= displayStars}
+                disabled={busy}
+                aria-label="{star} из 5"
+                onmouseenter={() => { hoverStar = star; }}
+                onclick={() => submitVote(star)}
+              >
+                {@html iconStar(34, star <= displayStars)}
+              </button>
+            {/each}
+          </div>
+        {:else}
+          <div class="release-page__rating-vote-stars" aria-hidden="true">
+            {#each [1, 2, 3, 4, 5] as star}
+              <span class="release-page__rating-vote-star" class:release-page__rating-vote-star--active={star <= yourVote}>
+                {@html iconStar(34, star <= yourVote)}
+              </span>
+            {/each}
+          </div>
+          <div class="release-page__rating-vote-meta">
+            <span class="release-page__rating-vote-label">Вы проголосовали</span>
+            <button type="button" class="release-page__rating-vote-change" disabled={busy} onclick={startChangeVote}>
+              Изменить
+            </button>
+          </div>
+        {/if}
+      </div>
     </div>
   </div>
 

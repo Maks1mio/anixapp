@@ -33,11 +33,11 @@
   }
 
   const STATUS_COLORS = {
-    watching: '#22c55e',
-    planned: '#a855f7',
-    completed: '#3b82f6',
-    on_hold: '#eab308',
-    dropped: '#ef4444',
+    watching: '#6fa873',
+    planned: '#a76fac',
+    completed: '#6974ac',
+    on_hold: '#d29742',
+    dropped: '#c24e4d',
   };
 
   // State
@@ -66,6 +66,8 @@
   let holdOnCount = $state(0);
   let droppedCount = $state(0);
   let statusSum = $derived(watchingCount + planCount + completedCount + holdOnCount + droppedCount);
+  const uncategorizedCount = $derived(Math.max(0, totalReleases - statusSum));
+  const statsTotal = $derived(Math.max(totalReleases, statusSum));
 
   // Releases
   let releaseItems = $state<ReleaseCardData[]>([]);
@@ -338,7 +340,7 @@
         <!-- Stats -->
         <section class="collection-stats">
           <h2 class="collection-stats__title">{totalReleases} релизов в коллекции</h2>
-          {#if statusSum > 0}
+          {#if statsTotal > 0}
             <div class="collection-stats__bar-wrap">
               <div class="collection-stats__bar">
                 {#each [
@@ -349,9 +351,12 @@
                   { v: droppedCount, c: STATUS_COLORS.dropped },
                 ] as part}
                   {#if part.v > 0}
-                    <span style="width:{(100 * part.v) / statusSum}%;background:{part.c}"></span>
+                    <span style="width:{(100 * part.v) / statsTotal}%;background:{part.c}"></span>
                   {/if}
                 {/each}
+                {#if uncategorizedCount > 0}
+                  <span style="width:{(100 * uncategorizedCount) / statsTotal}%;background:#6b7280"></span>
+                {/if}
               </div>
             </div>
             <div class="collection-stats__legend">
@@ -364,6 +369,9 @@
               ] as leg}
                 <span class="collection-stats__legend-item"><i style="background:{leg.c}"></i>{leg.label} {leg.count}</span>
               {/each}
+              {#if uncategorizedCount > 0}
+                <span class="collection-stats__legend-item"><i style="background:#6b7280"></i>Не в списке {uncategorizedCount}</span>
+              {/if}
             </div>
           {/if}
           <button type="button" class="collection-stats__random" onclick={openRandom}>

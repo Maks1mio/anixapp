@@ -3402,7 +3402,7 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   right: 0;
   z-index: 1;
   border-radius: 10px;
-  box-shadow: 0 4px 14px color-mix(in srgb, $color-accent 28%, transparent);
+  box-shadow: none;
 }
 
 // ── Status selector (custom UIKit select under Watch btn) ──
@@ -3447,7 +3447,7 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
     border: none;
     border-color: $color-accent;
     border-radius: 10px;
-    box-shadow: 0 4px 14px color-mix(in srgb, $color-accent 28%, transparent);
+    box-shadow: none;
 
     .release-page__btn-icon {
       color: #fff;

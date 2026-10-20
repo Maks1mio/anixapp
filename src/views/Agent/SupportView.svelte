@@ -29,6 +29,11 @@
   } from '../../components/icons';
   import UiV2Button from '../../components/uikit-v2/UiV2Button.svelte';
   import UiV2Tooltip from '../../components/uikit-v2/UiV2Tooltip.svelte';
+  import UserAvatar from '../../components/UserAvatar.svelte';
+  import UserBadge from '../../components/UserBadge.svelte';
+  import AppBadges from '../../components/AppBadges.svelte';
+  import { handleUserProfileClick } from '../../stores/user-profile';
+  import { resolveBadgeName, resolveProfileBadgeUrl } from '../../utils/badge';
   import AgentFace from './AgentFace.svelte';
   import { PERSONA_LOOKS, moodFromActivity, personaId, type PersonaId } from './personas';
 
@@ -330,6 +335,36 @@
     return d.toLocaleString('ru-RU', today ? { hour: '2-digit', minute: '2-digit' } : { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   }
 
+  type AuthorProfile = { avatar: string; badgeUrl: string | null; badgeName: string };
+
+  /** Anixart-профили авторов сообщений (аватарка и значок) — по одному запросу на автора. */
+  let authors = $state<Record<number, AuthorProfile>>({});
+  const requestedAuthors = new Set<number>();
+
+  async function loadAuthor(id: number) {
+    try {
+      const info = await window.anixApi?.profile?.info(id) as { profile?: Record<string, unknown> } | undefined;
+      const p = info?.profile;
+      if (!p) return;
+      authors[id] = {
+        avatar: typeof p.avatar === 'string' ? p.avatar : '',
+        badgeUrl: resolveProfileBadgeUrl(p, info),
+        badgeName: resolveBadgeName(p.badge),
+      };
+    } catch {
+      requestedAuthors.delete(id);
+    }
+  }
+
+  $effect(() => {
+    for (const m of messages) {
+      const id = Number(m.author_id ?? 0);
+      if (m.author_kind === 'bot' || m.author_kind === 'system' || id <= 0 || requestedAuthors.has(id)) continue;
+      requestedAuthors.add(id);
+      void loadAuthor(id);
+    }
+  });
+
   function authorName(m: TicketMessage): string {
     if (m.author_kind === 'bot') return PERSONA_LOOKS[personaId(m.persona)].name;
     if (m.author_kind === 'admin') return m.author_login ?? 'Команда';
@@ -455,14 +490,24 @@
               </div>
             {:else}
               {@const mine = m.author_id === viewerId}
+              {@const author = m.author_id ? authors[m.author_id] : undefined}
               <div class="support-msg" class:support-msg--mine={mine} class:support-msg--admin={m.author_kind === 'admin'} in:fly={{ y: 8, duration: 260 }}>
-                {#if !mine}
-                  <span class="support-msg__who">
-                    {authorName(m)}
-                    {#if m.author_kind === 'admin'}<span class="support-team">Команда</span>{/if}
-                    <span class="support-msg__time">{time(m.created_at)}</span>
-                  </span>
-                {/if}
+                <div class="support-msg__who">
+                  <button
+                    type="button"
+                    class="support-msg__author"
+                    disabled={!m.author_id}
+                    aria-label="Открыть профиль {authorName(m)}"
+                    onclick={(e) => handleUserProfileClick(m.author_id, e)}
+                  >
+                    <UserAvatar src={author?.avatar} label={authorName(m)} class="support-msg__avatar" />
+                    <span class="support-msg__login">{authorName(m)}</span>
+                  </button>
+                  {#if author?.badgeUrl}<UserBadge url={author.badgeUrl} name={author.badgeName} size="xs" />{/if}
+                  <AppBadges userId={m.author_id} size="xs" />
+                  {#if m.author_kind === 'admin'}<span class="support-team">Команда</span>{/if}
+                  <span class="support-msg__time">{time(m.created_at)}</span>
+                </div>
                 {#if m.content && m.content !== '(скриншот)'}
                   <div class="support-msg__bubble">{m.content}</div>
                 {/if}
@@ -480,7 +525,6 @@
                     {/each}
                   </div>
                 {/if}
-                {#if mine}<span class="support-msg__time support-msg__time--mine">{time(m.created_at)}</span>{/if}
               </div>
             {/if}
           {/each}
@@ -519,12 +563,16 @@
       {#if closed && !admin}
         <div class="support-closed">
           <span class="support-closed__icon" aria-hidden="true">{@html iconLock(16)}</span>
-          <div>
+          <div class="support-closed__text">
             <b>Обращение закрыто</b>
             {#if ticket?.close_reason}<p>{ticket.close_reason}</p>{/if}
           </div>
           {#if canReopen}
-            <UiV2Button label="Открыть снова" variant="chrome" size="sm" onclick={() => void setStatus('reopen')} />
+            <div class="support-closed__action">
+              <UiV2Button label="Открыть снова" variant="chrome" size="sm" onclick={() => void setStatus('reopen')}>
+                {#snippet icon()}{@html iconRotateCcw(14)}{/snippet}
+              </UiV2Button>
+            </div>
           {/if}
         </div>
       {:else}
@@ -868,10 +916,6 @@
     max-width: 100%;
   }
 
-  .support-msg--mine {
-    align-items: flex-end;
-  }
-
   .support-msg__head {
     display: flex;
     align-items: center;
@@ -884,12 +928,48 @@
   }
 
   .support-msg__who {
-    display: inline-flex;
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.4rem;
     font-size: 0.78rem;
     font-weight: 650;
     color: var(--uikit-v2-muted, #999);
+  }
+
+  .support-msg__author {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--uikit-v2-text, #fff);
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+  }
+
+  .support-msg__author:hover:not(:disabled) {
+    opacity: 0.8;
+  }
+
+  .support-msg__author:focus-visible {
+    outline: 2px solid var(--agent-accent);
+    outline-offset: 2px;
+    border-radius: 999px;
+  }
+
+  .support-msg__author:disabled {
+    cursor: default;
+  }
+
+  .support-msg__author :global(.support-msg__avatar) {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
   }
 
   .support-team {
@@ -1007,9 +1087,6 @@
     max-width: min(34rem, 85%);
   }
 
-  .support-msg--mine .support-shots {
-    justify-content: flex-end;
-  }
 
   .support-shot {
     width: 9rem;
@@ -1064,25 +1141,46 @@
   .support-closed {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
-    padding: 0.8rem 1rem;
-    border-radius: 1rem;
-    background: color-mix(in srgb, var(--uikit-v2-text, #fff) 5%, transparent);
-  }
-
-  .support-closed p {
-    margin: 0.15rem 0 0;
-    font-size: 0.82rem;
-    color: var(--uikit-v2-muted, #999);
-  }
-
-  .support-closed > :global(:last-child) {
-    margin-left: auto;
+    gap: 0.85rem;
+    padding: 0.85rem 1rem;
+    border-radius: 1.15rem;
+    border: 1px solid color-mix(in srgb, var(--uikit-v2-text, #fff) 6%, transparent);
+    background: var(--uikit-v2-surface, #1e1e1e);
   }
 
   .support-closed__icon {
     display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--uikit-v2-text, #fff) 7%, transparent);
     color: var(--uikit-v2-muted, #999);
+  }
+
+  .support-closed__text {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .support-closed__text b {
+    font-size: 0.92rem;
+    font-weight: 700;
+  }
+
+  .support-closed__text p {
+    margin: 0.15rem 0 0;
+    font-size: 0.82rem;
+    line-height: 1.4;
+    color: var(--uikit-v2-muted, #999);
+    overflow-wrap: anywhere;
+  }
+
+  .support-closed__action {
+    flex-shrink: 0;
   }
 
   .support-composer {

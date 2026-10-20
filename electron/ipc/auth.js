@@ -48,7 +48,7 @@ function register(deps) {
   }
 
   function scheduleFcmStop() {
-    try { void deps.fcmPush?.stop?.(); } catch { /* ignore */ }
+    try { void deps.fcmPush?.logout?.(); } catch { /* ignore */ }
   }
 
   function activateSavedAccount(account, baseUrl) {

@@ -6,6 +6,8 @@
  * 1. Регистрация в Firebase-проекте Anixart через @eneris/push-receiver
  * 2. POST auth/firebase → topicName пользователя
  * 3. Подписка токена на topic (C2DM register3 + AidLogin + X-gcm.topic)
+ *    При смене аккаунта / выходе прошлый topic отписывается; неудачные отписки
+ *    лежат в `pendingUnsubscribe` и повторяются при следующем sync.
  * 4. Входящие data → parseAnixartPushData → system-notifications.notify
  */
 
@@ -25,7 +27,10 @@ const RECENT_TTL_MS = 15 * 60 * 1000;
 let receiver = null;
 let stopNotificationListener = null;
 let stopCredentialsListener = null;
-let syncInFlight = null;
+/** Все sync/logout идут строго по очереди (быстрые переключения аккаунтов). */
+let opChain = Promise.resolve();
+/** Sync, поставленный в очередь, но ещё не начатый — повторные вызовы сливаются в него. */
+let queuedSync = null;
 let subscribedTopic = '';
 let connected = false;
 let topicSubscribed = false;
@@ -101,28 +106,48 @@ function formBody(fields) {
   return parts.join('&');
 }
 
-/** Ответ register3: `token=...` = ok, `Error=...` = fail. */
+/** Ответ register3: `token=...` (или `deleted=...` при отписке) = ok, `Error=...` = fail. */
 function isRegister3Success(text) {
   const t = String(text || '').trim();
   if (!t) return false;
   if (/^Error=/i.test(t)) return false;
-  return /^token=/i.test(t);
+  return /^(token|deleted)=/i.test(t);
+}
+
+function normalizeTopic(topic) {
+  return String(topic || '').replace(/^\/topics\//, '').trim();
+}
+
+function topicList(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map(normalizeTopic).filter(Boolean))];
 }
 
 /**
  * Подписка FCM-токена на user topic (как FirebaseMessaging.subscribeToTopic на Android).
  * Рабочий путь — C2DM register3 + AidLogin + X-gcm.topic (IID batchAdd без server key не проходит).
  */
-async function subscribeTokenToTopic(credentials, topic) {
+function subscribeTokenToTopic(credentials, topic) {
+  return topicRequest(credentials, topic, false);
+}
+
+/** Отписка (как FirebaseMessaging.unsubscribeFromTopic: тот же register3 + delete). */
+function unsubscribeTokenFromTopic(credentials, topic) {
+  return topicRequest(credentials, topic, true);
+}
+
+async function topicRequest(credentials, topic, remove) {
   const token = credentials?.fcm?.token;
-  const topicName = String(topic || '').replace(/^\/topics\//, '').trim();
+  const topicName = normalizeTopic(topic);
   if (!token || !topicName) return false;
+  const verb = remove ? 'unsubscribe' : 'subscribe';
+  const deleteFields = remove ? { delete: 'true', 'X-delete': '1' } : {};
 
   const topicPath = `/topics/${topicName}`;
   const androidId = credentials?.gcm?.androidId;
   const securityToken = credentials?.gcm?.securityToken;
   if (!androidId || !securityToken) {
-    logger.warn('fcm', 'topic subscribe: missing GCM checkin credentials');
+    logger.warn('fcm', `topic ${verb}: missing GCM checkin credentials`);
     return false;
   }
 
@@ -140,6 +165,7 @@ async function subscribeTokenToTopic(credentials, topic) {
         sender: token,
         'X-gcm.topic': topicPath,
         'X-scope': topicPath,
+        ...deleteFields,
       },
     },
     {
@@ -151,6 +177,7 @@ async function subscribeTokenToTopic(credentials, topic) {
         'X-gcm.topic': topicPath,
         'X-scope': topicPath,
         app_ver: '221',
+        ...deleteFields,
       },
     },
     {
@@ -165,6 +192,7 @@ async function subscribeTokenToTopic(credentials, topic) {
         'X-subscription': token,
         'X-gms_app_id': firebase.appId,
         app_ver: '221',
+        ...deleteFields,
       },
     },
   ];
@@ -182,15 +210,15 @@ async function subscribeTokenToTopic(credentials, topic) {
       });
       const text = await res.text().catch(() => '');
       if (isRegister3Success(text)) {
-        logger.info('fcm', `subscribed to topic via ${attempt.name}`, { topic: topicName });
+        logger.info('fcm', `${verb}d topic via ${attempt.name}`, { topic: topicName });
         return true;
       }
-      logger.warn('fcm', `topic subscribe ${attempt.name} failed`, {
+      logger.warn('fcm', `topic ${verb} ${attempt.name} failed`, {
         status: res.status,
         body: text.slice(0, 200),
       });
     } catch (err) {
-      logger.warn('fcm', `topic subscribe ${attempt.name} error: ${err?.message || err}`);
+      logger.warn('fcm', `topic ${verb} ${attempt.name} error: ${err?.message || err}`);
     }
   }
 
@@ -198,7 +226,7 @@ async function subscribeTokenToTopic(credentials, topic) {
   try {
     const fisToken = credentials?.fcm?.installation?.token;
     if (fisToken) {
-      const res = await fetch('https://iid.googleapis.com/iid/v1:batchAdd', {
+      const res = await fetch(`https://iid.googleapis.com/iid/v1:${remove ? 'batchRemove' : 'batchAdd'}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -209,16 +237,16 @@ async function subscribeTokenToTopic(credentials, topic) {
       });
       const text = await res.text().catch(() => '');
       if (res.ok) {
-        logger.info('fcm', 'subscribed to topic via FIS-batchAdd', { topic: topicName });
+        logger.info('fcm', `${verb}d topic via FIS-batch`, { topic: topicName });
         return true;
       }
-      logger.warn('fcm', 'topic subscribe FIS-batchAdd failed', {
+      logger.warn('fcm', `topic ${verb} FIS-batch failed`, {
         status: res.status,
         body: text.slice(0, 200),
       });
     }
   } catch (err) {
-    logger.warn('fcm', `topic subscribe FIS error: ${err?.message || err}`);
+    logger.warn('fcm', `topic ${verb} FIS error: ${err?.message || err}`);
   }
 
   return false;
@@ -323,7 +351,49 @@ async function ensureReceiver() {
   return receiver;
 }
 
+/**
+ * Отписка от прошлых profile topic'ов из `pendingUnsubscribe`.
+ * Ошибка не блокирует смену аккаунта: topic остаётся в списке до следующего sync.
+ */
+async function flushPendingUnsubscribes(creds) {
+  const pending = topicList(loadStore().pendingUnsubscribe);
+  if (!pending.length) return;
+  if (!creds?.fcm?.token) {
+    logger.warn('fcm', 'pending unsubscribe: no FCM credentials, retry later', { topics: pending });
+    return;
+  }
+  const failed = [];
+  for (const t of pending) {
+    if (!(await unsubscribeTokenFromTopic(creds, t))) failed.push(t);
+  }
+  const done = new Set(pending.filter((t) => !failed.includes(t)));
+  saveStore({ pendingUnsubscribe: topicList(loadStore().pendingUnsubscribe).filter((t) => !done.has(t)) });
+  if (failed.length) {
+    logger.warn('fcm', 'topic unsubscribe failed — will retry on next sync', { topics: failed });
+  }
+}
+
+/**
+ * Прошлый profile topic (store.topic) → в очередь на отписку.
+ * Трогаем только topic, полученный из auth/firebase, — общие topic'и сюда не попадают.
+ */
+function retireStoredTopic(keepTopic = '') {
+  const stored = loadStore();
+  const prev = normalizeTopic(stored.topic);
+  const pending = topicList(stored.pendingUnsubscribe);
+  if (prev && prev !== keepTopic && !pending.includes(prev)) pending.push(prev);
+  const patch = { pendingUnsubscribe: pending.filter((t) => t !== keepTopic) };
+  if (prev && prev !== keepTopic) {
+    patch.topic = '';
+    patch.topicSubscribed = false;
+  }
+  saveStore(patch);
+}
+
 async function syncInternal() {
+  // Хвосты прошлых аккаунтов отписываем даже без активной сессии (credentials лежат в store).
+  await flushPendingUnsubscribes(loadStore().credentials);
+
   const token = config.loadConfig?.()?.token;
   if (!token) {
     await stop();
@@ -355,6 +425,10 @@ async function syncInternal() {
     return getStatus();
   }
 
+  // Сменился профиль: сначала отписка от прошлого topic, потом подписка на новый.
+  retireStoredTopic(topic);
+  await flushPendingUnsubscribes(creds);
+
   const stored = loadStore();
   if (subscribedTopic === topic && topicSubscribed && stored.topicSubscribed === true) {
     return getStatus();
@@ -370,17 +444,37 @@ async function syncInternal() {
   return getStatus();
 }
 
+function enqueue(label, fn) {
+  const run = opChain.then(fn).catch((err) => {
+    logger.warn('fcm', `${label} failed: ${err?.message || err}`);
+    return getStatus();
+  });
+  opChain = run.then(() => {}, () => {});
+  return run;
+}
+
 function sync() {
-  if (syncInFlight) return syncInFlight;
-  syncInFlight = syncInternal()
-    .catch((err) => {
-      logger.warn('fcm', `sync failed: ${err?.message || err}`);
-      return getStatus();
-    })
-    .finally(() => {
-      syncInFlight = null;
-    });
-  return syncInFlight;
+  if (queuedSync) return queuedSync;
+  const run = enqueue('sync', () => {
+    // sync() во время этого прогона встанет в очередь заново и прочитает свежий токен.
+    if (queuedSync === run) queuedSync = null;
+    return syncInternal();
+  });
+  queuedSync = run;
+  return run;
+}
+
+/**
+ * Выход без перехода на другой аккаунт: отписка от profile topic и остановка приёма.
+ * stop() только гасит receiver (выход из приложения), подписку не трогает.
+ */
+function logout() {
+  return enqueue('logout', async () => {
+    retireStoredTopic();
+    await stop();
+    await flushPendingUnsubscribes(loadStore().credentials);
+    return getStatus();
+  });
 }
 
 async function stop() {
@@ -407,6 +501,7 @@ function createFcmPushService(deps) {
   return {
     sync,
     stop,
+    logout,
     getStatus,
     wasRecentlyShown,
     markShown,

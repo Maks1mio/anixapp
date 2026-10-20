@@ -7,3 +7,11 @@ export const LIST_STATUSES = [
 ] as const;
 
 export type ListStatusId = (typeof LIST_STATUSES)[number]['id'];
+
+/** Строка титров на TV-странице релиза: «Источник: манга», «Студия: …». */
+export interface ReleaseCreditRow {
+  label: string;
+  value: string;
+  /** TV «О тайтле»: строка на всю ширину сетки (длинные значения). */
+  wide?: boolean;
+}

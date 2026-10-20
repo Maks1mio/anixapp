@@ -63,7 +63,8 @@
   import { formatDubberQuality, isDubberNovelty, readLastEpisodeTypeUpdateId, sortDubbersPinnedFirst } from '../utils/dubber-meta';
   import { listPlayableDubberSources, NO_EPISODE_PICK_OTHER_DUB } from '../utils/dubber-sources';
   import { isTvMode } from '../platform/tv';
-  import { scheduleFocusTvOverlayContent } from '../services/tv-navigation';
+  import { restoreTvFocus, scheduleFocusTvOverlayContent } from '../services/tv-navigation';
+  import { tvLongPress } from '../actions/tvLongPress';
 
   interface Props {
     releaseId: number;
@@ -210,6 +211,8 @@
       );
     });
   });
+  /** TV: пульт и разметка «под 10 футов» (сетки, крупные плитки, без мелких кнопок). */
+  const isTv = isTvMode();
   const watchedCount = $derived(episodes.filter(isEpisodeWatched).length);
   const remainingCount = $derived(Math.max(0, episodes.length - watchedCount));
   const lastWatchedEpisode = $derived.by(() => {
@@ -219,6 +222,17 @@
     }
     return last;
   });
+  /** Серия, с которой продолжать: следующая после последней отмеченной (или первая). */
+  const nextEpisodePos = $derived.by(() => {
+    if (episodes.length === 0) return null;
+    const last = lastWatchedEpisode;
+    if (!last) return episodes[0].position;
+    const next = episodes
+      .filter((ep) => ep.position > last.position)
+      .sort((a, b) => a.position - b.position)[0];
+    return (next ?? last).position;
+  });
+  const nextEpisode = $derived(episodes.find((ep) => ep.position === nextEpisodePos) ?? null);
   const filteredDubbers = $derived.by(() => {
     const list =
       variantFilter === 'voice' ? dubbers.filter((d) => !isSubDubber(d))
@@ -273,9 +287,9 @@
 
   let pinningId = $state<number | null>(null);
 
-  async function togglePinDubber(d: Dubber, e: MouseEvent) {
-    e.stopPropagation();
-    e.preventDefault();
+  async function togglePinDubber(d: Dubber, e?: Event) {
+    e?.stopPropagation();
+    e?.preventDefault();
     const api = window.anixApi?.type;
     if (!api?.pin || !api?.unpin || pinningId != null) return;
     const nextPinned = !d.pinned;
@@ -288,6 +302,12 @@
       dubbers = sortDubbersPinnedFirst(
         dubbers.map((item) => (item.id === d.id ? { ...item, pinned: nextPinned } : item)),
       );
+      if (isTv) {
+        showToast(nextPinned ? `«${d.name}» закреплена` : `«${d.name}» откреплена`);
+        // Пересортировка переносит DOM-узел и сбрасывает фокус — возвращаем его на ту же озвучку.
+        await tick();
+        restoreTvFocus(document.querySelector<HTMLElement>(`.watch-modal__variant-row[data-dubber-id="${d.id}"]`));
+      }
     } catch {
       /* ignore */
     } finally {
@@ -717,6 +737,8 @@
 
     const doOpenPlayer = () => {
       if (isMobile) { startMobileEpisode(epPosition); return; }
+      // На TV — только встроенный плеер: выбор VLC/веб-плеера с пульта не нужен.
+      if (isTv) { void startDesktopEpisode('builtin', epPosition); return; }
       const prefs = getMobilePlayerPrefs();
       if (prefs.ask) desktopChooserEp = epPosition;
       else void startDesktopEpisode(prefs.kind === 'anix' ? 'builtin' : prefs.kind, epPosition);
@@ -787,8 +809,8 @@
     }
   }
 
-  async function toggleEpisodeWatched(ep: Episode, event: MouseEvent) {
-    event.stopPropagation();
+  async function toggleEpisodeWatched(ep: Episode, event?: Event) {
+    event?.stopPropagation();
     if (!selectedSource || actionBusy) return;
     const next = !isEpisodeWatched(ep);
     const key = `ep-${ep.position}`;
@@ -821,6 +843,18 @@
     } finally {
       actionBusy = '';
     }
+  }
+
+  /** TV: массовые отметки только через подтверждение — с пульта легко промахнуться. */
+  function confirmSetAllWatched(watched: boolean) {
+    openConfirm({
+      title: watched ? 'Отметить все серии?' : 'Снять все отметки?',
+      text: watched
+        ? `Все ${episodes.length} ${epWord(episodes.length)} будут отмечены просмотренными.`
+        : `Отметки просмотра будут сняты с ${watchedCount} ${epWord(watchedCount)}.`,
+      yesLabel: watched ? 'Отметить' : 'Снять',
+      onYes: () => { void setAllWatched(watched); },
+    });
   }
 
   async function resolveDownloadItem(ep: Episode): Promise<DownloadItem | null> {
@@ -1127,7 +1161,7 @@
 
 </script>
 
-<div class="watch-modal" role="dialog" aria-modal="true">
+<div class="watch-modal" class:watch-modal--tv={isTv} role="dialog" aria-modal="true">
   <button type="button" class="watch-modal__backdrop" aria-label="Закрыть" onclick={close}></button>
 
   <div class="watch-modal__panel">
@@ -1197,7 +1231,8 @@
               <div class="watch-modal__loading watch-modal__loading--center">{updatesError}</div>
             {:else}
               {#each updates as update, i (`${update.last_episode_update_name}-${update.last_episode_source_update_id}-${update.last_episode_update_date}-${i}`)}
-                <article class="watch-modal__update-row">
+                <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+                <article class="watch-modal__update-row" tabindex={isTv ? 0 : undefined}>
                   <span class="watch-modal__update-marker" aria-hidden="true"></span>
                   <div class="watch-modal__update-content">
                     <p>
@@ -1276,6 +1311,30 @@
                 </div>
               {/if}
 
+              {#if isTv}
+                <div class="watch-modal__tv-actions">
+                  {#if nextEpisode}
+                    {@const nextNum = episodeDisplayNumber(nextEpisode, episodes)}
+                    <button
+                      type="button"
+                      class="watch-modal__tv-action watch-modal__tv-action--primary"
+                      onclick={() => handleEpisodePlay(nextEpisode.position)}
+                    >
+                      {lastWatchedEpisode ? 'Продолжить' : 'Начать'} · {nextNum != null ? `${nextNum} серия` : (nextEpisode.name || 'серия')}
+                    </button>
+                  {/if}
+                  <button type="button" class="watch-modal__tv-action" onclick={() => confirmSetAllWatched(true)} disabled={actionBusy !== '' || remainingCount === 0}>
+                    Отметить все
+                  </button>
+                  <button type="button" class="watch-modal__tv-action" onclick={() => confirmSetAllWatched(false)} disabled={actionBusy !== '' || watchedCount === 0}>
+                    Снять отметки
+                  </button>
+                  <span class="watch-modal__tv-progress">
+                    Просмотрено {watchedCount} из {episodes.length}
+                    <span class="watch-modal__tv-hint">Удерживайте OK на серии — отметить</span>
+                  </span>
+                </div>
+              {:else}
               <div class="watch-modal__episodes-toolbar" role="search">
                 <label class="watch-modal__episodes-search">
                   <span class="watch-modal__episodes-search-icon" aria-hidden="true">{@html searchIconSvg}</span>
@@ -1308,6 +1367,7 @@
                   </div>
                 </div>
               </div>
+              {/if}
 
               {#if downloadStatus}
                 <div class="watch-modal__download-status">{downloadStatus}</div>
@@ -1325,9 +1385,15 @@
                     class:watch-modal__episode-card--watched={watched}
                     class:watch-modal__episode-card--active={selectedEpisodePos === ep.position}
                     class:watch-modal__episode-card--unnumbered={unnumbered}
+                    class:watch-modal__episode-card--next={isTv && nextEpisodePos === ep.position}
                     data-position={ep.position}
                   >
-                    <button type="button" class="watch-modal__episode-main" onclick={() => handleEpisodePlay(ep.position)}>
+                    <button
+                      type="button"
+                      class="watch-modal__episode-main"
+                      use:tvLongPress={isTv ? () => void toggleEpisodeWatched(ep) : null}
+                      onclick={() => handleEpisodePlay(ep.position)}
+                    >
                       {#if unnumbered}
                         <span class="watch-modal__episode-name watch-modal__episode-name--solo">
                           {ep.name?.trim() || 'Смотреть онлайн'}
@@ -1336,7 +1402,11 @@
                         <span class="watch-modal__episode-num">{displayNum}</span>
                         <span class="watch-modal__episode-name">{ep.name || `Серия ${displayNum}`}</span>
                       {/if}
+                      {#if isTv && watched}
+                        <span class="watch-modal__episode-check" aria-label="Просмотрено">{@html checkIconSvg}</span>
+                      {/if}
                     </button>
+                    {#if !isTv}
                     <span class="watch-modal__episode-actions">
                       <button
                         type="button"
@@ -1364,6 +1434,7 @@
                         {/if}
                       </button>
                     </span>
+                    {/if}
                   </article>
                 {/each}
               </div>
@@ -1402,6 +1473,9 @@
                 aria-selected={variantFilter === 'sub'}
                 onclick={() => variantFilter = 'sub'}
               >Субтитры</button>
+              {#if isTv}
+                <span class="watch-modal__tv-hint watch-modal__tv-hint--end">Удерживайте OK — закрепить озвучку</span>
+              {/if}
             </div>
 
             {#if isMobile && !hintVariantsHidden}
@@ -1426,8 +1500,11 @@
                   <div
                     class="watch-modal__variant-row"
                     class:watch-modal__variant-row--pinned={pinned}
+                    class:watch-modal__variant-row--current={isTv && selectedDubber?.id === d.id}
                     role="button"
                     tabindex="0"
+                    data-dubber-id={d.id}
+                    use:tvLongPress={isTv ? () => void togglePinDubber(d) : null}
                     onclick={() => openDubber(d)}
                     onkeydown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
@@ -1436,6 +1513,11 @@
                       }
                     }}
                   >
+                    {#if isTv}
+                      {#if pinned}
+                        <span class="watch-modal__variant-pinmark" aria-label="Закреплено">{@html iconPin(15)}</span>
+                      {/if}
+                    {:else}
                     <button
                       type="button"
                       class="watch-modal__variant-pin"
@@ -1447,6 +1529,7 @@
                     >
                       {@html iconPin(15)}
                     </button>
+                    {/if}
 
                     {#if iconUrl}
                       <span class="watch-modal__variant-avatar" style="background-image:url({iconUrl})"></span>
@@ -1527,7 +1610,7 @@
     {/if}
 
     {#if showConfirm}
-      <div class="watch-modal__confirm">
+      <div class="watch-modal__confirm" role="dialog" aria-modal="true" aria-label={confirmTitle}>
         <div class="watch-modal__confirm-inner">
           <div class="watch-modal__confirm-title">{confirmTitle}</div>
           <div class="watch-modal__confirm-text">{confirmText}</div>

@@ -201,6 +201,12 @@ function lowerFirstRu(text: string): string {
   return text.charAt(0).toLocaleLowerCase('ru') + text.slice(1);
 }
 
+/** «каждую пятницу» — компактная строка расписания для TV-страницы релиза. */
+export function formatEveryWeekdayShort(key: AirWeekdayKey | null | undefined): string {
+  if (!key) return '';
+  return lowerFirstRu(EVERY_LABEL[key] ?? '');
+}
+
 export function formatAirTriggerLabel(model: ReleaseAirCalendarModel, fallback = 'Выходит'): string {
   const next = model.nextEpisode;
   const verb = /анонс/i.test(fallback) ? 'Выйдет' : 'Выходит';

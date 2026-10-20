@@ -16,6 +16,9 @@ function applyGpuFlags() {
     app.disableHardwareAcceleration();
   }
 
+  // Звуки уведомлений в скрытом окне без жеста пользователя.
+  app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
   if (process.platform !== 'win32') {
     app.commandLine.appendSwitch('disable-gpu-vsync');
   }

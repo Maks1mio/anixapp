@@ -838,6 +838,7 @@
   // ── Overlay idle-hide ──────────────────────────────────────────────────────
   const IDLE_MS = 3000;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastPointerPosition: { x: number; y: number } | null = null;
 
   function chromeHideBlocked(): boolean {
     if (popoverType != null) return true;
@@ -884,6 +885,16 @@
 
   function onPointerActivity(e: Event) {
     if (e instanceof PointerEvent && e.pointerType === 'touch' && e.type === 'pointermove') return;
+    if (e instanceof PointerEvent && e.type === 'pointermove') {
+      const { clientX: x, clientY: y } = e;
+      if (lastPointerPosition?.x === x && lastPointerPosition.y === y) return;
+      lastPointerPosition = { x, y };
+    }
+    showAndSchedule();
+  }
+
+  function onPlayerEnter(e: MouseEvent) {
+    lastPointerPosition = { x: e.clientX, y: e.clientY };
     showAndSchedule();
   }
 
@@ -4397,8 +4408,6 @@
     window.addEventListener('wheel', onWheel, wheelOpts);
     window.addEventListener('pointermove', onPointerActivity, true);
     window.addEventListener('pointerdown', onPointerActivity, true);
-    document.addEventListener('mouseenter', showAndSchedule, true);
-    document.addEventListener('mouseleave', onPointerLeaveWindow, true);
     window.addEventListener('blur', onPointerLeaveWindow);
 
     return () => {
@@ -4413,8 +4422,6 @@
       window.removeEventListener('wheel', onWheel, wheelOpts);
       window.removeEventListener('pointermove', onPointerActivity, true);
       window.removeEventListener('pointerdown', onPointerActivity, true);
-      document.removeEventListener('mouseenter', showAndSchedule, true);
-      document.removeEventListener('mouseleave', onPointerLeaveWindow, true);
       window.removeEventListener('blur', onPointerLeaveWindow);
       stopUpscale();
       core.destroy();
@@ -4549,7 +4556,8 @@
     bind:this={playerWrapEl}
     onpointermove={onPointerActivity}
     onpointerdown={onPointerActivity}
-    onmouseenter={showAndSchedule}
+    onmouseenter={onPlayerEnter}
+    onmouseleave={onPointerLeaveWindow}
     role="presentation"
   >
     <div class="watch-page__player-wrap">

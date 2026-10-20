@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import Tabs from '../components/Tabs.svelte';
   import TopReleaseRow from '../components/TopReleaseRow.svelte';
@@ -6,6 +6,7 @@
   import { headlineFromLoadError } from '../utils/content-load-error';
   import { mapCardData } from './Release/_utils';
   import type { ReleaseCardData } from '../types/release';
+  import { toIpcArgs } from '../utils/ipc-args';
   import {
     DEFAULT_POPULAR_TAB,
     getPopularTabFilterArgs,
@@ -94,7 +95,7 @@
     try {
       const data = await window.anixApi.release.filter(
         nextPage,
-        getPopularTabFilterArgs(activeTab),
+        toIpcArgs(getPopularTabFilterArgs(activeTab)),
         true,
       ) as { content?: unknown[] };
       const content = (data?.content ?? []) as Record<string, unknown>[];
@@ -187,18 +188,18 @@
 
 <div class="view view-popular discover-page" bind:this={wrapEl}>
   <div class="view-header">
-    <h1 class="view-header__title">Популярное</h1>
-    <p class="view-header__subtitle">Топ релизов по категориям</p>
+    <h1 class="view-header__title">РџРѕРїСѓР»СЏСЂРЅРѕРµ</h1>
+    <p class="view-header__subtitle">РўРѕРї СЂРµР»РёР·РѕРІ РїРѕ РєР°С‚РµРіРѕСЂРёСЏРј</p>
   </div>
 
   <Tabs tabs={tabs} activeId={activeTab} rootClassName="releases-type" onChange={onTabChange} />
 
   {#if loadState === 'loading' && items.length === 0}
-    <div class="discover-page__loading">Загрузка…</div>
+    <div class="discover-page__loading">Р—Р°РіСЂСѓР·РєР°вЂ¦</div>
   {:else if loadState === 'error'}
     <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadPage()} />
   {:else if loadState === 'empty'}
-    <div class="discover-page__empty">Ничего не найдено</div>
+    <div class="discover-page__empty">РќРёС‡РµРіРѕ РЅРµ РЅР°Р№РґРµРЅРѕ</div>
   {:else}
     <ol class="top-release-list">
       {#each items as item, index (item.id)}
@@ -208,7 +209,7 @@
       {/each}
     </ol>
     {#if isLoading}
-      <div class="discover-page__loading discover-page__loading--inline">Загрузка…</div>
+      <div class="discover-page__loading discover-page__loading--inline">Р—Р°РіСЂСѓР·РєР°вЂ¦</div>
     {/if}
   {/if}
 </div>

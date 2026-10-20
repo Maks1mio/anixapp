@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { iconLock, iconPencil, iconShare } from './icons';
+  import { iconPencil, iconShare } from './icons';
   import OAuthBrandIcon from './OAuthBrandIcon.svelte';
   import { showToast } from '../stores/toast';
   import { formatHistoryViewTime } from '../utils/historyFormat';
@@ -13,8 +13,9 @@
   import ProfilePanelBlocklistView from './ProfilePanelBlocklistView.svelte';
   import ProfilePanelChangeEmailView from './ProfilePanelChangeEmailView.svelte';
   import ProfilePanelChangePasswordView from './ProfilePanelChangePasswordView.svelte';
-  import { resolveBadgeImageUrl, resolveBadgeName, rememberBadgeCatalogEntries, enrichLockedBadgePreviews } from '../utils/badge';
-  import { resolveJacksonRefs } from '../utils/jackson-refs';
+  import ProfileBadgesView from './profile-badges/ProfileBadgesView.svelte';
+  import { badgeImage } from '../utils/badge-collection';
+  import type { ApiBadge } from '../types/api';
   import { compressImageForUpload } from '../utils/compressImage';
   import BlogCreateModal from './feed/BlogCreateModal.svelte';
   import { createLinkCode, fetchMyBadges, type AppBadge, type LinkCodeResult } from '../services/badges-api';
@@ -27,15 +28,6 @@
     id: number;
     login: string;
     timestamp: number;
-  }
-
-  interface BadgeItem {
-    id: number;
-    name: string;
-    type: number;
-    image_url: string;
-    timestamp: number;
-    available: boolean;
   }
 
   interface ThemeOption {
@@ -200,42 +192,6 @@
   let currentBadgeName = $state<string | null>(null);
   let currentBadgeUrl = $state<string | null>(null);
   let currentBadgeId = $state<number | null>(null);
-  let badges = $state<BadgeItem[]>([]);
-  let badgesTotalCount = $state(0);
-  let badgesState = $state<'idle' | 'loading' | 'ready' | 'error'>('idle');
-  let badgeBusy = $state(false);
-
-  const badgesAvailableCount = $derived(badges.filter((b) => b.available).length);
-
-  function mapBadgeRow(row: Record<string, unknown>): BadgeItem | null {
-    const id = Number(row.id ?? 0);
-    if (!id) return null;
-    const name = resolveBadgeName(row);
-    const imageUrl = resolveBadgeImageUrl(row) ?? '';
-    const timestamp = Number(row.timestamp ?? 0);
-    // Как в APK: слот без имени — ещё не получен (id есть, превью пустое).
-    const available = !!name;
-    return {
-      id,
-      name,
-      type: Number(row.type ?? 0),
-      image_url: imageUrl,
-      timestamp: Number.isFinite(timestamp) ? timestamp : 0,
-      available,
-    };
-  }
-
-  function onBadgeClick(badge: BadgeItem) {
-    if (!badge.available) {
-      showToast(
-        'Этот значок пока недоступен. Получайте достижения и проявляйте активность на Anixart.',
-        'err',
-      );
-      return;
-    }
-    void applyBadge(badge);
-  }
-
   let themes = $state<ThemeOption[]>([]);
   let selectedThemeId = $state<number>(1);
   let themeBusy = $state(false);
@@ -378,7 +334,7 @@
       case 'nickname': return 'Изменить никнейм';
       case 'social': return 'Социальные сети';
       case 'telegram': return 'Telegram и значки Anixapp';
-      case 'badge': return 'Изменить значок';
+      case 'badge': return 'Установка значка';
       case 'health': return 'Здоровье аккаунта';
       case 'hiddenChannels': return 'Скрытые каналы';
       case 'blocklist': return 'Блоклист';
@@ -419,7 +375,6 @@
 
   function openBadgeScreen() {
     screen = 'badge';
-    void loadBadges();
   }
 
   function openShowcasePicker() {
@@ -733,7 +688,7 @@
       ).trim();
       avatarBanned = !!(settings.is_change_avatar_banned);
 
-      const badge = settings.badge as BadgeItem | null | undefined;
+      const badge = settings.badge as ApiBadge | null | undefined;
       if (badge && typeof badge === 'object') {
         currentBadgeId = Number(badge.id) || null;
         currentBadgeName = String(badge.name ?? currentBadgeName ?? '') || null;
@@ -751,140 +706,22 @@
     }
   }
 
-  async function loadBadges() {
-    const api = window.anixApi?.settings;
-    if (!api?.getBadges) {
-      badgesState = 'error';
-      return;
-    }
-    badgesState = 'loading';
-    badges = [];
-    badgesTotalCount = 0;
-    try {
-      const merged: BadgeItem[] = [];
-      let page = 0;
-      const seenIds = new Set<number>();
-      let totalCount = 0;
-      let profileBadge: Record<string, unknown> | null = null;
-
-      while (page <= 50) {
-        const res = resolveJacksonRefs(await api.getBadges(page)) as {
-          content?: unknown[];
-          profile?: { badge?: Record<string, unknown> };
-          total_count?: number;
-          totalCount?: number;
-          total_page_count?: number;
-          totalPageCount?: number;
-          current_page?: number;
-          currentPage?: number;
-        };
-        const rows = Array.isArray(res?.content) ? res.content : [];
-        if (!rows.length) break;
-        const before = merged.length;
-        for (const row of rows) {
-          if (!row || typeof row !== 'object') continue;
-          const mapped = mapBadgeRow(row as Record<string, unknown>);
-          if (mapped && !seenIds.has(mapped.id)) {
-            seenIds.add(mapped.id);
-            merged.push(mapped);
-          }
-        }
-        if (merged.length === before) break;
-
-        const nextCount = Number(
-          (res as { total_count?: number; totalCount?: number }).total_count
-          ?? (res as { totalCount?: number }).totalCount,
-        );
-        if (Number.isFinite(nextCount) && nextCount > 0) totalCount = nextCount;
-
-        const pb = res?.profile?.badge;
-        if (pb && typeof pb === 'object') profileBadge = pb as Record<string, unknown>;
-
-        if (totalCount > 0 && merged.length >= totalCount) break;
-        page += 1;
-      }
-
-      badges = await enrichLockedBadgePreviews(
-        merged,
-        window.anixApi?.search?.profiles
-          ? (query, page = 0) => window.anixApi!.search!.profiles(query, page)
-          : undefined,
-      );
-      rememberBadgeCatalogEntries(
-        badges
-          .filter((item) => item.available && item.name && item.image_url)
-          .map((item) => ({
-            id: item.id,
-            name: item.name,
-            type: item.type,
-            image_url: item.image_url,
-          })),
-      );
-      badgesTotalCount = totalCount > 0 ? totalCount : merged.length;
-
-      if (profileBadge) {
-        currentBadgeId = Number(profileBadge.id) || null;
-        currentBadgeName = String(profileBadge.name ?? '') || null;
-        currentBadgeUrl = String(profileBadge.image_url ?? '') || null;
-      }
-      badgesState = 'ready';
-    } catch {
-      badgesState = 'error';
-    }
-  }
-
-  async function applyBadge(badge: BadgeItem) {
-    if (!badge.available) return;
-    if (badgeBusy || !window.anixApi?.settings?.setBadge) return;
-    if (currentBadgeId === badge.id) return;
-    badgeBusy = true;
-    try {
-      const res = await window.anixApi.settings.setBadge(badge.id);
-      if (res?.code != null && res.code !== 0) {
-        showToast('Не удалось установить значок', 'err');
-        return;
-      }
-      currentBadgeId = badge.id;
-      currentBadgeName = badge.name;
-      currentBadgeUrl = badge.image_url;
-      onProfilePatched?.({
-        badge: {
-          id: badge.id,
-          name: badge.name,
-          type: badge.type,
-          image_url: badge.image_url,
-        },
-      });
-      showToast('Значок обновлён');
-      goMenu();
-    } catch {
-      showToast('Не удалось установить значок', 'err');
-    } finally {
-      badgeBusy = false;
-    }
-  }
-
-  async function clearBadge() {
-    if (badgeBusy || !window.anixApi?.settings?.removeBadge) return;
-    if (!currentBadgeId && !currentBadgeUrl) return;
-    badgeBusy = true;
-    try {
-      const res = await window.anixApi.settings.removeBadge();
-      if (res?.code != null && res.code !== 0) {
-        showToast('Не удалось сбросить значок', 'err');
-        return;
-      }
+  /** Значок установлен / снят на экране значков (Anixart 10.5) */
+  function handleBadgeChanged(badge: ApiBadge | null) {
+    if (!badge) {
       currentBadgeId = null;
       currentBadgeName = null;
       currentBadgeUrl = null;
       onProfilePatched?.({ badge: null });
-      showToast('Значок сброшен');
-      goMenu();
-    } catch {
-      showToast('Не удалось сбросить значок', 'err');
-    } finally {
-      badgeBusy = false;
+      return;
     }
+    const imageUrl = badgeImage(badge, 'anim') ?? badge.image_url ?? '';
+    currentBadgeId = badge.id;
+    currentBadgeName = badge.name ?? null;
+    currentBadgeUrl = imageUrl || null;
+    onProfilePatched?.({
+      badge: { id: badge.id, name: badge.name ?? '', type: badge.type ?? 0, image_url: imageUrl },
+    });
   }
 
   async function applyTheme(id: number) {
@@ -958,6 +795,31 @@
     } catch {
       loginHistory = [];
       loginHistoryState = 'error';
+    }
+  }
+
+  let loginHistoryClearArmed = $state(false);
+  let loginHistoryClearBusy = $state(false);
+
+  /** POST profile/preference/login/history/delete (Anixart 10.5); первое нажатие — подтверждение */
+  async function clearLoginHistory() {
+    if (loginHistoryClearBusy || !window.anixApi?.profile?.deleteLoginHistory) return;
+    if (!loginHistoryClearArmed) {
+      loginHistoryClearArmed = true;
+      setTimeout(() => (loginHistoryClearArmed = false), 4000);
+      return;
+    }
+    loginHistoryClearBusy = true;
+    try {
+      const res = await window.anixApi.profile.deleteLoginHistory();
+      if (res?.code != null && res.code !== 0) throw new Error();
+      loginHistory = [];
+      showToast('История изменений очищена');
+    } catch {
+      showToast('Не удалось очистить историю', 'err');
+    } finally {
+      loginHistoryClearBusy = false;
+      loginHistoryClearArmed = false;
     }
   }
 
@@ -1496,7 +1358,20 @@
         </button>
       </div>
       <section class="profile-panel__login-history" aria-labelledby="login-history-title">
-        <h3 id="login-history-title" class="profile-panel__login-history-title">История изменений</h3>
+        <div class="profile-panel__login-history-head">
+          <h3 id="login-history-title" class="profile-panel__login-history-title">История изменений</h3>
+          {#if loginHistory.length > 0}
+            <button
+              type="button"
+              class="profile-panel__login-history-clear"
+              class:profile-panel__login-history-clear--armed={loginHistoryClearArmed}
+              disabled={loginHistoryClearBusy}
+              onclick={() => void clearLoginHistory()}
+            >
+              {loginHistoryClearArmed ? 'Точно очистить?' : 'Очистить'}
+            </button>
+          {/if}
+        </div>
         {#if loginHistoryState === 'loading'}
           <p class="profile-panel__edit-hint">Загрузка…</p>
         {:else if loginHistoryState === 'error'}
@@ -1624,84 +1499,7 @@
       {/if}
     </div>
   {:else if screen === 'badge'}
-    <div class="profile-panel__edit-form">
-      {#if badgesState === 'loading' || badgesState === 'idle'}
-        <p class="profile-panel__edit-hint">Загрузка значков…</p>
-      {:else if badgesState === 'error'}
-        <p class="profile-panel__edit-hint profile-panel__edit-hint--err">Не удалось загрузить значки</p>
-        <button type="button" class="profile-panel__retry" onclick={() => void loadBadges()}>Повторить</button>
-      {:else if badges.length === 0}
-        <p class="profile-panel__edit-hint">
-          У вас пока нет доступных значков. Они появляются за активность и достижения в Anixart.
-        </p>
-      {:else}
-        {#if badgesTotalCount > 0}
-          <p class="profile-panel__badge-summary">
-            Получено {badgesAvailableCount} из {badgesTotalCount}
-          </p>
-        {/if}
-        <div class="profile-panel__badge-grid" role="listbox" aria-label="Значки профиля">
-          {#each badges as badge (badge.id)}
-            <button
-              type="button"
-              class="profile-panel__badge-option"
-              class:profile-panel__badge-option--on={badge.available && currentBadgeId === badge.id}
-              class:profile-panel__badge-option--locked={!badge.available}
-              role="option"
-              aria-selected={badge.available && currentBadgeId === badge.id}
-              aria-disabled={!badge.available}
-              disabled={badgeBusy}
-              onclick={() => onBadgeClick(badge)}
-            >
-              {#if badge.image_url}
-                <div
-                  class="profile-panel__badge-option-preview"
-                  class:profile-panel__badge-option-preview--locked={!badge.available}
-                >
-                  <UserBadge
-                    url={badge.image_url}
-                    name={badge.name}
-                    size="lg"
-                    class="profile-panel__badge-option-img"
-                    showTooltip={false}
-                  />
-                  {#if !badge.available}
-                    <span class="profile-panel__badge-option-lock" aria-hidden="true">{@html iconLock(18)}</span>
-                  {/if}
-                </div>
-              {:else}
-                <span
-                  class="profile-panel__badge-option-img profile-panel__badge-option-img--placeholder"
-                  class:profile-panel__badge-option-img--locked={!badge.available}
-                  aria-hidden="true"
-                >
-                  {#if !badge.available}
-                    <span class="profile-panel__badge-option-lock">{@html iconLock(18)}</span>
-                  {/if}
-                </span>
-              {/if}
-              {#if badge.available && badge.name}
-                <span class="profile-panel__badge-option-name">{badge.name}</span>
-              {:else if !badge.available}
-                <span class="profile-panel__badge-option-name profile-panel__badge-option-name--locked">
-                  {badge.name || 'Недоступен'}
-                </span>
-              {/if}
-            </button>
-          {/each}
-        </div>
-      {/if}
-      {#if currentBadgeId || currentBadgeUrl}
-        <button
-          type="button"
-          class="profile-panel__edit-save profile-panel__edit-save--ghost"
-          disabled={badgeBusy}
-          onclick={() => void clearBadge()}
-        >
-          {badgeBusy ? 'Сохранение…' : 'Сбросить значок'}
-        </button>
-      {/if}
-    </div>
+    <ProfileBadgesView {profileId} {login} {avatarUrl} onBadgeChanged={handleBadgeChanged} />
   {/if}
 
   {#if privacyPicker}

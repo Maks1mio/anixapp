@@ -5,13 +5,16 @@
   interface Props {
     label: string;
     tabId: string;
+    /** Куда вести вместо `/home/:tabId` (например, полный список закладок). */
+    href?: string;
+    text?: string;
   }
 
-  let { label, tabId }: Props = $props();
+  let { label, tabId, href, text = 'Посмотреть всю категорию' }: Props = $props();
 
   function openCategory(e?: Event) {
     e?.preventDefault();
-    navigate(`/home/${tabId}`);
+    navigate(href ?? `/home/${tabId}`);
   }
 
   function onKeydown(e: KeyboardEvent) {
@@ -27,13 +30,13 @@
   class="tv-category-see-all uiv2-anime-card uiv2-anime-card--vertical"
   role="button"
   tabindex="0"
-  aria-label="Посмотреть всю категорию: {label}"
+  aria-label="{text}: {label}"
   onclick={openCategory}
   onkeydown={onKeydown}
 >
   <div class="uiv2-anime-card__poster tv-category-see-all__poster">
     <span class="tv-category-see-all__icon" aria-hidden="true">{@html iconChevronRight(28)}</span>
-    <span class="tv-category-see-all__text">Посмотреть всю категорию</span>
+    <span class="tv-category-see-all__text">{text}</span>
   </div>
   <div class="uiv2-anime-card__body">
     <h3 class="uiv2-anime-card__title">{label}</h3>

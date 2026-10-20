@@ -1,26 +1,38 @@
 /**
- * Сборка Android TV APK: Vite TV-бандл → Capacitor sync → Gradle.
+ * Единственный TV APK: интерфейс грузится с https://tv.anixapp.com, а не из APK.
+ *
+ * За счёт этого правки UI (включая новые страницы) доезжают до пользователей
+ * простым перезаходом в приложение — после `npm run deploy:tv` пересобирать APK
+ * и перевыпускать релиз не нужно. APK обновляют только когда меняется нативный код.
+ *
+ *   npm run build:android-tv                      # release/AnixApp-TV-<version>.apk
+ *   ANIXAPP_TV_REMOTE_URL=https://… npm run …     # другой адрес вместо tv.anixapp.com
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync, copyFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { describeMissingAndroidEnv, findAndroidSdk, findJavaHome, javaMajor } from './lib/android-env.mjs';
+
+const REMOTE_URL = (process.env.ANIXAPP_TV_REMOTE_URL || 'https://tv.anixapp.com').replace(/\/$/, '');
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const androidDir = path.join(root, 'android');
-const sdkDir = process.env.ANDROID_HOME
-  || process.env.ANDROID_SDK_ROOT
-  || path.join(process.env.LOCALAPPDATA || '', 'Android', 'Sdk');
-const studioJbr = 'C:\\Program Files\\Android\\Android Studio\\jbr';
-const javaHome = existsSync(path.join(studioJbr, 'bin', 'java.exe'))
-  ? studioJbr
-  : (process.env.JAVA_HOME || studioJbr);
+const webDir = path.join(root, 'dist-android');
+const sdkDir = findAndroidSdk();
+const javaHome = findJavaHome();
+
+if (!sdkDir || !javaHome) {
+  console.error(describeMissingAndroidEnv({ javaHome, sdkDir }));
+  process.exit(1);
+}
 
 const env = {
   ...process.env,
   ANDROID_HOME: sdkDir,
   ANDROID_SDK_ROOT: sdkDir,
   JAVA_HOME: javaHome,
+  ANIXAPP_TV_REMOTE_URL: REMOTE_URL,
 };
 
 function run(cmd, args, cwd = root) {
@@ -35,43 +47,41 @@ function run(cmd, args, cwd = root) {
   }
 }
 
-function yarn(args) {
-  run('yarn', args);
-}
+console.log(`→ TV APK: UI грузится с ${REMOTE_URL}/`);
+console.log('  Правки интерфейса доезжают через npm run deploy:tv (APK пересобирать не нужно).');
+console.log(`  JDK: ${javaHome} (Java ${javaMajor(javaHome) || '?'})`);
+console.log(`  Android SDK: ${sdkDir}`);
 
-function npx(args) {
-  run('npx', args);
-}
+// Capacitor требует webDir для sync; реальный интерфейс берётся с сервера,
+// локальная страница остаётся только заглушкой на случай недоступности.
+mkdirSync(webDir, { recursive: true });
+writeFileSync(
+  path.join(webDir, 'index.html'),
+  `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${REMOTE_URL}/"></head>`
+  + '<body style="margin:0;background:#0d0d0d;color:#9a9a9a;font:500 15px/1.4 system-ui,sans-serif">'
+  + '<p style="padding:2rem">Загружаю интерфейс с ' + REMOTE_URL + '…</p></body></html>\n',
+);
 
-console.log('→ Vite TV web bundle → dist-android (встроенный фронт, лучше для Anime4K/WebGPU)');
-yarn(['cross-env', 'VITE_TV_MODE=1', 'ANIXAPP_OUT_DIR=dist-android', 'vite', 'build']);
+writeFileSync(
+  path.join(androidDir, 'local.properties'),
+  `sdk.dir=${sdkDir.replace(/\\/g, '\\\\')}\n`,
+);
 
-if (!existsSync(path.join(androidDir, 'app'))) {
-  console.log('→ Capacitor: add android');
-  npx(['cap', 'add', 'android']);
-}
-
-const localProps = path.join(androidDir, 'local.properties');
-writeFileSync(localProps, `sdk.dir=${sdkDir.replace(/\\/g, '\\\\')}\n`);
-
-console.log('→ Capacitor sync');
-npx(['cap', 'sync', 'android']);
-
-console.log('→ Gradle assembleDebug');
-const gradlew = process.platform === 'win32' ? 'gradlew.bat' : 'sh';
-const gradlewArgs = process.platform === 'win32'
-  ? ['assembleDebug']
-  : ['./gradlew', 'assembleDebug'];
-run(gradlew, gradlewArgs, androidDir);
+run('npx', ['cap', 'sync', 'android']);
+const gradlew = process.platform === 'win32' ? 'gradlew.bat' : './gradlew';
+run(gradlew, ['assembleDebug'], androidDir);
 
 const apkSrc = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
-const outDir = path.join(root, 'release');
-mkdirSync(outDir, { recursive: true });
 if (!existsSync(apkSrc)) {
-  console.error('APK not found:', apkSrc);
+  console.error('APK не найден:', apkSrc);
   process.exit(1);
 }
+
+const outDir = path.join(root, 'release');
+mkdirSync(outDir, { recursive: true });
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
-const apkDest = path.join(outDir, `AnixApp-TV-${pkg.version}-alpha.apk`);
+const apkDest = path.join(outDir, `AnixApp-TV-${pkg.version}.apk`);
 copyFileSync(apkSrc, apkDest);
-console.log('✓ APK (Android TV):', apkDest);
+
+console.log('✓ APK:', apkDest);
+console.log(`✓ UI: ${REMOTE_URL} (обновляется через npm run deploy:tv)`);

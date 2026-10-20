@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from 'svelte';
+  import { onMount, onDestroy, tick, untrack } from 'svelte';
   import Page from './Page.svelte';
   import {
     iconMoreHorizontal,
@@ -8,10 +8,13 @@
     iconBan,
     iconPlus,
   } from './icons';
+  import { get } from 'svelte/store';
   import {
     openProfilePanel,
     setProfilePanelInnerView,
     updateProfilePanelLogin,
+    profilePanelPendingEditScreen,
+    type ProfilePanelEditScreen,
     type ProfilePanelInnerView,
   } from '../stores/profile-panel';
   import { resolveCdnAssetUrl, toCdnProxyUrl, fetchCdnJson } from '../utils/posterUrl';
@@ -30,12 +33,13 @@
     PROFILE_BLOCKED_BY_USER_NOTICE,
     PROFILE_PRIVACY_NOTICE,
   } from '../views/Profile/v2/profile-privacy';
-  import ProfileStatsSection from '../views/Profile/v2/components/ProfileStatsSection.svelte';
   import ProfileDynamicsSection from '../views/Profile/v2/components/ProfileDynamicsSection.svelte';
   import ProfileHistorySection from '../views/Profile/v2/components/ProfileHistorySection.svelte';
   import ProfilePanelFriendsView from './ProfilePanelFriendsView.svelte';
   import ProfilePanelEditView from './ProfilePanelEditView.svelte';
   import ProfilePanelLoginHistoryView from './ProfilePanelLoginHistoryView.svelte';
+  import ProfilePanelBadgesView from './ProfilePanelBadgesView.svelte';
+  import ProfileSectionsCard from './profile-sections/ProfileSectionsCard.svelte';
   import ProfileSocialSheet from './ProfileSocialSheet.svelte';
   import ProfilePanelMoreSheet, { type ProfileMoreAction } from './ProfilePanelMoreSheet.svelte';
   import { openFeedMediaLightbox } from '../utils/feed-media-lightbox';
@@ -89,7 +93,7 @@
   let blogChannelId = $state<number | null>(null);
   let blogMuted = $state(false);
   let blogMuteBusy = $state(false);
-  let editStartScreen = $state<'menu' | 'status' | 'nickname' | 'social'>('menu');
+  let editStartScreen = $state<ProfilePanelEditScreen>('menu');
 
   let badgeLottieEl = $state<HTMLElement | undefined>();
   let badgeAnim: { destroy?: () => void } | null = null;
@@ -446,9 +450,19 @@
     panelView = 'overview';
   }
 
-  function openEditView(screen: 'menu' | 'status' | 'nickname' | 'social' = 'menu') {
+  function openEditView(screen: ProfilePanelEditScreen = 'menu') {
     editStartScreen = screen;
     panelView = 'edit';
+  }
+
+  /** Deep link «profile-badge»: открыть экран значков своего профиля. */
+  function consumePendingEditScreen() {
+    if (!active || !isMyProfile || loadState !== 'ready') return;
+    const pending = get(profilePanelPendingEditScreen);
+    if (!pending) return;
+    profilePanelPendingEditScreen.set(null);
+    // После tick: при монтировании с готовым профилем иначе следом срабатывает сброс на overview
+    void tick().then(() => openEditView(pending));
   }
 
   function closeEditView() {
@@ -458,6 +472,16 @@
 
   function openLoginHistoryView() {
     panelView = 'loginHistory';
+  }
+
+  /** «Показать все» в разделе «Значки»: свой профиль — установка значка, чужой — просмотр коллекции */
+  function openBadgesView() {
+    if (isMyProfile) openEditView('badge');
+    else panelView = 'badges';
+  }
+
+  function closeBadgesView() {
+    panelView = 'overview';
   }
 
   function closeLoginHistoryView() {
@@ -489,6 +513,15 @@
       return;
     }
     setProfilePanelInnerView(panelView);
+  });
+
+  $effect(() => {
+    void active;
+    void isMyProfile;
+    void loadState;
+    // Подписка на сам стор: deep link приходит и когда панель уже открыта и загружена
+    void $profilePanelPendingEditScreen;
+    consumePendingEditScreen();
   });
 
   async function onFriendClick() {
@@ -700,11 +733,15 @@
 
   $effect(() => {
     void userId;
-    panelView = 'overview';
-    closeSocialSheet();
-    closeMoreSheet();
-    if (active) setProfilePanelInnerView('overview');
-    innerSlideReady = false;
+    // Только смена профиля: без untrack эффект перезапускался от active и сбрасывал
+    // экран, открытый deep link'ом (уведомление «Новое достижение» → значки)
+    untrack(() => {
+      panelView = 'overview';
+      closeSocialSheet();
+      closeMoreSheet();
+      if (active) setProfilePanelInnerView('overview');
+      innerSlideReady = false;
+    });
     const id = requestAnimationFrame(() => {
       innerSlideReady = true;
     });
@@ -986,19 +1023,17 @@
             </section>
 
             <div class="profile-panel__tab-body">
-              {#if !blockedByUser && !profile.is_stats_hidden}
-                <UiV2Card title="Статистика">
-                  <div class="profile-panel__stats">
-                    <ProfileStatsSection
-                      profile={profile}
-                      profileId={userId}
-                      isMyProfile={isMyProfile}
-                      showMoreLink
-                      plain
-                    />
-                  </div>
-                </UiV2Card>
-
+              {#if !blockedByUser}
+                <!-- Разделы как в Android 10.5: статистика, оценки, коллекции, комментарии, видео, значки -->
+                <ProfileSectionsCard
+                  {profile}
+                  profileId={userId}
+                  {isMyProfile}
+                  onOpenBadges={openBadgesView}
+                />
+              {/if}
+              {#if !blockedByUser && (!profile.is_stats_hidden || isMyProfile)}
+                <div class="profile-panel__cards">
                 {#if watchDynamics.length && dynamicsSummary}
                   <UiV2Card
                     title="Динамика просмотра"
@@ -1018,6 +1053,7 @@
                     </div>
                   </UiV2Card>
                 {/if}
+                </div>
               {:else if !blockedByUser && !isMyProfile}
                 <p class="profile-panel__hint">Статистика скрыта настройками приватности.</p>
               {/if}
@@ -1056,6 +1092,10 @@
                 onBack={closeEditView}
                 onProfilePatched={onProfilePatched}
               />
+            </Page>
+          {:else if panelView === 'badges'}
+            <Page scrollId={`profile-panel-badges-${userId}`} extraClass="profile-panel__page">
+              <ProfilePanelBadgesView profileId={userId} {login} onBack={closeBadgesView} />
             </Page>
           {:else if panelView === 'loginHistory'}
             <Page scrollId={`profile-panel-login-history-${userId}`} extraClass="profile-panel__page">

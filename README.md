@@ -19,7 +19,7 @@
 <p align="center">
   <a href="https://github.com/Maks1mio/anixapp/stargazers"><img src="https://img.shields.io/github/stars/Maks1mio/anixapp?style=flat&color=ff6b9d" alt="Stars" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Noncommercial-6ea8fe?style=flat" alt="Noncommercial license" /></a>
-  <img src="https://img.shields.io/badge/version-0.1.59-informational?style=flat" alt="Version" />
+  <a href="https://github.com/Maks1mio/anixapp/releases/latest"><img src="https://img.shields.io/github/v/release/Maks1mio/anixapp?style=flat&label=version&filter=v*" alt="Version" /></a>
   <img src="https://img.shields.io/badge/Electron-44-47848f?style=flat" alt="Electron" />
   <img src="https://img.shields.io/badge/Svelte-5-ff3e00?style=flat" alt="Svelte" />
   <img src="https://img.shields.io/badge/platforms-Windows_·_Linux_·_macOS_·_Android_·_Android_TV-3ddc84?style=flat" alt="Platforms" />

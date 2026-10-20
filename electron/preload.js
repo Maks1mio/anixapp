@@ -122,6 +122,10 @@ ipcRenderer.on('app:update-progress', (_, payload) => {
   window.dispatchEvent(new CustomEvent('app-update-progress', { detail: payload }));
 });
 
+ipcRenderer.on('notification-sound:playInApp', (_, payload) => {
+  window.dispatchEvent(new CustomEvent('anix:notificationSound', { detail: payload ?? {} }));
+});
+
 // macOS: пункты «Настройки…» и «Переход» в меню приложения.
 // Событие может прийти раньше, чем смонтируется интерфейс, — тогда ждём сигнала app:menuReady.
 let menuListenerReady = false;
@@ -293,6 +297,22 @@ contextBridge.exposeInMainWorld('electron', {
   getLinuxInstallType: () => ipcRenderer.invoke('app:getLinuxInstallType'),
   getSettings: () => ipcRenderer.invoke('app:getSettings'),
   saveSettings: (settings) => ipcRenderer.invoke('app:saveSettings', settings),
+  notifications: {
+    show: (payload) => ipcRenderer.invoke('notifications:show', payload ?? {}),
+    test: (kind) => ipcRenderer.invoke('notifications:test', kind),
+    getSettings: () => ipcRenderer.invoke('notifications:getSettings'),
+    saveSettings: (patch) => ipcRenderer.invoke('notifications:saveSettings', patch ?? {}),
+    listSounds: () => ipcRenderer.invoke('notifications:listSounds'),
+    previewSound: (soundId) => ipcRenderer.invoke('notifications:previewSound', soundId),
+    clear: () => ipcRenderer.invoke('notifications:clear'),
+    /** Живой превью угла / кастомный стек на реальном экране. */
+    previewCorner: (position, items) =>
+      ipcRenderer.invoke('notifications:previewCorner', position, items ?? null),
+    endPreviewCorner: () => ipcRenderer.invoke('notifications:endPreviewCorner'),
+    /** Статус FCM push (как на Android). */
+    fcmStatus: () => ipcRenderer.invoke('notifications:fcmStatus'),
+    fcmSync: () => ipcRenderer.invoke('notifications:fcmSync'),
+  },
   getDevBridgeStatus: () => ipcRenderer.invoke('dev:getBridgeStatus'),
   setDevBridgeEnabled: (enabled) => ipcRenderer.invoke('dev:setBridgeEnabled', enabled),
   regenerateDevBridgeToken: () => ipcRenderer.invoke('dev:regenerateBridgeToken'),
@@ -487,6 +507,7 @@ contextBridge.exposeInMainWorld('anixApi', {
     info: (id) => ipcRenderer.invoke('anix:profileById', id),
     getSocialPages: (profileId) => ipcRenderer.invoke('anix:profileSocial', profileId),
     getLoginHistory: (profileId, page = 0) => ipcRenderer.invoke('anix:loginHistory', profileId, page),
+    deleteLoginHistory: () => ipcRenderer.invoke('anix:deleteLoginHistory'),
     getFriends: (profileId, page = 0) => ipcRenderer.invoke('anix:friends', profileId, page),
     sendFriendRequest: (profileId) => ipcRenderer.invoke('anix:friendRequestSend', profileId),
     removeFriendRequest: (profileId) => ipcRenderer.invoke('anix:friendRequestRemove', profileId),
@@ -731,6 +752,14 @@ contextBridge.exposeInMainWorld('anixApi', {
     getBadges: (page = 0) => ipcRenderer.invoke('anix:getBadges', page),
     setBadge: (id) => ipcRenderer.invoke('anix:setBadge', id),
     removeBadge: () => ipcRenderer.invoke('anix:removeBadge'),
+    getBadgeCollection: (profileId, recent) => ipcRenderer.invoke('anix:getBadgeCollection', profileId, recent),
+    getBadgeSection: (profileId, categoryId, page = 0) => ipcRenderer.invoke('anix:getBadgeSection', profileId, categoryId, page),
+    pinBadge: (id) => ipcRenderer.invoke('anix:pinBadge', id),
+    unpinBadge: (id) => ipcRenderer.invoke('anix:unpinBadge', id),
+    reorderBadgeShowcase: (ids) => ipcRenderer.invoke('anix:reorderBadgeShowcase', ids),
+    pinProfileSection: (section) => ipcRenderer.invoke('anix:pinProfileSection', section),
+    previewBadgeCode: (code) => ipcRenderer.invoke('anix:previewBadgeCode', code),
+    claimBadgeCode: (code, badgeId) => ipcRenderer.invoke('anix:claimBadgeCode', code, badgeId),
     selectTheme: (id) => ipcRenderer.invoke('anix:selectTheme', id),
     setAvatar: (imageBase64, fileName) => ipcRenderer.invoke('anix:setAvatar', imageBase64, fileName),
     deleteAvatar: () => ipcRenderer.invoke('anix:deleteAvatar'),

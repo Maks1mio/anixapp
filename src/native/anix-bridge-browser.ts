@@ -611,6 +611,16 @@ export function createBrowserAnixBridge() {
     'anix:getBadges': h((c, page = 0) => c.getClient().endpoints.settings.getBadges(page)),
     'anix:setBadge': h((c, id) => c.getClient().endpoints.settings.setBadge(id)),
     'anix:removeBadge': h((c) => c.getClient().endpoints.settings.removeBadge()),
+    'anix:getBadgeCollection': h((c, profileId, recent) => c.getClient().endpoints.profileBadge.list(profileId, recent)),
+    'anix:getBadgeSection': h((c, profileId, categoryId, page = 0) =>
+      c.getClient().endpoints.profileBadge.section(profileId, categoryId, page)),
+    'anix:pinBadge': h((c, id) => c.getClient().endpoints.profileBadge.pinToShowcase(id)),
+    'anix:unpinBadge': h((c, id) => c.getClient().endpoints.profileBadge.unpinFromShowcase(id)),
+    'anix:reorderBadgeShowcase': h((c, ids) => c.getClient().endpoints.profileBadge.reorderShowcase(ids)),
+    'anix:pinProfileSection': h((c, section) =>
+      c.getClient().endpoints.profilePreference.pinSection({ id: Number(section) || 0 } as never)),
+    'anix:previewBadgeCode': h((c, code) => c.getClient().endpoints.achievement.preview(code)),
+    'anix:claimBadgeCode': h((c, code, badgeId) => c.getClient().endpoints.achievement.claim(code, badgeId)),
     'anix:selectTheme': h((c, id) => c.getClient().endpoints.settings.selectTheme(id)),
     'anix:setAvatar': async () => {
       throw new Error('Загрузка изображений на Android TV пока не поддерживается');
@@ -632,7 +642,8 @@ export function createBrowserAnixBridge() {
       is_beta: true,
       is_api_alt: false,
     })),
-    'anix:loginHistory': h((c, profileId, page = 0) => c.getClient().endpoints.profile.loginHistory?.(profileId, page)),
+    'anix:loginHistory': h((c, profileId, page = 0) => c.getClient().endpoints.profile.changeLoginHistory(profileId, page)),
+    'anix:deleteLoginHistory': h((c) => c.getClient().endpoints.profilePreference.deleteLoginHistory()),
     'anix:searchReleases': h((c, query, page = 0, searchBy = 0) =>
       c.getClient().endpoints.search.releases({ query, page, searchBy })),
     'anix:searchProfiles': h((c, query, page = 0) =>

@@ -1,5 +1,6 @@
 const CAT_PREFIX = 'home-cat:';
 const RELEASE_PREFIX = 'release:';
+const BOOKMARK_LIST_PREFIX = 'bm-list:';
 const MAX_KEEP = 8;
 const MAX_KEEP_ANDROID = 3;
 
@@ -23,6 +24,8 @@ export function tvKeepAliveKey(path: string): string | null {
   if (p === '/feed') return 'feed';
   if (p === '/overview/popular') return 'popular';
   if (p === '/bookmarks') return 'bookmarks';
+  const bmList = p.match(/^\/bookmarks\/([a-z_]+)$/);
+  if (bmList) return `${BOOKMARK_LIST_PREFIX}${bmList[1]}`;
   if (p === '/search') return 'search';
   return null;
 }
@@ -44,6 +47,12 @@ export function tvKeptCategoryIds(kept: string[]): string[] {
   return kept
     .filter((key) => key.startsWith(CAT_PREFIX))
     .map((key) => key.slice(CAT_PREFIX.length));
+}
+
+export function tvKeptBookmarkListIds(kept: string[]): string[] {
+  return kept
+    .filter((key) => key.startsWith(BOOKMARK_LIST_PREFIX))
+    .map((key) => key.slice(BOOKMARK_LIST_PREFIX.length));
 }
 
 export function tvKeptReleaseIds(kept: string[]): string[] {

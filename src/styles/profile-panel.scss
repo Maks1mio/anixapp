@@ -1943,6 +1943,41 @@ $pp-btn-bg-hover: var(--pp-btn-bg-hover);
   color: $color-text;
 }
 
+.profile-panel__login-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.profile-panel__login-history-clear {
+  padding: 0.2rem 0.1rem;
+  border: none;
+  background: none;
+  color: var(--uiv2-fg-muted);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    color: var(--uiv2-fg-strong);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.profile-panel__login-history-clear--armed {
+  color: var(--uiv2-danger-fg);
+
+  &:hover:not(:disabled) {
+    color: var(--uiv2-danger-fg);
+  }
+}
+
 .profile-panel__login-history-list {
   list-style: none;
   margin: 0;
@@ -2165,7 +2200,27 @@ $pp-btn-bg-hover: var(--pp-btn-bg-hover);
 // ——— Content ———
 
 .profile-panel__tab-body {
+  // Ширина панели меняется ручкой (380–720px): раскладка карточек — по ширине панели, не окна
+  container: pp-body / inline-size;
   padding: 0.85rem 0.9rem 1.25rem;
+}
+
+// Динамика и «Просмотрено недавно» под разделами; в широкой панели — в две колонки
+.profile-panel__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+
+  > .uiv2-card--spaced {
+    margin-top: 0;
+  }
+
+  @container pp-body (min-width: 600px) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
 }
 
 .profile-panel__section {

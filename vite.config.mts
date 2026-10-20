@@ -57,6 +57,8 @@ export default defineConfig(({ command, mode }) => {
             resolve(rootDir, 'theme-editor.html'),
             resolve(rootDir, 'upscale-tool.html'),
             resolve(rootDir, 'overview-video-editor.html'),
+            resolve(rootDir, 'notification-banner.html'),
+            resolve(rootDir, 'notification-sound.html'),
           ],
       output: {
         manualChunks(id) {
@@ -100,7 +102,7 @@ export default defineConfig(({ command, mode }) => {
         }
       : undefined,
     watch: {
-      ignored: ['**/release/**', '**/dist/**', '**/dist-android/**', '**/dist-tv-web/**'],
+      ignored: ['**/release/**', '**/dist/**', '**/dist-android/**', '**/dist-mobile/**', '**/dist-tv-web/**', '**/android/**', '**/android-mobile/**'],
     },
     proxy: {
       '/fluo/ws': {

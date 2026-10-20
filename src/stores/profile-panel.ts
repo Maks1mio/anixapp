@@ -14,8 +14,22 @@ export const profilePanelHistory = writable<ProfileHistoryEntry[]>([]);
 export const profilePanelHistoryIndex = writable(0);
 
 /** Внутренний экран активного профиля: обзор, друзья, редактирование или история ника. */
-export type ProfilePanelInnerView = 'overview' | 'friends' | 'edit' | 'loginHistory';
+export type ProfilePanelInnerView = 'overview' | 'friends' | 'edit' | 'loginHistory' | 'badges';
 export const profilePanelInnerView = writable<ProfilePanelInnerView>('overview');
+
+/** Стартовый подэкран редактирования (напр. badge из deep link уведомления о значке). */
+export type ProfilePanelEditScreen =
+  | 'menu'
+  | 'status'
+  | 'nickname'
+  | 'social'
+  | 'badge'
+  | 'health'
+  | 'hiddenChannels'
+  | 'blocklist'
+  | 'email'
+  | 'password';
+export const profilePanelPendingEditScreen = writable<ProfilePanelEditScreen | null>(null);
 
 export const profilePanelCanBack = derived(
   [profilePanelHistory, profilePanelHistoryIndex],
@@ -142,13 +156,37 @@ export function updateProfilePanelLogin(userId: number, login: string): void {
   );
 }
 
+/**
+ * Переход на другую страницу из панели профиля (релиз, «Показать все», статистика…):
+ * панель перекрывает контент, поэтому закрываем её — иначе страница открывается «под всплывашкой».
+ * Пути /profile и /profile/:id сюда не доходят: navigate() открывает по ним саму панель.
+ */
+if (typeof window !== 'undefined') {
+  window.addEventListener('anix:beforeNavigate', (e) => {
+    const kind = (e as CustomEvent<{ kind?: string }>).detail?.kind;
+    if (kind === 'push' && get(profilePanelOpen)) closeProfilePanel();
+  });
+}
+
 export function closeProfilePanel(): void {
   profilePanelOpen.set(false);
   profilePanelUserId.set(null);
+  profilePanelPendingEditScreen.set(null);
   resetProfilePanelHistory();
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('anix:profilePanelClose'));
   }
+}
+
+/**
+ * Открыть экран своих значков (как DEEP_LINK_TYPE_PROFILE_BADGE на Android).
+ * Вызывается по клику на уведомление о достижении.
+ */
+export function openProfileBadgePanel(): void {
+  const id = Number((window as { __anixProfile?: { id?: number } }).__anixProfile?.id ?? 0);
+  if (!Number.isFinite(id) || id <= 0) return;
+  profilePanelPendingEditScreen.set('badge');
+  openProfilePanel(id);
 }
 
 export function setProfilePanelInnerView(view: ProfilePanelInnerView): void {

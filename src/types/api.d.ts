@@ -39,6 +39,47 @@ export type AuthCodeResult = {
   available?: boolean;
 };
 
+/** Значок Anixart 10.5 (поля из profile/{id}/badge/list и badge/edit) */
+export type ApiBadge = {
+  id: number;
+  name?: string | null;
+  /** 0 — картинка, 1 — Lottie-анимация */
+  type?: number;
+  image_url?: string | null;
+  image_medium_url?: string | null;
+  image_small_url?: string | null;
+  /** Статичное превью (PNG) для Lottie-значков */
+  image_preview_url?: string | null;
+  timestamp?: number;
+  description?: string | null;
+  /** COMMON | UNCOMMON | RARE | EPIC | LEGENDARY */
+  rarity?: string | null;
+  ownership_percentage?: number | null;
+  category?: { id: number; title: string } | null;
+  award?: {
+    /** CLAIM_CODE | EPISODE_WATCHED | MANUAL | PROFILE_LIST_STATUS */
+    trigger?: string | null;
+    release_id?: number | null;
+    release_title?: string | null;
+    release_image?: string | null;
+    episode_name?: string | null;
+    profile_list_status?: number | null;
+  } | null;
+  is_available?: boolean | null;
+  is_owned?: boolean;
+  is_selected?: boolean;
+  is_showcased?: boolean;
+};
+
+export type ApiBadgeCollection = {
+  code?: number;
+  total_count?: number;
+  showcased?: ApiBadge[] | null;
+  recent?: ApiBadge[] | null;
+  sections?: Array<{ id: number; title: string; count: number; content?: ApiBadge[] | null }> | null;
+  profile?: { id?: number; badge?: ApiBadge | null } | null;
+};
+
 export interface AnixApi {
   client: {
     readonly baseUrl: string;
@@ -173,6 +214,8 @@ export interface AnixApi {
         timestamp?: number;
       }>;
     }>;
+    /** POST profile/preference/login/history/delete (Anixart 10.5) */
+    deleteLoginHistory: () => Promise<{ code?: number }>;
     getFriends: (profileId: number, page?: number) => Promise<any>;
     sendFriendRequest: (profileId: number) => Promise<{ friend_status?: number | null; code?: number }>;
     removeFriendRequest: (profileId: number) => Promise<{ friend_status?: number | null; code?: number }>;
@@ -800,8 +843,31 @@ export interface AnixApi {
       current_page?: number;
       profile?: { badge?: { id: number; name: string; image_url: string; type: number } | null };
     }>;
-    setBadge: (id: number) => Promise<{ code?: number }>;
+    setBadge: (id: number) => Promise<{ code?: number; badge?: ApiBadge | null }>;
     removeBadge: () => Promise<{ code?: number }>;
+    /** GET profile/{id}/badge/list (Anixart 10.5): витрина, недавние, разделы */
+    getBadgeCollection: (profileId: number, recent?: number[]) => Promise<ApiBadgeCollection>;
+    /** GET profile/{id}/badge/list/{categoryId}/{page} */
+    getBadgeSection: (profileId: number, categoryId: number, page?: number) => Promise<{
+      code?: number;
+      content?: ApiBadge[];
+      total_count?: number;
+      total_page_count?: number;
+      current_page?: number;
+    }>;
+    /** code 2 — неверный значок, 3 — на витрине уже 3 значка */
+    pinBadge: (id: number) => Promise<{ code?: number }>;
+    unpinBadge: (id: number) => Promise<{ code?: number }>;
+    reorderBadgeShowcase: (ids: number[]) => Promise<{ code?: number }>;
+    /** POST profile/preference/section/edit: 0 статистика, 1 оценки, 2 коллекции, 3 комментарии, 4 видео, 5 значки */
+    pinProfileSection: (section: number) => Promise<{ code?: number }>;
+    /** GET achievement/preview/{code}: code 3 — код не найден */
+    previewBadgeCode: (code: string) => Promise<{
+      code?: number;
+      achievement?: { name?: string; badge?: ApiBadge | null } | null;
+    }>;
+    /** GET achievement/get/{code}: 2 — уже получен, 3 — не найден, 5 — лимит, 6 — значок изменился */
+    claimBadgeCode: (code: string, badgeId: number) => Promise<{ code?: number }>;
     selectTheme: (id: number) => Promise<{
       code?: number;
       theme?: {

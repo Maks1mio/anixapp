@@ -13,7 +13,7 @@ const DEV_DOWN_API_ENDPOINT = 'https://api-down.anixart.invalid';
 const LOG_DIR = 'logs';
 
 /** Anixart 10.0. В anixapi по умолчанию всё ещё 9.0 — передаём явно при new Anixart(...). */
-const ANIXART_UA = 'AnixartApp/10.0-26090418 (Android 14; SDK 34; x86_64; ROG ASUS AI2201_B; ru)';
+const ANIXART_UA = 'AnixartApp/10.5-26101718 (Android 14; SDK 34; x86_64; ROG ASUS AI2201_B; ru)';
 
 const VIDEO_HOSTS = [
   'anixis.com', 'aniqart.com', 'aniqit.com', 'video.sibnet.ru', 'sibnet.ru',

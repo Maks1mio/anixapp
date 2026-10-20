@@ -1,4 +1,14 @@
 // Hirro Sans — подключается из tv.scss, чтобы @font-face был в основном CSS, а не в позднем чанке.
+// Inter (variable) — шрифт макета, используется в TV-режиме как основной.
+
+@font-face {
+  font-family: 'Inter';
+  src: url('../assets/fonts/inter/InterVariable.woff2') format('woff2'),
+       url('../assets/fonts/inter/InterVariable.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
 
 @font-face {
   font-family: 'Hirro Sans';

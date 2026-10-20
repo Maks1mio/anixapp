@@ -24,6 +24,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  ChevronsRight,
   ClipboardList,
   Copy,
   Download,
@@ -488,6 +489,11 @@ export function iconRotateCcw(size = 16): string {
 /** Перемотка вперёд */
 export function iconRotateCw(size = 16): string {
   return toSvg(RotateCw, size);
+}
+
+/** Быстрая перемотка на заданное время (двойной шеврон, как в AniXart) */
+export function iconFastRewindTime(size = 18): string {
+  return toSvg(ChevronsRight, size);
 }
 
 /** Добавить человека (лобби) */

@@ -314,7 +314,7 @@
       else            await window.anixApi.release.addFavorite(releaseId);
       isFavorite     = !isFavorite;
       favoritesCount = Math.max(0, favoritesCount + (isFavorite ? 1 : -1));
-      notifyFavoritesChanged();
+      notifyFavoritesChanged({ releaseId, favorited: isFavorite });
     } catch { /* ignore */ }
   }
 

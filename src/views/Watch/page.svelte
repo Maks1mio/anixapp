@@ -2952,11 +2952,8 @@
     popoverType = 'settings';
   }
 
-  function skipForward85() {
-    if (videoEl && !isNaN(videoEl.duration)) {
-      videoEl.currentTime = Math.min(videoEl.currentTime + 85, videoEl.duration);
-      sendToLobby('seek');
-    }
+  function seekRewindTime() {
+    seekBySeconds(hotkeys.rewindSeconds);
   }
 
   function skipCarryKey() {
@@ -3203,6 +3200,11 @@
     if (e.code === hotkeys.seekForwardCode) {
       e.preventDefault();
       seekBySeconds(hotkeys.seekSeconds);
+      return;
+    }
+    if (e.code === hotkeys.rewindCode) {
+      e.preventDefault();
+      seekRewindTime();
       return;
     }
     if (e.code === hotkeys.volumeUpCode) {
@@ -4491,6 +4493,7 @@
     speedLocked: inLobby,
     lastEpisodeTypeUpdateId,
     seekSeconds: hotkeys.seekSeconds,
+    rewindSeconds: hotkeys.rewindSeconds,
     onprevEp: () => { if (prevEpisodePosition != null) goToEpisode(prevEpisodePosition); },
     onnextEp: () => { if (nextEpisodePosition != null) goToEpisode(nextEpisodePosition); },
     onnextAltDub: goToNextEpisodeInAltDub,
@@ -4527,6 +4530,7 @@
     onchangeQuality: changeQuality,
     onseekBack: () => seekBySeconds(-hotkeys.seekSeconds),
     onseekForward: () => seekBySeconds(hotkeys.seekSeconds),
+    onseekRewind: seekRewindTime,
     inLobby,
     sidebarOpen,
     onopenLobby: () => {

@@ -527,12 +527,14 @@ declare global {
 export interface PlayerHotkeysSettings {
   seekBackCode?: string;
   seekForwardCode?: string;
+  rewindCode?: string;
   playPauseCode?: string;
   volumeUpCode?: string;
   volumeDownCode?: string;
   fullscreenCode?: string;
   alwaysOnTopCode?: string;
   seekSeconds?: number;
+  rewindSeconds?: number;
   ctrlWheelSpeed?: boolean;
 }
 

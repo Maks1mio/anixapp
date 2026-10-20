@@ -78,7 +78,7 @@
     const api = window.anixApi;
     if (!api) return;
     (next ? api.release.addFavorite(id) : api.release.removeFavorite(id))
-      .then(() => notifyFavoritesChanged())
+      .then(() => notifyFavoritesChanged({ releaseId: id, favorited: next }))
       .catch(() => {});
   }
 

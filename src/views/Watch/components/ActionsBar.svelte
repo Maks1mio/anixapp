@@ -13,12 +13,14 @@
     iconVolumeX,
     iconRotateCcw,
     iconRotateCw,
+    iconFastRewindTime,
     iconSettings,
     iconMaximize2,
     iconMinimize2,
     iconPictureInPicture,
   } from '../../../components/icons';
   import { requestPlayerMuteToggle } from '../core/player-mute';
+  import { formatSeekSeconds } from '../../../utils/player-hotkeys';
 
   interface Props {
     paused: boolean;
@@ -44,6 +46,7 @@
     currentTime: string;
     totalTime: string;
     seekSeconds: number;
+    rewindSeconds: number;
     ontogglePlay: () => void;
     ontoggleMute: () => void;
     onvolumechange: (e: Event) => void;
@@ -62,17 +65,18 @@
     onchangeQuality: (q: string) => void;
     onseekBack: () => void;
     onseekForward: () => void;
+    onseekRewind: () => void;
   }
 
   let {
     paused, muted, volume, isFullscreen, pipActive = false, popoverType, useVideo,
     gpuAvailable, upscaleEnabled, upscaleType, upscaleIntensity, upscaleTargetRes,
     playbackRate, aspectRatio, surroundMode, eqGains, eqLevel, availableQualities, currentQuality,
-    speedLocked = false, currentTime, totalTime, seekSeconds,
+    speedLocked = false, currentTime, totalTime, seekSeconds, rewindSeconds,
     ontogglePlay, ontoggleMute, onvolumechange, onchangeAnime4k, onchangeAnime4kTargetRes,
     onopenSettings, onclosePopover, onfullscreen, onpip,
     onchangeRate, onchangeAspect, onchangeSurround, onchangeEq, onchangeEqLevel, onresetEq, onchangeQuality,
-    onseekBack, onseekForward,
+    onseekBack, onseekForward, onseekRewind,
   }: Props = $props();
 
   // Не ставим 0 при mute: скачок value у range в Electron иногда шлёт input и сразу unmute.
@@ -194,6 +198,20 @@
           onclick={(e) => { e.stopPropagation(); onseekForward(); }}
         >
           {@html iconRotateCw(18)}
+        </UiV2RoundButton>
+      </UiV2Tooltip>
+      <UiV2Tooltip
+        text={`Перемотка на ${formatSeekSeconds(rewindSeconds)}`}
+        placement="top"
+        showDelay={80}
+      >
+        <UiV2RoundButton
+          size="md"
+          class="watch-page__rewind-time-btn"
+          label={`Перемотка вперёд на ${formatSeekSeconds(rewindSeconds)}`}
+          onclick={(e) => { e.stopPropagation(); onseekRewind(); }}
+        >
+          {@html iconFastRewindTime(18)}
         </UiV2RoundButton>
       </UiV2Tooltip>
     {/if}

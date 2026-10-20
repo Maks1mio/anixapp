@@ -65,6 +65,7 @@
     speedLocked: boolean;
     lastEpisodeTypeUpdateId: number | null;
     seekSeconds: number;
+    rewindSeconds: number;
     onprevEp: () => void;
     onnextEp: () => void;
     onnextAltDub: (alt: NextEpAltDub) => void;
@@ -99,6 +100,7 @@
     onchangeQuality: (q: string) => void;
     onseekBack: () => void;
     onseekForward: () => void;
+    onseekRewind: () => void;
     inLobby?: boolean;
     sidebarOpen?: boolean;
     onopenLobby?: () => void;
@@ -208,6 +210,7 @@
       currentTime={props.currentTime}
       totalTime={props.totalTime}
       seekSeconds={props.seekSeconds}
+      rewindSeconds={props.rewindSeconds}
       ontogglePlay={props.ontogglePlay}
       ontoggleMute={props.ontoggleMute}
       onvolumechange={props.onvolumechange}
@@ -226,6 +229,7 @@
       onchangeQuality={props.onchangeQuality}
       onseekBack={props.onseekBack}
       onseekForward={props.onseekForward}
+      onseekRewind={props.onseekRewind}
     />
   </div>
 </div>

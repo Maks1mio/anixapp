@@ -5,8 +5,12 @@
   import UiV2Button from '../../../components/uikit-v2/UiV2Button.svelte';
   import {
     DEFAULT_PLAYER_HOTKEYS,
+    REWIND_SECONDS_MAX,
+    REWIND_SECONDS_MIN,
+    REWIND_SECONDS_OPTIONS,
     SEEK_SECONDS_OPTIONS,
     formatHotkeyCode,
+    formatSeekSeconds,
     isBindableKeyCode,
     normalizePlayerHotkeys,
     rebindPlayerHotkey,
@@ -41,6 +45,7 @@
   const HOTKEY_ROWS: { field: BindField; title: string; desc: string }[] = [
     { field: 'seekBackCode', title: 'Перемотка назад', desc: 'Клавиша для прыжка назад на заданное время.' },
     { field: 'seekForwardCode', title: 'Перемотка вперёд', desc: 'Клавиша для прыжка вперёд на заданное время.' },
+    { field: 'rewindCode', title: 'Перемотка на заданное время', desc: 'Прыжок вперёд на время из настройки ниже. По умолчанию — X.' },
     { field: 'playPauseCode', title: 'Пауза / воспроизведение', desc: 'По умолчанию — пробел.' },
     { field: 'volumeUpCode', title: 'Громче', desc: 'По умолчанию — стрелка вверх.' },
     { field: 'volumeDownCode', title: 'Тише', desc: 'По умолчанию — стрелка вниз.' },
@@ -146,11 +151,14 @@
     saveHotkeys(rebindPlayerHotkey(hotkeys, field, e.code));
   }
 
-  function formatSeekLabel(sec: number): string {
-    if (sec < 60) return `${sec} с`;
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return s === 0 ? `${m} мин` : `${m}:${String(s).padStart(2, '0')}`;
+  function onRewindSecondsChange(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const value = Number(input.value);
+    if (!Number.isFinite(value)) {
+      input.value = String(hotkeys.rewindSeconds);
+      return;
+    }
+    saveHotkeys({ ...hotkeys, rewindSeconds: value });
   }
 
   onMount(() => {
@@ -207,9 +215,40 @@
                 class:uiv2-settings__chip--on={hotkeys.seekSeconds === sec}
                 aria-pressed={hotkeys.seekSeconds === sec}
                 onclick={() => saveHotkeys({ ...hotkeys, seekSeconds: sec })}
-              >{formatSeekLabel(sec)}</button>
+              >{formatSeekSeconds(sec)}</button>
             {/each}
           </div>
+        </UiV2SettingsRow>
+
+        <UiV2SettingsRow
+          stack
+          title="Время перемотки"
+          desc={`Прыжок вперёд кнопкой перемотки и клавишей ${formatHotkeyCode(hotkeys.rewindCode)}. По умолчанию — 1:25, как в AniXart.`}
+        >
+          <div class="uiv2-settings__chips" role="group" aria-label="Время перемотки">
+            {#each REWIND_SECONDS_OPTIONS as sec (sec)}
+              <button
+                type="button"
+                class="uiv2-settings__chip"
+                class:uiv2-settings__chip--on={hotkeys.rewindSeconds === sec}
+                aria-pressed={hotkeys.rewindSeconds === sec}
+                onclick={() => saveHotkeys({ ...hotkeys, rewindSeconds: sec })}
+              >{formatSeekSeconds(sec)}</button>
+            {/each}
+          </div>
+          <label class="playback-rewind-custom">
+            <span>Своё время</span>
+            <input
+              type="number"
+              min={REWIND_SECONDS_MIN}
+              max={REWIND_SECONDS_MAX}
+              step="1"
+              value={hotkeys.rewindSeconds}
+              aria-label="Время перемотки в секундах"
+              onchange={onRewindSecondsChange}
+            />
+            <span>сек</span>
+          </label>
         </UiV2SettingsRow>
 
         <UiV2SettingsRow
@@ -225,7 +264,7 @@
 
         <UiV2SettingsRow
           title="Сбросить горячие клавиши"
-          desc="Вернуть ← / → / ↑ / ↓, пробел, F, P, 10 с и {modKey} + колёсико."
+          desc="Вернуть ← / → / ↑ / ↓, пробел, F, P, X, 10 с, 1:25 и {modKey} + колёсико."
         >
           <UiV2Button
             label="Сбросить"
@@ -407,3 +446,32 @@
     </section>
   {/if}
 </div>
+
+<style lang="scss">
+  .playback-rewind-custom {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    font-size: 0.8125rem;
+    color: var(--uiv2-fg-muted);
+
+    input {
+      width: 5.25rem;
+      height: 1.9rem;
+      padding: 0 0.6rem;
+      border: 1px solid color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
+      border-radius: 0.55rem;
+      background: var(--uiv2-chrome-bg);
+      color: var(--uiv2-chrome-fg);
+      font: inherit;
+      font-size: 0.8125rem;
+      font-variant-numeric: tabular-nums;
+
+      &:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--uikit-v2-accent) 55%, transparent);
+        outline-offset: 2px;
+      }
+    }
+  }
+</style>

@@ -1,9 +1,16 @@
 import { invalidateViewStatePrefix } from '../stores/view-state';
 
+export interface FavoritesChangedDetail {
+  releaseId?: number;
+  favorited?: boolean;
+}
+
 /** Сигнал об изменении списка избранных релизов (для сайдбара и др.). */
-export function notifyFavoritesChanged(): void {
-  window.dispatchEvent(new CustomEvent('anix:favoritesChanged'));
-  notifyBookmarksChanged({ kind: 'favorites' });
+export function notifyFavoritesChanged(detail?: FavoritesChangedDetail): void {
+  window.dispatchEvent(new CustomEvent<FavoritesChangedDetail>('anix:favoritesChanged', {
+    detail: detail ?? {},
+  }));
+  notifyBookmarksChanged({ kind: 'favorites', releaseId: detail?.releaseId, favorited: detail?.favorited });
 }
 
 /** Сигнал об изменении статуса в списках (смотрю / планы / …). */
@@ -31,6 +38,7 @@ export function notifyBookmarksChanged(detail?: {
   kind?: BookmarksChangeKind;
   releaseId?: number;
   statusId?: number | string | null;
+  favorited?: boolean;
 }): void {
   // Ключ кэша включает ?tab=… (например /bookmarks|tab=favorites) —
   // сбрасываем все варианты, а не только голый /bookmarks.

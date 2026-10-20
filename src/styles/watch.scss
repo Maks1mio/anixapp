@@ -1106,6 +1106,11 @@ $p-skip-dark:   #66c94280;
   color: var(--uikit-v2-accent);
 }
 
+/** Кнопка «перемотка на заданное время» — заметнее обычных ±X с. */
+.watch-page__rewind-time-btn {
+  color: var(--uikit-v2-accent);
+}
+
 .watch-page--pip .watch-page__gui-overlay,
 .watch-page--pip .watch-page__center-play,
 .watch-page--pip .watch-page__bottom-controls,

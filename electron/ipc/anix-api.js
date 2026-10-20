@@ -1710,7 +1710,7 @@ ipcMain.handle('anix:addToFavorites', async (_, releaseId) => {
   const client = getAnixart();
   const res = await client.endpoints.release.addFavorite(releaseId);
   if (res?.code !== DefaultResult.Ok) return Promise.reject(new Error(res?.code ?? 'fail'));
-  broadcastBookmarksChanged({ kind: 'favorites', releaseId });
+  broadcastBookmarksChanged({ kind: 'favorites', releaseId, favorited: true });
   return undefined;
 });
 
@@ -1718,7 +1718,7 @@ ipcMain.handle('anix:removeFromFavorites', async (_, releaseId) => {
   const client = getAnixart();
   const res = await client.endpoints.release.removeFavorite(releaseId);
   if (res?.code !== DefaultResult.Ok) return Promise.reject(new Error(res?.code ?? 'fail'));
-  broadcastBookmarksChanged({ kind: 'favorites', releaseId });
+  broadcastBookmarksChanged({ kind: 'favorites', releaseId, favorited: false });
   return undefined;
 });
 

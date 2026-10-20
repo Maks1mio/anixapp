@@ -38,6 +38,8 @@ export const sidebarPinsPlacement = writable<SidebarPinsPlacement>(getSidebarPin
 
 let loadPromise: Promise<void> | null = null;
 let refreshQueued = false;
+let favoriteRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+const favoritePinLoads = new Set<number>();
 
 /** Сайдбару хватает одной-двух страниц — не тянем всю историю. */
 const MAX_PAGES = 2;
@@ -263,6 +265,71 @@ export async function refreshSidebarPins(): Promise<void> {
   return loadPromise;
 }
 
+function removeFavoritePin(releaseId: number): void {
+  sidebarPins.update((pins) => pins.filter((pin) => !(pin.kind === 'release' && pin.id === releaseId)));
+}
+
+/** Оптимистично добавляем свежий избранный тайтл, не дожидаясь перезагрузки списка. */
+async function addFavoritePin(releaseId: number): Promise<void> {
+  if (getSidebarPinsSource() !== 'favorites' || getSidebarPinsPlacement() === 'none') return;
+  if (get(sidebarPins).some((pin) => pin.kind === 'release' && pin.id === releaseId)) return;
+  if (favoritePinLoads.has(releaseId)) return;
+  favoritePinLoads.add(releaseId);
+
+  try {
+    const data = await window.anixApi?.release?.info?.(releaseId, false) as Record<string, unknown> | undefined;
+    if (!data) return;
+    const raw = (data.release && typeof data.release === 'object' ? data.release : data) as Record<string, unknown>;
+    const pin = mapRawToReleasePin(raw);
+    if (!pin) return;
+    if (getSidebarPinsSource() !== 'favorites' || getSidebarPinsPlacement() === 'none') return;
+    if (get(sidebarPins).some((p) => p.kind === 'release' && p.id === releaseId)) return;
+    sidebarPins.update((pins) => dedupePins([pin, ...pins]));
+  } catch {
+    /* сеть недоступна — список обновится обычным refresh */
+  } finally {
+    favoritePinLoads.delete(releaseId);
+  }
+}
+
+function scheduleSidebarPinsRefresh(delayMs = 0): void {
+  if (delayMs <= 0) {
+    void refreshSidebarPins();
+    return;
+  }
+  if (favoriteRefreshTimer != null) clearTimeout(favoriteRefreshTimer);
+  favoriteRefreshTimer = setTimeout(() => {
+    favoriteRefreshTimer = null;
+    void refreshSidebarPins();
+  }, delayMs);
+}
+
+function applyFavoriteChange(detail: { releaseId?: unknown; favorited?: unknown }): void {
+  if (getSidebarPinsSource() !== 'favorites' || getSidebarPinsPlacement() === 'none') {
+    scheduleSidebarPinsRefresh();
+    return;
+  }
+
+  const releaseId = Number(detail.releaseId);
+  if (!(releaseId > 0)) {
+    scheduleSidebarPinsRefresh();
+    return;
+  }
+
+  if (detail.favorited === false) {
+    removeFavoritePin(releaseId);
+    scheduleSidebarPinsRefresh();
+    scheduleSidebarPinsRefresh(900);
+    return;
+  }
+
+  if (detail.favorited === true) {
+    void addFavoritePin(releaseId);
+  }
+  // Небольшая задержка на случай, если бэкенд ещё не успел вернуть новый список.
+  scheduleSidebarPinsRefresh(900);
+}
+
 export function initSidebarPins(): () => void {
   const unsubAuth = isAuthenticated.subscribe(() => {
     void refreshSidebarPins();
@@ -280,18 +347,38 @@ export function initSidebarPins(): () => void {
   const onRefresh = () => {
     void refreshSidebarPins();
   };
+  const onFavoritesChanged = (e: Event) => {
+    applyFavoriteChange((e as CustomEvent).detail ?? {});
+  };
+  const onBookmarksChanged = (e: Event) => {
+    const detail = (e as CustomEvent).detail ?? {};
+    if (detail.kind === 'favorites') {
+      applyFavoriteChange(detail);
+      return;
+    }
+    void refreshSidebarPins();
+  };
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') void refreshSidebarPins();
+  };
 
-  window.addEventListener('anix:favoritesChanged', onRefresh);
-  window.addEventListener('anix:bookmarksChanged', onRefresh);
+  window.addEventListener('anix:favoritesChanged', onFavoritesChanged);
+  window.addEventListener('anix:bookmarksChanged', onBookmarksChanged);
   window.addEventListener('anix:authChanged', onRefresh);
   window.addEventListener('anix:sidebarPinsPrefsChanged', onRefresh);
+  document.addEventListener('visibilitychange', onVisible);
 
   return () => {
     unsubAuth();
     unsubConn();
-    window.removeEventListener('anix:favoritesChanged', onRefresh);
-    window.removeEventListener('anix:bookmarksChanged', onRefresh);
+    if (favoriteRefreshTimer != null) {
+      clearTimeout(favoriteRefreshTimer);
+      favoriteRefreshTimer = null;
+    }
+    window.removeEventListener('anix:favoritesChanged', onFavoritesChanged);
+    window.removeEventListener('anix:bookmarksChanged', onBookmarksChanged);
     window.removeEventListener('anix:authChanged', onRefresh);
     window.removeEventListener('anix:sidebarPinsPrefsChanged', onRefresh);
+    document.removeEventListener('visibilitychange', onVisible);
   };
 }

@@ -301,6 +301,11 @@ html.mobile-mode {
   .release-page__actions .release-page__actions-status--completed .uiv2-select__trigger { border-color: #3b82f6 !important; }
   .release-page__actions .release-page__actions-status--on_hold .uiv2-select__trigger { border-color: #eab308 !important; }
   .release-page__actions .release-page__actions-status--dropped .uiv2-select__trigger { border-color: #ef4444 !important; }
+  .release-page__actions .release-page__actions-status--watching .uiv2-select__chevron { color: #22c55e !important; }
+  .release-page__actions .release-page__actions-status--planned .uiv2-select__chevron { color: #a855f7 !important; }
+  .release-page__actions .release-page__actions-status--completed .uiv2-select__chevron { color: #3b82f6 !important; }
+  .release-page__actions .release-page__actions-status--on_hold .uiv2-select__chevron { color: #eab308 !important; }
+  .release-page__actions .release-page__actions-status--dropped .uiv2-select__chevron { color: #ef4444 !important; }
   // «Не смотрю»: шеврон слева без плашки, как в референсе
   .release-page__actions .uiv2-select__trigger { flex-direction: row-reverse !important; justify-content: flex-start; gap: var(--m-space-3); padding: 0 var(--m-space-5) 0 var(--m-space-4) !important; }
   .release-page__actions .uiv2-select__chevron { background: transparent !important; border: 0 !important; width: auto !important; height: auto !important; color: var(--m-text) !important; svg { width: 18px; height: 18px; } }

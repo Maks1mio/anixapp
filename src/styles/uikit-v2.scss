@@ -3377,20 +3377,69 @@
   border-color: #22c55e !important;
 }
 
+.release-page__actions-status--watching .uiv2-select__value-label {
+  color: #22c55e;
+}
+
 .release-page__actions-status--planned .uiv2-select__field {
   border-color: #a855f7 !important;
+}
+
+.release-page__actions-status--planned .uiv2-select__value-label {
+  color: #a855f7;
 }
 
 .release-page__actions-status--completed .uiv2-select__field {
   border-color: #3b82f6 !important;
 }
 
+.release-page__actions-status--completed .uiv2-select__value-label {
+  color: #3b82f6;
+}
+
 .release-page__actions-status--on_hold .uiv2-select__field {
   border-color: #eab308 !important;
 }
 
+.release-page__actions-status--on_hold .uiv2-select__value-label {
+  color: #eab308;
+}
+
 .release-page__actions-status--dropped .uiv2-select__field {
   border-color: #ef4444 !important;
+}
+
+.release-page__actions-status--dropped .uiv2-select__value-label {
+  color: #ef4444;
+}
+
+.release-page__actions-status--watching .uiv2-select__chevron {
+  color: #22c55e !important;
+}
+
+.release-page__actions-status--planned .uiv2-select__chevron {
+  color: #a855f7 !important;
+}
+
+.release-page__actions-status--completed .uiv2-select__chevron {
+  color: #3b82f6 !important;
+}
+
+.release-page__actions-status--on_hold .uiv2-select__chevron {
+  color: #eab308 !important;
+}
+
+.release-page__actions-status--dropped .uiv2-select__chevron {
+  color: #ef4444 !important;
+}
+
+.release-page__actions-status .uiv2-select__chevron {
+  background: transparent;
+  box-shadow: none;
+}
+
+.release-page__actions-status .uiv2-select--open .uiv2-select__chevron {
+  background: transparent;
 }
 
 .uiv2-select__value {

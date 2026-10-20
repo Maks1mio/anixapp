@@ -177,7 +177,8 @@
   }
 
   function hasBookmarkItems(s: BookmarksViewState): boolean {
-    return s.items.length > 0 || s.collectionItems.length > 0;
+    // Снимок посреди загрузки восстановится как вечный скелетон — не берём его.
+    return s.loadState === 'ready' && (s.items.length > 0 || s.collectionItems.length > 0);
   }
 
   function restoreBookmarksScroll(scrollTop: number) {
@@ -302,6 +303,8 @@
   let nextPage = $state(0);
   let hasMore = $state(true);
   let isLoadingMore = $state(false);
+  /** Растёт при каждом loadTab: ответы старых запросов (другой вкладки) отбрасываются. */
+  let loadGen = 0;
   let loadState = $state<'loading' | 'error' | 'empty' | 'ready'>('loading');
   let showEnd = $state(false);
   let errorMsg = $state('');
@@ -606,9 +609,11 @@
   async function loadMore() {
     if (!window.anixApi || !hasMore || isLoadingMore) return;
     isLoadingMore = true;
+    const gen = loadGen;
 
     try {
       const { content, total, exhaustive } = await fetchPage(nextPage);
+      if (gen !== loadGen) return;
       if (isCollectionsTab) {
         collectionItems = [...collectionItems, ...content.map(mapCollectionToCardData)];
       } else if (isHistoryTab) {
@@ -627,7 +632,7 @@
       isLoadingMore = false;
       tryLoadMoreIfNeeded();
     } catch {
-      isLoadingMore = false;
+      if (gen === loadGen) isLoadingMore = false;
     }
   }
 
@@ -726,6 +731,9 @@
       tabId = TABS[0]?.id ?? 'watching';
     }
 
+    const gen = ++loadGen;
+    isLoadingMore = false;
+
     if (tabId !== activeTab && (items.length > 0 || collectionItems.length > 0)) {
       saveViewStateWithScroll(BOOKMARKS_VIEW_KEY(), bookmarksSnapshot());
     }
@@ -775,6 +783,7 @@
 
     try {
       const { content, total, exhaustive } = await fetchPage(0);
+      if (gen !== loadGen) return;
       if (!content.length) {
         loadState = 'empty';
         totalCount = total;
@@ -799,6 +808,7 @@
       loadState = 'ready';
       tryLoadMoreIfNeeded();
     } catch (err) {
+      if (gen !== loadGen) return;
       errorMsg = headlineFromLoadError(err);
       loadState = 'error';
     }

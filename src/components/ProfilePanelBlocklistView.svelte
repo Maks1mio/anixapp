@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import UserBadge from './UserBadge.svelte';
+  import AppBadges from './AppBadges.svelte';
   import { showToast } from '../stores/toast';
   import { openProfilePanel } from '../stores/profile-panel';
   import { resolveBadgeName, resolveProfileBadgeUrl } from '../utils/badge';
@@ -162,6 +163,7 @@
               <span class="profile-panel__friend-row-name">
                 {user.login}
                 <UserBadge url={badgeUrl} name={resolveBadgeName(user.badge)} size="xs" />
+                <AppBadges userId={Number(user.id)} size="xs" />
               </span>
             </span>
           </button>

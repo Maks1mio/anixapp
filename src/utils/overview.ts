@@ -27,6 +27,7 @@ export interface OverviewCommentWeekItem {
   timestamp: number;
   voteCount: number;
   isSpoiler: boolean;
+  profileId: number;
   profileLogin: string;
   profileAvatar: string;
   profileBadgeUrl?: string | null;
@@ -92,6 +93,7 @@ export function mapOverviewCommentWeek(
     timestamp: Number(raw.timestamp ?? 0),
     voteCount: Number(raw.vote_count ?? raw.voteCount ?? 0),
     isSpoiler: !!(raw.is_spoiler ?? raw.isSpoiler),
+    profileId: Number(profile.id ?? 0),
     profileLogin: String(profile.login ?? profile.nickname ?? 'Пользователь'),
     profileAvatar: resolveCdnAssetUrl(String(profile.avatar ?? '')),
     profileBadgeUrl:

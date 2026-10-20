@@ -1,6 +1,7 @@
 <script lang="ts">
   import UserAvatar from '../UserAvatar.svelte';
   import UserBadge from '../UserBadge.svelte';
+  import AppBadges from '../AppBadges.svelte';
   import UiV2ScrollArea from './UiV2ScrollArea.svelte';
   import UiV2ReactionsSkeleton from './UiV2ReactionsSkeleton.svelte';
   import { iconCheck, iconChevronDown, iconChevronUp } from '../icons';
@@ -220,6 +221,7 @@
                 <span class="uiv2-reactions__login">
                   {profile.login}
                   <UserBadge url={profile.badgeUrl} name={profile.badgeName} size="xs" />
+                  <AppBadges userId={profile.id} size="xs" />
                 </span>
                 <span
                   class="uiv2-reactions__vote"

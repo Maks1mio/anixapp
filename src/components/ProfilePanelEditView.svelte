@@ -1424,8 +1424,8 @@
   {:else if screen === 'telegram'}
     <div class="profile-panel__edit-form">
       <p class="profile-panel__edit-hint">
-        Значок «Пользуется Anixapp» есть у всех пользователей приложения. Дополнительные значки
-        поддержки выдаются через нашего Telegram-бота.
+        Значок «В AnixApp» выдаётся автоматически после запуска приложения с входом в аккаунт.
+        Дополнительные значки поддержки выдаются через нашего Telegram-бота.
       </p>
 
       <h3 class="profile-panel__edit-section">Мои значки Anixapp</h3>
@@ -1442,7 +1442,7 @@
             <span class="profile-panel__badge-option-name">{defaultBadge.name}</span>
           </div>
         {/if}
-        {#each appBadges.filter((b) => b.status !== 'pending') as ab (ab.slug)}
+        {#each appBadges.filter((b) => b.status !== 'pending' && b.slug !== defaultBadge?.slug) as ab (ab.slug)}
           <div class="profile-panel__badge-option">
             <div class="profile-panel__badge-option-preview">
               <img

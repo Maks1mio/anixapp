@@ -52,6 +52,34 @@ function toPositiveInt(value: unknown): number | null {
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
 }
 
+const PRESENCE_ORIGIN = /^(https:\/\/([a-z0-9-]+\.)*anixapp\.com|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/i;
+
+/** Mirror of electron/lib/anixapp-presence.js for the native/browser bridge. */
+async function sendAppPresence(payload: unknown, token: string | null, savedProfileId: number | null): Promise<unknown> {
+  const p = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>;
+  const origin = typeof p.origin === 'string' ? p.origin.replace(/\/$/, '') : '';
+  if (!PRESENCE_ORIGIN.test(origin)) return { ok: false, error: 'origin not allowed' };
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const userId = toPositiveInt(p.user_id) ?? toPositiveInt(savedProfileId);
+  if (token && userId) {
+    headers['X-Anixart-User-Id'] = String(userId);
+    headers['X-Anixart-Token'] = token;
+  }
+  try {
+    const res = await fetch(`${origin}/api/app/presence`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ install_id: p.install_id, platform: p.platform, version: p.version, event: p.event }),
+      signal: AbortSignal.timeout(10000),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) return { ok: false, status: res.status, error: data?.error ?? `HTTP ${res.status}` };
+    return data ?? { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 function h(fn: (c: BridgeCtx, ...args: any[]) => unknown): Handler {
   return async (c, args) => fn(c, ...(args ?? []));
 }
@@ -119,6 +147,10 @@ export function createBrowserAnixBridge() {
       if (!c.loadConfig().token) return { ok: true };
       await c.getClient().endpoints.feed.latest(1);
       return { ok: true };
+    },
+    'anix:appPresence': async (c, [payload]) => {
+      const cfg = c.loadConfig();
+      return sendAppPresence(payload, cfg.token, cfg.profileId);
     },
     'anix:login': async (c, [username, password]) => {
       const { baseUrl } = c.loadConfig();

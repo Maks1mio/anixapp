@@ -188,18 +188,18 @@
 
 <div class="view view-popular discover-page" bind:this={wrapEl}>
   <div class="view-header">
-    <h1 class="view-header__title">РџРѕРїСѓР»СЏСЂРЅРѕРµ</h1>
-    <p class="view-header__subtitle">РўРѕРї СЂРµР»РёР·РѕРІ РїРѕ РєР°С‚РµРіРѕСЂРёСЏРј</p>
+    <h1 class="view-header__title">Популярное</h1>
+    <p class="view-header__subtitle">Топ релизов по категориям</p>
   </div>
 
   <Tabs tabs={tabs} activeId={activeTab} rootClassName="releases-type" onChange={onTabChange} />
 
   {#if loadState === 'loading' && items.length === 0}
-    <div class="discover-page__loading">Р—Р°РіСЂСѓР·РєР°вЂ¦</div>
+    <div class="discover-page__loading">Загрузка…</div>
   {:else if loadState === 'error'}
     <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadPage()} />
   {:else if loadState === 'empty'}
-    <div class="discover-page__empty">РќРёС‡РµРіРѕ РЅРµ РЅР°Р№РґРµРЅРѕ</div>
+    <div class="discover-page__empty">Ничего не найдено</div>
   {:else}
     <ol class="top-release-list">
       {#each items as item, index (item.id)}
@@ -209,7 +209,7 @@
       {/each}
     </ol>
     {#if isLoading}
-      <div class="discover-page__loading discover-page__loading--inline">Р—Р°РіСЂСѓР·РєР°вЂ¦</div>
+      <div class="discover-page__loading discover-page__loading--inline">Загрузка…</div>
     {/if}
   {/if}
 </div>

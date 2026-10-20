@@ -3,6 +3,7 @@
   import UiV2Button from '../uikit-v2/UiV2Button.svelte';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../uikit-v2/UiV2PopupMenu.svelte';
   import UserAvatar from '../UserAvatar.svelte';
+  import AppBadges from '../AppBadges.svelte';
   import FeedDirectoryModal from './FeedDirectoryModal.svelte';
   import { openProfilePanel } from '../../stores/profile-panel';
   import type { FeedChannel } from '../../types/feed';
@@ -253,7 +254,7 @@
               <span class="feed-group__avatar-clip">
                 <UserAvatar src={channelAvatarUrl(person.avatar)} label={person.login} />
               </span>
-              <span class="feed-group__person-name">{person.login}</span>
+              <span class="feed-group__person-name">{person.login} <AppBadges userId={person.id} size="xs" /></span>
             </button>
           </li>
         {/each}

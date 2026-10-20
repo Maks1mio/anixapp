@@ -96,6 +96,7 @@ function mapChannel(channel: FeedChannel): UiV2FeedPostChannel {
     avatar: channelAvatarUrl(channel.avatar),
     badgeUrl: resolveBadgeImageUrl(channel.badge),
     badgeName: resolveBadgeName(channel.badge),
+    profileId: channel.is_blog ? channel.blog_profile_id ?? null : null,
     isVerified: !!channel.is_verified,
     isSubscribed: !!channel.is_subscribed,
     isBlog: !!channel.is_blog,

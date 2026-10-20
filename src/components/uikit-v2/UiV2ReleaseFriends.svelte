@@ -4,6 +4,7 @@
   import { cubicOut } from 'svelte/easing';
   import { fade } from 'svelte/transition';
   import UserBadge from '../UserBadge.svelte';
+  import AppBadges from '../AppBadges.svelte';
   import UiV2Skeleton from './UiV2Skeleton.svelte';
   import { iconBookmark, iconLayoutGrid, iconTags, iconType } from '../icons';
   import { resolveCdnAssetUrl } from '../../utils/posterUrl';
@@ -342,6 +343,7 @@
                   name={friend.badgeName}
                   size="sm"
                 />
+                <AppBadges userId={friend.id} size="sm" class="uiv2-release-friends__badge" />
               </span>
               {#if displayedLayout !== 'mini'}
                 <span class="uiv2-release-friends__status uiv2-release-friends__status--{friend.status}">

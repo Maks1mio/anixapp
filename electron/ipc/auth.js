@@ -288,6 +288,13 @@ ipcMain.handle('anix:getAuthStatus', () => {
   return { hasToken: !!token };
 });
 
+// Пинг присутствия в anixback: токен добавляется здесь, в рендерер он не уходит.
+ipcMain.handle('anix:appPresence', (_event, payload) => {
+  const { sendAnixappPresence } = require('../lib/anixapp-presence');
+  const cfg = config.loadConfig();
+  return sendAnixappPresence(payload, cfg.token, cfg.profileId);
+});
+
 // Лёгкая проверка соединения с API.
 // Если токена ещё нет (пользователь не залогинен) — считаем соединение доступным,
 // чтобы не блокировать экран логина.

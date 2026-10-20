@@ -3,6 +3,7 @@
   import { fade, scale } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { portal } from '../../actions/portal';
+  import AppBadges from '../AppBadges.svelte';
   import { infiniteScroll } from '../../actions/infiniteScroll';
   import UserAvatar from '../UserAvatar.svelte';
   import UiV2ScrollArea from '../uikit-v2/UiV2ScrollArea.svelte';
@@ -360,6 +361,7 @@
                   </span>
                   <span class="feed-dir-modal__name">
                     {person.login}
+                    <AppBadges userId={person.id} size="xs" />
                     {#if person.verified}
                       <span class="uiv2-feed-post__verified" title="Подтверждён" aria-hidden="true">✓</span>
                     {/if}

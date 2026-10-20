@@ -7,6 +7,7 @@
   import { setDiscordContext, refreshDiscordPresence } from '../services/discord-presence';
   import Tabs from '../components/Tabs.svelte';
   import UserBadge from '../components/UserBadge.svelte';
+  import AppBadges from '../components/AppBadges.svelte';
   import Checkbox from '../components/Checkbox.svelte';
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import { headlineFromLoadError } from '../utils/content-load-error';
@@ -262,6 +263,7 @@
                   <span class="search-page__profile-name-row">
                     <span class="search-page__profile-name">{fr.login || ''}</span>
                     <UserBadge url={badgeUrl} name={resolveBadgeName(fr.badge)} size="sm" />
+                    <AppBadges userId={fr.id} size="sm" />
                   </span>
                 </div>
               </button>
@@ -299,6 +301,7 @@
                 <span class="search-page__profile-name-row">
                   <span class="search-page__profile-name">{fr.login || ''}</span>
                   <UserBadge url={badgeUrl} name={resolveBadgeName(fr.badge)} size="sm" />
+                  <AppBadges userId={fr.id} size="sm" />
                   {#if banLabel}
                     <span class="search-page__profile-ban" title={banNotice ?? undefined}>{banLabel}</span>
                   {/if}

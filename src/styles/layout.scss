@@ -757,8 +757,43 @@
   color: #2aabee; // Telegram blue
 }
 
-.sidebar__link--boosty:hover {
-  color: #f15f2c; // Boosty orange
+.sidebar__link--support {
+  position: relative;
+  color: #6fd6ff;
+}
+
+.sidebar__link--support:hover {
+  color: #9fe6ff;
+}
+
+// Пока модалку Anix+ ни разу не открывали — мягкая пульсирующая точка
+.sidebar__link--support-new::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #6fd6ff;
+  box-shadow: 0 0 0 0 rgb(111 214 255 / 0.6);
+  animation: sidebar-support-pulse 2s ease-out infinite;
+}
+
+@keyframes sidebar-support-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(111 214 255 / 0.55);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 7px rgb(111 214 255 / 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar__link--support-new::after {
+    animation: none;
+  }
 }
 
 .sidebar-column {

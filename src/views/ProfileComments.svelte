@@ -4,6 +4,7 @@
   import Tabs from '../components/Tabs.svelte';
   import UserAvatar from '../components/UserAvatar.svelte';
   import UserBadge from '../components/UserBadge.svelte';
+  import AppBadges from '../components/AppBadges.svelte';
   import { iconChevronRight } from '../components/icons';
   import { buildPosterUrl } from '../utils/posterUrl';
   import { resolveJacksonRefs } from '../utils/jackson-refs';
@@ -191,6 +192,7 @@
                         name={item.profileBadgeName}
                         size="xs"
                       />
+                      <AppBadges userId={profileId} size="xs" />
                     </span>
                     <span class="overview-comment-week__to">{item.contextLabel}</span>
                   </div>

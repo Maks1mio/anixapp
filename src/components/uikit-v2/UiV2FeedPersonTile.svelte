@@ -1,6 +1,7 @@
 <script lang="ts">
   import UserAvatar from '../UserAvatar.svelte';
   import UserBadge from '../UserBadge.svelte';
+  import AppBadges from '../AppBadges.svelte';
 
   type Props = {
     title: string;
@@ -14,6 +15,8 @@
     pinned?: boolean;
     badgeUrl?: string | null;
     badgeName?: string | null;
+    /** Anixart profile id → Anixapp badges next to the name. */
+    profileId?: number | null;
     ariaLabel?: string;
     ariaPressed?: boolean | null;
     class?: string;
@@ -30,6 +33,7 @@
     pinned = false,
     badgeUrl = null,
     badgeName = null,
+    profileId = null,
     ariaLabel,
     ariaPressed = null,
     class: className = '',
@@ -70,6 +74,9 @@
     <span class="uiv2-feed-person__label">{title}</span>
     {#if showBadge}
       <UserBadge url={badgeUrl} name={badgeName} size="xs" showTooltip={false} />
+    {/if}
+    {#if profileId}
+      <AppBadges userId={profileId} size="xs" />
     {/if}
   </span>
 </button>

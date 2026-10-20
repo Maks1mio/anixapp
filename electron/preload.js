@@ -473,6 +473,7 @@ contextBridge.exposeInMainWorld('anixApi', {
     setBackupProxyEnabled: (enabled) => ipcRenderer.invoke('anix:setBackupProxyEnabled', enabled),
     getAuthStatus: () => ipcRenderer.invoke('anix:getAuthStatus'),
     checkConnection: () => ipcRenderer.invoke('anix:checkConnection'),
+    appPresence: (payload) => ipcRenderer.invoke('anix:appPresence', payload),
     testOffline: () => ipcRenderer.invoke('anix:testOffline'),
   },
 

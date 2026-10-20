@@ -48,6 +48,7 @@
   } from '../icons';
   import UserAvatar from '../UserAvatar.svelte';
   import UserBadge from '../UserBadge.svelte';
+  import AppBadges from '../AppBadges.svelte';
   import UiV2RoundButton from './UiV2RoundButton.svelte';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from './UiV2PopupMenu.svelte';
   import UiV2CommentThreadSkeleton from './UiV2CommentThreadSkeleton.svelte';
@@ -493,6 +494,7 @@
                     size="sm"
                     class="uiv2-comment__badge"
                   />
+                  <AppBadges userId={node.profile.id} size="sm" class="uiv2-comment__badge" />
                 </button>
                 {#if node.isEdited}
                   <span class="uiv2-comment__edited" title="Изменён">{@html iconPencil(13)}</span>

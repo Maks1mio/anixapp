@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import UiV2Button from '../components/uikit-v2/UiV2Button.svelte';
+  import AppBadges from '../components/AppBadges.svelte';
   import UiV2Card from '../components/uikit-v2/UiV2Card.svelte';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../components/uikit-v2/UiV2PopupMenu.svelte';
   import FeedArticleCard from '../components/feed/FeedArticleCard.svelte';
@@ -525,7 +526,7 @@
                   <span class="channel-page__avatar-clip">
                     <UserAvatar src={channelAvatarUrl(person.avatar)} label={person.login} />
                   </span>
-                  <span class="channel-page__person-name">{person.login}</span>
+                  <span class="channel-page__person-name">{person.login} <AppBadges userId={person.id} size="xs" /></span>
                 </button>
               </li>
             {/each}

@@ -20,6 +20,7 @@
   import SidebarNavRail from '../components/SidebarNavRail.svelte';
   import Page from '../components/Page.svelte';
   import UiV2Tooltip from '../components/uikit-v2/UiV2Tooltip.svelte';
+  import { openSupportModal, supportModalUnseen } from '../stores/support-promo';
   import UiV2MediaLightbox from '../components/uikit-v2/UiV2MediaLightbox.svelte';
   import { feedMediaLightbox } from '../utils/feed-media-lightbox';
   import { requestOpenExternal } from '../utils/external-link';
@@ -532,18 +533,20 @@
         </svg>
       </button>
     </UiV2Tooltip>
-    <UiV2Tooltip text="Boosty" placement={tipSide} class="sidebar__tooltip">
+    <UiV2Tooltip text="Поддержать Anixapp" placement={tipSide} class="sidebar__tooltip">
       <button
         type="button"
-        class="sidebar__link sidebar__link--social sidebar__link--boosty"
-        aria-label="Boosty"
+        class="sidebar__link sidebar__link--social sidebar__link--support"
+        class:sidebar__link--support-new={$supportModalUnseen}
+        aria-label="Поддержать Anixapp"
         onclick={(e) => {
-          requestOpenExternal('https://boosty.to/evt');
+          openSupportModal();
           (e.currentTarget as HTMLElement).blur();
         }}
       >
-        <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-          <path d="M13.5 2L4 13.5h7L8.5 22 20 10.5h-7L13.5 2z"/>
+        <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M6 3h12l4 6-10 12L2 9z" />
+          <path d="M2 9h20M9 3 7.5 9 12 21l4.5-12L15 3" />
         </svg>
       </button>
     </UiV2Tooltip>

@@ -787,12 +787,12 @@
           .filter((d: DubberItem) => String(d.id) !== currentDubId)
           .map(async (dub: DubberItem) => {
             try {
-              const srcRes = await api.getDubberSources(rId, dub.id);
-              const first = srcRes?.sources?.[0];
-              if (!first) return;
-              const epRes = await api.getEpisode(rId, first.id, nextEp);
-              if (epRes?.episode?.url) {
-                candidates.push({ dub, sourceId: first.id, sourceName: first.name });
+              for (const src of await listPlayableDubberSources(rId, dub.id)) {
+                const epRes = await api.getEpisode(rId, src.id, nextEp);
+                if (epRes?.episode?.url) {
+                  candidates.push({ dub, sourceId: src.id, sourceName: src.name });
+                  return;
+                }
               }
             } catch {
               /* skip */

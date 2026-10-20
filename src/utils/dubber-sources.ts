@@ -1,6 +1,6 @@
 /** Источники озвучки: официальный список + скрытые из episode/updates. */
 
-export type DubberSourceRef = { id: number; name: string };
+export type DubberSourceRef = { id: number; name: string; episodes_count?: number };
 
 /** Сообщение, когда у озвучки нет рабочей серии / источника. */
 export const NO_EPISODE_PICK_OTHER_DUB = 'Серии нет. Выберите другую озвучку';
@@ -20,7 +20,7 @@ type ReleaseApi = {
   getDubberSources?: (
     releaseId: number,
     dubberId: number,
-  ) => Promise<{ sources?: Array<{ id: number; name: string }> }>;
+  ) => Promise<{ sources?: Array<{ id: number; name: string; episodes_count?: number }> }>;
   getEpisodeUpdates?: (
     releaseId: number,
     page?: number,
@@ -48,6 +48,20 @@ function asSource(idRaw: unknown, nameRaw: unknown): DubberSourceRef | null {
   const name = String(nameRaw ?? '').trim() || `Источник ${id}`;
   if (isUnusableSourceName(name)) return null;
   return { id, name };
+}
+
+function episodeCount(raw: unknown): number | null {
+  const n = typeof raw === 'number' ? raw : Number(raw);
+  return raw != null && Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Anixart отдаёт пустые источники (например Sibnet у AniDUB с episodes_count: 0)
+ * раньше рабочих. Непустые ставим первыми, пустые отбрасываем, если есть альтернатива.
+ */
+function preferNonEmpty(sources: DubberSourceRef[]): DubberSourceRef[] {
+  const nonEmpty = sources.filter((s) => s.episodes_count !== 0);
+  return nonEmpty.length > 0 ? nonEmpty : sources;
 }
 
 export function invalidateDubberSourcesCache(releaseId?: number): void {
@@ -116,9 +130,15 @@ export async function listPlayableDubberSources(
   let official: DubberSourceRef[] = [];
   try {
     const res = await release.getDubberSources(releaseId, dubberId);
-    official = (res?.sources ?? [])
-      .map((s) => asSource(s.id, s.name))
-      .filter((s): s is DubberSourceRef => s != null);
+    official = preferNonEmpty(
+      (res?.sources ?? [])
+        .map((s) => {
+          const src = asSource(s.id, s.name);
+          const count = episodeCount(s.episodes_count);
+          return src && count != null ? { ...src, episodes_count: count } : src;
+        })
+        .filter((s): s is DubberSourceRef => s != null),
+    );
   } catch {
     official = [];
   }

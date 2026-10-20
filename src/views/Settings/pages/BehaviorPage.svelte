@@ -54,6 +54,9 @@
   function saveTray(checked: boolean) {
     minimizeToTray = checked;
     window.electron?.saveSettings?.({ minimizeToTray: checked });
+    window.dispatchEvent(new CustomEvent('anix:minimizeToTrayChanged', {
+      detail: { minimizeToTray: checked },
+    }));
   }
 
   function saveAccel(checked: boolean) {

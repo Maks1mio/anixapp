@@ -2,6 +2,8 @@ export interface ElectronWindowAPI {
   minimize: () => void;
   maximize: () => void;
   close: () => void;
+  isMaximized?: () => Promise<boolean>;
+  onMaximizedChanged?: (cb: (isMaximized: boolean) => void) => () => void;
 }
 
 export type LobbyWaitingOverlayPayload =

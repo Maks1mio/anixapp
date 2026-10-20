@@ -230,6 +230,12 @@ contextBridge.exposeInMainWorld('electron', {
     minimize: () => ipcRenderer.send('window:minimize'),
     maximize: () => ipcRenderer.send('window:maximize'),
     close: () => ipcRenderer.send('window:close'),
+    isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
+    onMaximizedChanged: (cb) => {
+      const listener = (_, value) => cb(value === true);
+      ipcRenderer.on('window:maximizedChanged', listener);
+      return () => ipcRenderer.removeListener('window:maximizedChanged', listener);
+    },
   },
   openPlayerWindow: (params) => ipcRenderer.invoke('player:openWindow', params),
   closePlayerWindow: () => ipcRenderer.send('player:close'),

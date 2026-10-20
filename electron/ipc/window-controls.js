@@ -16,6 +16,10 @@ ipcMain.on('window:maximize', (event) => {
   if (win.isMaximized()) win.unmaximize();
   else win.maximize();
 });
+ipcMain.handle('window:isMaximized', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender) || state.mainWindow;
+  return !!win && !win.isDestroyed() && win.isMaximized();
+});
 ipcMain.on('window:close', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender) || state.mainWindow;
   if (config.getMinimizeToTray() && win === state.mainWindow) {

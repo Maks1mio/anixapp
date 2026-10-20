@@ -89,6 +89,12 @@
   let cursorX = $state<number | null>(null);
   let showTimer: ReturnType<typeof setTimeout> | null = null;
   let hideTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * После сворачивания/восстановления окна Windows присылает синтетический
+   * mouseenter, из-за которого подсказка «запекалась» без наведения.
+   * Показываем её снова только после реального движения курсора.
+   */
+  let showSuppressed = $state(false);
 
   const hasStructured = $derived(!!title || !!description || lines.length > 0 || !!status || !!meta || !!icon);
   const hasContent = $derived(!!text || !!content || hasStructured);
@@ -175,14 +181,46 @@
   }
 
   function onTriggerEnter(e: MouseEvent | FocusEvent) {
+    if (showSuppressed) return;
     if (followCursor && e instanceof MouseEvent) cursorX = e.clientX;
     scheduleShow();
   }
 
   function onTriggerMove(e: MouseEvent) {
+    // Реальное движение курсора снимает блокировку после blur/restore.
+    if (showSuppressed) {
+      if (e.movementX === 0 && e.movementY === 0) return;
+      showSuppressed = false;
+      if (!visible) scheduleShow();
+    }
     if (!followCursor) return;
     cursorX = e.clientX;
     if (visible) layoutTip();
+  }
+
+  function hideNow() {
+    clearTimers();
+    visible = false;
+  }
+
+  function onWindowBlur() {
+    showSuppressed = true;
+    hideNow();
+  }
+
+  function onWindowFocus() {
+    showSuppressed = true;
+    hideNow();
+  }
+
+  function onWindowMouseMove(e: MouseEvent) {
+    if (!showSuppressed) return;
+    if (e.movementX !== 0 || e.movementY !== 0) showSuppressed = false;
+  }
+
+  function onVisibilityChange() {
+    showSuppressed = true;
+    hideNow();
   }
 
   function onTriggerLeave(e: FocusEvent | MouseEvent) {
@@ -210,6 +248,7 @@
   }
 
   function onWindowKeydown(e: KeyboardEvent) {
+    if (showSuppressed) showSuppressed = false;
     if (e.key === 'Escape' && visible) {
       clearTimers();
       visible = false;
@@ -217,7 +256,15 @@
   }
 </script>
 
-<svelte:window onkeydown={onWindowKeydown} onscroll={onScrollOrResize} onresize={onScrollOrResize} />
+<svelte:window
+  onkeydown={onWindowKeydown}
+  onscroll={onScrollOrResize}
+  onresize={onScrollOrResize}
+  onblur={onWindowBlur}
+  onfocus={onWindowFocus}
+  onmousemove={onWindowMouseMove}
+/>
+<svelte:document onvisibilitychange={onVisibilityChange} />
 
 <span
   bind:this={triggerEl}

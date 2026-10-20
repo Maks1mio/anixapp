@@ -3373,6 +3373,26 @@
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--uikit-v2-text) 12%, transparent);
 }
 
+.release-page__actions-status--watching .uiv2-select__field {
+  border-color: #22c55e !important;
+}
+
+.release-page__actions-status--planned .uiv2-select__field {
+  border-color: #a855f7 !important;
+}
+
+.release-page__actions-status--completed .uiv2-select__field {
+  border-color: #3b82f6 !important;
+}
+
+.release-page__actions-status--on_hold .uiv2-select__field {
+  border-color: #eab308 !important;
+}
+
+.release-page__actions-status--dropped .uiv2-select__field {
+  border-color: #ef4444 !important;
+}
+
 .uiv2-select__value {
   flex: 1;
   display: flex;

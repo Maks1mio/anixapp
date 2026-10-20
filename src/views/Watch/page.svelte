@@ -1347,6 +1347,39 @@
     };
   }
 
+  // ── Discord: сверка времени ────────────────────────────────────────────────
+  // Discord ведёт таймер сам от последней присланной позиции. Если после этого видео
+  // буферизуется или играет не на 1×, таймер расходится — тогда позицию шлём заново.
+  const PRESENCE_DRIFT_SEC = 2;
+  /** Не чаще: Discord принимает около пяти обновлений статуса за 20 с. */
+  const PRESENCE_RESYNC_MS = 5000;
+  /** Последняя позиция, отправленная в Discord, и когда; null — на паузе (таймера нет). */
+  let presenceAnchor: { ct: number; at: number } | null = null;
+  let presenceResyncAt = 0;
+
+  function notePresenceSent(p: { paused: boolean; currentTime: number }) {
+    presenceAnchor = p.paused ? null : { ct: p.currentTime, at: Date.now() };
+  }
+
+  /** Только статус (без action) — главное окно такие сообщения в комнату Fluo не передаёт. */
+  function sendPresenceState() {
+    const el = (window as any).electron;
+    if (!el?.sendPlayerState) return;
+    const p = getPlaybackPayload();
+    try { el.sendPlayerState(p); } catch { return; }
+    notePresenceSent(p);
+  }
+
+  function resyncPresenceIfDrifted(v: HTMLVideoElement) {
+    if (!presenceAnchor || v.paused || v.seeking || localMediaSwap || player.switching) return;
+    const now = Date.now();
+    if (now - presenceResyncAt < PRESENCE_RESYNC_MS) return;
+    const expected = presenceAnchor.ct + (now - presenceAnchor.at) / 1000;
+    if (Math.abs(v.currentTime - expected) < PRESENCE_DRIFT_SEC) return;
+    presenceResyncAt = now;
+    sendPresenceState();
+  }
+
   /** Ошибка потока: не ждать canplay у скрытого <video>, иначе барьер комнаты стоит до 8–12 с. */
   function releaseLobbySyncAfterPlaybackError() {
     if (!inLobbyRoom()) return;
@@ -1483,6 +1516,7 @@
     }
     if (viaElectron) {
       (window as any).electron.sendPlayerState({ action, playback: p });
+      notePresenceSent(p);
       if (action === 'play' || action === 'pause' || action === 'seek' || action === 'changeEpisode') {
         void publishLobbyPreview(true);
       }
@@ -3663,6 +3697,7 @@
       player.currentTime = v.currentTime;
       player.duration    = v.duration || 0;
       readVideoBuffer(v);
+      resyncPresenceIfDrifted(v);
       if (player.upscaleEnabled && isGpuAvailable() && player.useVideo && !core.upscale.active
         && v.readyState >= 2 && v.videoWidth >= 2 && player.loadState === 'ready' && !player.switching) {
         scheduleUpscaleRestart();
@@ -3718,7 +3753,7 @@
       if (!v) return;
       player.duration = v.duration || 0;
       if (!upscaleHoldForNewFrame) revealPlayerMedia();
-      try { (window as any).electron?.sendPlayerState?.(getPlaybackPayload()); } catch {}
+      sendPresenceState();
       syncVideoPlaybackRate();
       if (!upscaleHoldForNewFrame && player.upscaleEnabled && isGpuAvailable()) scheduleUpscaleRestart();
       if (pendingSync && !localMediaSwap) applyPendingSync();

@@ -3,6 +3,7 @@ import * as Icons from '../components/icons';
 export type SidebarNavId =
   | 'home'
   | 'overview'
+  | 'agent'
   | 'fluo'
   | 'feed'
   | 'popular'
@@ -249,6 +250,7 @@ function buildFolderIconOptions(): readonly {
 export const SIDEBAR_NAV_ITEMS: readonly SidebarNavItemDef[] = [
   { id: 'home', href: '/', label: 'Главная', icon: Icons.iconHome(18) },
   { id: 'overview', href: '/overview', label: 'Обзор', icon: Icons.iconCompass(18) },
+  { id: 'agent', href: '/agent', label: 'Канна — ИИ-помощница', icon: Icons.iconSparkles(18), beta: true },
   { id: 'fluo', href: '/fluo', label: 'Fluo', icon: Icons.iconSignal(18) },
   { id: 'feed', href: '/feed', label: 'Лента', icon: Icons.iconNewspaper(18), beta: true },
   { id: 'popular', href: '/overview/popular', label: 'Популярное', icon: Icons.iconFlame(18) },

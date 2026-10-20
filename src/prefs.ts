@@ -301,6 +301,34 @@ function normalizeSidebarNavLayout(input: Partial<SidebarNavLayout> | null | und
   return { left, right };
 }
 
+/**
+ * Tabs added after the user saved a custom layout: shown once next to «Обзор».
+ * If they hide it later, it stays hidden (the flag is per item, set on first insert).
+ */
+const NEW_NAV_ITEMS: ReadonlyArray<{ id: SidebarNavId; after: SidebarNavId; flag: string }> = [
+  { id: 'agent', after: 'overview', flag: 'anixapp.sidebarNav.added.agent' },
+];
+
+function withNewNavItems(layout: SidebarNavLayout): SidebarNavLayout {
+  let changed = false;
+  for (const item of NEW_NAV_ITEMS) {
+    try {
+      if (window.localStorage.getItem(item.flag)) continue;
+      window.localStorage.setItem(item.flag, '1');
+    } catch {
+      continue;
+    }
+    const placed = [...collectPlacedNavIds(layout.left), ...collectPlacedNavIds(layout.right)];
+    if (placed.includes(item.id)) continue;
+    const side = collectPlacedNavIds(layout.right).includes(item.after) ? layout.right : layout.left;
+    const at = side.findIndex((e) => e.kind === 'item' && e.id === item.after);
+    side.splice(at >= 0 ? at + 1 : Math.min(1, side.length), 0, { kind: 'item', id: item.id });
+    changed = true;
+  }
+  if (changed) setSidebarNavLayout(layout);
+  return layout;
+}
+
 function migratePlacementToLayout(): SidebarNavLayout | null {
   if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return null;
   try {
@@ -330,7 +358,7 @@ export function getSidebarNavLayout(): SidebarNavLayout {
   try {
     const raw = window.localStorage.getItem(SIDEBAR_NAV_LAYOUT_KEY);
     if (raw) {
-      return normalizeSidebarNavLayout(JSON.parse(raw) as Partial<SidebarNavLayout>);
+      return withNewNavItems(normalizeSidebarNavLayout(JSON.parse(raw) as Partial<SidebarNavLayout>));
     }
   } catch {
     /* fall through */
@@ -338,12 +366,13 @@ export function getSidebarNavLayout(): SidebarNavLayout {
   const migrated = migratePlacementToLayout();
   if (migrated) {
     setSidebarNavLayout(migrated);
-    return migrated;
+    return withNewNavItems(migrated);
   }
-  return {
+  // Default layout already has every tab — remember that, so hiding one later sticks.
+  return withNewNavItems({
     left: DEFAULT_SIDEBAR_NAV_LAYOUT.left.map((e) => ({ ...e })),
     right: [],
-  };
+  });
 }
 
 export function setSidebarNavLayout(next: SidebarNavLayout): SidebarNavLayout {

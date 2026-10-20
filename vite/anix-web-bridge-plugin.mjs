@@ -48,6 +48,8 @@ function isLongRunningAnixbackPath(path) {
   return (
     /\/admin\/overview\/overrides\/[^/?#]+\/(source-url|source|render|bg)\b/.test(path)
     || /\/api\/admin\/ads(\/|$)/.test(path)
+    // AAWA: стрим ответа с вызовами инструментов может идти дольше 30 с.
+    || /^\/api\/agent\/chat/.test(path)
   );
 }
 
@@ -254,6 +256,8 @@ async function proxyAnixback(req, res, url) {
     };
     if (req.headers['content-type']) headers['Content-Type'] = req.headers['content-type'];
     if (req.headers['x-admin-token']) headers['X-Admin-Token'] = req.headers['x-admin-token'];
+    // AAWA chat session (Bearer) — без него /api/agent/* отвечает 401.
+    if (req.headers.authorization) headers.Authorization = req.headers.authorization;
     if (req.headers.range) headers.Range = req.headers.range;
 
     const longRunning = isLongRunningAnixbackPath(path);
@@ -314,7 +318,7 @@ async function proxyAnixback(req, res, url) {
       }
     }
     if (!outHeaders['cache-control']) {
-      if (path.startsWith('/fluo') || path.startsWith('/api/ads') || path.startsWith('/api/admin/ads') || path.startsWith('/embed/')) {
+      if (path.startsWith('/fluo') || path.startsWith('/api/ads') || path.startsWith('/api/admin/ads') || path.startsWith('/embed/') || path.startsWith('/api/agent')) {
         outHeaders['Cache-Control'] = 'no-store, no-cache, must-revalidate';
       } else {
         outHeaders['Cache-Control'] = path.includes('/uploads/')

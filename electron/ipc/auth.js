@@ -295,6 +295,13 @@ ipcMain.handle('anix:appPresence', (_event, payload) => {
   return sendAnixappPresence(payload, cfg.token, cfg.profileId);
 });
 
+// Сессия чат-агента: токен Anixart меняется на id сессии здесь, в рендерер не уходит.
+ipcMain.handle('anix:agentSession', (_event, origin) => {
+  const { requestAgentSession } = require('../lib/anixapp-agent');
+  const cfg = config.loadConfig();
+  return requestAgentSession(origin, cfg.token, cfg.profileId);
+});
+
 // Лёгкая проверка соединения с API.
 // Если токена ещё нет (пользователь не залогинен) — считаем соединение доступным,
 // чтобы не блокировать экран логина.

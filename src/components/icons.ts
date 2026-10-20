@@ -101,6 +101,8 @@ import {
   ThumbsDown,
   ThumbsUp,
   X,
+  Gift,
+  Award,
 } from 'lucide';
 
 type IconNode = [string, Record<string, string | number | undefined>][];
@@ -367,6 +369,16 @@ export function iconUsers(size = 20): string {
 /** Шестерёнка (настройки) */
 export function iconSettings(size = 20): string {
   return toSvg(Settings, size);
+}
+
+/** Подарок (значок подарен другим пользователем) */
+export function iconGift(size = 18): string {
+  return toSvg(Gift, size);
+}
+
+/** Медаль (значок получен / выдан) */
+export function iconAward(size = 18): string {
+  return toSvg(Award, size);
 }
 
 /** Искры (Anime4K / апскейл) */

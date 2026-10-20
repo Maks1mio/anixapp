@@ -913,3 +913,13 @@ button.notifications-modal__item--app-update {
   font-size: 0.85rem;
   color: var(--uikit-v2-muted, #{$color-text-muted});
 }
+
+.notifications-modal__marker--gift {
+  background: #ec4899;
+  color: #fff;
+}
+
+.notifications-modal__marker--badge {
+  background: #f6c344;
+  color: #111;
+}

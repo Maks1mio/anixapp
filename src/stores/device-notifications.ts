@@ -1,6 +1,13 @@
 import { get, writable } from 'svelte/store';
 import { isAuthenticated } from './auth';
-import { fetchAllNotifications } from './notifications';
+import { fetchAllNotifications, refreshNotificationUnreadCount } from './notifications';
+import {
+  badgeEventPlainBody,
+  badgeEventTitle,
+  resetBadgeEventsCache,
+  takeBadgeEventsForToast,
+} from './badge-events';
+import { resolveAnixbackUploadUrl } from '../services/anixback-endpoint';
 import { parseNotification } from '../utils/notification-format';
 import { resolveBadgeImageUrl, resolveBadgeName } from '../utils/badge';
 import { resolveCdnAssetUrl } from '../utils/posterUrl';
@@ -729,6 +736,7 @@ export function resetDeviceNotificationBaseline(): void {
   seenIds.clear();
   baselineReady = false;
   resetBadgeAchievementBaseline();
+  resetBadgeEventsCache();
 }
 
 /**
@@ -833,8 +841,37 @@ export function resetBadgeAchievementBaseline(): void {
   badgeBaselineReady = false;
 }
 
+/** AnixApp badges (Anix+ bought / gifted / granted) → toast with who it's from. */
+let appBadgePolling = false;
+
+export async function pollAppBadgeEvents(): Promise<void> {
+  if (appBadgePolling || !get(isAuthenticated)) return;
+  appBadgePolling = true;
+  try {
+    const fresh = await takeBadgeEventsForToast();
+    for (const e of fresh) {
+      await showDeviceNotification({
+        id: `anixapp-badge-${e.id}`,
+        title: badgeEventTitle(e),
+        body: badgeEventPlainBody(e),
+        image: (e.image_url && resolveAnixbackUploadUrl(e.image_url)) || SAMPLE_ACHIEVEMENT_BADGE,
+        kind: 'achievement',
+        deepLink: { type: 'profile-badge', id: 0 },
+      });
+    }
+    if (fresh.length) void refreshNotificationUnreadCount();
+  } catch {
+    // тихо
+  } finally {
+    appBadgePolling = false;
+  }
+}
+
 export function startBadgeAchievementPolling(intervalMs = 60_000): () => void {
-  const tick = () => { void pollBadgeAchievements(); };
+  const tick = () => {
+    void pollBadgeAchievements();
+    void pollAppBadgeEvents();
+  };
   const warmup = setTimeout(tick, 12_000);
   badgePollTimer = setInterval(tick, intervalMs);
   return () => {

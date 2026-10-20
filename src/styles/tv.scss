@@ -1959,11 +1959,11 @@ html.tv-mode .tv-release-body__bar-fill {
   background: #ffc44d;
 }
 
-html.tv-mode .tv-release-body__bar-fill--watching { background: #40c463; }
-html.tv-mode .tv-release-body__bar-fill--planned { background: #8e7cff; }
-html.tv-mode .tv-release-body__bar-fill--completed { background: #3d9cff; }
-html.tv-mode .tv-release-body__bar-fill--on-hold { background: #ffc16b; }
-html.tv-mode .tv-release-body__bar-fill--dropped { background: #ff4d4d; }
+html.tv-mode .tv-release-body__bar-fill--watching { background: #6fa873; }
+html.tv-mode .tv-release-body__bar-fill--planned { background: #a76fac; }
+html.tv-mode .tv-release-body__bar-fill--completed { background: #6974ac; }
+html.tv-mode .tv-release-body__bar-fill--on-hold { background: #d29742; }
+html.tv-mode .tv-release-body__bar-fill--dropped { background: #c24e4d; }
 
 html.tv-mode .tv-release-body__bar-count {
   text-align: right;
@@ -3077,11 +3077,11 @@ html.tv-mode .tv-release-page__lists-bar {
   background: rgba(255, 255, 255, 0.08);
 }
 
-html.tv-mode .tv-release-page__lists-seg--watching { background: var(--color-success, #22c55e); }
-html.tv-mode .tv-release-page__lists-seg--planned { background: #a855f7; }
-html.tv-mode .tv-release-page__lists-seg--completed { background: #3b82f6; }
-html.tv-mode .tv-release-page__lists-seg--hold { background: #f97316; }
-html.tv-mode .tv-release-page__lists-seg--dropped { background: var(--color-error, #ef4444); }
+html.tv-mode .tv-release-page__lists-seg--watching { background: #6fa873; }
+html.tv-mode .tv-release-page__lists-seg--planned { background: #a76fac; }
+html.tv-mode .tv-release-page__lists-seg--completed { background: #6974ac; }
+html.tv-mode .tv-release-page__lists-seg--hold { background: #d29742; }
+html.tv-mode .tv-release-page__lists-seg--dropped { background: #c24e4d; }
 
 html.tv-mode .tv-release-page__lists-legend {
   margin: 0.55rem 0 0;

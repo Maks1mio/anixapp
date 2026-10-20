@@ -3374,63 +3374,63 @@
 }
 
 .release-page__actions-status--watching .uiv2-select__field {
-  border-color: #22c55e !important;
+  border-color: #6fa873 !important;
 }
 
 .release-page__actions-status--watching .uiv2-select__value-label {
-  color: #22c55e;
+  color: #6fa873;
 }
 
 .release-page__actions-status--planned .uiv2-select__field {
-  border-color: #a855f7 !important;
+  border-color: #a76fac !important;
 }
 
 .release-page__actions-status--planned .uiv2-select__value-label {
-  color: #a855f7;
+  color: #a76fac;
 }
 
 .release-page__actions-status--completed .uiv2-select__field {
-  border-color: #3b82f6 !important;
+  border-color: #6974ac !important;
 }
 
 .release-page__actions-status--completed .uiv2-select__value-label {
-  color: #3b82f6;
+  color: #6974ac;
 }
 
 .release-page__actions-status--on_hold .uiv2-select__field {
-  border-color: #eab308 !important;
+  border-color: #d29742 !important;
 }
 
 .release-page__actions-status--on_hold .uiv2-select__value-label {
-  color: #eab308;
+  color: #d29742;
 }
 
 .release-page__actions-status--dropped .uiv2-select__field {
-  border-color: #ef4444 !important;
+  border-color: #c24e4d !important;
 }
 
 .release-page__actions-status--dropped .uiv2-select__value-label {
-  color: #ef4444;
+  color: #c24e4d;
 }
 
 .release-page__actions-status--watching .uiv2-select__chevron {
-  color: #22c55e !important;
+  color: #6fa873 !important;
 }
 
 .release-page__actions-status--planned .uiv2-select__chevron {
-  color: #a855f7 !important;
+  color: #a76fac !important;
 }
 
 .release-page__actions-status--completed .uiv2-select__chevron {
-  color: #3b82f6 !important;
+  color: #6974ac !important;
 }
 
 .release-page__actions-status--on_hold .uiv2-select__chevron {
-  color: #eab308 !important;
+  color: #d29742 !important;
 }
 
 .release-page__actions-status--dropped .uiv2-select__chevron {
-  color: #ef4444 !important;
+  color: #c24e4d !important;
 }
 
 .release-page__actions-status .uiv2-select__chevron {
@@ -3864,33 +3864,33 @@
     0 6px 16px rgba(0, 0, 0, 0.22);
 
   &--watching {
-    color: #d8ffe8;
-    background: color-mix(in srgb, #2f9e68 72%, rgba(12, 18, 16, 0.55));
-    border-color: color-mix(in srgb, #7dffb5 28%, transparent);
+    color: #e8f1e9;
+    background: color-mix(in srgb, #6fa873 72%, rgba(12, 18, 16, 0.55));
+    border-color: color-mix(in srgb, #6fa873 40%, transparent);
   }
 
   &--planned {
-    color: #efe6ff;
-    background: color-mix(in srgb, #7c5cff 68%, rgba(14, 12, 24, 0.55));
-    border-color: color-mix(in srgb, #c4b5ff 28%, transparent);
+    color: #f0e8f1;
+    background: color-mix(in srgb, #a76fac 72%, rgba(14, 12, 24, 0.55));
+    border-color: color-mix(in srgb, #a76fac 40%, transparent);
   }
 
   &--completed {
-    color: #e3f0ff;
-    background: color-mix(in srgb, #3b82f6 70%, rgba(10, 14, 24, 0.55));
-    border-color: color-mix(in srgb, #93c5fd 28%, transparent);
+    color: #e8eaf3;
+    background: color-mix(in srgb, #6974ac 72%, rgba(10, 14, 24, 0.55));
+    border-color: color-mix(in srgb, #6974ac 40%, transparent);
   }
 
   &--on-hold {
-    color: #fff3d6;
-    background: color-mix(in srgb, #c9a227 68%, rgba(20, 16, 8, 0.55));
-    border-color: color-mix(in srgb, #f5d978 26%, transparent);
+    color: #f5ecdf;
+    background: color-mix(in srgb, #d29742 72%, rgba(20, 16, 8, 0.55));
+    border-color: color-mix(in srgb, #d29742 40%, transparent);
   }
 
   &--dropped {
-    color: #ffe4e4;
-    background: color-mix(in srgb, #c44b4b 68%, rgba(22, 10, 10, 0.55));
-    border-color: color-mix(in srgb, #ff9b9b 26%, transparent);
+    color: #f4e5e5;
+    background: color-mix(in srgb, #c24e4d 72%, rgba(22, 10, 10, 0.55));
+    border-color: color-mix(in srgb, #c24e4d 40%, transparent);
   }
 
   &--below {

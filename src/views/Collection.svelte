@@ -33,11 +33,11 @@
   }
 
   const STATUS_COLORS = {
-    watching: '#22c55e',
-    planned: '#a855f7',
-    completed: '#3b82f6',
-    on_hold: '#eab308',
-    dropped: '#ef4444',
+    watching: '#6fa873',
+    planned: '#a76fac',
+    completed: '#6974ac',
+    on_hold: '#d29742',
+    dropped: '#c24e4d',
   };
 
   // State

@@ -4610,23 +4610,23 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   &--watching {
-    background: $color-success;
+    background: #6fa873;
   }
 
   &--planned {
-    background: #a855f7;
+    background: #a76fac;
   }
 
   &--completed {
-    background: #3b82f6;
+    background: #6974ac;
   }
 
   &--on_hold {
-    background: #f97316;
+    background: #d29742;
   }
 
   &--dropped {
-    background: $color-error;
+    background: #c24e4d;
   }
 }
 
@@ -4662,23 +4662,23 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .release-page__list-stats-legend-item--watching i {
-  background: $color-success;
+  background: #6fa873;
 }
 
 .release-page__list-stats-legend-item--planned i {
-  background: #a855f7;
+  background: #a76fac;
 }
 
 .release-page__list-stats-legend-item--completed i {
-  background: #3b82f6;
+  background: #6974ac;
 }
 
 .release-page__list-stats-legend-item--on_hold i {
-  background: #f97316;
+  background: #d29742;
 }
 
 .release-page__list-stats-legend-item--dropped i {
-  background: $color-error;
+  background: #c24e4d;
 }
 
 .release-page__friends {

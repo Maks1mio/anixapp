@@ -1026,6 +1026,32 @@
   box-sizing: border-box;
 }
 
+// Развёрнуто на всё окно — показываем иконку восстановления (два квадрата).
+.titlebar__btn--max-restore {
+  position: relative;
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 9px;
+    height: 9px;
+    margin: -4.5px 0 0 -4.5px;
+    border: 1px solid currentColor;
+    box-sizing: border-box;
+  }
+
+  &::before {
+    transform: translate(2px, 2px);
+  }
+
+  &::after {
+    transform: translate(-2px, -2px);
+  }
+}
+
 // macOS: нативные кнопки окна слева — свои не показываем, тайтлбар сдвигаем под них.
 .platform-darwin {
   .titlebar__controls {

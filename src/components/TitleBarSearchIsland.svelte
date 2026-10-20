@@ -481,6 +481,11 @@
     }
   }
 
+  /** Закрываем поиск при любом переходе — в т.ч. когда открыт тайтл из результатов. */
+  function onNavigate() {
+    if (open && !closing) void closeIsland();
+  }
+
   onMount(() => {
     reducedMotion = prefersReducedMotion();
     const onOpen = (e: Event) => {
@@ -491,10 +496,16 @@
     window.addEventListener('anix:openSearchIsland', onOpen as EventListener);
     window.addEventListener('anix:focusSearch', onFocus);
     window.addEventListener('keydown', onGlobalKey);
+    window.addEventListener('anix:navigate', onNavigate);
+    window.addEventListener('hashchange', onNavigate);
+    window.addEventListener('popstate', onNavigate);
     return () => {
       window.removeEventListener('anix:openSearchIsland', onOpen as EventListener);
       window.removeEventListener('anix:focusSearch', onFocus);
       window.removeEventListener('keydown', onGlobalKey);
+      window.removeEventListener('anix:navigate', onNavigate);
+      window.removeEventListener('hashchange', onNavigate);
+      window.removeEventListener('popstate', onNavigate);
       if (debounceTimer) clearTimeout(debounceTimer);
     };
   });
@@ -767,7 +778,7 @@
                     aria-label="Тайтлы"
                     onclick={(e) => {
                       const t = e.target as HTMLElement;
-                      if (t.closest('a, button, [role="link"]')) {
+                      if (t.closest('a, button, [role="button"], [role="link"]')) {
                         queueMicrotask(() => void closeIsland());
                       }
                     }}

@@ -67,6 +67,15 @@
   padding: 0 0;
 }
 
+// AAWA: чат сам скроллит ленту сообщений, composer закреплён снизу
+.page--agent > .page__scroll {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  padding: 0;
+}
+
 // Комментарии / ответы: скролл внутри списка, composer закреплён снизу
 .page__scroll:has(> .view.anix-comments-page) {
   display: flex;

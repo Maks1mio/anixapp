@@ -45,6 +45,33 @@ export async function fetchMyBadges(profileId: number, token: string): Promise<B
   }
 }
 
+/** How a badge reached the user (anixback `/badges/events`). */
+export interface BadgeEvent {
+  id: number;
+  slug: string;
+  name: string;
+  image_url: string | null;
+  /** purchase — купил сам; gift — подарок (from); anon_gift — анонимно; granted — выдал админ. */
+  kind: 'purchase' | 'gift' | 'anon_gift' | 'granted';
+  from: { user_id: number | null; login: string | null; avatar: string | null; telegram: string | null } | null;
+  created_at: string;
+}
+
+/** Badge notifications for the current user, newest first. */
+export async function fetchBadgeEvents(profileId: number): Promise<BadgeEvent[] | null> {
+  try {
+    const res = await fetch(`${getApiBase()}/badges/events`, {
+      headers: appHeaders(profileId),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { events?: BadgeEvent[] };
+    return Array.isArray(data.events) ? data.events : [];
+  } catch {
+    return null;
+  }
+}
+
 /** Create one-time code to link Telegram via bot. */
 export async function createLinkCode(profileId: number, token: string): Promise<LinkCodeResult | null> {
   try {
@@ -155,6 +182,8 @@ export interface BadgeCatalogType {
   price: number | null;
   is_custom: boolean;
   description: string | null;
+  /** Chat agent requests per day for Anix+ tiers; null for other badges / older anixback. */
+  agent_daily_limit?: number | null;
 }
 
 let catalogCache: { types: BadgeCatalogType[]; at: number } | null = null;

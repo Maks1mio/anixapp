@@ -94,6 +94,16 @@ function createMainWindow(deps) {
       }
     }
   });
+  state.mainWindow.on('maximize', () => {
+    if (!state.mainWindow?.isDestroyed()) {
+      state.mainWindow.webContents.send('window:maximizedChanged', true);
+    }
+  });
+  state.mainWindow.on('unmaximize', () => {
+    if (!state.mainWindow?.isDestroyed()) {
+      state.mainWindow.webContents.send('window:maximizedChanged', false);
+    }
+  });
   state.mainWindow.on('closed', () => { state.mainWindow = null; });
 }
 

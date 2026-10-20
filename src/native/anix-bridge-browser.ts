@@ -80,6 +80,26 @@ async function sendAppPresence(payload: unknown, token: string | null, savedProf
   }
 }
 
+/** Mirror of electron/lib/anixapp-agent.js: Anixart token → chat agent session id. */
+async function requestAgentSession(origin: unknown, token: string | null, profileId: number | null): Promise<unknown> {
+  const o = typeof origin === 'string' ? origin.replace(/\/$/, '') : '';
+  if (!PRESENCE_ORIGIN.test(o)) return { ok: false, error: 'origin not allowed' };
+  const userId = toPositiveInt(profileId);
+  if (!token || !userId) return { ok: false, error: 'not_logged_in' };
+  try {
+    const res = await fetch(`${o}/api/agent/session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Anixart-User-Id': String(userId), 'X-Anixart-Token': token },
+      signal: AbortSignal.timeout(15000),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.session) return { ok: false, status: res.status, error: data?.error ?? `HTTP ${res.status}` };
+    return { ok: true, session: data.session, expires_at: data.expires_at };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 function h(fn: (c: BridgeCtx, ...args: any[]) => unknown): Handler {
   return async (c, args) => fn(c, ...(args ?? []));
 }
@@ -151,6 +171,10 @@ export function createBrowserAnixBridge() {
     'anix:appPresence': async (c, [payload]) => {
       const cfg = c.loadConfig();
       return sendAppPresence(payload, cfg.token, cfg.profileId);
+    },
+    'anix:agentSession': async (c, [origin]) => {
+      const cfg = c.loadConfig();
+      return requestAgentSession(origin, cfg.token, cfg.profileId);
     },
     'anix:login': async (c, [username, password]) => {
       const { baseUrl } = c.loadConfig();

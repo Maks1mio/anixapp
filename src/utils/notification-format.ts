@@ -1,5 +1,6 @@
 import { resolveCdnAssetUrl } from './posterUrl';
 import { resolveJacksonRefs } from './jackson-refs';
+import { resolveAnixbackUploadUrl } from '../services/anixback-endpoint';
 
 export interface ParsedNotification {
   bodyHtml: string;
@@ -17,6 +18,8 @@ export interface ParsedNotification {
     | 'friend'
     | 'friend-accept'
     | 'comment'
+    | 'badge'
+    | 'gift'
     | 'none';
   releaseId?: number;
   profileId?: number;
@@ -109,12 +112,14 @@ export type NotificationFilterId =
   | 'article'
   | 'release'
   | 'friend'
-  | 'comment';
+  | 'comment'
+  | 'badge';
 
 /** Category for filter chips (Android notifications_filter menu). */
 export function notificationFilterId(rawInput: unknown): Exclude<NotificationFilterId, 'all'> | 'other' {
   const raw = asRecord(resolveJacksonRefs(rawInput)) ?? {};
   const type = String(raw.type || '');
+  if (type === 'anixappBadge') return 'badge';
   if (type === 'episode') return 'episode';
   if (type === 'article') return 'article';
   if (type === 'relatedRelease') return 'release';
@@ -183,6 +188,8 @@ export function parseNotification(rawInput: unknown): ParsedNotification {
   const type = String(raw.type || '');
   const timeStr = formatNotificationTime(typeof raw.timestamp === 'number' ? raw.timestamp : undefined);
   const isNew = !!raw.is_new;
+
+  if (type === 'anixappBadge') return parseBadgeEvent(raw, timeStr, isNew);
 
   if (type === 'episode') {
     const episode = asRecord(raw.episode);
@@ -315,4 +322,46 @@ export function parseNotification(rawInput: unknown): ParsedNotification {
     image: '',
     markerKind: 'none',
   };
+}
+
+/** AnixApp badge (anixback `/badges/events`, see stores/badge-events.ts). */
+function parseBadgeEvent(raw: Record<string, unknown>, timeStr: string, isNew: boolean): ParsedNotification {
+  const e = asRecord(raw.badge_event) ?? {};
+  const from = asRecord(e.from);
+  const kind = String(e.kind || 'purchase');
+  const badge = boldQuoted(String(e.name || 'Значок'));
+  const login = typeof from?.login === 'string' && from.login ? from.login : '';
+  const tg = typeof from?.telegram === 'string' && from.telegram ? `@${from.telegram}` : '';
+  const who = login || tg;
+  const profileId = from?.user_id != null ? Number(from.user_id) || undefined : undefined;
+
+  let bodyHtml: string;
+  if (kind === 'gift') {
+    bodyHtml = who
+      ? `Пользователь ${boldText(who)} подарил вам значок ${badge}`
+      : `Вам подарили значок ${badge}`;
+  } else if (kind === 'anon_gift') {
+    bodyHtml = `Кто-то анонимно подарил вам значок ${badge}`;
+  } else if (kind === 'granted') {
+    bodyHtml = who
+      ? `Администратор ${boldText(who)} выдал вам значок ${badge}`
+      : `Команда AnixApp выдала вам значок ${badge}`;
+  } else {
+    bodyHtml = `Вы приобрели значок ${badge}. Спасибо за поддержку AnixApp!`;
+  }
+
+  const giftLike = kind === 'gift' || kind === 'anon_gift';
+  return {
+    bodyHtml,
+    timeStr,
+    isNew,
+    // Sender avatar for named gifts/grants, otherwise the badge itself.
+    image: (who && typeof from?.avatar === 'string' && cdnImage(from.avatar)) || badgeImage(e.image_url),
+    markerKind: giftLike ? 'gift' : 'badge',
+    profileId,
+  };
+}
+
+function badgeImage(raw: unknown): string {
+  return typeof raw === 'string' && raw ? resolveAnixbackUploadUrl(raw) : '';
 }

@@ -4,6 +4,13 @@
   import { openFeedArticle, openFeedChannel } from '../stores/feed-focus';
   import { handleUserProfileClick } from '../stores/user-profile';
   import { fetchAllNotifications, markNotificationsRead } from '../stores/notifications';
+  import {
+    badgeEventToRaw,
+    lastSeenBadgeEventId,
+    loadBadgeEvents,
+    markBadgeEventsSeen,
+  } from '../stores/badge-events';
+  import type { BadgeEvent } from '../services/badges-api';
   import { openSettingsModal } from '../stores/modals';
   import {
     iconPlay,
@@ -16,6 +23,8 @@
     iconX,
     iconSettings,
     iconListChecks,
+    iconGift,
+    iconAward,
   } from './icons';
   import type { AppUpdateProgress } from '../types/electron';
   import Page from './Page.svelte';
@@ -43,6 +52,7 @@
     { id: 'friend', label: 'Друзья' },
     { id: 'comment', label: 'Комменты' },
     { id: 'release', label: 'Релизы' },
+    { id: 'badge', label: 'Значки' },
   ];
 
   let loadState = $state<LoadState>('loading');
@@ -52,6 +62,7 @@
   let revealedSpoilers = $state<Record<string, boolean>>({});
   let filter = $state<NotificationFilterId>('all');
   let markBusy = $state(false);
+  let badgeEvents: BadgeEvent[] = [];
 
   const filterCounts = $derived.by(() => {
     const counts: Record<NotificationFilterId, number> = {
@@ -61,6 +72,7 @@
       release: 0,
       friend: 0,
       comment: 0,
+      badge: 0,
     };
     for (const raw of notifications) {
       const id = notificationFilterId(raw);
@@ -90,6 +102,7 @@
     if (markBusy || !hasUnread) return;
     markBusy = true;
     try {
+      markBadgeEventsSeen(badgeEvents);
       await markNotificationsRead();
       notifications = notifications.map((raw) => {
         if (raw && typeof raw === 'object') return { ...(raw as object), is_new: false };
@@ -120,6 +133,10 @@
         return `<span class="notifications-modal__marker notifications-modal__marker--friend-accept">${iconCheck(13)}</span>`;
       case 'comment':
         return `<span class="notifications-modal__marker notifications-modal__marker--comment">${iconMessageCircle(13)}</span>`;
+      case 'gift':
+        return `<span class="notifications-modal__marker notifications-modal__marker--gift">${iconGift(13)}</span>`;
+      case 'badge':
+        return `<span class="notifications-modal__marker notifications-modal__marker--badge">${iconAward(13)}</span>`;
       default:
         return '';
     }
@@ -191,7 +208,13 @@
 
     void (async () => {
       try {
-        const content = await fetchAllNotifications();
+        const [anixart, badges] = await Promise.all([
+          fetchAllNotifications(),
+          loadBadgeEvents(true).catch(() => [] as BadgeEvent[]),
+        ]);
+        badgeEvents = badges;
+        const seenBadge = lastSeenBadgeEventId();
+        const content = [...anixart, ...badges.map((e) => badgeEventToRaw(e, seenBadge))];
 
         if (content.length === 0) {
           loadState = 'empty';
@@ -372,7 +395,7 @@
         {:else if loadState === 'empty'}
           <div class="notifications-modal__state notifications-modal__state--empty">
             <p class="notifications-modal__state-title">Пока тихо</p>
-            <p class="notifications-modal__state-desc">Новые серии, записи и заявки в друзья появятся здесь</p>
+            <p class="notifications-modal__state-desc">Новые серии, записи, заявки в друзья и значки появятся здесь</p>
           </div>
         {:else if loadState === 'error'}
           <p class="notifications-modal__state notifications-modal__state--error">Ошибка: {errorMsg}</p>

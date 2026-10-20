@@ -5,6 +5,7 @@ import { rendererLogger } from '../services/logger';
 export type SidebarTabId =
   | 'home'
   | 'overview'
+  | 'agent'
   | 'fluo'
   | 'feed'
   | 'popular'
@@ -17,6 +18,7 @@ export type NavigationContextId = SidebarTabId | IndependentTabId;
 export const SIDEBAR_TAB_ROOTS: Record<SidebarTabId, string> = {
   home: '/',
   overview: '/overview',
+  agent: '/agent',
   fluo: '/fluo',
   feed: '/feed',
   popular: '/overview/popular',
@@ -28,6 +30,7 @@ export const SIDEBAR_TAB_ROOTS: Record<SidebarTabId, string> = {
 const HREF_TO_TAB: Record<string, SidebarTabId> = {
   '/': 'home',
   '/overview': 'overview',
+  '/agent': 'agent',
   '/fluo': 'fluo',
   '/feed': 'feed',
   '/overview/popular': 'popular',
@@ -62,6 +65,7 @@ export function resolveTabFromPath(path: string): NavigationContextId | null {
   const pathname = path.split('?')[0] || '/';
   if (pathname === '/' || pathname === '') return 'home';
   if (pathname === '/overview') return 'overview';
+  if (pathname === '/agent') return 'agent';
   if (pathname === '/fluo' || pathname.startsWith('/fluo/')) return 'fluo';
   if (pathname === '/feed' || pathname.startsWith('/feed/')) return 'feed';
   if (pathname === '/overview/popular' || pathname.startsWith('/overview/popular/')) return 'popular';

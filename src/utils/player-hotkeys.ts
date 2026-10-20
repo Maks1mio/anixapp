@@ -9,27 +9,36 @@ export const DEFAULT_PLAYBACK_RATE = 1;
 
 export const SEEK_SECONDS_OPTIONS = [5, 10, 15, 30, 60, 90] as const;
 
+/** Перемотка на заданное время — как «skip opening» в AniXart (по умолчанию 1:25). */
+export const REWIND_SECONDS_OPTIONS = [30, 60, 85, 120, 180] as const;
+export const REWIND_SECONDS_MIN = 1;
+export const REWIND_SECONDS_MAX = 3600;
+
 export interface PlayerHotkeysSettings {
   seekBackCode: string;
   seekForwardCode: string;
+  rewindCode: string;
   playPauseCode: string;
   volumeUpCode: string;
   volumeDownCode: string;
   fullscreenCode: string;
   alwaysOnTopCode: string;
   seekSeconds: number;
+  rewindSeconds: number;
   ctrlWheelSpeed: boolean;
 }
 
 export const DEFAULT_PLAYER_HOTKEYS: PlayerHotkeysSettings = {
   seekBackCode: 'ArrowLeft',
   seekForwardCode: 'ArrowRight',
+  rewindCode: 'KeyX',
   playPauseCode: 'Space',
   volumeUpCode: 'ArrowUp',
   volumeDownCode: 'ArrowDown',
   fullscreenCode: 'KeyF',
   alwaysOnTopCode: 'KeyP',
   seekSeconds: 10,
+  rewindSeconds: 85,
   ctrlWheelSpeed: true,
 };
 
@@ -37,6 +46,7 @@ export const DEFAULT_PLAYER_HOTKEYS: PlayerHotkeysSettings = {
 export const PLAYER_HOTKEY_BIND_FIELDS = [
   'seekBackCode',
   'seekForwardCode',
+  'rewindCode',
   'playPauseCode',
   'volumeUpCode',
   'volumeDownCode',
@@ -82,15 +92,25 @@ export function normalizePlayerHotkeys(raw: unknown): PlayerHotkeysSettings {
     Math.abs(n - seekSecondsRaw) < Math.abs(best - seekSecondsRaw) ? n : best,
   SEEK_SECONDS_OPTIONS[0]);
 
+  const rewindSecondsRaw = typeof src.rewindSeconds === 'number' && Number.isFinite(src.rewindSeconds)
+    ? src.rewindSeconds
+    : DEFAULT_PLAYER_HOTKEYS.rewindSeconds;
+  const rewindSeconds = Math.min(
+    REWIND_SECONDS_MAX,
+    Math.max(REWIND_SECONDS_MIN, Math.round(rewindSecondsRaw)),
+  );
+
   return {
     seekBackCode: pickHotkeyCode(src.seekBackCode, DEFAULT_PLAYER_HOTKEYS.seekBackCode),
     seekForwardCode: pickHotkeyCode(src.seekForwardCode, DEFAULT_PLAYER_HOTKEYS.seekForwardCode),
+    rewindCode: pickHotkeyCode(src.rewindCode, DEFAULT_PLAYER_HOTKEYS.rewindCode),
     playPauseCode: pickHotkeyCode(src.playPauseCode, DEFAULT_PLAYER_HOTKEYS.playPauseCode),
     volumeUpCode: pickHotkeyCode(src.volumeUpCode, DEFAULT_PLAYER_HOTKEYS.volumeUpCode),
     volumeDownCode: pickHotkeyCode(src.volumeDownCode, DEFAULT_PLAYER_HOTKEYS.volumeDownCode),
     fullscreenCode: pickHotkeyCode(src.fullscreenCode, DEFAULT_PLAYER_HOTKEYS.fullscreenCode),
     alwaysOnTopCode: pickHotkeyCode(src.alwaysOnTopCode, DEFAULT_PLAYER_HOTKEYS.alwaysOnTopCode),
     seekSeconds: nearestSeek,
+    rewindSeconds,
     ctrlWheelSpeed: src.ctrlWheelSpeed !== false,
   };
 }
@@ -118,6 +138,15 @@ export function formatHotkeyCode(code: string): string {
   if (code.startsWith('Digit') && code.length === 6) return code.slice(5);
   if (code.startsWith('Numpad')) return `Num ${code.slice(6)}`;
   return code;
+}
+
+/** 85 → «1:25», 45 → «45 с». */
+export function formatSeekSeconds(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  if (total < 60) return `${total} с`;
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return s === 0 ? `${m} мин` : `${m}:${String(s).padStart(2, '0')}`;
 }
 
 /** Reject pure modifiers / mouse-only codes when rebinding. */

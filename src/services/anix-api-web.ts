@@ -41,6 +41,7 @@ function buildWebAnixApi(): AnixApi {
       getAuthStatus: () => invoke('anix:getAuthStatus'),
       checkConnection: () => invoke('anix:checkConnection'),
       appPresence: (payload) => invoke('anix:appPresence', payload),
+      agentSession: (origin) => invoke('anix:agentSession', origin),
       testOffline: () => invoke('anix:testOffline'),
     },
 

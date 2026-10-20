@@ -141,6 +141,8 @@ export interface AnixApi {
       event: 'launch' | 'heartbeat' | 'quit';
       user_id: number | null;
     }) => Promise<{ ok: boolean; verified?: string; badge_granted?: boolean; heartbeat_sec?: number; error?: string }>;
+    /** Chat agent session: the bridge trades the Anixart token for an anixback session id. */
+    agentSession?: (origin: string) => Promise<{ ok: boolean; session?: string; expires_at?: string; status?: number; error?: string }>;
     testOffline: () => Promise<void>;
   };
 

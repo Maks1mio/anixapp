@@ -57,6 +57,7 @@
   import Home from './views/Home.svelte';
   import Overview from './views/Overview.svelte';
   import FluoPage from './views/Fluo/page.svelte';
+  import AgentPage from './views/Agent/page.svelte';
   import Feed from './views/Feed.svelte';
   import FeedComposerWindow from './views/FeedComposerWindow.svelte';
   import Popular from './views/Popular.svelte';
@@ -1021,6 +1022,8 @@
       <Overview />
     {:else if path === '/fluo'}
       <FluoPage />
+    {:else if path === '/agent'}
+      <AgentPage />
     {:else if path === '/feed' || articleMatch || channelMatch}
       <Feed />
     {:else if path === '/overview/popular'}

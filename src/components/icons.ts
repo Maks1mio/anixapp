@@ -24,6 +24,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  ChevronsRight,
   ClipboardList,
   Copy,
   Download,
@@ -100,6 +101,8 @@ import {
   ThumbsDown,
   ThumbsUp,
   X,
+  Gift,
+  Award,
 } from 'lucide';
 
 type IconNode = [string, Record<string, string | number | undefined>][];
@@ -368,6 +371,16 @@ export function iconSettings(size = 20): string {
   return toSvg(Settings, size);
 }
 
+/** Подарок (значок подарен другим пользователем) */
+export function iconGift(size = 18): string {
+  return toSvg(Gift, size);
+}
+
+/** Медаль (значок получен / выдан) */
+export function iconAward(size = 18): string {
+  return toSvg(Award, size);
+}
+
 /** Искры (Anime4K / апскейл) */
 export function iconSparkles(size = 18): string {
   return toSvg(Sparkles, size);
@@ -488,6 +501,11 @@ export function iconRotateCcw(size = 16): string {
 /** Перемотка вперёд */
 export function iconRotateCw(size = 16): string {
   return toSvg(RotateCw, size);
+}
+
+/** Быстрая перемотка на заданное время (двойной шеврон, как в AniXart) */
+export function iconFastRewindTime(size = 18): string {
+  return toSvg(ChevronsRight, size);
 }
 
 /** Добавить человека (лобби) */

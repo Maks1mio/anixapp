@@ -687,7 +687,11 @@
         episodesError = NO_EPISODE_PICK_OTHER_DUB;
         return;
       }
-      await selectSource(srcs[0], false);
+      // Счётчик серий в API бывает неточным: пустой источник — пробуем следующий.
+      for (const src of srcs) {
+        if (selectedDubber !== dubber) return;
+        if (await selectSource(src, false)) break;
+      }
       await tick();
       focusTvModalContent();
     } catch {
@@ -696,8 +700,9 @@
     }
   }
 
-  async function selectSource(source: Source, resetSearch = true) {
-    if (!selectedDubber) return;
+  /** true, если у источника есть серии. */
+  async function selectSource(source: Source, resetSearch = true): Promise<boolean> {
+    if (!selectedDubber) return false;
     selectedSourceId = source.id;
     selectedEpisodePos = null;
     if (resetSearch) searchInput = '';
@@ -711,15 +716,17 @@
       episodesLoading = false;
       if (episodes.length === 0) {
         episodesError = NO_EPISODE_PICK_OTHER_DUB;
-        return;
+        return false;
       }
       await refreshDownloadedState();
       await tick();
       focusTvModalContent();
       if (lastWatchedEpisode) window.setTimeout(() => scrollToEpisode(lastWatchedEpisode!.position), 80);
+      return true;
     } catch {
       episodesLoading = false;
       episodesError = 'Ошибка загрузки серий';
+      return false;
     }
   }
 
@@ -1296,7 +1303,7 @@
                   <button type="button" aria-label="Скрыть подсказку" onclick={() => hideHint('episodes')}>{@html closeIconSvg}</button>
                 </div>
               {/if}
-              {#if sources.length > 1}
+              {#if sources.length > 0}
                 <div class="watch-modal__source-pills" aria-label="Источники">
                   {#each sources as source (source.id)}
                     <button

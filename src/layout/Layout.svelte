@@ -360,8 +360,9 @@
 
   const isChatPage = $derived(/^\/announcement\/[^/]+\/chat$/.test(currentPath ?? ''));
   const isFeedPage = $derived((currentPath ?? '') === '/feed');
+  const isAgentPage = $derived((currentPath ?? '') === '/agent');
   const pageExtraClass = $derived(
-    [isChatPage ? 'page--chat' : '', isFeedPage ? 'page--feed' : '']
+    [isChatPage ? 'page--chat' : '', isFeedPage ? 'page--feed' : '', isAgentPage ? 'page--agent' : '']
       .filter(Boolean)
       .join(' ') || undefined,
   );
@@ -592,7 +593,7 @@
     <main class="layout__main">
       <div class="content-panel" class:content-panel--with-right={showRightSidebar}>
         <div class="content-panel__body">
-          <Page scrollId="content" extraClass={pageExtraClass} noPadding={isFeedPage}>
+          <Page scrollId="content" extraClass={pageExtraClass} noPadding={isFeedPage || isAgentPage}>
             {@render children?.()}
           </Page>
         </div>

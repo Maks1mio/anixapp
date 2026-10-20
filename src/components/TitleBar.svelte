@@ -56,6 +56,8 @@
   let appVersion = $state('');
   let authed = $state(false);
   let savedAccounts = $state<SavedAccountRow[]>([]);
+  let minimizeToTray = $state(false);
+  let isMaximized = $state(false);
 
   let accountsOpen = $state(false);
   let accountsX = $state(0);
@@ -191,6 +193,23 @@
     }
   }
 
+  async function loadWindowBehavior() {
+    try {
+      const settings = await window.electron?.getSettings?.();
+      minimizeToTray = settings?.minimizeToTray === true;
+    } catch {
+      // ignore
+    }
+  }
+
+  async function loadWindowState() {
+    try {
+      isMaximized = (await window.electron?.window?.isMaximized?.()) === true;
+    } catch {
+      // ignore
+    }
+  }
+
   async function loadUpdateInfo() {
     const currentVersion =
       (await window.electron?.getVersions?.().then((v: any) => v?.app).catch(() => undefined))
@@ -220,6 +239,18 @@
   onMount(() => {
     syncAvatarFromGlobalProfile();
     void loadAppVersion();
+    void loadWindowBehavior();
+    void loadWindowState();
+
+    const stopMaximizedChanges = window.electron?.window?.onMaximizedChanged?.((value) => {
+      isMaximized = value;
+    });
+
+    const onMinimizeToTrayChanged = (e: Event) => {
+      const detail = (e as CustomEvent<{ minimizeToTray?: boolean }>).detail;
+      if (typeof detail?.minimizeToTray === 'boolean') minimizeToTray = detail.minimizeToTray;
+    };
+    window.addEventListener('anix:minimizeToTrayChanged', onMinimizeToTrayChanged);
 
     // Получаем тип установки для правильных подписей кнопки
     window.electron?.getLinuxInstallType?.().then((t) => {
@@ -294,6 +325,8 @@
     return () => {
       window.removeEventListener('app-update-progress', onProgress);
       window.removeEventListener('anix:profileUpdated', onProfileUpdated);
+      window.removeEventListener('anix:minimizeToTrayChanged', onMinimizeToTrayChanged);
+      stopMaximizedChanges?.();
       unsubUnread();
       unsubAuth();
       clearInterval(unreadPoll);
@@ -561,19 +594,20 @@
           onclick={handleMinimize}
         ></button>
       </UiV2Tooltip>
-      <UiV2Tooltip text="Развернуть">
+      <UiV2Tooltip text={isMaximized ? 'Восстановить' : 'Развернуть'}>
         <button
           type="button"
           class="titlebar__btn titlebar__btn--max"
-          aria-label="Развернуть"
+          class:titlebar__btn--max-restore={isMaximized}
+          aria-label={isMaximized ? 'Восстановить' : 'Развернуть'}
           onclick={handleMaximize}
         ></button>
       </UiV2Tooltip>
-      <UiV2Tooltip text="Закрыть">
+      <UiV2Tooltip text={minimizeToTray ? 'Свернуть в трей' : 'Закрыть'}>
         <button
           type="button"
           class="titlebar__btn titlebar__btn--close"
-          aria-label="Закрыть"
+          aria-label={minimizeToTray ? 'Свернуть в трей' : 'Закрыть'}
           onclick={handleClose}
         ></button>
       </UiV2Tooltip>

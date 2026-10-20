@@ -25,16 +25,22 @@ function normalizePlayerHotkeys(raw) {
     const d = Math.abs(n - seekRaw);
     if (d < best) { best = d; seekSeconds = n; }
   }
+  const rewindRaw = typeof src.rewindSeconds === 'number' && Number.isFinite(src.rewindSeconds)
+    ? src.rewindSeconds
+    : 85;
+  const rewindSeconds = Math.min(3600, Math.max(1, Math.round(rewindRaw)));
   const pick = (value, fallback) => (typeof value === 'string' ? value : fallback);
   return {
     seekBackCode: pick(src.seekBackCode, 'ArrowLeft'),
     seekForwardCode: pick(src.seekForwardCode, 'ArrowRight'),
+    rewindCode: pick(src.rewindCode, 'KeyX'),
     playPauseCode: pick(src.playPauseCode, 'Space'),
     volumeUpCode: pick(src.volumeUpCode, 'ArrowUp'),
     volumeDownCode: pick(src.volumeDownCode, 'ArrowDown'),
     fullscreenCode: pick(src.fullscreenCode, 'KeyF'),
     alwaysOnTopCode: pick(src.alwaysOnTopCode, 'KeyP'),
     seekSeconds,
+    rewindSeconds,
     ctrlWheelSpeed: src.ctrlWheelSpeed !== false,
   };
 }

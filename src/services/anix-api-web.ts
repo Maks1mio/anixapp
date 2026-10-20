@@ -322,6 +322,7 @@ function buildWebAnixApi(): AnixApi {
       pinBadge: (id) => invoke('anix:pinBadge', id),
       unpinBadge: (id) => invoke('anix:unpinBadge', id),
       reorderBadgeShowcase: (ids) => invoke('anix:reorderBadgeShowcase', ids),
+      pinProfileSection: (section) => invoke('anix:pinProfileSection', section),
       previewBadgeCode: (code) => invoke('anix:previewBadgeCode', code),
       claimBadgeCode: (code, badgeId) => invoke('anix:claimBadgeCode', code, badgeId),
       selectTheme: (id) => invoke('anix:selectTheme', id),

@@ -1494,6 +1494,15 @@ ipcMain.handle('anix:reorderBadgeShowcase', async (_, ids) => {
   }
 });
 
+ipcMain.handle('anix:pinProfileSection', async (_, section) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.profilePreference.pinSection({ id: Number(section) || 0 });
+  } catch (err) {
+    handleAnixError(err, 'pinProfileSection');
+  }
+});
+
 ipcMain.handle('anix:previewBadgeCode', async (_, code) => {
   try {
     const client = getAnixart();

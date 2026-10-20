@@ -14,7 +14,7 @@ export const profilePanelHistory = writable<ProfileHistoryEntry[]>([]);
 export const profilePanelHistoryIndex = writable(0);
 
 /** Внутренний экран активного профиля: обзор, друзья, редактирование или история ника. */
-export type ProfilePanelInnerView = 'overview' | 'friends' | 'edit' | 'loginHistory';
+export type ProfilePanelInnerView = 'overview' | 'friends' | 'edit' | 'loginHistory' | 'badges';
 export const profilePanelInnerView = writable<ProfilePanelInnerView>('overview');
 
 /** Стартовый подэкран редактирования (напр. badge из deep link уведомления о значке). */
@@ -154,6 +154,18 @@ export function updateProfilePanelLogin(userId: number, login: string): void {
   profilePanelHistory.update((hist) =>
     hist.map((e) => (e.id === userId ? { ...e, login: name } : e)),
   );
+}
+
+/**
+ * Переход на другую страницу из панели профиля (релиз, «Показать все», статистика…):
+ * панель перекрывает контент, поэтому закрываем её — иначе страница открывается «под всплывашкой».
+ * Пути /profile и /profile/:id сюда не доходят: navigate() открывает по ним саму панель.
+ */
+if (typeof window !== 'undefined') {
+  window.addEventListener('anix:beforeNavigate', (e) => {
+    const kind = (e as CustomEvent<{ kind?: string }>).detail?.kind;
+    if (kind === 'push' && get(profilePanelOpen)) closeProfilePanel();
+  });
 }
 
 export function closeProfilePanel(): void {

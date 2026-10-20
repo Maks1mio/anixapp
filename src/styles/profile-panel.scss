@@ -2200,7 +2200,27 @@ $pp-btn-bg-hover: var(--pp-btn-bg-hover);
 // ——— Content ———
 
 .profile-panel__tab-body {
+  // Ширина панели меняется ручкой (380–720px): раскладка карточек — по ширине панели, не окна
+  container: pp-body / inline-size;
   padding: 0.85rem 0.9rem 1.25rem;
+}
+
+// Динамика и «Просмотрено недавно» под разделами; в широкой панели — в две колонки
+.profile-panel__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+
+  > .uiv2-card--spaced {
+    margin-top: 0;
+  }
+
+  @container pp-body (min-width: 600px) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
 }
 
 .profile-panel__section {

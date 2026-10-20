@@ -29,11 +29,13 @@
     profileId: number;
     login: string;
     avatarUrl?: string;
+    /** Чужой профиль: только просмотр коллекции (без установки, витрины и кодов) */
+    readonly?: boolean;
     /** Значок изменён (null — снят): обновить шапку профиля */
     onBadgeChanged?: (badge: ApiBadge | null) => void;
   }
 
-  let { profileId, login, avatarUrl = '', onBadgeChanged }: Props = $props();
+  let { profileId, login, avatarUrl = '', readonly = false, onBadgeChanged }: Props = $props();
 
   let loadState = $state<'loading' | 'ready' | 'error'>('loading');
   let view = $state<BadgeCollectionView | null>(null);
@@ -250,6 +252,7 @@
 </script>
 
 <div class="badges-view">
+  {#if !readonly}
   <div class="badges-view__preview" aria-label="Как значок выглядит в комментариях">
     {#if avatarUrl}
       <img class="badges-view__avatar" src={avatarUrl} alt="" />
@@ -279,6 +282,9 @@
       <UiV2Button label="Снять значок" variant="ghost" disabled={busy} onclick={() => void unselectBadge()} />
     {/if}
   </div>
+  {:else if view}
+    <p class="badges-view__info">Всего значков: {view.total}. Нажмите на значок, чтобы узнать, за что он получен.</p>
+  {/if}
 
   {#if loadState === 'loading'}
     <div class="badges-view__grid" aria-busy="true">
@@ -297,13 +303,16 @@
       <p>Вы можете получить значки за определенные действия, участие в событиях и конкурсах</p>
     </div>
   {:else if view}
+    {#if !readonly || showcased.length}
     <section class="badges-view__section" aria-labelledby="badges-showcase-title">
       <header class="badges-view__head">
         <h3 id="badges-showcase-title" class="badges-view__title">
           Закрепленные
-          <span class="badges-view__count">{showcased.length}/{BADGE_SHOWCASE_LIMIT}</span>
+          <span class="badges-view__count">{readonly ? showcased.length : `${showcased.length}/${BADGE_SHOWCASE_LIMIT}`}</span>
         </h3>
-        {#if reorder}
+        {#if readonly}
+          <!-- просмотр чужой витрины -->
+        {:else if reorder}
           <button type="button" class="badges-view__link" disabled={busy} onclick={() => void finishReorder()}>Готово</button>
         {:else if showcased.length > 0}
           <button type="button" class="badges-view__link" onclick={startReorder}>Изменить порядок</button>
@@ -340,7 +349,7 @@
             </div>
           {/each}
         {:else}
-          {#each Array(BADGE_SHOWCASE_LIMIT) as _, i (i)}
+          {#each Array(readonly ? showcased.length : BADGE_SHOWCASE_LIMIT) as _, i (i)}
             {@const badge = showcased[i]}
             <div class="badges-view__slot">
               {#if badge}
@@ -355,8 +364,9 @@
         {/if}
       </div>
     </section>
+    {/if}
 
-    {#if view.recent.length && !reorder}
+    {#if view.recent.length && !reorder && !readonly}
       <section class="badges-view__section" aria-labelledby="badges-recent-title">
         <header class="badges-view__head">
           <h3 id="badges-recent-title" class="badges-view__title">Недавние</h3>
@@ -409,7 +419,7 @@
 {#if openBadge}
   <BadgeDetailSheet
     badge={openBadge}
-    editable
+    editable={!readonly}
     selected={view?.selectedId === openBadge.id}
     {busy}
     onClose={() => (openBadge = null)}

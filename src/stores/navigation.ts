@@ -250,7 +250,7 @@ export function navigate(path: string, _state?: unknown): void {
     return;
   }
 
-  window.dispatchEvent(new CustomEvent('anix:beforeNavigate', { detail: { to: path } }));
+  window.dispatchEvent(new CustomEvent('anix:beforeNavigate', { detail: { to: path, kind: 'push' } }));
   captureActiveScroll();
 
   commitLocation(path, 'push', _state);
@@ -262,7 +262,7 @@ export function navigate(path: string, _state?: unknown): void {
 
 /** Заменить текущий URL без новой записи в истории. */
 export function replacePath(path: string): void {
-  window.dispatchEvent(new CustomEvent('anix:beforeNavigate', { detail: { to: path } }));
+  window.dispatchEvent(new CustomEvent('anix:beforeNavigate', { detail: { to: path, kind: 'replace' } }));
   captureActiveScroll();
 
   commitLocation(path, 'replace');

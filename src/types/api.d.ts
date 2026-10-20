@@ -859,6 +859,8 @@ export interface AnixApi {
     pinBadge: (id: number) => Promise<{ code?: number }>;
     unpinBadge: (id: number) => Promise<{ code?: number }>;
     reorderBadgeShowcase: (ids: number[]) => Promise<{ code?: number }>;
+    /** POST profile/preference/section/edit: 0 статистика, 1 оценки, 2 коллекции, 3 комментарии, 4 видео, 5 значки */
+    pinProfileSection: (section: number) => Promise<{ code?: number }>;
     /** GET achievement/preview/{code}: code 3 — код не найден */
     previewBadgeCode: (code: string) => Promise<{
       code?: number;

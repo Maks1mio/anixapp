@@ -757,6 +757,7 @@ contextBridge.exposeInMainWorld('anixApi', {
     pinBadge: (id) => ipcRenderer.invoke('anix:pinBadge', id),
     unpinBadge: (id) => ipcRenderer.invoke('anix:unpinBadge', id),
     reorderBadgeShowcase: (ids) => ipcRenderer.invoke('anix:reorderBadgeShowcase', ids),
+    pinProfileSection: (section) => ipcRenderer.invoke('anix:pinProfileSection', section),
     previewBadgeCode: (code) => ipcRenderer.invoke('anix:previewBadgeCode', code),
     claimBadgeCode: (code, badgeId) => ipcRenderer.invoke('anix:claimBadgeCode', code, badgeId),
     selectTheme: (id) => ipcRenderer.invoke('anix:selectTheme', id),

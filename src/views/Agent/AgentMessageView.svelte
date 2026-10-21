@@ -2,7 +2,7 @@
   import { slide } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import type { ViewMessage } from './types';
-  import type { AgentAction, AgentReleaseCard } from '../../services/agent-api';
+  import { sendActionState, type AgentAction, type AgentReleaseCard } from '../../services/agent-api';
   import type { ReleaseCardData } from '../../types/release';
   import { renderAgentMarkdown } from '../../utils/agent-markdown';
   import {
@@ -12,6 +12,7 @@
     iconRefreshCw,
     iconThumbsDown,
     iconThumbsUp,
+    iconX,
   } from '../../components/icons';
   import UiV2Tooltip from '../../components/uikit-v2/UiV2Tooltip.svelte';
   import UiV2ReleaseCarousel from '../../components/uikit-v2/UiV2ReleaseCarousel.svelte';
@@ -38,7 +39,10 @@
   let copied = $state(false);
   let stepsOpen = $state(false);
   let celebrating = $state(false);
-  let actionState = $state<Record<number, 'busy' | 'done'>>({});
+  let actionState = $state<Record<number, 'busy' | 'done' | 'declined'>>({});
+  /** Plain buttons and «Подтвердить / Отмена» cards; indexes stay those of message.actions. */
+  const buttons = $derived(message.actions.map((a, i) => ({ a, i })).filter(({ a }) => !a.confirm));
+  const confirms = $derived(message.actions.map((a, i) => ({ a, i })).filter(({ a }) => a.confirm));
   /** Pictures that failed to load are dropped from the gallery. */
   let brokenImages = $state<Record<string, true>>({});
 
@@ -139,6 +143,29 @@
     }
   }
 
+  function confirmState(a: AgentAction, i: number) {
+    return actionState[i] ?? a.state ?? null;
+  }
+
+  /** The user's own click on «Подтвердить» is the consent — only then the data changes. */
+  async function confirmAction(a: AgentAction, i: number) {
+    if (confirmState(a, i)) return;
+    actionState[i] = 'busy';
+    const ok = await runAgentAction(a);
+    if (!ok) {
+      delete actionState[i];
+      return;
+    }
+    actionState[i] = 'done';
+    if (message.id != null) sendActionState(message.id, i, 'done').catch(() => undefined);
+  }
+
+  function declineAction(a: AgentAction, i: number) {
+    if (confirmState(a, i)) return;
+    actionState[i] = 'declined';
+    if (message.id != null) sendActionState(message.id, i, 'declined').catch(() => undefined);
+  }
+
   async function act(a: AgentAction, i: number) {
     if (actionState[i]) return;
     if (!isAgentMutation(a)) {
@@ -220,15 +247,48 @@
         <p class="agent-gallery__credit">Источник: {imageSources.join(' · ')}</p>
       {/if}
 
-      {#if message.actions.length}
+      {#if confirms.length}
+        <div class="agent-confirms">
+          {#each confirms as { a, i }, n (i)}
+            {@const st = confirmState(a, i)}
+            <div class="agent-confirm" class:agent-confirm--settled={st === 'done' || st === 'declined'} style:--i={n}>
+              <span class="agent-confirm__icon" aria-hidden="true">{@html agentActionIcon(a)}</span>
+              <span class="agent-confirm__label">{a.label}</span>
+              {#if st === 'done'}
+                <span class="agent-confirm__result agent-confirm__result--done">{@html iconCheck(13)} Сделано</span>
+              {:else if st === 'declined'}
+                <span class="agent-confirm__result">Отменено</span>
+              {:else}
+                <span class="agent-confirm__buttons">
+                  <button
+                    type="button"
+                    class="agent-confirm__btn agent-confirm__btn--ok"
+                    disabled={st === 'busy' || message.streaming}
+                    onclick={() => void confirmAction(a, i)}
+                  >{st === 'busy' ? 'Выполняю…' : 'Подтвердить'}</button>
+                  <button
+                    type="button"
+                    class="agent-confirm__btn"
+                    aria-label="Отмена"
+                    disabled={st === 'busy' || message.streaming}
+                    onclick={() => declineAction(a, i)}
+                  >{@html iconX(13)}</button>
+                </span>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {/if}
+
+      {#if buttons.length}
         <div class="agent-msg__actions">
-          {#each message.actions as a, i (i)}
+          {#each buttons as { a, i }, n (i)}
             <button
               type="button"
               class="agent-msg__action"
               class:agent-msg__action--done={actionState[i] === 'done'}
               disabled={!!actionState[i]}
-              style:--i={i}
+              style:--i={n}
               onclick={() => void act(a, i)}
             >
               <span aria-hidden="true">{@html actionState[i] === 'done' ? iconCheck(14) : agentActionIcon(a)}</span>{a.label}
@@ -650,6 +710,90 @@
 
   .agent-msg__action span {
     display: inline-flex;
+    color: var(--msg-accent);
+  }
+
+  .agent-confirms {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    max-width: 34rem;
+  }
+
+  .agent-confirm {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0.55rem 0.5rem 0.8rem;
+    border: 1px solid color-mix(in srgb, var(--msg-accent) 35%, transparent);
+    border-radius: 0.8rem;
+    background: color-mix(in srgb, var(--msg-accent) 7%, transparent);
+    font-size: 0.84rem;
+    animation: agent-card-in 0.3s ease-out both;
+    animation-delay: calc(var(--i, 0) * 60ms);
+  }
+
+  .agent-confirm--settled {
+    border-color: color-mix(in srgb, var(--uikit-v2-text, #fff) 10%, transparent);
+    background: color-mix(in srgb, var(--uikit-v2-text, #fff) 3%, transparent);
+  }
+
+  .agent-confirm__icon {
+    display: inline-flex;
+    color: var(--msg-accent);
+  }
+
+  .agent-confirm__label {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+  }
+
+  .agent-confirm__buttons {
+    display: inline-flex;
+    gap: 0.3rem;
+  }
+
+  .agent-confirm__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    padding: 0.38rem 0.6rem;
+    border: 1px solid color-mix(in srgb, var(--uikit-v2-text, #fff) 12%, transparent);
+    border-radius: 0.6rem;
+    background: transparent;
+    color: var(--uikit-v2-text, #fff);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+
+  .agent-confirm__btn--ok {
+    border-color: color-mix(in srgb, var(--msg-accent) 60%, transparent);
+    background: color-mix(in srgb, var(--msg-accent) 22%, transparent);
+  }
+
+  .agent-confirm__btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--msg-accent) 30%, transparent);
+  }
+
+  .agent-confirm__btn:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  .agent-confirm__result {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: var(--uikit-v2-muted, #999);
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .agent-confirm__result--done {
     color: var(--msg-accent);
   }
 

@@ -18,10 +18,8 @@
   import type { ApiBadge } from '../types/api';
   import { compressImageForUpload } from '../utils/compressImage';
   import BlogCreateModal from './feed/BlogCreateModal.svelte';
-  import { createLinkCode, fetchMyBadges, type AppBadge, type LinkCodeResult } from '../services/badges-api';
-  import { resolveAnixbackUploadUrl } from '../services/anixback-endpoint';
 
-  type EditScreen = 'menu' | 'status' | 'nickname' | 'social' | 'badge' | 'health' | 'hiddenChannels' | 'blocklist' | 'email' | 'password' | 'telegram';
+  type EditScreen = 'menu' | 'status' | 'nickname' | 'social' | 'badge' | 'health' | 'hiddenChannels' | 'blocklist' | 'email' | 'password';
   type MediaPickerKind = 'avatar' | 'cover';
 
   interface LoginHistoryItem {
@@ -125,47 +123,6 @@
     discord_page: '',
   });
   let socialSaving = $state(false);
-
-  // ── Telegram link + Anixapp badges ────────────────────────────────────────
-  let tgLink = $state<{ linked: boolean; username: string | null }>({ linked: false, username: null });
-  let tgLinkState = $state<'idle' | 'loading' | 'ready' | 'error'>('idle');
-  let linkCode = $state<LinkCodeResult | null>(null);
-  let linkCodeBusy = $state(false);
-  let appBadges = $state<AppBadge[]>([]);
-  let defaultBadge = $state<{ slug: string; name: string; image_url: string } | null>(null);
-
-  async function loadTelegramLink(): Promise<void> {
-    tgLinkState = 'loading';
-    try {
-      const me = await fetchMyBadges(profileId, '');
-      if (me) {
-        tgLink = me.telegram;
-        appBadges = me.badges;
-        defaultBadge = me.default_badge;
-        tgLinkState = 'ready';
-      } else {
-        tgLinkState = 'error';
-      }
-    } catch {
-      tgLinkState = 'error';
-    }
-  }
-
-  async function generateLinkCode(): Promise<void> {
-    linkCodeBusy = true;
-    try {
-      linkCode = await createLinkCode(profileId, '');
-      if (linkCode?.linked) {
-        tgLink = { linked: true, username: linkCode.telegram_username };
-      }
-    } finally {
-      linkCodeBusy = false;
-    }
-  }
-
-  function copyLinkCode(): void {
-    if (linkCode?.code) void navigator.clipboard.writeText(linkCode.code);
-  }
 
 
   let privacyStats = $state<PrivacyVal>(0);
@@ -333,7 +290,6 @@
       case 'status': return 'Изменить статус';
       case 'nickname': return 'Изменить никнейм';
       case 'social': return 'Социальные сети';
-      case 'telegram': return 'Telegram и значки Anixapp';
       case 'badge': return 'Установка значка';
       case 'health': return 'Здоровье аккаунта';
       case 'hiddenChannels': return 'Скрытые каналы';
@@ -1197,13 +1153,6 @@
 
       <div class="profile-panel__edit-divider" aria-hidden="true"></div>
 
-      <h3 class="profile-panel__edit-section">Anixapp</h3>
-      <button type="button" class="profile-panel__edit-row" onclick={() => { screen = 'telegram'; void loadTelegramLink(); }}>
-        <span class="profile-panel__edit-row-title">Значки Anixapp и Telegram</span>
-        <span class="profile-panel__edit-row-sub">Привязка аккаунта и значки поддержки</span>
-      </button>
-
-      <div class="profile-panel__edit-divider" aria-hidden="true"></div>
 
       <h3 class="profile-panel__edit-section">Лента</h3>
       <button type="button" class="profile-panel__edit-row" onclick={() => { screen = 'hiddenChannels'; }}>
@@ -1420,83 +1369,6 @@
       >
         {socialSaving ? 'Сохранение…' : 'Сохранить'}
       </button>
-    </div>
-  {:else if screen === 'telegram'}
-    <div class="profile-panel__edit-form">
-      <p class="profile-panel__edit-hint">
-        Значок «В AnixApp» выдаётся автоматически после запуска приложения с входом в аккаунт.
-        Дополнительные значки поддержки выдаются через нашего Telegram-бота.
-      </p>
-
-      <h3 class="profile-panel__edit-section">Мои значки Anixapp</h3>
-      <div class="profile-panel__badge-grid" aria-label="Значки Anixapp">
-        {#if defaultBadge}
-          <div class="profile-panel__badge-option profile-panel__badge-option--on">
-            <div class="profile-panel__badge-option-preview">
-              <img
-                class="profile-panel__badge-option-img"
-                src={resolveAnixbackUploadUrl(defaultBadge.image_url)}
-                alt={defaultBadge.name}
-              />
-            </div>
-            <span class="profile-panel__badge-option-name">{defaultBadge.name}</span>
-          </div>
-        {/if}
-        {#each appBadges.filter((b) => b.status !== 'pending' && b.slug !== defaultBadge?.slug) as ab (ab.slug)}
-          <div class="profile-panel__badge-option">
-            <div class="profile-panel__badge-option-preview">
-              <img
-                class="profile-panel__badge-option-img"
-                src={resolveAnixbackUploadUrl(ab.image_url)}
-                alt={ab.name}
-              />
-            </div>
-            <span class="profile-panel__badge-option-name">{ab.name}</span>
-          </div>
-        {/each}
-      </div>
-
-      <h3 class="profile-panel__edit-section">Telegram</h3>
-      {#if tgLinkState === 'loading'}
-        <p class="profile-panel__edit-hint">Загрузка…</p>
-      {:else if tgLinkState === 'error'}
-        <p class="profile-panel__edit-hint profile-panel__edit-hint--err">Сервис значков недоступен</p>
-        <button type="button" class="profile-panel__retry" onclick={() => void loadTelegramLink()}>Повторить</button>
-      {:else if tgLink.linked}
-        <p class="profile-panel__edit-hint">
-          Аккаунт привязан{tgLink.username ? `: @${tgLink.username}` : ''}. Значки, купленные через
-          бота, появляются здесь автоматически.
-        </p>
-      {:else}
-        <p class="profile-panel__edit-hint">
-          Привяжите Telegram, чтобы получать значки из нашего бота.
-        </p>
-        {#if linkCode}
-          <div class="profile-panel__edit-field">
-            <span class="profile-panel__edit-field-label">
-              Код (живёт 10 минут): <strong>{linkCode.code}</strong>
-            </span>
-            <button type="button" class="profile-panel__retry" onclick={copyLinkCode}>Скопировать код</button>
-            <a
-              class="profile-panel__retry"
-              href={`https://t.me/${linkCode.bot_username}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Открыть бота
-            </a>
-          </div>
-        {:else}
-          <button
-            type="button"
-            class="profile-panel__edit-save"
-            disabled={linkCodeBusy}
-            onclick={() => void generateLinkCode()}
-          >
-            {linkCodeBusy ? 'Генерация…' : 'Получить код привязки'}
-          </button>
-        {/if}
-      {/if}
     </div>
   {:else if screen === 'badge'}
     <ProfileBadgesView {profileId} {login} {avatarUrl} onBadgeChanged={handleBadgeChanged} />

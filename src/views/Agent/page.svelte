@@ -10,8 +10,13 @@
     fetchConversations,
     renameConversation,
     resetAgentSession,
+    attachAgentLive,
+    sendClientToolResult,
     sendFeedback,
+    stopAgentAnswer,
     streamAgentChat,
+    type AgentAction,
+    type AgentLiveEvent,
     type AgentConversation,
     type AgentMe,
     type AgentMessage,
@@ -20,6 +25,8 @@
   } from '../../services/agent-api';
   import { fetchBadgeCatalog } from '../../services/badges-api';
   import { getAgentProfileSnapshot, resetAgentProfileSnapshot } from '../../services/agent-profile';
+  import { runAgentClientTool } from '../../services/agent-client-tools';
+  import { runAgentAction } from './agent-actions';
   import { isAuthenticated, requireAuth } from '../../stores/auth';
   import { openSupportModal } from '../../stores/support-promo';
   import {
@@ -102,6 +109,7 @@
   /** Switch views without killing an answer in flight — anixback still finishes and saves it. */
   function detachStream() {
     viewSeq += 1;
+    abort?.abort(); // only stops reading — the server keeps writing, resume() picks it up again
     abort = null;
     sending = false;
   }
@@ -285,8 +293,8 @@
     void load();
   });
 
-  // Leaving the tab mid-answer does NOT abort: anixback finishes and saves the answer,
-  // and the chat is reloaded from the server when the user comes back.
+  // Leaving the tab mid-answer does NOT stop the answer: anixback keeps writing it, and
+  // coming back re-attaches to the live stream (resume) or loads the saved answer.
   // «Открыть обращение» from a chat answer (or elsewhere in the app).
   const unsubRequested = requestedTicket.subscribe((id) => {
     if (!id) return;
@@ -299,6 +307,7 @@
   onDestroy(() => {
     unsubAuth();
     unsubRequested();
+    detachStream();
   });
 
   // ── conversations ───────────────────────────────────────────────────────
@@ -399,6 +408,7 @@
       loadingConv = false; // render the thread first, then jump to its end
       stickBottom = true;
       await scrollToBottom();
+      void resume(id);
     } catch (err) {
       banner = describe(err);
     } finally {
@@ -465,15 +475,7 @@
     messages[i] = fn(messages[i]);
   }
 
-  async function run(body: { message?: string; regenerate?: boolean }, userText: string | null) {
-    sending = true;
-    banner = '';
-    stickBottom = true;
-    const who = persona;
-    const userKey = userText != null ? key() : null;
-    if (userText != null && userKey) {
-      messages.push({ key: userKey, id: null, role: 'user', content: userText, releases: [], actions: [], feedback: null, persona: who });
-    }
+  function pushLiveBubble(who: PersonaId) {
     messages.push({
       key: key(),
       id: null,
@@ -486,13 +488,27 @@
       streaming: true,
       steps: [],
     });
-    await scrollToBottom(true);
+  }
 
-    abort = new AbortController();
-    const ctrl = abort;
-    const myView = viewSeq;
-    const visible = () => viewSeq === myView;
-    const onEvent = (e: AgentStreamEvent) => {
+  /** anixback asks the app for data only the user's own Anixart session can read. */
+  async function answerClientTool(e: Extract<AgentStreamEvent, { type: 'client_tool' }>) {
+    const result = await runAgentClientTool(e.name, e.args ?? {});
+    await sendClientToolResult(e.call_id, result).catch(() => undefined);
+  }
+
+  /**
+   * One handler for a fresh answer and for one re-attached after coming back: the
+   * server keeps writing while the user is away, the replay brings the text so far.
+   */
+  function streamHandler(opts: { who: PersonaId; userKey: string | null; visible: () => boolean }) {
+    const { who, userKey, visible } = opts;
+    let navigation: AgentAction | null = null;
+    return (e: AgentLiveEvent) => {
+      // Tools run even if the chat is off screen — the answer waits for them.
+      if (e.type === 'client_tool') {
+        void answerClientTool(e);
+        return;
+      }
       if (!visible()) {
         // Answer for a chat that's no longer on screen: just keep the list order fresh.
         if (e.type === 'meta') bumpConversation(e.conversation_id, e.title, who);
@@ -505,7 +521,7 @@
             activeId = e.conversation_id;
             rememberChat(e.conversation_id);
           }
-          bumpConversation(e.conversation_id, e.title, who);
+          if (!e.replay) bumpConversation(e.conversation_id, e.title, who);
           if (userKey && e.user_message_id != null) {
             const idx = messages.findIndex((m) => m.key === userKey);
             if (idx >= 0) messages[idx] = { ...messages[idx], id: e.user_message_id };
@@ -531,6 +547,10 @@
         case 'images':
           patchLast((m) => ({ ...m, images: e.images }));
           break;
+        case 'navigate':
+          // Only for an answer watched live — coming back later must not yank the user away.
+          if (!e.replay) navigation = e.action;
+          break;
         case 'done': {
           // Same key: the bubble stays mounted (no re-entry animation), steps are kept.
           patchLast((m) => ({ ...toView(e.message), key: m.key, persona: personaId(e.message.persona ?? who), steps: m.steps }));
@@ -542,6 +562,11 @@
             setTimeout(() => {
               if (visible() && $agentMode === 'chat') openSupportTicket(id);
             }, 1400);
+          } else if (navigation) {
+            const nav = navigation;
+            setTimeout(() => {
+              if (visible() && $agentMode === 'chat') void runAgentAction(nav);
+            }, 900);
           }
           break;
         }
@@ -552,6 +577,71 @@
       }
       void scrollToBottom();
     };
+  }
+
+  /** Coming back to a chat whose answer is still being written: pick the stream up. */
+  async function resume(id: string) {
+    if (sending) return;
+    const ctrl = new AbortController();
+    const myView = viewSeq;
+    const visible = () => viewSeq === myView;
+    const last = messages.at(-1);
+    let handler: ((e: AgentLiveEvent) => void) | null = null;
+    let attached = false;
+    try {
+      attached = await attachAgentLive(
+        id,
+        (e) => {
+          if (!handler) {
+            if (!visible()) return;
+            const who = personaId((e.type === 'meta' ? e.persona : null) ?? persona);
+            abort = ctrl;
+            sending = true;
+            stickBottom = true;
+            pushLiveBubble(who);
+            handler = streamHandler({ who, userKey: null, visible });
+          }
+          handler(e);
+        },
+        ctrl.signal,
+      );
+    } catch {
+      /* no live answer to pick up */
+    }
+    if (!visible()) return;
+    if (handler) {
+      if (abort === ctrl) abort = null;
+      sending = false;
+      const reason = ctrl.signal.aborted ? 'Остановлено' : 'Соединение прервалось';
+      patchLast((m) => (m.streaming ? { ...m, streaming: false, status: undefined, error: reason } : m));
+      void scrollToBottom();
+    } else if (!attached && last?.role === 'user') {
+      // Finished between loading the chat and re-attaching — the answer is saved by now.
+      const res = await fetchConversation(id).catch(() => null);
+      if (res && visible() && res.messages.length > messages.length) {
+        messages = res.messages.map(toView);
+        await scrollToBottom();
+      }
+    }
+  }
+
+  async function run(body: { message?: string; regenerate?: boolean }, userText: string | null) {
+    sending = true;
+    banner = '';
+    stickBottom = true;
+    const who = persona;
+    const userKey = userText != null ? key() : null;
+    if (userText != null && userKey) {
+      messages.push({ key: userKey, id: null, role: 'user', content: userText, releases: [], actions: [], feedback: null, persona: who });
+    }
+    pushLiveBubble(who);
+    await scrollToBottom(true);
+
+    abort = new AbortController();
+    const ctrl = abort;
+    const myView = viewSeq;
+    const visible = () => viewSeq === myView;
+    const onEvent = streamHandler({ who, userKey, visible });
 
     try {
       // Profile data comes from the app itself (anixback never holds the Anixart token).
@@ -620,7 +710,9 @@
     await run({ regenerate: true }, null);
   }
 
+  /** Closing the stream no longer stops the answer on the server — ask it to. */
   function stop() {
+    if (activeId) void stopAgentAnswer(activeId).catch(() => undefined);
     abort?.abort();
   }
 

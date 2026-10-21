@@ -39,7 +39,13 @@ export interface AgentAction {
     | 'add_to_list'
     | 'add_favorite'
     | 'open_url'
-    | 'open_ticket';
+    | 'open_ticket'
+    | 'open_user'
+    | 'open_collection'
+    | 'remove_from_list'
+    | 'remove_favorite'
+    | 'rate_release'
+    | 'add_friend';
   label: string;
   release_id?: number;
   route?: string;
@@ -49,6 +55,15 @@ export interface AgentAction {
   url?: string;
   /** open_ticket: support ticket id */
   ticket_id?: string;
+  /** open_user / add_friend: Anixart profile id (0 — own profile) */
+  profile_id?: number;
+  collection_id?: number;
+  /** rate_release: 1–5 */
+  vote?: number;
+  /** Changes the user's data: rendered as a «Подтвердить / Отмена» card. */
+  confirm?: boolean;
+  /** The user's answer to the card (kept on the server). */
+  state?: 'done' | 'declined';
 }
 
 /** Picture in the gallery under an answer (frames, art, photos from the internet). */
@@ -107,8 +122,15 @@ export type AgentStreamEvent =
   | { type: 'cards'; releases: AgentReleaseCard[] }
   | { type: 'images'; images: AgentImage[] }
   | { type: 'actions'; actions: AgentAction[] }
+  /** anixback asks the app to run a read-only tool with its own Anixart session. */
+  | { type: 'client_tool'; call_id: string; name: string; args: Record<string, unknown> }
+  /** Open this page when the answer is done. */
+  | { type: 'navigate'; action: AgentAction }
   | { type: 'done'; message: AgentMessage; quota: AgentQuota }
   | { type: 'error'; code: string; message: string; quota?: AgentQuota };
+
+/** Events re-sent after re-attaching to an answer in flight carry `replay: true`. */
+export type AgentLiveEvent = AgentStreamEvent & { replay?: boolean };
 
 export class AgentApiError extends Error {
   constructor(
@@ -206,6 +228,47 @@ export const renameConversation = (id: string, title: string) =>
 
 export const deleteConversation = (id: string) =>
   agentJson<{ ok: boolean }>(`/agent/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
+/** The user's answer to a confirmation card under an answer. */
+export const sendActionState = (messageId: number, index: number, state: 'done' | 'declined') =>
+  agentJson<{ ok: boolean }>(`/agent/messages/${messageId}/actions/${index}`, { method: 'POST', body: JSON.stringify({ state }) });
+
+/** Stop the answer being written in a chat (closing the stream alone doesn't stop it). */
+export const stopAgentAnswer = (conversationId: string) =>
+  agentJson<{ ok: boolean }>(`/agent/conversations/${encodeURIComponent(conversationId)}/stop`, { method: 'POST' });
+
+/** Result of a `client_tool` event. */
+export const sendClientToolResult = (callId: string, result: unknown) =>
+  agentJson<{ ok: boolean }>('/agent/tool-result', {
+    method: 'POST',
+    body: JSON.stringify({ call_id: callId, result }),
+    signal: AbortSignal.timeout(20_000),
+  });
+
+/**
+ * Re-attach to the answer still being written in a chat: everything so far is replayed
+ * (`replay: true`), then it streams live. Resolves `false` when nothing is running.
+ */
+export async function attachAgentLive(
+  conversationId: string,
+  onEvent: (e: AgentLiveEvent) => void,
+  signal: AbortSignal,
+): Promise<boolean> {
+  let res: Response;
+  try {
+    res = await authedFetch(`/agent/conversations/${encodeURIComponent(conversationId)}/live`, {
+      headers: { Accept: 'text/event-stream' },
+      signal,
+    });
+  } catch (err) {
+    if (err instanceof AgentApiError) throw err;
+    if (signal.aborted) return false;
+    throw new AgentApiError('network', 'Нет связи с сервером');
+  }
+  if (res.status === 204 || !res.ok || !res.headers.get('content-type')?.includes('event-stream')) return false;
+  await readSse(res, onEvent, signal);
+  return true;
+}
 
 export const sendFeedback = (messageId: number, value: -1 | 0 | 1) =>
   agentJson<{ ok: boolean }>(`/agent/messages/${messageId}/feedback`, { method: 'POST', body: JSON.stringify({ value }) });

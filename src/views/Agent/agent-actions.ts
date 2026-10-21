@@ -12,6 +12,10 @@ import { openSupportTicket } from './support-store';
 import {
   iconArrowRight,
   iconBookmark,
+  iconFolder,
+  iconStar,
+  iconTrash2,
+  iconUserPlus,
   iconGlobe,
   iconHeart,
   iconMessageCircle,
@@ -32,9 +36,18 @@ const LIST_STATUS: Record<NonNullable<AgentAction['list']>, { id: ReleaseListSta
   dropped: { id: 'dropped', name: 'Брошено' },
 };
 
-/** Buttons that change the user's data — they show a «done» state after the click. */
+const MUTATIONS = new Set<AgentAction['kind']>([
+  'add_to_list',
+  'add_favorite',
+  'remove_from_list',
+  'remove_favorite',
+  'rate_release',
+  'add_friend',
+]);
+
+/** Actions that change the user's data — run only after «Подтвердить» and show a «done» state. */
 export function isAgentMutation(a: AgentAction): boolean {
-  return a.kind === 'add_to_list' || a.kind === 'add_favorite';
+  return MUTATIONS.has(a.kind);
 }
 
 /** Resolves `true` when a data-changing action succeeded (navigation resolves `false`). */
@@ -64,6 +77,37 @@ export async function runAgentAction(a: AgentAction): Promise<boolean> {
     case 'open_ticket':
       if (a.ticket_id) openSupportTicket(a.ticket_id);
       return false;
+    case 'open_user':
+      if (a.profile_id != null && a.profile_id >= 0) openProfilePanel(a.profile_id || undefined);
+      return false;
+    case 'open_collection':
+      if (a.collection_id) navigate(`/collection/${a.collection_id}`);
+      return false;
+    case 'remove_from_list': {
+      const status = a.list ? LIST_STATUS[a.list] : null;
+      if (!a.release_id || !status) return false;
+      return attempt(() => applyReleaseListStatus(a.release_id as number, null, status.id), `Убрано из «${status.name}»`, 'Не получилось убрать из списка');
+    }
+    case 'remove_favorite': {
+      const api = window.anixApi?.release;
+      if (!a.release_id || !api) return false;
+      const id = a.release_id;
+      return attempt(async () => {
+        await api.removeFavorite(id);
+        notifyFavoritesChanged({ releaseId: id, favorited: false });
+      }, 'Убрано из избранного', 'Не получилось убрать из избранного');
+    }
+    case 'rate_release': {
+      const api = window.anixApi?.release;
+      const vote = Math.trunc(a.vote ?? 0);
+      if (!a.release_id || !api || vote < 1 || vote > 5) return false;
+      return attempt(() => api.vote(a.release_id as number, vote), `Оценка ${vote} из 5 поставлена`, 'Не получилось поставить оценку');
+    }
+    case 'add_friend': {
+      const api = window.anixApi?.profile;
+      if (!a.profile_id || !api) return false;
+      return attempt(() => api.sendFriendRequest(a.profile_id as number), 'Заявка в друзья отправлена', 'Не получилось отправить заявку');
+    }
     case 'add_to_list': {
       const status = a.list ? LIST_STATUS[a.list] : null;
       if (!a.release_id || !status) return false;
@@ -93,6 +137,17 @@ export async function runAgentAction(a: AgentAction): Promise<boolean> {
   return false;
 }
 
+async function attempt(task: () => Promise<unknown>, ok: string, fail: string): Promise<boolean> {
+  try {
+    await task();
+    showToast(ok);
+    return true;
+  } catch {
+    showToast(fail, 'err');
+    return false;
+  }
+}
+
 export function agentActionIcon(a: AgentAction): string {
   switch (a.kind) {
     case 'open_release':
@@ -104,7 +159,17 @@ export function agentActionIcon(a: AgentAction): string {
     case 'open_support':
       return iconSparkles(14);
     case 'open_profile':
+    case 'open_user':
       return iconUser(14);
+    case 'open_collection':
+      return iconFolder(14);
+    case 'remove_from_list':
+    case 'remove_favorite':
+      return iconTrash2(14);
+    case 'rate_release':
+      return iconStar(14);
+    case 'add_friend':
+      return iconUserPlus(14);
     case 'add_to_list':
       return iconBookmark(14);
     case 'add_favorite':

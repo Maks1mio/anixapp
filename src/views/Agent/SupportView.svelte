@@ -1,19 +1,27 @@
 <script lang="ts">
-  import { onDestroy, tick } from 'svelte';
+  import { onDestroy, tick, untrack } from 'svelte';
   import { fly, slide } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { AgentApiError } from '../../services/agent-api';
   import {
+    MAX_FILE_BYTES,
+    MODERATION_FLAGS,
     TICKET_CATEGORIES,
     TICKET_STATUSES,
+    blockingFlags,
+    downloadTicketFile,
     fetchTicket,
     patchTicket,
     postTicketMessage,
     ticketImageUrl,
     uploadScreenshot,
+    uploadTicketFile,
+    type ModerationFlag,
     type SupportStreamEvent,
     type Ticket,
     type TicketCategory,
+    type TicketFile,
+    type TicketLive,
     type TicketMessage,
   } from '../../services/support-api';
   import { renderAgentMarkdown } from '../../utils/agent-markdown';
@@ -21,6 +29,8 @@
   import {
     iconArrowUp,
     iconChevronDown,
+    iconDownload,
+    iconFlag,
     iconLayoutList,
     iconLock,
     iconPaperclip,
@@ -54,12 +64,21 @@
 
   const MAX_LEN = 4000;
   const MAX_IMAGES = 6;
+  const MAX_FILES = 4;
   const POLL_MS = 5000;
+  /** While a bot answer is being written — so the other side sees it type. */
+  const LIVE_POLL_MS = 1200;
+  const SCREENSHOT_TYPES = /^image\/(png|jpeg|webp|gif)$/;
 
   interface Attachment {
     key: string;
-    preview: string;
+    /** Object URL for screenshots; null for other files. */
+    preview: string | null;
+    name: string;
+    /** Screenshot: stored path. */
     url: string | null;
+    /** Other files: what the server stored (with its moderation verdict). */
+    file?: TicketFile;
     error?: string;
   }
 
@@ -82,16 +101,21 @@
   let textarea = $state<HTMLTextAreaElement | null>(null);
   let fileInput = $state<HTMLInputElement | null>(null);
   let abort: AbortController | null = null;
-  let pollTimer: ReturnType<typeof setInterval> | null = null;
+  let pollTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Flagged screenshots the team chose to look at anyway. */
+  let revealed = $state<Record<string, true>>({});
   let keySeq = 0;
   let loadedFor: string | null = null;
 
   const lastId = $derived(messages.at(-1)?.id ?? 0);
   const closed = $derived(ticket?.status === 'closed');
   const owner = $derived(!!ticket && ticket.user_id === viewerId);
-  const uploading = $derived(attachments.some((a) => !a.url && !a.error));
+  const uploading = $derived(attachments.some((a) => !a.url && !a.file && !a.error));
   const readyImages = $derived(attachments.filter((a) => a.url).map((a) => a.url as string));
-  const canSend = $derived(!sending && !uploading && (input.trim().length > 0 || readyImages.length > 0) && !(closed && !admin));
+  const readyFiles = $derived(attachments.filter((a) => a.file).map((a) => (a.file as TicketFile).id));
+  const canSend = $derived(
+    !sending && !uploading && (input.trim().length > 0 || readyImages.length > 0 || readyFiles.length > 0) && !(closed && !admin),
+  );
   const canReopen = $derived(!!ticket && closed && (admin || ticket.closed_by === 'user'));
   const look = $derived(PERSONA_LOOKS[ticket?.persona ? personaId(ticket.persona) : persona]);
 
@@ -121,6 +145,7 @@
       ticket = res.ticket;
       messages = res.messages;
       viewerId = res.viewer.user_id;
+      setLive(res.live);
       loading = false;
       await scrollToBottom();
     } catch (err) {
@@ -136,6 +161,7 @@
     try {
       const res = await fetchTicket(id, lastId);
       if (ticketId !== id || sending) return;
+      setLive(res.live);
       const fresh = res.messages.filter((m) => !messages.some((x) => x.id === m.id));
       if (fresh.length) {
         const near = isNearBottom();
@@ -151,18 +177,39 @@
     }
   }
 
+  /** Bot answer someone else started (or ours, after coming back): shown from the poll. */
+  function setLive(next: TicketLive | null | undefined) {
+    if (sending) return;
+    live = next ? { persona: personaId(next.persona), text: next.text, status: next.status, activity: next.activity } : null;
+    if (live && isNearBottom()) void scrollToBottom();
+  }
+
   $effect(() => {
     if (!ticketId) return;
-    pollTimer = setInterval(() => void poll(), POLL_MS);
+    let stopped = false;
+    let lastPoll = Date.now();
+    // Short tick; a real request only every POLL_MS unless a bot answer is being written.
+    const loop = () => {
+      pollTimer = setTimeout(async () => {
+        if (untrack(() => live) || Date.now() - lastPoll >= POLL_MS) {
+          lastPoll = Date.now();
+          await poll();
+        }
+        if (!stopped) loop();
+      }, LIVE_POLL_MS);
+    };
+    loop();
     return () => {
-      if (pollTimer) clearInterval(pollTimer);
+      stopped = true;
+      if (pollTimer) clearTimeout(pollTimer);
       pollTimer = null;
     };
   });
 
+  // Leaving only stops reading: the server finishes the answer, the poll shows it on return.
   onDestroy(() => {
     abort?.abort();
-    for (const a of attachments) URL.revokeObjectURL(a.preview);
+    for (const a of attachments) if (a.preview) URL.revokeObjectURL(a.preview);
   });
 
   function isNearBottom(): boolean {
@@ -176,37 +223,61 @@
 
   // ── attachments ───────────────────────────────────────────────────────────
 
+  function patchAttachment(key: string, patch: Partial<Attachment>) {
+    const i = attachments.findIndex((a) => a.key === key);
+    if (i >= 0) attachments[i] = { ...attachments[i], ...patch };
+  }
+
+  /** Screenshots go to the picture upload, anything else is a file (checked by the server). */
   function addFiles(files: Iterable<File>) {
     for (const file of files) {
-      if (!file.type.startsWith('image/')) continue;
-      if (attachments.length >= MAX_IMAGES) {
+      const shot = SCREENSHOT_TYPES.test(file.type);
+      const sameKind = attachments.filter((a) => (a.preview != null) === shot).length;
+      if (shot && sameKind >= MAX_IMAGES) {
         banner = `Можно прикрепить до ${MAX_IMAGES} картинок`;
-        break;
+        continue;
+      }
+      if (!shot && sameKind >= MAX_FILES) {
+        banner = `Можно прикрепить до ${MAX_FILES} файлов`;
+        continue;
+      }
+      if (!shot && file.size > MAX_FILE_BYTES) {
+        banner = `«${file.name}» больше 3 МБ`;
+        continue;
       }
       keySeq += 1;
-      const item: Attachment = { key: `f${keySeq}`, preview: URL.createObjectURL(file), url: null };
-      attachments.push(item);
-      const key = item.key;
-      uploadScreenshot(file)
-        .then((url) => {
-          const i = attachments.findIndex((a) => a.key === key);
-          if (i >= 0) attachments[i] = { ...attachments[i], url };
-        })
-        .catch((err) => {
-          const i = attachments.findIndex((a) => a.key === key);
-          if (i >= 0) attachments[i] = { ...attachments[i], error: err instanceof Error ? err.message : 'Ошибка' };
-        });
+      const key = `f${keySeq}`;
+      attachments.push({ key, preview: shot ? URL.createObjectURL(file) : null, name: file.name, url: null });
+      const fail = (err: unknown) => patchAttachment(key, { error: err instanceof Error ? err.message : 'Ошибка' });
+      if (shot) uploadScreenshot(file).then((url) => patchAttachment(key, { url }), fail);
+      else uploadTicketFile(file).then((stored) => patchAttachment(key, { file: stored }), fail);
     }
   }
 
   function removeAttachment(key: string) {
     const a = attachments.find((x) => x.key === key);
-    if (a) URL.revokeObjectURL(a.preview);
+    if (a?.preview) URL.revokeObjectURL(a.preview);
     attachments = attachments.filter((x) => x.key !== key);
   }
 
+  function flagText(flags: ModerationFlag[] | undefined): string {
+    return blockingFlags(flags).map((f) => MODERATION_FLAGS[f]).join(', ');
+  }
+
+  function fileSize(n: number): string {
+    return n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} МБ` : `${Math.max(1, Math.round(n / 1024))} КБ`;
+  }
+
+  async function download(f: TicketFile) {
+    try {
+      await downloadTicketFile(f);
+    } catch (err) {
+      banner = err instanceof Error ? err.message : 'Не получилось скачать файл';
+    }
+  }
+
   function onPaste(e: ClipboardEvent) {
-    const files = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'));
+    const files = [...(e.clipboardData?.files ?? [])];
     if (files.length) {
       e.preventDefault();
       addFiles(files);
@@ -225,9 +296,10 @@
     if (!canSend) return;
     const text = input.trim().slice(0, MAX_LEN);
     const images = readyImages;
+    const files = readyFiles;
     const creating = !ticketId;
     input = '';
-    for (const a of attachments) URL.revokeObjectURL(a.preview);
+    for (const a of attachments) if (a.preview) URL.revokeObjectURL(a.preview);
     attachments = [];
     resizeTextarea();
     sending = true;
@@ -264,7 +336,7 @@
     try {
       await postTicketMessage(
         ticketId,
-        { message: text, images, persona, ...(creating ? { category, client } : {}) },
+        { message: text, images, files, persona, ...(creating ? { category, client } : {}) },
         onEvent,
         ctrl.signal,
       );
@@ -279,7 +351,7 @@
     }
   }
 
-  async function setStatus(action: 'close' | 'reopen' | 'pending' | 'open') {
+  async function setStatus(action: 'close' | 'reopen' | 'pending' | 'open' | 'unflag') {
     if (!ticket) return;
     let reason: string | undefined;
     if (action === 'close' && admin && !owner) {
@@ -388,6 +460,9 @@
         <span class="support__meta">
           #{ticket.number}
           <span class="support-status support-status--{ticket.status}">{TICKET_STATUSES[ticket.status]}</span>
+          {#if ticket.flagged}
+            <span class="support-flagged" title={ticket.flag_reason ?? ''}>{@html iconFlag(11)} Помечено</span>
+          {/if}
           {#if admin}
             <select
               class="support__cat"
@@ -406,6 +481,9 @@
         </span>
       </div>
       <div class="support__actions">
+        {#if admin && ticket.flagged}
+          <UiV2Button label="Снять пометку" variant="chrome" size="sm" onclick={() => void setStatus('unflag')} />
+        {/if}
         {#if admin && !closed}
           {#if ticket.status === 'pending'}
             <UiV2Button label="Взять в работу" variant="chrome" size="sm" onclick={() => void setStatus('open')} />
@@ -456,7 +534,7 @@
           <AgentFace {persona} mood="wave" size={120} />
           <h1 class="support-hero__title">Что случилось?</h1>
           <p class="support-muted support-hero__text">
-            Опиши проблему, идею или вопрос по приложению и прикрепи скриншот, если есть.
+            Опиши проблему, идею или вопрос по приложению и прикрепи скриншот или лог, если есть.
             {PERSONA_LOOKS[persona].name} посмотрит код приложения и передаст обращение команде, когда нужно. Запросы здесь не тратятся.
           </p>
           <div class="support-cats" role="radiogroup" aria-label="Тема">
@@ -508,19 +586,52 @@
                   {#if m.author_kind === 'admin'}<span class="support-team">Команда</span>{/if}
                   <span class="support-msg__time">{time(m.created_at)}</span>
                 </div>
-                {#if m.content && m.content !== '(скриншот)'}
+                {#if m.content && m.content !== '(скриншот)' && m.content !== '(файл)'}
                   <div class="support-msg__bubble">{m.content}</div>
                 {/if}
                 {#if m.images.length}
                   <div class="support-shots">
                     {#each m.images as img, i (img.url)}
+                      {@const hiddenBy = flagText(img.flags)}
+                      {#if hiddenBy && !revealed[img.url]}
+                        <button
+                          type="button"
+                          class="support-shot support-shot--hidden"
+                          disabled={!admin}
+                          title={admin ? 'Показать (только для команды)' : ''}
+                          onclick={() => (revealed[img.url] = true)}
+                        >
+                          <span class="support-shot__veil">{@html iconFlag(14)} Скрыто: {hiddenBy}</span>
+                        </button>
+                      {:else}
+                        <button
+                          type="button"
+                          class="support-shot"
+                          title={admin && img.description ? `Помощница видит: ${img.description}` : 'Открыть'}
+                          onclick={(e) => openImages(m.images, i, e.currentTarget)}
+                        >
+                          <img src={ticketImageUrl(img.url)} alt="Скриншот {i + 1}" loading="lazy" />
+                        </button>
+                      {/if}
+                    {/each}
+                  </div>
+                {/if}
+                {#if m.files?.length}
+                  <div class="support-files">
+                    {#each m.files as f (f.id)}
+                      {@const flagged = flagText(f.flags)}
                       <button
                         type="button"
-                        class="support-shot"
-                        title={admin && img.description ? `Помощница видит: ${img.description}` : 'Открыть'}
-                        onclick={(e) => openImages(m.images, i, e.currentTarget)}
+                        class="support-file"
+                        class:support-file--flagged={!!flagged}
+                        disabled={!!flagged && !admin}
+                        title={flagged ? `Помечено модерацией: ${flagged}` : 'Скачать'}
+                        onclick={() => void download(f)}
                       >
-                        <img src={ticketImageUrl(img.url)} alt="Скриншот {i + 1}" loading="lazy" />
+                        <span class="support-file__icon" aria-hidden="true">{@html flagged ? iconFlag(14) : iconPaperclip(14)}</span>
+                        <span class="support-file__name">{f.name}</span>
+                        <span class="support-file__meta">{flagged || fileSize(f.size)}</span>
+                        {#if !flagged || admin}<span class="support-file__dl" aria-hidden="true">{@html iconDownload(13)}</span>{/if}
                       </button>
                     {/each}
                   </div>
@@ -590,8 +701,18 @@
           {#if attachments.length}
             <div class="support-attach">
               {#each attachments as a (a.key)}
-                <div class="support-attach__item" class:support-attach__item--busy={!a.url && !a.error} class:support-attach__item--err={!!a.error} title={a.error ?? ''}>
-                  <img src={a.preview} alt="" />
+                <div
+                  class="support-attach__item"
+                  class:support-attach__item--file={!a.preview}
+                  class:support-attach__item--busy={!a.url && !a.file && !a.error}
+                  class:support-attach__item--err={!!a.error || !!flagText(a.file?.flags)}
+                  title={a.error ?? (flagText(a.file?.flags) ? `Помечено: ${flagText(a.file?.flags)}` : a.name)}
+                >
+                  {#if a.preview}
+                    <img src={a.preview} alt="" />
+                  {:else}
+                    <span class="support-attach__file">{@html iconPaperclip(14)}<span>{a.name}</span></span>
+                  {/if}
                   <button type="button" class="support-attach__rm" aria-label="Убрать" onclick={() => removeAttachment(a.key)}>{@html iconX(11)}</button>
                 </div>
               {/each}
@@ -613,12 +734,12 @@
             aria-label="Сообщение в поддержку"
           ></textarea>
           <div class="support-composer__bar">
-            <UiV2Tooltip text="Прикрепить скриншот (можно вставить Ctrl+V)" placement="top">
+            <UiV2Tooltip text="Прикрепить скриншот или файл (лог, текст; картинку можно вставить Ctrl+V)" placement="top">
               <button
                 type="button"
                 class="support-icon-btn"
-                aria-label="Прикрепить скриншот"
-                disabled={attachments.length >= MAX_IMAGES}
+                aria-label="Прикрепить скриншот или файл"
+                disabled={attachments.length >= MAX_IMAGES + MAX_FILES}
                 onclick={() => fileInput?.click()}
               >
                 {@html iconPaperclip(16)}
@@ -627,7 +748,6 @@
             <input
               bind:this={fileInput}
               type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
               multiple
               hidden
               onchange={(e) => {
@@ -1058,6 +1178,117 @@
       transform: scale(0.55);
       opacity: 0.5;
     }
+  }
+
+  .support-flagged {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, #f0564a 18%, transparent);
+    color: #ff8a80;
+    font-size: 0.7rem;
+    font-weight: 700;
+  }
+
+  .support-shot--hidden {
+    display: grid;
+    place-items: center;
+    background: repeating-linear-gradient(
+      45deg,
+      color-mix(in srgb, var(--uikit-v2-text, #fff) 5%, transparent) 0 8px,
+      color-mix(in srgb, var(--uikit-v2-text, #fff) 2%, transparent) 8px 16px
+    );
+  }
+
+  .support-shot__veil {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.4rem;
+    color: #ff8a80;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  .support-files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.35rem;
+  }
+
+  .support-file {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    max-width: 100%;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid color-mix(in srgb, var(--uikit-v2-text, #fff) 10%, transparent);
+    border-radius: 0.7rem;
+    background: color-mix(in srgb, var(--uikit-v2-text, #fff) 4%, transparent);
+    color: var(--uikit-v2-text, #fff);
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+
+  .support-file:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--agent-accent) 50%, transparent);
+  }
+
+  .support-file:disabled {
+    cursor: default;
+  }
+
+  .support-file--flagged {
+    border-color: color-mix(in srgb, #f0564a 45%, transparent);
+    background: color-mix(in srgb, #f0564a 8%, transparent);
+  }
+
+  .support-file__icon,
+  .support-file__dl {
+    display: inline-flex;
+    color: var(--uikit-v2-muted, #999);
+  }
+
+  .support-file--flagged .support-file__icon {
+    color: #ff8a80;
+  }
+
+  .support-file__name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+
+  .support-file__meta {
+    color: var(--uikit-v2-muted, #999);
+    font-size: 0.72rem;
+    white-space: nowrap;
+  }
+
+  .support-attach__item.support-attach__item--file {
+    width: auto;
+    max-width: 12rem;
+  }
+
+  .support-attach__file {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    height: 100%;
+    padding: 0 1.4rem 0 0.6rem;
+    font-size: 0.75rem;
+  }
+
+  .support-attach__file span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .support-live {

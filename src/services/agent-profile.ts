@@ -66,7 +66,7 @@ function selfProfileId(): number {
 }
 
 /** `__anixProfile` is set by the layout, but the agent tab can open first — ask the bridge as a fallback. */
-async function resolveProfileId(): Promise<number> {
+export async function resolveProfileId(): Promise<number> {
   const direct = selfProfileId();
   if (direct) return direct;
   const pending = window.anixApi?.profile?.self?.();
@@ -140,3 +140,6 @@ export async function getAgentProfileSnapshot(): Promise<AgentProfileSnapshot | 
 export function resetAgentProfileSnapshot(): void {
   cache = null;
 }
+
+/** Same compact release shape for the agent's other tools (agent-client-tools.ts). */
+export const snapshotItem = item;

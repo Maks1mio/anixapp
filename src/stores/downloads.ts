@@ -328,6 +328,10 @@ function createDownloadsStore() {
     try { await window.electron?.resumeDownload?.(id); } catch {}
   }
 
+  async function retryEntry(id: string) {
+    try { await window.electron?.retryDownload?.(id); } catch {}
+  }
+
   async function pauseAllActive() {
     try { await window.electron?.pauseAllDownloads?.(); } catch {}
   }
@@ -451,6 +455,7 @@ function createDownloadsStore() {
     cancelEntry,
     pauseEntry,
     resumeEntry,
+    retryEntry,
     pauseAllActive,
     resumeAllActive,
     reorderEntries,

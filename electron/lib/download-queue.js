@@ -71,6 +71,8 @@ let lastPumpDeps = null;
 let streamingHold = false;
 /** id задач, поставленных на паузу из‑за стрима (вернуть после закрытия плеера). */
 const streamingPausedIds = new Set();
+/** Упавшие задачи (уже убраны из queue) — для «Повторить»; части на диске сохранены. */
+const failedJobs = new Map();
 
 function setProgressSink(fn) {
   progressSink = typeof fn === 'function' ? fn : () => {};
@@ -509,6 +511,10 @@ function restorePersistedJobs(deps, downloadRoot = '') {
       needsUrlRefresh: !!item.needsUrlRefresh || url.includes('placeholder.invalid'),
       resumed: true,
     });
+    // Упавшая задача поднята из sidecar заново — убрать её из «Повторить», чтобы не задвоить
+    for (const [fid, fj] of failedJobs) {
+      if (path.resolve(fj.filePath) === resolved) failedJobs.delete(fid);
+    }
     queue.push(job);
     existingPaths.add(resolved);
     emit(job);
@@ -765,6 +771,7 @@ function pump(deps) {
         } else {
           const idx = queue.indexOf(job);
           if (idx !== -1) queue.splice(idx, 1);
+          if (job.status === 'error' && job.filePath) failedJobs.set(job.id, job);
         }
         pump(useDeps);
       }
@@ -824,6 +831,7 @@ function enforceQueuePriority(deps) {
 }
 
 function cancelJob(id) {
+  failedJobs.delete(id);
   const job = queue.find((j) => j.id === id);
   if (!job) return false;
   if (job.status === 'paused') {
@@ -897,6 +905,28 @@ function resumeJob(id, deps) {
   job.pausedByStreaming = false;
   streamingPausedIds.delete(id);
   job.error = undefined;
+  emit(job);
+  persistQueueNow();
+  pump(deps || lastPumpDeps);
+  return true;
+}
+
+/**
+ * Повторить упавшую загрузку: вернуть в очередь с теми же URL и путём.
+ * Уже скачанные части не удаляются, поэтому докачиваются только недостающие.
+ */
+function retryJob(id, deps) {
+  if (streamingHold) return false;
+  const job = failedJobs.get(id);
+  if (!job) return false;
+  failedJobs.delete(id);
+  job.status = 'queued';
+  job.resumed = true;
+  job.error = undefined;
+  job.sslRetries = 0;
+  job.pauseRequested = false;
+  job.requeueAfterStop = false;
+  queue.push(job);
   emit(job);
   persistQueueNow();
   pump(deps || lastPumpDeps);
@@ -980,6 +1010,7 @@ module.exports = {
   pauseAll,
   resumeJob,
   resumeAll,
+  retryJob,
   reorderQueue,
   cancelAll,
   getQueueSnapshot,

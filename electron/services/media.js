@@ -1058,6 +1058,12 @@ ipcMain.handle('downloads:resume', (_, id) => {
   return { ok: downloadQueue.resumeJob(id, getDownloadQueueDeps()) };
 });
 
+ipcMain.handle('downloads:retry', (_, id) => {
+  if (typeof id !== 'string' || !id) return { ok: false };
+  if (downloadQueue.isStreamingHold()) return { ok: false, error: 'streaming' };
+  return { ok: downloadQueue.retryJob(id, getDownloadQueueDeps()) };
+});
+
 ipcMain.handle('downloads:resumeAll', () => {
   if (downloadQueue.isStreamingHold()) return { ok: false, error: 'streaming', resumed: 0 };
   return {

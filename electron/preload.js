@@ -281,6 +281,7 @@ contextBridge.exposeInMainWorld('electron', {
   pauseAllDownloads: () => ipcRenderer.invoke('downloads:pauseAll'),
   resumeDownload: (id) => ipcRenderer.invoke('downloads:resume', id),
   resumeAllDownloads: () => ipcRenderer.invoke('downloads:resumeAll'),
+  retryDownload: (id) => ipcRenderer.invoke('downloads:retry', id),
   isDownloadResumeBlocked: () => ipcRenderer.invoke('downloads:isResumeBlocked'),
   setDownloadStreamingHold: (blocked) => ipcRenderer.invoke('downloads:setStreamingHold', !!blocked),
   reorderDownloads: (payload) => ipcRenderer.invoke('downloads:reorder', payload),

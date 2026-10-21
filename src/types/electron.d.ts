@@ -289,6 +289,7 @@ declare global {
       pauseAllDownloads?: () => Promise<{ ok: boolean; paused?: number }>;
       resumeDownload?: (id: string) => Promise<{ ok: boolean; error?: string }>;
       resumeAllDownloads?: () => Promise<{ ok: boolean; resumed?: number; error?: string }>;
+      retryDownload?: (id: string) => Promise<{ ok: boolean; error?: string }>;
       isDownloadResumeBlocked?: () => Promise<{ blocked: boolean }>;
       setDownloadStreamingHold?: (blocked: boolean) => Promise<{ ok: boolean; blocked: boolean }>;
       reorderDownloads?: (payload: { orderedIds: string[] }) => Promise<{ ok: boolean }>;

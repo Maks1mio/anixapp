@@ -40,6 +40,7 @@
     iconSearch,
     iconMic,
     iconRotateCcw,
+    iconRotateCw,
   } from '../components/icons';
 
   interface LibrarySourceBucket {
@@ -142,6 +143,7 @@
 
   const ffmpegAvailable = $derived($ffmpegInstall.available ?? true);
   const ffmpegPath = $derived($ffmpegInstall.path);
+  const canRetry = typeof window !== 'undefined' && typeof window.electron?.retryDownload === 'function';
   const ffmpegSource = $derived($ffmpegInstall.source);
   const ffmpegBusy = $derived($ffmpegInstall.busy);
   const ffmpegProgress = $derived($ffmpegInstall.progress);
@@ -1684,6 +1686,17 @@
                             onclick={() => void downloads.cancelEntry(entry.id)}
                           >
                             {@html iconX(14)}
+                          </UiV2RoundButton>
+                        {/if}
+                        {#if entry.status === 'error' && entry.filePath && canRetry}
+                          <UiV2RoundButton
+                            label="Повторить"
+                            size="sm"
+                            title={$downloadResumeBlocked ? 'Недоступно во время онлайн-просмотра' : 'Повторить'}
+                            disabled={$downloadResumeBlocked}
+                            onclick={() => void downloads.retryEntry(entry.id)}
+                          >
+                            {@html iconRotateCw(14)}
                           </UiV2RoundButton>
                         {/if}
                         {#if entry.status === 'error' || entry.status === 'cancelled' || entry.status === 'done'}

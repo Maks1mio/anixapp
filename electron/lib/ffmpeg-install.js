@@ -53,8 +53,12 @@ async function resolveSystemFfmpeg() {
 
 async function resolveBundledFfmpeg() {
   try {
-    const bundled = require('ffmpeg-static');
-    if (typeof bundled === 'string' && fs.existsSync(bundled)) return bundled;
+    let bundled = require('ffmpeg-static');
+    if (typeof bundled !== 'string') return null;
+    // В сборке путь указывает внутрь app.asar: existsSync через asar-обёртку Electron
+    // отвечает true, но spawn падает с ENOTDIR. Бинарник лежит в app.asar.unpacked.
+    bundled = bundled.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1');
+    if (fs.existsSync(bundled)) return bundled;
   } catch (_) {}
   return null;
 }

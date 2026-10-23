@@ -18,6 +18,14 @@ export function applyMobileDefaults(): void {
   if ((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()) {
     root.classList.add('mobile-native');
   }
-  // Только тёмная тема: фиксируем, чтобы тема из desktop-настроек не перекрашивала мобильный UI.
-  root.style.colorScheme = 'dark';
+  // Долгое нажатие в WebView — это contextmenu: без него не появляются выделение текста
+  // и системное меню ссылок/картинок. В полях ввода оставляем (вставить, выделить всё).
+  document.addEventListener('contextmenu', (e) => {
+    if (!isEditableTarget(e.target)) e.preventDefault();
+  });
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  const el = target instanceof Element ? target : null;
+  return !!el?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), .m-selectable');
 }

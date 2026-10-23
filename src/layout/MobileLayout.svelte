@@ -7,13 +7,21 @@
   import { get } from 'svelte/store';
   import type { Snippet } from 'svelte';
   import { navigate } from '../stores/navigation';
-  import { notificationsModalOpen, settingsModalOpen } from '../stores/modals';
+  import { notificationsModalOpen, settingsModalOpen, watchModalOpen } from '../stores/modals';
   import { isAuthenticated, requireAuth } from '../stores/auth';
   import { ensureProfileId } from '../utils/profile';
-  import { iconDownload, iconPlus, iconHome, iconCompass, iconBookmark, iconNewspaper, iconUser, iconSearch, iconSettings, iconBell } from '../components/icons';
-  import SettingsModal from '../components/SettingsModal.svelte';
+  import { iconDownload, iconPlus, iconHome, iconCompass, iconBookmark, iconPanelTop, iconCircleUser, iconSearch, iconSettings, iconBell } from '../components/icons';
+  import MobileSettings from './MobileSettings.svelte';
+  import { bindNativeBackButton, minimizeNativeApp } from '../platform/mobile-back';
   import SidebarProfilePanel from '../components/SidebarProfilePanel.svelte';
-  import { profilePanelOpen, resetProfilePanelHistory } from '../stores/profile-panel';
+  import {
+    profilePanelOpen,
+    profilePanelCanBack,
+    profilePanelInnerView,
+    profilePanelBack,
+    resetProfilePanelHistory,
+    setProfilePanelInnerView,
+  } from '../stores/profile-panel';
   import { isOnline, hasActiveDownloads, watchDownloads, initConnectivity } from '../stores/mobile-downloads';
 
   interface Props {
@@ -27,8 +35,8 @@
     { id: 'home', label: 'Главная', href: '/', icon: iconHome },
     { id: 'overview', label: 'Обзор', href: '/overview', icon: iconCompass },
     { id: 'bookmarks', label: 'Закладки', href: '/bookmarks', icon: iconBookmark },
-    { id: 'feed', label: 'Лента', href: '/feed', icon: iconNewspaper },
-    { id: 'profile', label: 'Профиль', href: null, icon: iconUser },
+    { id: 'feed', label: 'Лента', href: '/feed', icon: iconPanelTop },
+    { id: 'profile', label: 'Профиль', href: null, icon: iconCircleUser },
   ];
 
   let profileOpen = $state(false);
@@ -50,7 +58,7 @@
   const isRoot = $derived(rootTab !== null && path !== '/overview/popular' && path !== '/schedule');
   const activeTab = $derived<Tab | null>(profileOpen ? 'profile' : rootTab);
   const searchHint = $derived(
-    rootTab === 'feed' ? 'Поиск записей и блогов' : rootTab === 'bookmarks' ? 'Поиск в закладках' : 'Поиск аниме',
+    rootTab === 'feed' ? 'Поиск записей и блогов' : 'Поиск аниме',
   );
 
   function goTab(tab: (typeof TABS)[number]) {
@@ -83,8 +91,26 @@
     else navigate('/');
   }
 
+  /** Профиль — вкладка со своей историей: внутренний экран → предыдущий профиль → закрыть. */
+  function backInProfile() {
+    if (get(profilePanelInnerView) !== 'overview') setProfilePanelInnerView('overview');
+    else if (get(profilePanelCanBack)) profilePanelBack();
+    else closeProfile();
+  }
+
+  /** «Назад» системы, когда ни один экран не перехватил: сначала закрываем слои, потом история, потом сворачиваем. */
+  function onNativeBack() {
+    if (get(watchModalOpen)) watchModalOpen.set(false);
+    else if (get(notificationsModalOpen)) notificationsModalOpen.set(false);
+    else if (profileOpen) backInProfile();
+    else if (path !== '/') goBack();
+    else void minimizeNativeApp();
+  }
+
   onMount(() => {
     initConnectivity();
+    let unbindBack = () => {};
+    void bindNativeBackButton(onNativeBack).then((fn) => { unbindBack = fn; });
     const stopDl = watchDownloads();
     // Запуск без сети: сразу на «Загрузки», чтобы можно было смотреть скачанное.
     const offlineStart = window.setTimeout(() => {
@@ -101,6 +127,7 @@
     window.addEventListener('anix:profilePanelOpen', onOpen);
     window.addEventListener('anix:profilePanelClose', onClose);
     return () => {
+      unbindBack();
       stopDl();
       window.clearTimeout(offlineStart);
       window.removeEventListener('anix:profilePanelOpen', onOpen);
@@ -112,14 +139,22 @@
 <div class="m-app">
   {#if isRoot}
     <header class="m-topbar">
-      <button type="button" class="m-search" onclick={() => navigate('/search')} aria-label="Поиск">
-        {@html iconSearch(24)}
-        <span>{searchHint}</span>
-      </button>
-      <button type="button" class="m-icon-btn" onclick={() => navigate('/downloads')} aria-label="Загрузки">
-        {@html iconDownload(24)}
-        {#if $hasActiveDownloads}<i class="m-dot"></i>{/if}
-      </button>
+      {#if rootTab === 'bookmarks'}
+        <!-- как в Anixart: в панели поиск по текущей вкладке — его поле рисуют сами «Закладки» (mobile-overrides) -->
+        <div class="m-search-slot"></div>
+      {:else}
+        <button type="button" class="m-search" onclick={() => navigate('/search')} aria-label="Поиск">
+          {@html iconSearch(24)}
+          <span>{searchHint}</span>
+        </button>
+      {/if}
+      {#if $hasActiveDownloads}
+        <!-- как в Anixart, в панели только настройки и уведомления; «Загрузки» появляются, пока что-то качается -->
+        <button type="button" class="m-icon-btn" onclick={() => navigate('/downloads')} aria-label="Загрузки">
+          {@html iconDownload(24)}
+          <i class="m-dot"></i>
+        </button>
+      {/if}
       <button type="button" class="m-icon-btn" onclick={() => settingsModalOpen.set(true)} aria-label="Настройки">
         {@html iconSettings(24)}
       </button>
@@ -167,13 +202,25 @@
 
   {#if profileOpen && profileUserId != null}
     <div class="m-fullscreen m-fullscreen--profile">
+      <header class="m-topbar">
+        <button type="button" class="m-search" onclick={() => { closeProfile(); navigate('/search'); }} aria-label="Поиск">
+          {@html iconSearch(24)}
+          <span>Поиск пользователей</span>
+        </button>
+        <button type="button" class="m-icon-btn" onclick={() => settingsModalOpen.set(true)} aria-label="Настройки">
+          {@html iconSettings(24)}
+        </button>
+        <button type="button" class="m-icon-btn" onclick={() => notificationsModalOpen.set(true)} aria-label="Уведомления">
+          {@html iconBell(24)}
+        </button>
+      </header>
       <SidebarProfilePanel userId={profileUserId} onClose={closeProfile} />
     </div>
   {/if}
 
   {#if $settingsModalOpen}
-    <div class="m-fullscreen">
-      <SettingsModal onClose={() => settingsModalOpen.set(false)} standalone flushTop />
+    <div class="m-fullscreen m-fullscreen--page">
+      <MobileSettings onClose={() => settingsModalOpen.set(false)} />
     </div>
   {/if}
 </div>
@@ -209,7 +256,7 @@
     padding: 0;
     justify-content: space-between;
 
-    .m-icon-btn { width: 48px; height: 48px; border-radius: 16px; background: rgba(28, 28, 28, 0.72); color: var(--m-text); backdrop-filter: blur(6px); }
+    .m-icon-btn { width: 48px; height: 48px; border-radius: 16px; background: color-mix(in srgb, var(--m-bg) 72%, transparent); color: var(--m-text); backdrop-filter: blur(6px); }
   }
 
   .m-app { position: relative; }
@@ -217,8 +264,8 @@
   .m-offline {
     display: flex; align-items: center; justify-content: space-between; gap: var(--m-space-3);
     margin: 0 var(--m-gutter) var(--m-space-2); padding: 6px var(--m-space-4); border-radius: 14px;
-    background: #3a3818; color: #c8c35f; font-size: 13px;
-    button { border: 0; background: none; color: #e6e1a0; font: 600 13px var(--m-font); padding: 6px 4px; }
+    background: var(--m-warn-bg); color: var(--m-warn-fg); font-size: 13px;
+    button { border: 0; background: none; color: var(--m-text); font: 600 13px var(--m-font); padding: 6px 4px; }
   }
 
   .m-fullscreen {
@@ -231,7 +278,19 @@
     padding-bottom: calc(var(--m-nav-h) + env(safe-area-inset-bottom));
   }
 
+  /* Отдельный экран поверх таб-бара: свой скролл внутри, без нижнего отступа под навбар */
+  .m-fullscreen--page {
+    z-index: 40;
+    overflow: hidden;
+    padding-bottom: 0;
+  }
+
   .m-fullscreen--profile {
     z-index: 20; /* ниже таб-бара (30): профиль — вкладка, а не модалка */
+
+    /* вкладку закрывает таб-бар и системное «назад» — desktop-крестик не нужен */
+    :global(.profile-panel__close) { display: none !important; }
   }
+
+  .m-search-slot { flex: 1; min-width: 0; height: 48px; margin-right: var(--m-space-2); }
 </style>

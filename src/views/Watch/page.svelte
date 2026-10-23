@@ -11,6 +11,7 @@
   import { normalizeSkipMarks, mergeSkipMarks, clampSkipMarksToDuration, skipMarkActive, endingIsAtEpisodeEnd, buildTimelineSausages, type SkipMarkKind, type SkipMarks } from './_skipMarks';
   import { getSkipAutoPref, setSkipAutoPref } from './_skipPrefs';
   import { pathToLocalMediaUrl } from '../../utils/local-media-url';
+  import { loadAppSettings, saveAppSettings } from '../../utils/app-settings';
   import { episodeHistoryLabel } from '../../utils/episode-display';
   import { rememberVideoCdnFromUrl, syncExtraVideoHostsToMain } from '../../utils/extra-video-hosts';
   import { sortDubbersPinnedFirst, readLastEpisodeTypeUpdateId } from '../../utils/dubber-meta';
@@ -2624,7 +2625,7 @@
     player.upscaleIntensity = intensity;
     player.upscaleEnabled = mapped.enabled;
     player.upscaleMode = mapped.mode;
-    (window as any).electron?.saveSettings?.({
+    saveAppSettings({
       upscaleEnabled: mapped.enabled,
       upscaleMode: mapped.mode,
       upscaleType: type,
@@ -2638,7 +2639,7 @@
     const next = normalizeAnime4kTargetRes(res);
     if (player.upscaleTargetRes === next) return;
     player.upscaleTargetRes = next;
-    (window as any).electron?.saveSettings?.({
+    saveAppSettings({
       upscaleEnabled: player.upscaleEnabled,
       upscaleMode: player.upscaleMode,
       upscaleType: player.upscaleType,
@@ -2724,7 +2725,7 @@
   function changeSurroundMode(mode: SurroundMode, opts?: { osd?: boolean }) {
     const next = normalizeSurroundMode(mode);
     player.surroundMode = next;
-    (window as any).electron?.saveSettings?.({ audioSurround: next });
+    saveAppSettings({ audioSurround: next });
     if (videoEl && player.useVideo) {
       void core.surround.setEqGains(player.eqGains).then(() =>
         core.surround.setEqLevel(player.eqLevel).then(() =>
@@ -2758,13 +2759,13 @@
         clearTimeout(eqSaveTimer);
         eqSaveTimer = null;
       }
-      void (window as any).electron?.saveSettings?.(payload);
+      void saveAppSettings(payload);
       return;
     }
     if (eqSaveTimer != null) clearTimeout(eqSaveTimer);
     eqSaveTimer = setTimeout(() => {
       eqSaveTimer = null;
-      void (window as any).electron?.saveSettings?.({
+      void saveAppSettings({
         audioEqGains: plainEqGains(),
         audioEqLevel: normalizeEqLevel(player.eqLevel),
       });
@@ -3802,9 +3803,9 @@
     } catch {}
     player.playbackRate = readStoredPlaybackRate();
 
-    if ((window as any).electron?.getSettings) {
+    {
       void Promise.all([
-        (window as any).electron.getSettings() as Promise<any>,
+        loadAppSettings() as Promise<any>,
         initWebGpuAvailability(true),
       ]).then(([s]) => {
         player.debugOverlay = s?.playerDebugOverlay === true;
@@ -3827,8 +3828,6 @@
         }
         if (adaptiveQualityByWindow) scheduleAdaptiveQuality();
       }).catch(() => {});
-    } else {
-      void initWebGpuAvailability(true);
     }
 
     const flushEqOnLeave = () => persistEqSettings({ immediate: true });

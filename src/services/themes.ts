@@ -174,11 +174,46 @@ function isLightTheme(v: ThemeVars): boolean {
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.55;
 }
 
+/**
+ * Палитры встроенных тем на телефоне — как у Anixart (Material 3: фон #121212, текст #e0e0e0, акцент лавандовый).
+ * Desktop-варианты тех же тем (#0d0d0d, красный акцент) на телефоне выглядели бы чужеродно.
+ */
+const MOBILE_PALETTES: Record<string, { bg: string; text: string; text2: string; accent: string; onAccent: string }> = {
+  dark:   { bg: '#121212', text: '#e0e0e0', text2: '#9e9e9e', accent: '#d0bcff', onAccent: '#381e72' },
+  amoled: { bg: '#000000', text: '#e6e1e5', text2: '#9f9f9f', accent: '#d0bcff', onAccent: '#381e72' },
+  light:  { bg: '#fafafa', text: '#1f1f1f', text2: '#6b6b6b', accent: '#6750a4', onAccent: '#ffffff' },
+};
+
+/** Телефон: тема задаёт базовые цвета --mt-*, остальные мобильные токены выводятся из них (_mobile-tokens.scss). */
+function applyMobileTheme(effective: Theme): void {
+  const v = effective.vars;
+  const p = MOBILE_PALETTES[effective.id] ?? {
+    bg: v.colorBg,
+    text: v.colorText,
+    text2: v.colorTextMuted,
+    accent: v.colorAccent,
+    onAccent: isLightTheme({ ...v, colorBg: v.colorAccent }) ? '#1a1a1a' : '#ffffff',
+  };
+  const root = document.documentElement;
+  root.style.setProperty('--mt-bg', p.bg);
+  root.style.setProperty('--mt-text', p.text);
+  root.style.setProperty('--mt-text-2', p.text2);
+  root.style.setProperty('--mt-accent', p.accent);
+  root.style.setProperty('--mt-on-accent', p.onAccent);
+  const light = isLightTheme({ ...v, colorBg: p.bg });
+  root.dataset.themeMode = light ? 'light' : 'dark';
+  root.style.colorScheme = light ? 'light' : 'dark';
+}
+
 export function applyTheme(theme: Theme): void {
-  // Мобильный режим: фиксированная тёмная палитра из токенов .m-* (см. _mobile-tokens.scss), темы desktop не применяем.
-  if (isMobileMode()) return;
   // For 'auto', resolve the actual theme based on OS preference
   const effective = theme.id === 'auto' ? resolveAutoTheme() : theme;
+  if (isMobileMode()) {
+    applyMobileTheme(effective);
+    setActiveThemeId(theme.id);
+    window.dispatchEvent(new CustomEvent('anix:themeChanged', { detail: { theme } }));
+    return;
+  }
 
   const root = document.documentElement;
   const v = effective.vars;

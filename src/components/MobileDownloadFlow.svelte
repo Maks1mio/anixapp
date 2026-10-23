@@ -257,7 +257,7 @@
 
   .m-flow__actions { display: flex; justify-content: flex-end; gap: var(--m-space-2); margin-top: var(--m-space-3); }
   .m-flow__btn {
-    border: 0; background: var(--m-text); color: #111; font: 500 15px var(--m-font); padding: 11px 24px; border-radius: 22px;
+    border: 0; background: var(--m-text); color: var(--m-bg); font: 500 15px var(--m-font); padding: 11px 24px; border-radius: 22px;
     &:disabled { opacity: 0.4; }
     &--ghost { background: none; color: var(--m-text); }
   }

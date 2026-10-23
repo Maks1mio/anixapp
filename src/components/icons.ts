@@ -14,6 +14,7 @@ import {
   BellPlus,
   BellRing,
   Newspaper,
+  Moon,
   Bold,
   Bookmark,
   Calendar,
@@ -103,6 +104,8 @@ import {
   X,
   Gift,
   Award,
+  PanelTop,
+  CircleUser,
 } from 'lucide';
 
 type IconNode = [string, Record<string, string | number | undefined>][];
@@ -272,6 +275,19 @@ export function iconTv(size = 16): string {
 /** Палитра */
 export function iconPalette(size = 16): string {
   return toSvg(Palette, size);
+}
+
+export function iconMoon(size = 16): string {
+  return toSvg(Moon, size);
+}
+
+/** Окно с шапкой — «Лента» в таб-баре телефона (как в Anixart) */
+export function iconPanelTop(size = 16): string {
+  return toSvg(PanelTop, size);
+}
+
+export function iconCircleUser(size = 16): string {
+  return toSvg(CircleUser, size);
 }
 
 /** Книга */

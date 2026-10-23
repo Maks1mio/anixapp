@@ -91,7 +91,7 @@
     &--selected { border-color: var(--m-text); }
     &__title { display: flex; align-items: center; gap: var(--m-space-2); font-size: 20px; font-weight: 500; }
     &__beta {
-      padding: 1px 8px; border-radius: 6px; background: var(--m-text); color: #111;
+      padding: 1px 8px; border-radius: 6px; background: var(--m-text); color: var(--m-bg);
       font-size: 13px; font-weight: 500; letter-spacing: 0.02em;
     }
     &__text { font-size: 17px; line-height: 1.3; color: var(--m-text-2); }
@@ -115,7 +115,7 @@
     background: var(--m-text); border-color: var(--m-text);
     &::after {
       content: ''; position: absolute; left: 6px; top: 1px; width: 7px; height: 13px;
-      border: solid #111; border-width: 0 3px 3px 0; transform: rotate(45deg);
+      border: solid var(--m-bg); border-width: 0 3px 3px 0; transform: rotate(45deg);
     }
   }
   .m-dialog__actions { display: flex; justify-content: flex-end; margin-top: var(--m-space-6); }

@@ -95,7 +95,7 @@
   .m-dialog__note { margin: var(--m-space-4) var(--m-space-2) 0; color: var(--m-text-2); font-size: 14px; }
   .m-dialog__actions { display: flex; justify-content: flex-end; gap: var(--m-space-2); margin-top: var(--m-space-5); }
   .m-dialog__btn {
-    border: 0; background: var(--m-text); color: #111; font: 500 15px var(--m-font); padding: 10px 22px; border-radius: 20px;
+    border: 0; background: var(--m-text); color: var(--m-bg); font: 500 15px var(--m-font); padding: 10px 22px; border-radius: 20px;
     &:disabled { opacity: 0.4; }
     &--ghost { background: none; color: var(--m-text); }
   }

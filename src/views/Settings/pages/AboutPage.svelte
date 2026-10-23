@@ -21,6 +21,8 @@
       } else if (typeof (window.electron as { getAppVersion?: () => Promise<string> })?.getAppVersion === 'function') {
         const v = await (window.electron as { getAppVersion: () => Promise<string> }).getAppVersion();
         if (v) version = `v${v}`;
+      } else if (__ANIXAPP_VERSION__) {
+        version = `v${__ANIXAPP_VERSION__}`;
       }
     } catch {}
 

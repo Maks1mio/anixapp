@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isMobileMode } from '../platform/mobile';
   import type { Snippet } from 'svelte';
   import Select from './Select.svelte';
   import { iconShuffle } from './icons';
@@ -26,6 +27,8 @@
   }: Props = $props();
 
   const sortOptions = bookmarkSortSelectOptions();
+  /** Телефон: как в Anixart, сортировка подписана («По добавлению ▾»), а не свёрнута в иконку. */
+  const touchLayout = isMobileMode();
 </script>
 
 <div class="bookmarks-toolbar" role="toolbar" aria-label="Действия списка">
@@ -37,7 +40,7 @@
       {@render leadingActions()}
     {/if}
     <Select
-      compact
+      compact={!touchLayout}
       options={sortOptions}
       value={String(sort)}
       onChange={(v) => onSortChange(Number(v))}

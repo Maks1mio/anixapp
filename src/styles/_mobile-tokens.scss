@@ -18,30 +18,36 @@
 }
 
 html.mobile-mode {
-  // ── Палитра (M3 dark baseline на чёрном) ─────────────────────────────────────────────────
-  --m-bg: #000000;
-  --m-surface-block: #0d0d0d;      // белый 5% поверх чёрного — разделители блоков, карточки
-  --m-surface-chip: #1a1a1a;       // чипы/теги («скоро», «зима 2027 г.»)
-  --m-surface-sheet: #161616;      // шторки, диалоги
-  --m-surface-raised: #1f1f1f;
+  // ── Палитра ──────────────────────────────────────────────────────────────────────────────
+  // Базовые цвета приходят из выбранной темы (--mt-*, themes.ts → applyMobileTheme); по умолчанию — тёмная тема
+  // Anixart (замер с телефона: фон #121212, поле поиска и навбар #252525, текст #e0e0e0). Всё остальное
+  // выводится смешиванием текста с фоном, поэтому любая тема (светлая, AMOLED, пользовательская) даёт целостный UI.
+  --m-bg: var(--mt-bg, #121212);
+  --m-text: var(--mt-text, #e0e0e0);           // M3 onSurface
+  --m-text-2: var(--mt-text-2, #9e9e9e);       // вторичный: метаданные, подписи секций
+  --m-text-3: color-mix(in srgb, var(--m-text-2) 78%, var(--m-bg));  // описания, подсказки
+  --m-text-tab: var(--m-text-2);               // неактивный таб
+  --m-nav-idle: color-mix(in srgb, var(--m-text-2) 75%, var(--m-bg));
 
-  --m-text: #e6e1e5;               // M3 onSurface
-  --m-text-2: #9f9f9f;             // вторичный: метаданные, подписи секций
-  --m-text-3: #767676;             // третичный: описания, подсказки, неактивные иконки
-  --m-text-tab: #8a888b;           // неактивный таб
-  --m-nav-idle: #626262;           // неактивный пункт навбара
+  --m-surface-block: color-mix(in srgb, var(--m-text) 5%, var(--m-bg));    // карточки, плашки
+  --m-surface-sheet: color-mix(in srgb, var(--m-text) 9%, var(--m-bg));    // поле поиска, навбар, шторки (#252525)
+  --m-surface-chip: color-mix(in srgb, var(--m-text) 11%, var(--m-bg));    // чипы/теги
+  --m-surface-raised: color-mix(in srgb, var(--m-text) 14%, var(--m-bg));
+  --m-press: color-mix(in srgb, var(--m-text) 10%, transparent);           // состояние нажатия
 
-  --m-outline: #565656;            // обводка полей (1dp)
-  --m-outline-variant: #424242;    // обводка плиток/выбора (md grey 800)
-  --m-divider: #1c1c1c;
+  --m-outline: color-mix(in srgb, var(--m-text) 36%, var(--m-bg));         // обводка полей
+  --m-outline-variant: color-mix(in srgb, var(--m-text) 24%, var(--m-bg)); // обводка плиток/выбора
+  --m-divider: color-mix(in srgb, var(--m-text) 10%, var(--m-bg));
 
-  --m-secondary-container: #494458; // M3 secondaryContainer — активная пилюля навбара
-  --m-on-secondary-container: #e8def8;
-  --m-primary: #d0bcff;             // M3 primary — временный акцент
-  --m-on-primary: #381e72;
-  --m-fill-button: #e0e0e0;         // залитая кнопка «Применить»
-  --m-on-fill-button: #111111;
-  --m-danger: #f2b8b5;              // M3 error (80)
+  --m-primary: var(--mt-accent, #d0bcff);       // M3 primary
+  --m-on-primary: var(--mt-on-accent, #381e72);
+  --m-secondary-container: color-mix(in srgb, var(--m-primary) 26%, var(--m-bg)); // пилюля навбара (#484456)
+  --m-on-secondary-container: color-mix(in srgb, var(--m-primary) 30%, var(--m-text));
+  --m-fill-button: var(--m-text);               // залитая кнопка «Воспроизвести», «Применить»
+  --m-on-fill-button: var(--m-bg);
+  --m-danger: #f2b8b5;
+  --m-warn-bg: color-mix(in srgb, #b8b23a 22%, var(--m-bg));   // плашки-предупреждения (лицензия, офлайн)
+  --m-warn-fg: color-mix(in srgb, #c8c35f 80%, var(--m-text));              // M3 error (80)
   --m-badge-dot: var(--m-primary);
 
   // Статусы списков (легенда профиля, бейджи на постерах)
@@ -53,8 +59,8 @@ html.mobile-mode {
   --m-online: #6fa873;
 
   // Скелетоны: вертикальный градиент, без мерцания (режим экономии ресурсов отключает анимацию)
-  --m-skeleton-top: #606060;
-  --m-skeleton-bottom: #424242;
+  --m-skeleton-top: color-mix(in srgb, var(--m-text) 30%, var(--m-bg));
+  --m-skeleton-bottom: color-mix(in srgb, var(--m-text) 20%, var(--m-bg));
 
   // ── Радиусы ─────────────────────────────────────────────────────────────────────────────
   --m-radius-xs: 4px;              // ≈ поля ввода (дропдауны)
@@ -75,8 +81,8 @@ html.mobile-mode {
 
   // ── Размеры ─────────────────────────────────────────────────────────────────────────────
   --m-touch: 44px;                 // минимальная тач-цель
-  --m-poster-w: 100px;             // постер списка ≈106×156 (≈2:3)
-  --m-poster-h: 150px;
+  --m-poster-w: 104px;             // постер списка — замер Anixart 104×156dp
+  --m-poster-h: 156px;
   --m-nav-h: 80px;
   --m-nav-pill-w: 64px;
   --m-nav-pill-h: 32px;
@@ -122,6 +128,7 @@ html.mobile-mode {
   --uiv2-surface-raised: var(--m-surface-chip);
   --uiv2-hover-bg: transparent;     // hover-эффектов на мобильном нет; состояние нажатия — :active
   --uiv2-hover-subtle: transparent;
+  --uiv2-chrome-shadow: none;       // desktop-«стекло» с тенью даёт на чёрном фоне светлые дуги вокруг кнопок
   --uiv2-skeleton-base: var(--m-skeleton-bottom);
   --uiv2-skeleton-highlight: var(--m-skeleton-top);
   --uiv2-chrome-active-bg: var(--m-secondary-container);
@@ -130,7 +137,6 @@ html.mobile-mode {
   --uiv2-panel-border: transparent;
   --uiv2-overlay: rgba(0, 0, 0, 0.6);
 
-  color-scheme: dark;
   background: var(--m-bg);
   color: var(--m-text);
   font-family: var(--m-font);

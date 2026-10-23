@@ -1,4 +1,5 @@
 import { get, writable } from 'svelte/store';
+import { hasNativeNotify, nativeNotify } from '../native/anix-notify';
 import { isAuthenticated } from './auth';
 import { fetchAllNotifications, refreshNotificationUnreadCount } from './notifications';
 import {
@@ -613,6 +614,17 @@ export async function showDeviceNotification(payload: DeviceNotificationPayload)
     return;
   }
 
+  // телефон: системное уведомление Android через плагин AnixPlayer
+  if (hasNativeNotify()) {
+    await nativeNotify({
+      id: payload.id ?? String(Date.now()),
+      title: payload.title || 'Anix',
+      body: s.showPreview ? (payload.body || '') : '',
+      deepLink: payload.deepLink,
+    });
+    return;
+  }
+
   if (!s.useNativeNotifications) return;
   const title = payload.title || 'AnixApp';
   const body = s.showPreview ? (payload.body || '') : '';
@@ -683,8 +695,7 @@ async function isFcmPushActive(): Promise<boolean> {
 
 export async function pollDeviceNotifications(): Promise<void> {
   if (polling || !get(isAuthenticated)) return;
-  const api = bridge();
-  if (!api) return;
+  if (!bridge() && !hasNativeNotify()) return;
   polling = true;
   try {
     const fcmActive = await isFcmPushActive();
@@ -744,7 +755,7 @@ export function resetDeviceNotificationBaseline(): void {
  * @returns функция остановки
  */
 export function startDeviceNotificationPolling(intervalMs = 60_000): () => void {
-  if (!bridge()) return () => {};
+  if (!bridge() && !hasNativeNotify()) return () => {};
   const tick = () => { void pollDeviceNotifications(); };
   // Небольшая задержка, чтобы приложение успело авторизоваться.
   const warmup = setTimeout(tick, 8_000);

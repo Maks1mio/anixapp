@@ -7,9 +7,13 @@
   import { get } from 'svelte/store';
   import type { Snippet } from 'svelte';
   import { navigate } from '../stores/navigation';
-  import { notificationsModalOpen, settingsModalOpen, watchModalOpen } from '../stores/modals';
+  import { notificationsModalOpen, settingsModalOpen, watchModalOpen, openSettingsModal, closeSettingsModal } from '../stores/modals';
+  import { notificationUnreadCount, refreshNotificationUnreadCount } from '../stores/notifications';
+  import { loadDeviceNotificationSettings, resetDeviceNotificationBaseline, startDeviceNotificationPolling } from '../stores/device-notifications';
+  import { supportModalOpen } from '../stores/support-promo';
+  import { bindNotificationTaps, requestNativeNotifyPermission } from '../native/anix-notify';
   import { isAuthenticated, requireAuth } from '../stores/auth';
-  import { ensureProfileId } from '../utils/profile';
+  import { ensureProfileId, loadSelfProfileGlobal } from '../utils/profile';
   import { iconDownload, iconPlus, iconHome, iconCompass, iconBookmark, iconPanelTop, iconCircleUser, iconSearch, iconSettings, iconBell } from '../components/icons';
   import MobileSettings from './MobileSettings.svelte';
   import { bindNativeBackButton, minimizeNativeApp } from '../platform/mobile-back';
@@ -107,8 +111,56 @@
     else void minimizeNativeApp();
   }
 
+  /** Счётчик на колокольчике — полное число, как в Anixart. */
+  const unreadLabel = $derived($notificationUnreadCount > 999 ? '999+' : String($notificationUnreadCount));
+
+  /** Уведомления: счётчик (раз в минуту и при возврате в приложение) и системные уведомления о новых. */
+  function startNotifications(): () => void {
+    void loadDeviceNotificationSettings();
+    let permissionAsked = false;
+    const unsubAuth = isAuthenticated.subscribe((ok) => {
+      if (!ok) {
+        notificationUnreadCount.set(0);
+        resetDeviceNotificationBaseline();
+        return;
+      }
+      void refreshNotificationUnreadCount();
+      void loadSelfProfileGlobal();
+      if (!permissionAsked) {
+        permissionAsked = true;
+        void requestNativeNotifyPermission();
+      }
+    });
+    const poll = window.setInterval(() => void refreshNotificationUnreadCount(), 60_000);
+    const onVisible = () => { if (document.visibilityState === 'visible') void refreshNotificationUnreadCount(); };
+    document.addEventListener('visibilitychange', onVisible);
+    const stopDevice = startDeviceNotificationPolling(45_000);
+    // нажатие на системное уведомление: адресат — как desktop-ссылка anix:deepLink, без адресата — список
+    const stopTaps = bindNotificationTaps((link) => {
+      if (link) window.dispatchEvent(new CustomEvent('anix:deepLink', { detail: link }));
+      else notificationsModalOpen.set(true);
+    });
+    // открыли список — после него счётчик обновится с сервера
+    const unsubModal = notificationsModalOpen.subscribe((open) => { if (!open) void refreshNotificationUnreadCount(); });
+    return () => {
+      unsubAuth();
+      unsubModal();
+      window.clearInterval(poll);
+      document.removeEventListener('visibilitychange', onVisible);
+      stopDevice();
+      stopTaps();
+    };
+  }
+
   onMount(() => {
     initConnectivity();
+    const stopNotifications = startNotifications();
+    // Anix+ на телефоне — раздел настроек, а не desktop-модалка (промо «Подробнее», значки и т.п.)
+    const unsubSupport = supportModalOpen.subscribe((open) => {
+      if (!open) return;
+      supportModalOpen.set(false);
+      openSettingsModal('support');
+    });
     let unbindBack = () => {};
     void bindNativeBackButton(onNativeBack).then((fn) => { unbindBack = fn; });
     const stopDl = watchDownloads();
@@ -127,6 +179,8 @@
     window.addEventListener('anix:profilePanelOpen', onOpen);
     window.addEventListener('anix:profilePanelClose', onClose);
     return () => {
+      stopNotifications();
+      unsubSupport();
       unbindBack();
       stopDl();
       window.clearTimeout(offlineStart);
@@ -160,6 +214,7 @@
       </button>
       <button type="button" class="m-icon-btn" onclick={() => notificationsModalOpen.set(true)} aria-label="Уведомления">
         {@html iconBell(24)}
+        {#if $notificationUnreadCount > 0}<span class="m-badge-count">{unreadLabel}</span>{/if}
       </button>
     </header>
   {:else}
@@ -212,6 +267,7 @@
         </button>
         <button type="button" class="m-icon-btn" onclick={() => notificationsModalOpen.set(true)} aria-label="Уведомления">
           {@html iconBell(24)}
+        {#if $notificationUnreadCount > 0}<span class="m-badge-count">{unreadLabel}</span>{/if}
         </button>
       </header>
       <SidebarProfilePanel userId={profileUserId} onClose={closeProfile} />
@@ -220,7 +276,7 @@
 
   {#if $settingsModalOpen}
     <div class="m-fullscreen m-fullscreen--page">
-      <MobileSettings onClose={() => settingsModalOpen.set(false)} />
+      <MobileSettings onClose={closeSettingsModal} />
     </div>
   {/if}
 </div>
@@ -290,6 +346,21 @@
 
     /* вкладку закрывает таб-бар и системное «назад» — desktop-крестик не нужен */
     :global(.profile-panel__close) { display: none !important; }
+  }
+
+  .m-badge-count {
+    position: absolute;
+    top: 3px;
+    right: 1px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    background: #e5484d;
+    color: #fff;
+    font: 600 12px/20px var(--m-font);
+    text-align: center;
+    pointer-events: none;
   }
 
   .m-search-slot { flex: 1; min-width: 0; height: 48px; margin-right: var(--m-space-2); }

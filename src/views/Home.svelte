@@ -26,7 +26,6 @@
     saveHomeCustomTab,
     serializeHomeCustomTabData,
     setDefaultHomeTab,
-    setSavedHomeActiveTab,
     toFilterRequest,
     type HomeCustomTabData,
   } from '../utils/homeCustomTab';
@@ -321,7 +320,6 @@
     if (tabId === 'my' && !requireAuth()) return;
     saveViewStateWithScroll(HOME_VIEW_KEY(activeTab), homeSnapshot());
     activeTab = tabId;
-    void setSavedHomeActiveTab(tabId);
 
     const cached = getViewState<HomeViewState>(HOME_VIEW_KEY(tabId));
     if (cached?.data && cached.data.items.length > 0) {

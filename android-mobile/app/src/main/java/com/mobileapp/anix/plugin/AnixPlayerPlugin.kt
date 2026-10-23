@@ -3,7 +3,15 @@ package com.mobileapp.anix.plugin
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import android.net.Uri
 import android.net.ConnectivityManager
 import android.net.Network
@@ -39,7 +47,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Граница «веб ↔ нативный плеер/загрузки».
- * Веб: play(), download(), downloads(), removeDownload(), storage(); события: downloadState, network.
+ * Веб: play(), download(), downloads(), removeDownload(), storage(), notify(); события: downloadState, network, notificationTap.
  */
 @UnstableApi
 @CapacitorPlugin(name = "AnixPlayer")
@@ -69,6 +77,13 @@ class AnixPlayerPlugin : Plugin() {
         cm.registerDefaultNetworkCallback(cb)
         netCallback = cb
         resumePendingDownloads()
+        // холодный старт по нажатию на уведомление
+        activity?.intent?.getStringExtra(EXTRA_DEEP_LINK)?.let { pendingDeepLink = it }
+    }
+
+    override fun handleOnNewIntent(intent: Intent) {
+        super.handleOnNewIntent(intent)
+        intent.getStringExtra(EXTRA_DEEP_LINK)?.let { emitNotificationTap(it) }
     }
 
     /** Приложение запущено заново (процесс мог умереть) — докачиваем незавершённое, пока не вернули сеть/сервис. */
@@ -371,6 +386,71 @@ class AnixPlayerPlugin : Plugin() {
         )
     }
 
+    // --- Уведомления --------------------------------------------------------------------------
+
+    private var pendingDeepLink: String? = null
+
+    private fun emitNotificationTap(link: String) =
+        notifyListeners("notificationTap", JSObject().put("deepLink", link), true)
+
+    /** Веб забирает ссылку, с которой приложение открыли нажатием на уведомление (холодный старт). */
+    @PluginMethod
+    fun takeLaunchDeepLink(call: PluginCall) {
+        call.resolve(JSObject().put("deepLink", pendingDeepLink))
+        pendingDeepLink = null
+    }
+
+    /** Android 13+: системный запрос разрешения на уведомления. Возвращает текущее состояние. */
+    @PluginMethod
+    fun requestNotifications(call: PluginCall) {
+        val granted = notificationsGranted()
+        if (!granted && Build.VERSION.SDK_INT >= 33) {
+            activity?.let {
+                ActivityCompat.requestPermissions(it, arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), REQ_NOTIFICATIONS)
+            }
+        }
+        call.resolve(JSObject().put("granted", granted))
+    }
+
+    @PluginMethod
+    fun notify(call: PluginCall) {
+        if (!notificationsGranted()) {
+            call.resolve(JSObject().put("shown", false))
+            return
+        }
+        ensureChannel()
+        val key = call.getString("id") ?: System.currentTimeMillis().toString()
+        val intent = Intent(context, activity?.javaClass ?: return call.reject("no activity"))
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .putExtra(EXTRA_DEEP_LINK, call.getString("deepLink") ?: "/notifications")
+        val pending = PendingIntent.getActivity(
+            context, key.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val body = call.getString("body") ?: ""
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(context.applicationInfo.icon)
+            .setContentTitle(call.getString("title") ?: "Anix")
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setAutoCancel(true)
+            .setContentIntent(pending)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+        NotificationManagerCompat.from(context).notify(key.hashCode(), notification)
+        call.resolve(JSObject().put("shown", true))
+    }
+
+    private fun notificationsGranted(): Boolean =
+        Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
+    private fun ensureChannel() {
+        if (Build.VERSION.SDK_INT < 26) return
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (nm.getNotificationChannel(CHANNEL_ID) != null) return
+        nm.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Уведомления Anixart", NotificationManager.IMPORTANCE_DEFAULT))
+    }
+
     private fun metaObject(data: ByteArray): JSObject? =
         try { JSObject(data.toString(Charsets.UTF_8)) } catch (_: Exception) { null }
 
@@ -402,4 +482,10 @@ class AnixPlayerPlugin : Plugin() {
         .put("bytes", bytesDownloaded)
         .put("failureReason", failureReason)
         .put("error", error)
+
+    private companion object {
+        const val CHANNEL_ID = "anix_updates"
+        const val EXTRA_DEEP_LINK = "anixDeepLink"
+        const val REQ_NOTIFICATIONS = 7701
+    }
 }

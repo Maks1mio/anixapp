@@ -319,3 +319,45 @@ html.mobile-mode {
     .uiv2-settings--about { align-items: center; padding: var(--m-space-5) var(--m-space-4); gap: var(--m-space-4); text-align: center; }
   }
 }
+
+// ── «Поддержать Anixapp» (MobileSupport.svelte) ──────────────────────────────────────────
+html.mobile-mode {
+  .m-support { display: flex; flex-direction: column; }
+  .m-support__lead { margin: var(--m-space-4) var(--m-space-4) var(--m-space-2); font: 400 14px/1.45 var(--m-font); color: var(--m-text-2); }
+  .m-support__tiers { display: flex; flex-direction: column; gap: var(--m-space-3); padding: var(--m-space-2) var(--m-space-4); }
+  .m-support__tier {
+    display: flex; align-items: flex-start; gap: var(--m-space-3); width: 100%; padding: var(--m-space-4);
+    border: 1.5px solid var(--m-outline-variant); border-radius: 20px; background: var(--m-surface-block);
+    color: inherit; font: inherit; text-align: left;
+    &--on { border-color: var(--m-primary); background: color-mix(in srgb, var(--m-primary) 10%, var(--m-bg)); }
+    &:active { filter: brightness(1.1); }
+  }
+  .m-support__tier-img { flex: none; width: 40px; height: 40px; object-fit: contain; }
+  .m-support__tier-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .m-support__tier-name { font: 600 16px/1.3 var(--m-font); color: var(--m-text); margin-bottom: 2px; }
+  .m-support__perk { font: 400 13px/1.35 var(--m-font); color: var(--m-text-2); &::before { content: '•  '; } }
+  .m-support__tier-price {
+    flex: none; display: flex; flex-direction: column; align-items: flex-end;
+    font: 700 17px/1.2 var(--m-font); color: var(--m-text);
+    small { font: 400 12px/1.3 var(--m-font); color: var(--m-text-3); }
+  }
+  .m-support__preview {
+    display: flex; align-items: center; gap: var(--m-space-3); margin: 0 var(--m-space-4); padding: var(--m-space-3) var(--m-space-4);
+    border-radius: 16px; background: var(--m-surface-block);
+  }
+  .m-support__avatar { flex: none; width: 40px; height: 40px; border-radius: 50%; overflow: hidden; }
+  .m-support__preview-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .m-support__nick { display: inline-flex; align-items: center; gap: 5px; font: 600 15px var(--m-font); color: var(--m-text); }
+  .m-support__preview-text { font: 400 13px/1.35 var(--m-font); color: var(--m-text-2); }
+  .m-support__how { margin: var(--m-space-4) var(--m-space-4) 0; font: 400 14px/1.45 var(--m-font); color: var(--m-text-2); b { color: var(--m-text); font-weight: 600; } }
+  .m-support__copy { flex: none; display: inline-flex; color: var(--m-text-2); margin-left: var(--m-space-4); }
+  .m-support__cta {
+    position: sticky; bottom: 0; margin-top: var(--m-space-3); padding: var(--m-space-3) var(--m-space-4) var(--m-space-2);
+    background: linear-gradient(to top, var(--m-bg) 70%, transparent);
+  }
+  .m-support__btn {
+    width: 100%; height: 52px; border: 0; border-radius: 26px; background: var(--m-primary); color: var(--m-on-primary);
+    font: 600 16px var(--m-font);
+    &:active { filter: brightness(0.92); }
+  }
+}

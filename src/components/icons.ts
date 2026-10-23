@@ -106,6 +106,12 @@ import {
   Award,
   PanelTop,
   CircleUser,
+  SkipBack,
+  SkipForward,
+  LockOpen,
+  Gauge,
+  ListVideo,
+  Sun,
 } from 'lucide';
 
 type IconNode = [string, Record<string, string | number | undefined>][];
@@ -288,6 +294,30 @@ export function iconPanelTop(size = 16): string {
 
 export function iconCircleUser(size = 16): string {
   return toSvg(CircleUser, size);
+}
+
+export function iconSkipBack(size = 20): string {
+  return toSvg(SkipBack, size);
+}
+
+export function iconSkipForward(size = 20): string {
+  return toSvg(SkipForward, size);
+}
+
+export function iconLockOpen(size = 18): string {
+  return toSvg(LockOpen, size);
+}
+
+export function iconGauge(size = 18): string {
+  return toSvg(Gauge, size);
+}
+
+export function iconListVideo(size = 18): string {
+  return toSvg(ListVideo, size);
+}
+
+export function iconSun(size = 18): string {
+  return toSvg(Sun, size);
 }
 
 /** Книга */

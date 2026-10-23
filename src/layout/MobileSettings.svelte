@@ -27,7 +27,7 @@
     iconPalette,
     iconGlobe,
     iconDownload,
-    iconSignal,
+    iconGift,
     iconInfo,
     iconLink,
     iconMessageCircle,
@@ -36,7 +36,7 @@
   import NotificationPreferencesPanel from '../components/NotificationPreferencesPanel.svelte';
   import PlaybackPage from '../views/Settings/pages/PlaybackPage.svelte';
   import ConnectionPage from '../views/Settings/pages/ConnectionPage.svelte';
-  import DebugPage from '../views/Settings/pages/DebugPage.svelte';
+  import MobileSupport from './MobileSupport.svelte';
   import AboutPage from '../views/Settings/pages/AboutPage.svelte';
 
   interface Props {
@@ -44,7 +44,7 @@
   }
   let { onClose }: Props = $props();
 
-  type Screen = 'menu' | 'notifications' | 'playback' | 'appearance' | 'connection' | 'debug' | 'about';
+  type Screen = 'menu' | 'notifications' | 'playback' | 'appearance' | 'connection' | 'support' | 'about';
 
   const TITLES: Record<Screen, string> = {
     menu: 'Настройки',
@@ -52,7 +52,7 @@
     playback: 'Воспроизведение',
     appearance: 'Внешний вид',
     connection: 'Соединение',
-    debug: 'Отладка',
+    support: 'Anix+',
     about: 'О приложении',
   };
 
@@ -66,11 +66,11 @@
       { title: 'Загрузки', icon: iconDownload, action: () => { onClose(); navigate('/downloads'); } },
     ],
     [
+      { screen: 'support', title: 'Поддержать Anixapp', icon: iconGift },
       { title: 'Канал в Telegram', icon: iconMessageCircle, action: () => requestOpenExternal('https://t.me/anixapp') },
       { title: 'Исходный код на GitHub', icon: iconLink, action: () => requestOpenExternal('https://github.com/Maks1mio/anixapp') },
       { screen: 'about', title: 'О приложении', icon: iconInfo },
     ],
-    [{ screen: 'debug', title: 'Отладка', icon: iconSignal }],
   ];
 
   /** Вкладки desktop-настроек, у которых есть мобильный аналог. */
@@ -79,7 +79,7 @@
     playback: 'playback',
     appearance: 'appearance',
     connection: 'connection',
-    debug: 'debug',
+    support: 'support',
     about: 'about',
   };
 
@@ -275,8 +275,8 @@
       <div class="m-settings__desktop"><NotificationPreferencesPanel embedded /></div>
     {:else if screen === 'connection'}
       <div class="m-settings__desktop"><ConnectionPage /></div>
-    {:else if screen === 'debug'}
-      <div class="m-settings__desktop"><DebugPage /></div>
+    {:else if screen === 'support'}
+      <MobileSupport />
     {:else}
       <div class="m-settings__desktop"><AboutPage /></div>
     {/if}

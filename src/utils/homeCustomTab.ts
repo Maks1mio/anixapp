@@ -86,12 +86,6 @@ export async function saveHomeCustomTab(data: HomeCustomTabData): Promise<void> 
   window.dispatchEvent(new CustomEvent('anix:homeCustomTabChanged'));
 }
 
-export async function setSavedHomeActiveTab(tabId: string): Promise<void> {
-  const current = await loadHomeCustomTab();
-  if (current.activeTab === tabId) return;
-  await saveHomeCustomTab({ ...current, activeTab: tabId });
-}
-
 export async function setDefaultHomeTab(tabId: string): Promise<void> {
   const current = await loadHomeCustomTab();
   await saveHomeCustomTab({ ...current, activeTab: tabId });

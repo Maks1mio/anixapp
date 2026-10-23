@@ -1,0 +1,363 @@
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Настройки на телефоне (MobileSettings.svelte) — список настроек Android по разметке Anixart:
+// fragment_preference (тулбар 56dp, заголовок 20sp bold, разделитель 0.5dp #1affffff с отступами 16dp),
+// preference_regular (отступ 16dp, рамка иконки 56dp, заголовок 15sp, подпись 14sp, по 16dp сверху/снизу),
+// preference_separator (16dp сверху, 8dp снизу). Desktop-страницы внутри перекрашиваются в тот же список.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+html.mobile-mode {
+  .m-settings {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--m-bg);
+    color: var(--m-text);
+  }
+
+  .m-pref-bar {
+    flex: none;
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 56px;
+    &::after {
+      content: '';
+      position: absolute;
+      left: var(--m-space-4);
+      right: var(--m-space-4);
+      bottom: 0;
+      height: 0.5px;
+      background: var(--m-divider);
+    }
+    &__back {
+      flex: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 56px;
+      height: 56px;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      background: none;
+      color: var(--m-text);
+      &:active { background: var(--m-press); }
+      svg { width: 24px; height: 24px; }
+    }
+    &__title {
+      flex: 1;
+      min-width: 0;
+      margin: 0;
+      padding-left: var(--m-space-4);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font: 700 20px/1 var(--m-font);
+    }
+  }
+
+  .m-settings__body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: calc(var(--m-space-5) + env(safe-area-inset-bottom));
+  }
+
+  .m-pref-space { height: var(--m-space-4); }
+  .m-pref-sep {
+    height: 0.5px;
+    margin: var(--m-space-4) var(--m-space-4) var(--m-space-2);
+    background: var(--m-divider);
+  }
+
+  .m-pref {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 48px;
+    padding: 0 var(--m-space-4);
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    &:active { background: var(--m-press); }
+
+    &__icon {
+      flex: none;
+      display: flex;
+      align-items: center;
+      min-width: 56px;
+      padding: 4px 8px 4px 0;
+      color: var(--m-text);
+      svg { width: 24px; height: 24px; }
+    }
+    &__text {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: var(--m-space-4) 0;
+    }
+    &__title { font: 400 15px/1.3 var(--m-font); color: var(--m-text); }
+    &__summary { font: 400 14px/1.35 var(--m-font); letter-spacing: 0.02em; color: var(--m-text-3); }
+  }
+
+  .m-pref-cat {
+    margin: var(--m-space-4) 0 0;
+    padding: var(--m-space-2) var(--m-space-4);
+    font: 500 14px/1.3 var(--m-font);
+    color: var(--m-primary);
+  }
+
+  .m-pref-version {
+    margin: var(--m-space-2) 0 0;
+    padding: var(--m-space-4);
+    font-size: 14px;
+    color: var(--m-text-3);
+  }
+
+  // M3 Switch (MaterialSwitch): дорожка 52×32, бегунок 16 → 24 при включении
+  .m-switch {
+    position: relative;
+    flex: none;
+    width: 52px;
+    height: 32px;
+    margin-left: var(--m-space-4);
+    border: 2px solid var(--m-outline);
+    border-radius: 16px;
+    background: var(--m-surface-raised);
+    transition: background 0.2s ease, border-color 0.2s ease;
+    &::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 6px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--m-outline);
+      transform: translateY(-50%);
+      transition: left 0.2s ease, width 0.2s ease, height 0.2s ease, background 0.2s ease;
+    }
+    &--on {
+      border-color: var(--m-primary);
+      background: var(--m-primary);
+      &::after { left: 22px; width: 24px; height: 24px; background: var(--m-on-primary); }
+    }
+  }
+
+  // ── Диалог выбора значения (CustomListPreference) ─────────────────────────────────────
+  .m-pref-dialog-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 var(--m-space-5);
+    background: rgba(0, 0, 0, 0.6);
+    &__bg { position: absolute; inset: 0; padding: 0; border: 0; background: none; }
+  }
+  .m-pref-dialog {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    max-height: 80dvh;
+    display: flex;
+    flex-direction: column;
+    padding: var(--m-space-5) 0 var(--m-space-3);
+    border-radius: 28px;
+    background: var(--m-surface-sheet);
+    &__title { margin: 0 0 var(--m-space-3); padding: 0 var(--m-space-5); font: 400 22px/1.25 var(--m-font); color: var(--m-text); }
+    &__list { flex: 1; min-height: 0; overflow-y: auto; }
+    &__actions {
+      display: flex;
+      justify-content: flex-end;
+      padding: var(--m-space-3) var(--m-space-5) 0;
+      button { padding: 10px 12px; border: 0; border-radius: 20px; background: none; color: var(--m-primary); font: 500 14px var(--m-font); &:active { background: color-mix(in srgb, var(--m-primary) 12%, transparent); } }
+    }
+  }
+  .m-pref-radio {
+    display: flex;
+    align-items: center;
+    gap: var(--m-space-4);
+    width: 100%;
+    min-height: 52px;
+    padding: var(--m-space-2) var(--m-space-5);
+    border: 0;
+    background: none;
+    color: var(--m-text);
+    font: 400 16px/1.3 var(--m-font);
+    text-align: left;
+    &:active { background: var(--m-press); }
+    &__dot {
+      position: relative;
+      flex: none;
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--m-text-2);
+      border-radius: 50%;
+      &--on {
+        border-color: var(--m-primary);
+        &::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--m-primary); }
+      }
+    }
+    &__text { display: flex; flex-direction: column; gap: 2px; small { font-size: 13px; color: var(--m-text-3); } }
+  }
+
+  // ── Desktop-страницы настроек внутри мобильного экрана ─────────────────────────────────
+  .m-settings__desktop {
+    .uiv2-settings { gap: 0; padding: 0; }
+    .uiv2-settings__block { gap: 0; }
+    .uiv2-settings__title {
+      margin: var(--m-space-4) 0 0;
+      padding: var(--m-space-2) var(--m-space-4);
+      font: 500 14px/1.3 var(--m-font);
+      color: var(--m-primary);
+    }
+    .uiv2-settings__desc, .uiv2-settings__hint, .uiv2-settings__status {
+      margin: 0;
+      padding: 0 var(--m-space-4) var(--m-space-2);
+      font: 400 14px/1.4 var(--m-font);
+      color: var(--m-text-3);
+    }
+    .uiv2-settings__group {
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      overflow: visible;
+      &--pad { padding: 0 var(--m-space-4) var(--m-space-3); }
+    }
+    .uiv2-settings__row {
+      gap: var(--m-space-4);
+      padding: var(--m-space-4);
+      & + .uiv2-settings__row { border-top: 0; }
+      &--stack { gap: var(--m-space-3); }
+    }
+    .uiv2-settings__row-title { font: 400 15px/1.3 var(--m-font); color: var(--m-text); }
+    .uiv2-settings__row-desc { margin-top: 2px; font: 400 14px/1.35 var(--m-font); letter-spacing: 0.02em; color: var(--m-text-3); }
+
+    .uiv2-settings__notice {
+      margin: var(--m-space-2) var(--m-space-4);
+      padding: var(--m-space-3) var(--m-space-4);
+      border-radius: 16px;
+      background: var(--m-surface-block);
+      font: 400 14px/1.4 var(--m-font);
+      &--warn { background: var(--m-warn-bg); color: var(--m-warn-fg); svg { color: var(--m-warn-fg); } }
+    }
+
+    // M3 filter chips
+    .uiv2-settings__chips { gap: var(--m-space-2); }
+    .uiv2-settings__chip {
+      min-height: 32px;
+      padding: 0 var(--m-space-4);
+      border: 1px solid var(--m-outline);
+      border-radius: var(--m-radius-sm);
+      background: transparent;
+      color: var(--m-text);
+      font: 500 14px/1 var(--m-font);
+      &--on { border-color: transparent; background: var(--m-secondary-container); color: var(--m-on-secondary-container); }
+    }
+
+    // UiV2Toggle → M3 Switch
+    .uiv2-toggle__ui {
+      width: 52px;
+      height: 32px;
+      border: 2px solid var(--m-outline);
+      border-radius: 16px;
+      background: var(--m-surface-raised);
+      &::after {
+        top: 50%;
+        left: 6px;
+        width: 16px;
+        height: 16px;
+        background: var(--m-outline);
+        box-shadow: none;
+        transform: translateY(-50%);
+        transition: left 0.2s ease, width 0.2s ease, height 0.2s ease, background 0.2s ease;
+      }
+    }
+    .uiv2-toggle input:checked + .uiv2-toggle__ui {
+      border-color: var(--m-primary);
+      background: var(--m-primary);
+      &::after { left: 22px; width: 24px; height: 24px; background: var(--m-on-primary); transform: translateY(-50%); }
+    }
+
+    input[type='number'], input[type='text'], select {
+      min-height: 40px;
+      padding: 0 var(--m-space-3);
+      border: 1px solid var(--m-outline);
+      border-radius: var(--m-radius-xs);
+      background: transparent;
+      color: var(--m-text);
+      font: 400 15px var(--m-font);
+    }
+
+    // Серверные настройки уведомлений (NotificationPreferencesPanel)
+    .notifications-modal__pref-section-title {
+      margin: var(--m-space-4) 0 0 !important;
+      padding: var(--m-space-2) var(--m-space-4) !important;
+      font: 500 14px/1.3 var(--m-font) !important;
+      color: var(--m-primary) !important;
+    }
+    .notifications-modal__pref-row, .notifications-modal__pref-link {
+      padding: var(--m-space-4) !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+    }
+    .notifications-modal__pref-label { font: 400 15px/1.3 var(--m-font) !important; color: var(--m-text) !important; }
+    .notifications-modal__pref-hint { font: 400 14px/1.35 var(--m-font) !important; letter-spacing: 0.02em; color: var(--m-text-3) !important; }
+    .notifications-modal__scope-cards { padding: 0 var(--m-space-4) var(--m-space-2); }
+
+    .playback-rewind-custom { margin-top: var(--m-space-3); gap: var(--m-space-3); }
+
+    // «О приложении»
+    .uiv2-settings--about { align-items: center; padding: var(--m-space-5) var(--m-space-4); gap: var(--m-space-4); text-align: center; }
+  }
+}
+
+// ── «Поддержать Anixapp» (MobileSupport.svelte) ──────────────────────────────────────────
+html.mobile-mode {
+  .m-support { display: flex; flex-direction: column; }
+  .m-support__lead { margin: var(--m-space-4) var(--m-space-4) var(--m-space-2); font: 400 14px/1.45 var(--m-font); color: var(--m-text-2); }
+  .m-support__tiers { display: flex; flex-direction: column; gap: var(--m-space-3); padding: var(--m-space-2) var(--m-space-4); }
+  .m-support__tier {
+    display: flex; align-items: flex-start; gap: var(--m-space-3); width: 100%; padding: var(--m-space-4);
+    border: 1.5px solid var(--m-outline-variant); border-radius: 20px; background: var(--m-surface-block);
+    color: inherit; font: inherit; text-align: left;
+    &--on { border-color: var(--m-primary); background: color-mix(in srgb, var(--m-primary) 10%, var(--m-bg)); }
+    &:active { filter: brightness(1.1); }
+  }
+  .m-support__tier-img { flex: none; width: 40px; height: 40px; object-fit: contain; }
+  .m-support__tier-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .m-support__tier-name { font: 600 16px/1.3 var(--m-font); color: var(--m-text); margin-bottom: 2px; }
+  .m-support__perk { font: 400 13px/1.35 var(--m-font); color: var(--m-text-2); &::before { content: '•  '; } }
+  .m-support__tier-price {
+    flex: none; display: flex; flex-direction: column; align-items: flex-end;
+    font: 700 17px/1.2 var(--m-font); color: var(--m-text);
+    small { font: 400 12px/1.3 var(--m-font); color: var(--m-text-3); }
+  }
+  .m-support__preview {
+    display: flex; align-items: center; gap: var(--m-space-3); margin: 0 var(--m-space-4); padding: var(--m-space-3) var(--m-space-4);
+    border-radius: 16px; background: var(--m-surface-block);
+  }
+  .m-support__avatar { flex: none; width: 40px; height: 40px; border-radius: 50%; overflow: hidden; }
+  .m-support__preview-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .m-support__nick { display: inline-flex; align-items: center; gap: 5px; font: 600 15px var(--m-font); color: var(--m-text); }
+  .m-support__preview-text { font: 400 13px/1.35 var(--m-font); color: var(--m-text-2); }
+  .m-support__how { margin: var(--m-space-4) var(--m-space-4) 0; font: 400 14px/1.45 var(--m-font); color: var(--m-text-2); b { color: var(--m-text); font-weight: 600; } }
+  .m-support__copy { flex: none; display: inline-flex; color: var(--m-text-2); margin-left: var(--m-space-4); }
+  .m-support__cta {
+    position: sticky; bottom: 0; margin-top: var(--m-space-3); padding: var(--m-space-3) var(--m-space-4) var(--m-space-2);
+    background: linear-gradient(to top, var(--m-bg) 70%, transparent);
+  }
+  .m-support__btn {
+    width: 100%; height: 52px; border: 0; border-radius: 26px; background: var(--m-primary); color: var(--m-on-primary);
+    font: 600 16px var(--m-font);
+    &:active { filter: brightness(0.92); }
+  }
+}

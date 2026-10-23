@@ -16,6 +16,8 @@
   import { toIpcArgs } from '../utils/ipc-args';
   import { fetchAnnouncements, type Announcement } from '../services/announcements';
   import AnnouncementBanner from '../components/AnnouncementBanner.svelte';
+  import { swipeTabs } from '../actions/swipeTabs';
+  import { isMobileMode } from '../platform/mobile';
   import {
     isHomeCustomTabConfigured,
     getMyTabLabel,
@@ -24,7 +26,6 @@
     saveHomeCustomTab,
     serializeHomeCustomTabData,
     setDefaultHomeTab,
-    setSavedHomeActiveTab,
     toFilterRequest,
     type HomeCustomTabData,
   } from '../utils/homeCustomTab';
@@ -305,12 +306,20 @@
     items = [];
   }
 
+  /** Свайп по списку (телефон): соседняя вкладка; «Моя вкладка» без входа пропускается как обычно. */
+  function swipeToTab(dir: 1 | -1): boolean {
+    const i = homeTabs.findIndex((t) => t.id === activeTab);
+    const next = homeTabs[i + dir];
+    if (!next) return false;
+    setActiveTab(next.id as HomeTabId);
+    return activeTab === next.id;
+  }
+
   function setActiveTab(tabId: HomeTabId) {
     if (tabId === activeTab) return;
     if (tabId === 'my' && !requireAuth()) return;
     saveViewStateWithScroll(HOME_VIEW_KEY(activeTab), homeSnapshot());
     activeTab = tabId;
-    void setSavedHomeActiveTab(tabId);
 
     const cached = getViewState<HomeViewState>(HOME_VIEW_KEY(tabId));
     if (cached?.data && cached.data.items.length > 0) {
@@ -536,7 +545,7 @@
     {/snippet}
   </Tabs>
 
-  <div class="home-content">
+  <div class="home-content" use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode() }}>
     <div class="home-list">
       {#if loadState === 'unconfigured' || showMyTabEmpty}
         <div class="home-my-tab-empty">

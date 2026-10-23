@@ -8,7 +8,7 @@
   import { requestOpenExternal } from '../utils/external-link';
   import { showToast } from '../stores/toast';
   import { closeSupportModal, SUPPORT_BOT_USERNAME, supportModalOpen } from '../stores/support-promo';
-  import { SUPPORT_TIERS, type SupportTier } from '../utils/support-tiers';
+  import { SUPPORT_TIERS, mergeRemoteTiers, supportTierPerks as perks, type SupportTier } from '../utils/support-tiers';
   import defaultBadgeImg from '../assets/media/default.png';
 
   const open = $derived($supportModalOpen);
@@ -22,18 +22,7 @@
   $effect(() => {
     if (!open) return;
     void fetchBadgeCatalog().then((types) => {
-      tiers = SUPPORT_TIERS.map((t) => {
-        const remote = types.find((r) => r.slug === t.slug);
-        return remote
-          ? {
-              ...t,
-              name: remote.name,
-              price: remote.price ?? t.price,
-              description: remote.description ?? t.description,
-              agentDailyLimit: remote.agent_daily_limit ?? t.agentDailyLimit,
-            }
-          : t;
-      });
+      tiers = mergeRemoteTiers(types);
     });
   });
 
@@ -47,27 +36,6 @@
       avatar: p?.avatar ?? null,
     };
   });
-
-  /** «Значок … + чат-агент … + …. Доступ бессрочный.» → пункты; сам значок показан отдельно. */
-  function perks(t: SupportTier): string[] {
-    const list = (t.description ?? '')
-      .replace(/\s*Доступ бессрочный\.?\s*$/i, '')
-      .split(/\s+\+\s+/)
-      .map((s) => s.trim().replace(/\.$/, ''))
-      .filter((s) => s && !/^значок/i.test(s))
-      .map((s) => s.charAt(0).toUpperCase() + s.slice(1));
-    // Tiers differ by the agent's daily limit — the line that sets them apart.
-    if (t.agentDailyLimit > 0) list.push(`${t.agentDailyLimit} ${requestsWord(t.agentDailyLimit)} к агенту в день`);
-    return list;
-  }
-
-  function requestsWord(n: number): string {
-    const mod10 = n % 10;
-    const mod100 = n % 100;
-    if (mod10 === 1 && mod100 !== 11) return 'запрос';
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'запроса';
-    return 'запросов';
-  }
 
   function support() {
     requestOpenExternal(`https://t.me/${SUPPORT_BOT_USERNAME}`);

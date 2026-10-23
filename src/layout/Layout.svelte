@@ -7,7 +7,7 @@
   import { isAuthenticated, requireAuth } from '../stores/auth';
   import { ensureProfileId } from '../utils/profile';
   import { bindSearchHotkeys } from '../search-controller';
-  import { resolveCdnAssetUrl } from '../utils/posterUrl';
+  import { loadSelfProfileGlobal } from '../utils/profile';
   import { downloads } from '../stores/downloads';
 
   import TitleBar from '../components/TitleBar.svelte';
@@ -438,23 +438,9 @@
         void checkTeamMembership();
         return;
       }
-      window.anixApi.profile.self().then((data: any) => {
-        const profile = data?.profile;
-        if (!profile) {
-          (window as any).__anixProfile = undefined;
-          window.dispatchEvent(new CustomEvent('anix:profileUpdated'));
-          return;
-        }
-        const pid = profile.id ?? profile['@id'];
-        const idNum = typeof pid === 'number' ? pid : Number(pid);
-        (window as any).__anixProfile = {
-          id: Number.isFinite(idNum) && idNum > 0 ? idNum : undefined,
-          login: profile.login ?? profile.nickname ?? undefined,
-          avatar: profile.avatar ? resolveCdnAssetUrl(profile.avatar) : null,
-        };
-        window.dispatchEvent(new CustomEvent('anix:profileUpdated'));
-        void checkTeamMembership();
-      }).catch(() => {});
+      void loadSelfProfileGlobal().then((found) => {
+        if (found) void checkTeamMembership();
+      });
     }
 
     loadSelfProfile();

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isMobileMode } from '../../../platform/mobile';
   import { navigate } from '../../../stores/navigation';
   import RelatedReleaseRow from '../../../components/RelatedReleaseRow.svelte';
   import type { ReleaseCardData } from '../../../types/release';
@@ -138,6 +139,7 @@
             isCurrent={isCurrent}
             isFirst={index === 0}
             isLast={index === preview.length - 1}
+            compact={isMobileMode()}
           />
         </div>
       {/each}

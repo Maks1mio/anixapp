@@ -1,11 +1,13 @@
 <script lang="ts">
+  import { isMobileMode } from "../platform/mobile";
   import RelatedReleaseRow from "../components/RelatedReleaseRow.svelte";
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { getSearchParams } from '../router';
   import type { ReleaseCardData } from '../types/release';
   import { mapReleaseRawToCard } from '../utils/release-card';
   import { headlineFromLoadError } from '../utils/content-load-error';
+  import { infiniteScroll } from '../actions/infiniteScroll';
 
   interface Props {
     /** Franchise related id (GET /related/{id}/{page}) */
@@ -37,9 +39,6 @@
   let loadState = $state<'loading' | 'error' | 'empty' | 'ready'>('loading');
   let errorMsg = $state('');
   let wrapEl: HTMLElement | undefined = $state();
-
-  let scrollEl: HTMLElement | null = null;
-  let scrollListener: (() => void) | null = null;
 
   let currentRowEl = $state<HTMLElement | undefined>();
   let bgVisible = $state(false);
@@ -141,16 +140,19 @@
     }
   }
 
-  function attachScroll() {
-    const el = wrapEl?.closest('.page__scroll') as HTMLElement | null;
-    if (!el) return;
-    scrollEl = el;
-    scrollListener = () => {
-      if (!hasMore || loading) return;
-      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-      if (distance < 200) loadPage();
-    };
-    el.addEventListener('scroll', scrollListener);
+  /** Сколько страниц догружать подряд, чтобы найти релиз, с которого пришли (у длинных франшиз он не на первой). */
+  const MAX_PAGES_TO_FIND_CURRENT = 10;
+
+  /** Догружаем страницы до текущего релиза и прокручиваем к нему — иначе его подсветку просто не видно. */
+  async function revealCurrent() {
+    if (currentReleaseId == null) return;
+    let guard = 0;
+    while (!items.some((it) => it.id === currentReleaseId) && hasMore && loadState === 'ready' && guard < MAX_PAGES_TO_FIND_CURRENT) {
+      guard += 1;
+      await loadPage();
+    }
+    await tick();
+    currentRowEl?.scrollIntoView({ block: 'center' });
   }
 
   onMount(() => {
@@ -159,12 +161,7 @@
       loadState = 'error';
       return;
     }
-    loadPage();
-    requestAnimationFrame(attachScroll);
-  });
-
-  onDestroy(() => {
-    if (scrollEl && scrollListener) scrollEl.removeEventListener('scroll', scrollListener);
+    void loadPage().then(revealCurrent);
   });
 </script>
 
@@ -201,9 +198,17 @@
               isFirst={index === 0}
               isLast={index === items.length - 1 && !hasMore}
               isCurrent={isCurrent}
+              mobileCard={isMobileMode()}
             />
           </div>
         {/each}
+        {#if hasMore}
+          <!-- сентинел вместо слушателя скролла: работает и в окне ПК, и в прокрутке документа на телефоне,
+               и когда первая страница целиком помещается на экран. Пересоздаётся на каждую страницу. -->
+          {#key items.length}
+            <div class="related__sentinel" aria-hidden="true" use:infiniteScroll={{ onLoad: () => void loadPage(), rootMargin: '400px' }}></div>
+          {/key}
+        {/if}
         {#if loading}
           <div class="related__loading">Загрузка…</div>
         {/if}

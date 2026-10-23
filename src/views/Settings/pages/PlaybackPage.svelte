@@ -37,8 +37,12 @@
   } from '../../Watch/core/surround-audio';
   import { initWebGpuAvailability } from '../../../utils/webgpu-availability.svelte';
   import { isMac } from '../../../utils/platform';
+  import { hasAppSettingsStore, loadAppSettings, saveAppSettings } from '../../../utils/app-settings';
+  import { isMobileMode } from '../../../platform/mobile';
 
   const modKey = isMac ? '⌘' : 'Ctrl';
+  /** Телефон: клавиатурных биндов и окон-инструментов нет — остаются только интервалы перемотки. */
+  const touchOnly = isMobileMode();
 
   type BindField = PlayerHotkeyBindField;
 
@@ -67,9 +71,9 @@
   const mappedUpscale = $derived(mapAnime4kPreset({ type: upscaleType, intensity: upscaleIntensity }));
 
   async function loadPlayback() {
-    if (!window.electron?.getSettings) return;
+    if (!hasAppSettingsStore()) return;
     gpuAvailable = await initWebGpuAvailability();
-    const settings = await window.electron.getSettings();
+    const settings = await loadAppSettings();
     const preset = normalizeAnime4kPreset(settings);
     upscaleType = preset.type;
     upscaleIntensity = preset.intensity;
@@ -83,7 +87,7 @@
 
   function saveUpscale() {
     const mapped = mapAnime4kPreset({ type: upscaleType, intensity: upscaleIntensity });
-    window.electron?.saveSettings?.({
+    saveAppSettings({
       upscaleEnabled: mapped.enabled,
       upscaleMode: mapped.mode,
       upscaleType,
@@ -109,26 +113,26 @@
   }
 
   function saveSurround() {
-    window.electron?.saveSettings?.({ audioSurround });
+    saveAppSettings({ audioSurround });
     window.dispatchEvent(new CustomEvent('anix:surroundChanged', {
       detail: { audioSurround },
     }));
   }
 
   function savePlayerDebug() {
-    window.electron?.saveSettings?.({ playerDebugOverlay });
+    saveAppSettings({ playerDebugOverlay });
     window.dispatchEvent(new CustomEvent('anix:playerDebugChanged', { detail: { playerDebugOverlay } }));
   }
 
   function saveAdaptiveQuality() {
-    window.electron?.saveSettings?.({ adaptiveQualityByWindow });
+    saveAppSettings({ adaptiveQualityByWindow });
     window.dispatchEvent(new CustomEvent('anix:adaptiveQualityChanged', { detail: { adaptiveQualityByWindow } }));
   }
 
   function saveHotkeys(next: PlayerHotkeysSettings) {
     const normalized = normalizePlayerHotkeys(next);
     hotkeys = { ...normalized };
-    void window.electron?.saveSettings?.({ playerHotkeys: { ...normalized } });
+    void saveAppSettings({ playerHotkeys: { ...normalized } });
     window.electron?.sendPlayerHotkeys?.(normalized);
     window.dispatchEvent(new CustomEvent('anix:playerHotkeysChanged', { detail: { ...normalized } }));
   }
@@ -169,8 +173,8 @@
 </script>
 
 <div class="uiv2-settings">
-  {#if !window.electron?.getSettings}
-    <p class="uiv2-settings__status">Настройки воспроизведения доступны только в приложении Electron.</p>
+  {#if !hasAppSettingsStore()}
+    <p class="uiv2-settings__status">Настройки воспроизведения недоступны: хранилище настроек отключено.</p>
   {:else if !playbackLoaded}
     <p class="uiv2-settings__status">Загрузка…</p>
   {:else}
@@ -186,9 +190,9 @@
     {/if}
 
     <section class="uiv2-settings__block">
-      <h3 class="uiv2-settings__title">Горячие клавиши</h3>
+      <h3 class="uiv2-settings__title">{touchOnly ? 'Перемотка' : 'Горячие клавиши'}</h3>
       <div class="uiv2-settings__group">
-        {#each HOTKEY_ROWS as row (row.field)}
+        {#each touchOnly ? [] : HOTKEY_ROWS as row (row.field)}
           <UiV2SettingsRow title={row.title} desc={row.desc}>
             <button
               type="button"
@@ -205,7 +209,7 @@
         <UiV2SettingsRow
           stack
           title="Время пропуска"
-          desc="На сколько секунд прыгать клавишами перемотки (по умолчанию ← / →)."
+          desc={touchOnly ? 'На сколько секунд прыгать кнопками перемотки в плеере.' : 'На сколько секунд прыгать клавишами перемотки (по умолчанию ← / →).'}
         >
           <div class="uiv2-settings__chips" role="group" aria-label="Время пропуска">
             {#each SEEK_SECONDS_OPTIONS as sec (sec)}
@@ -223,7 +227,7 @@
         <UiV2SettingsRow
           stack
           title="Время перемотки"
-          desc={`Прыжок вперёд кнопкой перемотки и клавишей ${formatHotkeyCode(hotkeys.rewindCode)}. По умолчанию — 1:25, как в AniXart.`}
+          desc={touchOnly ? 'Прыжок вперёд кнопкой перемотки. По умолчанию — 1:25, как в AniXart.' : `Прыжок вперёд кнопкой перемотки и клавишей ${formatHotkeyCode(hotkeys.rewindCode)}. По умолчанию — 1:25, как в AniXart.`}
         >
           <div class="uiv2-settings__chips" role="group" aria-label="Время перемотки">
             {#each REWIND_SECONDS_OPTIONS as sec (sec)}
@@ -251,6 +255,7 @@
           </label>
         </UiV2SettingsRow>
 
+        {#if !touchOnly}
         <UiV2SettingsRow
           title="{modKey} + колёсико — скорость"
           desc="Плавно ускорять и замедлять видео. Текущая скорость показывается на экране плеера."
@@ -273,6 +278,7 @@
             onclick={() => saveHotkeys({ ...DEFAULT_PLAYER_HOTKEYS })}
           />
         </UiV2SettingsRow>
+        {/if}
       </div>
     </section>
 
@@ -390,6 +396,7 @@
       </div>
     </section>
 
+    {#if !touchOnly}
     <section class="uiv2-settings__block">
       <h3 class="uiv2-settings__title">Качество потока</h3>
       <div class="uiv2-settings__group">
@@ -408,6 +415,7 @@
         </UiV2SettingsRow>
       </div>
     </section>
+    {/if}
 
     <section class="uiv2-settings__block">
       <h3 class="uiv2-settings__title">Отладка плеера</h3>
@@ -428,6 +436,7 @@
       </div>
     </section>
 
+    {#if !touchOnly}
     <section class="uiv2-settings__block">
       <h3 class="uiv2-settings__title">Инструменты разработки</h3>
       <div class="uiv2-settings__group">
@@ -444,6 +453,7 @@
         </UiV2SettingsRow>
       </div>
     </section>
+    {/if}
   {/if}
 </div>
 

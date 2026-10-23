@@ -51,6 +51,14 @@
   import TvLayout from './layout/TvLayout.svelte';
   import { isTvMode } from './platform/tv';
   import { isMobileMode } from './platform/mobile';
+  import MobileWatch from './views/Watch.mobile/page.svelte';
+
+  /** Телефон: свой плеер под пальцы; лобби и локальные файлы — в полном desktop-плеере. */
+  function useMobileWatch(): boolean {
+    if (!isMobileMode()) return false;
+    const q = new URLSearchParams(window.location.search);
+    return !q.get('localFile') && !q.get('lobby') && !q.get('lobbyCode') && !q.get('playbackMode');
+  }
   import MobileLayout from './layout/MobileLayout.svelte';
   import MobileDownloads from './views/MobileDownloads.svelte';
   import Login from './views/Login.svelte';
@@ -1089,7 +1097,11 @@
   {/if}
 
 {:else if isWatchRoute && !isTvMode()}
-  <WebPlayerShell />
+  {#if useMobileWatch()}
+    <MobileWatch />
+  {:else}
+    <WebPlayerShell />
+  {/if}
 
 {:else if isMobileMode()}
   <MobileLayout currentPath={path}>

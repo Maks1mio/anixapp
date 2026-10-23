@@ -3,6 +3,8 @@
   import ReleaseCardsGridSkeleton from '../components/ReleaseCardsGridSkeleton.svelte';
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import { headlineFromLoadError } from '../utils/content-load-error';
+  import { swipeTabs } from '../actions/swipeTabs';
+  import { isMobileMode } from '../platform/mobile';
   import UiV2CollectionCardSkeleton from '../components/uikit-v2/UiV2CollectionCardSkeleton.svelte';
   import CollectionCard from '../components/CollectionCard.svelte';
   import BookmarksToolbar from '../components/BookmarksToolbar.svelte';
@@ -726,6 +728,14 @@
     }
   }
 
+  function swipeToTab(dir: 1 | -1): boolean {
+    const i = TABS.findIndex((t) => t.id === activeTab);
+    const next = TABS[i + dir];
+    if (!next) return false;
+    void loadTab(next.id as TabId);
+    return true;
+  }
+
   async function loadTab(tabId: TabId, resetSort = false, force = false) {
     if (!TABS.some((t) => t.id === tabId)) {
       tabId = TABS[0]?.id ?? 'watching';
@@ -1069,7 +1079,7 @@
     onTabContextMenu={isListsPage ? undefined : handleTabContextMenu}
   />
 
-  <div class="bookmarks__content">
+  <div class="bookmarks__content" use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode() }}>
     <div class="bookmarks__grid">
       {#if loadState === 'loading'}
         {#if isCollectionsTab}

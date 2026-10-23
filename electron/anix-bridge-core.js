@@ -68,6 +68,137 @@ function createAnixBridgeCore(options = {}) {
     if ('token' in partial || 'baseUrl' in partial) anixart = null;
   }
 
+  // ── Сохранённые аккаунты (зеркало electron/lib/accounts-store.js; поле accounts того же web-config.json) ──
+  function getAccounts() {
+    const raw = readJson(configPath, {});
+    let accounts = (Array.isArray(raw.accounts) ? raw.accounts : [])
+      .filter((a) => a && Number(a.id) > 0 && a.token);
+    const activeId = Number(raw.profileId) || 0;
+    if (activeId > 0 && raw.token) {
+      const cur = accounts.find((a) => Number(a.id) === activeId);
+      if (!cur || cur.token !== raw.token || (raw.profileLogin && cur.login !== raw.profileLogin)) {
+        accounts = [
+          {
+            ...cur,
+            id: activeId,
+            login: raw.profileLogin || cur?.login || `ID ${activeId}`,
+            avatar: raw.profileAvatar || cur?.avatar || null,
+            token: raw.token,
+            profileRaw: raw.profileRaw ?? cur?.profileRaw ?? null,
+          },
+          ...accounts.filter((a) => Number(a.id) !== activeId),
+        ];
+        saveConfig({ accounts });
+      }
+    }
+    return accounts;
+  }
+
+  function activateAccount(account) {
+    saveConfig({
+      token: account.token,
+      profileId: account.id,
+      profileLogin: account.login,
+      profileAvatar: account.avatar ?? null,
+      profileRaw: account.profileRaw ?? null,
+    });
+  }
+
+  function clearActiveSession() {
+    saveConfig({ token: null, profileId: null, profileLogin: null, profileAvatar: null, profileRaw: null });
+  }
+
+  function removeSavedAccount(id) {
+    const activeId = Number(loadConfig().profileId) || 0;
+    const rest = getAccounts().filter((a) => Number(a.id) !== id);
+    saveConfig({ accounts: rest });
+    if (activeId !== id) return { success: true, switched: false };
+    if (rest[0]) {
+      activateAccount(rest[0]);
+      return { success: true, switched: true, profileId: rest[0].id };
+    }
+    clearActiveSession();
+    return { success: true, switched: false, loggedOut: true };
+  }
+
+  /** Успешный вход: прежний аккаунт остаётся в списке быстрой смены. */
+  function applyLoginSuccess(profile, token) {
+    const accounts = getAccounts();
+    const id = Number(profile?.id) || 0;
+    if (id > 0) {
+      saveConfig({
+        accounts: [
+          { id, login: profile?.login || `ID ${id}`, avatar: profile?.avatar ?? null, token, profileRaw: profile || null },
+          ...accounts.filter((a) => Number(a.id) !== id),
+        ],
+      });
+    }
+    saveConfig({
+      token,
+      profileId: profile?.id ?? null,
+      profileLogin: profile?.login ?? null,
+      profileAvatar: profile?.avatar ?? null,
+      profileRaw: profile || null,
+    });
+  }
+
+  // ── Вход через сервисы: токен сервиса получает телефон (нативное окно AnixOAuth), здесь — только Anixart ──
+  /** @type {{ provider: string, token: string, email: string | null } | null} */
+  let pendingOAuthSignup = null;
+
+  async function loginWithOAuthToken(provider, rawToken) {
+    const token = String(rawToken || '').trim();
+    if (!token) return { success: false, error: `${provider}_no_token` };
+    pendingOAuthSignup = null;
+    const auth = createClient({ token: undefined }).endpoints.auth;
+    let res;
+    if (provider === 'vk') res = await auth.signInWithVk({ vkAccessToken: token });
+    else if (provider === 'google') res = await auth.signInWithGoogle({ googleIdToken: token });
+    else if (provider === 'telegram') res = await auth.signInWithTelegram({ telegramIdToken: token });
+    else if (provider === 'yandex') res = await auth.signInWithYandex({ yandexAccessToken: token });
+    else return { success: false, error: 'unknown_provider' };
+    if (res?.code === DefaultResult.Ok && res?.profileToken?.token) {
+      applyLoginSuccess(res.profile, res.profileToken.token);
+      return { success: true };
+    }
+    if (res?.code === 3 /* OAuthAuthResult.NotRegistered */) {
+      pendingOAuthSignup = { provider, token, email: res?.email || null };
+      return {
+        success: false,
+        needsSignup: true,
+        code: res.code,
+        email: res?.email || null,
+        suggestedLogins: Array.isArray(res?.suggested_logins) ? res.suggested_logins : null,
+      };
+    }
+    return { success: false, code: res?.code };
+  }
+
+  async function completeOAuthSignUp(payload) {
+    const pending = pendingOAuthSignup;
+    if (!pending) return { success: false, error: 'no_pending_oauth' };
+    const login = String(payload?.login || '').trim();
+    const email = String(payload?.email || pending.email || '').trim();
+    if (!login || !email) return { success: false, error: 'login_email_required' };
+    const auth = createClient({ token: undefined }).endpoints.auth;
+    const { provider, token } = pending;
+    let res;
+    if (provider === 'vk') res = await auth.signUpWithVk({ login, email, vkAccessToken: token });
+    else if (provider === 'google') res = await auth.signUpWithGoogle({ login, email, googleIdToken: token });
+    else if (provider === 'telegram') res = await auth.signUpWithTelegram({ login, email, telegramIdToken: token });
+    else res = await auth.signUpWithYandex({ login, email, yandexAccessToken: token });
+    if (res?.code === DefaultResult.Ok && res?.profileToken?.token) {
+      pendingOAuthSignup = null;
+      applyLoginSuccess(res.profile, res.profileToken.token);
+      return { success: true };
+    }
+    const suggestedLogins = Array.isArray(res?.suggested_logins) ? res.suggested_logins : null;
+    if (res?.hash) {
+      return { success: false, code: res.code, needsVerify: true, hash: res.hash, codeTimestampExpires: res.codeTimestampExpires, suggestedLogins };
+    }
+    return { success: false, code: res?.code, suggestedLogins };
+  }
+
   function createClient({ baseUrl, token, backupFailover = true } = {}) {
     const cfg = loadConfig();
     let client = attachLegacyEndpoints(new Anixart({
@@ -159,14 +290,7 @@ function createAnixBridgeCore(options = {}) {
       const profile = res?.profile;
       const profileToken = res?.profileToken;
       if (code === DefaultResult.Ok && profileToken?.token) {
-        c.saveConfig({
-          token: profileToken.token,
-          profileId: profile?.id ?? null,
-          profileLogin: profile?.login ?? null,
-          profileAvatar: profile?.avatar ?? null,
-          profileRaw: profile || null,
-        });
-        c.resetClient();
+        applyLoginSuccess(profile, profileToken.token);
         return { success: true };
       }
       return { success: false, code };
@@ -361,24 +485,62 @@ function createAnixBridgeCore(options = {}) {
       if (code === 0) return { success: true, code };
       return { success: false, code };
     }),
-    'anix:oauthCompleteSignUp': async () => ({
-      success: false,
-      error: 'oauth_electron_only',
+    'anix:loginOAuthToken': async (_c, [provider, token]) => loginWithOAuthToken(String(provider || '').toLowerCase(), token),
+    'anix:bindOAuthToken': h(async (c, provider, rawToken) => {
+      const p = String(provider || '').toLowerCase();
+      const token = String(rawToken || '').trim();
+      if (!token) return { success: false, error: `${p}_no_token` };
+      const pref = c.getClient().endpoints.profilePreference;
+      let res;
+      if (p === 'vk') res = await pref.vkBind({ accessToken: token });
+      else if (p === 'google') res = await pref.googleBind({ idToken: token });
+      else if (p === 'telegram') res = await pref.telegramBind({ idToken: token });
+      else if (p === 'yandex') res = await pref.yandexBind({ accessToken: token });
+      else return { success: false, error: 'unknown_provider' };
+      const code = res?.code ?? -1;
+      if (code === 0) return { success: true, code };
+      return { success: false, code };
     }),
-    'anix:oauthClearPending': async () => ({ ok: true }),
+    'anix:oauthCompleteSignUp': async (_c, [payload]) => completeOAuthSignUp(payload),
+    'anix:oauthClearPending': async () => {
+      pendingOAuthSignup = null;
+      return { ok: true };
+    },
     'anix:oauthSubmitUrl': async () => ({ success: false, error: 'oauth_electron_only' }),
     'anix:oauthCancel': async () => ({ ok: true }),
-    'anix:logout': async (c) => {
-      const { baseUrl } = c.loadConfig();
-      c.saveConfig({
-        token: null,
-        profileId: null,
-        profileLogin: null,
-        profileAvatar: null,
-        profileRaw: null,
-        baseUrl,
-      });
-      c.resetClient();
+    'anix:logout': async () => {
+      // То же, что «удалить из списка» для активного аккаунта
+      const activeId = Number(loadConfig().profileId) || 0;
+      if (!(activeId > 0)) {
+        clearActiveSession();
+        return { switched: false, loggedOut: true };
+      }
+      const { switched, profileId, loggedOut } = removeSavedAccount(activeId);
+      return { switched, profileId, loggedOut };
+    },
+    'anix:listAccounts': async () => {
+      const activeId = Number(loadConfig().profileId) || 0;
+      return {
+        accounts: getAccounts().map((a) => ({
+          id: Number(a.id),
+          login: a.login,
+          avatar: a.avatar || a.profileRaw?.avatar || null,
+          active: Number(a.id) === activeId,
+        })),
+      };
+    },
+    'anix:switchAccount': async (_c, [profileId]) => {
+      const id = Number(profileId) || 0;
+      const account = getAccounts().find((a) => Number(a.id) === id);
+      if (!account) return { success: false, error: 'not_found' };
+      if (id === (Number(loadConfig().profileId) || 0)) return { success: true, alreadyActive: true };
+      activateAccount(account);
+      return { success: true, profileId: id };
+    },
+    'anix:removeAccount': async (_c, [profileId]) => {
+      const id = Number(profileId) || 0;
+      if (!(id > 0)) return { success: false, error: 'bad_id' };
+      return removeSavedAccount(id);
     },
     'anix:getBaseUrl': async (c) => c.loadConfig().baseUrl,
     'anix:setBaseUrl': async (c, [baseUrl]) => {

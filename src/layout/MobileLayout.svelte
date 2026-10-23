@@ -343,6 +343,15 @@
 
   .m-fullscreen--profile {
     z-index: 20; /* ниже таб-бара (30): профиль — вкладка, а не модалка */
+    /* Высота фиксирована окном: панель профиля (и редактор внутри неё) скроллит свой .page__scroll, как на desktop.
+       Иначе цепочка height:100% у слайдов не определена и прокрутка не работает. */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+
+    > :global(.m-topbar) { flex: none; }
+    > :global(.profile-panel) { flex: 1 1 0; min-height: 0; }
+    :global(.page__scroll) { overscroll-behavior: contain; }
 
     /* вкладку закрывает таб-бар и системное «назад» — desktop-крестик не нужен */
     :global(.profile-panel__close) { display: none !important; }

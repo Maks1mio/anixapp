@@ -7,6 +7,7 @@ import { isTvMode } from '../platform/tv';
 import { tvBridgeInvokeUrl } from '../constants/tv-bridge';
 
 const CONFIG_KEY = 'anixapp.native.config';
+const ACCOUNTS_KEY = 'anixapp.native.accounts';
 const CUSTOM_TAB_KEY = 'anixapp.homeCustomFilters';
 const DEFAULT_BASE_URL = 'https://api-s.anixsekai.com';
 
@@ -25,6 +26,16 @@ type NativeConfig = {
   profileLogin: string | null;
   profileAvatar: string | null;
   profileRaw: Record<string, unknown> | null;
+};
+
+/** Mirror of electron/lib/accounts-store.js: сохранённые сессии для быстрой смены аккаунта. */
+type SavedAccount = {
+  id: number;
+  login: string;
+  avatar: string | null;
+  token: string;
+  profileRaw: Record<string, unknown> | null;
+  updatedAt: number;
 };
 
 type Handler = (c: BridgeCtx, args: unknown[]) => Promise<unknown>;
@@ -153,6 +164,184 @@ export function createBrowserAnixBridge() {
     anixart = null;
   }
 
+  function normalizeAccounts(raw: unknown): SavedAccount[] {
+    if (!Array.isArray(raw)) return [];
+    const out: SavedAccount[] = [];
+    for (const item of raw as any[]) {
+      const id = toPositiveInt(item?.id);
+      const token = String(item?.token || '');
+      if (id == null || !token) continue;
+      out.push({
+        id,
+        login: String(item.login || '').trim() || `ID ${id}`,
+        avatar: item.avatar ? String(item.avatar) : null,
+        token,
+        profileRaw: item.profileRaw ?? null,
+        updatedAt: Number(item.updatedAt) || Date.now(),
+      });
+    }
+    return out;
+  }
+
+  function writeAccounts(accounts: SavedAccount[]) {
+    try {
+      localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+    } catch { /* ignore */ }
+  }
+
+  function upsertAccount(list: SavedAccount[], entry: Omit<SavedAccount, 'updatedAt'>): SavedAccount[] {
+    const prev = list.find((a) => a.id === entry.id);
+    const next: SavedAccount = {
+      id: entry.id,
+      login: String(entry.login || prev?.login || '').trim() || `ID ${entry.id}`,
+      avatar: entry.avatar || prev?.avatar || null,
+      token: entry.token,
+      profileRaw: entry.profileRaw ?? prev?.profileRaw ?? null,
+      updatedAt: Date.now(),
+    };
+    return [next, ...list.filter((a) => a.id !== entry.id)];
+  }
+
+  /** Список аккаунтов; активная сессия всегда в нём (миграция со старых версий). */
+  function getAccounts(): SavedAccount[] {
+    let accounts = normalizeAccounts(readJson<unknown>(ACCOUNTS_KEY, []));
+    const cfg = loadConfig();
+    const activeId = toPositiveInt(cfg.profileId);
+    if (activeId != null && cfg.token) {
+      const cur = accounts.find((a) => a.id === activeId);
+      if (!cur || cur.token !== cfg.token || cur.login !== (cfg.profileLogin || cur.login) || (cfg.profileAvatar && cur.avatar !== cfg.profileAvatar)) {
+        const updatedAt = cur?.updatedAt ?? Date.now();
+        accounts = upsertAccount(accounts, {
+          id: activeId,
+          login: cfg.profileLogin || cur?.login || '',
+          avatar: cfg.profileAvatar,
+          token: cfg.token,
+          profileRaw: cfg.profileRaw,
+        }).map((a) => (a.id === activeId ? { ...a, updatedAt } : a));
+        writeAccounts(accounts);
+      }
+    }
+    return accounts;
+  }
+
+  function activateAccount(account: SavedAccount) {
+    saveConfig({
+      token: account.token,
+      profileId: account.id,
+      profileLogin: account.login,
+      profileAvatar: account.avatar,
+      profileRaw: account.profileRaw,
+    });
+    writeAccounts(upsertAccount(getAccounts(), account));
+    resetClient();
+  }
+
+  function clearActiveSession() {
+    saveConfig({ token: null, profileId: null, profileLogin: null, profileAvatar: null, profileRaw: null });
+    resetClient();
+  }
+
+  /** Убрать аккаунт из списка; если он был активным — переключиться на следующий или выйти. */
+  function removeSavedAccount(id: number) {
+    const activeId = toPositiveInt(loadConfig().profileId);
+    const rest = getAccounts().filter((a) => a.id !== id);
+    writeAccounts(rest);
+    if (activeId !== id) return { success: true, switched: false };
+    const fallback = rest[0];
+    if (fallback) {
+      activateAccount(fallback);
+      return { success: true, switched: true, profileId: fallback.id };
+    }
+    clearActiveSession();
+    return { success: true, switched: false, loggedOut: true };
+  }
+
+  /** Успешный вход: прежний аккаунт остаётся в списке быстрой смены, новый становится активным. */
+  function applyLoginSuccess(profile: any, token: string) {
+    // getAccounts() кладёт текущую активную сессию в список до перезаписи конфига
+    let accounts = getAccounts();
+    const newId = toPositiveInt(profile?.id);
+    if (newId != null) {
+      accounts = upsertAccount(accounts, {
+        id: newId,
+        login: profile?.login ?? '',
+        avatar: profile?.avatar ?? null,
+        token,
+        profileRaw: profile || null,
+      });
+      writeAccounts(accounts);
+    }
+    saveConfig({
+      token,
+      profileId: profile?.id ?? null,
+      profileLogin: profile?.login ?? null,
+      profileAvatar: profile?.avatar ?? null,
+      profileRaw: profile || null,
+    });
+    resetClient();
+  }
+
+  type OAuthProvider = 'vk' | 'google' | 'telegram' | 'yandex';
+  /** Сервис подтвердил личность, но аккаунта Anixart нет — ждём никнейм/email (как pendingOAuthSignup в electron). */
+  let pendingOAuthSignup: { provider: OAuthProvider; token: string; email: string | null } | null = null;
+
+  /** Токен сервиса получает веб-слой (src/native/anix-oauth.ts) — здесь только вход в Anixart по нему. */
+  async function loginWithOAuthToken(provider: OAuthProvider, rawToken: unknown) {
+    const token = String(rawToken || '').trim();
+    if (!token) return { success: false, error: `${provider}_no_token` };
+    pendingOAuthSignup = null;
+    const auth = createClient({ token: undefined }).endpoints.auth;
+    const res = provider === 'vk'
+      ? await auth.signInWithVk({ vkAccessToken: token })
+      : provider === 'google'
+        ? await auth.signInWithGoogle({ googleIdToken: token })
+        : provider === 'telegram'
+          ? await auth.signInWithTelegram({ telegramIdToken: token })
+          : await auth.signInWithYandex({ yandexAccessToken: token });
+    if (res?.code === DefaultResult.Ok && res?.profileToken?.token) {
+      applyLoginSuccess(res.profile, res.profileToken.token);
+      return { success: true };
+    }
+    if (res?.code === 3 /* OAuthAuthResult.NotRegistered */) {
+      pendingOAuthSignup = { provider, token, email: res?.email || null };
+      return {
+        success: false,
+        needsSignup: true,
+        code: res.code,
+        email: res?.email || null,
+        suggestedLogins: Array.isArray(res?.suggested_logins) ? res.suggested_logins : null,
+      };
+    }
+    return { success: false, code: res?.code };
+  }
+
+  async function completeOAuthSignUp(payload: any) {
+    const pending = pendingOAuthSignup;
+    if (!pending) return { success: false, error: 'no_pending_oauth' };
+    const login = String(payload?.login || '').trim();
+    const email = String(payload?.email || pending.email || '').trim();
+    if (!login || !email) return { success: false, error: 'login_email_required' };
+    const auth = createClient({ token: undefined }).endpoints.auth;
+    const { provider, token } = pending;
+    const res = provider === 'vk'
+      ? await auth.signUpWithVk({ login, email, vkAccessToken: token })
+      : provider === 'google'
+        ? await auth.signUpWithGoogle({ login, email, googleIdToken: token })
+        : provider === 'telegram'
+          ? await auth.signUpWithTelegram({ login, email, telegramIdToken: token })
+          : await auth.signUpWithYandex({ login, email, yandexAccessToken: token });
+    if (res?.code === DefaultResult.Ok && res?.profileToken?.token) {
+      pendingOAuthSignup = null;
+      applyLoginSuccess(res.profile, res.profileToken.token);
+      return { success: true };
+    }
+    const suggestedLogins = Array.isArray(res?.suggested_logins) ? res.suggested_logins : null;
+    if (res?.hash) {
+      return { success: false, code: res.code, needsVerify: true, hash: res.hash, codeTimestampExpires: res.codeTimestampExpires, suggestedLogins };
+    }
+    return { success: false, code: res?.code, suggestedLogins };
+  }
+
   const ctx = (): BridgeCtx => ({
     getClient,
     createClient,
@@ -183,14 +372,7 @@ export function createBrowserAnixBridge() {
       const profile = res?.profile;
       const profileToken = res?.profileToken;
       if (res?.code === DefaultResult.Ok && profileToken?.token) {
-        c.saveConfig({
-          token: profileToken.token,
-          profileId: profile?.id ?? null,
-          profileLogin: profile?.login ?? null,
-          profileAvatar: profile?.avatar ?? null,
-          profileRaw: profile || null,
-        });
-        c.resetClient();
+        applyLoginSuccess(profile, profileToken.token);
         return { success: true };
       }
       return { success: false, code: res?.code };
@@ -225,26 +407,72 @@ export function createBrowserAnixBridge() {
       const client = c.createClient({ token: undefined });
       return client.endpoints.auth.restoreResend(payload);
     },
+    // Без нативного окна входа (TV) сервисы недоступны; на телефоне anix-api-web шлёт anix:loginOAuthToken
     'anix:loginVk': async () => ({ success: false, error: 'oauth_electron_only' }),
     'anix:loginGoogle': async () => ({ success: false, error: 'oauth_electron_only' }),
     'anix:loginTelegram': async () => ({ success: false, error: 'oauth_electron_only' }),
     'anix:loginYandex': async () => ({ success: false, error: 'oauth_electron_only' }),
     'anix:bindOAuthService': async () => ({ success: false, error: 'oauth_electron_only' }),
+    'anix:loginOAuthToken': async (_c, [provider, token]) => loginWithOAuthToken(provider as OAuthProvider, token),
+    'anix:bindOAuthToken': h(async (c, provider, rawToken) => {
+      const p = String(provider || '').toLowerCase();
+      const token = String(rawToken || '').trim();
+      if (!token) return { success: false, error: `${p}_no_token` };
+      const pref = c.getClient().endpoints.profilePreference;
+      const res = p === 'vk'
+        ? await pref.vkBind({ accessToken: token })
+        : p === 'google'
+          ? await pref.googleBind({ idToken: token })
+          : p === 'telegram'
+            ? await pref.telegramBind({ idToken: token })
+            : p === 'yandex'
+              ? await pref.yandexBind({ accessToken: token })
+              : null;
+      if (!res) return { success: false, error: 'unknown_provider' };
+      const code = res?.code ?? -1;
+      return code === DefaultResult.Ok ? { success: true, code } : { success: false, code };
+    }),
     'anix:unbindOAuthService': h(async (c, provider) => c.getClient().endpoints.auth.unbindOAuth?.(provider)),
-    'anix:oauthCompleteSignUp': async () => ({ success: false, error: 'oauth_electron_only' }),
-    'anix:oauthClearPending': async () => ({ ok: true }),
+    'anix:oauthCompleteSignUp': async (_c, [payload]) => completeOAuthSignUp(payload),
+    'anix:oauthClearPending': async () => {
+      pendingOAuthSignup = null;
+      return { ok: true };
+    },
     'anix:oauthSubmitUrl': async () => ({ success: false, error: 'oauth_electron_only' }),
     'anix:oauthCancel': async () => ({ ok: true }),
-    'anix:logout': async (c) => {
-      c.saveConfig({
-        token: null,
-        profileId: null,
-        profileLogin: null,
-        profileAvatar: null,
-        profileRaw: null,
-      });
-      c.resetClient();
-      return { ok: true };
+    'anix:logout': async () => {
+      // То же, что «удалить из списка» для активного аккаунта
+      const activeId = toPositiveInt(loadConfig().profileId);
+      if (activeId == null) {
+        clearActiveSession();
+        return { switched: false, loggedOut: true };
+      }
+      const { switched, profileId, loggedOut } = removeSavedAccount(activeId);
+      return { switched, profileId, loggedOut };
+    },
+    'anix:listAccounts': async () => {
+      const activeId = toPositiveInt(loadConfig().profileId);
+      return {
+        accounts: getAccounts().map((a) => ({
+          id: a.id,
+          login: a.login,
+          avatar: a.avatar || ((a.profileRaw as any)?.avatar ?? null),
+          active: a.id === activeId,
+        })),
+      };
+    },
+    'anix:switchAccount': async (_c, [profileId]) => {
+      const id = toPositiveInt(profileId);
+      const account = id == null ? null : getAccounts().find((a) => a.id === id);
+      if (!account) return { success: false, error: 'not_found' };
+      if (account.id === toPositiveInt(loadConfig().profileId)) return { success: true, alreadyActive: true };
+      activateAccount(account);
+      return { success: true, profileId: account.id };
+    },
+    'anix:removeAccount': async (_c, [profileId]) => {
+      const id = toPositiveInt(profileId);
+      if (id == null) return { success: false, error: 'bad_id' };
+      return removeSavedAccount(id);
     },
     'anix:getBaseUrl': async (c) => c.loadConfig().baseUrl,
     'anix:setBaseUrl': async (c, [baseUrl]) => {

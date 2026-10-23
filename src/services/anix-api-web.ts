@@ -3,7 +3,7 @@
  * Dev: Vite middleware /__anix/invoke.
  * Android TV: нативный мост (anixapi + CapacitorHttp).
  */
-import type { AnixApi } from '../types/api';
+import type { AnixApi, OAuthBindResult, OAuthSignInResult } from '../types/api';
 import { getNativeInvoke, initNativeAnixApi } from '../native/anix-api-native';
 
 function invokeUrl(): string {
@@ -27,6 +27,38 @@ async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
   return json.data as T;
 }
 
+type OAuthProvider = 'vk' | 'google' | 'telegram' | 'yandex';
+
+/**
+ * Телефон: токен сервиса берём нативным окном входа (AnixOAuth) здесь, а мосту — локальному или
+ * Vite /__anix в live-APK — отдаём уже готовый токен. Без плагина — прежние каналы (desktop-dev / TV).
+ */
+async function nativeOAuthToken(provider: OAuthProvider): Promise<{ token?: string; result?: unknown } | null> {
+  const oauth = await import('../native/anix-oauth');
+  if (!oauth.isNativeOAuthAvailable()) return null;
+  try {
+    return { token: await oauth.getOAuthToken(provider) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { result: msg === 'cancelled' ? { success: false, cancelled: true } : { success: false, error: msg } };
+  }
+}
+
+async function oauthSignIn(provider: OAuthProvider, fallbackChannel: string): Promise<OAuthSignInResult> {
+  const got = await nativeOAuthToken(provider);
+  if (!got) return invoke(fallbackChannel);
+  if (got.result) return got.result as OAuthSignInResult;
+  return invoke('anix:loginOAuthToken', provider, got.token);
+}
+
+async function oauthBind(provider: OAuthProvider): Promise<OAuthBindResult> {
+  const p = provider;
+  const got = await nativeOAuthToken(p);
+  if (!got) return invoke('anix:bindOAuthService', provider);
+  if (got.result) return got.result as OAuthBindResult;
+  return invoke('anix:bindOAuthToken', p, got.token);
+}
+
 function buildWebAnixApi(): AnixApi {
   return {
     client: {
@@ -47,10 +79,10 @@ function buildWebAnixApi(): AnixApi {
 
     auth: {
       signIn: (username, password) => invoke('anix:login', username, password),
-      signInWithVk: () => invoke('anix:loginVk'),
-      signInWithGoogle: () => invoke('anix:loginGoogle'),
-      signInWithTelegram: () => invoke('anix:loginTelegram'),
-      signInWithYandex: () => invoke('anix:loginYandex'),
+      signInWithVk: () => oauthSignIn('vk', 'anix:loginVk'),
+      signInWithGoogle: () => oauthSignIn('google', 'anix:loginGoogle'),
+      signInWithTelegram: () => oauthSignIn('telegram', 'anix:loginTelegram'),
+      signInWithYandex: () => oauthSignIn('yandex', 'anix:loginYandex'),
       signUp: (payload) => invoke('anix:signUp', payload),
       signUpVerify: (payload) => invoke('anix:signUpVerify', payload),
       signUpResend: (payload) => invoke('anix:signUpResend', payload),
@@ -62,9 +94,12 @@ function buildWebAnixApi(): AnixApi {
       clearOAuthPending: () => invoke('anix:oauthClearPending'),
       submitOAuthUrl: (url: string) => invoke('anix:oauthSubmitUrl', url),
       cancelOAuth: () => invoke('anix:oauthCancel'),
-      bindOAuthService: (provider: string) => invoke('anix:bindOAuthService', provider),
+      bindOAuthService: (provider) => oauthBind(provider),
       unbindOAuthService: (provider: string) => invoke('anix:unbindOAuthService', provider),
       logout: () => invoke('anix:logout'),
+      listAccounts: () => invoke('anix:listAccounts'),
+      switchAccount: (profileId: number) => invoke('anix:switchAccount', profileId),
+      removeAccount: (profileId: number) => invoke('anix:removeAccount', profileId),
       getStatus: () => invoke('anix:getAuthStatus'),
     },
 

@@ -203,8 +203,8 @@
   function mapOAuthError(result: OAuthSignInResult | null | undefined, provider: OAuthProvider): string {
     if (!result) return `Ошибка входа через ${providerLabel[provider]}.`;
     if (result.cancelled) return '';
-    if (result.error === 'oauth_electron_only') {
-      return 'Вход через сервисы доступен только в приложении (Electron).';
+    if (result.error === 'oauth_electron_only' || result.error === 'oauth_unavailable') {
+      return 'Вход через сервисы недоступен в этой сборке — обновите приложение.';
     }
     if (result.error === 'timeout') return 'Время ожидания авторизации истекло.';
     if (result.error) return `Ошибка: ${result.error}`;

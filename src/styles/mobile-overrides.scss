@@ -623,6 +623,22 @@ html.mobile-mode {
       &--social-discord { border-color: #5865f2 !important; background: transparent !important; }
       &--social-inst { border-color: #e1306c !important; background: transparent !important; }
     }
+
+    // «Редактировать профиль»: строки 16/14sp по краю гаттера, подписи секций — мелкие вторичные, как в Anixart
+    .profile-panel__edit-menu { padding: 0 0 var(--m-space-5); }
+    .profile-panel__edit-row {
+      gap: 2px; min-height: 56px; justify-content: center; padding: 10px var(--m-gutter);
+      -webkit-tap-highlight-color: transparent;
+      &:hover { background: transparent; }
+      &:active:not(:disabled) { background: var(--m-surface-block); }
+    }
+    .profile-panel__edit-row-title { font: 400 16px/1.3 var(--m-font); color: var(--m-text); }
+    .profile-panel__edit-row-sub { font: 400 14px/1.3 var(--m-font); color: var(--m-text-2); }
+    .profile-panel__edit-section {
+      margin: var(--m-space-2) 0 0; padding: var(--m-space-3) var(--m-gutter) var(--m-space-1);
+      font: 500 14px/1.3 var(--m-font); color: var(--m-text-2);
+    }
+    .profile-panel__edit-divider { margin: var(--m-space-3) var(--m-gutter); background: var(--m-outline-variant); }
   }
 }
 

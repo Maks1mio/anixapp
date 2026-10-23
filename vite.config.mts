@@ -20,6 +20,10 @@ export default defineConfig(({ command, mode }) => {
   const proxyKey = mobileBuild
     ? (process.env.ANIXART_PROXY_APP_KEY || loadEnv(mode, rootDir, '').ANIXART_PROXY_APP_KEY || '')
     : '';
+  // Firebase Web API key (Anixart) — для входа через Google на телефоне: id_token Google → Firebase id_token
+  const firebaseKey = mobileBuild
+    ? (process.env.FIREBASE_API_KEY || loadEnv(mode, rootDir, '').FIREBASE_API_KEY || '')
+    : '';
 
   return {
   root: rootDir,
@@ -29,6 +33,7 @@ export default defineConfig(({ command, mode }) => {
   appType: 'spa',
   define: {
     __ANIXART_PROXY_KEY__: JSON.stringify(proxyKey),
+    __ANIXAPP_FIREBASE_KEY__: JSON.stringify(firebaseKey),
     __ANIXAPP_VERSION__: JSON.stringify(appVersion),
   },
   plugins: [svelte({ preprocess: vitePreprocess() }), anixWebBridgePlugin()],

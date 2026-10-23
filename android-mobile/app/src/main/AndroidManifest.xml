@@ -57,6 +57,15 @@
             android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
+        <!-- Вход через сервисы: страница авторизации с перехватом redirect -->
+        <activity
+            android:name=".ui.OAuthActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:exported="false" />
+
         <service
             android:name=".playback.PlaybackService"
             android:foregroundServiceType="mediaPlayback"

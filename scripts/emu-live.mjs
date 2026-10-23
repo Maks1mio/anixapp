@@ -417,12 +417,29 @@ const androidDir = path.join(root, cfg.androidDir);
 const apk = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
 const stampFile = path.join(androidDir, 'app', 'build', 'anix-live.json');
 
+/** Самый свежий mtime среди файлов каталога (рекурсивно). */
+function newestMtime(dir) {
+  let newest = 0;
+  if (!existsSync(dir)) return newest;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    newest = Math.max(newest, entry.isDirectory() ? newestMtime(full) : statSync(full).mtimeMs);
+  }
+  return newest;
+}
+
 function liveApkUpToDate() {
   if (flag('--rebuild') || !existsSync(apk) || !existsSync(stampFile)) return false;
   try {
     const stamp = JSON.parse(readFileSync(stampFile, 'utf8'));
+    const apkTime = statSync(apk).mtimeMs;
+    // Нативный код / манифест / ресурсы правили после сборки — HMR их не доставит, нужна новая APK
+    if (newestMtime(path.join(androidDir, 'app', 'src')) > apkTime) {
+      console.log('→ нативный код изменился после сборки live APK — пересобираю');
+      return false;
+    }
     // APK новее штампа → его перезаписала обычная (не live) сборка
-    return stamp.url === liveUrl && statSync(apk).mtimeMs <= statSync(stampFile).mtimeMs;
+    return stamp.url === liveUrl && apkTime <= statSync(stampFile).mtimeMs;
   } catch {
     return false;
   }

@@ -294,7 +294,7 @@
     data-placement={side}
     style:left="{tipLeft}px"
     style:top="{tipTop}px"
-    use:portal
+    use:portal={{ lock: false }}
     transition:scale={{ duration: 140, start: 0.97, easing: cubicOut }}
     onmouseenter={onTipEnter}
     onmouseleave={onTipLeave}

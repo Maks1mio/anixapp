@@ -86,7 +86,7 @@
     style:--arrow-bottom={anchor ? `${anchor.arrowBottom}px` : undefined}
     style:max-width={anchor ? `${anchor.maxWidth}px` : undefined}
     aria-label="Поддержать Anixapp"
-    use:portal
+    use:portal={{ lock: false }}
     transition:fade={{ duration: 180 }}
   >
     <button type="button" class="support-promo__badge" aria-label="Подробнее об Anix+" onclick={details}>

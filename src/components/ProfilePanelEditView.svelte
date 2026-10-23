@@ -5,7 +5,7 @@
   import { showToast } from '../stores/toast';
   import { formatHistoryViewTime } from '../utils/historyFormat';
   import UiV2BackBar from './uikit-v2/UiV2BackBar.svelte';
-  import UiV2ChoiceSheet from './uikit-v2/UiV2ChoiceSheet.svelte';
+  import UiV2ChoiceSheet, { type UiV2ChoiceOption } from './uikit-v2/UiV2ChoiceSheet.svelte';
   import UiV2OutlinedField from './uikit-v2/UiV2OutlinedField.svelte';
   import UserBadge from './UserBadge.svelte';
   import ProfilePanelHealthView from './ProfilePanelHealthView.svelte';
@@ -145,6 +145,9 @@
   let coverInputEl = $state<HTMLInputElement | undefined>();
 
   let logoutBusy = $state(false);
+  let accountsPickerOpen = $state(false);
+  let accountsBusy = $state(false);
+  let savedAccounts = $state<{ id: number; login: string; active: boolean }[]>([]);
 
   let currentBadgeName = $state<string | null>(null);
   let currentBadgeUrl = $state<string | null>(null);
@@ -993,6 +996,62 @@
     }
   }
 
+  const ADD_ACCOUNT = 'add';
+
+  const otherAccountsCount = $derived(savedAccounts.filter((a) => !a.active).length);
+
+  const accountOptions = $derived<UiV2ChoiceOption[]>([
+    ...savedAccounts.map((a) => ({
+      value: a.id,
+      label: a.login || `ID ${a.id}`,
+      description: a.active ? 'Текущий аккаунт' : undefined,
+    })),
+    { value: ADD_ACCOUNT, label: 'Добавить аккаунт', description: 'Войти в ещё одну учётную запись' },
+  ]);
+
+  async function refreshSavedAccounts() {
+    try {
+      const res = await window.anixApi?.auth?.listAccounts?.();
+      savedAccounts = Array.isArray(res?.accounts) ? res.accounts : [];
+    } catch {
+      savedAccounts = [];
+    }
+  }
+
+  async function openAccountsPicker() {
+    await refreshSavedAccounts();
+    accountsPickerOpen = true;
+  }
+
+  async function onAccountPicked(value: string | number) {
+    if (value === ADD_ACCOUNT) {
+      accountsPickerOpen = false;
+      const { openLoginPrompt } = await import('../stores/auth');
+      openLoginPrompt();
+      return;
+    }
+    const id = Number(value);
+    if (accountsBusy || savedAccounts.find((a) => a.id === id)?.active) {
+      accountsPickerOpen = false;
+      return;
+    }
+    accountsBusy = true;
+    try {
+      const res = await window.anixApi?.auth?.switchAccount?.(id);
+      if (!res?.success) throw new Error('switch failed');
+      if (!res.alreadyActive) {
+        const { applyAccountSessionChange } = await import('../stores/auth');
+        await applyAccountSessionChange();
+        return;
+      }
+      accountsPickerOpen = false;
+    } catch {
+      showToast('Не удалось переключить аккаунт', 'err');
+    } finally {
+      accountsBusy = false;
+    }
+  }
+
   function fmtNextChange(ts: number | null): string {
     if (!ts) return '';
     try {
@@ -1076,6 +1135,7 @@
 
   onMount(() => {
     void loadSettings();
+    void refreshSavedAccounts();
   });
 </script>
 
@@ -1095,6 +1155,21 @@
     <div class="profile-panel__edit-menu">
       <button type="button" class="profile-panel__edit-row" onclick={() => void logout()} disabled={logoutBusy}>
         <span class="profile-panel__edit-row-title">Выйти из учетной записи</span>
+        {#if otherAccountsCount > 0}
+          <span class="profile-panel__edit-row-sub">Вы перейдёте на другой сохранённый аккаунт</span>
+        {/if}
+      </button>
+      <button type="button" class="profile-panel__edit-row" onclick={() => void openAccountsPicker()} disabled={accountsBusy}>
+        <span class="profile-panel__edit-row-title">Переключиться на другой аккаунт</span>
+        <span class="profile-panel__edit-row-sub">
+          {#if accountsBusy}
+            Переключение…
+          {:else if otherAccountsCount > 0}
+            Сохранённых аккаунтов: {otherAccountsCount}
+          {:else}
+            Добавить аккаунт для быстрой смены
+          {/if}
+        </span>
       </button>
 
       <div class="profile-panel__edit-divider" aria-hidden="true"></div>
@@ -1144,15 +1219,12 @@
         <span class="profile-panel__edit-row-sub">{showcasePreview}</span>
       </button>
 
-      <div class="profile-panel__edit-divider" aria-hidden="true"></div>
-
-      <h3 class="profile-panel__edit-section">Мои социальные сети</h3>
       <button type="button" class="profile-panel__edit-row" onclick={() => { screen = 'social'; }}>
-        <span class="profile-panel__edit-row-title">Укажите ссылки на свои страницы в соц. сетях</span>
+        <span class="profile-panel__edit-row-title">Мои социальные сети</span>
+        <span class="profile-panel__edit-row-sub">Укажите ссылки на свои страницы в соц. сетях</span>
       </button>
 
       <div class="profile-panel__edit-divider" aria-hidden="true"></div>
-
 
       <h3 class="profile-panel__edit-section">Лента</h3>
       <button type="button" class="profile-panel__edit-row" onclick={() => { screen = 'hiddenChannels'; }}>
@@ -1383,6 +1455,17 @@
       disabled={privacySaving}
       onClose={closePrivacyPicker}
       onSelect={(v) => void setPrivacy(picker.kind, Number(v))}
+    />
+  {/if}
+
+  {#if accountsPickerOpen}
+    <UiV2ChoiceSheet
+      title="Аккаунты"
+      options={accountOptions}
+      value={savedAccounts.find((a) => a.active)?.id ?? profileId}
+      disabled={accountsBusy}
+      onClose={() => { accountsPickerOpen = false; }}
+      onSelect={(v) => void onAccountPicked(v)}
     />
   {/if}
 

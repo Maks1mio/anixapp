@@ -534,7 +534,7 @@
       class="titlebar-island__layer"
       class:titlebar-island__layer--visible={layerVisible}
       class:titlebar-island__layer--closing={closing}
-      use:portal={'body'}
+      use:portal={{ lock: false }}
     >
       <button
         type="button"

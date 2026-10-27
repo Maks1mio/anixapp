@@ -21,6 +21,7 @@ import {
   sendFluoPreviewFrame,
   catchUpFluoPlayback,
   computeFluoPosition,
+  fluoServerNow,
   kickFluoParticipant,
   transferFluoHost,
   getFluoRoomSettings,
@@ -107,7 +108,7 @@ export function setLobbyRoom(
       },
       paused: options.playback.paused !== false,
       mediaOrigin: typeof options.playback.currentTime === 'number' ? options.playback.currentTime : 0,
-      t0: Date.now(),
+      t0: fluoServerNow(),
       rate: 1,
       seq: 1,
     };

@@ -19,6 +19,7 @@ import {
 } from '../types';
 import { logFluoAction } from '../action-log';
 import { createFluoRoomWithOptions, joinFluoRoomWithPassword, FluoJoinError } from '../rooms-api';
+import { createFluoClockOffset, fluoClockSample } from './clock-offset';
 
 export type FluoProfilePayload = {
   profileId?: number;
@@ -59,6 +60,8 @@ let localControlUntil = 0;
 let lastPartySignature = '';
 /** После join не даём локальным play/seek с t≈0 откатить живые часы комнаты. */
 let joinGraceUntil = 0;
+/** Расхождение локальных часов с сервером; не сбрасываем между комнатами — это свойство машины. */
+const serverClockOffset = createFluoClockOffset();
 
 const RECONNECT_MS = 3000;
 const MAX_RECONNECT = 10;
@@ -156,13 +159,18 @@ export function isFluoChatEnabled(): boolean {
   return roomSettings.chatEnabled;
 }
 
-export function computeFluoPosition(c: FluoClockState, now = Date.now()): number {
+/** Текущее время по часам сервера (t0 в часах комнаты — серверное). */
+export function fluoServerNow(): number {
+  return Date.now() + serverClockOffset.offsetMs();
+}
+
+export function computeFluoPosition(c: FluoClockState, now = fluoServerNow()): number {
   if (c.paused) return c.mediaOrigin;
   const elapsed = Math.max(0, (now - c.t0) / 1000) * (c.rate || 1);
   return Math.max(0, c.mediaOrigin + elapsed);
 }
 
-function computePosition(c: FluoClockState, now = Date.now()): number {
+function computePosition(c: FluoClockState, now = fluoServerNow()): number {
   return computeFluoPosition(c, now + rttMs / 2);
 }
 
@@ -482,9 +490,28 @@ function handleMessage(raw: string): void {
     const t1 = Number(msg.t0);
     const t2 = typeof msg.t2 === 'number' ? Number(msg.t2) : t1;
     rttMs = Math.max(0, t3 - t0);
-    // offset sample unused — position uses rtt/2
-    void t1;
-    void t2;
+    const sample = fluoClockSample(t0, t1, t2, t3);
+    if (!sample) return;
+    const prevOffset = serverClockOffset.offsetMs();
+    const offset = serverClockOffset.add(sample);
+    // Оценка заметно сдвинулась (первый замер при сбитых часах) — догоняем позицию,
+    // которую до этого посчитали по локальным часам.
+    if (
+      Math.abs(offset - prevOffset) >= HARD_SEEK * 1000
+      && roomId
+      && clock?.content
+      && !clock.paused
+      && !roomBarrier
+      && Date.now() >= localControlUntil
+    ) {
+      logFluoAction({
+        origin: 'system',
+        action: 'clock.offset',
+        detail: { offsetMs: Math.round(offset), rttMs: Math.round(sample.rttMs) },
+        via: 'ws',
+      });
+      applyClockToPlayer(clock, true);
+    }
     return;
   }
 
@@ -1093,7 +1120,7 @@ export function pushFluoCommand(
       content: cmd.content,
       paused: cmd.paused,
       mediaOrigin: cmd.currentTime,
-      t0: Date.now(),
+      t0: fluoServerNow(),
       rate: 1,
       seq: (clock?.seq ?? lastAppliedSeq) + 1,
     };

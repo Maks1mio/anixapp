@@ -43,6 +43,7 @@ function run(cmd, args, cwd = root) {
     shell: process.platform === 'win32',
   });
   if (result.status !== 0) {
+    if (result.error) console.error(`${cmd}: ${result.error.message}`);
     process.exit(result.status ?? 1);
   }
 }
@@ -68,8 +69,12 @@ writeFileSync(
 );
 
 run('npx', ['cap', 'sync', 'android']);
-const gradlew = process.platform === 'win32' ? 'gradlew.bat' : './gradlew';
-run(gradlew, ['assembleDebug'], androidDir);
+// gradlew лежит в git без +x — на Linux/macOS запускаем через sh, как в build-android-mobile.
+const gradlew = process.platform === 'win32' ? 'gradlew.bat' : 'sh';
+const gradlewArgs = process.platform === 'win32'
+  ? ['assembleDebug', '--no-daemon', '--console=plain']
+  : ['./gradlew', 'assembleDebug', '--no-daemon', '--console=plain'];
+run(gradlew, gradlewArgs, androidDir);
 
 const apkSrc = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
 if (!existsSync(apkSrc)) {

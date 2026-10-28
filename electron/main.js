@@ -50,7 +50,9 @@ function ensureWindowsNotificationIdentity() {
     fs.mkdirSync(programs, { recursive: true });
     const shortcutPath = path.join(programs, `${APP_DISPLAY_NAME}.lnk`);
     const appRoot = path.join(electronDir, '..');
-    const iconPath = getIconPath();
+    // В сборке public/logo лежит внутри app.asar — Windows не читает иконки из архива
+    // и рисует пустой лист. Берём иконку, встроенную в AnixApp.exe.
+    const iconPath = app.isPackaged ? process.execPath : getIconPath();
     const options = {
       target: process.execPath,
       args: app.isPackaged ? '' : `"${appRoot}"`,

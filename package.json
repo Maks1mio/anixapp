@@ -61,7 +61,7 @@
         "@typescript-eslint/parser": "^8.50.1",
         "concurrently": "^10.0.5",
         "cross-env": "^10.1.0",
-        "electron": "44.5.1",
+        "electron": "44.9.1",
         "electron-builder": "^26.15.3",
         "esbuild": "^0.28.2",
         "eslint": "^9.39.2",

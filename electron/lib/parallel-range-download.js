@@ -55,7 +55,6 @@ function requestOnce(url, {
         method,
         headers: { ...headers },
         agent,
-        rejectUnauthorized: insecure ? false : undefined,
       }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           res.resume();

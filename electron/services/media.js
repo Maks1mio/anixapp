@@ -321,7 +321,7 @@ async function sessionFetchBufferForHls(url, headers = {}, signal = null, opts =
     const raw = extractRawMessage(err);
     if (raw === 'cancelled' || signal?.aborted) throw new Error('cancelled');
     if (opts.insecureTls) throw err;
-    // SSL CDN: повтор без проверки сертификата (как retry у Kodik на SSLError)
+    // SSL CDN: повтор с допуском просроченного сертификата (цепочка и хост проверяются)
     if (/CERT_|UNABLE_TO_VERIFY|certificate|SSL|TLS|ERR_CERT/i.test(raw)) {
       try {
         return await nodeFetchBuffer(url, headers, signal, { insecureTls: true, timeoutMs: HLS_SEGMENT_IDLE_TIMEOUT_MS });

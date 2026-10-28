@@ -48,8 +48,17 @@ function getHttpFetcher() {
 
 /**
  * Chromium session.fetch падает на просроченном LE (CERT_DATE / ERR_FAILED).
- * Node https с rejectUnauthorized:false для CDN — как рабочий /__cdn в Vite.
+ * Node https с допуском только просроченного сертификата (цепочка и хост проверяются).
  */
+let cdnHttpsAgent = null;
+function getCdnHttpsAgent() {
+  if (!cdnHttpsAgent) {
+    const { ExpiredCertTolerantAgent } = require('./lib/tls-expired-tolerant');
+    cdnHttpsAgent = new ExpiredCertTolerantAgent({ keepAlive: true });
+  }
+  return cdnHttpsAgent;
+}
+
 function nodeCdnGet(url, headers, timeoutMs, redirectsLeft = 5) {
   return new Promise((resolve, reject) => {
     let parsed;
@@ -63,7 +72,7 @@ function nodeCdnGet(url, headers, timeoutMs, redirectsLeft = 5) {
     const req = lib.get(url, {
       headers,
       timeout: timeoutMs,
-      rejectUnauthorized: false,
+      agent: parsed.protocol === 'http:' ? undefined : getCdnHttpsAgent(),
     }, (res) => {
       const loc = res.headers.location;
       if (res.statusCode >= 300 && res.statusCode < 400 && loc && redirectsLeft > 0) {

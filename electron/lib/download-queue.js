@@ -11,6 +11,7 @@ const persist = require('./download-queue-persist');
 const { toKodikHlsUrl } = require('./media-proxy');
 const throttle = require('./download-throttle');
 const { isPathInside } = require('./safe-path');
+const { ExpiredCertTolerantAgent } = require('./tls-expired-tolerant');
 
 const MIN_PLAYABLE_BYTES = 512 * 1024;
 
@@ -27,13 +28,12 @@ const httpsAgent = new https.Agent({
   maxFreeSockets: 512,
   scheduling: 'lifo',
 });
-/** Fallback для CDN с битым/просроченным сертификатом (solodcdn и т.п.). */
-const httpsInsecureAgent = new https.Agent({
+/** Fallback для CDN с просроченным сертификатом (solodcdn и т.п.): игнорирует только срок действия. */
+const httpsInsecureAgent = new ExpiredCertTolerantAgent({
   keepAlive: true,
   maxSockets: 2048,
   maxFreeSockets: 512,
   scheduling: 'lifo',
-  rejectUnauthorized: false,
 });
 
 /**
@@ -280,7 +280,6 @@ function nodeFetchBuffer(url, headers = {}, signal = null, opts = {}) {
         method: 'GET',
         headers: { ...headers },
         agent,
-        rejectUnauthorized: insecure ? false : undefined,
       }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           res.resume();
@@ -347,7 +346,6 @@ function nodeFetchStreamToFile(url, outputPath, headers = {}, onProgress = null,
         method: 'GET',
         headers: { ...headers },
         agent,
-        rejectUnauthorized: insecure ? false : undefined,
       };
       const req = rlib.request(rOpts, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
@@ -758,10 +756,10 @@ async function runJob(job, deps) {
                 ? fresh.headers
                 : job.headers;
             }
-          } catch (_) { /* continue with insecure fallback */ }
+          } catch (_) { /* continue with expired-cert fallback */ }
         }
 
-        // 2) Повтор: сначала нормальный TLS, потом без проверки сертификата CDN
+        // 2) Повтор: сначала нормальный TLS, потом с допуском только просроченного сертификата CDN
         try {
           await runOnce(false);
         } catch (err2) {

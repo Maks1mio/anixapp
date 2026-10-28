@@ -19,7 +19,10 @@ const { app, BrowserWindow, shell } = require('electron');
 
 /** Имя в системных уведомлениях / доке вместо «Electron». */
 const APP_DISPLAY_NAME = 'AnixApp';
-const APP_USER_MODEL_ID = 'com.anixapp.client';
+const { isDevPrev, applyDevPrevProfile } = require('./lib/dev-prev-profile');
+const DEV_PREV = isDevPrev();
+// dev-prev — отдельная группа на панели задач, чтобы не склеиваться с установленным AnixApp.
+const APP_USER_MODEL_ID = DEV_PREV ? 'com.anixapp.client.dev-prev' : 'com.anixapp.client';
 app.setName(APP_DISPLAY_NAME);
 // setName меняет и путь userData: оставляем прежнюю папку «anixapp», иначе на Linux
 // после обновления теряются данные, а на macOS не показываются картинки в уведомлениях
@@ -33,6 +36,8 @@ if (process.platform === 'win32') {
 /** Windows: без ярлыка с AUMID тосты подписываются как «Electron». */
 function ensureWindowsNotificationIdentity() {
   if (process.platform !== 'win32') return;
+  // Ярлык AnixApp.lnk общий с установленной версией — dev-prev его не перезаписывает.
+  if (DEV_PREV) return;
   try {
     const fs = require('fs');
     const programs = path.join(
@@ -65,6 +70,11 @@ function ensureWindowsNotificationIdentity() {
 // TV dev can run alongside desktop dev (separate userData → separate single-instance lock).
 if (process.env.ANIXAPP_TV === '1') {
   app.setPath('userData', path.join(app.getPath('userData'), '-tv-dev'));
+}
+
+// Дев рядом с установленной прод-версией (npm run electron:dev-prev).
+if (DEV_PREV) {
+  applyDevPrevProfile(app);
 }
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;

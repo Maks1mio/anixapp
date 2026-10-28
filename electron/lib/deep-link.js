@@ -63,6 +63,8 @@ function findDeepLinkInArgv(argv) {
  * @param {string} protocol
  */
 function registerOneProtocol(app, protocol) {
+  // dev-prev не перехватывает anixart:// у установленной версии.
+  if (process.env.ANIXAPP_DEV_PREV === '1') return;
   if (process.defaultApp) {
     if (process.argv.length >= 2) {
       app.setAsDefaultProtocolClient(protocol, process.execPath, [path.resolve(process.argv[1])]);

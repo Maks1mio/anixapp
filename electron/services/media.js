@@ -12,6 +12,7 @@ const config = require('../lib/config-store');
 const state = require('../lib/app-state');
 const { formatDownloadError, extractRawMessage } = require('../lib/download-errors');
 const downloadQueue = require('../lib/download-queue');
+const downloadThrottle = require('../lib/download-throttle');
 const { nodeFetchBuffer } = downloadQueue;
 const { saveFolderMeta, getFolderMeta, parseEpisodeFromFilename } = require('../lib/download-meta');
 const { writeSkipSidecar, readSkipSidecar, normalizeSkipMarks } = require('../lib/skip-marks');
@@ -31,6 +32,9 @@ const media = {
 
 function register(deps) {
   const { appendLog, getAnixart } = deps;
+  try {
+    downloadThrottle.setLimit(config.getDownloadSpeedLimitMBps() * 1024 * 1024);
+  } catch (_) { /* без лимита */ }
 
 async function refreshDownloadUrl(job) {
   const releaseId = Number(job?.releaseId);
@@ -212,6 +216,7 @@ function sessionFetchStreamToFile(url, outputPath, headers = {}, onProgress = nu
       res.on('data', (chunk) => {
         received += chunk.length;
         ws.write(chunk);
+        downloadThrottle.throttleStream(res, chunk.length);
         const now = Date.now();
         if (onProgress && now - lastEmit >= 300) {
           lastEmit = now;
@@ -339,7 +344,10 @@ async function downloadHlsToFile(m3u8Url, outputPath, headers = {}, onProgress =
   const fetchBuffer = async (url, hdrs, sig) => {
     const release = await globalSegmentBudget.acquire();
     try {
-      return await baseFetch(url, hdrs, sig);
+      const buf = await baseFetch(url, hdrs, sig);
+      // Лимит скорости: слот сегмента держим, пока «не оплатили» байты
+      await downloadThrottle.take(buf?.length || 0, sig);
+      return buf;
     } finally {
       release();
     }
@@ -745,6 +753,11 @@ ipcMain.handle('downloads:saveSettings', (_, payload) => {
   }
   if (typeof payload.autoClearFinished === 'boolean') {
     updates.downloadAutoClearFinished = payload.autoClearFinished;
+  }
+  if (payload.speedLimitMBps != null) {
+    const n = Number(payload.speedLimitMBps);
+    updates.downloadSpeedLimitMBps = Number.isFinite(n) && n > 0 ? Math.min(1000, Math.round(n * 10) / 10) : 0;
+    downloadThrottle.setLimit(updates.downloadSpeedLimitMBps * 1024 * 1024);
   }
   if (typeof payload.allAtOnce === 'boolean') {
     updates.downloadAllAtOnce = payload.allAtOnce;

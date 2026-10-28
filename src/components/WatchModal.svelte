@@ -1173,7 +1173,7 @@
                   {/if}
                   <UiV2Button label="Отметить все" onclick={() => confirmSetAllWatched(true)} disabled={actionBusy !== '' || remainingCount === 0} />
                   <UiV2Button label="Снять отметки" onclick={() => confirmSetAllWatched(false)} disabled={actionBusy !== '' || watchedCount === 0} />
-                  <UiV2Button label="Скачать" title="Скачать серии" ariaHaspopup="dialog" onclick={() => (desktopDlOpen = true)} disabled={!selectedSource || episodes.length === 0}>
+                  <UiV2Button label="Скачать" ariaHaspopup="dialog" onclick={() => (desktopDlOpen = true)} disabled={!selectedSource || episodes.length === 0}>
                     {#snippet icon()}{@html downloadIconSvg}{/snippet}
                   </UiV2Button>
                   <label class="watch-modal__desk-search">
@@ -1262,7 +1262,6 @@
                         class:watch-modal__episode-watch--on={watched}
                         aria-pressed={watched}
                         aria-label={watched ? 'Снять отметку' : 'Отметить просмотренной'}
-                        title={watched ? 'Снять отметку' : 'Отметить просмотренной'}
                         onclick={(e) => toggleEpisodeWatched(ep, e)}
                       >
                         {@html checkIconSvg}

@@ -15,6 +15,7 @@ const http = require('http');
 const https = require('https');
 const path = require('path');
 const { extractRawMessage } = require('./download-errors');
+const throttle = require('./download-throttle');
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -203,6 +204,7 @@ async function downloadRangeToFile(url, range, partPath, headers, signal, insecu
       got += chunk.length;
       ws.write(chunk);
       if (onBytes) onBytes(chunk.length);
+      await throttle.take(chunk.length, signal);
     }
     await new Promise((resolve, reject) => {
       ws.end(() => resolve());

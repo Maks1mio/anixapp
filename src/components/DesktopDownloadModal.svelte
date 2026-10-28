@@ -282,7 +282,6 @@
                 class:dl-modal__ep--on={on}
                 class:dl-modal__ep--disk={onDisk[ep.position]}
                 aria-pressed={on}
-                title={onDisk[ep.position] ? 'Уже скачана' : inQueue[ep.position] ? 'Уже в загрузках' : ep.name}
                 disabled={!!busy}
                 onclick={(e) => toggleEpisode(ep, e)}
               >

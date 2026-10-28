@@ -57,6 +57,8 @@ export interface DownloadSettings {
   /** false = по очереди (1 файл), true = все сразу */
   allAtOnce: boolean;
   autoClearFinished: boolean;
+  /** Лимит скорости загрузок, МБ/с; 0 — без ограничений */
+  speedLimitMBps: number;
 }
 
 const doneTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -75,6 +77,7 @@ const settingsStore = writable<DownloadSettings>({
   organizeByTitle: true,
   allAtOnce: false,
   autoClearFinished: true,
+  speedLimitMBps: 0,
 });
 const libraryStore = writable<DownloadLibraryGroup[]>([]);
 const resumeBlockedStore = writable(false);
@@ -165,6 +168,7 @@ function applySettingsPayload(data: Partial<DownloadSettings> & { directory?: st
     organizeByTitle: typeof data.organizeByTitle === 'boolean' ? data.organizeByTitle : s.organizeByTitle,
     allAtOnce: typeof data.allAtOnce === 'boolean' ? data.allAtOnce : s.allAtOnce,
     autoClearFinished: typeof data.autoClearFinished === 'boolean' ? data.autoClearFinished : s.autoClearFinished,
+    speedLimitMBps: typeof data.speedLimitMBps === 'number' ? data.speedLimitMBps : s.speedLimitMBps,
   }));
 }
 
@@ -182,6 +186,7 @@ function createDownloadsStore() {
     organizeByTitle?: boolean;
     allAtOnce?: boolean;
     autoClearFinished?: boolean;
+    speedLimitMBps?: number;
   }) {
     try {
       const res = await window.electron?.saveDownloadSettings?.(patch);
@@ -324,8 +329,36 @@ function createDownloadsStore() {
     try { await window.electron?.pauseDownload?.(id); } catch {}
   }
 
+  /** Поднять задачу наверх списка (main делает то же со своей очередью). */
+  function moveToFrontLocal(id: string) {
+    update((list) => {
+      const idx = list.findIndex((x) => x.id === id);
+      if (idx <= 0) return list;
+      const next = [...list];
+      const [e] = next.splice(idx, 1);
+      next.unshift(e);
+      return next;
+    });
+  }
+
+  /** «Продолжить» = скачивать сейчас: задача становится первой в очереди. */
   async function resumeEntry(id: string) {
-    try { await window.electron?.resumeDownload?.(id); } catch {}
+    try {
+      const res = await window.electron?.resumeDownload?.(id);
+      if (res?.ok !== false) moveToFrontLocal(id);
+    } catch {}
+  }
+
+  /** «Скачать сейчас» для задачи из очереди: наверх (и продолжить, если на паузе). */
+  async function startNow(id: string) {
+    const list = get({ subscribe });
+    const entry = list.find((x) => x.id === id);
+    if (!entry) return;
+    if (entry.status === 'paused') {
+      await resumeEntry(id);
+      return;
+    }
+    await reorderEntries([id, ...list.filter((x) => x.id !== id).map((x) => x.id)]);
   }
 
   async function retryEntry(id: string) {
@@ -455,6 +488,7 @@ function createDownloadsStore() {
     cancelEntry,
     pauseEntry,
     resumeEntry,
+    startNow,
     retryEntry,
     pauseAllActive,
     resumeAllActive,

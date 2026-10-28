@@ -194,11 +194,13 @@ declare global {
         organizeByTitle: boolean;
         allAtOnce: boolean;
         autoClearFinished: boolean;
+        speedLimitMBps?: number;
       }>;
       saveDownloadSettings?: (payload: {
         organizeByTitle?: boolean;
         allAtOnce?: boolean;
         autoClearFinished?: boolean;
+        speedLimitMBps?: number;
       }) => Promise<{
         ok: boolean;
         directory?: string;
@@ -206,6 +208,7 @@ declare global {
         organizeByTitle?: boolean;
         allAtOnce?: boolean;
         autoClearFinished?: boolean;
+        speedLimitMBps?: number;
       }>;
       resetDownloadDirectory?: () => Promise<{
         ok: boolean;

@@ -325,7 +325,15 @@ function buildDownloadSettingsPayload(data) {
     organizeByTitle: src.downloadOrganizeByTitle !== false,
     allAtOnce: src.downloadAllAtOnce === true,
     autoClearFinished: src.downloadAutoClearFinished !== false,
+    speedLimitMBps: getDownloadSpeedLimitMBps(src),
   };
+}
+
+/** Лимит скорости загрузок, МБ/с; 0 — без ограничений. */
+function getDownloadSpeedLimitMBps(data) {
+  const src = data && typeof data === 'object' ? data : (_configCache ?? _readConfigFromDisk());
+  const n = Number(src.downloadSpeedLimitMBps);
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 // ——— Уведомления устройства ———
@@ -486,6 +494,7 @@ module.exports = {
   clampParallelFiles,
   normalizeHlsPresets,
   getDownloadAllAtOnce,
+  getDownloadSpeedLimitMBps,
   getDownloadParallelFiles,
   getDownloadOrganizeByTitle,
   getDownloadAutoClearFinished,

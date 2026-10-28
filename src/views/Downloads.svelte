@@ -16,6 +16,8 @@
   import { formatDownloadErrorMessage } from '../utils/download-errors';
   import { queueMissingEpisodes } from '../utils/download-queue-client';
   import { navigate } from '../stores/navigation';
+  import { mapCardData } from './Release/_utils';
+  import { toPosterDisplayUrl } from '../utils/posterUrl';
   import { getCurrentRoomId } from '../services/lobby-state';
   import {
     buildViewStateKey,
@@ -31,6 +33,8 @@
     iconFolder,
     iconFileVideo,
     iconChevronRight,
+    iconChevronUp,
+    iconChevronDown,
     iconPlay,
     iconPause,
     iconX,
@@ -578,98 +582,80 @@
     return entry.filename;
   }
 
-  type QueueGroup = {
-    key: string;
-    title: string;
-    releaseId?: number;
-    items: DownloadEntry[];
-  };
+  /** Живая очередь в порядке main: первая — текущая (как в Steam), дальше «Далее». */
+  const liveItems = $derived(activeItems.filter((x) =>
+    x.status === 'queued'
+    || x.status === 'starting'
+    || x.status === 'downloading'
+    || x.status === 'paused',
+  ));
+  const finishedItems = $derived(activeItems.filter((x) =>
+    x.status === 'error' || x.status === 'cancelled' || x.status === 'done',
+  ));
+  const currentItem = $derived(liveItems[0] ?? null);
+  const upNextItems = $derived(liveItems.slice(1));
+  const totalSpeedBps = $derived(
+    liveItems.reduce((n, x) => n + (x.status === 'downloading' ? (x.speedBps ?? 0) : 0), 0),
+  );
 
-  const queueGroups = $derived.by((): QueueGroup[] => {
-    const live = activeItems.filter((x) =>
-      x.status === 'queued'
-      || x.status === 'starting'
-      || x.status === 'downloading'
-      || x.status === 'paused',
-    );
-    const finished = activeItems.filter((x) =>
-      x.status === 'error' || x.status === 'cancelled' || x.status === 'done',
-    );
-    const groups: QueueGroup[] = [];
-    const index = new Map<string, QueueGroup>();
-    for (const entry of live) {
-      const key = entry.releaseId != null
-        ? `id:${entry.releaseId}`
-        : `t:${entry.releaseTitle || entry.filename}`;
-      let g = index.get(key);
-      if (!g) {
-        g = {
-          key,
-          title: entry.releaseTitle || entry.filename || 'Загрузка',
-          releaseId: entry.releaseId,
-          items: [],
-        };
-        index.set(key, g);
-        groups.push(g);
-      }
-      g.items.push(entry);
+  /** В строке очереди номер серии первым — длинное название обрежется, а серия останется видна. */
+  function rowLabel(entry: DownloadEntry): string {
+    const title = (entry.releaseTitle || '').trim() || entry.filename;
+    const ep = entry.episodePosition;
+    return ep != null && ep > 0 ? `Серия ${ep} · ${title}` : title;
+  }
+
+  function heroStatus(entry: DownloadEntry): string {
+    if (entry.status === 'paused') return 'Приостановлено';
+    if (entry.status === 'starting') return 'Подготовка…';
+    if (entry.status === 'queued') return $downloadResumeBlocked ? 'Ждёт конца онлайн-просмотра' : 'В очереди';
+    return 'Загрузка';
+  }
+
+  // Постеры для карточек очереди (кэш на время жизни экрана)
+  let posters = $state<Record<number, string>>({});
+  const posterRequested = new Set<number>();
+  $effect(() => {
+    for (const e of liveItems) {
+      const rid = e.releaseId;
+      if (rid == null || posterRequested.has(rid) || !window.anixApi?.release?.info) continue;
+      posterRequested.add(rid);
+      void window.anixApi.release.info(rid, false)
+        .then((data) => {
+          const rel = data?.release as Record<string, unknown> | undefined;
+          const raw = rel ? mapCardData(rel).poster : '';
+          if (raw) posters = { ...posters, [rid]: toPosterDisplayUrl(raw, 'cardVertical') };
+        })
+        .catch(() => {});
     }
-    if (finished.length > 0) {
-      groups.push({
-        key: '__finished',
-        title: 'Завершённые',
-        items: finished,
-      });
-    }
-    return groups;
   });
 
   let dragJobId = $state<string | null>(null);
-  let dragGroupKey = $state<string | null>(null);
   let dropTargetJobId = $state<string | null>(null);
-  let dropTargetGroupKey = $state<string | null>(null);
+  let heroDropActive = $state(false);
   let deleteBusy = $state<string | null>(null);
 
-  function flatLiveIds(): string[] {
-    return queueGroups
-      .filter((g) => g.key !== '__finished')
-      .flatMap((g) => g.items.map((i) => i.id));
-  }
-
   async function applyReorder(nextIds: string[]) {
-    const finished = activeItems
-      .filter((x) => x.status === 'error' || x.status === 'cancelled' || x.status === 'done')
-      .map((x) => x.id);
-    await downloads.reorderEntries([...nextIds, ...finished]);
+    await downloads.reorderEntries([...nextIds, ...finishedItems.map((x) => x.id)]);
   }
 
   function onJobDragStart(e: DragEvent, id: string) {
     dragJobId = id;
-    dragGroupKey = null;
     e.dataTransfer?.setData('text/anix-job', id);
-    e.dataTransfer!.effectAllowed = 'move';
-  }
-
-  function onGroupDragStart(e: DragEvent, key: string) {
-    if (key === '__finished') return;
-    dragGroupKey = key;
-    dragJobId = null;
-    e.dataTransfer?.setData('text/anix-group', key);
     e.dataTransfer!.effectAllowed = 'move';
   }
 
   function onDragEnd() {
     dragJobId = null;
-    dragGroupKey = null;
     dropTargetJobId = null;
-    dropTargetGroupKey = null;
+    heroDropActive = false;
   }
 
   async function onJobDrop(e: DragEvent, targetId: string) {
     e.preventDefault();
     const fromJob = e.dataTransfer?.getData('text/anix-job') || dragJobId;
     if (fromJob && fromJob !== targetId) {
-      const ids = flatLiveIds();
+      const ids = liveItems.map((x) => x.id);
       const from = ids.indexOf(fromJob);
       const to = ids.indexOf(targetId);
       if (from >= 0 && to >= 0) {
@@ -681,26 +667,12 @@
     onDragEnd();
   }
 
-  async function onGroupDrop(e: DragEvent, targetKey: string) {
+  /** Бросили серию на текущую загрузку — качать её сейчас, текущая уходит в «Далее». */
+  async function onHeroDrop(e: DragEvent) {
     e.preventDefault();
-    if (targetKey === '__finished') return;
-    const fromKey = e.dataTransfer?.getData('text/anix-group') || dragGroupKey;
-    if (!fromKey || fromKey === targetKey || fromKey === '__finished') {
-      onDragEnd();
-      return;
-    }
-    const live = queueGroups.filter((g) => g.key !== '__finished');
-    const from = live.findIndex((g) => g.key === fromKey);
-    const to = live.findIndex((g) => g.key === targetKey);
-    if (from < 0 || to < 0) {
-      onDragEnd();
-      return;
-    }
-    const next = [...live];
-    const [block] = next.splice(from, 1);
-    next.splice(to, 0, block);
-    await applyReorder(next.flatMap((g) => g.items.map((i) => i.id)));
+    const fromJob = e.dataTransfer?.getData('text/anix-job') || dragJobId;
     onDragEnd();
+    if (fromJob && fromJob !== currentItem?.id) await downloads.startNow(fromJob);
   }
 
   async function confirmDeleteFile(file: DownloadLibraryFile) {
@@ -1011,6 +983,25 @@
     if (bps < 1024) return `${Math.round(bps)} Б/с`;
     if (bps < 1024 * 1024) return `${(bps / 1024).toFixed(0)} КБ/с`;
     return `${(bps / (1024 * 1024)).toFixed(1)} МБ/с`;
+  }
+
+  /** Последний включённый лимит — чтобы тумблер возвращал его, а не сбрасывал на дефолт. */
+  let lastSpeedLimit = $state(5);
+  $effect(() => {
+    if ($downloadSettings.speedLimitMBps > 0) lastSpeedLimit = $downloadSettings.speedLimitMBps;
+  });
+
+  /** Шаг стрелок: мелкий на малых лимитах, крупный на больших. */
+  function stepSpeedLimit(dir: 1 | -1) {
+    const cur = $downloadSettings.speedLimitMBps || lastSpeedLimit;
+    const step = cur < 5 || (dir < 0 && cur <= 5) ? 0.5 : cur < 20 || (dir < 0 && cur <= 20) ? 1 : 5;
+    const next = Math.round((cur + dir * step) * 10) / 10;
+    void downloads.saveSettings({ speedLimitMBps: Math.min(1000, Math.max(0.5, next)) });
+  }
+
+  function saveSpeedLimit(raw: string) {
+    const n = Math.round(Number(String(raw).replace(',', '.')) * 10) / 10;
+    void downloads.saveSettings({ speedLimitMBps: Number.isFinite(n) && n > 0 ? Math.min(1000, n) : lastSpeedLimit });
   }
 
   function onTabChange(id: string) {
@@ -1478,28 +1469,10 @@
       {/if}
     </UiV2Card>
   {:else if activeTab === 'active'}
-    <UiV2Card
-      title="Активные"
-      pill={String(activeItems.length)}
-      spaced
-      class="dl-v2-card"
-    >
+    <div class="dl-steam">
       <div class="dl-v2-toolbar">
-        <UiV2Button
-          label="Обновить библиотеку"
-          size="sm"
-          variant="ghost"
-          onclick={() => void downloads.loadLibrary()}
-        >
-          {#snippet icon()}{@html iconRefreshCw(14)}{/snippet}
-        </UiV2Button>
         {#if canPauseAll}
-          <UiV2Button
-            label="Пауза всем"
-            size="sm"
-            variant="chrome"
-            onclick={() => void downloads.pauseAllActive()}
-          >
+          <UiV2Button label="Пауза всем" size="sm" variant="chrome" onclick={() => void downloads.pauseAllActive()}>
             {#snippet icon()}{@html iconPause(14)}{/snippet}
           </UiV2Button>
         {/if}
@@ -1509,28 +1482,18 @@
             size="sm"
             variant="chrome"
             disabled={$downloadResumeBlocked}
-            title={$downloadResumeBlocked ? 'Пока идёт онлайн-просмотр, загрузки на паузе' : undefined}
             onclick={() => void downloads.resumeAllActive()}
           >
             {#snippet icon()}{@html iconPlay(14)}{/snippet}
           </UiV2Button>
         {/if}
-        {#if activeCount > 0 || queuedCount > 0 || pausedCount > 0}
-          <UiV2Button
-            label="Остановить все"
-            size="sm"
-            variant="danger"
-            onclick={() => void downloads.cancelAllActive()}
-          />
+        {#if liveItems.length > 0}
+          <UiV2Button label="Остановить все" size="sm" variant="danger" onclick={() => void downloads.cancelAllActive()} />
         {/if}
-        {#if errorCount > 0}
-          <UiV2Button
-            label="Очистить ошибки"
-            size="sm"
-            variant="ghost"
-            onclick={() => downloads.clearErrors()}
-          />
-        {/if}
+        <span class="dl-steam__toolbar-spacer"></span>
+        <UiV2Button label="Обновить библиотеку" size="sm" variant="ghost" onclick={() => void downloads.loadLibrary()}>
+          {#snippet icon()}{@html iconRefreshCw(14)}{/snippet}
+        </UiV2Button>
       </div>
 
       {#if $downloadResumeBlocked}
@@ -1539,192 +1502,173 @@
         </p>
       {/if}
 
-      {#if activeItems.length === 0}
+      {#if liveItems.length === 0 && finishedItems.length === 0}
         <div class="dl-v2-empty">
           <div class="dl-v2-empty__icon" aria-hidden="true">{@html iconDownload(36)}</div>
           <p class="dl-v2-empty__title">Нет активных загрузок</p>
-          <p class="dl-v2-empty__sub">Запустите скачивание из карточки релиза</p>
-        </div>
-      {:else}
-        <div class="dl-v2-queue" role="list">
-          {#each queueGroups as group (group.key)}
-            {@const isFinished = group.key === '__finished'}
-            {@const multi = !isFinished && queueGroups.filter((g) => g.key !== '__finished').length > 1}
-            <section
-              class="dl-v2-qgroup"
-              class:dl-v2-qgroup--dragging={dragGroupKey === group.key}
-              class:dl-v2-qgroup--drop={dropTargetGroupKey === group.key}
-              class:dl-v2-qgroup--finished={isFinished}
-              role="listitem"
-              ondragover={(e) => {
-                if (isFinished || !dragGroupKey) return;
-                e.preventDefault();
-                dropTargetGroupKey = group.key;
-              }}
-              ondrop={(e) => void onGroupDrop(e, group.key)}
-            >
-              {#if multi || isFinished}
-                <div
-                  class="dl-v2-qgroup__head"
-                  role="button"
-                  tabindex={isFinished ? -1 : 0}
-                  aria-disabled={isFinished}
-                  aria-label={`Перетащить группу «${group.title}»`}
-                  draggable={!isFinished}
-                  ondragstart={(e) => onGroupDragStart(e, group.key)}
-                  ondragend={onDragEnd}
-                >
-                  {#if !isFinished}
-                    <span class="dl-v2-qgroup__grip" aria-hidden="true">{@html iconGripVertical(14)}</span>
-                  {/if}
-                  <span class="dl-v2-qgroup__title">{group.title}</span>
-                  <span class="dl-v2-qgroup__meta">{group.items.length}</span>
-                </div>
-              {/if}
-
-              <div class="dl-v2-jobs">
-                {#each group.items as entry (entry.id)}
-                  {@const pct = progressPercent(entry)}
-                  {@const canDrag = entry.status === 'queued' || entry.status === 'paused' || entry.status === 'downloading' || entry.status === 'starting'}
-                  <div
-                    class="dl-v2-job dl-v2-job--{entry.status}"
-                    class:dl-v2-job--dragging={dragJobId === entry.id}
-                    class:dl-v2-job--drop-target={dropTargetJobId === entry.id}
-                    role="listitem"
-                    draggable={canDrag}
-                    ondragstart={(e) => canDrag && onJobDragStart(e, entry.id)}
-                    ondragend={onDragEnd}
-                    ondragover={(e) => {
-                      if (!dragJobId || dragJobId === entry.id) return;
-                      e.preventDefault();
-                      dropTargetJobId = entry.id;
-                    }}
-                    ondrop={(e) => void onJobDrop(e, entry.id)}
-                  >
-                    <div class="dl-v2-job__top">
-                      {#if canDrag}
-                        <span class="dl-v2-job__grip" aria-hidden="true" title="Перетащить">{@html iconGripVertical(14)}</span>
-                      {/if}
-                      <span
-                        class="dl-v2-job__icon"
-                        class:dl-v2-job__icon--spin={entry.status === 'downloading' || entry.status === 'queued'}
-                        aria-hidden="true"
-                      >
-                        {#if entry.status === 'error' || entry.status === 'cancelled'}
-                          {@html iconTriangleAlert(16)}
-                        {:else if entry.status === 'paused'}
-                          {@html iconPause(16)}
-                        {:else if entry.status === 'downloading' || entry.status === 'queued'}
-                          {@html iconRefreshCw(16)}
-                        {:else}
-                          {@html iconDownload(16)}
-                        {/if}
-                      </span>
-                      <div class="dl-v2-job__info">
-                        {#if entry.releaseId}
-                          <button
-                            type="button"
-                            class="dl-v2-job__name dl-v2-job__name--link"
-                            title={jobLabel(entry)}
-                            onclick={() => openRelease(entry.releaseId)}
-                          >
-                            {jobLabel(entry)}
-                          </button>
-                        {:else}
-                          <span class="dl-v2-job__name" title={jobLabel(entry)}>{jobLabel(entry)}</span>
-                        {/if}
-                        <span class="dl-v2-job__meta">
-                          {#if entry.dubberName || entry.sourceName}
-                            {[entry.dubberName, entry.sourceName].filter(Boolean).join(' · ')} ·
-                          {/if}
-                          {#if entry.total > 0}
-                            {formatBytes(entry.received)} / {formatBytes(entry.total)}
-                          {:else}
-                            {formatBytes(entry.received)}
-                          {/if}
-                          · {statusLabel(entry)}
-                          {#if entry.status === 'downloading' && formatSpeed(entry.speedBps)}
-                            · {formatSpeed(entry.speedBps)}
-                          {/if}
-                          {#if entry.status === 'downloading' && formatEta(entry.etaSec)}
-                            · осталось {formatEta(entry.etaSec)}
-                          {/if}
-                        </span>
-                      </div>
-                      <div class="dl-v2-job__actions">
-                        {#if entry.status === 'downloading' || entry.status === 'queued' || entry.status === 'starting'}
-                          <UiV2RoundButton
-                            label="Пауза"
-                            size="sm"
-                            title="Пауза"
-                            onclick={() => void downloads.pauseEntry(entry.id)}
-                          >
-                            {@html iconPause(14)}
-                          </UiV2RoundButton>
-                          <UiV2RoundButton
-                            label="Остановить"
-                            size="sm"
-                            title="Остановить"
-                            onclick={() => void downloads.cancelEntry(entry.id)}
-                          >
-                            {@html iconX(14)}
-                          </UiV2RoundButton>
-                        {:else if entry.status === 'paused'}
-                          <UiV2RoundButton
-                            label="Продолжить"
-                            size="sm"
-                            title={$downloadResumeBlocked ? 'Недоступно во время онлайн-просмотра' : 'Продолжить'}
-                            disabled={$downloadResumeBlocked}
-                            onclick={() => void downloads.resumeEntry(entry.id)}
-                          >
-                            {@html iconPlay(14)}
-                          </UiV2RoundButton>
-                          <UiV2RoundButton
-                            label="Остановить"
-                            size="sm"
-                            title="Остановить"
-                            onclick={() => void downloads.cancelEntry(entry.id)}
-                          >
-                            {@html iconX(14)}
-                          </UiV2RoundButton>
-                        {/if}
-                        {#if entry.status === 'error' && entry.filePath && canRetry}
-                          <UiV2RoundButton
-                            label="Повторить"
-                            size="sm"
-                            title={$downloadResumeBlocked ? 'Недоступно во время онлайн-просмотра' : 'Повторить'}
-                            disabled={$downloadResumeBlocked}
-                            onclick={() => void downloads.retryEntry(entry.id)}
-                          >
-                            {@html iconRotateCw(14)}
-                          </UiV2RoundButton>
-                        {/if}
-                        {#if entry.status === 'error' || entry.status === 'cancelled' || entry.status === 'done'}
-                          <UiV2RoundButton
-                            label="Убрать из списка"
-                            size="sm"
-                            title="Убрать из списка"
-                            onclick={() => void downloads.removeEntry(entry.id)}
-                          >
-                            {@html iconTrash2(14)}
-                          </UiV2RoundButton>
-                        {/if}
-                      </div>
-                    </div>
-                    <div class="dl-v2-job__track" aria-hidden="true">
-                      <div class="dl-v2-job__fill" style="width: {pct}%"></div>
-                    </div>
-                    {#if (entry.status === 'error' || entry.status === 'cancelled') && entry.error}
-                      <p class="dl-v2-job__error" title={entry.error}>{formatDownloadErrorMessage(entry.error)}</p>
-                    {/if}
-                  </div>
-                {/each}
-              </div>
-            </section>
-          {/each}
+          <p class="dl-v2-empty__sub">Запустите скачивание из окна выбора серий</p>
         </div>
       {/if}
-    </UiV2Card>
+
+      {#if currentItem}
+        {@const cur = currentItem}
+        {@const pct = progressPercent(cur)}
+        {@const poster = cur.releaseId != null ? posters[cur.releaseId] : ''}
+        <UiV2Card title="Сейчас" class="dl-v2-card">
+          <div
+            class="dl-steam__current dl-steam__current--{cur.status}"
+            class:dl-steam__current--drop={heroDropActive}
+            role="group"
+            aria-label="Текущая загрузка"
+            ondragover={(e) => {
+              if (!dragJobId || dragJobId === cur.id) return;
+              e.preventDefault();
+              heroDropActive = true;
+            }}
+            ondragleave={() => (heroDropActive = false)}
+            ondrop={(e) => void onHeroDrop(e)}
+          >
+            <span class="dl-steam__poster" style={poster ? `background-image:url(${poster})` : ''}>
+              {#if !poster}{@html iconFilm(20)}{/if}
+            </span>
+            <div class="dl-steam__current-info">
+              {#if cur.releaseId}
+                <button type="button" class="dl-steam__row-title dl-steam__row-title--link dl-steam__current-title" onclick={() => openRelease(cur.releaseId)}>
+                  {cur.releaseTitle || cur.filename}
+                </button>
+              {:else}
+                <span class="dl-steam__row-title dl-steam__current-title">{cur.releaseTitle || cur.filename}</span>
+              {/if}
+              <span class="dl-steam__row-meta">
+                {[cur.episodePosition != null ? `Серия ${cur.episodePosition}` : '', cur.dubberName, cur.sourceName].filter(Boolean).join(' · ')}
+              </span>
+              <div class="dl-steam__progress-row">
+                <span>{heroStatus(cur)}</span>
+                <span class="dl-steam__progress-nums">
+                  {formatBytes(cur.received)}{#if cur.total > 0}&nbsp;/ {formatBytes(cur.total)}{/if}{#if cur.status === 'downloading' && formatSpeed(totalSpeedBps)}&nbsp;· {formatSpeed(totalSpeedBps)}{/if}{#if cur.status === 'downloading' && formatEta(cur.etaSec)}&nbsp;· осталось {formatEta(cur.etaSec)}{/if}{#if $downloadSettings.speedLimitMBps > 0}&nbsp;· лимит {$downloadSettings.speedLimitMBps} МБ/с{/if}
+                  · {pct}%
+                </span>
+              </div>
+              <div class="dl-steam__track" aria-hidden="true"><div class="dl-steam__fill" style="width:{pct}%"></div></div>
+              {#if cur.status === 'paused' && upNextItems.length > 0}
+                <p class="dl-steam__hint">Очередь ждёт эту серию. Продолжите её или перетащите сюда другую.</p>
+              {/if}
+            </div>
+            <div class="dl-steam__row-actions">
+              {#if cur.status === 'paused'}
+                <UiV2RoundButton label="Продолжить" disabled={$downloadResumeBlocked} onclick={() => void downloads.resumeEntry(cur.id)}>
+                  {@html iconPlay(16)}
+                </UiV2RoundButton>
+              {:else}
+                <UiV2RoundButton label="Пауза" onclick={() => void downloads.pauseEntry(cur.id)}>
+                  {@html iconPause(16)}
+                </UiV2RoundButton>
+              {/if}
+              <UiV2RoundButton label="Остановить" onclick={() => void downloads.cancelEntry(cur.id)}>
+                {@html iconX(16)}
+              </UiV2RoundButton>
+            </div>
+          </div>
+        </UiV2Card>
+      {/if}
+
+      {#if upNextItems.length > 0}
+        <UiV2Card title="Далее" pill={String(upNextItems.length)} class="dl-v2-card">
+          <div class="dl-steam__list" role="list">
+            {#each upNextItems as entry (entry.id)}
+              {@const pct = progressPercent(entry)}
+              {@const poster = entry.releaseId != null ? posters[entry.releaseId] : ''}
+              <div
+                class="dl-steam__row dl-steam__row--{entry.status}"
+                class:dl-steam__row--dragging={dragJobId === entry.id}
+                class:dl-steam__row--drop={dropTargetJobId === entry.id}
+                role="listitem"
+                draggable="true"
+                ondragstart={(e) => onJobDragStart(e, entry.id)}
+                ondragend={onDragEnd}
+                ondragover={(e) => {
+                  if (!dragJobId || dragJobId === entry.id) return;
+                  e.preventDefault();
+                  dropTargetJobId = entry.id;
+                }}
+                ondrop={(e) => void onJobDrop(e, entry.id)}
+              >
+                <span class="dl-steam__grip" aria-hidden="true">{@html iconGripVertical(14)}</span>
+                <span class="dl-steam__thumb" style={poster ? `background-image:url(${poster})` : ''}>
+                  {#if !poster}{@html iconFilm(16)}{/if}
+                </span>
+                <div class="dl-steam__row-info">
+                  <span class="dl-steam__row-title">{rowLabel(entry)}</span>
+                  <span class="dl-steam__row-meta">
+                    {[entry.dubberName, entry.sourceName].filter(Boolean).join(' · ')}{#if entry.total > 0}&nbsp;· {formatBytes(entry.received)} / {formatBytes(entry.total)}{:else if entry.received > 0}&nbsp;· {formatBytes(entry.received)}{/if}{#if entry.status === 'downloading' && formatSpeed(entry.speedBps)}&nbsp;· {formatSpeed(entry.speedBps)}{/if}
+                  </span>
+                  {#if entry.received > 0 || entry.status === 'downloading'}
+                    <div class="dl-steam__mini-track" aria-hidden="true"><div class="dl-steam__fill" style="width:{pct}%"></div></div>
+                  {/if}
+                </div>
+                <span class="dl-steam__row-status">{entry.status === 'paused' ? 'Пауза' : entry.status === 'downloading' ? `${pct}%` : 'Далее'}</span>
+                <div class="dl-steam__row-actions">
+                  <UiV2RoundButton label="Скачать сейчас" size="sm" disabled={$downloadResumeBlocked} onclick={() => void downloads.startNow(entry.id)}>
+                    {@html iconDownload(14)}
+                  </UiV2RoundButton>
+                  {#if entry.status !== 'paused'}
+                    <UiV2RoundButton label="Пауза" size="sm" onclick={() => void downloads.pauseEntry(entry.id)}>
+                      {@html iconPause(14)}
+                    </UiV2RoundButton>
+                  {/if}
+                  <UiV2RoundButton label="Убрать из очереди" size="sm" onclick={() => void downloads.cancelEntry(entry.id)}>
+                    {@html iconX(14)}
+                  </UiV2RoundButton>
+                </div>
+              </div>
+            {/each}
+          </div>
+          <p class="dl-steam__hint">Перетащите серию в «Сейчас», чтобы скачивать её первой.</p>
+        </UiV2Card>
+      {/if}
+
+      {#if finishedItems.length > 0}
+        <UiV2Card title="Завершённые" pill={String(finishedItems.length)} class="dl-v2-card">
+          {#if errorCount > 0}
+            <div class="dl-v2-toolbar">
+              <UiV2Button label="Очистить ошибки" size="sm" variant="ghost" onclick={() => downloads.clearErrors()} />
+            </div>
+          {/if}
+          <div class="dl-steam__list" role="list">
+            {#each finishedItems as entry (entry.id)}
+              <div class="dl-steam__row dl-steam__row--{entry.status}" role="listitem">
+                <span class="dl-steam__row-icon" aria-hidden="true">
+                  {#if entry.status === 'done'}{@html iconDownload(16)}{:else}{@html iconTriangleAlert(16)}{/if}
+                </span>
+                <div class="dl-steam__row-info">
+                  {#if entry.releaseId}
+                    <button type="button" class="dl-steam__row-title dl-steam__row-title--link" onclick={() => openRelease(entry.releaseId)}>{rowLabel(entry)}</button>
+                  {:else}
+                    <span class="dl-steam__row-title">{rowLabel(entry)}</span>
+                  {/if}
+                  <span class="dl-steam__row-meta">
+                    {[entry.dubberName, entry.sourceName, statusLabel(entry)].filter(Boolean).join(' · ')}
+                  </span>
+                  {#if (entry.status === 'error' || entry.status === 'cancelled') && entry.error}
+                    <p class="dl-v2-job__error">{formatDownloadErrorMessage(entry.error)}</p>
+                  {/if}
+                </div>
+                <div class="dl-steam__row-actions">
+                  {#if entry.status === 'error' && entry.filePath && canRetry}
+                    <UiV2RoundButton label="Повторить" size="sm" disabled={$downloadResumeBlocked} onclick={() => void downloads.retryEntry(entry.id)}>
+                      {@html iconRotateCw(14)}
+                    </UiV2RoundButton>
+                  {/if}
+                  <UiV2RoundButton label="Убрать из списка" size="sm" onclick={() => void downloads.removeEntry(entry.id)}>
+                    {@html iconTrash2(14)}
+                  </UiV2RoundButton>
+                </div>
+              </div>
+            {/each}
+          </div>
+        </UiV2Card>
+      {/if}
+    </div>
   {:else}
     <div class="dl-v2-settings">
       <UiV2Card title="Папка" spaced class="dl-v2-card">
@@ -1759,7 +1703,13 @@
         <div class="dl-v2-pref">
           <div class="dl-v2-pref__info">
             <div class="dl-v2-pref__label">Папки по тайтлам</div>
-            <div class="dl-v2-pref__desc">Тайтл → озвучка → источник → «Название 01.mp4»</div>
+            <div class="dl-v2-pref__desc">
+              {#if $downloadSettings.organizeByTitle}
+                Вкл: у каждого тайтла своя папка — «Тайтл / Озвучка / Источник / Название 01.mp4»
+              {:else}
+                Выкл: все серии лежат прямо в папке загрузок, без подпапок — «Название 01.mp4»
+              {/if}
+            </div>
           </div>
           <label class="dl-v2-switch" aria-label="Папки по тайтлам">
             <input
@@ -1788,6 +1738,54 @@
               checked={$downloadSettings.allAtOnce}
               onchange={(e) => void downloads.saveSettings({
                 allAtOnce: (e.currentTarget as HTMLInputElement).checked,
+              })}
+            />
+            <span class="dl-v2-switch__track" aria-hidden="true">
+              <span class="dl-v2-switch__thumb"></span>
+            </span>
+          </label>
+        </div>
+
+        <div class="dl-v2-pref">
+          <div class="dl-v2-pref__info">
+            <div class="dl-v2-pref__label">Ограничить скорость</div>
+            <div class="dl-v2-pref__desc">
+              {#if $downloadSettings.speedLimitMBps > 0}
+                Все загрузки вместе — не быстрее {$downloadSettings.speedLimitMBps} МБ/с, чтобы не забивать интернет
+              {:else}
+                Без ограничений — качать на полной скорости
+              {/if}
+            </div>
+          </div>
+          {#if $downloadSettings.speedLimitMBps > 0}
+            <div class="dl-v2-speed">
+              <div class="dl-v2-speed__field">
+                <input
+                  type="text"
+                  inputmode="decimal"
+                  aria-label="Лимит скорости, МБ/с"
+                  value={$downloadSettings.speedLimitMBps}
+                  onchange={(e) => saveSpeedLimit((e.currentTarget as HTMLInputElement).value)}
+                  onkeydown={(e) => {
+                    if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                    else if (e.key === 'ArrowUp') { e.preventDefault(); stepSpeedLimit(1); }
+                    else if (e.key === 'ArrowDown') { e.preventDefault(); stepSpeedLimit(-1); }
+                  }}
+                />
+                <div class="dl-v2-speed__arrows">
+                  <button type="button" tabindex="-1" aria-label="Больше" onclick={() => stepSpeedLimit(1)}>{@html iconChevronUp(12)}</button>
+                  <button type="button" tabindex="-1" aria-label="Меньше" disabled={$downloadSettings.speedLimitMBps <= 0.5} onclick={() => stepSpeedLimit(-1)}>{@html iconChevronDown(12)}</button>
+                </div>
+              </div>
+              <span>МБ/с</span>
+            </div>
+          {/if}
+          <label class="dl-v2-switch" aria-label="Ограничить скорость">
+            <input
+              type="checkbox"
+              checked={$downloadSettings.speedLimitMBps > 0}
+              onchange={(e) => void downloads.saveSettings({
+                speedLimitMBps: (e.currentTarget as HTMLInputElement).checked ? lastSpeedLimit : 0,
               })}
             />
             <span class="dl-v2-switch__track" aria-hidden="true">

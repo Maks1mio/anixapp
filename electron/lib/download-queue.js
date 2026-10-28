@@ -9,6 +9,7 @@ const { formatDownloadError, extractRawMessage } = require('./download-errors');
 const { parallelRangeDownload } = require('./parallel-range-download');
 const persist = require('./download-queue-persist');
 const { toKodikHlsUrl } = require('./media-proxy');
+const throttle = require('./download-throttle');
 
 const MIN_PLAYABLE_BYTES = 512 * 1024;
 
@@ -372,6 +373,7 @@ function nodeFetchStreamToFile(url, outputPath, headers = {}, onProgress = null,
         res.on('data', (chunk) => {
           received += chunk.length;
           ws.write(chunk);
+          throttle.throttleStream(res, chunk.length);
           const now = Date.now();
           if (onProgress && now - lastEmit >= 300) {
             lastEmit = now;
@@ -422,6 +424,7 @@ async function sessionFetchStreamToFile(url, outputPath, headers = {}, onProgres
         if (done) break;
         received += value.length;
         ws.write(Buffer.from(value));
+        await throttle.take(value.length, signal);
         const now = Date.now();
         if (onProgress && now - lastEmit >= 300) {
           lastEmit = now;
@@ -831,6 +834,14 @@ async function runJob(job, deps) {
   }
 }
 
+/** Задача, которая держит место в очереди (качается, ждёт или на ручной паузе). */
+function occupiesSlot(job) {
+  return job.status === 'queued'
+    || job.status === 'starting'
+    || job.status === 'downloading'
+    || (job.status === 'paused' && !job.pausedByStreaming);
+}
+
 function resolveParallelLimit(deps) {
   const maxParallel = typeof deps?.resolveParallelFiles === 'function'
     ? deps.resolveParallelFiles()
@@ -845,8 +856,10 @@ function pump(deps) {
   if (!useDeps) return;
   // Как Kodik-Download-Watch: по умолчанию 1 файл с полной параллельностью сегментов.
   const limit = resolveParallelLimit(useDeps);
-  const queued = queue.filter((j) => j.status === 'queued');
-  for (const job of queued) {
+  // Как в Steam: слоты занимают первые N задач по порядку, включая поставленные на паузу —
+  // пауза у верхней задачи держит очередь, пока её не продолжат или не перетащат другую наверх.
+  const slots = queue.filter(occupiesSlot).slice(0, limit);
+  for (const job of slots) {
     if (activeCount >= limit) break;
     if (job.status !== 'queued') continue;
     job.status = 'starting';
@@ -902,11 +915,7 @@ function enforceQueuePriority(deps) {
   if (!useDeps) return;
   const limit = resolveParallelLimit(useDeps);
 
-  const competitors = queue.filter((j) =>
-    j.status === 'queued'
-    || j.status === 'starting'
-    || j.status === 'downloading',
-  );
+  const competitors = queue.filter(occupiesSlot);
   const allowed = new Set(competitors.slice(0, limit).map((j) => j.id));
 
   for (const job of competitors) {
@@ -1009,9 +1018,11 @@ function resumeJob(id, deps) {
   job.pausedByStreaming = false;
   streamingPausedIds.delete(id);
   job.error = undefined;
+  // «Продолжить» = скачивать сейчас: наверх очереди, остальные сдвигаются (части сохраняются)
+  queue.splice(queue.indexOf(job), 1);
+  queue.unshift(job);
   emit(job);
-  persistQueueNow();
-  pump(deps || lastPumpDeps);
+  enforceQueuePriority(deps || lastPumpDeps);
   return true;
 }
 
@@ -1041,11 +1052,20 @@ function retryJob(id, deps) {
 
 function resumeAll(deps) {
   if (streamingHold) return 0;
-  const ids = queue.filter((j) => j.status === 'paused').map((j) => j.id);
+  // Порядок не трогаем (в отличие от resumeJob, который поднимает задачу наверх)
   let n = 0;
-  for (const id of ids) {
-    if (resumeJob(id, deps)) n += 1;
+  for (const job of queue) {
+    if (job.status !== 'paused') continue;
+    job.status = 'queued';
+    job.resumed = true;
+    job.pauseRequested = false;
+    job.pausedByStreaming = false;
+    streamingPausedIds.delete(job.id);
+    job.error = undefined;
+    emit(job);
+    n += 1;
   }
+  if (n > 0) enforceQueuePriority(deps || lastPumpDeps);
   return n;
 }
 

@@ -172,13 +172,6 @@ function runFfmpeg(ffmpegPath, args) {
   });
 }
 
-/** Как в Kodik-Download-Watch combine_segments(hwaccel='cuda'). На Windows — d3d11va. */
-function ffmpegHwaccelArgs() {
-  if (process.platform === 'win32') return ['-hwaccel', 'd3d11va'];
-  if (process.platform === 'linux') return ['-hwaccel', 'auto'];
-  return [];
-}
-
 function makeProgressTracker(totalSegments, onProgress) {
   let bytesDone = 0;
   let segmentsDone = 0;
@@ -309,21 +302,12 @@ async function downloadSegmentsToFilesThenConcat(
       }
     }
 
-    const listPath = path.join(workDir, 'files.txt');
-    const listBody = partPaths
-      .map((p) => `file '${p.replace(/\\/g, '/').replace(/'/g, "'\\''")}'`)
-      .join('\n');
-    fs.writeFileSync(listPath, listBody, 'utf8');
-
-    await runFfmpeg(ffmpegPath, [
-      '-y', '-hide_banner', '-loglevel', 'error',
-      ...ffmpegHwaccelArgs(),
-      '-f', 'concat', '-safe', '0',
-      '-i', listPath,
-      '-c', 'copy',
-      '-movflags', '+faststart',
-      outputPath,
-    ]);
+    // Склейка побайтово (TS для этого и сделан) с исходными таймстемпами, затем remux в MP4.
+    // concat-демуксер ffmpeg пересчитывает время каждого сегмента по длительности — у аудио
+    // и видео она чуть разная, и к концу серии звук уезжает от картинки.
+    const joinedPath = path.join(workDir, 'joined.ts');
+    await concatFilesBinary(partPaths, joinedPath, signal);
+    await remuxTsToMp4(ffmpegPath, joinedPath, outputPath);
     tracker.finish();
     success = true;
   } finally {
@@ -397,6 +381,29 @@ async function downloadSegmentsToTs(segments, outputPath, headers, fetchBuffer, 
   tracker.finish();
 }
 
+/** Последовательно дописать файлы в один (без загрузки всего в память). */
+async function concatFilesBinary(paths, outPath, signal = null) {
+  const ws = fs.createWriteStream(outPath);
+  try {
+    for (const p of paths) {
+      if (signal?.aborted) throw new Error('cancelled');
+      await new Promise((resolve, reject) => {
+        const rs = fs.createReadStream(p);
+        rs.on('error', reject);
+        rs.on('end', resolve);
+        rs.pipe(ws, { end: false });
+      });
+    }
+  } catch (err) {
+    try { ws.destroy(); } catch (_) {}
+    throw err;
+  }
+  await new Promise((resolve, reject) => {
+    ws.on('error', reject);
+    ws.end(resolve);
+  });
+}
+
 async function remuxTsToMp4(ffmpegPath, inputPath, outputPath) {
   if (!ffmpegPath) {
     fs.renameSync(inputPath, outputPath);
@@ -405,7 +412,10 @@ async function remuxTsToMp4(ffmpegPath, inputPath, outputPath) {
   await runFfmpeg(ffmpegPath, [
     '-y', '-hide_banner', '-loglevel', 'error',
     '-i', inputPath,
+    '-map', '0:v?', '-map', '0:a?',
     '-c', 'copy',
+    // AAC из TS идёт в ADTS — в MP4 нужен ASC, иначе часть плееров даёт сдвиг/треск
+    '-bsf:a', 'aac_adtstoasc',
     '-movflags', '+faststart',
     outputPath,
   ]);

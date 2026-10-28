@@ -441,6 +441,12 @@ function emitActiveProposalFromJoin(raw: unknown): void {
   });
 }
 
+/** ts от другого участника: NaN/Infinity/1e20 ломают Date#toISOString в чате. */
+function safeChatTs(raw: unknown): number {
+  const ts = Number(raw);
+  return Number.isFinite(ts) && Math.abs(ts) <= 8.64e15 ? ts : Date.now();
+}
+
 /** Подгрузить историю чата комнаты при join. */
 function emitChatHistoryFromJoin(raw: unknown): void {
   if (!Array.isArray(raw) || raw.length === 0) return;
@@ -457,7 +463,7 @@ function emitChatHistoryFromJoin(raw: unknown): void {
         text: text.slice(0, 500),
         login: String(m.login ?? 'Участник'),
         avatar: typeof m.avatar === 'string' ? m.avatar : null,
-        ts: typeof m.ts === 'number' ? m.ts : Date.now(),
+        ts: safeChatTs(m.ts),
         peerId: from || null,
         self: !!(myPeerId && from && from === myPeerId),
       };
@@ -692,7 +698,7 @@ function handleMessage(raw: string): void {
         text: String(msg.text).slice(0, 500),
         login: String(msg.login ?? 'Участник'),
         avatar: typeof msg.avatar === 'string' ? msg.avatar : null,
-        ts: typeof msg.ts === 'number' ? msg.ts : Date.now(),
+        ts: safeChatTs(msg.ts),
         peerId: from || null,
         self: false,
       },

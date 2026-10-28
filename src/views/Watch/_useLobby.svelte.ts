@@ -2,6 +2,28 @@ import type { LobbyParticipant, LobbyActivityEntry, LobbyChatMessage, ProposalDa
 
 const LOG_MAX = 5;
 const LOG_TTL = 10000;
+/** Предел Date в JS: за ним toISOString() бросает RangeError. */
+const MAX_DATE_MS = 8.64e15;
+
+/** Сообщения приходят от других участников комнаты — не доверяем типам. */
+function normalizeChatMessage(m: unknown): LobbyChatMessage | null {
+  if (!m || typeof m !== 'object') return null;
+  const r = m as Record<string, unknown>;
+  const id = typeof r.id === 'string' || typeof r.id === 'number' ? String(r.id) : '';
+  const text = typeof r.text === 'string' ? r.text.slice(0, 500) : '';
+  if (!id || !text) return null;
+  const ts = Number(r.ts);
+  return {
+    id,
+    text,
+    login: typeof r.login === 'string' && r.login ? r.login : 'Участник',
+    avatar: typeof r.avatar === 'string' ? r.avatar : null,
+    ts: Number.isFinite(ts) && Math.abs(ts) <= MAX_DATE_MS ? ts : Date.now(),
+    peerId: typeof r.peerId === 'string' ? r.peerId : null,
+    self: r.self === true,
+    system: r.system === true,
+  };
+}
 
 export class LobbyState {
   participants = $state<LobbyParticipant[]>([]);
@@ -50,7 +72,9 @@ export class LobbyState {
     this.logTimers.set(id, t);
   }
 
-  addChat(msg: LobbyChatMessage) {
+  addChat(raw: LobbyChatMessage) {
+    const msg = normalizeChatMessage(raw);
+    if (!msg) return;
     if (this.chatMessages.some((m) => m.id === msg.id)) return;
     this.chatMessages = [...this.chatMessages, msg].slice(-200);
   }
@@ -59,9 +83,9 @@ export class LobbyState {
     if (!Array.isArray(messages) || messages.length === 0) return;
     const byId = new Map<string, LobbyChatMessage>();
     for (const m of this.chatMessages) byId.set(m.id, m);
-    for (const m of messages) {
-      if (!m?.id || !m.text) continue;
-      byId.set(m.id, m);
+    for (const raw of messages) {
+      const m = normalizeChatMessage(raw);
+      if (m) byId.set(m.id, m);
     }
     this.chatMessages = [...byId.values()]
       .sort((a, b) => a.ts - b.ts)

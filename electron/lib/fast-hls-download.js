@@ -91,6 +91,83 @@ function isConnectionResetError(err) {
   return /ERR_CONNECTION_RESET|ECONNRESET|connection reset|socket hang up/i.test(extractRawMessage(err));
 }
 
+/**
+ * Общий на процесс лимит памяти под HLS-сегменты: байты держатся от начала загрузки
+ * сегмента до записи на диск. Без него 512 параллельных сегментов × несколько файлов
+ * в режиме «всё сразу» съедают гигабайты и подвешивают приложение.
+ */
+const SEGMENT_MEMORY_LIMIT = 384 * 1024 * 1024;
+const SEGMENT_SIZE_ESTIMATE = 2 * 1024 * 1024;
+
+class SegmentMemoryGate {
+  constructor(limitBytes = SEGMENT_MEMORY_LIMIT) {
+    this.limit = limitBytes;
+    this.used = 0;
+    // Размер сегмента заранее неизвестен — резервируем среднее по уже скачанным.
+    this.estimate = SEGMENT_SIZE_ESTIMATE;
+    /** @type {Array<(bytes: number) => void>} */
+    this._waiters = [];
+  }
+
+  _fits() {
+    return this.used === 0 || this.used + this.estimate <= this.limit;
+  }
+
+  _handle(bytes) {
+    let held = bytes;
+    let released = false;
+    return {
+      resize: (actual) => {
+        if (released) return;
+        const n = Math.max(0, Number(actual) || 0);
+        this.used += n - held;
+        held = n;
+        if (n > 0) this.estimate = Math.round(this.estimate * 0.8 + n * 0.2);
+        this._drain();
+      },
+      release: () => {
+        if (released) return;
+        released = true;
+        this.used -= held;
+        this._drain();
+      },
+    };
+  }
+
+  /** @returns {Promise<{ resize: (bytes: number) => void, release: () => void }>} */
+  async reserve(signal = null) {
+    if (signal?.aborted) throw new Error('cancelled');
+    if (!this._waiters.length && this._fits()) {
+      this.used += this.estimate;
+      return this._handle(this.estimate);
+    }
+    const bytes = await new Promise((resolve, reject) => {
+      const waiter = (granted) => {
+        signal?.removeEventListener('abort', onAbort);
+        resolve(granted);
+      };
+      const onAbort = () => {
+        const i = this._waiters.indexOf(waiter);
+        if (i >= 0) this._waiters.splice(i, 1);
+        reject(new Error('cancelled'));
+      };
+      this._waiters.push(waiter);
+      signal?.addEventListener('abort', onAbort, { once: true });
+    });
+    return this._handle(bytes);
+  }
+
+  _drain() {
+    while (this._waiters.length && this._fits()) {
+      const next = this._waiters.shift();
+      this.used += this.estimate;
+      next(this.estimate);
+    }
+  }
+}
+
+const segmentMemory = new SegmentMemoryGate();
+
 async function fetchBufferWithRetry(fetchBuffer, url, headers, policy, signal) {
   let lastErr;
   for (let attempt = 0; attempt <= policy.maxRetries; attempt++) {
@@ -274,8 +351,11 @@ async function downloadSegmentsToFilesThenConcat(
             }
           }
           if (i < 0) return;
+          let mem = null;
           try {
+            mem = await segmentMemory.reserve(jobSignal);
             const buf = await fetchBufferWithRetry(fetchBuffer, segments[i], headers, policy, jobSignal);
+            mem.resize(buf?.length || 0);
             if (jobSignal.aborted) return;
             const tmp = `${partPaths[i]}.tmp`;
             await fs.promises.writeFile(tmp, buf);
@@ -290,6 +370,8 @@ async function downloadSegmentsToFilesThenConcat(
               segmentTotal: total,
             })));
             return;
+          } finally {
+            mem?.release();
           }
         }
       });
@@ -317,68 +399,6 @@ async function downloadSegmentsToFilesThenConcat(
       } catch (_) {}
     }
   }
-}
-
-/**
- * Fallback без ffmpeg: параллельно в один .ts (запись по порядку).
- */
-async function downloadSegmentsToTs(segments, outputPath, headers, fetchBuffer, onProgress, signal, policyOpts = {}) {
-  const total = segments.length;
-  const policy = hlsFetchPolicy(segments, policyOpts);
-  const pending = new Map();
-  let nextWrite = 0;
-  let nextFetch = 0;
-  const CONCURRENCY = Math.min(policy.concurrency, total);
-  const ws = fs.createWriteStream(outputPath);
-  const tracker = makeProgressTracker(total, onProgress);
-
-  const flush = () => {
-    while (pending.has(nextWrite)) {
-      const buf = pending.get(nextWrite);
-      pending.delete(nextWrite);
-      ws.write(buf);
-      tracker.addSegment(buf);
-      nextWrite += 1;
-    }
-  };
-
-  try {
-    await runParallelSegmentWorkers(CONCURRENCY, signal, async (jobSignal, failJob) => {
-      while (nextFetch < total) {
-        if (jobSignal.aborted) return;
-        const i = nextFetch;
-        nextFetch += 1;
-        try {
-          const buf = await fetchBufferWithRetry(fetchBuffer, segments[i], headers, policy, jobSignal);
-          if (jobSignal.aborted) return;
-          pending.set(i, buf);
-          flush();
-        } catch (err) {
-          if (extractRawMessage(err) === 'cancelled' || jobSignal.aborted) return;
-          failJob(new Error(formatDownloadError(err, {
-            url: segments[i],
-            segment: i,
-            segmentTotal: total,
-          })));
-          return;
-        }
-      }
-    });
-    flush();
-    if (nextWrite !== total) {
-      throw new Error('Не все сегменты загружены — возможно, CDN оборвал соединение');
-    }
-  } catch (err) {
-    try { ws.destroy(); } catch (_) {}
-    throw err;
-  }
-
-  ws.end();
-  await new Promise((resolve, reject) => {
-    ws.on('finish', resolve);
-    ws.on('error', reject);
-  });
-  tracker.finish();
 }
 
 /** Последовательно дописать файлы в один (без загрузки всего в память). */
@@ -444,30 +464,19 @@ async function fastDownloadHls(opts) {
     concurrency: typeof hlsConcurrency === 'number' ? hlsConcurrency : undefined,
   };
 
-  // С ffmpeg — как Kodik: параллельно на диск, затем concat (быстрее при 64+ потоках).
-  if (ffmpegPath) {
-    await downloadSegmentsToFilesThenConcat(
-      segments,
-      outputPath,
-      headers,
-      fetchBuffer,
-      ffmpegPath,
-      onProgress,
-      signal,
-      policyOpts,
-    );
-    return { mode: 'parallel-concat' };
-  }
-
-  const tmpPath = `${outputPath}.ts.part`;
-  try {
-    await downloadSegmentsToTs(segments, tmpPath, headers, fetchBuffer, onProgress, signal, policyOpts);
-    if (signal?.aborted) throw new Error('cancelled');
-    await remuxTsToMp4(null, tmpPath, outputPath);
-    return { mode: 'parallel-ts' };
-  } finally {
-    try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (_) {}
-  }
+  // Как Kodik: параллельно на диск, затем склейка. Без ffmpeg склеенный .ts просто
+  // переименовывается — сегменты всё равно не копятся в памяти в ожидании своей очереди.
+  await downloadSegmentsToFilesThenConcat(
+    segments,
+    outputPath,
+    headers,
+    fetchBuffer,
+    ffmpegPath,
+    onProgress,
+    signal,
+    policyOpts,
+  );
+  return { mode: ffmpegPath ? 'parallel-concat' : 'parallel-ts' };
 }
 
 module.exports = {
@@ -479,4 +488,5 @@ module.exports = {
   runParallelSegmentWorkers,
   remuxTsToMp4,
   runFfmpeg,
+  SegmentMemoryGate,
 };

@@ -69,13 +69,14 @@ const globalSegmentBudget = new ConnectionBudget(256);
 /**
  * Сколько сокетов реально выделять под сегменты.
  * max/Infinity → до 512 (как «все сегменты» без шторма при многих файлах).
- * custom N → min(N, 10000), но не ниже 16.
+ * custom N → min(N, 512), но не ниже 16: больше сокетов не ускоряет CDN, а только
+ * раздувает число сегментов, одновременно висящих в памяти.
  */
 function resolveBudgetLimit(concurrencySetting) {
   if (!Number.isFinite(concurrencySetting) || concurrencySetting <= 0) {
     return 512;
   }
-  return Math.min(10000, Math.max(16, Math.round(concurrencySetting)));
+  return Math.min(512, Math.max(16, Math.round(concurrencySetting)));
 }
 
 module.exports = {

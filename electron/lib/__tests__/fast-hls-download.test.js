@@ -8,6 +8,7 @@ const {
   isConnectionResetError,
   fetchBufferWithRetry,
   runParallelSegmentWorkers,
+  SegmentMemoryGate,
 } = require('../fast-hls-download');
 
 describe('hlsFetchPolicy AniLibria', () => {
@@ -112,5 +113,48 @@ describe('runParallelSegmentWorkers', () => {
     });
     setTimeout(() => parent.abort(), 20);
     await assert.rejects(() => p, /cancelled/);
+  });
+});
+
+describe('SegmentMemoryGate', () => {
+  const MB = 1024 * 1024;
+
+  it('blocks new segments over the byte limit and resumes on release', async () => {
+    const gate = new SegmentMemoryGate(6 * MB);
+    const a = await gate.reserve();
+    a.resize(3 * MB);
+    const b = await gate.reserve();
+    b.resize(3 * MB);
+    let granted = false;
+    const pending = gate.reserve().then((h) => { granted = true; return h; });
+    await new Promise((r) => setImmediate(r));
+    assert.equal(granted, false);
+    a.release();
+    const c = await pending;
+    assert.equal(granted, true);
+    assert.ok(gate.used <= 6 * MB);
+    b.release();
+    c.release();
+    assert.equal(gate.used, 0);
+  });
+
+  it('always lets one segment through even if it exceeds the limit', async () => {
+    const gate = new SegmentMemoryGate(1 * MB);
+    const h = await gate.reserve();
+    h.resize(5 * MB);
+    h.release();
+    assert.equal(gate.used, 0);
+  });
+
+  it('rejects waiting reservations on abort', async () => {
+    const gate = new SegmentMemoryGate(1 * MB);
+    const h = await gate.reserve();
+    h.resize(1 * MB);
+    const ctrl = new AbortController();
+    const pending = gate.reserve(ctrl.signal);
+    ctrl.abort();
+    await assert.rejects(pending, /cancelled/);
+    h.release();
+    assert.equal(gate.used, 0);
   });
 });

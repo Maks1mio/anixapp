@@ -134,6 +134,11 @@
     }
   }
 
+  function isoTime(ts: number): string | undefined {
+    const d = new Date(ts);
+    return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+  }
+
   function nameColor(login: string): string {
     let hash = 0;
     for (let i = 0; i < login.length; i++) hash = login.charCodeAt(i) + ((hash << 5) - hash);
@@ -311,7 +316,7 @@
               <p class="watch-lobby-sidebar__system">{msg.text}</p>
             {:else}
               <p class="watch-lobby-sidebar__line" class:watch-lobby-sidebar__line--self={msg.self}>
-                <time class="watch-lobby-sidebar__line-time" datetime={new Date(msg.ts).toISOString()}>
+                <time class="watch-lobby-sidebar__line-time" datetime={isoTime(msg.ts)}>
                   {formatTime(msg.ts)}
                 </time>
                 <span

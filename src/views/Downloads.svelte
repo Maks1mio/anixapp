@@ -8,6 +8,9 @@
     downloadSettings,
     downloadLibrary,
     downloadResumeBlocked,
+    downloadFolders,
+    type DownloadDisk,
+    type DownloadFolder,
     type DownloadEntry,
     type DownloadLibraryGroup,
     type DownloadLibraryFile,
@@ -31,6 +34,7 @@
     iconRefreshCw,
     iconTriangleAlert,
     iconFolder,
+    iconPlus,
     iconFileVideo,
     iconChevronRight,
     iconChevronUp,
@@ -98,6 +102,8 @@
   }
   import UiV2Tabs, { type UiV2TabItem } from '../components/uikit-v2/UiV2Tabs.svelte';
   import UiV2Card from '../components/uikit-v2/UiV2Card.svelte';
+  import UiV2ChoiceSheet from '../components/uikit-v2/UiV2ChoiceSheet.svelte';
+  import { showToast } from '../stores/toast';
   import UiV2Button from '../components/uikit-v2/UiV2Button.svelte';
   import UiV2RoundButton from '../components/uikit-v2/UiV2RoundButton.svelte';
   import UiV2OutlinedField from '../components/uikit-v2/UiV2OutlinedField.svelte';
@@ -134,8 +140,13 @@
   let expandedDubs = $state<Record<string, boolean>>({});
   let expandedSources = $state<Record<string, boolean>>({});
   let activeTab = $state('library');
-  let pickingDir = $state(false);
-  let resettingDir = $state(false);
+  /** Смена основной папки / перенос / добавление — блокирует кнопки папок */
+  let folderBusy = $state(false);
+  let moveProgress = $state<{ done: number; total: number } | null>(null);
+  let folderMsg = $state('');
+  /** Ждёт ответа «перенести или оставить» */
+  let pendingPrimary = $state<{ path: string; titles: number; files: number; bytes: number } | null>(null);
+  let stopMoveProgress: (() => void) | null = null;
   let seasonBusy = $state<string | null>(null);
   let playBlockedMsg = $state('');
   let playBlockedTimer: ReturnType<typeof setTimeout> | null = null;
@@ -157,6 +168,10 @@
   onMount(() => {
     unregisterScrollKey = registerActiveScrollKey(() => DOWNLOADS_VIEW_KEY());
     downloads.init();
+    void downloads.loadFolders();
+    stopMoveProgress = window.electron?.onDownloadFolderMoveProgress?.((d) => {
+      if (!d.finished) moveProgress = { done: d.done ?? 0, total: d.total ?? 0 };
+    }) ?? null;
     ffmpegInstall.init();
     void ffmpegInstall.refreshStatus();
     const cached = getViewState<DownloadsViewState>(DOWNLOADS_VIEW_KEY());
@@ -180,6 +195,7 @@
   });
 
   onDestroy(() => {
+    stopMoveProgress?.();
     unregisterScrollKey?.();
     unregisterScrollKey = null;
     if (playBlockedTimer) clearTimeout(playBlockedTimer);
@@ -543,10 +559,21 @@
   }
 
   const downloadDir = $derived($downloadSettings.directory || '—');
-  const isCustomDir = $derived(
-    !!$downloadSettings.directory
-    && !!$downloadSettings.defaultDirectory
-    && $downloadSettings.directory !== $downloadSettings.defaultDirectory,
+  /** Папки по дискам (диск основной — первым), у каждого — его заполнение. */
+  const folderDisks = $derived.by(() => {
+    const groups: Array<{ root: string; disk: DownloadDisk | null; folders: DownloadFolder[] }> = [];
+    for (const f of $downloadFolders.folders) {
+      let g = groups.find((x) => x.root === f.disk);
+      if (!g) {
+        g = { root: f.disk, disk: $downloadFolders.disks.find((d) => d.root === f.disk) ?? null, folders: [] };
+        groups.push(g);
+      }
+      g.folders.push(f);
+    }
+    return groups;
+  });
+  const primaryIsDefault = $derived(
+    !$downloadFolders.defaultDirectory || samePathUi($downloadSettings.directory, $downloadFolders.defaultDirectory),
   );
 
   const tabs = $derived<UiV2TabItem[]>([
@@ -715,7 +742,13 @@
     if (n < 1024) return `${n} Б`;
     if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} КБ`;
     if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} МБ`;
-    return `${(n / (1024 * 1024 * 1024)).toFixed(2)} ГБ`;
+    if (n < 1024 ** 4) return `${(n / (1024 * 1024 * 1024)).toFixed(2)} ГБ`;
+    return `${(n / 1024 ** 4).toFixed(2)} ТБ`;
+  }
+
+  /** Как formatBytes, но пустая папка — «0 Б», а не прочерк. */
+  function formatSize(n: number): string {
+    return n > 0 ? formatBytes(n) : '0 Б';
   }
 
   function formatDate(ts: number): string {
@@ -867,26 +900,69 @@
     persistDownloadsView();
   }
 
-  async function pickFolder() {
-    pickingDir = true;
+  function samePathUi(a: string, b: string): boolean {
+    const norm = (x: string) => x.replace(/[\\/]+$/, '').replace(/\//g, '\\').toLowerCase();
+    return !!a && !!b && norm(a) === norm(b);
+  }
+
+  function seriesCountWord(n: number): string {
+    const m10 = n % 10;
+    const m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return 'тайтл';
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'тайтла';
+    return 'тайтлов';
+  }
+
+  /** Новая основная папка: если в старой что-то скачано — спросить, переносить ли. */
+  async function choosePrimary(target?: string) {
+    if (folderBusy) return;
+    folderMsg = '';
+    let dir = target;
+    if (!dir) {
+      const r = await window.electron?.chooseDownloadFolder?.('Новая папка для загрузок');
+      if (!r?.ok || !r.path) return;
+      dir = r.path;
+    }
+    const current = $downloadSettings.directory;
+    if (samePathUi(dir, current)) return;
+    const info = (await window.electron?.inspectDownloadFolder?.(current)) ?? { titles: 0, files: 0, bytes: 0 };
+    // В старой папке пусто — спрашивать нечего, просто переключаемся
+    if (info.files === 0) {
+      await applyPrimary(dir, 'move');
+      return;
+    }
+    pendingPrimary = { path: dir, ...info };
+  }
+
+  async function applyPrimary(dir: string, mode: 'move' | 'keep') {
+    pendingPrimary = null;
+    folderBusy = true;
+    folderMsg = '';
+    if (mode === 'move') moveProgress = { done: 0, total: 0 };
     try {
-      await downloads.pickDirectory();
+      const res = await downloads.setPrimaryFolder(dir, mode);
+      if (!res.ok) {
+        folderMsg = res.error === 'no-space'
+            ? `На новом диске не хватает места: нужно ${formatSize(res.need ?? 0)}, свободно ${formatSize(res.free ?? 0)}`
+          : res.error === 'nested'
+            ? 'Новая папка не может лежать внутри старой (и наоборот)'
+            : 'Не удалось сменить папку';
+      } else if (mode === 'move' && (res.failed ?? 0) > 0) {
+        folderMsg = `Перенесено не всё: ${res.failed} файлов остались в старой папке, она осталась в библиотеке`;
+      } else if (mode === 'move' && (res.bytes ?? 0) > 0) {
+        showToast(`Перенесено ${formatBytes(res.bytes ?? 0)}`);
+      }
     } finally {
-      pickingDir = false;
+      folderBusy = false;
+      moveProgress = null;
     }
   }
 
-  async function resetFolder() {
-    resettingDir = true;
-    try {
-      await downloads.resetDirectory();
-    } finally {
-      resettingDir = false;
-    }
-  }
-
-  function openFolder() {
-    window.electron?.openDownloadDirectory?.(downloadDir);
+  async function addLibraryFolder() {
+    if (folderBusy) return;
+    const r = await window.electron?.chooseDownloadFolder?.('Папка с аниме для библиотеки');
+    if (!r?.ok || !r.path) return;
+    await downloads.addLibraryFolder(r.path);
   }
 
   function showInFolder(file: DownloadLibraryFile) {
@@ -1006,6 +1082,8 @@
 
   function onTabChange(id: string) {
     activeTab = id;
+    // Размеры папок и свободное место меняются по мере загрузок
+    if (id === 'settings') void downloads.loadFolders();
     persistDownloadsView(id);
   }
 </script>
@@ -1671,32 +1749,92 @@
     </div>
   {:else}
     <div class="dl-v2-settings">
-      <UiV2Card title="Папка" spaced class="dl-v2-card">
-        <div class="dl-v2-path-row">
-          <div class="dl-v2-path" title={downloadDir}>
+      <UiV2Card title="Папки" spaced class="dl-v2-card">
+        {#if folderDisks.length === 0}
+          <div class="dl-v2-path">
             <span class="dl-v2-path__icon" aria-hidden="true">{@html iconFolder(16)}</span>
             <span class="dl-v2-path__text">{downloadDir}</span>
           </div>
-          <div class="dl-v2-row-actions dl-v2-row-actions--path">
-            <UiV2Button
-              label={pickingDir ? 'Выбор…' : 'Изменить'}
-              size="sm"
-              variant="chrome"
-              disabled={pickingDir}
-              onclick={() => void pickFolder()}
-            />
-            <UiV2Button label="Открыть" size="sm" variant="ghost" onclick={openFolder} />
-            {#if isCustomDir}
-              <UiV2Button
-                label={resettingDir ? 'Сброс…' : 'По умолчанию'}
-                size="sm"
-                variant="ghost"
-                disabled={resettingDir}
-                onclick={() => void resetFolder()}
-              />
-            {/if}
-          </div>
+        {/if}
+        <div class="dl-v2-disks">
+          {#each folderDisks as g (g.root)}
+            <section class="dl-v2-disk">
+              <div class="dl-v2-disk__head">
+                <span class="dl-v2-disk__name">Диск {g.root.replace(/[\\/]+$/, '') || g.root}</span>
+                {#if g.disk}
+                  <span class="dl-v2-disk__free">свободно {formatSize(g.disk.free)} из {formatSize(g.disk.total)}</span>
+                {:else}
+                  <span class="dl-v2-disk__free">недоступен</span>
+                {/if}
+              </div>
+              {#if g.disk}
+                {@const d = g.disk}
+                {@const other = Math.max(0, d.total - d.free - d.anime)}
+                {@const pct = (n: number) => (d.total > 0 ? (n / d.total) * 100 : 0)}
+                <div class="dl-v2-disk__bar" aria-hidden="true">
+                  <span class="dl-v2-disk__seg dl-v2-disk__seg--anime" style="width:max({pct(d.anime)}%, {d.anime > 0 ? 3 : 0}px)"></span>
+                  <span class="dl-v2-disk__seg dl-v2-disk__seg--other" style="width:{pct(other)}%"></span>
+                </div>
+                <div class="dl-v2-disk__legend">
+                  <span><i class="dl-v2-disk__dot dl-v2-disk__dot--anime"></i>Аниме {formatSize(d.anime)}</span>
+                  <span><i class="dl-v2-disk__dot dl-v2-disk__dot--other"></i>Система и программы {formatSize(other)}</span>
+                  <span><i class="dl-v2-disk__dot"></i>Свободно {formatSize(d.free)}</span>
+                </div>
+              {/if}
+              <div class="dl-v2-folders">
+                {#each g.folders as f (f.path)}
+                  <div class="dl-v2-folder" class:dl-v2-folder--primary={f.primary} class:dl-v2-folder--missing={!f.exists}>
+                    <span class="dl-v2-path__icon" aria-hidden="true">{@html iconFolder(16)}</span>
+                    <div class="dl-v2-folder__info">
+                      <span class="dl-v2-folder__path">{f.path}</span>
+                      {#if f.primary && moveProgress}
+                        {@const movePct = moveProgress.total > 0 ? Math.round((moveProgress.done / moveProgress.total) * 100) : 0}
+                        <span class="dl-v2-folder__meta" role="status">
+                          Перенос… {formatSize(moveProgress.done)} из {formatSize(moveProgress.total)} · {movePct}%
+                        </span>
+                        <div class="dl-steam__mini-track" aria-hidden="true"><div class="dl-steam__fill" style="width:{movePct}%"></div></div>
+                      {:else}
+                        <span class="dl-v2-folder__meta">
+                          {#if !f.exists}Папка недоступна — диск отключён или папку удалили
+                          {:else if f.primary}Сюда скачиваются новые серии · {formatSize(f.bytes)}
+                          {:else}Только для библиотеки · {formatSize(f.bytes)}{/if}
+                        </span>
+                      {/if}
+                    </div>
+                    {#if f.primary}
+                      <span class="dl-v2-folder__badge">Основная</span>
+                      {#if !primaryIsDefault}
+                        <UiV2Button label="По умолчанию" size="sm" variant="ghost" disabled={folderBusy} onclick={() => void choosePrimary($downloadFolders.defaultDirectory)} />
+                      {/if}
+                      <UiV2Button label="Переместить" size="sm" variant="chrome" disabled={folderBusy} onclick={() => void choosePrimary()} />
+                    {:else}
+                      <UiV2Button label="Сделать основной" size="sm" variant="ghost" disabled={folderBusy || !f.exists} onclick={() => void applyPrimary(f.path, 'keep')} />
+                    {/if}
+                    <UiV2RoundButton label="Открыть папку" size="sm" disabled={!f.exists} onclick={() => void window.electron?.openDownloadDirectory?.(f.path)}>
+                      {@html iconFolder(14)}
+                    </UiV2RoundButton>
+                    {#if !f.primary}
+                      <UiV2RoundButton label="Убрать из библиотеки" size="sm" disabled={folderBusy} onclick={() => void downloads.removeLibraryFolder(f.path)}>
+                        {@html iconX(14)}
+                      </UiV2RoundButton>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            </section>
+          {/each}
         </div>
+
+        <button type="button" class="dl-v2-folder-add" disabled={folderBusy} onclick={() => void addLibraryFolder()}>
+          {@html iconPlus(16)}
+          <span>Добавить папку</span>
+        </button>
+        {#if folderMsg}
+          <p class="dl-v2-folder-msg" role="alert">{folderMsg}</p>
+        {/if}
+        <p class="dl-v2-folders-note">
+          Новые серии скачиваются в основную папку. Остальные только показываются в библиотеке — файлы в них не трогаются.
+        </p>
       </UiV2Card>
 
       <UiV2Card title="Скачивание" spaced class="dl-v2-card">
@@ -1882,5 +2020,26 @@
         </div>
       </UiV2Card>
     </div>
+  {/if}
+  {#if pendingPrimary}
+    {@const pp = pendingPrimary}
+    <UiV2ChoiceSheet
+      title="Сменить папку загрузок?"
+      value=""
+      options={[
+        {
+          value: 'move',
+          label: 'Перенести всё в новую папку',
+          description: `${pp.titles} ${seriesCountWord(pp.titles)} (${formatSize(pp.bytes)}) переедут в ${pp.path}. Старая папка освободится.`,
+        },
+        {
+          value: 'keep',
+          label: 'Оставить в старой папке',
+          description: 'Новые серии будут скачиваться в новую папку, а старая останется в библиотеке.',
+        },
+      ]}
+      onSelect={(v) => void applyPrimary(pp.path, v === 'move' ? 'move' : 'keep')}
+      onClose={() => (pendingPrimary = null)}
+    />
   {/if}
 </div>

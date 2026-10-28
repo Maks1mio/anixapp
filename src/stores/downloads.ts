@@ -80,6 +80,41 @@ const settingsStore = writable<DownloadSettings>({
   speedLimitMBps: 0,
 });
 const libraryStore = writable<DownloadLibraryGroup[]>([]);
+
+export interface DownloadFolder {
+  path: string;
+  /** Сюда качаются новые серии */
+  primary: boolean;
+  isDefault: boolean;
+  exists: boolean;
+  /** Сколько занимает скачанное в этой папке */
+  bytes: number;
+  disk: string;
+}
+
+export interface DownloadDisk {
+  root: string;
+  total: number;
+  free: number;
+  /** Аниме во всех папках библиотеки на этом диске */
+  anime: number;
+}
+
+export interface DownloadFoldersState {
+  folders: DownloadFolder[];
+  disks: DownloadDisk[];
+  defaultDirectory: string;
+  loaded: boolean;
+}
+
+const foldersStore = writable<DownloadFoldersState>({ folders: [], disks: [], defaultDirectory: '', loaded: false });
+
+async function loadFolders() {
+  try {
+    const res = await window.electron?.listDownloadFolders?.();
+    if (res) foldersStore.set({ folders: res.folders, disks: res.disks, defaultDirectory: res.defaultDirectory, loaded: true });
+  } catch {}
+}
 const resumeBlockedStore = writable(false);
 
 /**
@@ -212,6 +247,26 @@ function createDownloadsStore() {
       return res.directory;
     }
     return null;
+  }
+
+  /** Сменить основную папку: 'move' — перенести скачанное, 'keep' — старая остаётся в библиотеке. */
+  async function setPrimaryFolder(dir: string, mode: 'move' | 'keep') {
+    const res = await window.electron?.setPrimaryDownloadFolder?.({ path: dir, mode });
+    await loadSettings();
+    await Promise.all([loadFolders(), loadLibrary()]);
+    return res ?? { ok: false, error: 'unavailable' };
+  }
+
+  async function addLibraryFolder(dir: string) {
+    const res = await window.electron?.addLibraryFolder?.(dir);
+    await Promise.all([loadFolders(), loadLibrary()]);
+    return res ?? { ok: false };
+  }
+
+  async function removeLibraryFolder(dir: string) {
+    const res = await window.electron?.removeLibraryFolder?.(dir);
+    await Promise.all([loadFolders(), loadLibrary()]);
+    return res ?? { ok: false };
   }
 
   async function resetDirectory() {
@@ -483,6 +538,10 @@ function createDownloadsStore() {
     loadLibrary,
     pickDirectory,
     resetDirectory,
+    loadFolders,
+    setPrimaryFolder,
+    addLibraryFolder,
+    removeLibraryFolder,
     handleProgress,
     removeEntry,
     cancelEntry,
@@ -503,6 +562,7 @@ function createDownloadsStore() {
 }
 
 export const downloads = createDownloadsStore();
+export { foldersStore as downloadFolders };
 export { settingsStore as downloadSettings, libraryStore as downloadLibrary, resumeBlockedStore as downloadResumeBlocked };
 
 export const activeDownloadsCount = derived(downloads, ($dl) =>

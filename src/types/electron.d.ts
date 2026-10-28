@@ -299,6 +299,35 @@ declare global {
       checkDownloadFiles?: (payload: {
         items: Array<{ folder?: string; filename: string }>;
       }) => Promise<Array<{ folder?: string; filename: string; exists: boolean; path: string | null }>>;
+      listDownloadFolders?: () => Promise<{
+        folders: Array<{ path: string; primary: boolean; isDefault: boolean; exists: boolean; bytes: number; disk: string }>;
+        disks: Array<{ root: string; total: number; free: number; anime: number }>;
+        defaultDirectory: string;
+        moving: boolean;
+      }>;
+      chooseDownloadFolder?: (title?: string) => Promise<{ ok: boolean; path?: string }>;
+      inspectDownloadFolder?: (dir: string) => Promise<{ titles: number; files: number; bytes: number }>;
+      addLibraryFolder?: (dir: string) => Promise<{ ok: boolean; error?: string }>;
+      removeLibraryFolder?: (dir: string) => Promise<{ ok: boolean; error?: string }>;
+      setPrimaryDownloadFolder?: (payload: { path: string; mode: 'move' | 'keep' }) => Promise<{
+        ok: boolean;
+        error?: string;
+        count?: number;
+        need?: number;
+        free?: number;
+        mode?: 'move' | 'keep';
+        moved?: number;
+        skipped?: number;
+        failed?: number;
+        bytes?: number;
+      }>;
+      onDownloadFolderMoveProgress?: (cb: (data: {
+        done?: number;
+        total?: number;
+        current?: string;
+        finished?: boolean;
+        error?: string;
+      }) => void) => () => void;
       cancelDownload?: (id: string) => Promise<{ ok: boolean }>;
       cancelAllDownloads?: () => Promise<{ ok: boolean; cancelled?: number }>;
       getActiveDownloadQueue?: () => Promise<Array<{

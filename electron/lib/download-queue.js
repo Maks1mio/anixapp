@@ -10,6 +10,7 @@ const { parallelRangeDownload } = require('./parallel-range-download');
 const persist = require('./download-queue-persist');
 const { toKodikHlsUrl } = require('./media-proxy');
 const throttle = require('./download-throttle');
+const { isPathInside } = require('./safe-path');
 
 const MIN_PLAYABLE_BYTES = 512 * 1024;
 
@@ -1125,7 +1126,73 @@ function getActiveDownloadPaths() {
   return paths;
 }
 
+/** Хвосты недокачанной задачи рядом с файлом (части, sidecar). */
+const JOB_SIDE_SUFFIXES = ['', '.hls-parts', '.range-parts', '.part', '.ts.part', '.anixdl'];
+
+/**
+ * Перед переносом папки: остановить задачи, которые пишут в root (части сохраняются),
+ * и дождаться, пока они действительно перестанут писать.
+ * @returns {Promise<string[]>} id задач, которые качались/ждали — их потом продолжить
+ */
+async function suspendJobsUnder(root, { timeoutMs = 30_000 } = {}) {
+  const affected = queue.filter((j) => j.filePath && isPathInside(root, j.filePath) && j.status !== 'done');
+  const resumeIds = [];
+  for (const job of affected) {
+    if (job.status === 'paused') continue; // пауза пользователя — так и оставим
+    resumeIds.push(job.id);
+    pauseJob(job.id);
+  }
+  const started = Date.now();
+  while (
+    affected.some((j) => j.status === 'downloading' || j.status === 'starting' || j.abort)
+    && Date.now() - started < timeoutMs
+  ) {
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  persistQueueNow();
+  return resumeIds;
+}
+
+/**
+ * После переноса: задачи из oldRoot смотрят в newRoot (тот же относительный путь).
+ * Задачу, чьи файлы не переехали (ошибка переноса), не трогаем — она докачается в старой папке.
+ */
+function relocateJobs(oldRoot, newRoot) {
+  let n = 0;
+  for (const job of [...queue, ...failedJobs.values()]) {
+    if (!job.filePath || !isPathInside(oldRoot, job.filePath)) continue;
+    const stillThere = JOB_SIDE_SUFFIXES.some((suf) => fs.existsSync(job.filePath + suf));
+    if (stillThere) continue;
+    job.filePath = path.join(newRoot, path.relative(oldRoot, job.filePath));
+    if (job.status !== 'error') persist.writeSidecar(job);
+    emit(job);
+    n += 1;
+  }
+  persistQueueNow();
+  return n;
+}
+
+/** Продолжить задачи после переноса, не меняя их порядок в очереди. */
+function resumeJobsByIds(ids, deps) {
+  const want = new Set(ids);
+  let n = 0;
+  for (const job of queue) {
+    if (!want.has(job.id) || job.status !== 'paused') continue;
+    job.status = 'queued';
+    job.resumed = true;
+    job.pauseRequested = false;
+    job.error = undefined;
+    emit(job);
+    n += 1;
+  }
+  if (n > 0) enforceQueuePriority(deps || lastPumpDeps);
+  return n;
+}
+
 module.exports = {
+  suspendJobsUnder,
+  relocateJobs,
+  resumeJobsByIds,
   setProgressSink,
   setStreamingHoldSink,
   setStreamingHold,

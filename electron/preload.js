@@ -286,6 +286,17 @@ contextBridge.exposeInMainWorld('electron', {
   setDownloadStreamingHold: (blocked) => ipcRenderer.invoke('downloads:setStreamingHold', !!blocked),
   reorderDownloads: (payload) => ipcRenderer.invoke('downloads:reorder', payload),
   checkDownloadFiles: (payload) => ipcRenderer.invoke('downloads:checkFiles', payload),
+  listDownloadFolders: () => ipcRenderer.invoke('downloads:listFolders'),
+  chooseDownloadFolder: (title) => ipcRenderer.invoke('downloads:chooseFolder', title),
+  inspectDownloadFolder: (dir) => ipcRenderer.invoke('downloads:inspectFolder', dir),
+  addLibraryFolder: (dir) => ipcRenderer.invoke('downloads:addLibraryFolder', dir),
+  removeLibraryFolder: (dir) => ipcRenderer.invoke('downloads:removeLibraryFolder', dir),
+  setPrimaryDownloadFolder: (payload) => ipcRenderer.invoke('downloads:setPrimaryFolder', payload),
+  onDownloadFolderMoveProgress: (cb) => {
+    const handler = (_, data) => cb(data);
+    ipcRenderer.on('downloads:move-progress', handler);
+    return () => ipcRenderer.removeListener('downloads:move-progress', handler);
+  },
   cancelDownload: (id) => ipcRenderer.invoke('downloads:cancel', id),
   cancelAllDownloads: () => ipcRenderer.invoke('downloads:cancelAll'),
   getActiveDownloadQueue: () => ipcRenderer.invoke('downloads:getActiveQueue'),

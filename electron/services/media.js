@@ -18,6 +18,7 @@ const { saveFolderMeta, getFolderMeta, parseEpisodeFromFilename } = require('../
 const { writeSkipSidecar, readSkipSidecar, normalizeSkipMarks } = require('../lib/skip-marks');
 const { isPathInside, isTraversalSegment } = require('../lib/safe-path');
 const { migrateLibraryLayout } = require('../lib/library-migrate');
+const libraryMove = require('../lib/library-move');
 const { fastDownloadHls } = require('../lib/fast-hls-download');
 const ffmpegInstall = require('../lib/ffmpeg-install');
 
@@ -28,6 +29,7 @@ const ffmpegCacheRef = { value: undefined, source: undefined };
 const media = {
   getDownloadDirectory: null,
   setDownloadDirectory: null,
+  getLibraryRoots: null,
 };
 
 function register(deps) {
@@ -499,6 +501,47 @@ function setDownloadDirectory(dir) {
   return true;
 }
 
+function samePath(a, b) {
+  const ra = path.resolve(a);
+  const rb = path.resolve(b);
+  return process.platform === 'win32' ? ra.toLowerCase() === rb.toLowerCase() : ra === rb;
+}
+
+/** Дополнительные папки: туда не качаем, но показываем их серии в библиотеке. */
+function getExtraLibraryDirs() {
+  const raw = config.getRawConfig();
+  const list = Array.isArray(raw.downloadLibraryDirs) ? raw.downloadLibraryDirs : [];
+  const primary = getDownloadDirectory();
+  const out = [];
+  for (const d of list) {
+    if (typeof d !== 'string' || !d.trim()) continue;
+    if (samePath(d, primary) || out.some((x) => samePath(x, d))) continue;
+    out.push(d.trim());
+  }
+  return out;
+}
+
+function saveExtraLibraryDirs(list) {
+  const primary = getDownloadDirectory();
+  const clean = [];
+  for (const d of list) {
+    if (typeof d !== 'string' || !d.trim()) continue;
+    if (samePath(d, primary) || clean.some((x) => samePath(x, d))) continue;
+    clean.push(d.trim());
+  }
+  config.saveConfig({ downloadLibraryDirs: clean });
+}
+
+/** Основная папка первой, затем дополнительные (только существующие). */
+function getLibraryRoots() {
+  return [getDownloadDirectory(), ...getExtraLibraryDirs().filter((d) => fs.existsSync(d))];
+}
+
+function rootContaining(p) {
+  if (typeof p !== 'string' || !p.trim()) return null;
+  return getLibraryRoots().find((r) => isPathInside(r, p)) || null;
+}
+
 function sanitizeDownloadDirName(name) {
   return String(name || 'downloads')
     .replace(/[<>:"/\\|?*\x00-\x1F]/g, ' ')
@@ -676,10 +719,39 @@ function scanDownloadLibrary(rootDir) {
   return list;
 }
 
+/** Библиотека по всем папкам: одинаковые тайтлы из разных папок сливаются в одну группу. */
+function scanAllLibraryRoots() {
+  const merged = new Map();
+  for (const root of getLibraryRoots()) {
+    for (const g of scanDownloadLibrary(root)) {
+      const prev = merged.get(g.id);
+      if (!prev) {
+        merged.set(g.id, { ...g, files: [...g.files] });
+        continue;
+      }
+      prev.files.push(...g.files);
+      for (const k of ['releaseId', 'dubberId', 'sourceId', 'dubberName', 'sourceName']) {
+        if (prev[k] == null || prev[k] === '') prev[k] = g[k];
+      }
+    }
+  }
+  const list = [...merged.values()];
+  for (const g of list) {
+    g.files.sort((a, b) => {
+      const ap = a.episodePosition ?? 9999;
+      const bp = b.episodePosition ?? 9999;
+      if (ap !== bp) return ap - bp;
+      return a.name.localeCompare(b.name, 'ru');
+    });
+  }
+  list.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  return list;
+}
+
 function listDownloadsForRelease(releaseId) {
   const id = Number(releaseId);
   if (!Number.isFinite(id) || id <= 0) return [];
-  const groups = scanDownloadLibrary(getDownloadDirectory());
+  const groups = scanAllLibraryRoots();
   const files = [];
   for (const g of groups) {
     if (g.releaseId !== id) continue;
@@ -720,7 +792,14 @@ function isValidDownloadVideoFile(filePath) {
 }
 
 function findExistingDownloadFile(folder, filename) {
-  const baseDir = getDownloadDirectory();
+  for (const baseDir of getLibraryRoots()) {
+    const found = findExistingDownloadFileIn(baseDir, folder, filename);
+    if (found) return found;
+  }
+  return null;
+}
+
+function findExistingDownloadFileIn(baseDir, folder, filename) {
   const targetDir = folder ? resolveDownloadSubDir(baseDir, folder) : baseDir;
   if (!fs.existsSync(targetDir)) return null;
 
@@ -855,11 +934,133 @@ ipcMain.handle('downloads:pickDirectory', async () => {
   return { ok: true, directory: result.filePaths[0] };
 });
 
+let libraryMoveBusy = false;
+
+/** Папки библиотеки + диски: свободно / аниме / остальное. */
+ipcMain.handle('downloads:listFolders', async () => {
+  const primary = getDownloadDirectory();
+  const defaultDir = getDefaultDownloadDirectory();
+  const dirs = [primary, ...getExtraLibraryDirs()];
+  const folders = await Promise.all(dirs.map(async (d) => {
+    const exists = fs.existsSync(d);
+    return {
+      path: d,
+      primary: samePath(d, primary),
+      isDefault: samePath(d, defaultDir),
+      exists,
+      bytes: exists ? await libraryMove.dirSize(d) : 0,
+      disk: libraryMove.diskRootOf(d),
+    };
+  }));
+  const byDisk = new Map();
+  for (const f of folders) {
+    if (!f.exists) continue;
+    const cur = byDisk.get(f.disk) || { root: f.disk, probe: f.path, anime: 0 };
+    cur.anime += f.bytes;
+    byDisk.set(f.disk, cur);
+  }
+  const disks = [];
+  for (const d of byDisk.values()) {
+    const st = await libraryMove.diskStats(d.probe);
+    if (!st) continue;
+    disks.push({ root: d.root, total: st.total, free: st.free, anime: d.anime });
+  }
+  return { folders, disks, defaultDirectory: defaultDir, moving: libraryMoveBusy };
+});
+
+ipcMain.handle('downloads:chooseFolder', async (_, title) => {
+  const result = await dialog.showOpenDialog(state.mainWindow ?? undefined, {
+    title: typeof title === 'string' && title ? title : 'Выберите папку',
+    defaultPath: getDownloadDirectory(),
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (result.canceled || !result.filePaths?.[0]) return { ok: false };
+  return { ok: true, path: result.filePaths[0] };
+});
+
+ipcMain.handle('downloads:inspectFolder', async (_, dir) => {
+  if (typeof dir !== 'string' || !dir.trim() || !fs.existsSync(dir)) return { titles: 0, files: 0, bytes: 0 };
+  return libraryMove.summarizeLibrary(dir);
+});
+
+/** Добавить папку только для просмотра в библиотеке. */
+ipcMain.handle('downloads:addLibraryFolder', (_, dir) => {
+  if (typeof dir !== 'string' || !path.isAbsolute(dir) || !fs.existsSync(dir)) return { ok: false, error: 'bad-path' };
+  if (samePath(dir, getDownloadDirectory())) return { ok: true };
+  saveExtraLibraryDirs([...getExtraLibraryDirs(), dir]);
+  return { ok: true };
+});
+
+/** Убрать папку из библиотеки (файлы на диске не трогаем). */
+ipcMain.handle('downloads:removeLibraryFolder', (_, dir) => {
+  if (typeof dir !== 'string' || samePath(dir, getDownloadDirectory())) return { ok: false, error: 'primary' };
+  saveExtraLibraryDirs(getExtraLibraryDirs().filter((d) => !samePath(d, dir)));
+  return { ok: true };
+});
+
+/**
+ * Сменить основную папку.
+ * mode 'keep' — старая остаётся в библиотеке; 'move' — всё скачанное переезжает в новую.
+ */
+ipcMain.handle('downloads:setPrimaryFolder', async (event, payload) => {
+  const dir = typeof payload?.path === 'string' ? payload.path.trim() : '';
+  const mode = payload?.mode === 'move' ? 'move' : 'keep';
+  if (!dir || !path.isAbsolute(dir)) return { ok: false, error: 'bad-path' };
+  if (libraryMoveBusy) return { ok: false, error: 'busy' };
+  const old = getDownloadDirectory();
+  if (samePath(dir, old)) return { ok: true };
+  if (isPathInside(old, dir) || isPathInside(dir, old)) return { ok: false, error: 'nested' };
+  try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { return { ok: false, error: e?.message || 'mkdir' }; }
+
+
+  // Другой диск: заранее проверить место, иначе перенос развалится посередине
+  if (mode === 'move' && libraryMove.diskRootOf(old) !== libraryMove.diskRootOf(dir)) {
+    const [need, st] = await Promise.all([libraryMove.summarizeLibrary(old), libraryMove.diskStats(dir)]);
+    if (st && st.free < need.bytes + 256 * 1024 * 1024) {
+      return { ok: false, error: 'no-space', need: need.bytes, free: st.free };
+    }
+  }
+
+  // Новые серии сразу идут в новую папку; старая видна в библиотеке, пока не опустеет
+  const extras = getExtraLibraryDirs().filter((d) => !samePath(d, dir));
+  setDownloadDirectory(dir);
+  saveExtraLibraryDirs([...extras, old]);
+  if (mode === 'keep') return { ok: true, mode };
+
+  libraryMoveBusy = true;
+  const send = (data) => { try { event.sender.send('downloads:move-progress', data); } catch (_) {} };
+  // Загрузки в старой папке — на паузу (части сохраняются), переезжают вместе со всем и продолжаются
+  let resumeIds = [];
+  try {
+    resumeIds = await downloadQueue.suspendJobsUnder(old);
+    const res = await libraryMove.moveLibrary(old, dir, {
+      onProgress: (p) => send({ ...p, from: old, to: dir }),
+    });
+    const leftover = await libraryMove.summarizeLibrary(old);
+    if (res.failed.length === 0 && leftover.files === 0) {
+      saveExtraLibraryDirs(getExtraLibraryDirs().filter((d) => !samePath(d, old)));
+    }
+    send({ done: res.bytes, total: res.bytes, finished: true });
+    return { ok: true, mode, moved: res.moved, skipped: res.skipped, failed: res.failed.length, bytes: res.bytes };
+  } catch (e) {
+    send({ finished: true, error: e?.message || 'move-failed' });
+    return { ok: false, error: e?.message || 'move-failed' };
+  } finally {
+    try {
+      downloadQueue.relocateJobs(old, dir);
+      downloadQueue.resumeJobsByIds(resumeIds, getDownloadQueueDeps());
+    } catch (e) {
+      console.warn('relocate downloads after move:', e?.message || e);
+    }
+    libraryMoveBusy = false;
+  }
+});
+
 const OPENABLE_VIDEO_EXT = new Set(['.mp4', '.mkv', '.webm', '.mov', '.m4v', '.avi', '.ts']);
 
-/** Путь допустим для shell-действий, только если он внутри папки загрузок. */
+/** Путь допустим для shell-действий, только если он внутри одной из папок библиотеки. */
 function insideDownloadRoot(p) {
-  return typeof p === 'string' && p.trim() !== '' && isPathInside(getDownloadDirectory(), p);
+  return !!rootContaining(p);
 }
 
 ipcMain.handle('downloads:openDirectory', async (_, dir) => {
@@ -882,25 +1083,27 @@ ipcMain.handle('downloads:openFile', (_, filePath) => {
 });
 
 ipcMain.handle('downloads:listLibrary', () => {
-  const root = getDownloadDirectory();
-  try {
-    // При выключенной сортировке по тайтлам файлы лежат плоско намеренно: не раскладываем
-    if (config.getDownloadOrganizeByTitle()) {
-      migrateLibraryLayout(root, downloadQueue.getActiveDownloadPaths?.() || new Set());
+  for (const root of getLibraryRoots()) {
+    try {
+      // При выключенной сортировке по тайтлам файлы лежат плоско намеренно: не раскладываем
+      if (config.getDownloadOrganizeByTitle()) {
+        migrateLibraryLayout(root, downloadQueue.getActiveDownloadPaths?.() || new Set());
+      }
+    } catch (e) {
+      console.warn('migrateLibraryLayout:', e?.message || e);
     }
-  } catch (e) {
-    console.warn('migrateLibraryLayout:', e?.message || e);
   }
-  return scanDownloadLibrary(root);
+  return scanAllLibraryRoots();
 });
 
 ipcMain.handle('downloads:deleteFile', (_, filePath) => {
   if (typeof filePath !== 'string' || !filePath) return { ok: false, error: 'bad-path' };
-  const root = path.resolve(getDownloadDirectory());
   const resolved = path.resolve(filePath);
-  if (!isPathInside(root, resolved)) {
+  const owner = rootContaining(resolved);
+  if (!owner) {
     return { ok: false, error: 'outside-root' };
   }
+  const root = path.resolve(owner);
   try {
     if (fs.existsSync(resolved)) fs.unlinkSync(resolved);
     for (const suf of ['.anixskip', '.anixdl']) {
@@ -924,11 +1127,20 @@ ipcMain.handle('downloads:deleteFile', (_, filePath) => {
 
 ipcMain.handle('downloads:deleteGroup', (_, groupName) => {
   if (typeof groupName !== 'string' || !groupName) return { ok: false, error: 'bad-name' };
-  const root = getDownloadDirectory();
+  let result = { ok: false, error: 'not-found' };
+  for (const root of getLibraryRoots()) {
+    const r = deleteGroupInRoot(root, groupName);
+    if (r.ok || result.error === 'not-found') result = r;
+  }
+  return result;
+});
+
+function deleteGroupInRoot(root, groupName) {
   const target = path.join(root, sanitizeDownloadDirName(groupName));
   const resolved = path.resolve(target);
   const rootRes = path.resolve(root);
   if (resolved === rootRes || !isPathInside(rootRes, resolved)) return { ok: false, error: 'outside-root' };
+  if (!fs.existsSync(resolved)) return { ok: false, error: 'not-found' };
   try {
     if (fs.existsSync(resolved)) {
       fs.rmSync(resolved, { recursive: true, force: true });
@@ -950,7 +1162,7 @@ ipcMain.handle('downloads:deleteGroup', (_, groupName) => {
   } catch (e) {
     return { ok: false, error: e?.message || 'delete-failed' };
   }
-});
+}
 
 ipcMain.handle('downloads:listByRelease', (_, releaseId) => listDownloadsForRelease(releaseId));
 
@@ -1097,6 +1309,8 @@ ipcMain.handle('downloads:pauseAll', () => ({
 ipcMain.handle('downloads:resume', (_, id) => {
   if (typeof id !== 'string' || !id) return { ok: false };
   if (downloadQueue.isStreamingHold()) return { ok: false, error: 'streaming' };
+  // Во время переноса папки задачи сами продолжатся после него
+  if (libraryMoveBusy) return { ok: false, error: 'moving' };
   return { ok: downloadQueue.resumeJob(id, getDownloadQueueDeps()) };
 });
 
@@ -1108,6 +1322,7 @@ ipcMain.handle('downloads:retry', (_, id) => {
 
 ipcMain.handle('downloads:resumeAll', () => {
   if (downloadQueue.isStreamingHold()) return { ok: false, error: 'streaming', resumed: 0 };
+  if (libraryMoveBusy) return { ok: false, error: 'moving', resumed: 0 };
   return {
     ok: true,
     resumed: downloadQueue.resumeAll(getDownloadQueueDeps()),
@@ -1295,6 +1510,7 @@ ipcMain.handle('episode-download:download', async (_, payload) => {
 
 
   media.getDownloadDirectory = getDownloadDirectory;
+  media.getLibraryRoots = getLibraryRoots;
   media.setDownloadDirectory = setDownloadDirectory;
   media.restoreDownloads = () => {
     try {

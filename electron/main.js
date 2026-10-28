@@ -175,7 +175,7 @@ app.whenReady().then(() => {
 
   setupSessionRequestHeaders();
   setupCdnProtocol(logger);
-  setupLocalMediaProtocol(() => media.getDownloadDirectory?.() || '', logger);
+  setupLocalMediaProtocol(() => media.getLibraryRoots?.() || media.getDownloadDirectory?.() || '', logger);
   setupNotificationSoundProtocol(electronDir, logger);
   if (media.getDownloadDirectory) media.getDownloadDirectory();
 

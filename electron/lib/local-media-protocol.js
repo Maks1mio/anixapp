@@ -31,7 +31,7 @@ function guessVideoMime(filePath) {
 }
 
 /**
- * @param {() => string} getDownloadRoot
+ * @param {() => string | string[]} getDownloadRoot
  * @param {{ error?: (tag: string, msg: string) => void } | null} logger
  */
 function setupLocalMediaProtocol(getDownloadRoot, logger) {
@@ -47,9 +47,10 @@ function setupLocalMediaProtocol(getDownloadRoot, logger) {
       }
 
       const resolved = path.resolve(filePath);
-      const root = path.resolve(getDownloadRoot() || '');
+      const rawRoots = getDownloadRoot();
+      const roots = (Array.isArray(rawRoots) ? rawRoots : [rawRoots]).filter(Boolean).map((r) => path.resolve(r));
       // path.relative вместо startsWith: «...\Anixapp-evil» не должен проходить как «...\Anixapp»
-      if (!root || !isPathInside(root, resolved)) {
+      if (!roots.some((root) => isPathInside(root, resolved))) {
         return new Response('Forbidden', { status: 403 });
       }
       if (!fs.existsSync(resolved)) {

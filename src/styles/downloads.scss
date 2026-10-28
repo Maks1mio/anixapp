@@ -1477,3 +1477,184 @@
     }
   }
 }
+
+/* ——— Настройки: несколько папок библиотеки и место на дисках ——— */
+.dl-v2-folders {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.dl-v2-folder {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  box-sizing: border-box;
+  min-height: 3.25rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 12px;
+  background: var(--uiv2-surface-subtle);
+
+  &--missing {
+    opacity: 0.6;
+  }
+}
+
+/* «Добавить папку» — пустая папка-заглушка того же размера, что и строка папки */
+.dl-v2-folder-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 3.25rem;
+  margin: 0;
+  border: 1.5px dashed color-mix(in srgb, var(--uiv2-fg, #fff) 18%, transparent);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--uiv2-fg-muted);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+
+  &:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--uiv2-fg, #fff) 35%, transparent);
+    background: var(--uiv2-surface-subtle);
+    color: var(--uiv2-fg-strong);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.dl-v2-folder__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.dl-v2-folder__path {
+  color: var(--uiv2-fg-strong);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dl-v2-folder__meta {
+  color: var(--uiv2-fg-muted);
+  font-size: 0.75rem;
+}
+
+.dl-v2-folder__badge {
+  flex-shrink: 0;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, #{$color-accent} 18%, transparent);
+  color: color-mix(in srgb, #{$color-accent} 80%, #{$color-text});
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.dl-v2-folder-msg {
+  margin: 0.6rem 0 0;
+  color: color-mix(in srgb, #{$color-accent} 85%, #{$color-text});
+  font-size: 0.8rem;
+}
+
+.dl-v2-folders-note {
+  margin: 0.55rem 0 0;
+  color: var(--uiv2-fg-muted);
+  font-size: 0.75rem;
+}
+
+.dl-v2-disks {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  margin-bottom: 0.4rem;
+}
+
+.dl-v2-disk__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 0.4rem;
+}
+
+.dl-v2-disk__name {
+  color: var(--uiv2-fg-strong);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.dl-v2-disk__free {
+  color: var(--uiv2-fg-muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.dl-v2-disk__bar {
+  display: flex;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--uiv2-fg, #fff) 10%, transparent);
+}
+
+.dl-v2-disk__seg {
+  height: 100%;
+
+  &--anime {
+    background: $color-accent;
+  }
+
+  &--other {
+    background: color-mix(in srgb, var(--uiv2-fg, #fff) 32%, transparent);
+  }
+}
+
+.dl-v2-disk__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.1rem;
+  margin-top: 0.45rem;
+  color: var(--uiv2-fg-muted);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+}
+
+.dl-v2-disk__dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--uiv2-fg, #fff) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--uiv2-fg, #fff) 22%, transparent);
+
+  &--anime {
+    background: $color-accent;
+    box-shadow: none;
+  }
+
+  &--other {
+    background: color-mix(in srgb, var(--uiv2-fg, #fff) 32%, transparent);
+    box-shadow: none;
+  }
+}

@@ -1135,6 +1135,32 @@ ipcMain.handle('downloads:deleteGroup', (_, groupName) => {
   return result;
 });
 
+function pathKey(p) {
+  const r = path.resolve(p);
+  return process.platform === 'win32' ? r.toLowerCase() : r;
+}
+
+/**
+ * Удалить папку целиком, кроме файлов активных загрузок (например, та же серия
+ * в другой озвучке ещё качается в соседнюю подпапку).
+ * @returns {boolean} что-то пришлось оставить
+ */
+function removeTreeExcept(dir, keep) {
+  let kept = false;
+  for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, ent.name);
+    if (keep.has(pathKey(p))) {
+      kept = true;
+    } else if (ent.isDirectory()) {
+      if (removeTreeExcept(p, keep)) kept = true;
+    } else {
+      fs.rmSync(p, { force: true });
+    }
+  }
+  if (!kept) fs.rmdirSync(dir);
+  return kept;
+}
+
 function deleteGroupInRoot(root, groupName) {
   const target = path.join(root, sanitizeDownloadDirName(groupName));
   const resolved = path.resolve(target);
@@ -1142,17 +1168,18 @@ function deleteGroupInRoot(root, groupName) {
   if (resolved === rootRes || !isPathInside(rootRes, resolved)) return { ok: false, error: 'outside-root' };
   if (!fs.existsSync(resolved)) return { ok: false, error: 'not-found' };
   try {
-    if (fs.existsSync(resolved)) {
-      fs.rmSync(resolved, { recursive: true, force: true });
-    }
-    // meta key
+    const active = downloadQueue.getActiveDownloadArtifacts?.() || new Set();
+    const keep = new Set([...active].map(pathKey));
+    removeTreeExcept(resolved, keep);
+    // meta key (папки, где ещё идёт загрузка, сохраняют название/постер)
     try {
       const metaPath = path.join(root, '.anixapp-library.json');
       if (fs.existsSync(metaPath)) {
         const raw = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
         if (raw?.folders) {
           for (const k of Object.keys(raw.folders)) {
-            if (k === groupName || k.startsWith(`${groupName}/`)) delete raw.folders[k];
+            if (k !== groupName && !k.startsWith(`${groupName}/`)) continue;
+            if (!fs.existsSync(path.join(root, k))) delete raw.folders[k];
           }
           fs.writeFileSync(metaPath, JSON.stringify(raw, null, 2), 'utf8');
         }

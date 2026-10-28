@@ -1127,6 +1127,15 @@ function getActiveDownloadPaths() {
 /** Хвосты недокачанной задачи рядом с файлом (части, sidecar). */
 const JOB_SIDE_SUFFIXES = ['', '.hls-parts', '.range-parts', '.part', '.ts.part', '.anixdl'];
 
+/** Файлы и папки частей, в которые сейчас пишут активные задачи — их нельзя удалять. */
+function getActiveDownloadArtifacts() {
+  const out = new Set();
+  for (const p of getActiveDownloadPaths()) {
+    for (const suf of JOB_SIDE_SUFFIXES) out.add(`${p}${suf}`);
+  }
+  return out;
+}
+
 /**
  * Перед переносом папки: остановить задачи, которые пишут в root (части сохраняются),
  * и дождаться, пока они действительно перестанут писать.
@@ -1206,6 +1215,7 @@ module.exports = {
   cancelAll,
   getQueueSnapshot,
   getActiveDownloadPaths,
+  getActiveDownloadArtifacts,
   syncParallelPolicy,
   restorePersistedJobs,
   persistQueueNow,

@@ -1122,7 +1122,9 @@
   height: 100%;
 }
 
-.sidebar-dl-ring {
+// Селектор с .sidebar-dl-wrap: иначе `.uiv2-sidenav__tab svg` (размер иконки 1.125rem)
+// сжимает кольцо до размера иконки и уводит его в левый верхний угол.
+.sidebar-dl-wrap .sidebar-dl-ring {
   position: absolute;
   inset: 0;
   width: 100%;

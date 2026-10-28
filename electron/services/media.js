@@ -57,7 +57,6 @@ async function refreshDownloadUrl(job) {
 
     const direct = await (async () => {
       try {
-        const { resolveViaAnixback } = require('./stream-resolve-remote');
         const remote = await resolveViaAnixback(embedUrl);
         if (remote?.directUrl) return remote;
       } catch (e) {
@@ -276,12 +275,35 @@ async function resolveHlsSegments(m3u8Url, headers = {}) {
   return { segments, encrypted };
 }
 
+/** Сегмент HLS — ~1 МБ; если CDN молчит дольше, быстрее переспросить, чем ждать (иначе «99%» висит). */
+const HLS_SEGMENT_IDLE_TIMEOUT_MS = 12_000;
+const HLS_SEGMENT_SESSION_TIMEOUT_MS = 30_000;
+
+async function sessionFetchWithTimeout(url, headers, signal, timeoutMs) {
+  const ctrl = new AbortController();
+  const onAbort = () => ctrl.abort();
+  if (signal) signal.addEventListener('abort', onAbort, { once: true });
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await session.defaultSession.fetch(url, { headers, redirect: 'follow', signal: ctrl.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status} @ ${url}`);
+    return Buffer.from(await res.arrayBuffer());
+  } catch (err) {
+    if (signal?.aborted) throw new Error('cancelled');
+    if (ctrl.signal.aborted) throw new Error(`ETIMEDOUT: нет ответа ${timeoutMs / 1000} с @ ${url}`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    if (signal) signal.removeEventListener('abort', onAbort);
+  }
+}
+
 async function sessionFetchBufferForHls(url, headers = {}, signal = null, opts = {}) {
   if (signal?.aborted) throw new Error('cancelled');
   // Прямой Node HTTP быстрее при десятках параллельных сегментов,
   // чем Electron session.fetch (ограниченный пул соединений).
   try {
-    return await nodeFetchBuffer(url, headers, signal, opts);
+    return await nodeFetchBuffer(url, headers, signal, { ...opts, timeoutMs: HLS_SEGMENT_IDLE_TIMEOUT_MS });
   } catch (err) {
     const raw = extractRawMessage(err);
     if (raw === 'cancelled' || signal?.aborted) throw new Error('cancelled');
@@ -289,13 +311,11 @@ async function sessionFetchBufferForHls(url, headers = {}, signal = null, opts =
     // SSL CDN: повтор без проверки сертификата (как retry у Kodik на SSLError)
     if (/CERT_|UNABLE_TO_VERIFY|certificate|SSL|TLS|ERR_CERT/i.test(raw)) {
       try {
-        return await nodeFetchBuffer(url, headers, signal, { insecureTls: true });
+        return await nodeFetchBuffer(url, headers, signal, { insecureTls: true, timeoutMs: HLS_SEGMENT_IDLE_TIMEOUT_MS });
       } catch (_) { /* fall through */ }
     }
     if (typeof session?.defaultSession?.fetch === 'function') {
-      const res = await session.defaultSession.fetch(url, { headers, redirect: 'follow', signal });
-      if (!res.ok) throw new Error(`HTTP ${res.status} @ ${url}`);
-      return Buffer.from(await res.arrayBuffer());
+      return sessionFetchWithTimeout(url, headers, signal, HLS_SEGMENT_SESSION_TIMEOUT_MS);
     }
     throw err;
   }
@@ -845,7 +865,10 @@ ipcMain.handle('downloads:openFile', (_, filePath) => {
 ipcMain.handle('downloads:listLibrary', () => {
   const root = getDownloadDirectory();
   try {
-    migrateLibraryLayout(root, downloadQueue.getActiveDownloadPaths?.() || new Set());
+    // При выключенной сортировке по тайтлам файлы лежат плоско намеренно: не раскладываем
+    if (config.getDownloadOrganizeByTitle()) {
+      migrateLibraryLayout(root, downloadQueue.getActiveDownloadPaths?.() || new Set());
+    }
   } catch (e) {
     console.warn('migrateLibraryLayout:', e?.message || e);
   }

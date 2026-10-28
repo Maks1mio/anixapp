@@ -8,6 +8,7 @@ const { session } = require('electron');
 const { formatDownloadError, extractRawMessage } = require('./download-errors');
 const { parallelRangeDownload } = require('./parallel-range-download');
 const persist = require('./download-queue-persist');
+const { toKodikHlsUrl } = require('./media-proxy');
 
 const MIN_PLAYABLE_BYTES = 512 * 1024;
 
@@ -219,11 +220,31 @@ function isSslCertError(err) {
   return /ERR_CERT|CERT_DATE|CERT_AUTHORITY|CERT_COMMON_NAME|UNABLE_TO_VERIFY|DEPTH_ZERO|SELF_SIGNED|certificate|SSL|TLS/i.test(raw);
 }
 
+/** 5xx / 408 / 429 / зависание или обрыв CDN — имеет смысл сменить формат или взять свежую ссылку. */
+function isKodikProgressiveUrl(url) {
+  return toKodikHlsUrl(url) !== url;
+}
+
+function isServerStatusError(err) {
+  const raw = extractRawMessage(err);
+  if (/ETIMEDOUT|ERR_TIMED_OUT|ERR_CONNECTION_TIMED_OUT|ECONNRESET|ERR_CONNECTION_RESET|ERR_EMPTY_RESPONSE/i.test(raw)) {
+    return true;
+  }
+  const m = /HTTP\s+(\d{3})/i.exec(raw);
+  if (!m) return false;
+  const code = Number(m[1]);
+  return code === 408 || code === 429 || code >= 500;
+}
+
+/** Зависшее соединение с CDN (сегмент HLS, solodcdn) иначе держит загрузку вечно. */
+const NODE_FETCH_IDLE_TIMEOUT_MS = 30_000;
+
 function nodeFetchBuffer(url, headers = {}, signal = null, opts = {}) {
   return new Promise((resolve, reject) => {
     let parsed;
     try { parsed = new URL(url); } catch (e) { reject(e); return; }
     const insecure = !!opts.insecureTls;
+    const timeoutMs = opts.timeoutMs || NODE_FETCH_IDLE_TIMEOUT_MS;
     const doRequest = (targetUrl, redirectsLeft) => {
       let p;
       try { p = new URL(targetUrl); } catch (e) { reject(e); return; }
@@ -260,6 +281,9 @@ function nodeFetchBuffer(url, headers = {}, signal = null, opts = {}) {
         res.on('error', reject);
       });
       req.on('error', reject);
+      req.setTimeout(timeoutMs, () => {
+        req.destroy(new Error(`ETIMEDOUT: нет ответа ${timeoutMs / 1000} с @ ${targetUrl}`));
+      });
       if (signal) {
         const onAbort = () => { req.destroy(); reject(new Error('cancelled')); };
         if (signal.aborted) { onAbort(); return; }
@@ -345,6 +369,9 @@ function nodeFetchStreamToFile(url, outputPath, headers = {}, onProgress = null,
         ws.on('error', fail);
       });
       req.on('error', fail);
+      req.setTimeout(NODE_FETCH_IDLE_TIMEOUT_MS, () => {
+        req.destroy(new Error(`ETIMEDOUT: нет ответа ${NODE_FETCH_IDLE_TIMEOUT_MS / 1000} с @ ${targetUrl}`));
+      });
       if (signal) {
         const onAbort = () => {
           req.destroy();
@@ -630,6 +657,56 @@ async function runJob(job, deps) {
     }
   };
 
+  // Kodik: прогрессивный «720.mp4» на CDN бывает сломан (500 на всех pN — они редиректят
+  // на один и тот же edge, а HEAD/Range иногда висят), а HLS той же серии рабочий —
+  // плеер играет именно его. Поэтому HLS первым, mp4 — запасной; затем свежая ссылка с API.
+  const kodikHls = toKodikHlsUrl(job.url);
+  if (kodikHls !== job.url) job.url = kodikHls;
+
+  const retryOnServerError = async (firstErr) => {
+    let lastErr = firstErr;
+    const isCancel = (e) => extractRawMessage(e) === 'cancelled' || job.abort?.signal.aborted;
+    const tryUrl = async (url, note) => {
+      const prevUrl = job.url;
+      job.url = url;
+      if (note) emit(job, { note });
+      try {
+        await runOnce(false);
+        return true;
+      } catch (e) {
+        if (isCancel(e)) throw new Error('cancelled');
+        lastErr = e;
+        job.url = prevUrl;
+        if (!isServerStatusError(e)) throw e;
+        return false;
+      }
+    };
+    // HLS той же серии ↔ прогрессивный mp4
+    const alternateKodikUrl = (url) => {
+      const hls = toKodikHlsUrl(url);
+      if (hls !== url) return hls;
+      const progressive = String(url).replace(/:hls:manifest\.m3u8$/i, '');
+      return progressive !== url && isKodikProgressiveUrl(progressive) ? progressive : null;
+    };
+
+    const alt = alternateKodikUrl(job.url);
+    if (alt && await tryUrl(alt, 'format-fallback')) return;
+
+    if (typeof refreshDownloadUrl === 'function') {
+      let fresh = null;
+      try { fresh = await refreshDownloadUrl(job); } catch (_) { /* keep lastErr */ }
+      if (fresh?.url) {
+        if (fresh.headers && typeof fresh.headers === 'object') job.headers = fresh.headers;
+        const freshHls = toKodikHlsUrl(fresh.url);
+        for (const url of [...new Set([freshHls, fresh.url])]) {
+          if (url === job.url || url === alt) continue;
+          if (await tryUrl(url, 'url-refresh')) return;
+        }
+      }
+    }
+    throw lastErr;
+  };
+
   try {
     try {
       await runOnce(false);
@@ -668,6 +745,8 @@ async function runJob(job, deps) {
             throw err2;
           }
         }
+      } else if (isServerStatusError(err)) {
+        await retryOnServerError(err);
       } else {
         throw err;
       }

@@ -125,7 +125,8 @@ function formatDownloadError(err, context = {}) {
   const technical = raw || rawFull;
   if (friendly && technical && friendly !== technical) {
     const techShort = splitRawAndUrl(technical).message || technical;
-    if (techShort && techShort !== friendly && techShort.length < 120) {
+    // «Ошибка сервера источника (HTTP 500)» уже содержит «HTTP 500» — не дублируем
+    if (techShort && !friendly.includes(techShort) && techShort.length < 120) {
       parts.push(`(${techShort})`);
     }
   }

@@ -20,6 +20,10 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/** Простой сокета (подключение или поток данных), после которого запрос считается зависшим. */
+const REQUEST_IDLE_TIMEOUT_MS = 30_000;
+const HEAD_PROBE_TIMEOUT_MS = 10_000;
+
 function pickAgent(url, insecure, agents) {
   const httpsUrl = /^https:/i.test(url);
   if (!httpsUrl) return agents.http;
@@ -32,6 +36,7 @@ function requestOnce(url, {
   signal = null,
   insecure = false,
   agents,
+  timeoutMs = REQUEST_IDLE_TIMEOUT_MS,
 }) {
   return new Promise((resolve, reject) => {
     let parsed;
@@ -66,6 +71,10 @@ function requestOnce(url, {
         resolve({ res, url: targetUrl });
       });
       req.on('error', reject);
+      // Без таймаута зависшее соединение с CDN (бывает у pN.solodcdn.com) держит загрузку вечно
+      req.setTimeout(timeoutMs, () => {
+        req.destroy(new Error(`ETIMEDOUT: нет ответа ${timeoutMs / 1000} с @ ${targetUrl}`));
+      });
       if (signal) {
         const onAbort = () => {
           req.destroy();
@@ -108,6 +117,8 @@ async function probeFile(url, headers, signal, insecure, agents) {
       signal,
       insecure,
       agents,
+      // solodcdn на HEAD иногда не отвечает вовсе — дальше всё равно есть Range-probe
+      timeoutMs: HEAD_PROBE_TIMEOUT_MS,
     });
     res.resume();
     const len = parseInt(res.headers['content-length'] || '0', 10) || 0;

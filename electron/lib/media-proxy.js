@@ -427,4 +427,5 @@ module.exports = {
   corsHeaders,
   EXTRA_MEDIA_HOSTS,
   solodMirrorCandidates,
+  toKodikHlsUrl,
 };

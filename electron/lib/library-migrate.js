@@ -3,11 +3,14 @@
 /**
  * Миграция библиотеки:
  * Anixapp / Title / Dub / Source / «Title 01.mp4»
+ *
+ * Трогаем только то, что скачало само приложение (папки из .anixapp-library.json
+ * или файлы с .anixdl): пользователь может выбрать папку, где уже лежат чужие видео.
  */
 
 const fs = require('fs');
 const path = require('path');
-const { getFolderMeta, parseEpisodeFromFilename } = require('./download-meta');
+const { readMeta, getFolderMeta, parseEpisodeFromFilename } = require('./download-meta');
 
 const VIDEO_EXT = new Set(['.mp4', '.mkv', '.webm', '.avi', '.mov', '.m4v']);
 
@@ -103,6 +106,16 @@ function migrateLibraryLayout(rootDir, skipPaths = new Set()) {
   let moved = 0;
   const skip = new Set([...skipPaths].map((p) => path.resolve(p)));
 
+  // Названия (верхний уровень), под которые приложение само что-то скачивало
+  const knownTitles = new Set(
+    Object.keys(readMeta(rootDir).folders || {})
+      .map((key) => String(key).replace(/\\/g, '/').split('/')[0])
+      .filter(Boolean)
+      .map((t) => sanitize(t).toLowerCase()),
+  );
+  const isKnownTitle = (name) => knownTitles.has(sanitize(name).toLowerCase());
+  const hasQueueSidecar = (full) => fs.existsSync(`${full}.anixdl`);
+
   /** @type {Array<{ from: string, title: string, dub: string, source: string, ep: number|null }>} */
   const plan = [];
 
@@ -118,12 +131,18 @@ function migrateLibraryLayout(rootDir, skipPaths = new Set()) {
       const full = path.join(dir, ent.name);
       if (ent.isDirectory()) {
         if (relParts.length >= 6) continue;
+        // Чужие папки в корне не обходим вовсе
+        if (relParts.length === 0 && !isKnownTitle(ent.name)) continue;
         walk(full, [...relParts, ent.name]);
         continue;
       }
       const ext = path.extname(ent.name).toLowerCase();
       if (!VIDEO_EXT.has(ext)) continue;
       if (skip.has(path.resolve(full))) continue;
+      // Файл в корне: только «Title 01.mp4» известного тайтла или с сайдкаром очереди
+      const guessed = path.basename(ent.name, ext).replace(/[ _-]*\d{1,3}$/, '').trim()
+        || path.basename(ent.name, ext);
+      if (relParts.length === 0 && !isKnownTitle(guessed) && !hasQueueSidecar(full)) continue;
       try {
         const st = fs.statSync(full);
         if (!st.isFile() || st.size < 256 * 1024) continue;
@@ -132,7 +151,7 @@ function migrateLibraryLayout(rootDir, skipPaths = new Set()) {
       }
 
       const parts = relParts.filter(Boolean);
-      const title = sanitize(parts[0] || path.basename(ent.name, ext));
+      const title = sanitize(parts[0] || guessed);
       const titleMeta = getFolderMeta(rootDir, title);
       let dub = parts[1] || '';
       let source = parts[2] || '';

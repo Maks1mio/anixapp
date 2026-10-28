@@ -2834,13 +2834,14 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
     opacity: 1;
   }
 
+  // Цвет затемнения: --carousel-fade-color (по умолчанию фон страницы)
   &--left {
     left: 0;
     justify-content: flex-start;
     padding-left: 0.5rem;
     background: linear-gradient(to right,
-        $color-bg 0%,
-        color-mix(in srgb, $color-bg 92%, transparent) 48%,
+        var(--carousel-fade-color, #{$color-bg}) 0%,
+        color-mix(in srgb, var(--carousel-fade-color, #{$color-bg}) 92%, transparent) 48%,
         transparent 100%);
   }
 
@@ -2849,8 +2850,8 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
     justify-content: flex-end;
     padding-right: 0.5rem;
     background: linear-gradient(to left,
-        $color-bg 0%,
-        color-mix(in srgb, $color-bg 92%, transparent) 48%,
+        var(--carousel-fade-color, #{$color-bg}) 0%,
+        color-mix(in srgb, var(--carousel-fade-color, #{$color-bg}) 92%, transparent) 48%,
         transparent 100%);
   }
 }

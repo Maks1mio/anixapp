@@ -299,14 +299,18 @@
     container: pp-sections / inline-size;
     display: flex;
     flex-direction: column;
-    gap: 0.7rem;
+    /* = padding-top карточки: отступ над и под строкой вкладок одинаковый */
+    gap: 0.75rem;
+    /* Fade карусели под цвет карточки (по умолчанию — фон страницы) */
+    --carousel-fade-color: color-mix(in srgb, var(--uikit-v2-text) 4%, var(--color-bg));
   }
 
   /* Вкладки внутри карточки: без sticky/фона, fade-градиенты под цвет карточки */
   .pp-sections :global(.uiv2-tabs.pp-sections__tabs) {
     --uikit-v2-bg: color-mix(in srgb, var(--uikit-v2-text) 4%, var(--color-bg));
-    margin: -0.2rem -0.15rem 0;
-    padding: 0 0 0.1rem;
+    /* Подпись вкладки на равном расстоянии от края карточки и от линии под вкладками */
+    margin: -0.375rem -0.15rem 0;
+    padding: 0 0 0.375rem;
     background: transparent;
   }
 

@@ -43,3 +43,14 @@ export async function loadSelfProfileGlobal(): Promise<boolean> {
     return false;
   }
 }
+
+/** Локально обновить свой профиль (после смены аватара / ника) и разослать anix:profileUpdated. */
+export function patchSelfProfileGlobal(patch: { avatar?: string | null; login?: string }): void {
+  const w = window as unknown as { __anixProfile?: { id?: number; login?: string; avatar: string | null } };
+  if (!w.__anixProfile) return;
+  const next = { ...w.__anixProfile };
+  if ('avatar' in patch) next.avatar = patch.avatar ? resolveCdnAssetUrl(String(patch.avatar)) : null;
+  if (patch.login) next.login = patch.login;
+  w.__anixProfile = next;
+  window.dispatchEvent(new CustomEvent('anix:profileUpdated'));
+}

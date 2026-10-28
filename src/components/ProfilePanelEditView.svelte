@@ -16,7 +16,7 @@
   import ProfileBadgesView from './profile-badges/ProfileBadgesView.svelte';
   import { badgeImage } from '../utils/badge-collection';
   import type { ApiBadge } from '../types/api';
-  import { compressImageForUpload } from '../utils/compressImage';
+  import ProfileMediaEditSheet, { type ProfileMediaPreviewInfo } from './profile-media/ProfileMediaEditSheet.svelte';
   import BlogCreateModal from './feed/BlogCreateModal.svelte';
 
   type EditScreen = 'menu' | 'status' | 'nickname' | 'social' | 'badge' | 'health' | 'hiddenChannels' | 'blocklist' | 'email' | 'password';
@@ -40,6 +40,9 @@
     badgeName?: string | null;
     badgeUrl?: string | null;
     avatarUrl?: string;
+    coverUrl?: string | null;
+    /** Данные шапки профиля для предпросмотра фото/обложки */
+    profilePreview?: ProfileMediaPreviewInfo;
     startScreen?: EditScreen;
     onBack: () => void;
     onProfilePatched?: (patch: Record<string, unknown>) => void;
@@ -52,6 +55,8 @@
     badgeName = null,
     badgeUrl = null,
     avatarUrl = '',
+    coverUrl = null,
+    profilePreview = {},
     startScreen = 'menu',
     onBack,
     onProfilePatched,
@@ -141,8 +146,6 @@
   let emailHint = $state('');
   let avatarBanned = $state(false);
   let mediaBusy = $state(false);
-  let avatarInputEl = $state<HTMLInputElement | undefined>();
-  let coverInputEl = $state<HTMLInputElement | undefined>();
 
   let logoutBusy = $state(false);
   let accountsPickerOpen = $state(false);
@@ -407,56 +410,14 @@
     mediaPicker = null;
   }
 
-  const mediaPickerOptions = $derived.by(() => {
-    const options = [{ value: 'upload', label: 'Загрузить с устройства' }];
-    if (mediaPicker === 'avatar') {
-      options.push({ value: 'reset', label: 'Сбросить фото' });
-    } else if (mediaPicker === 'cover' && hasCover) {
-      options.push({ value: 'reset', label: 'Сбросить обложку' });
-    }
-    return options;
-  });
-
-  async function onMediaPickerSelect(value: string | number) {
-    const kind = mediaPicker;
-    closeMediaPicker();
-    if (!kind) return;
-    if (value === 'upload') {
-      queueMicrotask(() => {
-        if (kind === 'avatar') avatarInputEl?.click();
-        else coverInputEl?.click();
-      });
-      return;
-    }
-    if (value === 'reset') {
-      if (kind === 'avatar') void resetAvatar();
-      else void resetCover();
-    }
-  }
-
-  async function fileToDataUrl(file: File, maxWidth: number): Promise<{ dataUrl: string; name: string }> {
-    const compressed = await compressImageForUpload(file, maxWidth);
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result ?? ''));
-      reader.onerror = () => reject(reader.error ?? new Error('read failed'));
-      reader.readAsDataURL(compressed);
-    });
-    return { dataUrl, name: compressed.name || 'image.jpg' };
-  }
-
-  async function onAvatarFileChange(e: Event) {
-    const input = e.currentTarget as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = '';
-    if (!file || mediaBusy) return;
+  async function saveAvatar(dataUrl: string, name: string) {
+    if (mediaBusy) return;
     if (!window.anixApi?.settings?.setAvatar) {
       showToast('Загрузка фото недоступна', 'err');
       return;
     }
     mediaBusy = true;
     try {
-      const { dataUrl, name } = await fileToDataUrl(file, 1024);
       const res = await window.anixApi.settings.setAvatar(dataUrl, name);
       if (res?.code != null && res.code !== 0) {
         showToast('Не удалось обновить фото профиля', 'err');
@@ -464,6 +425,7 @@
       }
       const nextAvatar = String(res?.avatar ?? '');
       if (nextAvatar) onProfilePatched?.({ avatar: nextAvatar });
+      closeMediaPicker();
       showToast('Фото профиля обновлено');
     } catch {
       showToast('Не удалось обновить фото профиля', 'err');
@@ -482,6 +444,7 @@
         return;
       }
       onProfilePatched?.({ avatar: String(res?.avatar ?? '') });
+      closeMediaPicker();
       showToast('Фото профиля сброшено');
     } catch {
       showToast('Не удалось сбросить фото', 'err');
@@ -515,11 +478,8 @@
     }
   }
 
-  async function onCoverFileChange(e: Event) {
-    const input = e.currentTarget as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = '';
-    if (!file || mediaBusy) return;
+  async function saveCover(dataUrl: string, name: string) {
+    if (mediaBusy) return;
     if (!window.anixApi?.channel?.uploadCover) {
       showToast('Загрузка обложки недоступна', 'err');
       return;
@@ -531,7 +491,6 @@
         /* диалог улучшения профиля уже открыт, либо API недоступен */
         return;
       }
-      const { dataUrl, name } = await fileToDataUrl(file, 1920);
       const res = await window.anixApi.channel.uploadCover(id, dataUrl, name);
       if (res?.code != null && res.code !== 0) {
         showToast('Не удалось обновить обложку', 'err');
@@ -540,6 +499,7 @@
       const next = String(res?.url ?? '');
       hasCover = !!next;
       onProfilePatched?.({ cover: next || null });
+      closeMediaPicker();
       showToast('Обложка обновлена');
     } catch {
       showToast('Не удалось обновить обложку', 'err');
@@ -564,6 +524,7 @@
       }
       hasCover = false;
       onProfilePatched?.({ cover: null });
+      closeMediaPicker();
       showToast('Обложка сброшена');
     } catch {
       showToast('Не удалось сбросить обложку', 'err');
@@ -1184,13 +1145,13 @@
           {:else if avatarBanned}
             Смена временно недоступна
           {:else}
-            Загрузить с устройства
+            Загрузить и обрезать
           {/if}
         </span>
       </button>
       <button type="button" class="profile-panel__edit-row" onclick={() => void openCoverPicker()} disabled={mediaBusy}>
         <span class="profile-panel__edit-row-title">Изменить обложку</span>
-        <span class="profile-panel__edit-row-sub">{mediaBusy ? 'Загрузка…' : 'Загрузить с устройства'}</span>
+        <span class="profile-panel__edit-row-sub">{mediaBusy ? 'Загрузка…' : 'Загрузить и обрезать'}</span>
       </button>
       <button type="button" class="profile-panel__edit-row" onclick={() => { screen = 'status'; }}>
         <span class="profile-panel__edit-row-title">Изменить статус</span>
@@ -1481,13 +1442,17 @@
   {/if}
 
   {#if mediaPicker}
-    <UiV2ChoiceSheet
-      title={mediaPicker === 'avatar' ? 'Изменить фото профиля' : 'Изменить обложку'}
-      options={mediaPickerOptions}
-      value="upload"
-      disabled={mediaBusy}
+    <ProfileMediaEditSheet
+      kind={mediaPicker}
+      {login}
+      {avatarUrl}
+      {coverUrl}
+      preview={profilePreview}
+      canReset={mediaPicker === 'avatar' ? !!avatarUrl : hasCover}
+      busy={mediaBusy}
       onClose={closeMediaPicker}
-      onSelect={(v) => void onMediaPickerSelect(v)}
+      onSave={(dataUrl, name) => (mediaPicker === 'avatar' ? saveAvatar(dataUrl, name) : saveCover(dataUrl, name))}
+      onReset={() => (mediaPicker === 'avatar' ? resetAvatar() : resetCover())}
     />
   {/if}
 
@@ -1498,20 +1463,5 @@
       blogCreateForCover = false;
     }}
     onCreated={onBlogCreatedFromSettings}
-  />
-
-  <input
-    bind:this={avatarInputEl}
-    type="file"
-    accept="image/jpeg,image/png,image/webp,image/gif"
-    hidden
-    onchange={(e) => void onAvatarFileChange(e)}
-  />
-  <input
-    bind:this={coverInputEl}
-    type="file"
-    accept="image/jpeg,image/png,image/webp"
-    hidden
-    onchange={(e) => void onCoverFileChange(e)}
   />
 </div>

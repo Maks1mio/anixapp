@@ -55,23 +55,6 @@
   line-height: 1;
 }
 
-.titlebar__beta {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 1.1rem;
-  padding: 0 0.4rem;
-  border-radius: 74px;
-  background: #ef4444;
-  color: #fff;
-  font-size: 0.6rem;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  line-height: 1.1;
-  flex-shrink: 0;
-}
-
 .titlebar__version {
   font-size: 0.7rem;
   font-weight: 500;
@@ -733,78 +716,9 @@
   pointer-events: none;
 }
 
-.titlebar__account {
-  display: inline-flex;
-  align-items: center;
-  height: 32px;
-  padding: 2px;
-  gap: 0;
-  border-radius: 999px;
-  background: transparent;
-  transition: background $transition;
-  -webkit-app-region: no-drag;
-
-  &:hover,
-  &--open {
-    background: $color-surface-hover;
-  }
-
-  .uiv2-tooltip__trigger {
-    display: inline-flex;
-  }
-}
-
-.titlebar__account-avatar,
-.titlebar__account-chevron {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: $color-text-muted;
-  cursor: pointer;
-  transition: color $transition, background $transition;
-
-  &:hover,
-  &:focus-visible {
-    color: $color-text;
-  }
-
-  &:focus-visible {
-    outline: 2px solid color-mix(in srgb, $color-accent 70%, transparent);
-    outline-offset: 1px;
-  }
-}
-
-.titlebar__account-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-}
-
-.titlebar__account-chevron {
-  width: 20px;
-  height: 28px;
-  border-radius: 999px;
-  margin-right: 1px;
-}
-
-.titlebar__account-chevron-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.titlebar__account--open .titlebar__account-chevron-icon {
-  transform: rotate(180deg);
-  color: $color-text;
-}
-
 .titlebar__menu-item--avatar {
   padding: 0;
+  border-radius: 999px;
 }
 
 .titlebar__menu-item--update {
@@ -947,17 +861,6 @@
 .titlebar__avatar--image {
   background-size: cover;
   background-position: center;
-}
-
-// Иконка-аватар в popup «Аккаунты» (HTML в UiV2PopupMenu item.icon, portal вне titlebar)
-.titlebar__account-menu-avatar {
-  display: block;
-  width: 1.35rem;
-  height: 1.35rem;
-  border-radius: 999px;
-  object-fit: cover;
-  background-color: $color-surface-hover;
-  flex-shrink: 0;
 }
 
 .titlebar__controls {

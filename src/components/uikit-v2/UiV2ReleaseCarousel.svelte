@@ -11,6 +11,8 @@
     onScrollLeftChange?: (left: number) => void;
     scrollbar?: boolean;
     wheelScroll?: boolean;
+    /** Цвет fade по краям; по умолчанию фон страницы (--carousel-fade-color) */
+    fadeColor?: string;
   };
 
   let {
@@ -21,7 +23,10 @@
     onScrollLeftChange,
     scrollbar = true,
     wheelScroll = false,
+    fadeColor,
   }: Props = $props();
+
+  const fadeStyle = $derived(fadeColor ? `--carousel-fade-color: ${fadeColor}` : undefined);
 </script>
 
 {#snippet body()}
@@ -40,6 +45,7 @@
 {#if scrollbar}
   <div
     class="uiv2-carousel uiv2-scroll-area uiv2-scroll-area--x {className}"
+    style={fadeStyle}
     use:uiv2CustomScroll={{ axis: 'x', viewportSelector: '.uiv2-carousel__scroll' }}
   >
     {@render body()}
@@ -48,7 +54,7 @@
     </div>
   </div>
 {:else}
-  <div class="uiv2-carousel {className}">
+  <div class="uiv2-carousel {className}" style={fadeStyle}>
     {@render body()}
   </div>
 {/if}

@@ -813,9 +813,8 @@
       <span class="titlebar__logo" aria-hidden="true">
         <img src="logo/512x512.png" alt="" class="titlebar__logo-img" />
       </span>
-      <div class="titlebar__brand" title={appVersion ? `AnixApp v${appVersion}` : 'AnixApp beta'}>
+      <div class="titlebar__brand" title={appVersion ? `AnixApp v${appVersion}` : 'AnixApp'}>
         <span class="titlebar__title">AnixApp</span>
-        <span class="titlebar__beta">beta</span>
         {#if appVersion}
           <span class="titlebar__version">v{appVersion}</span>
         {/if}

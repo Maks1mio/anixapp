@@ -19,6 +19,7 @@
   } from '../stores/profile-panel';
   import { resolveCdnAssetUrl, toCdnProxyUrl, fetchCdnJson } from '../utils/posterUrl';
   import { resolveFriendButtonState } from '../utils/profile-friend';
+  import { patchSelfProfileGlobal } from '../utils/profile';
   import {
     fmtDate,
     fmtLastSeen,
@@ -514,6 +515,13 @@
     if (typeof rest.login === 'string' && rest.login) {
       updateProfilePanelLogin(userId, rest.login);
     }
+    // Свой аватар / ник → шапка приложения и прочие места, читающие __anixProfile
+    if (isMyProfile && ('avatar' in rest || typeof rest.login === 'string')) {
+      patchSelfProfileGlobal({
+        ...('avatar' in rest ? { avatar: rest.avatar ? String(rest.avatar) : null } : {}),
+        ...(typeof rest.login === 'string' && rest.login ? { login: rest.login } : {}),
+      });
+    }
   }
 
   $effect(() => {
@@ -871,20 +879,36 @@
                     <h2 class="profile-panel__name">
                       <span class="profile-panel__name-text">{login}</span>
                       {#if badge?.image_url}
-                        {#if isLottieBadgeUrl(badge.image_url)}
-                          <span
-                            class="profile-panel__badge"
-                            title={badge.name || badgeNameByUrl(badge.image_url) || 'Значок Anixart'}
-                            bind:this={badgeLottieEl}
-                          ></span>
-                        {:else}
-                          <img
-                            class="profile-panel__badge-img"
-                            src={toCdnProxyUrl(badge.image_url)}
-                            alt={badge.name ?? ''}
-                            title={badge.name || badgeNameByUrl(badge.image_url) || 'Значок Anixart'}
-                          />
-                        {/if}
+                        {@const badgeTitle = badge.name || badgeNameByUrl(badge.image_url) || 'Значок Anixart'}
+                        <!-- Клик по значку Anixart → выбор значка (свой профиль) или витрина значков -->
+                        <span
+                          class="profile-panel__badge-hit"
+                          role="button"
+                          tabindex="0"
+                          aria-label="{badgeTitle} — значки"
+                          onclick={openBadgesView}
+                          onkeydown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              openBadgesView();
+                            }
+                          }}
+                        >
+                          {#if isLottieBadgeUrl(badge.image_url)}
+                            <span
+                              class="profile-panel__badge"
+                              title={badgeTitle}
+                              bind:this={badgeLottieEl}
+                            ></span>
+                          {:else}
+                            <img
+                              class="profile-panel__badge-img"
+                              src={toCdnProxyUrl(badge.image_url)}
+                              alt={badge.name ?? ''}
+                              title={badgeTitle}
+                            />
+                          {/if}
+                        </span>
                       {/if}
                       {#if profile.is_verified}
                         <span class="profile-panel__verified" title="Подтверждён">✓</span>
@@ -1125,6 +1149,17 @@
                 badgeName={badge?.name ?? null}
                 badgeUrl={badge?.image_url ?? null}
                 avatarUrl={avatarUrl}
+                coverUrl={coverUrl ? toCdnProxyUrl(coverUrl) : null}
+                profilePreview={{
+                  status: statusText,
+                  badgeUrl: badge?.image_url ?? null,
+                  badgeName: badge?.name ?? null,
+                  verified: !!profile.is_verified,
+                  online: isOnline,
+                  level,
+                  meta: metaSecondary,
+                  roles,
+                }}
                 startScreen={editStartScreen}
                 onBack={closeEditView}
                 onProfilePatched={onProfilePatched}

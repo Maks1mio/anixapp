@@ -62,7 +62,7 @@ function mapKnownError(raw, extra = {}) {
   const httpMatch = /HTTP\s+(\d{3})/i.exec(text);
   if (httpMatch) {
     const code = httpMatch[1];
-    if (code === '403') return 'Доступ запрещён (HTTP 403) — ссылка могла устареть, попробуйте снова из плеера';
+    if (code === '403') return 'Ссылка устарела (HTTP 403), а свежую получить не удалось — нажмите «Повторить» или выберите другой источник';
     if (code === '404') {
       const hay = `${text} ${extra.url || ''} ${extra.host || ''}`;
       if (/libria\.fun|anilibria|aniliberty|iframe\.php/i.test(hay)) {

@@ -236,6 +236,25 @@ function isServerStatusError(err) {
   return code === 408 || code === 429 || code >= 500;
 }
 
+/**
+ * Подписанная ссылка CDN протухла (Kodik/solodcdn через несколько часов, после рестарта,
+ * после паузы на время просмотра) — лечится свежей ссылкой с API, а не повтором той же.
+ */
+function isExpiredLinkError(err) {
+  const raw = extractRawMessage(err);
+  const m = /HTTP\s+(\d{3})/i.exec(raw);
+  if (!m) return /forbidden|expired|signature/i.test(raw);
+  const code = Number(m[1]);
+  return code === 401 || code === 403 || code === 404 || code === 410;
+}
+
+/** Старше этого — перед стартом берём свежую ссылку (подписи CDN живут недолго). */
+const URL_MAX_AGE_MS = 30 * 60_000;
+
+function canRefreshUrl(job) {
+  return [job?.releaseId, job?.sourceId, job?.episodePosition].every((v) => Number.isFinite(Number(v)) && v != null);
+}
+
 /** Зависшее соединение с CDN (сегмент HLS, solodcdn) иначе держит загрузку вечно. */
 const NODE_FETCH_IDLE_TIMEOUT_MS = 30_000;
 
@@ -474,6 +493,7 @@ function enqueue(jobInput, deps) {
     pausedByStreaming: streamingHold || undefined,
     received: 0,
     total: 0,
+    urlResolvedAt: Date.now(),
   });
   queue.push(job);
   if (streamingHold) streamingPausedIds.add(job.id);
@@ -578,9 +598,12 @@ async function runJob(job, deps) {
   job.abort = new AbortController();
   emit(job);
 
-  // Просроченная ссылка / HTML-эмбед / восстановление без URL
+  // Просроченная ссылка / HTML-эмбед / восстановление без URL / ссылка из прошлой сессии или долгой паузы
+  const urlIsStale = canRefreshUrl(job)
+    && (!job.urlResolvedAt || Date.now() - job.urlResolvedAt > URL_MAX_AGE_MS);
   if (
     job.needsUrlRefresh
+    || urlIsStale
     || /placeholder\.invalid/i.test(job.url)
     || (typeof isEmbedPageUrl === 'function' && isEmbedPageUrl(job.url))
   ) {
@@ -593,8 +616,9 @@ async function runJob(job, deps) {
             ? fresh.headers
             : job.headers;
           job.needsUrlRefresh = false;
+          job.urlResolvedAt = Date.now();
         }
-      } catch (_) { /* continue */ }
+      } catch (_) { /* continue — пробуем старую ссылку, на 403 обновим ещё раз */ }
     }
     if (!/^https?:\/\//i.test(job.url) || /placeholder\.invalid/i.test(job.url)) {
       throw new Error('Ссылка устарела — добавьте серию в загрузку снова');
@@ -677,7 +701,7 @@ async function runJob(job, deps) {
         if (isCancel(e)) throw new Error('cancelled');
         lastErr = e;
         job.url = prevUrl;
-        if (!isServerStatusError(e)) throw e;
+        if (!isServerStatusError(e) && !isExpiredLinkError(e)) throw e;
         return false;
       }
     };
@@ -697,6 +721,7 @@ async function runJob(job, deps) {
       try { fresh = await refreshDownloadUrl(job); } catch (_) { /* keep lastErr */ }
       if (fresh?.url) {
         if (fresh.headers && typeof fresh.headers === 'object') job.headers = fresh.headers;
+        job.urlResolvedAt = Date.now();
         const freshHls = toKodikHlsUrl(fresh.url);
         for (const url of [...new Set([freshHls, fresh.url])]) {
           if (url === job.url || url === alt) continue;
@@ -745,7 +770,7 @@ async function runJob(job, deps) {
             throw err2;
           }
         }
-      } else if (isServerStatusError(err)) {
+      } else if (isServerStatusError(err) || isExpiredLinkError(err)) {
         await retryOnServerError(err);
       } else {
         throw err;
@@ -1005,6 +1030,8 @@ function retryJob(id, deps) {
   job.sslRetries = 0;
   job.pauseRequested = false;
   job.requeueAfterStop = false;
+  // Повтор после ошибки — почти всегда протухшая ссылка: берём свежую
+  job.urlResolvedAt = 0;
   queue.push(job);
   emit(job);
   persistQueueNow();

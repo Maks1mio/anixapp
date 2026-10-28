@@ -4,11 +4,6 @@
   import { getFluoRoomSettings } from '../fluo/sync';
   import { fluoAnimeSelectModeOf, fluoPlaybackControlMode, isFluoAnimeVoteEnabled } from '../fluo/types';
   import { isDubberBlacklisted } from '../views/Watch/_utils';
-  import {
-    buildDownloadFolder,
-    buildEpisodeFilename,
-    resolveDownloadWithSiblingFallback,
-  } from '../utils/download-queue-client';
   import { navigate } from '../stores/navigation';
   import { isMobileMode } from '../platform/mobile';
   import { showToast } from '../stores/toast';
@@ -65,6 +60,8 @@
   import { isTvMode } from '../platform/tv';
   import { restoreTvFocus, scheduleFocusTvOverlayContent } from '../services/tv-navigation';
   import { tvLongPress } from '../actions/tvLongPress';
+  import UiV2Button from './uikit-v2/UiV2Button.svelte';
+  import DesktopDownloadModal from './DesktopDownloadModal.svelte';
 
   interface Props {
     releaseId: number;
@@ -117,24 +114,6 @@
     [key: string]: unknown;
   }
 
-  interface DownloadItem {
-    url: string;
-    filename: string;
-    folder?: string;
-    headers?: Record<string, string>;
-    releaseId?: number;
-    sourceId?: number;
-    dubberId?: number;
-    episodePosition?: number;
-    releaseTitle?: string;
-    dubberName?: string;
-    sourceName?: string;
-    skip?: {
-      opening?: { start: number; end: number } | null;
-      ending?: { start: number; end: number } | null;
-    } | null;
-  }
-
   interface EpisodeUpdate {
     last_episode_update_date?: number;
     last_episode_update_name?: string;
@@ -171,8 +150,6 @@
   let selectedEpisodePos = $state<number | null>(null);
   let optionsOpen = $state(false);
   let actionBusy = $state('');
-  let downloadStatus = $state('');
-  let downloadedPositions = $state<Record<number, boolean>>({});
   let lastEpisodeTypeUpdateId = $state<number | null>(null);
 
   let confirmTitle = $state('');
@@ -213,6 +190,8 @@
   });
   /** TV: пульт и разметка «под 10 футов» (сетки, крупные плитки, без мелких кнопок). */
   const isTv = isTvMode();
+  /** ПК: ТВ-подобные крупные карточки, но под мышь (ховеры, пин и отметка кнопками). */
+  const isDesktop = !isTv && !isMobileMode();
   const watchedCount = $derived(episodes.filter(isEpisodeWatched).length);
   const remainingCount = $derived(Math.max(0, episodes.length - watchedCount));
   const lastWatchedEpisode = $derived.by(() => {
@@ -312,37 +291,6 @@
       /* ignore */
     } finally {
       pinningId = null;
-    }
-  }
-
-  function buildDownloadMeta(ep: Episode, sourceNameOverride = '') {
-    const dub = selectedDubber?.name ?? '';
-    const player = sourceNameOverride || selectedSource?.name || '';
-    return {
-      folder: buildDownloadFolder(releaseTitle, dub, player),
-      filename: buildEpisodeFilename(releaseTitle, dub, ep.position, player),
-    };
-  }
-
-  function isEpisodeDownloaded(position: number): boolean {
-    return !!downloadedPositions[position];
-  }
-
-  async function refreshDownloadedState() {
-    if (!window.electron?.checkDownloadFiles || episodes.length === 0) {
-      downloadedPositions = {};
-      return;
-    }
-    try {
-      const items = episodes.map((ep) => buildDownloadMeta(ep));
-      const results = await window.electron.checkDownloadFiles({ items });
-      const next: Record<number, boolean> = {};
-      results.forEach((r, i) => {
-        if (r.exists) next[episodes[i].position] = true;
-      });
-      downloadedPositions = next;
-    } catch {
-      downloadedPositions = {};
     }
   }
 
@@ -668,7 +616,6 @@
     episodes = [];
     searchInput = '';
     optionsOpen = false;
-    downloadStatus = '';
     episodesError = '';
     episodesLoading = true;
 
@@ -718,7 +665,6 @@
         episodesError = NO_EPISODE_PICK_OTHER_DUB;
         return false;
       }
-      await refreshDownloadedState();
       await tick();
       focusTvModalContent();
       if (lastWatchedEpisode) window.setTimeout(() => scrollToEpisode(lastWatchedEpisode!.position), 80);
@@ -864,57 +810,10 @@
     });
   }
 
-  async function resolveDownloadItem(ep: Episode): Promise<DownloadItem | null> {
-    if (!selectedSource || selectedDubber?.id == null) return null;
-    let episode = ep;
-    if (!episode.url) {
-      const res = await window.anixApi?.release?.getEpisode(releaseId, selectedSource.id, ep.position);
-      episode = { ...ep, ...(res?.episode ?? {}) };
-    }
-    if (!episode.url) return null;
-
-    const resolved = await resolveDownloadWithSiblingFallback({
-      releaseId,
-      sourceId: selectedSource.id,
-      dubberId: selectedDubber.id,
-      position: ep.position,
-      episodeUrl: episode.url,
-      iframe: !!episode.iframe,
-    });
-    if (!resolved?.url) return null;
-
-    const sourceName = resolved.sourceName || selectedSource?.name || '';
-    const meta = buildDownloadMeta(ep, sourceName);
-    return {
-      url: resolved.url,
-      filename: meta.filename,
-      folder: meta.folder,
-      headers: resolved.headers,
-      releaseId,
-      sourceId: resolved.sourceId,
-      dubberId: selectedDubber.id,
-      episodePosition: ep.position,
-      releaseTitle,
-      dubberName: selectedDubber?.name ?? '',
-      sourceName,
-      skip: resolved.skip ?? null,
-    };
-  }
-
-  async function queueDownloads(eps: Episode[]) {
-    const items: DownloadItem[] = [];
-    for (const ep of eps) {
-      downloadStatus = `Подготовка серии ${ep.position}…`;
-      const item = await resolveDownloadItem(ep);
-      if (item) items.push(item);
-    }
-    if (items.length === 0) throw new Error('no items');
-    await window.electron?.queueEpisodeDownloads?.({ items });
-    void refreshDownloadedState();
-  }
-
   // ── Телефон: нативные загрузки (Media3) ────────────────────────────────────────────────────
   let dlDialog = $state(false);
+  /** ПК: окно «Скачать серии» для выбранных озвучки и источника. */
+  let desktopDlOpen = $state(false);
   let dlBusy = $state('');
 
   function mobileDlItem(position: number) {
@@ -963,90 +862,18 @@
     void mobileQueue(list, quality);
   }
 
-  async function downloadEpisode(ep: Episode, event?: MouseEvent) {
+  function downloadEpisode(ep: Episode, event?: MouseEvent) {
     event?.stopPropagation();
-    if (isMobile) {
-      const st = mobileDlItem(ep.position)?.state;
-      if (st === 'completed' || st === 'queued' || st === 'downloading') {
-        showToast(st === 'completed' ? 'Серия уже скачана' : 'Серия уже в загрузках');
-        return;
-      }
-      void mobileQueue([ep], getDownloadQuality());
+    const st = mobileDlItem(ep.position)?.state;
+    if (st === 'completed' || st === 'queued' || st === 'downloading') {
+      showToast(st === 'completed' ? 'Серия уже скачана' : 'Серия уже в загрузках');
       return;
     }
-    if (actionBusy) return;
-
-    const run = async () => {
-      actionBusy = `dl-${ep.position}`;
-      downloadStatus = `Подготовка серии ${ep.position}…`;
-      try {
-        await queueDownloads([ep]);
-        downloadStatus = `Серия ${ep.position} добавлена в загрузки`;
-        navigate('/downloads');
-      } catch {
-        downloadStatus = `Не удалось подготовить серию ${ep.position}`;
-      } finally {
-        actionBusy = '';
-      }
-    };
-
-    if (isEpisodeDownloaded(ep.position)) {
-      openConfirm({
-        title: `Серия ${ep.position} уже скачана`,
-        text: 'Файл уже есть в папке загрузок. Скачать заново?',
-        yesLabel: 'Скачать заново',
-        onYes: () => { void run(); },
-      });
-      return;
-    }
-    await run();
+    void mobileQueue([ep], getDownloadQuality());
   }
 
-  async function downloadAllEpisodes() {
-    if (isMobile) { if (episodes.length > 0) dlDialog = true; return; }
-    if (episodes.length === 0 || actionBusy) return;
-
-    const already = episodes.filter((ep) => isEpisodeDownloaded(ep.position));
-    const pending = episodes.filter((ep) => !isEpisodeDownloaded(ep.position));
-
-    const runQueue = async (list: Episode[]) => {
-      if (list.length === 0) {
-        downloadStatus = 'Нечего скачивать — все серии уже на диске';
-        return;
-      }
-      actionBusy = 'download-all';
-      optionsOpen = false;
-      downloadStatus = `Подготовка ${liveEpisodeTotal || list.length} серий…`;
-      try {
-        await queueDownloads(list);
-        downloadStatus = `Добавлено в загрузки: ${list.length}`;
-        navigate('/downloads');
-      } catch {
-        downloadStatus = 'Не удалось подготовить загрузку';
-      } finally {
-        actionBusy = '';
-      }
-    };
-
-    if (already.length > 0) {
-      const nums = already.map((ep) => ep.position).join(', ');
-      const allDone = already.length === episodes.length;
-      openConfirm({
-        title: allDone
-          ? 'Все серии уже скачаны'
-          : `${already.length} ${already.length === 1 ? 'серия уже скачана' : already.length < 5 ? 'серии уже скачаны' : 'серий уже скачаны'}`,
-        text: allDone
-          ? 'Все файлы уже есть в папке загрузок. Скачать всё заново?'
-          : `Серии ${nums} уже скачаны. Скачать всё заново (будут созданы новые копии) или пропустить их?`,
-        yesLabel: 'Скачать заново',
-        onYes: () => { void runQueue(episodes); },
-        skipLabel: allDone ? '' : `Скачать только ${pending.length} ${pending.length === 1 ? 'серию' : pending.length < 5 ? 'серии' : 'серий'}`,
-        onSkip: allDone ? undefined : () => { void runQueue(pending); },
-      });
-      return;
-    }
-
-    await runQueue(episodes);
+  function downloadAllEpisodes() {
+    if (episodes.length > 0) dlDialog = true;
   }
 
   function handleConfirmYes() {
@@ -1085,12 +912,6 @@
     focusTvModalContent();
 
     const cached = getWatchModalState(releaseId);
-
-    const onDownloadProgress = (e: Event) => {
-      const d = (e as CustomEvent).detail;
-      if (d?.status === 'done') void refreshDownloadedState();
-    };
-    window.addEventListener('episode-download:progress', onDownloadProgress);
 
     const api = window.anixApi;
     if (!Number.isFinite(releaseId) || releaseId <= 0 || !api?.release?.getDubbers) {
@@ -1143,10 +964,6 @@
           sourcesError = 'Ошибка загрузки';
         });
     }
-
-    return () => {
-      window.removeEventListener('episode-download:progress', onDownloadProgress);
-    };
   });
 
   onDestroy(() => {
@@ -1168,7 +985,7 @@
 
 </script>
 
-<div class="watch-modal" class:watch-modal--tv={isTv} role="dialog" aria-modal="true">
+<div class="watch-modal" class:watch-modal--tv={isTv} class:watch-modal--desktop={isDesktop} role="dialog" aria-modal="true">
   <button type="button" class="watch-modal__backdrop" aria-label="Закрыть" onclick={close}></button>
 
   <div class="watch-modal__panel">
@@ -1315,6 +1132,9 @@
                       {sourceLabel(source)}
                     </button>
                   {/each}
+                  {#if isDesktop}
+                    <span class="watch-modal__desk-progress">Просмотрено {watchedCount} из {episodes.length}</span>
+                  {/if}
                 </div>
               {/if}
 
@@ -1340,6 +1160,32 @@
                     Просмотрено {watchedCount} из {episodes.length}
                     <span class="watch-modal__tv-hint">Удерживайте OK на серии — отметить</span>
                   </span>
+                </div>
+              {:else if isDesktop}
+                <div class="watch-modal__desk-actions">
+                  {#if nextEpisode}
+                    {@const nextNum = episodeDisplayNumber(nextEpisode, episodes)}
+                    <UiV2Button
+                      variant="primary"
+                      label="{lastWatchedEpisode ? 'Продолжить' : 'Начать'} · {nextNum != null ? `${nextNum} серия` : (nextEpisode.name || 'серия')}"
+                      onclick={() => handleEpisodePlay(nextEpisode.position)}
+                    />
+                  {/if}
+                  <UiV2Button label="Отметить все" onclick={() => confirmSetAllWatched(true)} disabled={actionBusy !== '' || remainingCount === 0} />
+                  <UiV2Button label="Снять отметки" onclick={() => confirmSetAllWatched(false)} disabled={actionBusy !== '' || watchedCount === 0} />
+                  <UiV2Button label="Скачать" title="Скачать серии" ariaHaspopup="dialog" onclick={() => (desktopDlOpen = true)} disabled={!selectedSource || episodes.length === 0}>
+                    {#snippet icon()}{@html downloadIconSvg}{/snippet}
+                  </UiV2Button>
+                  <label class="watch-modal__desk-search">
+                    <span class="watch-modal__episodes-search-icon" aria-hidden="true">{@html searchIconSvg}</span>
+                    <input
+                      type="search"
+                      class="watch-modal__episodes-search-input"
+                      placeholder="Найти серию"
+                      bind:value={searchInput}
+                      onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearchEpisode(); } }}
+                    />
+                  </label>
                 </div>
               {:else}
               <div class="watch-modal__episodes-toolbar" role="search">
@@ -1376,15 +1222,11 @@
               </div>
               {/if}
 
-              {#if downloadStatus}
-                <div class="watch-modal__download-status">{downloadStatus}</div>
-              {/if}
-
               <div class="watch-modal__episodes" bind:this={episodesListEl}>
                 {#each filteredEpisodes as ep (ep.position)}
                   {@const watched = isEpisodeWatched(ep)}
                   {@const dlItem = isMobile ? mobileDlItem(ep.position) : undefined}
-                  {@const downloaded = isMobile ? dlItem?.state === 'completed' : isEpisodeDownloaded(ep.position)}
+                  {@const downloaded = dlItem?.state === 'completed'}
                   {@const displayNum = episodeDisplayNumber(ep, episodes)}
                   {@const unnumbered = displayNum == null}
                   <article
@@ -1392,7 +1234,7 @@
                     class:watch-modal__episode-card--watched={watched}
                     class:watch-modal__episode-card--active={selectedEpisodePos === ep.position}
                     class:watch-modal__episode-card--unnumbered={unnumbered}
-                    class:watch-modal__episode-card--next={isTv && nextEpisodePos === ep.position}
+                    class:watch-modal__episode-card--next={(isTv || isDesktop) && nextEpisodePos === ep.position}
                     data-position={ep.position}
                   >
                     <button
@@ -1413,7 +1255,19 @@
                         <span class="watch-modal__episode-check" aria-label="Просмотрено">{@html checkIconSvg}</span>
                       {/if}
                     </button>
-                    {#if !isTv}
+                    {#if isDesktop}
+                      <button
+                        type="button"
+                        class="watch-modal__episode-watch"
+                        class:watch-modal__episode-watch--on={watched}
+                        aria-pressed={watched}
+                        aria-label={watched ? 'Снять отметку' : 'Отметить просмотренной'}
+                        title={watched ? 'Снять отметку' : 'Отметить просмотренной'}
+                        onclick={(e) => toggleEpisodeWatched(ep, e)}
+                      >
+                        {@html checkIconSvg}
+                      </button>
+                    {:else if !isTv}
                     <span class="watch-modal__episode-actions">
                       <button
                         type="button"
@@ -1482,6 +1336,8 @@
               >Субтитры</button>
               {#if isTv}
                 <span class="watch-modal__tv-hint watch-modal__tv-hint--end">Удерживайте OK — закрепить озвучку</span>
+              {:else if isDesktop}
+                <span class="watch-modal__desk-hint">Наведите на озвучку, чтобы закрепить</span>
               {/if}
             </div>
 
@@ -1581,6 +1437,19 @@
         preDubberId={selectedDubber?.id}
         preSourceId={selectedSource?.id}
         onClose={() => (dlDialog = false)}
+      />
+    {/if}
+
+    {#if desktopDlOpen && selectedDubber && selectedSource}
+      <DesktopDownloadModal
+        {releaseId}
+        {releaseTitle}
+        dubberId={selectedDubber.id}
+        dubberName={selectedDubber.name}
+        sourceId={selectedSource.id}
+        sourceName={selectedSource.name}
+        episodes={episodes.map((ep) => ({ position: ep.position, name: ep.name, url: ep.url, iframe: !!ep.iframe }))}
+        onClose={() => (desktopDlOpen = false)}
       />
     {/if}
 

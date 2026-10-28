@@ -66,6 +66,12 @@ async function refreshDownloadUrl(job) {
     })();
     let url = direct?.directUrl || '';
     if (!url) return null;
+    // То же качество, что было: иначе докачка HLS по частям склеит сегменты разных потоков
+    const prevQuality = /\/(\d{3,4})\.mp4/i.exec(String(job?.url || ''))?.[1];
+    const sameQuality = prevQuality && direct?.qualityMap
+      ? (direct.qualityMap[prevQuality] || direct.qualityMap[`${prevQuality}p`])
+      : '';
+    if (sameQuality) url = sameQuality;
     url = String(url)
       .replace(/:hls:manifest\.m3u8$/, '')
       .replace(/:hls:hls\.m3u8$/, '');

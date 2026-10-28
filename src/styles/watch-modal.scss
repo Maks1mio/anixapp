@@ -995,3 +995,344 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ——— ПК: «Смотреть» в стиле ТВ — сетка крупных карточек озвучек и серий, под мышь ——— */
+.watch-modal--desktop {
+  --wm-card: color-mix(in srgb, #{$color-text} 6%, transparent);
+  --wm-card-hover: color-mix(in srgb, #{$color-text} 10%, transparent);
+
+  .watch-modal__panel {
+    width: min(74rem, 100%);
+    height: min(90vh, 56rem);
+    max-height: min(90vh, 56rem);
+  }
+
+  .watch-modal__head {
+    gap: 0.85rem;
+    padding: 1.25rem 1.5rem 0.9rem;
+    border-bottom: 0;
+  }
+
+  .watch-modal__title {
+    font-size: 1.6rem;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .watch-modal__subtitle {
+    margin-top: 0.3rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .watch-modal__head-back {
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 12px;
+    background: var(--wm-card);
+    color: $color-text;
+  }
+
+  /* Вкладки и источники — пилюли */
+  .watch-modal__filters,
+  .watch-modal__source-pills {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    border: 0;
+    overflow: visible;
+  }
+
+  .watch-modal__filters {
+    padding: 0.25rem 1.5rem 1rem;
+  }
+
+  .watch-modal__filter,
+  .watch-modal__source-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.5rem;
+    padding: 0 1.1rem;
+    border: 0;
+    border-radius: 12px;
+    background: var(--wm-card);
+    color: color-mix(in srgb, $color-text 80%, transparent);
+    font-size: 0.92rem;
+    font-weight: 700;
+    white-space: nowrap;
+    transition: background $transition, color $transition;
+
+    &::after {
+      display: none;
+    }
+
+    &:hover:not(.watch-modal__filter--active):not(.watch-modal__source-pill--active) {
+      background: var(--wm-card-hover);
+      color: $color-text;
+    }
+  }
+
+  .watch-modal__filter--active,
+  .watch-modal__source-pill--active {
+    background: $color-text;
+    border-color: transparent;
+    color: $color-bg;
+  }
+
+  .watch-modal__desk-hint,
+  .watch-modal__desk-progress {
+    margin-left: auto;
+    color: $color-text-muted;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  /* Озвучки: адаптивная сетка (3 колонки на обычной ширине модалки) */
+  .watch-modal__variants {
+    padding: 0.1rem 0 1.25rem;
+  }
+
+  .watch-modal__variant-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+    gap: 0.75rem;
+    padding: 0 1.5rem;
+  }
+
+  .watch-modal__variant-row {
+    position: relative;
+    gap: 0.9rem;
+    min-height: 5.4rem;
+    padding: 0.95rem 1.05rem;
+    border: 0;
+    border-radius: 18px;
+    background: var(--wm-card);
+    transition: background $transition, box-shadow $transition, transform 0.15s ease;
+
+    &:last-child {
+      border-bottom: 0;
+    }
+
+    &:hover {
+      background: var(--wm-card-hover);
+      transform: translateY(-1px);
+    }
+
+    &:focus-visible {
+      outline: 2px solid $color-text;
+      outline-offset: 2px;
+    }
+  }
+
+  .watch-modal__variant-row--pinned {
+    background: var(--wm-card);
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, $color-text 88%, transparent);
+
+    &:hover {
+      background: var(--wm-card-hover);
+    }
+  }
+
+  /* Пин — в углу карточки, виден на ховере (закреплённая — всегда). */
+  .watch-modal__variant-pin {
+    position: absolute;
+    top: 0.45rem;
+    right: 0.5rem;
+    z-index: 1;
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 10px;
+    opacity: 0;
+
+    &--active {
+      opacity: 1;
+      color: $color-accent;
+    }
+
+    &:focus-visible {
+      opacity: 1;
+    }
+  }
+
+  .watch-modal__variant-row:hover .watch-modal__variant-pin:not(.watch-modal__variant-pin--active) {
+    opacity: 0.7;
+  }
+
+  .watch-modal__variant-avatar {
+    width: 3.4rem;
+    height: 3.4rem;
+    flex: 0 0 3.4rem;
+    border-radius: 14px;
+  }
+
+  .watch-modal__variant-info {
+    gap: 0.3rem;
+    padding-right: 1.4rem;
+  }
+
+  .watch-modal__variant-name {
+    font-size: 1.08rem;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .watch-modal__variant-ep {
+    font-size: 0.86rem;
+    font-weight: 600;
+  }
+
+  .watch-modal__variant-views-badge {
+    align-self: flex-end;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+
+  /* Серии */
+  .watch-modal__episodes-view {
+    gap: 0.9rem;
+    padding: 0.1rem 1.5rem 1.5rem;
+  }
+
+  .watch-modal__desk-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .watch-modal__desk-search {
+    flex: 0 1 15rem;
+    min-width: 10rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    height: 2.5rem;
+    margin-left: auto;
+    padding: 0 0.85rem;
+    border-radius: 999px;
+    background: var(--wm-card);
+    color: $color-text-muted;
+    cursor: text;
+    transition: box-shadow $transition;
+
+    &:focus-within {
+      box-shadow: 0 0 0 2px color-mix(in srgb, $color-accent 45%, transparent);
+
+      .watch-modal__episodes-search-icon {
+        opacity: 1;
+        color: $color-accent;
+      }
+    }
+  }
+
+  .watch-modal__episodes {
+    grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+    gap: 0.75rem;
+    padding: 0.2rem;
+  }
+
+  .watch-modal__episode-card {
+    min-height: 6.6rem;
+    padding: 0;
+    border: 0;
+    border-radius: 18px;
+    background: var(--wm-card);
+
+    &:hover {
+      transform: translateY(-1px);
+      background: var(--wm-card-hover);
+    }
+  }
+
+  .watch-modal__episode-card--active,
+  .watch-modal__episode-card--highlight {
+    border: 0;
+    background: var(--wm-card-hover);
+    box-shadow: 0 0 0 2px color-mix(in srgb, $color-accent 60%, transparent);
+  }
+
+  .watch-modal__episode-card--next {
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, $color-text 90%, transparent);
+  }
+
+  .watch-modal__episode-main {
+    height: 100%;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.95rem 3rem 0.95rem 1.05rem;
+    border-radius: inherit;
+
+    &:focus-visible {
+      outline: 2px solid $color-text;
+      outline-offset: 2px;
+    }
+  }
+
+  .watch-modal__episode-num {
+    font-size: 1.75rem;
+    font-weight: 800;
+  }
+
+  .watch-modal__episode-name {
+    font-size: 0.86rem;
+    font-weight: 600;
+  }
+
+  .watch-modal__episode-name--solo {
+    font-size: 0.95rem;
+    color: $color-text;
+  }
+
+  /* Галочка «просмотрено»: на просмотренных — всегда, на остальных — на ховере. */
+  .watch-modal__episode-watch {
+    position: absolute;
+    top: 0.7rem;
+    right: 0.7rem;
+    width: 1.9rem;
+    height: 1.9rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, $color-text 18%, transparent);
+    border-radius: 50%;
+    background: transparent;
+    color: $color-text-muted;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity $transition, background $transition, color $transition, border-color $transition;
+
+    &:hover {
+      color: $color-text;
+      background: color-mix(in srgb, $color-text 10%, transparent);
+    }
+
+    &:focus-visible {
+      opacity: 1;
+      outline: 2px solid $color-text;
+      outline-offset: 2px;
+    }
+
+    &--on {
+      opacity: 1;
+      border-color: transparent;
+      background: color-mix(in srgb, $color-success 18%, transparent);
+      color: $color-success;
+
+      &:hover {
+        background: color-mix(in srgb, $color-success 28%, transparent);
+        color: $color-success;
+      }
+    }
+  }
+
+  .watch-modal__episode-card:hover .watch-modal__episode-watch {
+    opacity: 1;
+  }
+}

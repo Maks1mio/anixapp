@@ -60,7 +60,7 @@
 
   const MENU_ROWS: { tab: SettingsTab; title: string; sub: string; section?: string }[] = [
     { tab: 'appearance', title: 'Внешний вид', sub: 'Темы, масштабирование, навигация', section: 'Настройки приложения' },
-    { tab: 'connection', title: 'Соединение', sub: 'API-Эндпоинт' },
+    { tab: 'connection', title: 'Соединение', sub: 'API-эндпоинт' },
     { tab: 'behavior', title: 'Поведение', sub: 'Трей и ускорение' },
     { tab: 'notifications', title: 'Уведомления', sub: 'Всплывающие уведомления, баннеры и звук' },
     { tab: 'playback', title: 'Воспроизведение', sub: 'Anime4K, звук и горячие клавиши' },

@@ -9,7 +9,7 @@ export const DEFAULT_PLAYBACK_RATE = 1;
 
 export const SEEK_SECONDS_OPTIONS = [5, 10, 15, 30, 60, 90] as const;
 
-/** Перемотка на заданное время — как «skip opening» в AniXart (по умолчанию 1:25). */
+/** Перемотка на заданное время — как «skip opening» в Anixart (по умолчанию 1:25). */
 export const REWIND_SECONDS_OPTIONS = [30, 60, 85, 120, 180] as const;
 export const REWIND_SECONDS_MIN = 1;
 export const REWIND_SECONDS_MAX = 3600;

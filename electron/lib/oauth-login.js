@@ -41,7 +41,7 @@ const YANDEX_CLIENT_ID = 'a980f00536554180b4826f7daa76f060';
 const YANDEX_REDIRECT = `https://yx${YANDEX_CLIENT_ID}.oauth.yandex.ru/auth/finish`;
 
 const OAUTH_TIMEOUT_MS = 5 * 60 * 1000;
-const OAUTH_APP_DEVICE_LABEL = 'Приложение Anixapp';
+const OAUTH_APP_DEVICE_LABEL = 'Приложение AnixApp';
 
 function getOAuthUserAgent() {
   let ver = '1.0';
@@ -56,7 +56,7 @@ function getOAuthUserAgent() {
   }
   return (
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
-    `Chrome/131.0.0.0 Safari/537.36 Anixapp/${ver} (${OAUTH_APP_DEVICE_LABEL})`
+    `Chrome/131.0.0.0 Safari/537.36 AnixApp/${ver} (${OAUTH_APP_DEVICE_LABEL})`
   );
 }
 

@@ -520,12 +520,12 @@
         </svg>
       </button>
     </UiV2Tooltip>
-    <UiV2Tooltip text="Поддержать Anixapp" placement={tipSide} class="sidebar__tooltip">
+    <UiV2Tooltip text="Поддержать AnixApp" placement={tipSide} class="sidebar__tooltip">
       <button
         type="button"
         class="sidebar__link sidebar__link--social sidebar__link--support"
         class:sidebar__link--support-new={$supportModalUnseen}
-        aria-label="Поддержать Anixapp"
+        aria-label="Поддержать AnixApp"
         onclick={(e) => {
           openSupportModal();
           (e.currentTarget as HTMLElement).blur();

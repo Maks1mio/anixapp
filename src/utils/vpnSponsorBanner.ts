@@ -10,7 +10,7 @@ export const VPN_67_URL =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_VPN_67_URL) || 'https://67vpn.ru';
 
 export const VPN_67_COPY = {
-  kicker: 'Сервис не доступен?',
+  kicker: 'Сервис недоступен?',
   title: 'Используй 67 VPN',
   body: 'Белые списки. Стабильный VPN. 67 рублей. Дешевле обеда.',
   cta: 'Кликай по баннеру',

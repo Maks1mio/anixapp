@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Проверка караказябр (битая кириллица / UTF-8) в исходниках anixapp.
+ * Проверка кракозябр (битая кириллица / UTF-8) в исходниках anixapp.
  *
  * Типы:
  *  A) UTF-8 → Windows-1251 → «РЎРµСЂРёСЏ» вместо «Серия»
@@ -268,7 +268,7 @@ function main() {
   }
 
   if (!reports.length) {
-    console.log('check:mojibake OK — караказябр не найдено');
+    console.log('check:mojibake OK — кракозябр не найдено');
     process.exit(0);
   }
 

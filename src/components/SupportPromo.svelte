@@ -85,7 +85,7 @@
     style:bottom={anchor ? `${anchor.bottom}px` : undefined}
     style:--arrow-bottom={anchor ? `${anchor.arrowBottom}px` : undefined}
     style:max-width={anchor ? `${anchor.maxWidth}px` : undefined}
-    aria-label="Поддержать Anixapp"
+    aria-label="Поддержать AnixApp"
     use:portal={{ lock: false }}
     transition:fade={{ duration: 180 }}
   >
@@ -94,7 +94,7 @@
     </button>
     <div class="support-promo__body">
       <p class="support-promo__title">Значок Anix+ навсегда</p>
-      <p class="support-promo__text">Поддержите Anixapp — и у вашего ника появится значок, который увидят все.</p>
+      <p class="support-promo__text">Поддержите AnixApp — и у вашего ника появится значок, который увидят все.</p>
       <div class="support-promo__actions">
         <UiV2Button label="Подробнее" size="sm" variant="primary" onclick={details} />
         <UiV2Button label="Не сейчас" size="sm" variant="ghost" onclick={dismiss} />

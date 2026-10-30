@@ -47,12 +47,12 @@
   type BindField = PlayerHotkeyBindField;
 
   const HOTKEY_ROWS: { field: BindField; title: string; desc: string }[] = [
-    { field: 'seekBackCode', title: 'Перемотка назад', desc: 'Клавиша для прыжка назад на заданное время.' },
-    { field: 'seekForwardCode', title: 'Перемотка вперёд', desc: 'Клавиша для прыжка вперёд на заданное время.' },
-    { field: 'rewindCode', title: 'Перемотка на заданное время', desc: 'Прыжок вперёд на время из настройки ниже. По умолчанию — X.' },
+    { field: 'seekBackCode', title: 'Перемотка назад', desc: 'Клавиша для прыжка назад на заданное время. По умолчанию — ←.' },
+    { field: 'seekForwardCode', title: 'Перемотка вперёд', desc: 'Клавиша для прыжка вперёд на заданное время. По умолчанию — →.' },
+    { field: 'rewindCode', title: 'Пропуск на заданное время', desc: 'Прыжок вперёд на время из блока «Время пропуска». По умолчанию — X.' },
     { field: 'playPauseCode', title: 'Пауза / воспроизведение', desc: 'По умолчанию — пробел.' },
-    { field: 'volumeUpCode', title: 'Громче', desc: 'По умолчанию — стрелка вверх.' },
-    { field: 'volumeDownCode', title: 'Тише', desc: 'По умолчанию — стрелка вниз.' },
+    { field: 'volumeUpCode', title: 'Громче', desc: 'По умолчанию — ↑.' },
+    { field: 'volumeDownCode', title: 'Тише', desc: 'По умолчанию — ↓.' },
     { field: 'fullscreenCode', title: 'Полный экран', desc: 'По умолчанию — F.' },
     { field: 'alwaysOnTopCode', title: 'Поверх всех окон', desc: 'Закрепить окно плеера поверх остальных. По умолчанию — P.' },
   ];
@@ -208,10 +208,10 @@
 
         <UiV2SettingsRow
           stack
-          title="Время пропуска"
-          desc={touchOnly ? 'На сколько секунд прыгать кнопками перемотки в плеере.' : 'На сколько секунд прыгать клавишами перемотки (по умолчанию ← / →).'}
+          title="Время перемотки"
+          desc={touchOnly ? 'На сколько секунд перематывать видео кнопками плеера. По умолчанию — 10 с.' : `На сколько секунд перематывать видео кнопками и горячими клавишами плеера (${formatHotkeyCode(hotkeys.seekBackCode)} / ${formatHotkeyCode(hotkeys.seekForwardCode)}). По умолчанию — 10 с.`}
         >
-          <div class="uiv2-settings__chips" role="group" aria-label="Время пропуска">
+          <div class="uiv2-settings__chips" role="group" aria-label="Время перемотки">
             {#each SEEK_SECONDS_OPTIONS as sec (sec)}
               <button
                 type="button"
@@ -226,10 +226,10 @@
 
         <UiV2SettingsRow
           stack
-          title="Время перемотки"
-          desc={touchOnly ? 'Прыжок вперёд кнопкой перемотки. По умолчанию — 1:25, как в AniXart.' : `Прыжок вперёд кнопкой перемотки и клавишей ${formatHotkeyCode(hotkeys.rewindCode)}. По умолчанию — 1:25, как в AniXart.`}
+          title="Время пропуска"
+          desc={touchOnly ? 'Прыжок вперёд кнопкой пропуска. По умолчанию — 1:25.' : `Прыжок вперёд кнопкой пропуска и горячей клавишей ${formatHotkeyCode(hotkeys.rewindCode)}. По умолчанию — 1:25.`}
         >
-          <div class="uiv2-settings__chips" role="group" aria-label="Время перемотки">
+          <div class="uiv2-settings__chips" role="group" aria-label="Время пропуска">
             {#each REWIND_SECONDS_OPTIONS as sec (sec)}
               <button
                 type="button"
@@ -248,7 +248,7 @@
               max={REWIND_SECONDS_MAX}
               step="1"
               value={hotkeys.rewindSeconds}
-              aria-label="Время перемотки в секундах"
+              aria-label="Время пропуска в секундах"
               onchange={onRewindSecondsChange}
             />
             <span>сек</span>
@@ -402,7 +402,7 @@
       <div class="uiv2-settings__group">
         <UiV2SettingsRow
           title="Качество по размеру окна"
-          desc="Чем меньше окно плеера, тем ниже поток: 1080 → 720 → 480 → 360. Удобно для режима «поверх всех окон». По умолчанию выключено."
+          desc="Автоматическое снижение разрешения при уменьшении окна плеера: 1080 → 720 → 480 → 360. Удобно для режима «поверх всех окон». По умолчанию выключено."
         >
           <UiV2Toggle
             label="Качество по размеру окна"
@@ -442,7 +442,7 @@
       <div class="uiv2-settings__group">
         <UiV2SettingsRow
           title="Предпросмотр моделей"
-          desc="Открыть инструмент сравнения — 5 пресетов аниме, split-ползунок для сравнения оригинала и фильтра в реальном времени."
+          desc="Инструмент для сравнения фильтров (Deblur, Denoise, Restore, Upscale) на тестовых кадрах со слайдером «до/после» в реальном времени."
         >
           <UiV2Button
             label="Открыть"

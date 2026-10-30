@@ -94,7 +94,7 @@
 
 <div class="uiv2-settings">
   <section class="uiv2-settings__block">
-    <h3 class="uiv2-settings__title">Отображение карточек</h3>
+    <h3 class="uiv2-settings__title">Вид отображения релизов</h3>
     <div class="uiv2-settings__choice-grid">
       <button
         type="button"

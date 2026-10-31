@@ -344,7 +344,7 @@
     if (!isLocalPlaybackMode) return downloadedEpisodes;
     return downloadedEpisodes.filter((d) => {
       const dubOk = !watchState.dubberName || d.dubberName === watchState.dubberName
-        || (!d.dubberName && watchState.dubberName === 'Скаченное');
+        || (!d.dubberName && watchState.dubberName === 'Скачанное');
       const srcOk = !watchState.sourceName || d.sourceName === watchState.sourceName
         || (!d.sourceName && (watchState.sourceName === 'Скачано' || watchState.sourceName === 'Источник'));
       return dubOk && srcOk;
@@ -430,7 +430,7 @@
         filePath,
         label,
         name: niceName,
-        dubberName: dubberName || 'Скаченное',
+        dubberName: dubberName || 'Скачанное',
         sourceName: sourceName || 'Скачано',
         dubberId: f.dubberId ?? null,
         sourceId: f.sourceId ?? null,
@@ -2107,7 +2107,7 @@
     localPlaybackPath = item.filePath;
     popoverType = null;
     watchState.ep = episodeIndex(item.episodePosition) ?? watchState.ep;
-    const dubName = item.dubberName || 'Скаченное';
+    const dubName = item.dubberName || 'Скачанное';
     const srcName = item.sourceName || 'Скачано';
     watchState.dubberName = dubName;
     watchState.sourceName = srcName;
@@ -3419,7 +3419,7 @@
       return;
     }
     if (epOverride != null && episodeIndex(epOverride) != null) watchState.ep = epOverride;
-    const dub = (dubName || watchState.dubberName || 'Скаченное').trim();
+    const dub = (dubName || watchState.dubberName || 'Скачанное').trim();
     const src = (srcName || watchState.sourceName || 'Скачано').trim();
     watchState.dubberName = dub;
     watchState.sourceName = src;

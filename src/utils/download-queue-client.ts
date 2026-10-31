@@ -22,7 +22,7 @@ function safeFilePart(value: string): string {
   return value.replace(/[<>:"/\\|?*\x00-\x1F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) || 'episode';
 }
 
-/** Папка: `Тайтл/Озвучка/Источник` (относительно Anixapp). */
+/** Папка: `Тайтл/Озвучка/Источник` (относительно AnixApp). */
 export function buildDownloadFolder(
   releaseTitle: string,
   dubberName: string,

@@ -68,7 +68,7 @@
   function seriesWord(n: number): string {
     const m10 = n % 10;
     const m100 = n % 100;
-    if (m10 === 1 && m100 !== 11) return 'серию';
+    if (m10 === 1 && m100 !== 11) return 'серия';
     if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'серии';
     return 'серий';
   }
@@ -294,7 +294,7 @@
               </button>
             {/each}
           </div>
-          <p class="dl-modal__hint">Клик — выбрать серию, Shift+клик — диапазон. Зелёные уже скачаны.</p>
+          <p class="dl-modal__hint">Клик — выбрать серию, Shift+клик — диапазон. Зелёным отмечены скачанные серии.</p>
         {/if}
       </section>
 
@@ -332,7 +332,7 @@
         {#if busy}
           {busy}
         {:else if selectedList.length > 0}
-          Будет скачано: {selectedList.length} {seriesWord(selectedList.length)}{#if quality != null}&nbsp;· {quality}p{/if}{#if selectedHaveFile > 0}<span class="dl-modal__summary-warn">&nbsp;· {selectedHaveFile} уже на диске — будет новая копия</span>{/if}
+          Скачается: {selectedList.length} {seriesWord(selectedList.length)}{#if quality != null}&nbsp;· {quality}p{/if}{#if selectedHaveFile > 0}<span class="dl-modal__summary-warn">&nbsp;· {selectedHaveFile} уже на диске — будет новая копия</span>{/if}
           <span class="dl-modal__summary-folder">{canQueue ? folderHint : 'Скачивание доступно только в приложении для ПК'}</span>
         {:else if !canQueue}
           Скачивание доступно только в приложении для ПК

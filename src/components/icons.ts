@@ -330,7 +330,7 @@ export function iconTags(size = 16): string {
   return toSvg(Tags, size);
 }
 
-/** Дом (главная) */
+/** Дом (вкладка «Главная») */
 export function iconHome(size = 20): string {
   return toSvg(Home, size);
 }
@@ -549,7 +549,7 @@ export function iconRotateCw(size = 16): string {
   return toSvg(RotateCw, size);
 }
 
-/** Быстрая перемотка на заданное время (двойной шеврон, как в AniXart) */
+/** Быстрая перемотка на заданное время (двойной шеврон, как в Anixart) */
 export function iconFastRewindTime(size = 18): string {
   return toSvg(ChevronsRight, size);
 }

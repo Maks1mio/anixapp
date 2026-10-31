@@ -66,7 +66,7 @@
       { title: 'Загрузки', icon: iconDownload, action: () => { onClose(); navigate('/downloads'); } },
     ],
     [
-      { screen: 'support', title: 'Поддержать Anixapp', icon: iconGift },
+      { screen: 'support', title: 'Поддержать AnixApp', icon: iconGift },
       { title: 'Канал в Telegram', icon: iconMessageCircle, action: () => requestOpenExternal('https://t.me/anixapp') },
       { title: 'Исходный код на GitHub', icon: iconLink, action: () => requestOpenExternal('https://github.com/Maks1mio/anixapp') },
       { screen: 'about', title: 'О приложении', icon: iconInfo },

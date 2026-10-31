@@ -306,10 +306,10 @@
         const blob = await snapshotCanvasImage(upscaleCanvasEl, 'image/png');
         if (blob) {
           triggerBlobDownload(blob, upscaledFileName(item.url));
-          showToast('Апскейл сохранён');
+          showToast('Улучшенное изображение сохранено');
           return;
         }
-        showToast('Не удалось сохранить апскейл, качаю оригинал', 'err');
+        showToast('Не удалось сохранить улучшенное изображение, скачиваю оригинал', 'err');
       }
       const fetchUrl = toCdnProxyUrl(item.url) || item.url;
       const res = await fetch(fetchUrl);
@@ -469,8 +469,8 @@
       <button
         type="button"
         class="uiv2-media-lightbox__tool"
-        aria-label={upscaleActive ? 'Скачать апскейл' : 'Скачать'}
-        title={upscaleActive ? 'Скачать апскейл' : 'Скачать'}
+        aria-label={upscaleActive ? 'Скачать улучшенное изображение' : 'Скачать'}
+        title={upscaleActive ? 'Скачать улучшенное изображение' : 'Скачать'}
         disabled={downloadBusy}
         onclick={() => void downloadCurrent()}
       >
@@ -580,7 +580,7 @@
             disabled={upscaleBusy || !gpuOk}
             onclick={() => void applyUpscale()}
           >
-            {upscaleBusy ? 'Обработка…' : upscaleActive ? 'Применить снова' : 'Апскейл'}
+            {upscaleBusy ? 'Обработка…' : upscaleActive ? 'Применить снова' : 'Улучшение'}
           </button>
         </div>
       </div>

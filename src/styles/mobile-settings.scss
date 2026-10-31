@@ -320,7 +320,7 @@ html.mobile-mode {
   }
 }
 
-// ── «Поддержать Anixapp» (MobileSupport.svelte) ──────────────────────────────────────────
+// ── «Поддержать AnixApp» (MobileSupport.svelte) ──────────────────────────────────────────
 html.mobile-mode {
   .m-support { display: flex; flex-direction: column; }
   .m-support__lead { margin: var(--m-space-4) var(--m-space-4) var(--m-space-2); font: 400 14px/1.45 var(--m-font); color: var(--m-text-2); }

@@ -11,7 +11,7 @@ export interface AppBadge {
 
 export interface BadgesMeResult {
   badges: AppBadge[];
-  /** null until the user has launched Anixapp at least once (verified by anixback). */
+  /** null until the user has launched AnixApp at least once (verified by anixback). */
   default_badge: { slug: string; name: string; image_url: string } | null;
   telegram: { linked: boolean; username: string | null };
 }

@@ -51,7 +51,7 @@
     behavior: 'Поведение',
     notifications: 'Уведомления',
     playback: 'Воспроизведение',
-    discord: 'Discord RPC',
+    discord: 'Discord Rich Presence',
     update: 'Обновление',
     debug: 'Отладка',
     developer: 'Разработчик',
@@ -59,14 +59,14 @@
   };
 
   const MENU_ROWS: { tab: SettingsTab; title: string; sub: string; section?: string }[] = [
-    { tab: 'appearance', title: 'Внешний вид', sub: 'Тема, масштаб, навигация', section: 'Настройки приложения' },
-    { tab: 'connection', title: 'Соединение', sub: 'Эндпоинт API' },
+    { tab: 'appearance', title: 'Внешний вид', sub: 'Темы, масштабирование, навигация', section: 'Настройки приложения' },
+    { tab: 'connection', title: 'Соединение', sub: 'API-эндпоинт' },
     { tab: 'behavior', title: 'Поведение', sub: 'Трей и ускорение' },
-    { tab: 'notifications', title: 'Уведомления', sub: 'Тосты, баннеры и звук' },
-    { tab: 'playback', title: 'Воспроизведение', sub: 'Апскейл, звук и горячие клавиши' },
-    { tab: 'discord', title: 'Discord RPC', sub: 'Статус в Discord' },
-    { tab: 'update', title: 'Обновление', sub: 'Новые и предыдущие версии' },
-    { tab: 'debug', title: 'Отладка', sub: 'Логи консоли и сети' },
+    { tab: 'notifications', title: 'Уведомления', sub: 'Всплывающие уведомления, баннеры и звук' },
+    { tab: 'playback', title: 'Воспроизведение', sub: 'Anime4K, звук и горячие клавиши' },
+    { tab: 'discord', title: 'Discord Rich Presence', sub: 'Статус в Discord' },
+    { tab: 'update', title: 'Обновление', sub: 'Проверка обновлений и история версий' },
+    { tab: 'debug', title: 'Отладка', sub: 'Логи приложения и сети' },
   ];
 
   const isDev = import.meta.env.DEV;

@@ -17,7 +17,7 @@
     lastEpisodeTypeUpdateId?: number | null;
     downloadedEpisodes?: DownloadedEpisodeItem[];
     currentDownloadedPath?: string;
-    /** Скрыть блок «Скаченные» (например в комнате совместного просмотра) */
+    /** Скрыть блок «Скачанные» (например в комнате совместного просмотра) */
     hideDownloaded?: boolean;
     /** Только локальные варианты — без онлайн-озвучек тайтла */
     localOnly?: boolean;
@@ -45,7 +45,7 @@
   const localDubbers = $derived.by(() => {
     const map = new Map<string, number>();
     for (const d of downloadedEpisodes) {
-      const name = (d.dubberName || 'Скаченное').trim() || 'Скаченное';
+      const name = (d.dubberName || 'Скачанное').trim() || 'Скачанное';
       map.set(name, (map.get(name) || 0) + 1);
     }
     return [...map.entries()]
@@ -98,7 +98,7 @@
     const next: UiV2PopupMenuItem[] = [];
 
     if (!hideDownloaded && localDubbers.length > 0) {
-      next.push({ id: 'sec-downloaded', label: localOnly ? 'Локальные' : 'Скаченные', type: 'label' });
+      next.push({ id: 'sec-downloaded', label: localOnly ? 'Локальные' : 'Скачанные', type: 'label' });
       for (const dub of localDubbers) {
         next.push({
           id: `local-dub:${dub.name}`,

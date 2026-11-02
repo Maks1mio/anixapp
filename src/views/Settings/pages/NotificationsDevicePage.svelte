@@ -308,7 +308,7 @@
 
     <section class="uiv2-settings__block">
       <h3 class="uiv2-settings__title">События аккаунта</h3>
-      <p class="uiv2-settings__desc">Какие события приходят в колокольчик и на все ваши устройства</p>
+      <p class="uiv2-settings__desc">Какие события приходят в раздел уведомлений и на все ваши устройства</p>
       <div class="notif-prefs-wrap">
         <NotificationPreferencesPanel embedded />
       </div>

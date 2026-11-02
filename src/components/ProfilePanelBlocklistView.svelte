@@ -142,7 +142,7 @@
       <button type="button" class="profile-panel__retry" onclick={() => void load(false)}>Повторить</button>
     </div>
   {:else if loadState === 'empty'}
-    <p class="profile-panel__state">Блоклист пуст</p>
+    <p class="profile-panel__state">Заблокированных пользователей нет</p>
   {:else}
     <ul class="profile-panel__friend-rows" aria-label="Блоклист">
       {#each items as user (user.id)}

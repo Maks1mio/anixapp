@@ -453,7 +453,7 @@
         const ok = await copyText(value);
         if (ok) {
           markCopied(id);
-          showToast('Название скопировано');
+          showToast('Альтернативное название скопировано');
         }
       }
       onMenuSelect?.(id);

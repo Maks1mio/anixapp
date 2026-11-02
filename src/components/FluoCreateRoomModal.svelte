@@ -23,18 +23,18 @@
   let localHint = $state('');
 
   const visibilityOptions: UiV2SelectOption[] = [
-    { value: 'public', label: 'Публичный', desc: 'В каталоге, войти может любой' },
-    { value: 'private', label: 'Приватный', desc: 'Скрыт из каталога, вход по коду' },
-    { value: 'closed', label: 'Закрытый', desc: 'В каталоге, вход только с паролем' },
+    { value: 'public', label: 'Публичная', desc: 'Отображается в каталоге, войти может любой' },
+    { value: 'private', label: 'Приватная', desc: 'Скрыта из каталога, вход по коду комнаты' },
+    { value: 'closed', label: 'По паролю', desc: 'Отображается в каталоге, вход только с паролем' },
   ];
   const playerControlOptions: UiV2SelectOption[] = [
-    { value: 'host', label: 'Хост', desc: 'Play, пауза, перемотка и серии текущего тайтла' },
-    { value: 'everyone', label: 'Могут все', desc: 'Свободное управление плеером' },
+    { value: 'host', label: 'Только хост', desc: 'Только хост может свободно управлять плеером' },
+    { value: 'everyone', label: 'Все участники', desc: 'Каждый участник может свободно управлять плеером' },
   ];
   const animeSelectOptions: UiV2SelectOption[] = [
-    { value: 'host', label: 'Хост', desc: 'Хост сам решает, что смотреть' },
-    { value: 'everyone', label: 'Могут все', desc: 'Свободное переключение тайтла' },
-    { value: 'vote', label: 'Могут все (голосование)', desc: 'Смена тайтла через голосование' },
+    { value: 'host', label: 'Только хост', desc: 'Только хост может свободно переключать тайтлы' },
+    { value: 'everyone', label: 'Все участники', desc: 'Каждый участник может свободно переключать тайтлы' },
+    { value: 'vote', label: 'Через голосование', desc: 'Смена тайтла через голосование участников' },
   ];
   const chatOptions: UiV2SelectOption[] = [
     { value: 'on', label: 'Включён' },
@@ -83,7 +83,7 @@
       <UiV2OutlinedField label="Название" bind:value={name} maxlength={80} disabled={busy} />
 
       <UiV2Select
-        label="Настройки комнаты"
+        label="Тип комнаты"
         options={visibilityOptions}
         value={visibility}
         disabled={busy}
@@ -125,7 +125,7 @@
       />
 
       <UiV2Select
-        label="Настройки чата"
+        label="Чат"
         options={chatOptions}
         value={chat ? 'on' : 'off'}
         disabled={busy}

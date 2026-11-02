@@ -2,11 +2,11 @@
 
 /**
  * Preload для OAuth BrowserWindow:
- * подмена «неизвестном устройстве» → «Приложение Anixapp» (только текст в этом окне).
+ * подмена «неизвестном устройстве» → «Приложение AnixApp» (только текст в этом окне).
  */
 const { webFrame } = require('electron');
 
-const LABEL = 'Приложение Anixapp';
+const LABEL = 'Приложение AnixApp';
 
 const PAGE_SCRIPT = `(() => {
   const LABEL = ${JSON.stringify(LABEL)};

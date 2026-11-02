@@ -315,8 +315,8 @@
       : [{ label: headTitle, active: true }],
   );
 
-  const statusPreview = $derived(statusValue.trim() || status.trim() || 'Не указан');
-  const badgePreview = $derived(currentBadgeName?.trim() || 'Не указан');
+  const statusPreview = $derived(statusValue.trim() || status.trim() || 'Не установлен');
+  const badgePreview = $derived(currentBadgeName?.trim() || 'Не установлен');
   const showcasePreview = $derived(
     themes.find((t) => t.id === selectedThemeId)?.name
       || (selectedThemeId === 2 ? 'Без темы' : selectedThemeId === 1 ? 'Автоматически' : 'Не выбрана'),

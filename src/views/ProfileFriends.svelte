@@ -9,6 +9,8 @@
   import UserBadge from '../components/UserBadge.svelte';
   import AppBadges from '../components/AppBadges.svelte';
   import Checkbox from '../components/Checkbox.svelte';
+  import UiV2PillField from '../components/uikit-v2/UiV2PillField.svelte';
+  import { iconSearch, iconX } from '../components/icons';
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import { headlineFromLoadError } from '../utils/content-load-error';
   import {
@@ -64,6 +66,37 @@
   let banScanTotal = $state(0);
   let banScanRunning = $state(false);
   let banScanner: FriendBanScanner | null = null;
+
+  /** Поиск по друзьям через search/profile/friends (Anixart 11+). */
+  const canSearchFriends = typeof window !== 'undefined' && !!window.anixApi?.search?.friends;
+  let searchQuery = $state('');
+  let searchTimer: ReturnType<typeof setTimeout> | null = null;
+  let loadSeq = 0;
+
+  function onSearchInput(e: Event) {
+    searchQuery = (e.currentTarget as HTMLInputElement).value;
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(restartLoad, 350);
+  }
+
+  function onSearchClear() {
+    if (searchTimer) clearTimeout(searchTimer);
+    searchQuery = '';
+    restartLoad();
+  }
+
+  function onSearchKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape' && searchQuery) {
+      e.preventDefault();
+      onSearchClear();
+    }
+  }
+
+  function restartLoad() {
+    loadSeq += 1;
+    isLoading = false;
+    void load(false);
+  }
 
   const friendsWithBan = $derived(
     friends.map((fr) => mergeBanFields(fr, banFieldsById[Number(fr.id)])),
@@ -132,6 +165,8 @@
       showEnd = false;
     }
     const pageToLoad = currentPage;
+    const seq = loadSeq;
+    const query = searchQuery.trim();
     try {
       const uid = await getId();
       if (!uid) {
@@ -139,7 +174,10 @@
         isLoading = false;
         return;
       }
-      const data = await window.anixApi!.profile.getFriends(uid, pageToLoad) as any;
+      const data = (query && canSearchFriends
+        ? await window.anixApi!.search.friends!(uid, query, pageToLoad)
+        : await window.anixApi!.profile.getFriends(uid, pageToLoad)) as any;
+      if (seq !== loadSeq) return;
       const content = (data?.content ?? []) as any[];
       if (!content.length) {
         if (!append) loadState = 'empty';
@@ -155,6 +193,7 @@
       attachInfiniteScroll();
       if (showBannedOnly && hasMore) void load(true);
     } catch (err) {
+      if (seq !== loadSeq) return;
       errorMsg = headlineFromLoadError(err);
       loadState = 'error';
       isLoading = false;
@@ -215,6 +254,7 @@
   });
 
   onDestroy(() => {
+    if (searchTimer) clearTimeout(searchTimer);
     banScanner?.abort();
     banScanner = null;
     if (scrollEl && scrollListener) scrollEl.removeEventListener('scroll', scrollListener);
@@ -233,6 +273,26 @@
     <Tabs tabs={profileTabs} activeId="friends" onChange={onProfileTabChange} />
 
     <div class="profile-friends__toolbar">
+      {#if canSearchFriends}
+        <div class="profile-friends__search">
+          <UiV2PillField
+            type="search"
+            label="Поиск по друзьям"
+            value={searchQuery}
+            autocomplete="off"
+            spellcheck={false}
+            oninput={onSearchInput}
+            onkeydown={onSearchKeydown}
+          >
+            {#snippet icon()}{@html iconSearch(16)}{/snippet}
+          </UiV2PillField>
+          {#if searchQuery}
+            <button type="button" class="profile-friends__search-clear" aria-label="Очистить поиск" onclick={onSearchClear}>
+              {@html iconX(14)}
+            </button>
+          {/if}
+        </div>
+      {/if}
       {#if scanningBanned}
         <span class="profile-friends__scan" aria-live="polite">{scanLabel}</span>
       {/if}
@@ -244,7 +304,7 @@
     </div>
 
     <div class="search-page__results">
-      {#if isMyProfilePage && recommendations.length && !showBannedOnly}
+      {#if isMyProfilePage && recommendations.length && !showBannedOnly && !searchQuery.trim()}
         <section class="profile-friends__recs">
           <h2 class="profile-friends__recs-title">Рекомендации</h2>
           <div class="search-page__profiles">

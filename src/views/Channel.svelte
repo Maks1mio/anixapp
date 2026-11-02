@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import UiV2Button from '../components/uikit-v2/UiV2Button.svelte';
+  import AnimatedMediaOverlay from '../components/AnimatedMediaOverlay.svelte';
   import AppBadges from '../components/AppBadges.svelte';
   import UiV2Card from '../components/uikit-v2/UiV2Card.svelte';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../components/uikit-v2/UiV2PopupMenu.svelte';
@@ -83,6 +84,9 @@
   const title = $derived(channel?.title?.trim() || (channel?.is_blog ? 'Блог' : 'Группа'));
   const cover = $derived(channelCoverUrl(channel?.cover));
   const avatar = $derived(channelAvatarUrl(channel?.avatar));
+  /** Anixart 11+: анимированные обложка и аватар (видео) */
+  const coverAnimation = $derived(typeof channel?.cover_animation === 'string' ? channel.cover_animation : '');
+  const avatarAnimation = $derived(typeof channel?.avatar_animation === 'string' ? channel.avatar_animation : '');
   const subs = $derived(channelSubscriberCount(channel));
   const isBlog = $derived(!!channel?.is_blog);
   const subscribed = $derived(!!channel?.is_subscribed);
@@ -348,7 +352,7 @@
       class:channel-page__cover--empty={!cover}
       style={cover ? `background-image:url('${cover}')` : undefined}
       aria-hidden="true"
-    ></div>
+    >{#if cover}<AnimatedMediaOverlay src={coverAnimation} />{/if}</div>
     <div class="channel-page__toolbar">
       <div class="channel-page__identity">
         <span
@@ -356,7 +360,7 @@
           class:channel-page__avatar--empty={!avatar}
           style={avatar ? `background-image:url('${avatar}')` : undefined}
           aria-hidden="true"
-        ></span>
+        >{#if avatar}<AnimatedMediaOverlay src={avatarAnimation} />{/if}</span>
         <div class="channel-page__hero-meta">
           <h1 class="channel-page__title">
             {title}

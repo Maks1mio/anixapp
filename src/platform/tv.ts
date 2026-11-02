@@ -1,9 +1,49 @@
 /** Android TV / leanback UI target (Vite `VITE_TV_MODE=1`). */
 import { toCdnProxyUrl } from '../utils/posterUrl';
 
-export function isTvMode(): boolean {
+/** Сборка под Android TV / TV-веб (нативный мост, медиа-прокси сервера). */
+export function isTvBuild(): boolean {
   const v = import.meta.env.VITE_TV_MODE;
   return v === '1' || v === 'true';
+}
+
+const BIG_PICTURE_KEY = 'anixapp.bigPicture';
+
+/** Desktop Big Picture: TV-интерфейс поверх Electron (флаг живёт до перезапуска приложения). */
+export function isBigPictureMode(): boolean {
+  if (typeof window === 'undefined' || !window.electron) return false;
+  try {
+    return sessionStorage.getItem(BIG_PICTURE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** TV-интерфейс: TV-сборка или Big Picture на ПК. */
+export function isTvMode(): boolean {
+  return isTvBuild() || isBigPictureMode();
+}
+
+function setBigPicture(on: boolean): void {
+  try {
+    if (on) sessionStorage.setItem(BIG_PICTURE_KEY, '1');
+    else sessionStorage.removeItem(BIG_PICTURE_KEY);
+  } catch {
+    return;
+  }
+  window.electron?.window?.setFullScreen?.(on);
+  // Старт с главной: TV- и десктоп-маршруты не совпадают один к одному.
+  const home = window.location.protocol === 'file:' ? `${window.location.pathname}#/` : '/';
+  window.history.replaceState(null, '', home);
+  window.location.reload();
+}
+
+export function enterBigPicture(): void {
+  setBigPicture(true);
+}
+
+export function exitBigPicture(): void {
+  setBigPicture(false);
 }
 
 /** Reference 10-foot canvas — UI is authored for this size, then scaled to the display. */
@@ -80,6 +120,9 @@ export function applyTvDefaults(): void {
   root.style.setProperty('--uikit-v2-font', tvFontStack);
 
   initTvViewportScale();
+
+  // Big Picture всегда во весь экран (в т.ч. после перезагрузки окна).
+  if (isBigPictureMode()) window.electron?.window?.setFullScreen?.(true);
 
   try {
     if (localStorage.getItem(TV_THEME_APPLIED_KEY)) return;

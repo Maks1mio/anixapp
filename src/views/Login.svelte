@@ -4,7 +4,7 @@
   import OAuthBrandIcon from '../components/OAuthBrandIcon.svelte';
   import AuthCoverGrid from '../components/AuthCoverGrid.svelte';
   import type { AuthCodeResult, OAuthSignInResult } from '../types/api';
-  import { iconDownload } from '../components/icons';
+  import { iconDownload, iconQrCode } from '../components/icons';
   import { checkForUpdate, type UpdateInfo } from '../services/update-checker';
   import type { AppUpdateProgress } from '../types/electron';
   import ConnectionBanner from '../components/ConnectionBanner.svelte';
@@ -12,6 +12,7 @@
   import AnixappTermsModal, { isAnixappAboutHidden } from '../components/AnixappTermsModal.svelte';
   import { isTvMode } from '../platform/tv';
   import { tvLoginQrSvg } from '../utils/tv-login-qr';
+  import { anixartQrLoginSvg } from '../utils/anixart-qr-login';
   import { startTvLanLogin, stopTvLanLogin, subscribeTvLanCredentials } from '../services/tv-lan-login';
   import { startTvPairLogin, pollTvPairCredentials } from '../services/tv-pair-login';
   import { formatAnixError } from '../native/anix-errors';
@@ -59,7 +60,8 @@
     | 'registerVerify'
     | 'forgot'
     | 'forgotVerify'
-    | 'oauthSignup';
+    | 'oauthSignup'
+    | 'qr';
 
   const OAUTH_PROVIDERS: { id: OAuthProvider; label: string }[] = [
     { id: 'vk', label: 'Войти через VK' },
@@ -113,6 +115,18 @@
   let pairMode = $state(false);
   let qrSvg = $state('');
 
+  /** Вход по QR через Anixart 11+ (телефон с Anixart подтверждает PIN-кодом). */
+  type QrLoginState = 'loading' | 'waiting' | 'scanned' | 'expired' | 'declined' | 'error';
+  const QR_CODE_EXPIRED = 2;
+  const QR_CODE_DECLINED = 3;
+  const QR_STATUS_SCANNED = 1;
+  let qrLoginState = $state<QrLoginState>('loading');
+  let qrLoginSvg = $state('');
+  let qrLoginPin = $state('');
+  let qrLoginSeq = 0;
+  let qrLoginTimer: ReturnType<typeof setTimeout> | null = null;
+  const canQrLogin = typeof window !== 'undefined' && !!window.anixApi?.auth?.qrLoginStart;
+
   const hasApi = typeof window !== 'undefined' && !!window.anixApi;
 
   const providerLabel: Record<OAuthProvider, string> = {
@@ -144,6 +158,82 @@
 
   function finishSuccess() {
     void playExitThen(() => onSuccess());
+  }
+
+  function stopQrLogin(cancel = true) {
+    qrLoginSeq += 1;
+    if (qrLoginTimer) clearTimeout(qrLoginTimer);
+    qrLoginTimer = null;
+    if (cancel) void window.anixApi?.auth?.qrLoginCancel?.().catch(() => {});
+  }
+
+  async function startQrLogin() {
+    const api = window.anixApi?.auth;
+    if (!api?.qrLoginStart) return;
+    stopQrLogin(false);
+    const seq = qrLoginSeq;
+    qrLoginState = 'loading';
+    qrLoginSvg = '';
+    qrLoginPin = '';
+    try {
+      const res = await api.qrLoginStart();
+      if (seq !== qrLoginSeq) return;
+      if (!res?.success || !res.key) {
+        qrLoginState = 'error';
+        return;
+      }
+      qrLoginSvg = anixartQrLoginSvg(res.key);
+      qrLoginPin = res.pin ?? '';
+      qrLoginState = 'waiting';
+      scheduleQrPoll(seq, res.pollInterval);
+    } catch {
+      if (seq === qrLoginSeq) qrLoginState = 'error';
+    }
+  }
+
+  function scheduleQrPoll(seq: number, intervalSec?: number | null) {
+    const ms = Math.max(1, Number(intervalSec) || 2) * 1000;
+    qrLoginTimer = setTimeout(() => void pollQrLogin(seq, intervalSec), ms);
+  }
+
+  async function pollQrLogin(seq: number, intervalSec?: number | null) {
+    if (seq !== qrLoginSeq) return;
+    try {
+      const res = await window.anixApi?.auth?.qrLoginPoll?.();
+      if (seq !== qrLoginSeq) return;
+      if (res?.success) {
+        stopQrLogin(false);
+        finishSuccess();
+        return;
+      }
+      if (res?.code === QR_CODE_EXPIRED) {
+        qrLoginState = 'expired';
+        return;
+      }
+      if (res?.code === QR_CODE_DECLINED) {
+        qrLoginState = 'declined';
+        return;
+      }
+      if (res?.code && res.code !== 0) {
+        qrLoginState = 'error';
+        return;
+      }
+      if (res?.pin) qrLoginPin = res.pin;
+      if (res?.status === QR_STATUS_SCANNED) qrLoginState = 'scanned';
+    } catch {
+      // сеть моргнула — пробуем дальше
+    }
+    if (seq === qrLoginSeq) scheduleQrPoll(seq, intervalSec);
+  }
+
+  function openQrLogin() {
+    void goPanel('qr');
+    void startQrLogin();
+  }
+
+  function closeQrLogin() {
+    stopQrLogin();
+    void goPanel('signin');
   }
 
   function finishDismiss() {
@@ -664,6 +754,7 @@
     if (panel === 'registerVerify') return 'Подтвердите email кодом из письма';
     if (panel === 'forgot') return 'Восстановление пароля';
     if (panel === 'forgotVerify') return 'Введите код подтверждения из письма';
+    if (panel === 'qr') return 'Отсканируйте QR камерой телефона с Anixart.';
     if (tv) return 'Войдите с телефона по QR или локальной ссылке — либо логином и паролем.';
     return 'Нужно войти по почте или никнейму Anixart.';
   });
@@ -803,6 +894,7 @@
       stopLan?.();
       stopPair?.();
       void stopTvLanLogin();
+      if (qrLoginTimer) stopQrLogin();
     };
   });
 </script>
@@ -1097,6 +1189,20 @@
                         {/if}
                       </button>
                     {/each}
+                    {#if !isRegister && canQrLogin}
+                      <button
+                        type="button"
+                        class="auth-oauth__icon-btn auth-oauth__icon-btn--qr"
+                        class:auth-oauth__icon-btn--dimmed={!!oauthBusy}
+                        style="--oauth-i: {OAUTH_PROVIDERS.length}"
+                        disabled={busy}
+                        aria-label="Войти по QR-коду с телефона"
+                        title="Войти по QR-коду с телефона"
+                        onclick={openQrLogin}
+                      >
+                        <span class="auth-oauth__icon-face">{@html iconQrCode(22)}</span>
+                      </button>
+                    {/if}
                   </div>
                 </div>
                 {/if}
@@ -1169,6 +1275,49 @@
                   </button>
                 </p>
               </form>
+
+            {:else if panel === 'qr'}
+              <div class="auth-form auth-qr">
+                <div class="auth-qr__code" class:auth-qr__code--dim={qrLoginState !== 'waiting' && qrLoginState !== 'scanned'}>
+                  {#if qrLoginSvg}
+                    {@html qrLoginSvg}
+                  {:else}
+                    <div class="auth-qr__ph" aria-hidden="true"></div>
+                  {/if}
+                </div>
+                {#if qrLoginState === 'loading'}
+                  <p class="auth-form__info" role="status">Создаю QR-код…</p>
+                {:else if qrLoginState === 'waiting'}
+                  <p class="auth-qr__hint">Откройте камеру на телефоне, где выполнен вход в Anixart, и наведите на QR.</p>
+                {:else if qrLoginState === 'scanned'}
+                  <p class="auth-form__info" role="status">
+                    Отсканировано. Подтвердите вход на телефоне{qrLoginPin ? ' кодом' : ''}.
+                  </p>
+                {:else if qrLoginState === 'expired'}
+                  <p class="auth-form__error" role="alert">QR-код устарел.</p>
+                {:else if qrLoginState === 'declined'}
+                  <p class="auth-form__error" role="alert">Вход отклонён на телефоне.</p>
+                {:else}
+                  <p class="auth-form__error" role="alert">Не удалось создать QR-код.</p>
+                {/if}
+                {#if qrLoginPin && (qrLoginState === 'waiting' || qrLoginState === 'scanned')}
+                  <p class="auth-qr__pin" aria-label="PIN-код">{qrLoginPin}</p>
+                {/if}
+                {#if qrLoginState === 'expired' || qrLoginState === 'declined' || qrLoginState === 'error'}
+                  <button
+                    type="button"
+                    class="uiv2-btn uiv2-btn--lg uiv2-btn--primary uiv2-btn--block auth-form__submit"
+                    onclick={() => void startQrLogin()}
+                  >
+                    <span class="uiv2-btn__label">Новый QR-код</span>
+                  </button>
+                {/if}
+                <p class="auth-switch">
+                  <button type="button" class="auth-link" onclick={closeQrLogin}>
+                    Войти по паролю
+                  </button>
+                </p>
+              </div>
 
             {:else if panel === 'forgot'}
               <form class="auth-form" onsubmit={handleForgot}>

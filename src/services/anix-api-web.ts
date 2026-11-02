@@ -83,6 +83,9 @@ function buildWebAnixApi(): AnixApi {
       signInWithGoogle: () => oauthSignIn('google', 'anix:loginGoogle'),
       signInWithTelegram: () => oauthSignIn('telegram', 'anix:loginTelegram'),
       signInWithYandex: () => oauthSignIn('yandex', 'anix:loginYandex'),
+      qrLoginStart: () => invoke('anix:qrLoginStart'),
+      qrLoginPoll: () => invoke('anix:qrLoginPoll'),
+      qrLoginCancel: () => invoke('anix:qrLoginCancel'),
       signUp: (payload) => invoke('anix:signUp', payload),
       signUpVerify: (payload) => invoke('anix:signUpVerify', payload),
       signUpResend: (payload) => invoke('anix:signUpResend', payload),
@@ -160,6 +163,7 @@ function buildWebAnixApi(): AnixApi {
       vote: (releaseId, vote) => invoke('anix:releaseVote', releaseId, vote),
       deleteVote: (releaseId) => invoke('anix:releaseDeleteVote', releaseId),
       schedule: () => invoke('anix:schedule'),
+      continueWatching: (releaseId) => invoke('anix:releaseContinue', releaseId),
     },
 
     comments: {
@@ -208,6 +212,7 @@ function buildWebAnixApi(): AnixApi {
       feed: (query, page = 0, searchBy = 0) => invoke('anix:searchFeed', query, page, searchBy),
       channelSubscribers: (channelId, page = 0, query = '') =>
         invoke('anix:searchChannelSubscribers', channelId, page, query),
+      friends: (profileId, query, page = 0) => invoke('anix:searchFriends', profileId, query, page),
     },
 
     collection: {

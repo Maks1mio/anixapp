@@ -112,6 +112,7 @@ import {
   Gauge,
   ListVideo,
   Sun,
+  QrCode,
 } from 'lucide';
 
 type IconNode = [string, Record<string, string | number | undefined>][];
@@ -497,6 +498,11 @@ export function iconSearch(size = 20): string {
 /** Загрузка / обновление */
 export function iconDownload(size = 20): string {
   return toSvg(Download, size);
+}
+
+/** QR-код (вход с телефона) */
+export function iconQrCode(size = 20): string {
+  return toSvg(QrCode, size);
 }
 
 /** Изображение / обложка */

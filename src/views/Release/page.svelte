@@ -127,6 +127,10 @@
       (r.poster as any)?.original?.url ?? (r.poster as any)?.medium?.url ?? (r.poster as any)?.small?.url;
     return buildPosterUrl(raw ?? (typeof r.image === 'string' ? r.image as string : '')) || '';
   });
+  /** Anixart 11+: анимированный постер (видео) */
+  const posterAnimation = $derived(
+    typeof release?.poster_animation === 'string' ? release.poster_animation as string : '',
+  );
 
   // ── Derived: title / description ──────────────────────────────────────────
   const titleRu       = $derived((release?.title_ru       ?? '') as string);
@@ -518,7 +522,7 @@
 
       <!-- Head: poster + info -->
       <ReleaseHead
-        {posterUrl} {title} {titleRu} {titleOriginal} {titleAlt}
+        {posterUrl} {posterAnimation} {title} {titleRu} {titleOriginal} {titleAlt}
         {ageRateText} {ageIsRestricted}
         {isFavorite} {favoritesCount}
         {isViewBlocked} {noteHtml} {descHtml} {descClean} {descNeedsTruncate} {descCollapsed}

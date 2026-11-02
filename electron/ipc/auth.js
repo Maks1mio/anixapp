@@ -17,6 +17,17 @@ const {
 /** @type {{ provider: string, token: string, email?: string | null, suggestedLogins?: string[] | null } | null} */
 let pendingOAuthSignup = null;
 
+/** Текущая QR-сессия входа (Anixart 11+). secret не уходит в renderer. */
+/** @type {{ key: string, secret: string } | null} */
+let qrLoginSession = null;
+
+const QR_STATUS_CONFIRMED = 2;
+
+function qrDeviceName() {
+  const os = { win32: 'Windows', darwin: 'macOS', linux: 'Linux' }[process.platform] || process.platform;
+  return `AnixApp · ${os}`;
+}
+
 function register(deps) {
   const {
     loggedHandle,
@@ -338,6 +349,55 @@ loggedHandle('anix:login', async (_, username, password) => {
   }
   logger.warn('auth', 'login failed', { code });
   return { success: false, code };
+});
+
+// Вход по QR: ПК показывает QR, телефон с Anixart сканирует и подтверждает PIN-кодом.
+loggedHandle('anix:qrLoginStart', async () => {
+  const { baseUrl } = config.loadConfig();
+  const client = createAnixClient({ baseUrl });
+  // anixapi < 0.4.1 не знает auth/qr/*
+  if (typeof client.endpoints.auth.qrCreate !== 'function') return { success: false, code: -2 };
+  const res = await client.endpoints.auth.qrCreate({ device: qrDeviceName() });
+  if (res?.code !== DefaultResult.Ok || !res?.key || !res?.secret) {
+    qrLoginSession = null;
+    return { success: false, code: res?.code };
+  }
+  qrLoginSession = { key: res.key, secret: res.secret };
+  return {
+    success: true,
+    key: res.key,
+    pin: res.pin ?? null,
+    expiresIn: res.expires_in ?? null,
+    pollInterval: res.poll_interval ?? null,
+  };
+});
+
+loggedHandle('anix:qrLoginPoll', async () => {
+  const session = qrLoginSession;
+  if (!session) return { success: false, code: -1 };
+  const { baseUrl } = config.loadConfig();
+  const client = createAnixClient({ baseUrl });
+  const res = await client.endpoints.auth.qrStatus(session);
+  const code = res?.code;
+  if (code === DefaultResult.Ok && res?.status === QR_STATUS_CONFIRMED && res?.profileToken?.token) {
+    qrLoginSession = null;
+    applyLoginSuccess(res.profile, res.profileToken, baseUrl);
+    logger.info('auth', 'qr login success', { profileId: res.profile?.id, login: res.profile?.login });
+    return { success: true };
+  }
+  if (code !== DefaultResult.Ok) qrLoginSession = null;
+  return {
+    success: false,
+    code,
+    status: res?.status ?? null,
+    pin: res?.pin ?? null,
+    device: res?.device ?? null,
+  };
+});
+
+loggedHandle('anix:qrLoginCancel', async () => {
+  qrLoginSession = null;
+  return { success: true };
 });
 
 loggedHandle('anix:signUp', async (_, payload) => {

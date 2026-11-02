@@ -1,6 +1,7 @@
 <script lang="ts">
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import { onMount, onDestroy } from 'svelte';
+  import AnimatedMediaOverlay from '../components/AnimatedMediaOverlay.svelte';
   import { iconPencil, iconLock, iconTrash2 } from '../components/icons';
   import { navigate } from '../stores/navigation';
   import { requireAuth } from '../stores/auth';
@@ -48,6 +49,8 @@
   let collectionTitle = $state('');
   let collectionDesc = $state('');
   let collectionImage = $state('');
+  /** Anixart 11+: анимированная обложка (видео) */
+  let collectionCoverAnimation = $state('');
   let lastUpdateDate = $state(0);
   let totalReleases = $state(0);
   let isFavorite = $state(false);
@@ -193,6 +196,7 @@
       collectionTitle = info.title || 'Без названия';
       collectionDesc = info.description || '';
       collectionImage = info.image || '';
+      collectionCoverAnimation = typeof info.cover_animation === 'string' ? info.cover_animation : '';
       isPrivate = !!(info.is_private ?? info.isPrivate);
       lastUpdateDate = info.last_update_date ?? info.creation_date ?? 0;
       favoritesCount = info.favorites_count ?? 0;
@@ -259,6 +263,7 @@
         <div class="collection-banner">
           {#if collectionImage}
             <img src={buildPosterUrl(collectionImage)} alt="" loading="eager" />
+            <AnimatedMediaOverlay src={collectionCoverAnimation} />
           {:else}
             <div class="collection-banner__placeholder"></div>
           {/if}

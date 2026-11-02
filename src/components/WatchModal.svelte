@@ -1241,6 +1241,7 @@
                       type="button"
                       class="watch-modal__episode-main"
                       use:tvLongPress={isTv ? () => void toggleEpisodeWatched(ep) : null}
+                      data-tv-longpress-hint="Отметить серию"
                       onclick={() => handleEpisodePlay(ep.position)}
                     >
                       {#if unnumbered}
@@ -1367,6 +1368,7 @@
                     tabindex="0"
                     data-dubber-id={d.id}
                     use:tvLongPress={isTv ? () => void togglePinDubber(d) : null}
+                    data-tv-longpress-hint={pinned ? 'Открепить озвучку' : 'Закрепить озвучку'}
                     onclick={() => openDubber(d)}
                     onkeydown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {

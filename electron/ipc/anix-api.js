@@ -42,6 +42,22 @@ loggedHandle('anix:releaseById', async (_, id, extended = true) => {
   }
 });
 
+// «Продолжить просмотр» (Anixart 11+): релиз для последнего просмотренного
+loggedHandle('anix:releaseContinue', async (_, id) => {
+  const releaseId = toPositiveInt(id);
+  if (releaseId == null) return null;
+  try {
+    const client = getAnixart();
+    // anixapi < 0.4.1: без release/{id}/continue берём обычный релиз
+    if (typeof client.endpoints.release.continueWatching !== 'function') {
+      return await client.endpoints.release.info(releaseId, true);
+    }
+    return await client.endpoints.release.continueWatching(releaseId);
+  } catch (err) {
+    handleAnixError(err, 'releaseContinue');
+  }
+});
+
 ipcMain.handle('anix:getVideos', async (_, releaseId) => {
   const id = toPositiveInt(releaseId);
   if (id == null) return { types: [] };
@@ -1712,6 +1728,20 @@ loggedHandle('anix:searchChannelSubscribers', async (_, channelId, page = 0, que
     });
   } catch (err) {
     handleAnixError(err, 'searchChannelSubscribers');
+  }
+});
+
+// Поиск по друзьям профиля (Anixart 11+)
+loggedHandle('anix:searchFriends', async (_, profileId, query, page = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.search.profileFriendSearch(Number(profileId), page, {
+      query: String(query ?? ''),
+      page,
+      searchBy: 0,
+    });
+  } catch (err) {
+    handleAnixError(err, 'searchFriends');
   }
 });
 

@@ -6,7 +6,7 @@
  */
 import { isCapacitorNative } from '../native/anix-api-native';
 import { isMobileMode } from '../platform/mobile';
-import { isTvMode } from '../platform/tv';
+import { isTvBuild } from '../platform/tv';
 import { getAnixbackDirectOrigin } from './anixback-endpoint';
 import { invalidateBadges } from './badges-api';
 
@@ -45,7 +45,7 @@ function installId(): string {
 }
 
 function platform(): string {
-  if (isTvMode()) return 'android-tv';
+  if (isTvBuild()) return 'android-tv';
   if (isMobileMode() || isCapacitorNative()) return 'android';
   const p = window.electron?.platform;
   if (p === 'win32') return 'windows';

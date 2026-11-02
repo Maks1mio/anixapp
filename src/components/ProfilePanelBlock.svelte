@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, tick, untrack } from 'svelte';
   import Page from './Page.svelte';
+  import AnimatedMediaOverlay from './AnimatedMediaOverlay.svelte';
   import {
     iconMoreHorizontal,
     iconMessageCircle,
@@ -170,6 +171,10 @@
 
   const login = $derived(String(profile?.login ?? 'Профиль'));
   const avatarUrl = $derived(profile?.avatar ? posterUrl(String(profile.avatar)) : '');
+  /** Anixart 11+: анимированный аватар (видео) */
+  const avatarAnimation = $derived(
+    typeof profile?.avatar_animation === 'string' ? String(profile.avatar_animation) : '',
+  );
   const statusText = $derived(
     profile?.status && String(profile.status).trim() ? String(profile.status).trim() : '',
   );
@@ -860,7 +865,7 @@
                         style={`background-image:url('${avatarUrl}')`}
                         aria-label="Смотреть аватар"
                         onclick={previewAvatar}
-                      ></button>
+                      ><AnimatedMediaOverlay src={avatarAnimation} /></button>
                     {:else}
                       <div
                         class="profile-panel__avatar"

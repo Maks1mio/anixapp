@@ -3,13 +3,16 @@ import { isTvReleasePath, isTvWatchPath, tvKeepAliveKey } from '../tv/keepAlive'
 import { getPath } from '../router';
 import { scrollTvCarouselItemIntoView } from '../tv/carouselScroll';
 import { cancelTvReleaseOpen } from './tv-release-transition';
+import { get } from 'svelte/store';
+import { isTvShellPath, TV_NAV_ITEMS, tvNavHref } from '../tv/nav';
+import { initTvInput, tvSystemMenuOpen, TV_INPUT_ACTION_EVENT, type TvInputAction } from './tv-input';
 
 const FOCUS_ATTR = 'data-tv-focus';
 /** Элемент поддерживает удержание OK (см. actions/tvLongPress). */
 export const TV_LONGPRESS_ATTR = 'data-tv-longpress';
 export const TV_LONGPRESS_EVENT = 'tv-longpress';
-const TV_LONGPRESS_ACTIVE_ATTR = 'data-tv-longpress-active';
-const TV_LONGPRESS_MS = 550;
+export const TV_LONGPRESS_ACTIVE_ATTR = 'data-tv-longpress-active';
+export const TV_LONGPRESS_MS = 550;
 const RAIL_SEL = '.tv-layout__rail';
 const MAIN_SEL = '.tv-layout__main';
 const TV_HOME_ROW_SEL = '[data-tv-home-row]';
@@ -568,7 +571,9 @@ function focusElement(el: HTMLElement, sticky = false, preserveScroll = false): 
 }
 
 function focusActiveRailItem(): boolean {
-  const active = document.querySelector<HTMLElement>('.tv-layout__rail-item--active');
+  const active =
+    document.querySelector<HTMLElement>('.tv-layout__rail-item--active')
+    ?? document.querySelector<HTMLElement>('.tv-layout__rail-item');
   if (!active) return false;
   focusElement(active, true);
   return true;
@@ -956,6 +961,11 @@ function observeDom(): void {
 }
 
 function handleBack(): void {
+  if (get(tvSystemMenuOpen)) {
+    tvSystemMenuOpen.set(false);
+    return;
+  }
+
   if (railEngaged && isInRail(document.activeElement)) {
     focusDefaultContent();
     return;
@@ -1039,15 +1049,16 @@ function handleBack(): void {
     }
   }
 
-  if (window.history.length > 1) {
+  // Корневой раздел: «Назад» открывает меню управления, а не листает историю вкладок.
+  if (!isTvShellPath(currentRoutePath()) && window.history.length > 1) {
     window.history.back();
     return;
   }
 
-  void exitTvApp();
+  tvSystemMenuOpen.set(true);
 }
 
-async function exitTvApp(): Promise<void> {
+export async function exitTvApp(): Promise<void> {
   try {
     const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
     if (cap?.isNativePlatform?.()) {
@@ -1160,6 +1171,65 @@ function bindBackKeys(): void {
   }, true);
 }
 
+function toggleRail(): void {
+  if (railEngaged && isInRail(document.activeElement)) {
+    focusDefaultContent();
+    return;
+  }
+  // Сначала раскрыть: на immersive-страницах рейл скрыт, пока не взведён data-tv-rail-expanded.
+  setRailEngaged(true);
+  if (!focusActiveRailItem()) setRailEngaged(false);
+}
+
+/** Открыт диалог / шторка / лайтбокс поверх страницы. */
+export function isTvOverlayOpen(): boolean {
+  return !!overlayRoot() || !!document.querySelector('.watch-modal');
+}
+
+function stepSection(delta: 1 | -1): void {
+  const items = TV_NAV_ITEMS.filter((item) => !!tvNavHref(item));
+  const current = currentRoutePath().split('?')[0] || '/';
+  const idx = items.findIndex((item) => tvNavHref(item) === current);
+  const next = items[(Math.max(idx, 0) + delta + items.length) % items.length];
+  // Клик по пункту рейла — та же логика, что и мышью (авторизация для закладок и т.д.).
+  document.querySelector<HTMLElement>(`[data-tv-nav-id="${next.id}"]`)?.click();
+}
+
+function onTvInputAction(event: Event): void {
+  if (!isTvMode()) return;
+  const action = (event as CustomEvent<TvInputAction>).detail;
+  if (get(tvSystemMenuOpen)) {
+    if (action === 'menu') tvSystemMenuOpen.set(false);
+    return;
+  }
+  const path = currentRoutePath();
+  // Плеер сам решает, что значит кнопка (Watch.tv: tv-watch:action).
+  if (isTvWatchPath(path)) {
+    window.dispatchEvent(new CustomEvent<TvInputAction>('tv-watch:action', { detail: action }));
+    return;
+  }
+  // Диалоги: свои кнопки, глобальные действия не перехватываем.
+  if (isTvOverlayOpen()) return;
+  // Разделы и поиск — только на корневых экранах; со страницы — через «Меню».
+  if (action !== 'menu' && (railEngaged || !isTvShellPath(path))) return;
+  // Пауза и серии — только в плеере.
+  if (action === 'play-pause' || action === 'prev-episode' || action === 'next-episode') return;
+  switch (action) {
+    case 'menu':
+      toggleRail();
+      break;
+    case 'search':
+      document.querySelector<HTMLElement>('[data-tv-nav-id="search"]')?.click();
+      break;
+    case 'prev-section':
+      stepSection(-1);
+      break;
+    case 'next-section':
+      stepSection(1);
+      break;
+  }
+}
+
 export function isTvRailEngaged(): boolean {
   return railEngaged;
 }
@@ -1255,6 +1325,8 @@ export function initTvNavigation(): void {
   document.addEventListener('keydown', onActivateKeydown, true);
   document.addEventListener('keyup', onActivateKeyup, true);
   bindBackKeys();
+  initTvInput();
+  window.addEventListener(TV_INPUT_ACTION_EVENT, onTvInputAction);
   observeDom();
   watchRouteChanges();
   void bindCapacitorBackButton();

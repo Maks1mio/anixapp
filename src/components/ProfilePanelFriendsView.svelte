@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, untrack } from 'svelte';
-  import { iconMessageCircle } from './icons';
+  import { iconMessageCircle, iconSearch, iconX } from './icons';
+  import UiV2PillField from './uikit-v2/UiV2PillField.svelte';
   import UserBadge from './UserBadge.svelte';
   import AppBadges from './AppBadges.svelte';
   import Checkbox from './Checkbox.svelte';
@@ -54,6 +55,37 @@
   let errorMsg = $state('');
   let requestBusyId = $state(0);
   let showBannedOnly = $state(false);
+
+  /** Поиск по друзьям через search/profile/friends (Anixart 11+). */
+  const canSearchFriends = typeof window !== 'undefined' && !!window.anixApi?.search?.friends;
+  let searchQuery = $state('');
+  let searchTimer: ReturnType<typeof setTimeout> | null = null;
+  let loadSeq = 0;
+
+  function onSearchInput(e: Event) {
+    searchQuery = (e.currentTarget as HTMLInputElement).value;
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(restartFriends, 350);
+  }
+
+  function onSearchClear() {
+    if (searchTimer) clearTimeout(searchTimer);
+    searchQuery = '';
+    restartFriends();
+  }
+
+  function onSearchKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape' && searchQuery) {
+      e.preventDefault();
+      onSearchClear();
+    }
+  }
+
+  function restartFriends() {
+    loadSeq += 1;
+    loading = false;
+    void loadFriends(false);
+  }
   let banFieldsById = $state<Record<number, ProfileBanFields>>({});
   let banCheckedCount = $state(0);
   let banScanTotal = $state(0);
@@ -138,13 +170,18 @@
       friendsRoot = null;
     }
     const pageToLoad = page;
+    const seq = loadSeq;
+    const query = searchQuery.trim();
     try {
-      const data = await window.anixApi.profile.getFriends(profileId, pageToLoad) as {
+      const data = (query && canSearchFriends
+        ? await window.anixApi.search.friends!(profileId, query, pageToLoad)
+        : await window.anixApi.profile.getFriends(profileId, pageToLoad)) as {
         content?: Record<string, unknown>[];
       };
+      if (seq !== loadSeq) return;
       const content = data?.content ?? [];
       if (!content.length) {
-        if (!append) loadState = hasAnyRequests ? 'ready' : 'empty';
+        if (!append) loadState = query ? 'ready' : hasAnyRequests ? 'ready' : 'empty';
         hasMore = false;
         loading = false;
         return;
@@ -162,6 +199,7 @@
       attachScroll();
       if (showBannedOnly && hasMore) void loadFriends(true);
     } catch (err) {
+      if (seq !== loadSeq) return;
       errorMsg = String(err);
       loadState = 'error';
       loading = false;
@@ -263,6 +301,7 @@
   });
 
   onDestroy(() => {
+    if (searchTimer) clearTimeout(searchTimer);
     banScanner?.abort();
     banScanner = null;
     if (scrollEl && scrollListener) scrollEl.removeEventListener('scroll', scrollListener);
@@ -380,10 +419,33 @@
       />
     </div>
 
+    {#if canSearchFriends}
+      <div class="profile-friends__search profile-panel__friends-search">
+        <UiV2PillField
+          type="search"
+          label="Поиск по друзьям"
+          value={searchQuery}
+          autocomplete="off"
+          spellcheck={false}
+          oninput={onSearchInput}
+          onkeydown={onSearchKeydown}
+        >
+          {#snippet icon()}{@html iconSearch(16)}{/snippet}
+        </UiV2PillField>
+        {#if searchQuery}
+          <button type="button" class="profile-friends__search-clear" aria-label="Очистить поиск" onclick={onSearchClear}>
+            {@html iconX(14)}
+          </button>
+        {/if}
+      </div>
+    {/if}
+
     {#if loadState === 'loading' && !friends.length}
       <p class="profile-panel__state">Загрузка…</p>
     {:else if loadState === 'error'}
       <p class="profile-panel__state">{errorMsg || 'Не удалось загрузить'}</p>
+    {:else if searchQuery.trim() && loadState === 'ready' && !friends.length}
+      <p class="profile-panel__state">Ничего не найдено</p>
     {:else if loadState === 'empty' && !hasAnyRequests}
       <p class="profile-panel__state">Нет друзей</p>
     {:else if showBannedOnly && !visibleFriends.length}

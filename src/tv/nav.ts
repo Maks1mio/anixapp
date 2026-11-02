@@ -20,7 +20,7 @@ function tvNavIcon(svg: string): string {
 
 export type TvNavItem =
   | { id: string; href: string; label: string; icon: string }
-  | { id: string; action: 'settings' | 'profile'; label: string; icon: string };
+  | { id: string; action: 'settings' | 'profile' | 'power'; label: string; icon: string };
 
 export const TV_NAV_ITEMS: TvNavItem[] = [
   { id: 'home', href: '/', label: 'Главная', icon: tvNavIcon(iconHome(TV_ICON_SIZE)) },
@@ -51,6 +51,16 @@ export const TV_PROFILE_NAV_ITEM: TvNavItem = {
   action: 'profile',
   label: 'Профиль',
   icon: tvNavIcon(iconUser(TV_ICON_SIZE)),
+};
+
+/** Меню управления: свернуть, выйти из Big Picture, закрыть приложение. */
+export const TV_POWER_NAV_ITEM: TvNavItem = {
+  id: 'power',
+  action: 'power',
+  label: 'Выход',
+  icon: tvNavIcon(
+    `<svg width="${TV_ICON_SIZE}" height="${TV_ICON_SIZE}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${TV_ICON_STROKE}" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>`,
+  ),
 };
 
 /** Main TV shell routes — each has a matching `*.tv.svelte` view. */

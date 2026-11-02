@@ -3,6 +3,7 @@ export interface ElectronWindowAPI {
   maximize: () => void;
   close: () => void;
   isMaximized?: () => Promise<boolean>;
+  setFullScreen?: (on: boolean) => void;
   onMaximizedChanged?: (cb: (isMaximized: boolean) => void) => () => void;
 }
 

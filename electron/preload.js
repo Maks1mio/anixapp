@@ -231,6 +231,7 @@ contextBridge.exposeInMainWorld('electron', {
     maximize: () => ipcRenderer.send('window:maximize'),
     close: () => ipcRenderer.send('window:close'),
     isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
+    setFullScreen: (on) => ipcRenderer.send('window:setFullScreen', on === true),
     onMaximizedChanged: (cb) => {
       const listener = (_, value) => cb(value === true);
       ipcRenderer.on('window:maximizedChanged', listener);
@@ -502,6 +503,9 @@ contextBridge.exposeInMainWorld('anixApi', {
     signInWithGoogle: () => ipcRenderer.invoke('anix:loginGoogle'),
     signInWithTelegram: () => ipcRenderer.invoke('anix:loginTelegram'),
     signInWithYandex: () => ipcRenderer.invoke('anix:loginYandex'),
+    qrLoginStart: () => ipcRenderer.invoke('anix:qrLoginStart'),
+    qrLoginPoll: () => ipcRenderer.invoke('anix:qrLoginPoll'),
+    qrLoginCancel: () => ipcRenderer.invoke('anix:qrLoginCancel'),
     signUp: (payload) => ipcRenderer.invoke('anix:signUp', payload),
     signUpVerify: (payload) => ipcRenderer.invoke('anix:signUpVerify', payload),
     signUpResend: (payload) => ipcRenderer.invoke('anix:signUpResend', payload),
@@ -576,6 +580,7 @@ contextBridge.exposeInMainWorld('anixApi', {
     vote: (releaseId, vote) => ipcRenderer.invoke('anix:releaseVote', releaseId, vote),
     deleteVote: (releaseId) => ipcRenderer.invoke('anix:releaseDeleteVote', releaseId),
     schedule: () => ipcRenderer.invoke('anix:schedule'),
+    continueWatching: (releaseId) => ipcRenderer.invoke('anix:releaseContinue', releaseId),
   },
 
   comments: {
@@ -627,6 +632,7 @@ contextBridge.exposeInMainWorld('anixApi', {
       ipcRenderer.invoke('anix:searchFeed', query, page, searchBy),
     channelSubscribers: (channelId, page = 0, query = '') =>
       ipcRenderer.invoke('anix:searchChannelSubscribers', channelId, page, query),
+    friends: (profileId, query, page = 0) => ipcRenderer.invoke('anix:searchFriends', profileId, query, page),
   },
 
   collection: {

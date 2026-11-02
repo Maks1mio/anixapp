@@ -2,6 +2,7 @@
   import { onDestroy, onMount, untrack } from 'svelte';
   import { navigate } from '../../stores/navigation';
   import { openWatchModal } from '../../stores/modals';
+  import AnimatedMediaOverlay from '../AnimatedMediaOverlay.svelte';
   import type { OverviewBanner } from '../../utils/overview';
   import { parseBannerReleaseId } from '../../utils/heroPlayback';
   import {
@@ -34,6 +35,10 @@
   let { items, overrides = [], initialActiveIndex = 0, onActiveIndexChange }: Props = $props();
 
   const AUTO_ADVANCE_SEC = 8;
+  /** Длительность текущего слайда: 8 с или целое число проигрываний видео баннера */
+  let slideDurationMs = AUTO_ADVANCE_SEC * 1000;
+  /** Слайд, для которого таймер уже подогнан под видео (повторно не сбрасываем) */
+  let slideSyncedId = 0;
   const SLIDE_ANIM_MS = 520;
   const VIDEO_MUTED_STORAGE_KEY = 'anixapp.overviewSteam.muted';
 
@@ -98,6 +103,12 @@
   );
   const showVideo = $derived(
     mediaHover && Boolean(hoverVideoUrl) && videoReady && !thumbPreview
+  );
+  /** Anixart 11+: анимированный баннер, пока не выбран свой фон, скриншот или трейлер */
+  const bannerAnimation = $derived(
+    activeBanner?.imageAnimation && !thumbPreview && !showVideo && !resolveCustomBgUrl(activeOverride)
+      ? activeBanner.imageAnimation
+      : ''
   );
 
   function resolveAbsoluteUrl(url: string | null | undefined): string {
@@ -357,6 +368,8 @@
     onActiveIndexChange?.(nextIndex);
     progressElapsedMs = 0;
     slideProgress = 0;
+    slideDurationMs = AUTO_ADVANCE_SEC * 1000;
+    slideSyncedId = 0;
 
     if (animTimer != null) clearTimeout(animTimer);
     animTimer = setTimeout(() => {
@@ -411,6 +424,21 @@
     openWatchModal(id, banner.title || 'Просмотр');
   }
 
+  /**
+   * Видео баннера готово: слайд длится целое число его проигрываний (ближайшее к 8 с),
+   * чтобы перелистывание совпадало с концом ролика. Отсчёт начинается вместе с видео.
+   */
+  function syncSlideToVideo(bannerId: number, video: HTMLVideoElement) {
+    if (activeBanner?.id !== bannerId || slideSyncedId === bannerId) return;
+    const sec = video.duration;
+    if (!Number.isFinite(sec) || sec <= 0) return;
+    const loops = Math.max(1, Math.round(AUTO_ADVANCE_SEC / sec));
+    slideSyncedId = bannerId;
+    slideDurationMs = loops * sec * 1000;
+    progressElapsedMs = video.currentTime * 1000;
+    slideProgress = Math.min(1, progressElapsedMs / slideDurationMs);
+  }
+
   function startProgressTimer() {
     stopProgressTimer();
     progressLastTs = 0;
@@ -422,8 +450,8 @@
 
       if (!autoPaused && !animating && count > 1) {
         progressElapsedMs += delta;
-        slideProgress = Math.min(1, progressElapsedMs / (AUTO_ADVANCE_SEC * 1000));
-        if (progressElapsedMs >= AUTO_ADVANCE_SEC * 1000) {
+        slideProgress = Math.min(1, progressElapsedMs / slideDurationMs);
+        if (progressElapsedMs >= slideDurationMs) {
           progressElapsedMs = 0;
           slideProgress = 0;
           goNext();
@@ -550,6 +578,13 @@
                   decoding="async"
                   fetchpriority="high"
                 />
+                {#key activeBanner.id}
+                  <AnimatedMediaOverlay
+                    src={bannerAnimation}
+                    class="steam-hero__anim"
+                    onReady={(video) => syncSlideToVideo(activeBanner.id, video)}
+                  />
+                {/key}
               {:else}
                 <div class="steam-hero__poster steam-hero__poster--placeholder"></div>
               {/if}

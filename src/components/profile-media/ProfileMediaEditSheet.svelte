@@ -444,6 +444,8 @@
         {isAvatar ? 'Фото профиля' : 'Обложка профиля'}
       </h3>
 
+      <!-- Полотно редактора: перетаскивание и колесо мыши -->
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_no_noninteractive_tabindex -->
       <div
         bind:this={stageEl}
         bind:clientWidth={stageW}

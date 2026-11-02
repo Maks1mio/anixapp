@@ -13,6 +13,8 @@ export interface OverviewBanner {
   title: string;
   description: string;
   image: string;
+  /** Anixart 11+: анимированный баннер (mp4) */
+  imageAnimation: string;
   type: number;
   action: string;
 }
@@ -50,6 +52,7 @@ export function mapOverviewBanner(raw: Record<string, unknown>): OverviewBanner 
     title: String(raw.title ?? ''),
     description: String(raw.description ?? ''),
     image: resolveImageUrl(raw.image),
+    imageAnimation: typeof raw.image_animation === 'string' ? raw.image_animation : '',
     type: Number(raw.type ?? 0),
     action: String(raw.action ?? ''),
   };

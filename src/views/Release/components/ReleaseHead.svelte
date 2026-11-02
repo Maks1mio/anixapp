@@ -23,10 +23,13 @@
   import { openImageLightbox, formatVoteCount } from '../_utils';
 import { requestOpenExternal } from '../../../utils/external-link';
   import { toPosterDisplayUrl } from '../../../utils/posterUrl';
+  import AnimatedMediaOverlay from '../../../components/AnimatedMediaOverlay.svelte';
   import { isMobileMode } from '../../../platform/mobile';
 
   interface Props {
     posterUrl:       string;
+    /** Anixart 11+: анимированный постер (видео) */
+    posterAnimation?: string;
     title:           string;
     titleRu:         string;
     titleOriginal:   string;
@@ -62,7 +65,7 @@ import { requestOpenExternal } from '../../../utils/external-link';
   }
 
   let {
-    posterUrl, title, titleRu, titleOriginal, titleAlt, ageRateText, ageIsRestricted,
+    posterUrl, posterAnimation, title, titleRu, titleOriginal, titleAlt, ageRateText, ageIsRestricted,
     isFavorite, favoritesCount,
     isViewBlocked,
     noteHtml, descHtml, descClean, descNeedsTruncate, descCollapsed,
@@ -159,6 +162,7 @@ import { requestOpenExternal } from '../../../utils/external-link';
   >
     {#if displayPosterUrl}
       <img src={displayPosterUrl} alt={title} />
+      <AnimatedMediaOverlay src={posterAnimation} />
     {:else}
       <div class="release-page__poster-placeholder"></div>
     {/if}

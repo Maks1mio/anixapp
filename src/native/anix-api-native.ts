@@ -1,4 +1,4 @@
-import { isTvMode } from '../platform/tv';
+import { isTvBuild } from '../platform/tv';
 
 type NativeWindow = Window & {
   Capacitor?: { isNativePlatform?: () => boolean };
@@ -20,7 +20,7 @@ export async function initNativeAnixApi(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
   // Live APK → Vite на ПК: тот же /__anix, что у electron:dev-tv. Не подменять мостом.
   if (import.meta.env.DEV) return false;
-  const useNative = isCapacitorNative() || (isTvMode() && import.meta.env.PROD);
+  const useNative = isCapacitorNative() || (isTvBuild() && import.meta.env.PROD);
   if (!useNative) return false;
 
   try {

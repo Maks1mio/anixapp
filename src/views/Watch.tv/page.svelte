@@ -17,6 +17,8 @@
   import { setSkipAutoPref } from '../Watch/_skipPrefs';
   import { episodeDisplayNumber } from '../../utils/episode-display';
   import { scheduleFocusTvOverlayContent, focusTvWatchPlay } from '../../services/tv-navigation';
+  import { tvInputDevice, type TvInputAction } from '../../services/tv-input';
+  import TvInputGlyph from '../../components/tv/TvInputGlyph.svelte';
   import { getTvWatchArt } from '../../services/tv-release-transition';
   import { toPosterDisplayUrl } from '../../utils/posterUrl';
   import { fade } from 'svelte/transition';
@@ -70,6 +72,10 @@
 
   let episodeLoadGen = 0;
   let overlayTimer = 0;
+  /** Индикатор перемотки (±N с у края экрана); серия нажатий в одну сторону суммируется. */
+  let seekFlash = $state<{ dir: 1 | -1; total: number; key: number } | null>(null);
+  let seekFlashTimer = 0;
+  const SEEK_FLASH_MS = 900;
   let tickTimer = 0;
   let tickInterval = 0;
   let skipMarks = $state<SkipMarks | null>(null);
@@ -642,10 +648,24 @@
 
   function seekBy(seconds: number, showUi = true) {
     if (!useVideo || !videoEl || !Number.isFinite(videoEl.duration)) return;
-    const next = Math.max(0, Math.min(videoEl.duration, videoEl.currentTime + seconds));
+    const prev = videoEl.currentTime;
+    const next = Math.max(0, Math.min(videoEl.duration, prev + seconds));
     fluo.setProgress(next, { origin: 'user' });
+    if (Math.abs(next - prev) >= 0.5) flashSeek(seconds);
     syncPlaybackState();
     if (showUi) showOverlay();
+  }
+
+  function flashSeek(seconds: number) {
+    const dir: 1 | -1 = seconds < 0 ? -1 : 1;
+    const step = Math.round(Math.abs(seconds));
+    const total = seekFlash && seekFlash.dir === dir ? seekFlash.total + step : step;
+    seekFlash = { dir, total, key: (seekFlash?.key ?? 0) + 1 };
+    if (seekFlashTimer) window.clearTimeout(seekFlashTimer);
+    seekFlashTimer = window.setTimeout(() => {
+      seekFlash = null;
+      seekFlashTimer = 0;
+    }, SEEK_FLASH_MS);
   }
 
   function goBack() {
@@ -783,6 +803,36 @@
     seekBy(detail.seconds, detail.showUi ?? false);
   }
 
+  /** Кнопки геймпада / F-клавиши в плеере (см. tv-input: menu, search, разделы, X, курки). */
+  function onTvWatchAction(event: Event) {
+    const action = (event as CustomEvent<TvInputAction>).detail;
+    if (loadState !== 'ready') return;
+    const panelShown = panelOpen || settingsOpen;
+    switch (action) {
+      case 'play-pause':
+        if (!panelShown) togglePlay();
+        break;
+      case 'prev-section':
+      case 'next-section':
+        if (!panelShown) seekBy(action === 'prev-section' ? -SEEK_STEP : SEEK_STEP);
+        break;
+      case 'search':
+        if (panelOpen) closePanel();
+        else openPanel();
+        break;
+      case 'menu':
+        if (settingsOpen) closeSettings();
+        else openSettings();
+        break;
+      case 'prev-episode':
+        if (prevEp != null) void loadEpisode(prevEp);
+        break;
+      case 'next-episode':
+        if (nextEp != null) void loadEpisode(nextEp);
+        break;
+    }
+  }
+
   function onRootKeydown(event: KeyboardEvent) {
     if (event.key === ' ' || event.key === 'MediaPlayPause') {
       if (panelOpen) return;
@@ -811,6 +861,7 @@
     window.addEventListener('tv-watch:exit', onExitPlayer);
     window.addEventListener('tv-watch:close-settings', closeSettings);
     window.addEventListener('tv-watch:seek', onTvSeek);
+    window.addEventListener('tv-watch:action', onTvWatchAction);
 
     void (async () => {
       try {
@@ -830,7 +881,9 @@
       window.removeEventListener('tv-watch:exit', onExitPlayer);
       window.removeEventListener('tv-watch:close-settings', closeSettings);
       window.removeEventListener('tv-watch:seek', onTvSeek);
+      window.removeEventListener('tv-watch:action', onTvWatchAction);
       if (overlayTimer) window.clearTimeout(overlayTimer);
+      if (seekFlashTimer) window.clearTimeout(seekFlashTimer);
       stopTicking();
       core.destroy();
     };
@@ -905,6 +958,25 @@
 
   {#if loadState === 'ready' && paused && !overlayVisible && !panelOpen && !settingsOpen && !showLoading}
     <div class="tv-watch__paused-badge" aria-hidden="true">{@html iconPause(22)} Пауза</div>
+  {/if}
+
+  {#if seekFlash && loadState === 'ready'}
+    <div
+      class="tv-watch__seek-flash"
+      class:tv-watch__seek-flash--back={seekFlash.dir < 0}
+      aria-hidden="true"
+      out:fade={{ duration: 180 }}
+    >
+      {#key seekFlash.key}
+        <span class="tv-watch__seek-flash-arrows">
+          <svg viewBox="0 0 24 24"><path d="M4 6l7 6-7 6z" /></svg>
+          <svg viewBox="0 0 24 24"><path d="M4 6l7 6-7 6z" /></svg>
+          <svg viewBox="0 0 24 24"><path d="M4 6l7 6-7 6z" /></svg>
+        </span>
+      {/key}
+      <span class="tv-watch__seek-flash-label">{seekFlash.dir < 0 ? '−' : '+'}{seekFlash.total} с</span>
+      <span class="tv-watch__seek-flash-time">{timeCurrent}</span>
+    </div>
   {/if}
 
   {#if (loadState === 'ready' && !awaitingFirstFrame) || loadState === 'error'}
@@ -1012,9 +1084,28 @@
               <span class="tv-watch__time">{timeCurrent}</span>
               <span class="tv-watch__scrub-hint">
                 {#if scrubbing || Math.abs(scrubDeltaSec) >= 1}
-                  <kbd>OK</kbd> перейти · <kbd>Назад</kbd> отмена
+                  <span class="tv-watch__hint"><TvInputGlyph button="select" device={$tvInputDevice} />Перейти</span>
+                  <span class="tv-watch__hint"><TvInputGlyph button="back" device={$tvInputDevice} />Отмена</span>
                 {:else if timelineFocused}
-                  <kbd>◀</kbd><kbd>▶</kbd> перемотка · <kbd>OK</kbd> пауза
+                  <span class="tv-watch__hint"><TvInputGlyph button="navigate" device={$tvInputDevice} />Перемотка</span>
+                  <span class="tv-watch__hint"><TvInputGlyph button="select" device={$tvInputDevice} />{paused ? 'Играть' : 'Пауза'}</span>
+                {:else if $tvInputDevice !== 'remote' && useVideo}
+                  <!-- Геймпад / клавиатура: кнопки плеера без перехода фокуса -->
+                  <span class="tv-watch__hint"><TvInputGlyph button="play" device={$tvInputDevice} />{paused ? 'Играть' : 'Пауза'}</span>
+                  <span class="tv-watch__hint">
+                    <TvInputGlyph button="prev" device={$tvInputDevice} />
+                    <TvInputGlyph button="next" device={$tvInputDevice} />
+                    ±{SEEK_STEP} с
+                  </span>
+                  {#if hasPrevEp || hasNextEp}
+                    <span class="tv-watch__hint">
+                      <TvInputGlyph button="prev-ep" device={$tvInputDevice} />
+                      <TvInputGlyph button="next-ep" device={$tvInputDevice} />
+                      Серия
+                    </span>
+                  {/if}
+                  <span class="tv-watch__hint"><TvInputGlyph button="search" device={$tvInputDevice} />Серии</span>
+                  <span class="tv-watch__hint"><TvInputGlyph button="menu" device={$tvInputDevice} />Настройки</span>
                 {/if}
               </span>
               <span class="tv-watch__time tv-watch__time--muted">{formatTime(duration)}</span>

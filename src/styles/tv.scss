@@ -62,6 +62,23 @@ html.tv-mode #app {
   overflow: hidden;
 }
 
+// Полоса подсказок внизу (TvHintBar, висит на <html>) забирает высоту у всего приложения:
+// body — блок-контейнер и для fixed-слоёв (диалоги, порталы, immersive-страницы), поэтому
+// всё, что раньше занимало весь экран, теперь заканчивается над полосой.
+html.tv-mode {
+  --tv-hints-h: round(3.4rem, 2px);
+}
+
+html.tv-hints body {
+  height: calc(100% - var(--tv-hints-h));
+  contain: layout;
+}
+
+// Подсказку «Удерживайте OK…» показывает полоса внизу.
+html.tv-hints .watch-modal__tv-hint {
+  display: none;
+}
+
 .tv-layout {
   position: relative;
   display: flex;
@@ -3352,6 +3369,23 @@ html.tv-mode .tv-release-page__shell--skeleton .tv-release-page__main {
     pointer-events: none;
   }
 
+  // «Меню» на странице без рейла: рейл выезжает слева поверх контента.
+  html.tv-mode[data-tv-rail-expanded] & {
+    .tv-layout__rail,
+    .tv-layout__backdrop {
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    .tv-layout__backdrop {
+      z-index: 45;
+    }
+
+    .tv-layout__rail {
+      z-index: 50;
+    }
+  }
+
   .tv-layout__main {
     position: fixed;
     inset: 0;
@@ -3810,6 +3844,13 @@ html.tv-mode:not(.tv-android) .tv-watch__video {
   color: #fff;
 }
 
+.tv-watch__hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
 .tv-watch__time--muted {
   color: rgba(255, 255, 255, 0.55);
 }
@@ -3818,7 +3859,8 @@ html.tv-mode:not(.tv-android) .tv-watch__video {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.5rem;
   min-height: 1.8rem;
   font-size: 1.05rem;
   font-weight: 600;
@@ -3837,6 +3879,87 @@ html.tv-mode:not(.tv-android) .tv-watch__video {
     font-size: 0.95rem;
     font-weight: 800;
     color: #fff;
+  }
+}
+
+/* Перемотка ±N с: у правого (вперёд) или левого (назад) края, видна и при скрытом интерфейсе. */
+.tv-watch__seek-flash {
+  position: absolute;
+  top: 50%;
+  right: 9%;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: 9.5rem;
+  height: 9.5rem;
+  border-radius: 50%;
+  background: rgba(13, 13, 13, 0.62);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  transform: translateY(-50%);
+  pointer-events: none;
+  animation: tv-seek-flash-in 0.16s ease-out;
+}
+
+.tv-watch__seek-flash--back {
+  right: auto;
+  left: 9%;
+
+  .tv-watch__seek-flash-arrows {
+    transform: scaleX(-1);
+  }
+}
+
+.tv-watch__seek-flash-arrows {
+  display: inline-flex;
+
+  svg {
+    width: 1.9rem;
+    height: 1.9rem;
+    margin: 0 -0.35rem;
+    fill: currentColor;
+    opacity: 0.25;
+    animation: tv-seek-flash-arrow 0.6s ease-out both;
+  }
+
+  svg:nth-child(2) {
+    animation-delay: 0.1s;
+  }
+
+  svg:nth-child(3) {
+    animation-delay: 0.2s;
+  }
+}
+
+.tv-watch__seek-flash-label {
+  font-size: 1.6rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-watch__seek-flash-time {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.65);
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes tv-seek-flash-in {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) scale(0.88);
+  }
+}
+
+@keyframes tv-seek-flash-arrow {
+  40% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.25;
   }
 }
 

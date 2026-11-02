@@ -16,6 +16,7 @@
   import { toIpcArgs } from '../utils/ipc-args';
   import { fetchAnnouncements, type Announcement } from '../services/announcements';
   import AnnouncementBanner from '../components/AnnouncementBanner.svelte';
+  import HomeContinueWatching from '../components/HomeContinueWatching.svelte';
   import { swipeTabs } from '../actions/swipeTabs';
   import { isMobileMode } from '../platform/mobile';
   import {
@@ -546,6 +547,7 @@
   </Tabs>
 
   <div class="home-content" use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode() }}>
+    <HomeContinueWatching />
     <div class="home-list">
       {#if loadState === 'unconfigured' || showMyTabEmpty}
         <div class="home-my-tab-empty">

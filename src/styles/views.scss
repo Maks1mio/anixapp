@@ -995,18 +995,66 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   }
 }
 
-.auth-oauth__icon-btn--google .auth-oauth__icon-face {
-  width: 2.1rem;
-  height: 2.1rem;
+// QR — такой же круг, как у брендовых иконок (белый, как у Google)
+.auth-oauth__icon-btn--qr .auth-oauth__icon-face {
+  background: #fff;
+  color: #1f1f1f;
+
+  svg {
+    display: block;
+    width: 1.35rem;
+    height: 1.35rem;
+  }
 }
 
-.auth-oauth__icon-btn--yandex .auth-oauth__icon-face {
-  width: 2.55rem;
-  height: 2.55rem;
+// Вход по QR (Anixart 11+)
+.auth-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
 
-  .oauth-brand-icon {
-    transform: scale(1.12);
+.auth-qr__code {
+  margin: 0.25rem 0 1rem;
+  padding: 0.6rem;
+  border-radius: 14px;
+  background: #fff;
+  line-height: 0;
+  transition: opacity 0.22s $auth-ease, filter 0.22s $auth-ease;
+  animation: auth-rise-in 0.35s $auth-ease both;
+
+  svg {
+    display: block;
+    width: 12rem;
+    height: 12rem;
   }
+
+  &--dim {
+    opacity: 0.35;
+    filter: grayscale(1);
+  }
+}
+
+.auth-qr__ph {
+  width: 12rem;
+  height: 12rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, #000 6%, #fff);
+}
+
+.auth-qr__hint {
+  margin: 0 0 0.9rem;
+  font-size: 0.88rem;
+  color: $color-text-muted;
+}
+
+.auth-qr__pin {
+  margin: 0 0 1rem;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  font-variant-numeric: tabular-nums;
 }
 
 .auth-oauth__spinner {
@@ -3335,6 +3383,7 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .release-page__poster {
+  position: relative;
   border-radius: 12px;
   overflow: hidden;
   background: $color-surface;

@@ -49,6 +49,8 @@
 
   import Layout from './layout/Layout.svelte';
   import TvLayout from './layout/TvLayout.svelte';
+  import TvSystemMenu from './components/tv/TvSystemMenu.svelte';
+  import TvHintBar from './components/tv/TvHintBar.svelte';
   import { isTvMode } from './platform/tv';
   import { isMobileMode } from './platform/mobile';
   import MobileWatch from './views/Watch.mobile/page.svelte';
@@ -1177,6 +1179,8 @@
 {/if}
 {#if isTvMode()}
   <TvDebugMetrics />
+  <TvSystemMenu />
+  <TvHintBar hidden={isWatchRoute} />
 {/if}
 
 <style>

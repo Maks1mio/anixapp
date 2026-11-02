@@ -3,7 +3,7 @@ import { Anixart, BookmarkSortType, BookmarkType, DefaultResult } from 'anixapi'
 import { attachLegacyEndpoints } from './legacy-endpoints';
 import { attachApiFailover, installProxyKeyFetch, isProxyUrl, proxyKey } from './api-failover';
 import { ANIXART_UA, attachAnixErrorMessages, enrichAnixError } from './anix-errors';
-import { isTvMode } from '../platform/tv';
+import { isTvBuild } from '../platform/tv';
 import { tvBridgeInvokeUrl } from '../constants/tv-bridge';
 
 const CONFIG_KEY = 'anixapp.native.config';
@@ -256,6 +256,8 @@ export function createBrowserAnixBridge() {
     return { success: true, switched: false, loggedOut: true };
   }
 
+  let qrLoginSession: { key: string; secret: string } | null = null;
+
   /** Успешный вход: прежний аккаунт остаётся в списке быстрой смены, новый становится активным. */
   function applyLoginSuccess(profile: any, token: string) {
     // getAccounts() кладёт текущую активную сессию в список до перезаписи конфига
@@ -364,6 +366,43 @@ export function createBrowserAnixBridge() {
     'anix:agentSession': async (c, [origin]) => {
       const cfg = c.loadConfig();
       return requestAgentSession(origin, cfg.token, cfg.profileId);
+    },
+    // Вход по QR (Anixart 11+): secret хранится только здесь
+    'anix:qrLoginStart': async (c) => {
+      const { baseUrl } = c.loadConfig();
+      const client = c.createClient({ baseUrl, token: undefined });
+      if (typeof client.endpoints.auth.qrCreate !== 'function') return { success: false, code: -2 };
+      const res = await client.endpoints.auth.qrCreate({ device: 'AnixApp · Web' });
+      if (res?.code !== DefaultResult.Ok || !res?.key || !res?.secret) {
+        qrLoginSession = null;
+        return { success: false, code: res?.code };
+      }
+      qrLoginSession = { key: res.key, secret: res.secret };
+      return {
+        success: true,
+        key: res.key,
+        pin: res.pin ?? null,
+        expiresIn: res.expires_in ?? null,
+        pollInterval: res.poll_interval ?? null,
+      };
+    },
+    'anix:qrLoginPoll': async (c) => {
+      const session = qrLoginSession;
+      if (!session) return { success: false, code: -1 };
+      const { baseUrl } = c.loadConfig();
+      const client = c.createClient({ baseUrl, token: undefined });
+      const res = await client.endpoints.auth.qrStatus(session);
+      if (res?.code === DefaultResult.Ok && res?.status === 2 && res?.profileToken?.token) {
+        qrLoginSession = null;
+        applyLoginSuccess(res.profile, res.profileToken.token);
+        return { success: true };
+      }
+      if (res?.code !== DefaultResult.Ok) qrLoginSession = null;
+      return { success: false, code: res?.code, status: res?.status ?? null, pin: res?.pin ?? null, device: res?.device ?? null };
+    },
+    'anix:qrLoginCancel': async () => {
+      qrLoginSession = null;
+      return { success: true };
     },
     'anix:login': async (c, [username, password]) => {
       const { baseUrl } = c.loadConfig();
@@ -532,6 +571,14 @@ export function createBrowserAnixBridge() {
       if (releaseId == null) return null;
       return c.getClient().endpoints.release.info(releaseId, extended);
     }),
+    'anix:releaseContinue': h((c, id) => {
+      const releaseId = toPositiveInt(id);
+      if (releaseId == null) return null;
+      const release = c.getClient().endpoints.release;
+      return typeof release.continueWatching === 'function'
+        ? release.continueWatching(releaseId)
+        : release.info(releaseId, true);
+    }),
     'anix:getVideos': h((c, releaseId) => {
       const id = toPositiveInt(releaseId);
       if (id == null) return { types: [] };
@@ -571,7 +618,7 @@ export function createBrowserAnixBridge() {
         console.warn('[stream] anixback resolve failed:', e);
       }
       // TV web prod: dedicated bridge invoke if /api/stream unavailable on older deploy.
-      if (import.meta.env.PROD && isTvMode()) {
+      if (import.meta.env.PROD && isTvBuild()) {
         const res = await fetch(tvBridgeInvokeUrl(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -943,6 +990,12 @@ export function createBrowserAnixBridge() {
       c.getClient().endpoints.search.profileList?.({ status, query, page, searchBy })),
     'anix:searchFeed': h((c, query, page = 0, searchBy = 0) =>
       c.getClient().endpoints.search.feedSearch(page, { query, page, searchBy })),
+    'anix:searchFriends': h((c, profileId, query, page = 0) =>
+      c.getClient().endpoints.search.profileFriendSearch(Number(profileId), page, {
+        query: String(query ?? ''),
+        page,
+        searchBy: 0,
+      })),
     'anix:searchChannelSubscribers': h((c, channelId, page = 0, query = '') =>
       c.getClient().endpoints.search.channelSubscribersSearch(channelId, page, {
         query: String(query ?? ''),

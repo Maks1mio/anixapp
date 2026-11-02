@@ -883,6 +883,47 @@
   margin: -0.35rem 0.5rem 0;
 }
 
+.profile-friends__search {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 10rem;
+  max-width: 24rem;
+  margin-right: auto;
+
+  .uiv2-pill-field {
+    width: 100%;
+    padding-right: 2.2rem;
+  }
+
+  .uiv2-pill-field__input::-webkit-search-cancel-button {
+    display: none;
+  }
+}
+
+.profile-friends__search-clear {
+  position: absolute;
+  top: 50%;
+  right: 0.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--uiv2-fg-muted);
+  transform: translateY(-50%);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--uiv2-hover-bg);
+    color: var(--uiv2-fg-strong);
+  }
+}
+
 .profile-friends__scan {
   font-size: 0.78rem;
   font-weight: 500;
@@ -907,4 +948,9 @@
 // hscroll внутри v2
 .profile-v2 .profile__hscroll {
   margin: 0 -0.25rem;
+}
+
+.profile-panel__friends-search {
+  max-width: none;
+  margin: 0 0 0.75rem;
 }

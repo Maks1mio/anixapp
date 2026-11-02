@@ -162,6 +162,24 @@ export interface AnixApi {
     signInWithGoogle: () => Promise<OAuthSignInResult>;
     signInWithTelegram: () => Promise<OAuthSignInResult>;
     signInWithYandex: () => Promise<OAuthSignInResult>;
+    /** Вход по QR (Anixart 11+): ПК показывает QR, телефон подтверждает PIN-кодом. */
+    qrLoginStart?: () => Promise<{
+      success: boolean;
+      code?: number;
+      key?: string;
+      pin?: string | null;
+      expiresIn?: number | null;
+      pollInterval?: number | null;
+    }>;
+    /** status: 0 ждём, 1 отсканирован, 2 подтверждён (тогда success). code 2 истёк, 3 отклонён. */
+    qrLoginPoll?: () => Promise<{
+      success: boolean;
+      code?: number;
+      status?: number | null;
+      pin?: string | null;
+      device?: string | null;
+    }>;
+    qrLoginCancel?: () => Promise<{ success: boolean }>;
     signUp: (payload: { login: string; email: string; password: string }) => Promise<AuthCodeResult>;
     signUpVerify: (payload: {
       login: string;
@@ -323,6 +341,8 @@ export interface AnixApi {
     vote: (releaseId: number, vote: number) => Promise<{ code?: number; release?: unknown }>;
     deleteVote: (releaseId: number) => Promise<{ code?: number; release?: unknown }>;
     schedule: () => Promise<Record<string, unknown>>;
+    /** Релиз для «Продолжить просмотр» (Anixart 11+) */
+    continueWatching?: (releaseId: number) => Promise<{ code?: number; release?: unknown } | null>;
   };
 
   comments: {
@@ -422,6 +442,12 @@ export interface AnixApi {
         channelId: number,
         page?: number,
         query?: string,
+      ) => Promise<{ content?: unknown[]; total_count?: number; total_page_count?: number }>;
+      /** Поиск по друзьям профиля (Anixart 11+) */
+      friends?: (
+        profileId: number,
+        query: string,
+        page?: number,
       ) => Promise<{ content?: unknown[]; total_count?: number; total_page_count?: number }>;
     };
 

@@ -1,6 +1,6 @@
 import { setEmbedMediaContext, getEmbedCookie } from './core/hls-media-context';
 import { normalizeSkipMarks, type SkipMarks } from './_skipMarks';
-import { isTvMode } from '../../platform/tv';
+import { isTvBuild } from '../../platform/tv';
 import { tvBridgeMediaUrl } from '../../constants/tv-bridge';
 
 export function isVideoEmbedPageUrl(url: string): boolean {
@@ -92,7 +92,7 @@ function hostNeedsMediaProxy(host: string): boolean {
 }
 
 function shouldUseTvMediaProxy(): boolean {
-  return import.meta.env.PROD && isTvMode();
+  return import.meta.env.PROD && isTvBuild();
 }
 
 /** CDN/HLS через same-origin прокси (браузер LAN + Electron dev). Prod TV (browser + APK) → api.anixapp.com/tv/media. */
@@ -110,7 +110,7 @@ export function toCorsSafePlayUrl(url: string, referer?: string): string {
     if (!hostNeedsMediaProxy(parsed.hostname)) return url;
     const ref = referer?.trim();
     const cookie = getEmbedCookie();
-    if (import.meta.env.PROD && isTvMode()) {
+    if (import.meta.env.PROD && isTvBuild()) {
       return tvBridgeMediaUrl(parsed.href, ref, cookie || undefined);
     }
     let out = `/__anix/media?u=${encodeURIComponent(parsed.href)}`;

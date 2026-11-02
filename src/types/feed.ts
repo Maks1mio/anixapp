@@ -28,6 +28,9 @@ export interface FeedChannel {
   description?: string;
   avatar?: string;
   cover?: string;
+  /** Anixart 11+: анимированные версии (видео) */
+  avatar_animation?: string | null;
+  cover_animation?: string | null;
   is_blog?: boolean;
   /** ID профиля владельца блога (не путать с id канала). */
   blog_profile_id?: number;

@@ -121,6 +121,9 @@ function createAnixBridgeCore(options = {}) {
     return { success: true, switched: false, loggedOut: true };
   }
 
+  /** @type {{ key: string, secret: string } | null} */
+  let qrLoginSession = null;
+
   /** Успешный вход: прежний аккаунт остаётся в списке быстрой смены. */
   function applyLoginSuccess(profile, token) {
     const accounts = getAccounts();
@@ -281,6 +284,43 @@ function createAnixBridgeCore(options = {}) {
       if (!token) return { ok: true };
       await c.getClient().endpoints.feed.latest(1);
       return { ok: true };
+    },
+    // Вход по QR (Anixart 11+): secret хранится только здесь
+    'anix:qrLoginStart': async (c) => {
+      const { baseUrl } = c.loadConfig();
+      const client = c.createClient({ baseUrl, token: undefined });
+      if (typeof client.endpoints.auth.qrCreate !== 'function') return { success: false, code: -2 };
+      const res = await client.endpoints.auth.qrCreate({ device: 'AnixApp · Web' });
+      if (res?.code !== DefaultResult.Ok || !res?.key || !res?.secret) {
+        qrLoginSession = null;
+        return { success: false, code: res?.code };
+      }
+      qrLoginSession = { key: res.key, secret: res.secret };
+      return {
+        success: true,
+        key: res.key,
+        pin: res.pin ?? null,
+        expiresIn: res.expires_in ?? null,
+        pollInterval: res.poll_interval ?? null,
+      };
+    },
+    'anix:qrLoginPoll': async (c) => {
+      const session = qrLoginSession;
+      if (!session) return { success: false, code: -1 };
+      const { baseUrl } = c.loadConfig();
+      const client = c.createClient({ baseUrl, token: undefined });
+      const res = await client.endpoints.auth.qrStatus(session);
+      if (res?.code === DefaultResult.Ok && res?.status === 2 && res?.profileToken?.token) {
+        qrLoginSession = null;
+        applyLoginSuccess(res.profile, res.profileToken.token);
+        return { success: true };
+      }
+      if (res?.code !== DefaultResult.Ok) qrLoginSession = null;
+      return { success: false, code: res?.code, status: res?.status ?? null, pin: res?.pin ?? null, device: res?.device ?? null };
+    },
+    'anix:qrLoginCancel': async () => {
+      qrLoginSession = null;
+      return { success: true };
     },
     'anix:login': async (c, [username, password]) => {
       const { baseUrl } = c.loadConfig();
@@ -631,6 +671,14 @@ function createAnixBridgeCore(options = {}) {
       const releaseId = toPositiveInt(id);
       if (releaseId == null) return null;
       return c.getClient().endpoints.release.info(releaseId, extended);
+    }),
+    'anix:releaseContinue': h((c, id) => {
+      const releaseId = toPositiveInt(id);
+      if (releaseId == null) return null;
+      const release = c.getClient().endpoints.release;
+      return typeof release.continueWatching === 'function'
+        ? release.continueWatching(releaseId)
+        : release.info(releaseId, true);
     }),
     'anix:getVideos': h((c, releaseId) => {
       const id = toPositiveInt(releaseId);
@@ -1107,6 +1155,12 @@ function createAnixBridgeCore(options = {}) {
       c.getClient().endpoints.search.profileListSearch(status, page, { query, page, searchBy })),
     'anix:searchFeed': h((c, query, page = 0, searchBy = 0) =>
       c.getClient().endpoints.search.feedSearch(page, { query, page, searchBy })),
+    'anix:searchFriends': h((c, profileId, query, page = 0) =>
+      c.getClient().endpoints.search.profileFriendSearch(Number(profileId), page, {
+        query: String(query ?? ''),
+        page,
+        searchBy: 0,
+      })),
     'anix:searchChannelSubscribers': h((c, channelId, page = 0, query = '') =>
       c.getClient().endpoints.search.channelSubscribersSearch(channelId, page, {
         query: String(query ?? ''),

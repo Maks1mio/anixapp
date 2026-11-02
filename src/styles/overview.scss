@@ -1426,6 +1426,14 @@ img.poster-image--loaded {
   }
 }
 
+// Anixart 11+: анимированный баннер поверх постера (как сам постер — contain)
+.steam-hero__media video.steam-hero__anim {
+  z-index: 1;
+  object-fit: contain;
+  object-position: center;
+  border-radius: 0;
+}
+
 .steam-hero__video {
   position: absolute;
   inset: 0;

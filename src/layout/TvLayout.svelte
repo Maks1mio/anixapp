@@ -11,7 +11,8 @@
     profilePanelUserId,
     toggleProfilePanel,
   } from '../stores/profile-panel';
-  import { TV_NAV_ITEMS, TV_PROFILE_NAV_ITEM, tvNavHref, type TvNavItem } from '../tv/nav';
+  import { TV_NAV_ITEMS, TV_PROFILE_NAV_ITEM, TV_POWER_NAV_ITEM, tvNavHref, type TvNavItem } from '../tv/nav';
+  import { tvSystemMenuOpen } from '../services/tv-input';
   import { returnTvFocusToContent } from '../services/tv-navigation';
   import { ensureProfileId } from '../utils/profile';
   import Page from '../components/Page.svelte';
@@ -126,6 +127,10 @@
   }
 
   function activateNavItem(item: TvNavItem) {
+    if ('action' in item && item.action === 'power') {
+      tvSystemMenuOpen.set(true);
+      return;
+    }
     if ('action' in item && item.action === 'settings') {
       openSettingsModal();
       returnTvFocusToContent();
@@ -233,6 +238,20 @@
       </div>
 
       <footer class="tv-layout__rail-footer">
+        <button
+          type="button"
+          class="tv-layout__rail-item"
+          data-tv-nav-id={TV_POWER_NAV_ITEM.id}
+          data-tv-nav
+          tabindex="-1"
+          onclick={(e) => onNavClick(e, TV_POWER_NAV_ITEM)}
+        >
+          <span class="tv-layout__rail-item-leading">
+            <span class="tv-layout__rail-icon" aria-hidden="true">{@html TV_POWER_NAV_ITEM.icon}</span>
+            <span class="tv-layout__rail-active-mark" aria-hidden="true"></span>
+          </span>
+          <span class="tv-layout__rail-label">{TV_POWER_NAV_ITEM.label}</span>
+        </button>
         <button
           type="button"
           class="tv-layout__rail-item tv-layout__rail-item--profile"

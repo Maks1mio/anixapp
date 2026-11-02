@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
-  import { iconArrowLeft, iconArrowRight, iconRefreshCw, iconBell, iconCalendar, iconUser, iconSettings, iconDownload } from './icons';
+  import { iconArrowLeft, iconArrowRight, iconRefreshCw, iconBell, iconCalendar, iconTv, iconUser, iconSettings, iconDownload } from './icons';
   import { checkForUpdate, type UpdateInfo } from '../services/update-checker';
   import type { AppUpdateProgress } from '../types/electron';
   import { isMac } from '../utils/platform';
+  import { enterBigPicture } from '../platform/tv';
   import { isAuthenticated } from '../stores/auth';
   import { goBack, goForward, refreshCurrentPage } from '../stores/navigation';
   import { notificationUnreadCount, refreshNotificationUnreadCount } from '../stores/notifications';
@@ -364,6 +365,20 @@
           </button>
         </UiV2Tooltip>
       {/if}
+    {/if}
+
+    {#if hasWindowApi}
+      <UiV2Tooltip text="Режим большого экрана">
+        <button
+          type="button"
+          class="titlebar__menu-item"
+          id="titlebar-big-picture"
+          aria-label="Режим большого экрана"
+          onclick={enterBigPicture}
+        >
+          {@html iconTv(18)}
+        </button>
+      </UiV2Tooltip>
     {/if}
 
     <UiV2Tooltip text="Расписание">

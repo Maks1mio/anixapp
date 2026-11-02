@@ -2322,6 +2322,21 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   min-height: 120px;
 }
 
+.uiv2-card.bookmarks__unvoted {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 1rem 1.1rem;
+}
+
+.bookmarks__unvoted-text {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
 .bookmarks__grid {
   display: flex;
   flex-direction: column;
@@ -4667,6 +4682,122 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   border-top: 1px solid $color-border;
   min-width: 0;
   max-width: 100%;
+}
+
+.release-page__announce-plan {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 1.1rem;
+}
+
+.release-page__announce-plan-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, #a76fac 18%, transparent);
+  color: #c89bcc;
+}
+
+// Стрелки крутятся независимо: минутная — быстро и плавно, часовая — в 12 раз медленнее
+.release-page__announce-clock-hour,
+.release-page__announce-clock-minute {
+  transform-box: view-box;
+  transform-origin: 12px 12px;
+  animation: release-announce-hand linear infinite;
+}
+
+.release-page__announce-clock-minute {
+  animation-duration: 3s;
+}
+
+.release-page__announce-clock-hour {
+  animation-duration: 36s;
+  animation-delay: -9s;
+}
+
+@keyframes release-announce-hand {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .release-page__announce-clock-hour,
+  .release-page__announce-clock-minute {
+    animation: none;
+  }
+}
+
+.release-page__announce-plan-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.release-page__announce-plan-count {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #c89bcc;
+}
+
+.release-page__announce-plan-sub {
+  font-size: 0.9rem;
+  color: $color-text-muted;
+}
+
+.release-page__announce-bar {
+  display: flex;
+  gap: 3px;
+  height: 28px;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 0.9rem;
+
+  .release-page__list-stats-seg {
+    flex-grow: 0;
+    flex-shrink: 1;
+    min-width: 6px;
+  }
+}
+
+.release-page__announce-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.75rem;
+}
+
+.release-page__announce-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+
+  i {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+
+  &--planned i { background: #a76fac; }
+  &--on_hold i { background: #d29742; }
+  &--dropped i { background: #c24e4d; }
+}
+
+.release-page__announce-legend-label {
+  color: $color-text-muted;
+}
+
+.release-page__announce-legend-count {
+  color: $color-text;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .release-page__list-stats-bar {

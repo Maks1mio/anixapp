@@ -123,6 +123,7 @@ function buildWebAnixApi(): AnixApi {
         invoke('anix:getBookmarks', profileId, type, page, sort, filterAnnounce, filter),
       getVotedReleases: (profileId, page = 0, sort = 1) =>
         invoke('anix:votedReleases', profileId, page, sort),
+      getUnvotedReleases: (page = 0) => invoke('anix:unvotedReleases', page),
       getReleaseComments: (profileId, page = 0, sort = 1) =>
         invoke('anix:profileReleaseComments', profileId, page, sort),
       getCollectionComments: (profileId, page = 0, sort = 1) =>

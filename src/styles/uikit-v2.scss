@@ -4243,6 +4243,49 @@
   }
 }
 
+.uiv2-anime-card__rate {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-top: 0.2rem;
+
+  &--busy {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+}
+
+.uiv2-anime-card__rate-star {
+  display: inline-flex;
+  padding: 0.2rem;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 45%, transparent);
+  line-height: 0;
+  cursor: pointer;
+  transition: color 0.12s ease, transform 0.12s ease;
+
+  &--on {
+    color: #fbbf24;
+    transform: scale(1.06);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--uikit-v2-accent);
+    outline-offset: 1px;
+  }
+
+  svg {
+    display: block;
+  }
+}
+
+.uiv2-anime-card--vertical .uiv2-anime-card__rate {
+  gap: 0;
+  margin-top: 0.1rem;
+}
+
 .uiv2-anime-card--horizontal {
   display: flex;
   gap: 0.9rem;

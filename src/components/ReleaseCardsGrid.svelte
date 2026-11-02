@@ -12,9 +12,20 @@
     className?: string;
     variant?: 'default' | 'history';
     onDeleteFromHistory?: (id: number) => void;
+    onVote?: (id: number, stars: number) => void;
+    /** id релизов, оценка которых сейчас отправляется */
+    voteBusyIds?: ReadonlySet<number>;
   }
 
-  let { items, layout = 'auto', className = '', variant = 'default', onDeleteFromHistory }: Props = $props();
+  let {
+    items,
+    layout = 'auto',
+    className = '',
+    variant = 'default',
+    onDeleteFromHistory,
+    onVote,
+    voteBusyIds,
+  }: Props = $props();
 
   function resolveLayout(mode: GridLayoutMode): 'mini' | 'wide' {
     if (mode === 'auto') return getCardLayout();
@@ -67,6 +78,8 @@
       variant={effectiveLayout === 'mini' ? 'vertical' : 'horizontal'}
       cardVariant={variant}
       {onDeleteFromHistory}
+      {onVote}
+      voteBusy={!!item.id && !!voteBusyIds?.has(item.id)}
     />
   {/each}
 </div>

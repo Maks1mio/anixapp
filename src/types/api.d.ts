@@ -264,6 +264,8 @@ export interface AnixApi {
     getFriendRecommendations: () => Promise<{ content?: unknown[] }>;
     getBookmarks: (profileId: number, type: number, page?: number, sort?: number, filterAnnounce?: number, filter?: number) => Promise<any>;
     getVotedReleases: (profileId: number, page?: number, sort?: number) => Promise<any>;
+    /** Просмотренные, но не оценённые релизы текущего пользователя (page = -1 → «последние») */
+    getUnvotedReleases?: (page?: number) => Promise<any>;
     getReleaseComments: (profileId: number, page?: number, sort?: number) => Promise<{ content?: Record<string, unknown>[] }>;
     getCollectionComments: (profileId: number, page?: number, sort?: number) => Promise<{ content?: Record<string, unknown>[] }>;
     getArticleComments: (profileId: number, page?: number, sort?: number) => Promise<{ content?: Record<string, unknown>[] }>;

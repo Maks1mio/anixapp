@@ -543,6 +543,7 @@ contextBridge.exposeInMainWorld('anixApi', {
       ipcRenderer.invoke('anix:getBookmarks', profileId, type, page, sort, filterAnnounce, filter),
     getVotedReleases: (profileId, page = 0, sort = 1) =>
       ipcRenderer.invoke('anix:votedReleases', profileId, page, sort),
+    getUnvotedReleases: (page = 0) => ipcRenderer.invoke('anix:unvotedReleases', page),
     getReleaseComments: (profileId, page = 0, sort = 1) =>
       ipcRenderer.invoke('anix:profileReleaseComments', profileId, page, sort),
     getCollectionComments: (profileId, page = 0, sort = 1) =>

@@ -55,6 +55,8 @@ export interface AppReleaseInfo {
   channel?: 'stable' | 'beta';
   source?: 'github' | 'anixback';
   downloadUrl?: string | null;
+  /** Original installer name. Beta URLs end in `/download`, so the updater needs this. */
+  fileName?: string;
   id?: string;
   /** Платформа, для которой искали ассет (Linux / Windows / macOS) */
   platformLabel?: string;
@@ -365,7 +367,7 @@ declare global {
       sendPlayerState: (playback: LobbyPlaybackPayload) => void;
       sendFluoPreview?: (payload: { dataUrl: string; duration?: number }) => void;
       startUpdateDownload?: (
-        versionOrOpts?: string | { version?: string; downloadUrl?: string },
+        versionOrOpts?: string | { version?: string; downloadUrl?: string; fileName?: string },
         downloadUrl?: string,
       ) => Promise<void>;
       checkForUpdate?: (

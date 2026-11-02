@@ -1042,6 +1042,18 @@ function createAnixBridgeCore(options = {}) {
         throw err;
       }
     }),
+    'anix:unvotedReleases': h(async (c, page = 0) => {
+      const ep = c.getClient().endpoints.profileReleaseVote;
+      try {
+        return await (Number(page) < 0 ? ep.lastReleaseUnvoted() : ep.allReleaseUnvoted(Number(page) || 0));
+      } catch (err) {
+        const msg = String(err?.message || err || '');
+        if (msg.includes('empty response')) {
+          return { content: [], last: true, total_count: 0, code: 0 };
+        }
+        throw err;
+      }
+    }),
     'anix:profileSocial': h((c, profileId) =>
       c.getClient().endpoints.profile.getSocialPages(profileId)),
     'anix:friends': h((c, profileId, page = 0) =>

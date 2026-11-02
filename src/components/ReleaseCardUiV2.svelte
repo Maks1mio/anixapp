@@ -25,6 +25,9 @@
     showMenu?: boolean;
     /** Подсказка «Перейти к тайтлу» при фокусе (TV home) */
     showTvOpenHint?: boolean;
+    /** Звёзды для оценки прямо в карточке */
+    onVote?: (id: number, stars: number) => void;
+    voteBusy?: boolean;
   }
 
   let {
@@ -35,6 +38,8 @@
     disableOpen = false,
     showMenu = true,
     showTvOpenHint = false,
+    onVote,
+    voteBusy = false,
   }: Props = $props();
 
   const id = $derived(data.id);
@@ -120,6 +125,8 @@
   isFavorite={data.isFavorite}
   listStatus={data.listStatus ?? null}
   myVote={data.myVote ?? null}
+  onVote={onVote && id ? (stars) => onVote(id, stars) : undefined}
+  {voteBusy}
   historyView={data.historyView ?? null}
   prependMenuItems={historyMenu}
   {showMenu}

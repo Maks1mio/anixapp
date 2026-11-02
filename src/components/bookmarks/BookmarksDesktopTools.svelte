@@ -11,7 +11,7 @@
     iconShuffle,
     iconChevronDown,
   } from '../icons';
-  import { BOOKMARK_SORT_OPTIONS } from '../../constants/bookmarkSort';
+  import { BOOKMARK_SORT_OPTIONS, type BookmarkSortOption } from '../../constants/bookmarkSort';
   import { BOOKMARK_ANNOUNCE_FILTERS, bookmarkAnnounceFilterLabel } from '../../constants/bookmarkFilter';
 
   type Props = {
@@ -26,6 +26,9 @@
     sort: number;
     filter: number;
     randomDisabled: boolean;
+    /** Свой набор сортировок (например, для «Оценок»); подпись кнопки — desc пункта */
+    sortOptions?: readonly BookmarkSortOption[];
+    showRandom?: boolean;
     onSortChange: (sort: number) => void;
     onFilterChange: (filter: number) => void;
     onRandom: () => void;
@@ -41,6 +44,8 @@
     sort,
     filter,
     randomDisabled,
+    sortOptions,
+    showRandom = true,
     onSortChange,
     onFilterChange,
     onRandom,
@@ -52,18 +57,21 @@
   let menuY = $state(0);
   let menuAnchor = $state<HTMLElement | null>(null);
 
-  const sortMeta = $derived(BOOKMARK_SORT_OPTIONS.find((o) => o.value === sort) ?? BOOKMARK_SORT_OPTIONS[0]);
+  const options = $derived<readonly BookmarkSortOption[]>(sortOptions ?? BOOKMARK_SORT_OPTIONS);
+  const sortMeta = $derived(options.find((o) => o.value === sort) ?? options[0]);
   /** Короткая подпись направления для кнопки — полная видна в меню */
   const SORT_SHORT: Record<number, string> = {
     1: 'новые', 2: 'старые', 3: 'новые', 4: 'старые', 5: 'А–Я', 6: 'Я–А', 7: 'высокий', 8: 'низкий',
   };
-  const sortLabel = $derived(`${sortMeta.label} · ${SORT_SHORT[sortMeta.value] ?? ''}`);
+  const sortLabel = $derived(
+    sortOptions ? sortMeta.desc : `${sortMeta.label} · ${SORT_SHORT[sortMeta.value] ?? ''}`,
+  );
 
   // Группы как в Anixart: «По добавлению» → новые/старые и т.д.
   const sortItems = $derived.by((): UiV2PopupMenuItem[] => {
     const out: UiV2PopupMenuItem[] = [];
     let prev = '';
-    for (const o of BOOKMARK_SORT_OPTIONS) {
+    for (const o of options) {
       if (o.label !== prev) {
         out.push({ id: `label:${o.label}`, label: o.label, type: 'label', dividerBefore: out.length > 0 });
         prev = o.label;
@@ -159,9 +167,11 @@
       </UiV2Button>
     {/if}
 
-    <UiV2RoundButton size="lg" label="Случайный тайтл из списка" disabled={randomDisabled} onclick={onRandom}>
-      {@html iconShuffle(18)}
-    </UiV2RoundButton>
+    {#if showRandom}
+      <UiV2RoundButton size="lg" label="Случайный тайтл из списка" disabled={randomDisabled} onclick={onRandom}>
+        {@html iconShuffle(18)}
+      </UiV2RoundButton>
+    {/if}
   {/if}
 </div>
 

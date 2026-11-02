@@ -107,6 +107,15 @@ function setDevice(next: TvInputDevice): void {
   tvInputDevice.set(next);
 }
 
+/**
+ * Пульты Android TV (Mi RC и т.п.) Chromium тоже отдаёт через Gamepad API, хотя их кнопки
+ * и так приходят обычными клавишами. Настоящий геймпад — стандартная раскладка или два стика.
+ */
+function isRealGamepad(pad: Gamepad): boolean {
+  if (/remote|rc|keyboard|consumer control|ir receiver/i.test(pad.id)) return false;
+  return pad.mapping === 'standard' || pad.axes.length >= 4;
+}
+
 function gamepadKind(pad: Gamepad): TvInputDevice {
   // «Xbox Wireless Controller» тоже содержит «wireless controller» — Xbox проверяем первым.
   if (/xbox|045e|xinput/i.test(pad.id)) return 'xbox';
@@ -260,7 +269,7 @@ function loop(now: number): void {
   const focused = document.hasFocus();
   let any = false;
   for (const pad of list) {
-    if (!pad || !pad.connected) continue;
+    if (!pad || !pad.connected || !isRealGamepad(pad)) continue;
     any = true;
     if (focused) pollPad(pad, now);
   }
@@ -289,14 +298,11 @@ export function initTvInput(): void {
   }, true);
   window.addEventListener('mousemove', () => setDevice(keysDevice), { passive: true });
 
-  window.addEventListener('gamepadconnected', (event) => {
-    tvGamepadSeen.set(true);
-    setDevice(gamepadKind(event.gamepad));
-    startPolling();
-  });
+  // Само подключение устройство не переключает — только реальное нажатие на геймпаде (pollPad).
+  window.addEventListener('gamepadconnected', () => startPolling());
   window.addEventListener('gamepaddisconnected', (event) => {
     pads.delete(event.gamepad.index);
-    if (!(navigator.getGamepads?.() ?? []).some((p) => p?.connected)) setDevice(keysDevice);
+    if (!(navigator.getGamepads?.() ?? []).some((p) => p?.connected && isRealGamepad(p))) setDevice(keysDevice);
   });
   window.addEventListener('focus', startPolling);
 

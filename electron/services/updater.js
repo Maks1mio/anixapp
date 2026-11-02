@@ -347,9 +347,59 @@ async function fetchInstallerUrl(versionOrNull) {
   return pickInstallAssetUrl(data);
 }
 
-async function downloadInstaller(versionOrNull, downloadUrlOverride) {
-  const path = require('path');
-  const fs = require('fs');
+function sanitizeInstallerBaseName(name) {
+  const base = path.basename(String(name || '').replace(/\\/g, '/'))
+    .replace(/[<>:"|?*\u0000-\u001f]/g, '_')
+    .trim();
+  if (!base || base === '.' || base === '..') return '';
+  return base;
+}
+
+function installerExtensionOk(name) {
+  return /\.(exe|msi|dmg|AppImage|deb|rpm|pacman|flatpak|pkg\.tar\.zst)$/i.test(name);
+}
+
+function parseContentDispositionFileName(header) {
+  const value = String(header || '');
+  const star = value.match(/filename\*\s*=\s*(?:UTF-8|utf-8)?''([^;]+)/i);
+  if (star?.[1]) {
+    try {
+      return sanitizeInstallerBaseName(decodeURIComponent(star[1].trim().replace(/^"|"$/g, '')));
+    } catch {
+      /* ignore malformed filename* */
+    }
+  }
+  const quoted = value.match(/filename\s*=\s*"([^"]+)"/i);
+  if (quoted?.[1]) return sanitizeInstallerBaseName(quoted[1]);
+  const plain = value.match(/filename\s*=\s*([^;]+)/i);
+  if (plain?.[1]) return sanitizeInstallerBaseName(plain[1].trim().replace(/^"|"$/g, ''));
+  return '';
+}
+
+function fallbackInstallerName(versionOrNull) {
+  const ver = String(versionOrNull || '').replace(/^v/i, '').replace(/[^\w.\-]+/g, '');
+  if (process.platform === 'darwin') return ver ? `AnixApp-${ver}.dmg` : 'AnixApp.dmg';
+  if (process.platform === 'linux') return ver ? `AnixApp-${ver}.AppImage` : 'AnixApp.AppImage';
+  return ver ? `AnixApp-Setup-${ver}.exe` : 'AnixApp-Setup.exe';
+}
+
+/**
+ * Beta downloads live at `.../beta/:id/download`. URL basename is `download`,
+ * which Windows cannot spawn. Prefer Content-Disposition, then an explicit name.
+ */
+function chooseInstallerFileName({ downloadUrl, contentDisposition, versionOrNull, fileNameHint }) {
+  const candidates = [
+    parseContentDispositionFileName(contentDisposition),
+    sanitizeInstallerBaseName(fileNameHint),
+    sanitizeInstallerBaseName(path.basename(String(downloadUrl || '').split('?')[0] || '')),
+  ];
+  for (const name of candidates) {
+    if (name && installerExtensionOk(name)) return name;
+  }
+  return fallbackInstallerName(versionOrNull);
+}
+
+async function downloadInstaller(versionOrNull, downloadUrlOverride, fileNameHint) {
   const https = require('https');
   const http = require('http');
 
@@ -366,22 +416,7 @@ async function downloadInstaller(versionOrNull, downloadUrlOverride) {
     const updatesDir = path.join(app.getPath('userData'), 'updates');
     if (!fs.existsSync(updatesDir)) fs.mkdirSync(updatesDir, { recursive: true });
 
-    const fileName = path.basename(downloadUrl.split('?')[0] || 'AnixApp-Setup.exe') || 'AnixApp-Setup.exe';
-    destPath = path.join(updatesDir, fileName);
-
-    // Remove stale partial downloads
-    if (fs.existsSync(destPath)) {
-      try { fs.unlinkSync(destPath); } catch (_) {}
-    }
-
-    file = fs.createWriteStream(destPath);
-
     await new Promise((resolve, reject) => {
-      // Surface WriteStream errors — unhandled 'error' on a stream crashes the process
-      file.on('error', (err) => {
-        reject(new Error(`File write error: ${err.message}`));
-      });
-
       const maxRedirects = 5;
       function doRequest(url, redirectsLeft) {
         const lib = String(url).startsWith('http://') ? http : https;
@@ -404,6 +439,23 @@ async function downloadInstaller(versionOrNull, downloadUrlOverride) {
               reject(new Error(`Download status ${res.statusCode}`));
               return;
             }
+
+            const fileName = chooseInstallerFileName({
+              downloadUrl: url,
+              contentDisposition: res.headers['content-disposition'],
+              versionOrNull,
+              fileNameHint,
+            });
+            destPath = path.join(updatesDir, fileName);
+            try {
+              if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+            } catch (_) {}
+
+            file = fs.createWriteStream(destPath);
+            // Surface WriteStream errors — unhandled 'error' on a stream crashes the process
+            file.on('error', (err) => {
+              reject(new Error(`File write error: ${err.message}`));
+            });
 
             const total = parseInt(res.headers['content-length'] || '0', 10) || 0;
             state.updateDownloadState.total = total;
@@ -443,6 +495,7 @@ async function downloadInstaller(versionOrNull, downloadUrlOverride) {
     // Clean up partial file
     if (file) { try { file.destroy(); } catch (_) {} }
     if (destPath) { try { if (fs.existsSync(destPath)) fs.unlinkSync(destPath); } catch (_) {} }
+    state.pendingInstallerPath = null;
   }
 }
 
@@ -450,15 +503,17 @@ ipcMain.handle('app:startUpdateDownload', async (_, versionOrOpts, maybeUrl) => 
   if (state.updateDownloadState.state === 'downloading') return;
   let target = null;
   let downloadUrl = null;
+  let fileNameHint = null;
   if (versionOrOpts && typeof versionOrOpts === 'object') {
     target = versionOrOpts.version != null ? String(versionOrOpts.version).trim() : null;
     downloadUrl = versionOrOpts.downloadUrl != null ? String(versionOrOpts.downloadUrl).trim() : null;
+    fileNameHint = versionOrOpts.fileName != null ? String(versionOrOpts.fileName).trim() : null;
   } else {
     target = versionOrOpts != null && String(versionOrOpts).trim() ? String(versionOrOpts).trim() : null;
     downloadUrl = maybeUrl != null && String(maybeUrl).trim() ? String(maybeUrl).trim() : null;
   }
   // downloadInstaller is a floating promise — catch here so unhandled rejection never crashes main.
-  downloadInstaller(target, downloadUrl).catch((e) => {
+  downloadInstaller(target, downloadUrl, fileNameHint).catch((e) => {
     console.error('Updater unexpected error', e);
     state.updateDownloadState = { state: 'error', received: 0, total: 0 };
     sendUpdateProgress({ errorMessage: String(e) });
@@ -468,16 +523,38 @@ ipcMain.handle('app:startUpdateDownload', async (_, versionOrOpts, maybeUrl) => 
 /** Возвращает тип установки для рендерера (используется для подписей кнопок). */
 ipcMain.handle('app:getLinuxInstallType', () => getLinuxInstallType());
 
+function spawnDetached(exePath, args) {
+  const { spawn } = require('child_process');
+  return new Promise((resolve, reject) => {
+    const child = spawn(exePath, args, { detached: true, stdio: 'ignore', shell: false });
+    child.once('error', reject);
+    child.once('spawn', () => {
+      child.unref();
+      resolve();
+    });
+  });
+}
+
 ipcMain.handle('app:installUpdate', async () => {
   const { spawn } = require('child_process');
-  if (!state.pendingInstallerPath || !fs.existsSync(state.pendingInstallerPath)) return;
+  if (!state.pendingInstallerPath || !fs.existsSync(state.pendingInstallerPath)) {
+    sendUpdateProgress({ state: 'error', errorMessage: 'Файл установщика не найден. Скачайте сборку ещё раз.' });
+    return;
+  }
 
   try {
     // ── Windows ──────────────────────────────────────────────────────────
     if (process.platform === 'win32') {
-      const child = spawn(state.pendingInstallerPath, [], { detached: true, stdio: 'ignore', shell: false });
-      child.unref();
-      isQuitting = true;
+      let exePath = state.pendingInstallerPath;
+      // A file saved from `.../download` has no extension. CreateProcess returns ENOENT.
+      if (!/\.exe$/i.test(exePath)) {
+        const next = `${exePath}.exe`;
+        fs.copyFileSync(exePath, next);
+        exePath = next;
+        state.pendingInstallerPath = next;
+      }
+      await spawnDetached(exePath, []);
+      state.isQuitting = true;
       app.quit();
       return;
     }
@@ -511,7 +588,7 @@ ipcMain.handle('app:installUpdate', async () => {
         fs.copyFileSync(state.pendingInstallerPath, currentPath);
         const child = spawn(currentPath, [], { detached: true, stdio: 'ignore' });
         child.unref();
-        isQuitting = true;
+        state.isQuitting = true;
         app.quit();
         return;
       }
@@ -527,7 +604,7 @@ ipcMain.handle('app:installUpdate', async () => {
         });
         child.on('exit', (code) => {
           if (code === 0) {
-            isQuitting = true;
+            state.isQuitting = true;
             app.quit();
           } else {
             // Пользователь отменил или ошибка установки — остаёмся в приложении
@@ -552,7 +629,7 @@ ipcMain.handle('app:installUpdate', async () => {
           });
           child.on('exit', (code) => {
             if (code === 0) {
-              isQuitting = true;
+              state.isQuitting = true;
               app.quit();
             } else {
               sendUpdateProgress({ state: 'install-error', errorMessage: `pkexec завершился с кодом ${code}` });
@@ -572,7 +649,7 @@ ipcMain.handle('app:installUpdate', async () => {
             return;
           }
           // software center сам управляет установкой — просто закрываемся
-          isQuitting = true;
+          state.isQuitting = true;
           app.quit();
         }
         return;
@@ -591,7 +668,7 @@ ipcMain.handle('app:installUpdate', async () => {
         const child = spawn(cmd, args, { detached: false, stdio: 'ignore' });
         child.on('exit', (code) => {
           if (code === 0) {
-            isQuitting = true;
+            state.isQuitting = true;
             app.quit();
           } else {
             sendUpdateProgress({ state: 'install-error', errorMessage: `flatpak update завершился с кодом ${code}` });

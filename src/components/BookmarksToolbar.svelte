@@ -3,7 +3,7 @@
   import type { Snippet } from 'svelte';
   import Select from './Select.svelte';
   import { iconShuffle } from './icons';
-  import { bookmarkSortSelectOptions } from '../constants/bookmarkSort';
+  import { bookmarkSortSelectOptions, type BookmarkSortOption } from '../constants/bookmarkSort';
 
   interface Props {
     totalCount: number;
@@ -14,6 +14,9 @@
     /** Кнопки слева от сортировки/рандома */
     leadingActions?: Snippet;
     showCount?: boolean;
+    /** Свой набор сортировок (например, для «Оценок») */
+    sortOptions?: readonly BookmarkSortOption[];
+    showRandom?: boolean;
   }
 
   let {
@@ -24,9 +27,11 @@
     randomLoading = false,
     leadingActions,
     showCount = true,
+    sortOptions: customSortOptions,
+    showRandom = true,
   }: Props = $props();
 
-  const sortOptions = bookmarkSortSelectOptions();
+  const sortOptions = $derived(bookmarkSortSelectOptions(customSortOptions));
   /** Телефон: как в Anixart, сортировка подписана («По добавлению ▾»), а не свёрнута в иконку. */
   const touchLayout = isMobileMode();
 </script>
@@ -47,15 +52,17 @@
       placeholder="Сортировка"
       className="bookmarks-toolbar__sort"
     />
-    <button
-      type="button"
-      class="bookmarks-toolbar__icon-btn"
-      title="Случайный релиз"
-      aria-label="Случайный релиз"
-      disabled={randomLoading || totalCount === 0}
-      onclick={() => onRandom()}
-    >
-      {@html iconShuffle(18)}
-    </button>
+    {#if showRandom}
+      <button
+        type="button"
+        class="bookmarks-toolbar__icon-btn"
+        title="Случайный релиз"
+        aria-label="Случайный релиз"
+        disabled={randomLoading || totalCount === 0}
+        onclick={() => onRandom()}
+      >
+        {@html iconShuffle(18)}
+      </button>
+    {/if}
   </div>
 </div>

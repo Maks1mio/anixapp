@@ -559,6 +559,7 @@
         {yourVote}
         {watchingCount} {planCount} {completedCount} {holdOnCount} {droppedCount}
         {canVote}
+        {isAnnounce}
         onRefresh={refreshReleaseData}
       />
 

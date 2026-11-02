@@ -11,11 +11,15 @@
   import { onMount, onDestroy } from 'svelte';
   import Tabs, { type TabItem } from '../components/Tabs.svelte';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../components/uikit-v2/UiV2PopupMenu.svelte';
+  import UiV2Card from '../components/uikit-v2/UiV2Card.svelte';
+  import UiV2Button from '../components/uikit-v2/UiV2Button.svelte';
   import { navigate } from '../stores/navigation';
+  import { requireAuth } from '../stores/auth';
+  import { notifyVotesChanged } from '../utils/favorites-events';
   import { handleUserProfileClick } from '../stores/user-profile';
   import { getSearchParams } from '../router';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
-  import { getBookmarksSort, setBookmarksSort } from '../constants/bookmarkSort';
+  import { getBookmarksSort, setBookmarksSort, VOTE_SORT_OPTIONS } from '../constants/bookmarkSort';
   import { getBookmarksAnnounceFilter, setBookmarksAnnounceFilter } from '../constants/bookmarkFilter';
   import BookmarksDesktopHead from '../components/bookmarks/BookmarksDesktopHead.svelte';
   import BookmarksDesktopTools from '../components/bookmarks/BookmarksDesktopTools.svelte';
@@ -92,11 +96,16 @@
     errorMsg: string;
     selectedSort: number;
     announceFilter?: number;
+    voteSort?: number;
+    votesMode?: VotesMode;
     totalCount: number;
     cachedProfileId: number | null;
     profileLogin: string;
     profileAvatar: string;
   }
+
+  /** Вкладка «Оценки»: оценённые или просмотренные без оценки (как «Оцените релизы» в Anixart) */
+  type VotesMode = 'voted' | 'unvoted';
 
   const STATUS_TO_TAB: Record<string, TabId> = {
     '1': 'watching',
@@ -148,6 +157,8 @@
       errorMsg,
       selectedSort,
       announceFilter,
+      voteSort,
+      votesMode,
       totalCount,
       cachedProfileId,
       profileLogin,
@@ -165,6 +176,9 @@
   }
 
   function snapshotMatchesCurrentSort(s: BookmarksViewState): boolean {
+    if (s.activeTab === 'votes') {
+      return (s.voteSort ?? 1) === voteSort && (s.votesMode ?? 'voted') === votesMode;
+    }
     if (!tabUsesSort(s.activeTab)) return true;
     return s.selectedSort === getBookmarksSort()
       && (s.announceFilter ?? 0) === getBookmarksAnnounceFilter();
@@ -322,6 +336,10 @@
   let cachedProfileId = $state<number | null>(null);
   let totalCount = $state(0);
   let selectedSort = $state(getBookmarksSort());
+  /** sort для оценок: 1 последние, 2 старые, 3–7 — только 5…1 звёзд */
+  let voteSort = $state(1);
+  let votesMode = $state<VotesMode>('voted');
+  let voteBusyIds = $state<ReadonlySet<number>>(new Set());
   /** filter_announce: 0 все, 1 только анонсы, 2 без анонсов (статусные списки и избранное) */
   let announceFilter = $state(getBookmarksAnnounceFilter());
   let exportOpen = $state(false);
@@ -542,6 +560,19 @@
       return { content, total: extractTotalCount(data, content.length) };
     }
 
+    if (activeTab === 'votes' && votesMode === 'unvoted') {
+      const fetchUnvoted = async (p: number) => {
+        const data = await api.profile.getUnvotedReleases?.(p) as Record<string, unknown> | null;
+        const content = (data?.content ?? []) as Record<string, unknown>[];
+        return { content, total: extractTotalCount(data ?? {}, content.length) };
+      };
+      if (q) {
+        if (page > 0) return { content: [], total: 0, exhaustive: true };
+        return scanAllPagesForQuery(q, fetchUnvoted, 25);
+      }
+      return fetchUnvoted(page);
+    }
+
     if (activeTab === 'votes') {
       const profileId = await ensureProfileId();
       if (typeof profileId !== 'number') return { content: [], total: 0, exhaustive: true };
@@ -550,14 +581,14 @@
         return scanAllPagesForQuery(
           q,
           async (p) => {
-            const data = await api.profile.getVotedReleases(profileId, p, 1) as Record<string, unknown>;
+            const data = await api.profile.getVotedReleases(profileId, p, voteSort) as Record<string, unknown>;
             const content = (data?.content ?? []) as Record<string, unknown>[];
             return { content, total: extractTotalCount(data, content.length) };
           },
           25,
         );
       }
-      const data = await api.profile.getVotedReleases(profileId, page, 1) as Record<string, unknown>;
+      const data = await api.profile.getVotedReleases(profileId, page, voteSort) as Record<string, unknown>;
       const content = (data?.content ?? []) as Record<string, unknown>[];
       return { content, total: extractTotalCount(data, content.length) };
     }
@@ -763,6 +794,7 @@
     }
 
     const keepErrorOverlay = tabId === activeTab && loadState === 'error';
+    if (tabId !== activeTab) votesMode = 'voted';
     activeTab = tabId;
     syncTabToUrl(tabId);
 
@@ -857,6 +889,20 @@
     saveViewStateData(BOOKMARKS_VIEW_KEY(), bookmarksSnapshot());
   }
 
+  /** Есть просмотренные, но не оценённые релизы (баннер «Оценить» во вкладке «Оценки») */
+  let hasUnvoted = $state(false);
+
+  async function checkUnvoted() {
+    const api = window.anixApi?.profile;
+    if (isOtherProfile || !api?.getUnvotedReleases) return;
+    try {
+      const data = await api.getUnvotedReleases(-1) as Record<string, unknown> | null;
+      hasUnvoted = Array.isArray(data?.content) && data.content.length > 0;
+    } catch {
+      hasUnvoted = false;
+    }
+  }
+
   function onBookmarksChanged(e: Event) {
     if (isOtherProfile) return;
     const detail = (e as CustomEvent<{
@@ -871,6 +917,14 @@
       return;
     }
 
+    if (!detail.kind || detail.kind === 'votes' || detail.kind === 'history') void checkUnvoted();
+    // Оценку из «Оцените релизы» уже убрали из списка сами — без перезагрузки.
+    if (
+      detail.kind === 'votes'
+      && votesMode === 'unvoted'
+      && typeof detail.releaseId === 'number'
+      && !items.some((i) => i.id === detail.releaseId)
+    ) return;
     if (detail.kind && detail.kind !== activeTab) return;
     void loadTab(activeTab, false, true);
   }
@@ -879,6 +933,39 @@
     if (sort === selectedSort) return;
     selectedSort = setBookmarksSort(sort);
     void loadTab(activeTab, false, true);
+  }
+
+  function onVoteSortChange(sort: number) {
+    if (sort === voteSort) return;
+    voteSort = sort;
+    void loadTab(activeTab, false, true);
+  }
+
+  function setVotesMode(mode: VotesMode) {
+    if (mode === votesMode) return;
+    votesMode = mode;
+    void loadTab('votes', false, true);
+  }
+
+  async function onVote(id: number, stars: number) {
+    if (!requireAuth() || voteBusyIds.has(id) || !window.anixApi) return;
+    voteBusyIds = new Set([...voteBusyIds, id]);
+    try {
+      await window.anixApi.release.vote(id, stars);
+      items = items.filter((i) => i.id !== id);
+      totalCount = Math.max(0, totalCount - 1);
+      if (!items.length) {
+        if (hasMore) void loadTab('votes', false, true);
+        else loadState = 'empty';
+      }
+      notifyVotesChanged({ releaseId: id });
+    } catch {
+      /* оценка не сохранилась — звёзды остаются */
+    } finally {
+      const next = new Set(voteBusyIds);
+      next.delete(id);
+      voteBusyIds = next;
+    }
   }
 
   function onFilterChange(filter: number) {
@@ -993,6 +1080,7 @@
     defaultBookmarksTab = getDefaultBookmarksTab();
 
     void loadProfileHeader();
+    void checkUnvoted();
 
     const params = getSearchParams();
     const tabParam = params.get('tab');
@@ -1061,11 +1149,13 @@
       </button>
 
       <div class="bookmarks__user-actions">
-        {#if isReleaseListTab && loadState !== 'loading'}
+        {#if (isReleaseListTab || (isVotesTab && votesMode === 'voted')) && loadState !== 'loading'}
           <BookmarksToolbar
             {totalCount}
-            sort={selectedSort}
-            onSortChange={onSortChange}
+            sort={isVotesTab ? voteSort : selectedSort}
+            onSortChange={isVotesTab ? onVoteSortChange : onSortChange}
+            sortOptions={isVotesTab ? VOTE_SORT_OPTIONS : undefined}
+            showRandom={isReleaseListTab}
             onRandom={onRandom}
             {randomLoading}
           >
@@ -1145,15 +1235,31 @@
       searchValue={searchInput}
       {onSearchInput}
       onSearchClear={clearSearch}
-      showListControls={isReleaseListTab}
+      showListControls={isReleaseListTab || (isVotesTab && votesMode === 'voted')}
       showFilter={isReleaseListTab}
-      sort={selectedSort}
+      showRandom={isReleaseListTab}
+      sortOptions={isVotesTab ? VOTE_SORT_OPTIONS : undefined}
+      sort={isVotesTab ? voteSort : selectedSort}
       filter={announceFilter}
       randomDisabled={randomLoading || totalCount === 0 || loadState !== 'ready'}
-      {onSortChange}
+      onSortChange={isVotesTab ? onVoteSortChange : onSortChange}
       {onFilterChange}
       {onRandom}
     />
+  {/if}
+
+  {#if isVotesTab && !isOtherProfile}
+    {#if votesMode === 'unvoted'}
+      <UiV2Card class="bookmarks__unvoted" label="Оцените релизы">
+        <p class="bookmarks__unvoted-text">Оцените просмотренные релизы — оценка сохраняется сразу</p>
+        <UiV2Button label="К оценкам" onclick={() => setVotesMode('voted')} />
+      </UiV2Card>
+    {:else if hasUnvoted && !searchQuery}
+      <UiV2Card class="bookmarks__unvoted" label="Неоценённые релизы">
+        <p class="bookmarks__unvoted-text">У вас есть просмотренные, но ещё не оценённые релизы</p>
+        <UiV2Button label="Оценить" variant="light" onclick={() => setVotesMode('unvoted')} />
+      </UiV2Card>
+    {/if}
   {/if}
 
   <div class="bookmarks__content" use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode() }}>
@@ -1174,7 +1280,9 @@
             ? 'Ничего не найдено.'
             : isReleaseListTab && announceFilter !== 0
               ? 'Под выбранный фильтр ничего не подходит.'
-              : 'Здесь пока ничего нет.'}
+              : isVotesTab
+                ? (votesMode === 'unvoted' ? 'Все релизы оценены.' : 'Оценённых релизов нет.')
+                : 'Здесь пока ничего нет.'}
         </p>
       {:else if isHistoryTab}
         <ReleaseCardsGrid items={items} variant="history" onDeleteFromHistory={onDeleteFromHistory} />
@@ -1185,7 +1293,11 @@
           {/each}
         </div>
       {:else}
-        <ReleaseCardsGrid {items} />
+        <ReleaseCardsGrid
+          {items}
+          onVote={isVotesTab && votesMode === 'unvoted' ? onVote : undefined}
+          {voteBusyIds}
+        />
       {/if}
     </div>
     {#if showEnd}

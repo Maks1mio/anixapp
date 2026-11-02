@@ -12,6 +12,19 @@ export const BOOKMARK_SORT_OPTIONS = [
 
 export const DEFAULT_BOOKMARK_SORT = 1;
 
+export type BookmarkSortOption = { value: number; label: string; desc: string };
+
+/** sort для /profile/vote/release/voted (меню vote_sort в Anixart): дата оценки или фильтр по звёздам. */
+export const VOTE_SORT_OPTIONS: readonly BookmarkSortOption[] = [
+  { value: 1, label: 'По дате оценки', desc: 'Сначала последние' },
+  { value: 2, label: 'По дате оценки', desc: 'Сначала старые' },
+  { value: 3, label: 'Только', desc: '5 звёзд' },
+  { value: 4, label: 'Только', desc: '4 звезды' },
+  { value: 5, label: 'Только', desc: '3 звезды' },
+  { value: 6, label: 'Только', desc: '2 звезды' },
+  { value: 7, label: 'Только', desc: '1 звезда' },
+];
+
 const BOOKMARKS_SORT_KEY = 'anixapp.bookmarksSort';
 
 export function isBookmarkSortValue(value: number): boolean {
@@ -34,8 +47,8 @@ export function setBookmarksSort(sort: number): number {
   return next;
 }
 
-export function bookmarkSortSelectOptions() {
-  return BOOKMARK_SORT_OPTIONS.map((o) => ({
+export function bookmarkSortSelectOptions(options: readonly BookmarkSortOption[] = BOOKMARK_SORT_OPTIONS) {
+  return options.map((o) => ({
     value: String(o.value),
     label: o.label,
     desc: o.desc,

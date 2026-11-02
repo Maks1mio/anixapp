@@ -835,6 +835,7 @@
     void window.electron?.startUpdateDownload?.({
       version: target.version,
       downloadUrl: target.downloadUrl || undefined,
+      fileName: target.fileName || undefined,
     }).catch((err) => {
       progress = {
         state: 'error', percent: 0, received: 0, total: 0,

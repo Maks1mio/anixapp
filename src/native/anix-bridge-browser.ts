@@ -898,6 +898,17 @@ export function createBrowserAnixBridge() {
       c.getClient().endpoints.release.getRelatedReleases(relatedId, page)),
     'anix:votedReleases': h((c, profileId, page = 0, sort = 1) =>
       c.getClient().endpoints.profile.getVotedReleases(profileId, page, sort)),
+    'anix:unvotedReleases': h(async (c, page = 0) => {
+      const ep = c.getClient().endpoints.profileReleaseVote;
+      try {
+        return await (Number(page) < 0 ? ep.lastReleaseUnvoted() : ep.allReleaseUnvoted(Number(page) || 0));
+      } catch (err) {
+        if (String((err as Error)?.message || err || '').includes('empty response')) {
+          return { content: [], last: true, total_count: 0, code: 0 };
+        }
+        throw err;
+      }
+    }),
     'anix:profileSocial': h((c, profileId) => c.getClient().endpoints.profile.getSocialPages(profileId)),
     'anix:friends': h((c, profileId, page = 0) =>
       c.getClient().endpoints.profile.getFriends({ id: profileId, page })),

@@ -23,6 +23,8 @@
     droppedCount: number;
     /** false для анонсов — нельзя ставить оценку */
     canVote?: boolean;
+    /** Анонс: как в Anixart — без рейтинга, только «N пользователей планируют…» и списки */
+    isAnnounce?: boolean;
     onRefresh: () => void | Promise<void>;
   }
 
@@ -43,6 +45,7 @@
     holdOnCount,
     droppedCount,
     canVote = true,
+    isAnnounce = false,
     onRefresh,
   }: Props = $props();
 
@@ -53,6 +56,29 @@
 
   const totalList = $derived(watchingCount + planCount + completedCount + holdOnCount + droppedCount);
   const lp = (n: number) => totalList > 0 ? (n / totalList) * 100 : 0;
+  /** Как в Anixart: у анонса «Смотрю» и «Просмотрено» не считаются */
+  const announceTotal = $derived(planCount + holdOnCount + droppedCount);
+  const ap = (n: number) => announceTotal > 0 ? (n / announceTotal) * 100 : 0;
+  const announceLists = $derived(
+    [
+      { id: 'planned', label: 'В планах', count: planCount },
+      { id: 'on_hold', label: 'Отложено', count: holdOnCount },
+      { id: 'dropped', label: 'Брошено', count: droppedCount },
+    ].filter((l) => l.count > 0),
+  );
+
+  function pluralRu(n: number, one: string, few: string, many: string): string {
+    const m10 = n % 10;
+    const m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+    return many;
+  }
+
+  const announcePlanText = $derived(
+    `${planCount.toLocaleString('ru-RU')} ${pluralRu(planCount, 'пользователь', 'пользователя', 'пользователей')} `
+      + (planCount % 10 === 1 && planCount % 100 !== 11 ? 'планирует' : 'планируют'),
+  );
   const ratingText = $derived(
     grade != null && hasRating ? grade.toFixed(2).replace(/\.?0+$/, '') : '—',
   );
@@ -108,6 +134,47 @@
   }
 </script>
 
+{#if isAnnounce}
+  {#if announceTotal > 0}
+    <div class="release-page__section release-page__announce-stats">
+      <h2 class="release-page__block-title">В списках у людей</h2>
+
+      <div class="release-page__announce-plan">
+        <span class="release-page__announce-plan-icon" aria-hidden="true">
+          <svg class="release-page__announce-clock" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="10" />
+            <line class="release-page__announce-clock-hour" x1="12" y1="12" x2="12" y2="8" />
+            <line class="release-page__announce-clock-minute" x1="12" y1="12" x2="12" y2="5.5" />
+            <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+          </svg>
+        </span>
+        <div class="release-page__announce-plan-text">
+          <span class="release-page__announce-plan-count">{announcePlanText}</span>
+          <span class="release-page__announce-plan-sub">смотреть этот релиз</span>
+        </div>
+      </div>
+
+      <div class="release-page__announce-bar">
+        {#each announceLists as l (l.id)}
+          <div
+            class="release-page__list-stats-seg release-page__list-stats-seg--{l.id}"
+            style="flex-basis:{ap(l.count)}%"
+          ></div>
+        {/each}
+      </div>
+
+      <div class="release-page__announce-legend">
+        {#each announceLists as l (l.id)}
+          <div class="release-page__announce-legend-item release-page__announce-legend-item--{l.id}">
+            <i aria-hidden="true"></i>
+            <span class="release-page__announce-legend-label">{l.label}</span>
+            <span class="release-page__announce-legend-count">{l.count.toLocaleString('ru-RU')}</span>
+          </div>
+        {/each}
+      </div>
+    </div>
+  {/if}
+{:else}
 <div class="release-page__section release-page__rating-block">
   <h2 class="release-page__block-title">Рейтинг</h2>
 
@@ -157,7 +224,7 @@
               </span>
             {/each}
           </div>
-          <span class="release-page__rating-vote-hint">Оценка недоступна для анонса</span>
+          <span class="release-page__rating-vote-hint">Оценка недоступна</span>
         {:else if showPicker}
           <div
             class="release-page__rating-stars"
@@ -217,3 +284,4 @@
     </div>
   {/if}
 </div>
+{/if}

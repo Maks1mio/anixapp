@@ -86,6 +86,9 @@
     listStatus?: UiV2AnimeCardListStatus | null;
     /** Личная оценка 1–5 — для вкладки «Оценки» */
     myVote?: number | null;
+    /** Выбор оценки звёздами прямо в карточке («Оцените релизы») */
+    onVote?: (stars: number) => void;
+    voteBusy?: boolean;
     /** Последний просмотр — для вкладки «История» */
     historyView?: {
       episodeLabel?: string | null;
@@ -139,6 +142,8 @@
     isFavorite = false,
     listStatus = null,
     myVote = null,
+    onVote,
+    voteBusy = false,
     historyView = null,
     moreLabel = 'Ещё',
     showMenu = true,
@@ -346,6 +351,14 @@
     favoritesCount != null && favoritesCount > 0 ? formatCount(favoritesCount) : null,
   );
 
+  let voteHover = $state(0);
+
+  function pickVote(stars: number, e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!voteBusy) onVote?.(stars);
+  }
+
   function onCardKeydown(e: KeyboardEvent) {
     if (!onclick) return;
     if (e.key === 'Enter' || e.key === ' ') {
@@ -479,6 +492,32 @@
   const canLinkGenre = $derived(!!(onGenreClick || onMetaClick));
 </script>
 
+{#snippet votePicker()}
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <div
+    class="uiv2-anime-card__rate"
+    class:uiv2-anime-card__rate--busy={voteBusy}
+    role="group"
+    aria-label="Оценка"
+    onmouseleave={() => (voteHover = 0)}
+    onkeydown={(e) => e.stopPropagation()}
+  >
+    {#each [1, 2, 3, 4, 5] as n (n)}
+      <button
+        type="button"
+        class="uiv2-anime-card__rate-star"
+        class:uiv2-anime-card__rate-star--on={n <= voteHover}
+        aria-label="{n} из 5"
+        disabled={voteBusy}
+        onmouseenter={() => (voteHover = n)}
+        onfocus={() => (voteHover = n)}
+        onblur={() => (voteHover = 0)}
+        onclick={(e) => pickVote(n, e)}
+      >{@html iconStar(variant === 'vertical' ? 20 : 26, n <= voteHover)}</button>
+    {/each}
+  </div>
+{/snippet}
+
 {#if variant === 'vertical'}
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <div
@@ -575,6 +614,7 @@
           {/if}
         </p>
       {/if}
+      {#if onVote}{@render votePicker()}{/if}
     </div>
   </div>
 {:else}
@@ -677,6 +717,8 @@
           {/if}
         {/if}
       </div>
+
+      {#if onVote}{@render votePicker()}{/if}
 
       {#if descriptionText}
         <p class="uiv2-anime-card__desc">{descriptionText}</p>

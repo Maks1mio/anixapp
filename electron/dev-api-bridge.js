@@ -11,6 +11,7 @@ const COMMON_METHODS = [
   'profile.getFriends',
   'profile.getBookmarks',
   'profile.getVotedReleases',
+  'profile.getUnvotedReleases',
   'release.info',
   'release.filter',
   'collection.info',

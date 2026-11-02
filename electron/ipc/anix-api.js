@@ -1155,6 +1155,20 @@ ipcMain.handle('anix:votedReleases', async (_, profileId, page = 0, sort = 1) =>
   }
 });
 
+ipcMain.handle('anix:unvotedReleases', async (_, page = 0) => {
+  try {
+    const ep = getAnixart().endpoints.profileReleaseVote;
+    // page < 0 → /unvoted/last (короткий список для баннера)
+    return await (Number(page) < 0 ? ep.lastReleaseUnvoted() : ep.allReleaseUnvoted(Number(page) || 0));
+  } catch (err) {
+    const msg = String(err?.message || err || '');
+    if (msg.includes('empty response')) {
+      return { content: [], last: true, total_count: 0, code: 0 };
+    }
+    handleAnixError(err, 'unvotedReleases');
+  }
+});
+
 ipcMain.handle('anix:profileSocial', async (_, profileId) => {
   try {
     const client = getAnixart();

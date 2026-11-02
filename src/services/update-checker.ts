@@ -111,6 +111,7 @@ export async function listBetaReleases(currentVersion?: string): Promise<AppRele
           channel: 'beta',
           source: 'anixback',
           downloadUrl,
+          fileName: fileName || undefined,
         });
       }
     }

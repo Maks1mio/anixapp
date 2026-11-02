@@ -285,6 +285,11 @@ function buildWebAnixApi(): AnixApi {
         invoke('anix:unmarkEpisodeAsWatched', releaseId, sourceId, episodePosition),
     },
 
+    bookmarks: {
+      export: (profileLists: number[] = [], sort = 0) => invoke('anix:bookmarksExport', profileLists, sort),
+      import: (body: unknown) => invoke('anix:bookmarksImport', body),
+      importStatus: () => invoke('anix:bookmarksImportStatus'),
+    },
     favorites: {
       all: (page = 0, sort = 1, filterAnnounce = 0, filter = 0) =>
         invoke('anix:favorites', page, sort, filterAnnounce, filter),

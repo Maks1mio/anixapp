@@ -16,6 +16,11 @@
   import { getSearchParams } from '../router';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import { getBookmarksSort, setBookmarksSort } from '../constants/bookmarkSort';
+  import { getBookmarksAnnounceFilter, setBookmarksAnnounceFilter } from '../constants/bookmarkFilter';
+  import BookmarksDesktopHead from '../components/bookmarks/BookmarksDesktopHead.svelte';
+  import BookmarksDesktopTools from '../components/bookmarks/BookmarksDesktopTools.svelte';
+  import BookmarksExportSheet from '../components/bookmarks/BookmarksExportSheet.svelte';
+  import BookmarksImportSheet from '../components/bookmarks/BookmarksImportSheet.svelte';
   import type { ReleaseCardData } from '../types/release';
   import { mapReleaseRawToCard } from '../utils/release-card';
   import { mapHistoryRawToReleaseCard } from '../utils/historyCard';
@@ -86,6 +91,7 @@
     showEnd: boolean;
     errorMsg: string;
     selectedSort: number;
+    announceFilter?: number;
     totalCount: number;
     cachedProfileId: number | null;
     profileLogin: string;
@@ -141,6 +147,7 @@
       showEnd,
       errorMsg,
       selectedSort,
+      announceFilter,
       totalCount,
       cachedProfileId,
       profileLogin,
@@ -159,7 +166,8 @@
 
   function snapshotMatchesCurrentSort(s: BookmarksViewState): boolean {
     if (!tabUsesSort(s.activeTab)) return true;
-    return s.selectedSort === getBookmarksSort();
+    return s.selectedSort === getBookmarksSort()
+      && (s.announceFilter ?? 0) === getBookmarksAnnounceFilter();
   }
 
   function applyBookmarksSnapshot(s: BookmarksViewState) {
@@ -172,6 +180,7 @@
     showEnd = s.showEnd;
     errorMsg = s.errorMsg;
     selectedSort = tabUsesSort(s.activeTab) ? getBookmarksSort() : s.selectedSort;
+    announceFilter = getBookmarksAnnounceFilter();
     totalCount = s.totalCount;
     cachedProfileId = s.cachedProfileId;
     profileLogin = s.profileLogin;
@@ -313,6 +322,11 @@
   let cachedProfileId = $state<number | null>(null);
   let totalCount = $state(0);
   let selectedSort = $state(getBookmarksSort());
+  /** filter_announce: 0 все, 1 только анонсы, 2 без анонсов (статусные списки и избранное) */
+  let announceFilter = $state(getBookmarksAnnounceFilter());
+  let exportOpen = $state(false);
+  let importOpen = $state(false);
+  const desktopLayout = !isMobileMode();
   let randomLoading = $state(false);
   let wrapEl: HTMLElement | undefined = $state();
   let unregisterScrollKey: (() => void) | null = null;
@@ -552,12 +566,12 @@
       if (q) {
         if (page > 0) return { content: [], total: 0, exhaustive: true };
         return scanAllPagesForQuery(q, async (p) => {
-          const data = await api.favorites.all(p, selectedSort, 0, 0) as Record<string, unknown>;
+          const data = await api.favorites.all(p, selectedSort, announceFilter, 0) as Record<string, unknown>;
           const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
           return { content, total: extractTotalCount(data, content.length) };
         });
       }
-      const data = await api.favorites.all(page, selectedSort, 0, 0) as Record<string, unknown>;
+      const data = await api.favorites.all(page, selectedSort, announceFilter, 0) as Record<string, unknown>;
       const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
       return { content, total: extractTotalCount(data, content.length) };
     }
@@ -588,7 +602,7 @@
           tab.type!,
           p,
           selectedSort,
-          0,
+          announceFilter,
           0,
         ) as Record<string, unknown>;
         const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
@@ -601,7 +615,7 @@
       tab.type,
       page,
       selectedSort,
-      0,
+      announceFilter,
       0,
     ) as Record<string, unknown>;
     const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
@@ -773,7 +787,10 @@
     }
 
     if (force) invalidateViewStatePrefix(listsBasePath());
-    if (tabUsesSort(tabId)) selectedSort = getBookmarksSort();
+    if (tabUsesSort(tabId)) {
+      selectedSort = getBookmarksSort();
+      announceFilter = getBookmarksAnnounceFilter();
+    }
     nextPage = 0;
     hasMore = true;
     items = [];
@@ -863,6 +880,33 @@
     selectedSort = setBookmarksSort(sort);
     void loadTab(activeTab, false, true);
   }
+
+  function onFilterChange(filter: number) {
+    if (filter === announceFilter) return;
+    announceFilter = setBookmarksAnnounceFilter(filter);
+    void loadTab(activeTab, false, true);
+  }
+
+  function onSetDefaultTab(tabId: string) {
+    defaultBookmarksTab = setDefaultBookmarksTab(tabId);
+  }
+
+  function pluralRu(n: number, one: string, few: string, many: string): string {
+    const m10 = n % 10;
+    const m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+    return many;
+  }
+
+  /** «Смотрю · 3 тайтла» — сколько в открытой вкладке */
+  const headSummary = $derived.by(() => {
+    if (loadState !== 'ready' || totalCount <= 0) return '';
+    const noun = isCollectionsTab
+      ? pluralRu(totalCount, 'коллекция', 'коллекции', 'коллекций')
+      : pluralRu(totalCount, 'тайтл', 'тайтла', 'тайтлов');
+    return `${activeTabMeta?.label ?? 'Список'} · ${totalCount} ${noun}`;
+  });
 
   async function onRandom() {
     if (!window.anixApi || randomLoading || totalCount === 0 || isVotesTab) return;
@@ -986,87 +1030,103 @@
 </script>
 
 <div class="view view-bookmarks" bind:this={wrapEl}>
-  <div class="bookmarks__user-header">
-    <button
-      type="button"
-      class="bookmarks__user"
-      onclick={(e) => handleUserProfileClick(profileIdForPanel, e)}
-      title="Открыть профиль"
-    >
-      <span
-        class="bookmarks__user-avatar"
-        style={headerAvatarUrl ? `background-image:url('${headerAvatarUrl}')` : undefined}
-        aria-hidden="true"
-      ></span>
-      <span class="bookmarks__user-name">{profileLogin || (isOtherProfile ? 'Профиль' : 'Мои списки')}</span>
-    </button>
-
-    <div class="bookmarks__user-actions">
-      {#if isReleaseListTab && loadState !== 'loading'}
-        <BookmarksToolbar
-          {totalCount}
-          sort={selectedSort}
-          onSortChange={onSortChange}
-          onRandom={onRandom}
-          {randomLoading}
-        >
-          {#snippet leadingActions()}
-            {#if !isListsPage}
-              <button
-                type="button"
-                class="bookmarks-toolbar__icon-btn"
-                title="Изменить вкладку по умолчанию"
-                aria-label="Изменить вкладку по умолчанию"
-                onclick={handleTabsSettingsClick}
-              >
-                {@html iconHome(18)}
-              </button>
-            {/if}
-          {/snippet}
-        </BookmarksToolbar>
-      {:else}
-        {#if (isVotesTab || isFavoritesTab || isHistoryTab || isCollectionsTab) && loadState === 'ready' && totalCount > 0}
-          <span class="bookmarks-toolbar__count" title="Всего в списке">{totalCount}</span>
-        {/if}
-        {#if !isListsPage}
-          <button
-            type="button"
-            class="bookmarks-toolbar__icon-btn"
-            title="Изменить вкладку по умолчанию"
-            aria-label="Изменить вкладку по умолчанию"
-            onclick={handleTabsSettingsClick}
-          >
-            {@html iconHome(18)}
-          </button>
-        {/if}
-      {/if}
-    </div>
-  </div>
-
-  <label class="bookmarks__search">
-    <span class="bookmarks__search-icon" aria-hidden="true">{@html iconSearch(18)}</span>
-    <input
-      class="bookmarks__search-input"
-      type="search"
-      enterkeyhint="search"
-      autocomplete="off"
-      spellcheck="false"
-      placeholder={searchPlaceholder}
-      value={searchInput}
-      oninput={onSearchInput}
-      aria-label={searchPlaceholder}
+  {#if desktopLayout}
+    <BookmarksDesktopHead
+      title={isOtherProfile ? 'Списки' : listsOnly ? 'Мои списки' : 'Закладки'}
+      login={profileLogin}
+      avatarUrl={headerAvatarUrl}
+      summary={headSummary}
+      isSelf={!isListsPage}
+      tabs={SELF_TABS}
+      defaultTab={defaultBookmarksTab}
+      onProfileClick={(e) => handleUserProfileClick(profileIdForPanel, e)}
+      {onSetDefaultTab}
+      onExport={() => (exportOpen = true)}
+      onImport={() => (importOpen = true)}
     />
-    {#if searchInput}
+  {:else}
+    <div class="bookmarks__user-header">
       <button
         type="button"
-        class="bookmarks__search-clear"
-        aria-label="Очистить поиск"
-        onclick={clearSearch}
+        class="bookmarks__user"
+        onclick={(e) => handleUserProfileClick(profileIdForPanel, e)}
+        title="Открыть профиль"
       >
-        {@html iconX(14)}
+        <span
+          class="bookmarks__user-avatar"
+          style={headerAvatarUrl ? `background-image:url('${headerAvatarUrl}')` : undefined}
+          aria-hidden="true"
+        ></span>
+        <span class="bookmarks__user-name">{profileLogin || (isOtherProfile ? 'Профиль' : 'Мои списки')}</span>
       </button>
-    {/if}
-  </label>
+
+      <div class="bookmarks__user-actions">
+        {#if isReleaseListTab && loadState !== 'loading'}
+          <BookmarksToolbar
+            {totalCount}
+            sort={selectedSort}
+            onSortChange={onSortChange}
+            onRandom={onRandom}
+            {randomLoading}
+          >
+            {#snippet leadingActions()}
+              {#if !isListsPage}
+                <button
+                  type="button"
+                  class="bookmarks-toolbar__icon-btn"
+                  title="Изменить вкладку по умолчанию"
+                  aria-label="Изменить вкладку по умолчанию"
+                  onclick={handleTabsSettingsClick}
+                >
+                  {@html iconHome(18)}
+                </button>
+              {/if}
+            {/snippet}
+          </BookmarksToolbar>
+        {:else}
+          {#if (isVotesTab || isFavoritesTab || isHistoryTab || isCollectionsTab) && loadState === 'ready' && totalCount > 0}
+            <span class="bookmarks-toolbar__count" title="Всего в списке">{totalCount}</span>
+          {/if}
+          {#if !isListsPage}
+            <button
+              type="button"
+              class="bookmarks-toolbar__icon-btn"
+              title="Изменить вкладку по умолчанию"
+              aria-label="Изменить вкладку по умолчанию"
+              onclick={handleTabsSettingsClick}
+            >
+              {@html iconHome(18)}
+            </button>
+          {/if}
+        {/if}
+      </div>
+    </div>
+
+    <label class="bookmarks__search">
+      <span class="bookmarks__search-icon" aria-hidden="true">{@html iconSearch(18)}</span>
+      <input
+        class="bookmarks__search-input"
+        type="search"
+        enterkeyhint="search"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder={searchPlaceholder}
+        value={searchInput}
+        oninput={onSearchInput}
+        aria-label={searchPlaceholder}
+      />
+      {#if searchInput}
+        <button
+          type="button"
+          class="bookmarks__search-clear"
+          aria-label="Очистить поиск"
+          onclick={clearSearch}
+        >
+          {@html iconX(14)}
+        </button>
+      {/if}
+    </label>
+  {/if}
 
   <Tabs
     tabs={TABS.map((t) => ({
@@ -1078,6 +1138,23 @@
     onChange={(tabId) => loadTab(tabId as TabId)}
     onTabContextMenu={isListsPage ? undefined : handleTabContextMenu}
   />
+
+  {#if desktopLayout}
+    <BookmarksDesktopTools
+      {searchPlaceholder}
+      searchValue={searchInput}
+      {onSearchInput}
+      onSearchClear={clearSearch}
+      showListControls={isReleaseListTab}
+      showFilter={isReleaseListTab}
+      sort={selectedSort}
+      filter={announceFilter}
+      randomDisabled={randomLoading || totalCount === 0 || loadState !== 'ready'}
+      {onSortChange}
+      {onFilterChange}
+      {onRandom}
+    />
+  {/if}
 
   <div class="bookmarks__content" use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode() }}>
     <div class="bookmarks__grid">
@@ -1092,7 +1169,13 @@
       {:else if loadState === 'error'}
         <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadTab(activeTab)} />
       {:else if loadState === 'empty'}
-        <p class="bookmarks__empty">{searchQuery ? 'Ничего не найдено.' : 'Здесь пока ничего нет.'}</p>
+        <p class="bookmarks__empty">
+          {searchQuery
+            ? 'Ничего не найдено.'
+            : isReleaseListTab && announceFilter !== 0
+              ? 'Под выбранный фильтр ничего не подходит.'
+              : 'Здесь пока ничего нет.'}
+        </p>
       {:else if isHistoryTab}
         <ReleaseCardsGrid items={items} variant="history" onDeleteFromHistory={onDeleteFromHistory} />
       {:else if isCollectionsTab}
@@ -1129,3 +1212,13 @@
   onSelect={handleTabMenuSelect}
   onCheckedChange={handleTabMenuCheckedChange}
 />
+
+{#if exportOpen}
+  <BookmarksExportSheet onClose={() => (exportOpen = false)} />
+{/if}
+{#if importOpen}
+  <BookmarksImportSheet
+    onClose={() => (importOpen = false)}
+    onImported={() => void loadTab(activeTab, false, true)}
+  />
+{/if}

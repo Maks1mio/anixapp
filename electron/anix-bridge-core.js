@@ -896,6 +896,11 @@ function createAnixBridgeCore(options = {}) {
         return {};
       }
     }),
+    // Экспорт: сервер отдаёт релизы выбранных списков, файл собирает клиент (как в Anixart)
+    'anix:bookmarksExport': h((c, profileLists = [], sort = 0) =>
+      c.getClient().endpoints.export.bookmarks({ bookmarksExportProfileLists: profileLists }, { sort })),
+    'anix:bookmarksImport': h((c, body) => c.getClient().endpoints.import.bookmarks(body)),
+    'anix:bookmarksImportStatus': h((c) => c.getClient().endpoints.import.status()),
     'anix:favorites': h((c, page = 0, sort = BookmarkSortType.NewToOldAddTime, filterAnnounce = 0, filter = 0) =>
       c.getClient().endpoints.profile.getFavorites({ page, sort, filter_announce: filterAnnounce, filter })),
     'anix:getBookmarks': h((c, profileId, type, page = 0, sort = BookmarkSortType.NewToOldAddTime, filterAnnounce = 0, filter = 0) =>

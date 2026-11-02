@@ -80,6 +80,16 @@ export type ApiBadgeCollection = {
   profile?: { id?: number; badge?: ApiBadge | null } | null;
 };
 
+/** Тело import/bookmarks: id релизов Shikimori по спискам (поля как в Anixart, camelCase). */
+export interface BookmarksImportBody {
+  watching: number[];
+  plans: number[];
+  completed: number[];
+  holdOn: number[];
+  dropped: number[];
+  selected_importer_name: 'Shikimori';
+}
+
 export interface AnixApi {
   client: {
     readonly baseUrl: string;
@@ -579,6 +589,14 @@ export interface AnixApi {
     add: (releaseId: number, sourceId: number, episodePosition: number) => Promise<void>;
     markWatched: (releaseId: number, sourceId: number, episodePosition: number) => Promise<void>;
     unmarkWatched: (releaseId: number, sourceId: number, episodePosition: number) => Promise<void>;
+  };
+
+  /** Экспорт/импорт закладок (раздел «Данные» в Anixart). */
+  bookmarks: {
+    /** profileLists: 0 — избранное, 1–5 — статусы; sort: 0 название, 1 статус, 2 оценка */
+    export: (profileLists?: number[], sort?: number) => Promise<{ code?: number; releases?: unknown[] }>;
+    import: (body: BookmarksImportBody) => Promise<{ code?: number }>;
+    importStatus: () => Promise<{ code?: number }>;
   };
 
   favorites: {

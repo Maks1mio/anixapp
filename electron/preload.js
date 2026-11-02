@@ -701,6 +701,11 @@ contextBridge.exposeInMainWorld('anixApi', {
     unmarkWatched: (releaseId, sourceId, episodePosition) => ipcRenderer.invoke('anix:unmarkEpisodeAsWatched', releaseId, sourceId, episodePosition),
   },
 
+  bookmarks: {
+    export: (profileLists = [], sort = 0) => ipcRenderer.invoke('anix:bookmarksExport', profileLists, sort),
+    import: (body) => ipcRenderer.invoke('anix:bookmarksImport', body),
+    importStatus: () => ipcRenderer.invoke('anix:bookmarksImportStatus'),
+  },
   favorites: {
     all: (page = 0, sort = 1, filterAnnounce = 0, filter = 0) =>
       ipcRenderer.invoke('anix:favorites', page, sort, filterAnnounce, filter),

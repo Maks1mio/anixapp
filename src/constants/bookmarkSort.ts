@@ -4,8 +4,8 @@ export const BOOKMARK_SORT_OPTIONS = [
   { value: 2, label: 'По добавлению', desc: 'От старых к новым' },
   { value: 3, label: 'По году выхода', desc: 'От новых к старым' },
   { value: 4, label: 'По году выхода', desc: 'От старых к новым' },
-  { value: 5, label: 'По названию', desc: 'От Я до А' },
-  { value: 6, label: 'По названию', desc: 'От А до Я' },
+  { value: 5, label: 'По названию', desc: 'От А до Я' },
+  { value: 6, label: 'По названию', desc: 'От Я до А' },
   { value: 7, label: 'По рейтингу', desc: 'От высокого к низкому' },
   { value: 8, label: 'По рейтингу', desc: 'От низкого к высокому' },
 ] as const;

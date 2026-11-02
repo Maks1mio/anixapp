@@ -853,6 +853,34 @@ loggedHandle('anix:schedule', async () => {
   }
 });
 
+// Экспорт/импорт закладок (как «Данные» в Anixart): файл собирает клиент, сервер отдаёт релизы
+ipcMain.handle('anix:bookmarksExport', async (_, profileLists = [], sort = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.export.bookmarks({ bookmarksExportProfileLists: profileLists }, { sort });
+  } catch (err) {
+    handleAnixError(err, 'bookmarksExport');
+  }
+});
+
+ipcMain.handle('anix:bookmarksImport', async (_, body) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.import.bookmarks(body);
+  } catch (err) {
+    handleAnixError(err, 'bookmarksImport');
+  }
+});
+
+ipcMain.handle('anix:bookmarksImportStatus', async () => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.import.status();
+  } catch (err) {
+    handleAnixError(err, 'bookmarksImportStatus');
+  }
+});
+
 ipcMain.handle('anix:favorites', async (_, page = 0, sort = BookmarkSortType.NewToOldAddTime, filterAnnounce = 0, filter = 0) => {
   try {
     const client = getAnixart();

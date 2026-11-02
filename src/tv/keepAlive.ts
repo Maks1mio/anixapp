@@ -1,6 +1,8 @@
 const CAT_PREFIX = 'home-cat:';
 const RELEASE_PREFIX = 'release:';
 const BOOKMARK_LIST_PREFIX = 'bm-list:';
+/** Прочие TV-страницы (коллекции, профиль, настройки…): `page:<маршрут без />`. */
+const PAGE_PREFIX = 'page:';
 const MAX_KEEP = 8;
 const MAX_KEEP_ANDROID = 3;
 
@@ -20,14 +22,35 @@ export function tvKeepAliveKey(path: string): string | null {
   if (p === '/') return 'home';
   const cat = p.match(/^\/home\/([^/]+)$/);
   if (cat) return `${CAT_PREFIX}${cat[1]}`;
-  if (p === '/overview' || p === '/schedule') return 'overview';
-  if (p === '/feed') return 'feed';
+  if (p === '/overview') return 'overview';
   if (p === '/overview/popular') return 'popular';
   if (p === '/bookmarks') return 'bookmarks';
   const bmList = p.match(/^\/bookmarks\/([a-z_]+)$/);
   if (bmList) return `${BOOKMARK_LIST_PREFIX}${bmList[1]}`;
   if (p === '/search') return 'search';
+  const page = tvPageKeyFromPath(p);
+  if (page) return `${PAGE_PREFIX}${page}`;
   return null;
+}
+
+/** Страница TV без отдельного слота в App: ключ — нормализованный маршрут. */
+function tvPageKeyFromPath(p: string): string | null {
+  if (p === '/schedule' || p === '/collections' || p === '/settings') return p.slice(1);
+  if (p === '/profile') return 'profile/self';
+  if (/^\/profile\/\d+$/.test(p)) return p.slice(1);
+  if (/^\/collection\/\d+$/.test(p)) return p.slice(1);
+  if (/^\/overview\/popular\/[a-z]+$/.test(p)) return p.slice('/overview/'.length);
+  return null;
+}
+
+export function tvKeptPageKeys(kept: string[]): string[] {
+  return kept
+    .filter((key) => key.startsWith(PAGE_PREFIX))
+    .map((key) => key.slice(PAGE_PREFIX.length));
+}
+
+export function tvPageKeepKey(page: string): string {
+  return `${PAGE_PREFIX}${page}`;
 }
 
 export function rememberTvKeepAlive(kept: string[], path: string): string[] {

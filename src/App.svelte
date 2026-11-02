@@ -96,7 +96,6 @@
   import HomeTv from './views/Home.tv.svelte';
   import HomeCategoryTv from './views/HomeCategory.tv.svelte';
   import OverviewTv from './views/Overview.tv.svelte';
-  import FeedTv from './views/Feed.tv.svelte';
   import PopularTv from './views/Popular.tv.svelte';
   import BookmarksTv from './views/Bookmarks.tv.svelte';
   import BookmarksListTv from './views/BookmarksList.tv.svelte';
@@ -106,7 +105,17 @@
   import TvFallback from './views/TvFallback.svelte';
   import TvKeepAlive from './components/tv/TvKeepAlive.svelte';
   import TvPlayerShell from './components/tv/TvPlayerShell.svelte';
-  import { rememberTvKeepAlive, tvKeepAliveKey, tvKeptBookmarkListIds, tvKeptCategoryIds, tvKeptReleaseIds } from './tv/keepAlive';
+  import TvRoutePage from './components/tv/TvRoutePage.svelte';
+  import {
+    rememberTvKeepAlive,
+    tvKeepAliveKey,
+    tvKeptBookmarkListIds,
+    tvKeptCategoryIds,
+    tvKeptPageKeys,
+    tvKeptReleaseIds,
+    tvPageKeepKey,
+  } from './tv/keepAlive';
+  import { isTvUnsupportedPath } from './tv/nav';
   import WebPlayerShell from './components/WebPlayerShell.svelte';
   import { isEmbeddedWebPlayer } from './utils/watch-nav';
   import { startAppPresence } from './services/app-presence';
@@ -138,6 +147,7 @@
   const tvKeptCats = $derived(tvKeptCategoryIds(tvKept));
   const tvKeptReleases = $derived(tvKeptReleaseIds(tvKept));
   const tvKeptBookmarkLists = $derived(tvKeptBookmarkListIds(tvKept));
+  const tvKeptPages = $derived(tvKeptPageKeys(tvKept));
   const tvKeepKey = $derived(tvKeepAliveKey(path));
 
   $effect(() => {
@@ -191,6 +201,13 @@
       syncSearchParams();
       resetScrollAfterRouteChange();
     }
+  });
+
+  // TV: ленты и ИИ-помощника нет — уводим на главную.
+  $effect(() => {
+    const route = path;
+    if (!isTvMode() || !isTvUnsupportedPath(route)) return;
+    queueMicrotask(() => replacePath('/'));
   });
 
   // Старый полноэкранный профиль: открыть панель и уйти с маршрута
@@ -911,14 +928,8 @@
     {/each}
 
     {#if tvKept.includes('overview')}
-      <TvKeepAlive keepKey="overview" active={path === '/overview' || path === '/schedule'}>
+      <TvKeepAlive keepKey="overview" active={path === '/overview'}>
         <OverviewTv />
-      </TvKeepAlive>
-    {/if}
-
-    {#if tvKept.includes('feed')}
-      <TvKeepAlive keepKey="feed" active={path === '/feed'}>
-        <FeedTv />
       </TvKeepAlive>
     {/if}
 
@@ -945,6 +956,12 @@
         <SearchTv />
       </TvKeepAlive>
     {/if}
+
+    {#each tvKeptPages as pageKey (pageKey)}
+      <TvKeepAlive keepKey={tvPageKeepKey(pageKey)} active={tvKeepKey === tvPageKeepKey(pageKey)}>
+        <TvRoutePage {pageKey} />
+      </TvKeepAlive>
+    {/each}
 
     {#if isWatchRoute}
       <TvKeepAlive keepKey="watch" active>

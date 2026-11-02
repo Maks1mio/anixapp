@@ -1,4 +1,5 @@
 import { openProfilePanel } from './profile-panel';
+import { isTvMode } from '../platform/tv';
 
 /** `/profile` или `/profile/:id` — полноэкранной страницы больше нет. */
 export function isProfilePagePath(path: string): boolean {
@@ -8,6 +9,8 @@ export function isProfilePagePath(path: string): boolean {
 
 /** Открыть правую панель, если путь — старый полноэкранный профиль. */
 export function openProfileFromPath(path: string): boolean {
+  // На TV профиль — отдельный экран (`Profile.tv`), а не панель.
+  if (isTvMode()) return false;
   const pathname = path.split('?')[0] ?? path;
   if (pathname === '/profile') {
     openProfilePanel();

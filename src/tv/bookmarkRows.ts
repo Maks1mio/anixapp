@@ -80,12 +80,21 @@ function mapListItem(raw: Record<string, unknown>): ReleaseCardData {
   return { ...mapReleaseRawToCard(releaseRaw), myVote };
 }
 
-export async function fetchTvBookmarkPage(id: TvBookmarkListId, page: number): Promise<TvBookmarkPage> {
+/** `profileId` — чужой профиль (только статусные списки и оценки); по умолчанию свой. */
+export async function fetchTvBookmarkPage(
+  id: TvBookmarkListId,
+  page: number,
+  profileId?: number,
+): Promise<TvBookmarkPage> {
   const api = window.anixApi;
   if (!api) throw new Error('API недоступно');
 
   let data: Record<string, unknown> | null = null;
   let history = false;
+
+  if (profileId != null && (id === 'history' || id === 'favorites')) {
+    return { items: [], total: 0, done: true };
+  }
 
   if (id === 'history') {
     data = (await api.history.all(page)) as Record<string, unknown>;
@@ -93,14 +102,14 @@ export async function fetchTvBookmarkPage(id: TvBookmarkListId, page: number): P
   } else if (id === 'favorites') {
     data = (await api.favorites.all(page, getBookmarksSort(), 0, 0)) as Record<string, unknown>;
   } else {
-    const profileId = await ensureSelfProfileId();
-    if (profileId == null) return { items: [], total: 0, done: true };
+    const ownerId = profileId ?? await ensureSelfProfileId();
+    if (ownerId == null) return { items: [], total: 0, done: true };
     if (id === 'votes') {
-      data = (await api.profile.getVotedReleases(profileId, page, 1)) as Record<string, unknown>;
+      data = (await api.profile.getVotedReleases(ownerId, page, 1)) as Record<string, unknown>;
     } else {
       const def = tvBookmarkListDef(id);
       if (def?.type == null) return { items: [], total: 0, done: true };
-      data = (await api.profile.getBookmarks(profileId, def.type, page, getBookmarksSort(), 0, 0)) as Record<string, unknown>;
+      data = (await api.profile.getBookmarks(ownerId, def.type, page, getBookmarksSort(), 0, 0)) as Record<string, unknown>;
     }
   }
 

@@ -1,27 +1,16 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { onMount } from 'svelte';
   import { navigateSidebarTab, navigate } from '../stores/navigation';
   import { isSidebarTabActive } from '../stores/tab-navigation';
-  import { openSettingsModal, settingsModalOpen, settingsBossFightLock } from '../stores/modals';
+  import { settingsModalOpen } from '../stores/modals';
   import { requireAuth } from '../stores/auth';
-  import {
-    closeProfilePanel,
-    profilePanelOpen,
-    profilePanelUserId,
-    toggleProfilePanel,
-  } from '../stores/profile-panel';
+  import { closeProfilePanel, profilePanelOpen, profilePanelUserId } from '../stores/profile-panel';
   import { TV_NAV_ITEMS, TV_PROFILE_NAV_ITEM, TV_POWER_NAV_ITEM, tvNavHref, type TvNavItem } from '../tv/nav';
   import { tvSystemMenuOpen } from '../services/tv-input';
   import { returnTvFocusToContent } from '../services/tv-navigation';
-  import { ensureProfileId } from '../utils/profile';
   import Page from '../components/Page.svelte';
   import UiV2MediaLightbox from '../components/uikit-v2/UiV2MediaLightbox.svelte';
   import TvPosterBackdrop from '../components/tv/TvPosterBackdrop.svelte';
-  import SidebarProfilePanel from '../components/SidebarProfilePanel.svelte';
-  import SettingsModal from '../components/SettingsModal.svelte';
-  import SidebarPanelResizeHandle from '../components/SidebarPanelResizeHandle.svelte';
-  import { getProfilePanelWidthPx, setProfilePanelWidthPx } from '../prefs';
 
   interface Props {
     children?: Snippet;
@@ -32,121 +21,23 @@
 
   let { children, currentPath = '/', immersive = false }: Props = $props();
 
-  let profileVisible = $state(false);
-  let profileActive = $state(false);
-  let settingsVisible = $state(false);
-  let settingsActive = $state(false);
-  let openSettingsAfterProfileClose = $state(false);
-  let openProfileAfterSettingsClose = $state(false);
-  let profilePanelWidthPx = $state(getProfilePanelWidthPx());
+  const routePath = $derived((currentPath ?? '/').split('?')[0] || '/');
+
+  const isProfileRoute = $derived(routePath === '/profile' || /^\/profile\/\d+$/.test(routePath));
+  /** Поиск, настройки и профиль — не вкладки сайдбара ПК: подсвечиваются только на своём маршруте. */
+  const isStandaloneRoute = $derived(isProfileRoute || routePath === '/settings' || routePath === '/search');
 
   function isActive(item: TvNavItem): boolean {
-    if ('action' in item && item.action === 'settings') {
-      return settingsActive;
-    }
-    if ('action' in item && item.action === 'profile') {
-      return $profilePanelOpen;
-    }
+    if ('action' in item && item.action === 'profile') return isProfileRoute;
     const href = tvNavHref(item);
     if (!href) return false;
+    if (href === '/settings' || href === '/search') return routePath === href;
+    if (isStandaloneRoute) return false;
     return isSidebarTabActive(href, currentPath ?? '');
   }
 
-  function closeProfile() {
-    closeProfilePanel();
-    returnTvFocusToContent();
-  }
-
-  function actuallyOpenSettings() {
-    settingsVisible = true;
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        settingsActive = true;
-      });
-    });
-  }
-
-  function closeSettings(immediate = false) {
-    if ($settingsBossFightLock) return;
-    if (!settingsVisible) return;
-    if (!settingsActive && !immediate) return;
-    settingsActive = false;
-    settingsModalOpen.set(false);
-    if (immediate) {
-      settingsVisible = false;
-      if (openProfileAfterSettingsClose) {
-        openProfileAfterSettingsClose = false;
-        void activateProfileAfterSettings();
-      }
-      return;
-    }
-    window.setTimeout(() => {
-      if (settingsActive) return;
-      settingsVisible = false;
-      if (openProfileAfterSettingsClose) {
-        openProfileAfterSettingsClose = false;
-        void activateProfileAfterSettings();
-      }
-    }, 360);
-  }
-
-  async function activateProfileAfterSettings() {
-    if (!requireAuth()) {
-      returnTvFocusToContent();
-      return;
-    }
-    const selfId = Number((window as { __anixProfile?: { id?: number } }).__anixProfile?.id ?? 0)
-      || Number(await ensureProfileId() ?? 0);
-    if (!selfId) {
-      returnTvFocusToContent();
-      return;
-    }
-    toggleProfilePanel(selfId);
-    returnTvFocusToContent();
-  }
-
-  async function activateProfile() {
-    if (settingsVisible) {
-      openProfileAfterSettingsClose = true;
-      openSettingsAfterProfileClose = false;
-      closeSettings(false);
-      return;
-    }
-    if (!requireAuth()) {
-      returnTvFocusToContent();
-      return;
-    }
-    const selfId = Number((window as { __anixProfile?: { id?: number } }).__anixProfile?.id ?? 0)
-      || Number(await ensureProfileId() ?? 0);
-    if (!selfId) {
-      returnTvFocusToContent();
-      return;
-    }
-    toggleProfilePanel(selfId);
-    returnTvFocusToContent();
-  }
-
-  function activateNavItem(item: TvNavItem) {
-    if ('action' in item && item.action === 'power') {
-      tvSystemMenuOpen.set(true);
-      return;
-    }
-    if ('action' in item && item.action === 'settings') {
-      openSettingsModal();
-      returnTvFocusToContent();
-      return;
-    }
-    if ('action' in item && item.action === 'profile') {
-      void activateProfile();
-      return;
-    }
-    const href = tvNavHref(item);
-    if (!href) return;
-    if (href === '/bookmarks' && !requireAuth()) {
-      returnTvFocusToContent();
-      return;
-    }
-    if (href === currentPath) {
+  function go(href: string) {
+    if (href === routePath) {
       returnTvFocusToContent();
       return;
     }
@@ -155,51 +46,46 @@
     returnTvFocusToContent();
   }
 
-  $effect(() => {
-    if ($settingsModalOpen) {
-      if (settingsVisible && settingsActive) return;
-      if (profileVisible) {
-        openSettingsAfterProfileClose = true;
-        closeProfilePanel();
-        return;
-      }
-      actuallyOpenSettings();
+  function activateNavItem(item: TvNavItem) {
+    if ('action' in item && item.action === 'power') {
+      tvSystemMenuOpen.set(true);
       return;
     }
-    if (settingsVisible && settingsActive) closeSettings();
+    if ('action' in item && item.action === 'profile') {
+      if (!requireAuth()) {
+        returnTvFocusToContent();
+        return;
+      }
+      go('/profile');
+      return;
+    }
+    const href = tvNavHref(item);
+    if (!href) return;
+    if (href === '/bookmarks' && !requireAuth()) {
+      returnTvFocusToContent();
+      return;
+    }
+    go(href);
+  }
+
+  // На TV нет боковых панелей ПК: профиль и настройки — отдельные экраны.
+  $effect(() => {
+    if (!$profilePanelOpen) return;
+    const id = $profilePanelUserId;
+    closeProfilePanel();
+    navigate(id ? `/profile/${id}` : '/profile');
+  });
+
+  $effect(() => {
+    if (!$settingsModalOpen) return;
+    settingsModalOpen.set(false);
+    if (routePath !== '/settings') navigate('/settings');
   });
 
   function onNavClick(event: MouseEvent, item: TvNavItem) {
     event.preventDefault();
     activateNavItem(item);
   }
-
-  onMount(() => {
-    const onProfilePanelOpen = () => {
-      profileVisible = true;
-      requestAnimationFrame(() => {
-        profileActive = true;
-      });
-    };
-    const onProfilePanelClose = () => {
-      profileActive = false;
-      window.setTimeout(() => {
-        profileVisible = false;
-        if (openSettingsAfterProfileClose) {
-          openSettingsAfterProfileClose = false;
-          actuallyOpenSettings();
-        }
-      }, 360);
-    };
-
-    window.addEventListener('anix:profilePanelOpen', onProfilePanelOpen);
-    window.addEventListener('anix:profilePanelClose', onProfilePanelClose);
-
-    return () => {
-      window.removeEventListener('anix:profilePanelOpen', onProfilePanelOpen);
-      window.removeEventListener('anix:profilePanelClose', onProfilePanelClose);
-    };
-  });
 </script>
 
 <div class="tv-layout" class:tv-layout--immersive={immersive}>
@@ -276,69 +162,6 @@
       {@render children?.()}
     </Page>
   </main>
-
-  {#if (profileVisible && $profilePanelUserId) || settingsVisible}
-    <button
-      type="button"
-      class="schedule-panel-backdrop"
-      class:schedule-panel-backdrop--open={profileActive || settingsActive}
-      class:schedule-panel-backdrop--locked={$settingsBossFightLock && settingsActive}
-      aria-label="Закрыть панель"
-      onclick={() => {
-        if ($settingsBossFightLock && settingsActive) return;
-        if (profileActive) closeProfile();
-        else if (settingsActive) closeSettings();
-      }}
-    ></button>
-  {/if}
-
-  {#if profileVisible && $profilePanelUserId}
-    <aside
-      class="schedule-panel-wrap schedule-panel-wrap--profile tv-layout__profile-panel"
-      class:schedule-panel-wrap--open={profileActive}
-      aria-label="Профиль"
-      aria-hidden={!profileActive}
-    >
-      <div class="schedule-panel-shell schedule-panel-shell--profile" style={`width: ${profilePanelWidthPx}px`}>
-        <div class="schedule-panel-shell__body">
-          <SidebarProfilePanel userId={$profilePanelUserId} onClose={() => closeProfile()} />
-        </div>
-        <SidebarPanelResizeHandle
-          widthPx={profilePanelWidthPx}
-          label="Ширина профиля"
-          onWidthChange={(w) => {
-            profilePanelWidthPx = w;
-          }}
-          onWidthCommit={(w) => {
-            profilePanelWidthPx = setProfilePanelWidthPx(w);
-          }}
-        />
-      </div>
-    </aside>
-  {:else if settingsVisible}
-    <aside
-      class="schedule-panel-wrap schedule-panel-wrap--profile tv-layout__profile-panel"
-      class:schedule-panel-wrap--open={settingsActive}
-      aria-label="Настройки"
-      aria-hidden={!settingsActive}
-    >
-      <div class="schedule-panel-shell schedule-panel-shell--profile" style={`width: ${profilePanelWidthPx}px`}>
-        <div class="schedule-panel-shell__body">
-          <SettingsModal onClose={() => closeSettings()} />
-        </div>
-        <SidebarPanelResizeHandle
-          widthPx={profilePanelWidthPx}
-          label="Ширина настроек"
-          onWidthChange={(w) => {
-            profilePanelWidthPx = w;
-          }}
-          onWidthCommit={(w) => {
-            profilePanelWidthPx = setProfilePanelWidthPx(w);
-          }}
-        />
-      </div>
-    </aside>
-  {/if}
 
   <UiV2MediaLightbox />
 </div>

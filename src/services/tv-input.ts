@@ -52,6 +52,47 @@ const BTN_DOWN = 13;
 const BTN_LEFT = 14;
 const BTN_RIGHT = 15;
 
+/** Номера кнопок стандартной раскладки — для экранов, которые захватывают геймпад. */
+export const TV_PAD_BUTTON = {
+  A: BTN_A,
+  B: BTN_B,
+  X: BTN_X,
+  Y: BTN_Y,
+  LB: BTN_LB,
+  RB: BTN_RB,
+  LT: BTN_LT,
+  RT: BTN_RT,
+} as const;
+
+export interface TvStick {
+  x: number;
+  y: number;
+}
+
+/**
+ * Экран забирает геймпад себе (например, круговой ввод текста в поиске):
+ * стики уходят в `sticks`, а не в стрелки; кнопки — сначала в `button`.
+ * D-pad остаётся навигацией.
+ */
+export interface TvGamepadCapture {
+  sticks: (left: TvStick, right: TvStick) => void;
+  /** true — кнопка поглощена, обычное действие не выполняется. */
+  button: (index: number) => boolean;
+}
+
+let capture: TvGamepadCapture | null = null;
+export const tvGamepadCaptureActive = writable(false);
+
+export function setTvGamepadCapture(next: TvGamepadCapture): () => void {
+  capture = next;
+  tvGamepadCaptureActive.set(true);
+  return () => {
+    if (capture !== next) return;
+    capture = null;
+    tvGamepadCaptureActive.set(false);
+  };
+}
+
 const STICK_THRESHOLD = 0.55;
 const REPEAT_DELAY_MS = 380;
 const REPEAT_RATE_MS = 95;
@@ -67,6 +108,8 @@ function setDevice(next: TvInputDevice): void {
 }
 
 function gamepadKind(pad: Gamepad): TvInputDevice {
+  // «Xbox Wireless Controller» тоже содержит «wireless controller» — Xbox проверяем первым.
+  if (/xbox|045e|xinput/i.test(pad.id)) return 'xbox';
   return /054c|playstation|dualsense|dualshock|wireless controller/i.test(pad.id) ? 'playstation' : 'xbox';
 }
 
@@ -113,7 +156,19 @@ function padDir(pad: Gamepad): Dir | null {
   if (b[BTN_DOWN]?.pressed) return 'ArrowDown';
   if (b[BTN_LEFT]?.pressed) return 'ArrowLeft';
   if (b[BTN_RIGHT]?.pressed) return 'ArrowRight';
+  // Стики захвачены экраном — навигация только крестовиной.
+  if (capture) return null;
   return stickDir(pad);
+}
+
+const CAPTURE_DEADZONE = 0.2;
+
+function feedCapture(pad: Gamepad): boolean {
+  if (!capture) return false;
+  const left = { x: pad.axes[0] ?? 0, y: pad.axes[1] ?? 0 };
+  const right = { x: pad.axes[2] ?? 0, y: pad.axes[3] ?? 0 };
+  capture.sticks(left, right);
+  return Math.hypot(left.x, left.y) > CAPTURE_DEADZONE || Math.hypot(right.x, right.y) > CAPTURE_DEADZONE;
 }
 
 function onButtonDown(index: number): void {
@@ -169,9 +224,13 @@ function pollPad(pad: Gamepad, now: number): void {
     state.pressed[index] = button.pressed;
     if (index >= BTN_UP && index <= BTN_RIGHT) return;
     active = true;
-    if (button.pressed) onButtonDown(index);
-    else onButtonUp(index);
+    if (button.pressed) {
+      if (capture?.button(index)) return;
+      onButtonDown(index);
+    } else onButtonUp(index);
   });
+
+  if (feedCapture(pad)) active = true;
 
   const dir = padDir(pad);
   if (dir !== state.dir) {

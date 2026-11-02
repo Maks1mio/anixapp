@@ -57,6 +57,11 @@ const OVERLAY_ROOT = [
 const FOCUS_PRIORITY = [
   '.watch-modal__confirm-btn--secondary',
   '.watch-modal__confirm-btn',
+  '.tv-choice__item.tv-release-page__dialog-item--on',
+  '.tv-choice__item',
+  '.tv-search__key--primary',
+  // Первая кнопка шапки страницы (коллекция, профиль) — иначе фокус уходит в сетку ниже.
+  '[data-tv-autofocus]',
   '.uiv2-media-lightbox__tool[aria-label="Закрыть"]',
   '.release-lightbox__close',
   '.tv-release-page__shot-nav',

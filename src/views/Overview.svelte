@@ -12,12 +12,7 @@
   import OverviewSkeleton from '../components/overview/OverviewSkeleton.svelte';
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import { headlineFromLoadError } from '../utils/content-load-error';
-  import { mapCardData } from './Release/_utils';
   import {
-    mapOverviewBanner,
-    mapOverviewCollection,
-    mapOverviewCommentWeek,
-    mapOverviewDiscuss,
     type OverviewBanner,
     type OverviewCommentWeekItem,
     type OverviewDiscussItem,
@@ -27,8 +22,8 @@
     getOverviewInflight,
     setOverviewCache,
     setOverviewInflight,
+    fetchOverviewPayload,
     type OverviewCacheData,
-    type OverviewCachePayload,
   } from '../utils/overviewCache';
   import {
     fetchOverviewOverrides,
@@ -57,8 +52,6 @@
   }
 
   const OVERVIEW_UI_KEY = () => buildViewStateKey('/overview');
-
-  const DISCOVER_TIMEOUT_MS = 8_000;
 
   let loadState = $state<LoadState>('loading');
   let errorMsg = $state('');
@@ -100,60 +93,6 @@
         void restoreScrollTop(top, { maxWaitMs: 8000 });
       });
     }
-  }
-
-  function mapReleaseList(data: { content?: unknown[] } | null | undefined): ReleaseCardData[] {
-    return (data?.content ?? [])
-      .filter((raw): raw is Record<string, unknown> => !!raw && typeof raw === 'object')
-      .map((raw) => mapCardData(raw));
-  }
-
-  function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
-    return Promise.race([
-      promise,
-      new Promise<T>((_, reject) => {
-        setTimeout(() => reject(new Error(`${label}: timeout`)), DISCOVER_TIMEOUT_MS);
-      }),
-    ]);
-  }
-
-  async function fetchOverviewPayload(): Promise<OverviewCachePayload> {
-    if (!window.anixApi?.discover) {
-      throw new Error('API недоступен');
-    }
-
-    const api = window.anixApi.discover;
-    const results = await Promise.allSettled([
-      withTimeout(api.interesting(), 'interesting'),
-      withTimeout(api.recommendations(-1, -1), 'recommendations'),
-      withTimeout(api.watching(0), 'watching'),
-      withTimeout(api.discussing(), 'discussing'),
-      withTimeout(api.collectionsWeek(-1, -1), 'collectionsWeek'),
-      withTimeout(api.commentsWeek(), 'commentsWeek'),
-    ]);
-
-    return {
-      banners: results[0].status === 'fulfilled'
-        ? (results[0].value.content ?? [])
-            .map((raw) => mapOverviewBanner(raw as Record<string, unknown>))
-            .filter((b): b is OverviewBanner => b != null)
-        : [],
-      recommendations: results[1].status === 'fulfilled' ? mapReleaseList(results[1].value) : [],
-      watching: results[2].status === 'fulfilled' ? mapReleaseList(results[2].value) : [],
-      discussing: results[3].status === 'fulfilled'
-        ? (results[3].value.content ?? []).map((raw) => mapOverviewDiscuss(raw as Record<string, unknown>))
-        : [],
-      collectionsWeek: results[4].status === 'fulfilled'
-        ? (results[4].value.content ?? []).map((raw) => mapOverviewCollection(raw as Record<string, unknown>))
-        : [],
-      commentsWeek: results[5].status === 'fulfilled'
-        ? (results[5].value.content ?? [])
-            .map((raw) =>
-              mapOverviewCommentWeek(raw as Record<string, unknown>, results[5].value),
-            )
-            .filter((c): c is OverviewCommentWeekItem => c != null)
-        : [],
-    };
   }
 
   async function loadHeroOverrides(bannerList: OverviewBanner[] = banners) {

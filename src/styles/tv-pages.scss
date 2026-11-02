@@ -1,0 +1,956 @@
+// TV-экраны поверх общего каркаса tv.scss: обзор, поиск, коллекции, профиль, настройки.
+// Палитра — как у страницы релиза: плашки #1d1d1d, акцент #cf3434, фокус — белое кольцо.
+
+$tv-surface: #1d1d1d;
+$tv-surface-hi: #2a2a2a;
+$tv-accent: #cf3434;
+$tv-muted: rgba(255, 255, 255, 0.62);
+$tv-radius: 1.3rem;
+
+// ——— Ряды плиток (TvRow) ———
+html.tv-mode .tv-home .tv-row--wide .tv-release-carousel .uiv2-carousel__item {
+  --tv-card-w: 27rem;
+}
+
+html.tv-mode .tv-home .tv-row--compact .tv-release-carousel .uiv2-carousel__item {
+  --tv-card-w: 15rem;
+}
+
+html.tv-mode .tv-row__carousel .uiv2-carousel__scroll {
+  padding-block: 6px 0.5rem;
+}
+
+// ——— Плитка коллекции / баннера ———
+.tv-collection-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: $tv-radius;
+  background: transparent;
+  color: #fff;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tv-collection-tile__cover {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: $tv-radius;
+  background: $tv-surface;
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.tv-collection-tile__count {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 0.6rem;
+  background: rgba(13, 13, 13, 0.72);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.tv-collection-tile__title {
+  display: -webkit-box;
+  overflow: hidden;
+  padding-inline: 0.2rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.tv-collection-tile__desc {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: -0.3rem;
+  padding-inline: 0.2rem;
+  font-size: 0.95rem;
+  line-height: 1.3;
+  color: $tv-muted;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.tv-collection-tile--skeleton .tv-collection-tile__cover {
+  animation: tv-pages-pulse 1.4s ease-in-out infinite;
+}
+
+html.tv-mode .tv-collection-tile[data-tv-focus='true'] .tv-collection-tile__title {
+  color: #fff;
+}
+
+html.tv-mode .tv-collection-tile:not([data-tv-focus='true']) .tv-collection-tile__title {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+@keyframes tv-pages-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+// ——— Плитка-ярлык (разделы, друзья) ———
+.tv-shortcut {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.9rem;
+  width: 100%;
+  min-height: 11rem;
+  padding: 1.3rem 1.4rem;
+  border: 0;
+  border-radius: $tv-radius;
+  background: $tv-surface;
+  color: #fff;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.tv-shortcut__icon {
+  display: inline-flex;
+  color: $tv-accent;
+
+  svg {
+    width: 2.4rem;
+    height: 2.4rem;
+  }
+}
+
+.tv-shortcut__image,
+.tv-shortcut__letter {
+  width: 4.4rem;
+  height: 4.4rem;
+  border-radius: 1rem;
+  object-fit: cover;
+  background: $tv-surface-hi;
+}
+
+.tv-shortcut__letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  font-weight: 800;
+}
+
+.tv-shortcut--round {
+  align-items: center;
+  text-align: center;
+
+  .tv-shortcut__image,
+  .tv-shortcut__letter {
+    width: 5.6rem;
+    height: 5.6rem;
+    border-radius: 999px;
+  }
+
+  .tv-shortcut__text {
+    align-items: center;
+    width: 100%;
+  }
+}
+
+.tv-shortcut__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.tv-shortcut__title {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 1.2rem;
+  font-weight: 800;
+  line-height: 1.21;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tv-shortcut__sub {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: $tv-muted;
+}
+
+// ——— Ошибка загрузки внутри rails ———
+.tv-overview__error {
+  padding: 4rem var(--tv-home-gutter) 0 var(--tv-home-content-left);
+}
+
+// ——— Чипсы (сортировка, вкладки поиска, история) ———
+.tv-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 1.4rem;
+}
+
+.tv-chip {
+  min-height: 3rem;
+  padding: 0 1.3rem;
+  border: 0;
+  border-radius: 999px;
+  background: $tv-surface;
+  color: rgba(255, 255, 255, 0.85);
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tv-chip--active {
+  background: #fff;
+  color: #0d0d0d;
+}
+
+// ——— Сетка коллекций ———
+.tv-collections__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+  gap: 1.6rem 1.1rem;
+}
+
+.tv-collections__grid--narrow {
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+}
+
+// ——— Шапка коллекции ———
+.tv-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.tv-detail__hero {
+  display: flex;
+  align-items: flex-end;
+  gap: 2rem;
+  min-height: 15rem;
+}
+
+.tv-detail__hero--loading {
+  opacity: 0.6;
+}
+
+.tv-detail__cover {
+  flex: 0 0 auto;
+  width: 30rem;
+  aspect-ratio: 16 / 9;
+  border-radius: $tv-radius;
+  object-fit: cover;
+  background: $tv-surface;
+}
+
+.tv-detail__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+  max-width: 60rem;
+}
+
+.tv-detail__kicker {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: $tv-accent;
+}
+
+.tv-detail__title {
+  margin: 0;
+  font-size: 2.6rem;
+  font-weight: 800;
+  line-height: 1.15;
+  color: #fff;
+}
+
+.tv-detail__sub {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: $tv-muted;
+}
+
+.tv-detail__desc {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  font-size: 1.1rem;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.78);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.tv-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.8rem;
+}
+
+// ——— Кнопки действий (как карточки hero релиза) ———
+.tv-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 4rem;
+  padding: 0 1.5rem;
+  border: 0;
+  border-radius: $tv-radius;
+  background: $tv-surface;
+  color: #fff;
+  font: inherit;
+  font-size: 1.2rem;
+  font-weight: 800;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.tv-action--primary {
+  background: $tv-accent;
+}
+
+.tv-action--on .tv-action__icon {
+  color: $tv-accent;
+
+  svg {
+    fill: currentColor;
+  }
+}
+
+.tv-action__icon {
+  display: inline-flex;
+
+  svg {
+    width: 1.6rem;
+    height: 1.6rem;
+  }
+}
+
+.tv-action__count {
+  font-weight: 600;
+  color: $tv-muted;
+}
+
+// ——— Профиль ———
+html.tv-mode .tv-profile__hero {
+  display: flex;
+  flex-direction: column;
+  gap: 1.6rem;
+  padding: 1rem var(--tv-home-gutter) 1.5rem var(--tv-home-content-left);
+}
+
+.tv-profile__head {
+  display: flex;
+  align-items: center;
+  gap: 1.8rem;
+}
+
+.tv-profile__head--loading {
+  opacity: 0.55;
+}
+
+.tv-profile__avatar {
+  position: relative;
+  flex: 0 0 auto;
+  width: 8.5rem;
+  height: 8.5rem;
+
+  .user-avatar {
+    width: 100%;
+    height: 100%;
+    font-size: 3rem;
+  }
+}
+
+.tv-profile__avatar--online::after {
+  content: '';
+  position: absolute;
+  right: 0.35rem;
+  bottom: 0.35rem;
+  width: 1.4rem;
+  height: 1.4rem;
+  border: 0.25rem solid #0d0d0d;
+  border-radius: 999px;
+  background: #3fb950;
+}
+
+.tv-profile__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.tv-profile__login {
+  margin: 0;
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1.15;
+  color: #fff;
+}
+
+.tv-profile__status {
+  margin: 0;
+  max-width: 60rem;
+  font-size: 1.2rem;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.tv-profile__facts {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: $tv-muted;
+}
+
+.tv-profile__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.75rem;
+}
+
+.tv-profile__stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.2rem;
+  min-width: 9rem;
+  min-height: 4rem;
+  padding: 0.6rem 1.3rem;
+  border: 0;
+  border-radius: $tv-radius;
+  background: $tv-surface;
+  color: #fff;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tv-profile__stat--static {
+  cursor: default;
+}
+
+.tv-profile__stat-value {
+  font-size: 1.3rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.tv-profile__stat-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: $tv-muted;
+}
+
+// ——— Настройки ———
+.tv-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  max-width: 62rem;
+}
+
+.tv-settings__group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.tv-settings__group-title {
+  margin: 0 0 0.3rem;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: $tv-muted;
+}
+
+.tv-setting {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  width: 100%;
+  min-height: 4.6rem;
+  padding: 0.8rem 1.5rem;
+  border: 0;
+  border-radius: $tv-radius;
+  background: $tv-surface;
+  color: #fff;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.tv-setting__avatar {
+  flex: 0 0 auto;
+  width: 3.6rem;
+  height: 3.6rem;
+
+  .user-avatar {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.tv-setting__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.tv-setting__title {
+  font-size: 1.2rem;
+  font-weight: 800;
+  line-height: 1.21;
+}
+
+.tv-setting__desc {
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: $tv-muted;
+}
+
+.tv-setting__value {
+  flex: 0 0 auto;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.tv-setting__switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 3.4rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  transition: background 0.2s ease;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0.25rem;
+    left: 0.25rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 999px;
+    background: #fff;
+    transition: transform 0.2s ease;
+  }
+}
+
+.tv-setting__switch--on {
+  background: $tv-accent;
+
+  &::after {
+    transform: translateX(1.4rem);
+  }
+}
+
+// ——— Диалог выбора ———
+.tv-choice {
+  z-index: 120;
+}
+
+.tv-choice__panel {
+  width: min(34rem, 100%);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.tv-choice__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  min-height: 3.3rem;
+  font-size: 1.1rem;
+}
+
+.tv-choice__item--danger {
+  background: $tv-accent;
+}
+
+.tv-choice__hint {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+// ——— Поиск: клавиатура слева, результаты справа ———
+html.tv-mode .tv-search {
+  display: grid;
+  grid-template-columns: 30rem minmax(0, 1fr);
+  gap: 2rem;
+  height: 100%;
+  padding:
+    calc(env(safe-area-inset-top, 0px) + var(--tv-home-pad-top))
+    0
+    0
+    var(--tv-home-content-left);
+}
+
+.tv-search__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 0;
+}
+
+.tv-search__query {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 4.2rem;
+  padding: 0 1.3rem;
+  border: 0;
+  border-radius: $tv-radius;
+  font-family: inherit;
+  text-align: left;
+  cursor: text;
+  background: $tv-surface;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.tv-search__query-icon {
+  display: inline-flex;
+  color: $tv-muted;
+
+  svg {
+    width: 1.6rem;
+    height: 1.6rem;
+  }
+}
+
+.tv-search__query-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  direction: rtl;
+  unicode-bidi: plaintext;
+}
+
+.tv-search__query--empty .tv-search__query-text {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.tv-search__caret {
+  flex: 0 0 auto;
+  width: 2px;
+  height: 1.6rem;
+  margin-left: -0.5rem;
+  background: $tv-accent;
+  animation: tv-search-caret 1s steps(1) infinite;
+}
+
+.tv-search__query--empty .tv-search__caret {
+  order: -1;
+  margin-left: 0;
+  margin-right: -0.5rem;
+}
+
+@keyframes tv-search-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.tv-search__keys {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.tv-search__controls {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.tv-search__key {
+  min-width: 0;
+  height: 3.3rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.8rem;
+  background: $tv-surface;
+  color: #fff;
+  font: inherit;
+  font-size: 1.35rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
+.tv-search__controls .tv-search__key {
+  font-size: 1.05rem;
+  text-transform: none;
+}
+
+.tv-search__key--wide {
+  grid-column: span 2;
+}
+
+html.tv-mode .tv-search__key[data-tv-focus='true'] {
+  background: #fff;
+  color: #0d0d0d;
+}
+
+html.tv-mode .tv-search__results {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--tv-home-gutter) var(--tv-home-pad-bottom) 0.5rem;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tv-category-page__grid {
+    grid-template-columns: repeat(auto-fill, minmax(#{10 * 1.15}rem, 1fr));
+  }
+}
+
+.tv-search__intro {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 46rem;
+  padding-top: 4rem;
+}
+
+.tv-search__section-title {
+  margin: 1.5rem 0 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: $tv-muted;
+}
+
+// Фокус-кольцо для крупных скруглённых плиток: следует радиусу.
+html.tv-mode .tv-collection-tile[data-tv-focus='true'],
+html.tv-mode .tv-shortcut[data-tv-focus='true'],
+html.tv-mode .tv-action[data-tv-focus='true'],
+html.tv-mode .tv-setting[data-tv-focus='true'],
+html.tv-mode .tv-profile__stat[data-tv-focus='true'],
+html.tv-mode .tv-chip[data-tv-focus='true'] {
+  outline-offset: 4px !important;
+}
+
+// ——— Поиск с геймпада: строка сверху, результаты ниже, колёса стиков поверх снизу ———
+html.tv-mode .tv-search--pad {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 1.4rem;
+
+  .tv-search__panel {
+    max-width: 64rem;
+  }
+
+  .tv-search__results {
+    padding-left: 0;
+    transition: padding-bottom 0.25s ease;
+  }
+}
+
+// Колёса перекрывают низ — даём результатам доскроллиться над ними.
+html.tv-mode .tv-search--wheels .tv-search__results {
+  padding-bottom: 19rem;
+}
+
+.tv-search__layout {
+  margin-left: auto;
+  padding: 0.2rem 0.65rem;
+  border-radius: 0.55rem;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.tv-search__wheels {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 3rem 4rem 1.4rem calc(var(--tv-rail-collapsed-w) + 3rem);
+  background: linear-gradient(to top, rgba(10, 10, 10, 0.94) 55%, rgba(10, 10, 10, 0));
+  pointer-events: none;
+  animation: tv-wheels-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes tv-wheels-in {
+  from {
+    opacity: 0;
+    transform: translateY(2.5rem);
+  }
+}
+
+.tv-wheel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.tv-wheel__ring {
+  position: relative;
+  width: 15.5rem;
+  height: 15.5rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, #222 0 34%, #181818 35% 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 1.2rem 3rem rgba(0, 0, 0, 0.55);
+}
+
+// Подсветка выбранного сектора: конический клин под буквой.
+.tv-wheel__sector {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: conic-gradient(
+    from calc(var(--a) - var(--w) / 2),
+    rgba(207, 52, 52, 0.42) 0 var(--w),
+    transparent var(--w)
+  );
+  mask: radial-gradient(circle, transparent 34%, #000 35%);
+}
+
+.tv-wheel__char {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  margin: -1.05rem 0 0 -1.05rem;
+  border-radius: 999px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+  // Сначала уводим на радиус, затем возвращаем поворот — буквы стоят ровно.
+  transform: rotate(var(--a)) translateY(-6.35rem) rotate(calc(-1 * var(--a)));
+  transition: color 0.12s ease, background 0.12s ease, scale 0.12s ease;
+}
+
+.tv-wheel__char--on {
+  background: #fff;
+  color: #0d0d0d;
+  scale: 1.22;
+}
+
+.tv-wheel__cursor {
+  position: absolute;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 999px;
+  background: #cf3434;
+  box-shadow: 0 0 0 0.25rem rgba(207, 52, 52, 0.28);
+  transform: translate(-50%, -50%);
+  opacity: 0.35;
+  transition: opacity 0.15s ease;
+}
+
+.tv-wheel--armed .tv-wheel__cursor {
+  opacity: 1;
+}
+
+.tv-wheel__center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 4.6rem;
+  height: 4.6rem;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.tv-wheel__picked {
+  font-size: 2.4rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.tv-wheel__picked--flash {
+  animation: tv-wheel-flash 0.3s ease-out;
+}
+
+@keyframes tv-wheel-flash {
+  from {
+    color: #cf3434;
+    scale: 1.35;
+  }
+}
+
+.tv-wheel__hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+}

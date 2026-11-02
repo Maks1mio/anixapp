@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import TvInputGlyph, { type TvGlyphButton } from './TvInputGlyph.svelte';
-  import { tvGamepadSeen, tvInputDevice, tvSystemMenuOpen } from '../../services/tv-input';
+  import { tvGamepadCaptureActive, tvGamepadSeen, tvInputDevice, tvSystemMenuOpen } from '../../services/tv-input';
   import { isTvOverlayOpen, isTvRailEngaged, TV_LONGPRESS_ACTIVE_ATTR, TV_LONGPRESS_ATTR } from '../../services/tv-navigation';
   import { isBigPictureMode, isTvBuild } from '../../platform/tv';
   import { isTvShellPath } from '../../tv/nav';
@@ -52,6 +52,20 @@
 
     if ($tvSystemMenuOpen) {
       return { left: [], right: [...nav, select(), back('Закрыть')] };
+    }
+    // Круговой ввод в поиске: триггеры печатают, B прячет колёса.
+    if ($tvGamepadCaptureActive) {
+      return {
+        left: menu,
+        right: [
+          { id: 'type', buttons: ['prev-ep', 'next-ep'], label: 'Ввести букву' },
+          { id: 'erase', buttons: ['play'], label: 'Стереть' },
+          { id: 'space', buttons: ['search'], label: 'Пробел' },
+          { id: 'layout', buttons: ['prev'], label: 'Раскладка' },
+          { id: 'results', buttons: ['navigate'], label: 'Результаты' },
+          back('Закрыть клавиатуру'),
+        ],
+      };
     }
     if (isTvRailEngaged()) {
       return { left: [], right: [...nav, select('Открыть'), back('Закрыть меню')] };

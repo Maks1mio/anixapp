@@ -139,6 +139,18 @@ export function isFounderProfile(): boolean {
   return Number.isFinite(id) && id === FOUNDER_ID;
 }
 
+/**
+ * Chromium `fetch` accepts only ISO-8859-1 in header values.
+ * Cyrillic notes (and non-Latin filenames) must be percent-encoded;
+ * the query string stays the source of truth and is already encoded by URLSearchParams.
+ */
+function fetchHeaderValue(value: string): string {
+  for (let i = 0; i < value.length; i += 1) {
+    if (value.charCodeAt(i) > 0xff) return encodeURIComponent(value);
+  }
+  return value;
+}
+
 export async function uploadBetaBuild(input: {
   file: File;
   version: string;
@@ -151,13 +163,15 @@ export async function uploadBetaBuild(input: {
   }
   const version = String(input.version || '').replace(/^v/i, '').trim();
   if (!version) throw new Error('Укажите версию');
-  if (!/\.exe$/i.test(input.file.name || '')) {
+  const fileName = input.file.name || 'AnixApp-Setup.exe';
+  const notes = input.notes || '';
+  if (!/\.exe$/i.test(fileName)) {
     throw new Error('Загружайте только .exe установщик');
   }
   const qs = new URLSearchParams({
     version,
-    filename: input.file.name || 'AnixApp-Setup.exe',
-    notes: input.notes || '',
+    filename: fileName,
+    notes,
     platform: 'win',
   });
   const res = await fetch(`${getApiBase()}/admin/app-updates/beta?${qs}`, {
@@ -165,9 +179,9 @@ export async function uploadBetaBuild(input: {
     headers: {
       'X-Admin-Token': token,
       'Content-Type': 'application/octet-stream',
-      'X-Update-Version': version,
-      'X-Update-Filename': input.file.name || 'AnixApp-Setup.exe',
-      'X-Update-Notes': input.notes || '',
+      'X-Update-Version': fetchHeaderValue(version),
+      'X-Update-Filename': fetchHeaderValue(fileName),
+      'X-Update-Notes': fetchHeaderValue(notes),
       'X-Update-Platform': 'win',
     },
     body: input.file,

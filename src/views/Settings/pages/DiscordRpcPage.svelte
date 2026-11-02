@@ -67,7 +67,6 @@
       label: 'Ещё',
       items: [
         { key: 'discordRpcPageBookmarks', label: 'Закладки' },
-        { key: 'discordRpcPageSearch', label: 'Поиск' },
         { key: 'discordRpcPageDownloads', label: 'Загрузки' },
         { key: 'discordRpcPageAnnouncement', label: 'Чат в объявлении' },
         { key: 'discordRpcPageOther', label: 'Остальное', hint: 'Админка, UI Kit и прочие экраны' },

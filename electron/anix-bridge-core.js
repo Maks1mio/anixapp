@@ -1095,9 +1095,9 @@ function createAnixBridgeCore(options = {}) {
       c.getClient().endpoints.profile.changeLoginHistory(profileId, page)),
     'anix:deleteLoginHistory': h((c) => c.getClient().endpoints.profilePreference.deleteLoginHistory()),
     'anix:searchReleases': h((c, query, page = 0, searchBy = 0) =>
-      c.getClient().endpoints.search.releases(query, page, searchBy)),
-    'anix:searchProfiles': h((c, query, page = 0) => c.getClient().endpoints.search.profiles(query, page)),
-    'anix:searchCollections': h((c, query, page = 0) => c.getClient().endpoints.search.collections(query, page)),
+      c.getClient().endpoints.search.releases({ query, page, searchBy })),
+    'anix:searchProfiles': h((c, query, page = 0) => c.getClient().endpoints.search.profiles({ query, page, searchBy: 0 })),
+    'anix:searchCollections': h((c, query, page = 0) => c.getClient().endpoints.search.collections({ query, page, searchBy: 0 })),
     'anix:searchProfileList': h((c, status, query, page = 0, searchBy = 0) =>
       c.getClient().endpoints.search.profileListSearch(status, page, { query, page, searchBy })),
     'anix:searchFeed': h((c, query, page = 0, searchBy = 0) =>

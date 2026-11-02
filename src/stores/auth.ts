@@ -77,16 +77,14 @@ export function requireAuth(): boolean {
 export function pathRequiresAuth(path: string): boolean {
   const p = (path.split('?')[0] || '/').replace(/\/+$/, '') || '/';
   if (p === '/bookmarks' || p.startsWith('/bookmarks/')) return true;
-  if (p === '/notifications') return true;
   if (
     p === '/collections/my'
     || p === '/collections/create'
-    || p === '/collections/pick-release'
     || p.startsWith('/collections/edit/')
   ) {
     return true;
   }
-  if (/^\/profile\/(votes|friends|lists|comments|videos|collections)$/.test(p)) return true;
+  if (/^\/profile\/(votes|lists)$/.test(p)) return true;
   return false;
 }
 

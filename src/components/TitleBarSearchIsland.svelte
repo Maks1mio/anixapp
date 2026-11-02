@@ -1,808 +1,381 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { fade } from 'svelte/transition';
+  import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { portal } from '../actions/portal';
   import { shortcutLabel } from '../utils/platform';
-  import { iconSearch, iconX, iconArrowRight, iconArrowLeft } from './icons';
-  import TitleBarIslandCarousel from './TitleBarIslandCarousel.svelte';
-  import CollectionCard, { type CollectionCardData } from './CollectionCard.svelte';
-  import ReleaseCardsGrid from './ReleaseCardsGrid.svelte';
-  import UiV2SearchFranchise from './uikit-v2/UiV2SearchFranchise.svelte';
-  import UiV2ScrollArea from './uikit-v2/UiV2ScrollArea.svelte';
-  import UiV2FeedPersonTile from './uikit-v2/UiV2FeedPersonTile.svelte';
-  import { handleUserProfileClick } from '../stores/user-profile';
-  import { resolveBadgeName, resolveProfileBadgeUrl } from '../utils/badge';
-  import { addSearchHistory, getSearchHistory } from '../utils/search-history';
-  import { mapReleaseRawToCard } from '../utils/release-card';
-  import { resolveCdnAssetUrl } from '../utils/posterUrl';
-  import type { ReleaseCardData } from '../types/release';
+  import { getPath, getSearchParams } from '../router';
+  import {
+    iconSearch,
+    iconX,
+    iconClock,
+    iconFilm,
+    iconLayoutGrid,
+    iconUsers,
+    iconArrowRight,
+  } from './icons';
+  import {
+    getSearchHistory,
+    removeSearchHistory,
+    clearSearchHistory,
+  } from '../utils/search-history';
+  import {
+    openSearchPage,
+    RELEASE_SEARCH_BY_OPTIONS,
+    type SearchTab,
+  } from '../search-controller';
 
-  type ProfileHit = {
-    id: number;
-    login: string;
-    avatar?: string | null;
-    is_online?: boolean;
-    badge?: unknown;
-    _root?: unknown;
-  };
+  type Option =
+    | { kind: 'scope'; tab: SearchTab; by: number; label: string; hint?: string; icon: string }
+    | { kind: 'by'; by: number; label: string }
+    | { kind: 'history'; value: string };
 
-  type FranchiseData = {
-    images: string[];
-    name: string;
-    releaseCount?: number;
-    relatedId?: number;
-    firstReleaseId?: number;
-  };
+  const HISTORY_LIMIT = 8;
 
-  type ExpandedSection = 'profiles' | 'collections' | null;
-
-  let open = $state(false);
   let query = $state('');
-  let inputEl = $state<HTMLInputElement | null>(null);
-  let pillEl = $state<HTMLButtonElement | null>(null);
-  let panelEl = $state<HTMLDivElement | null>(null);
-  let busy = $state(false);
-  let loadState = $state<'idle' | 'hint' | 'loading' | 'empty' | 'ready' | 'error'>('idle');
-  let errorMsg = $state('');
-  let releases = $state<ReleaseCardData[]>([]);
-  let collections = $state<CollectionCardData[]>([]);
-  let profiles = $state<ProfileHit[]>([]);
-  let profilesRoot = $state<unknown>(null);
-  let franchise = $state<FranchiseData | null>(null);
-  let releasePage = $state(0);
-  let releaseHasMore = $state(true);
-  let profilePage = $state(0);
-  let profileHasMore = $state(true);
-  let collectionPage = $state(0);
-  let collectionHasMore = $state(true);
+  let focused = $state(false);
+  let open = $state(false);
+  let activeIndex = $state(-1);
   let recent = $state<string[]>(getSearchHistory());
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-  let requestSeq = 0;
-  let expandReady = $state(false);
-  let layerVisible = $state(false);
-  let closing = $state(false);
-  let pillObscured = $state(false);
-  let reducedMotion = $state(false);
-  let lastSearchedQuery = $state('');
-  let reopenQueued = false;
-  let expanded = $state<ExpandedSection>(null);
-
-  const FADE_MS = 260;
-  const PAGE_SIZE = 20;
+  let inputEl = $state<HTMLInputElement | null>(null);
+  let wrapEl = $state<HTMLDivElement | null>(null);
+  let dropEl = $state<HTMLDivElement | null>(null);
+  let dropTop = $state(0);
+  let dropLeft = $state(0);
+  let dropWidth = $state(0);
 
   const trimmed = $derived(query.trim());
-  const showHistory = $derived(open && !trimmed && recent.length > 0);
-  const searchDone = $derived(loadState === 'ready' || loadState === 'empty');
-  const hasFranchise = $derived(!!franchise && (!!franchise.images.length || !!franchise.name));
-  const hasResults = $derived(
-    releases.length > 0 || collections.length > 0 || profiles.length > 0 || hasFranchise,
-  );
 
-  function mapCollection(raw: Record<string, unknown>): CollectionCardData {
-    return {
-      id: Number(raw.id),
-      title: String(raw.title ?? raw.name ?? 'Без названия'),
-      image: resolveCdnAssetUrl(String(raw.image ?? '')) || undefined,
-      description: typeof raw.description === 'string' ? raw.description : undefined,
-      releaseCount: typeof raw.release_count === 'number' ? raw.release_count : undefined,
-      notesCount: typeof raw.notes_count === 'number'
-        ? raw.notes_count
-        : (typeof raw.comment_count === 'number' ? raw.comment_count : undefined),
-      bookmarksCount: typeof raw.bookmarks_count === 'number' ? raw.bookmarks_count : undefined,
-      favoritesCount: typeof raw.favorites_count === 'number' ? raw.favorites_count : undefined,
-      isFavorite: !!raw.is_favorite,
-    };
+  const scopeOptions = $derived.by((): Option[] => {
+    if (!trimmed) return [];
+    return [
+      { kind: 'scope', tab: 'releases', by: 0, label: 'Тайтлы', hint: 'по названию', icon: iconFilm(16) },
+      { kind: 'scope', tab: 'collections', by: 0, label: 'Коллекции', icon: iconLayoutGrid(16) },
+      { kind: 'scope', tab: 'profiles', by: 0, label: 'Пользователи', icon: iconUsers(16) },
+    ];
+  });
+
+  const byOptions = $derived.by((): Option[] => {
+    if (!trimmed) return [];
+    return RELEASE_SEARCH_BY_OPTIONS
+      .filter((o) => Number(o.value) > 0)
+      .map((o) => ({ kind: 'by', by: Number(o.value), label: o.label }));
+  });
+
+  const historyOptions = $derived.by((): Option[] => {
+    const needle = trimmed.toLocaleLowerCase('ru-RU');
+    return recent
+      .filter((item) => item !== trimmed && (!needle || item.toLocaleLowerCase('ru-RU').includes(needle)))
+      .slice(0, HISTORY_LIMIT)
+      .map((value) => ({ kind: 'history', value }));
+  });
+
+  /** Порядок как в разметке — для стрелок. */
+  const options = $derived([...scopeOptions, ...byOptions, ...historyOptions]);
+  const showDrop = $derived(open && options.length > 0);
+
+  function indexOf(opt: Option): number {
+    return options.indexOf(opt);
   }
 
-  function mapProfile(raw: Record<string, unknown>, root: unknown): ProfileHit | null {
-    const id = Number(raw.id ?? 0);
-    if (!(id > 0)) return null;
-    return {
-      id,
-      login: typeof raw.login === 'string' && raw.login.trim() ? raw.login.trim() : `id${id}`,
-      avatar: typeof raw.avatar === 'string' ? raw.avatar : null,
-      is_online: !!raw.is_online,
-      badge: raw.badge,
-      _root: root,
-    };
+  function positionDrop() {
+    if (!wrapEl) return;
+    const rect = wrapEl.getBoundingClientRect();
+    const width = Math.max(rect.width, 400);
+    const maxLeft = document.documentElement.clientWidth - width - 8;
+    dropWidth = width;
+    dropLeft = Math.max(8, Math.min(rect.left + rect.width / 2 - width / 2, maxLeft));
+    dropTop = rect.bottom + 6;
   }
 
-  function extractContent(data: unknown): unknown[] {
-    const rec = data as { content?: unknown } | null;
-    let source: unknown = rec?.content ?? data;
-    if (source && !Array.isArray(source) && typeof source === 'object') {
-      const obj = source as Record<string, unknown>;
-      if (Array.isArray(obj.releases)) source = obj.releases;
-      else if (Array.isArray(obj.collections)) source = obj.collections;
-    }
-    return Array.isArray(source) ? source : [];
-  }
-
-  function prefersReducedMotion(): boolean {
-    try {
-      return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    } catch {
-      return false;
-    }
-  }
-
-  function waitMs(ms: number): Promise<void> {
-    return new Promise((resolve) => {
-      window.setTimeout(resolve, ms);
-    });
-  }
-
-  function waitFrames(n = 2): Promise<void> {
-    return new Promise((resolve) => {
-      const step = (left: number) => {
-        if (left <= 0) {
-          resolve();
-          return;
-        }
-        requestAnimationFrame(() => step(left - 1));
-      };
-      step(n);
-    });
-  }
-
-  async function playOpenFade(): Promise<void> {
-    expandReady = false;
-    pillObscured = false;
-    layerVisible = false;
-    await tick();
-    await waitFrames(2);
-    if (reducedMotion) {
-      expandReady = true;
-      pillObscured = true;
-      layerVisible = true;
-      return;
-    }
-    layerVisible = true;
-    expandReady = true;
-    pillObscured = true;
-    await waitMs(FADE_MS);
-  }
-
-  async function playCloseFade(): Promise<void> {
-    expandReady = false;
-    layerVisible = false;
-    pillObscured = false;
-    if (reducedMotion) return;
-    await waitMs(FADE_MS);
-  }
-
-  function canReuseSearch(q: string): boolean {
-    if (!q || q !== lastSearchedQuery) return false;
-    return loadState === 'ready' || loadState === 'empty' || hasResults;
-  }
-
-  function resetExpanded() {
-    expanded = null;
-  }
-
-  async function openIsland(initialQuery = ''): Promise<void> {
-    if (open && !closing) {
-      if (initialQuery) query = initialQuery;
-      inputEl?.focus();
-      return;
-    }
-    if (closing) {
-      if (initialQuery) query = initialQuery;
-      reopenQueued = true;
-      return;
-    }
-    reducedMotion = prefersReducedMotion();
-    if (initialQuery) query = initialQuery;
+  function openDrop() {
     recent = getSearchHistory();
-    closing = false;
+    activeIndex = -1;
+    positionDrop();
     open = true;
-    await playOpenFade();
-    inputEl?.focus();
-    if (trimmed) {
-      const len = inputEl?.value.length ?? 0;
-      inputEl?.setSelectionRange(len, len);
-      if (!canReuseSearch(trimmed)) void runSearch(false);
-    } else if (loadState !== 'ready' && loadState !== 'empty') {
-      loadState = recent.length ? 'hint' : 'idle';
-    }
   }
 
-  async function closeIsland(): Promise<void> {
-    if (!open || closing) return;
-    closing = true;
-    reopenQueued = false;
-    if (debounceTimer) {
-      clearTimeout(debounceTimer);
-      debounceTimer = null;
-    }
-    await playCloseFade();
+  function closeDrop() {
     open = false;
-    closing = false;
-    pillObscured = false;
-    layerVisible = false;
-    expandReady = false;
-    resetExpanded();
-    if (reopenQueued) {
-      reopenQueued = false;
-      void openIsland(query);
-    }
+    activeIndex = -1;
   }
 
-  function onPillClick() {
-    void openIsland(query);
+  function finish() {
+    closeDrop();
+    inputEl?.blur();
   }
 
-  function onBackdropClick() {
-    void closeIsland();
+  function submit(tab: SearchTab = 'releases', by = 0, value = trimmed) {
+    const q = value.trim();
+    if (!q) return;
+    query = q;
+    openSearchPage(q, tab, by);
+    finish();
+  }
+
+  function choose(opt: Option) {
+    if (opt.kind === 'scope') submit(opt.tab, opt.by);
+    else if (opt.kind === 'by') submit('releases', opt.by);
+    else submit('releases', 0, opt.value);
+  }
+
+  function removeRecent(value: string) {
+    removeSearchHistory(value);
+    recent = getSearchHistory();
+    activeIndex = -1;
+  }
+
+  function clearRecent() {
+    clearSearchHistory();
+    recent = [];
+    activeIndex = -1;
+  }
+
+  function onFocus() {
+    focused = true;
+    openDrop();
+  }
+
+  function onBlur() {
+    focused = false;
+    closeDrop();
   }
 
   function onInput() {
-    resetExpanded();
-    if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      debounceTimer = null;
-      void runSearch(false);
-    }, 280);
+    activeIndex = -1;
+    if (!open) openDrop();
   }
 
   function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       e.preventDefault();
-      if (expanded) {
-        resetExpanded();
-        return;
-      }
-      void closeIsland();
+      if (open && options.length) closeDrop();
+      else finish();
+      return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (!options.length) return;
+      e.preventDefault();
+      if (!open) openDrop();
+      const step = e.key === 'ArrowDown' ? 1 : -1;
+      activeIndex = (activeIndex + step + options.length + 1) % (options.length + 1);
+      if (activeIndex === options.length) activeIndex = -1;
+      void tick().then(() => {
+        dropEl?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' });
+      });
       return;
     }
     if (e.key === 'Enter') {
       e.preventDefault();
+      const opt = activeIndex >= 0 ? options[activeIndex] : null;
+      if (opt) choose(opt);
+      else submit();
     }
   }
 
-  async function runSearch(appendReleases: boolean) {
-    const q = trimmed;
-    if (!q) {
-      releases = [];
-      collections = [];
-      profiles = [];
-      franchise = null;
-      lastSearchedQuery = '';
-      releaseHasMore = false;
-      profileHasMore = false;
-      collectionHasMore = false;
-      resetExpanded();
-      loadState = recent.length ? 'hint' : 'idle';
-      return;
-    }
-    if (!window.anixApi?.search) {
-      loadState = 'error';
-      errorMsg = 'API поиска недоступно';
-      return;
-    }
-    if (appendReleases && (busy || !releaseHasMore)) return;
-
-    const seq = ++requestSeq;
-    busy = true;
-    if (!appendReleases) {
-      loadState = 'loading';
-      releasePage = 0;
-      releaseHasMore = true;
-      profilePage = 0;
-      profileHasMore = true;
-      collectionPage = 0;
-      collectionHasMore = true;
-      releases = [];
-      collections = [];
-      profiles = [];
-      profilesRoot = null;
-      franchise = null;
-      resetExpanded();
-    }
-
-    try {
-      if (!appendReleases) {
-        const [relRes, colRes, profRes] = await Promise.allSettled([
-          window.anixApi.search.releases(q, 0, 0),
-          window.anixApi.search.collections(q, 0),
-          window.anixApi.search.profiles(q, 0),
-        ]);
-        if (seq !== requestSeq) return;
-
-        if (relRes.status === 'fulfilled') {
-          const data = relRes.value;
-          const content = extractContent(data);
-          const related = (data as { related?: Record<string, unknown> })?.related;
-          if (related) {
-            franchise = {
-              images: Array.isArray(related.images) ? related.images.map(String) : [],
-              name: String(related.name_ru ?? related.name ?? ''),
-              releaseCount: typeof related.release_count === 'number' ? related.release_count : undefined,
-              relatedId: typeof related.id === 'number' ? related.id : undefined,
-              firstReleaseId: content[0] && typeof (content[0] as { id?: number }).id === 'number'
-                ? (content[0] as { id: number }).id
-                : undefined,
-            };
-          }
-          releases = content.map((row) => mapReleaseRawToCard(row as Record<string, unknown>));
-          releasePage = 1;
-          releaseHasMore = content.length >= PAGE_SIZE;
-        }
-
-        if (colRes.status === 'fulfilled') {
-          const content = extractContent(colRes.value);
-          collections = content
-            .map((row) => mapCollection(row as Record<string, unknown>))
-            .filter((c) => c.id > 0);
-          collectionPage = 1;
-          collectionHasMore = content.length >= PAGE_SIZE;
-        }
-
-        if (profRes.status === 'fulfilled') {
-          profilesRoot = profRes.value;
-          const content = extractContent(profRes.value);
-          profiles = content
-            .map((row) => mapProfile(row as Record<string, unknown>, profRes.value))
-            .filter((p): p is ProfileHit => !!p);
-          profilePage = 1;
-          profileHasMore = content.length >= PAGE_SIZE;
-        }
-
-        addSearchHistory(q);
-        recent = getSearchHistory();
-        lastSearchedQuery = q;
-        const found =
-          releases.length > 0 ||
-          collections.length > 0 ||
-          profiles.length > 0 ||
-          !!(franchise && (franchise.images.length || franchise.name));
-        loadState = found ? 'ready' : 'empty';
-      } else {
-        const data = await window.anixApi.search.releases(q, releasePage, 0);
-        if (seq !== requestSeq) return;
-        const content = extractContent(data);
-        if (!content.length) {
-          releaseHasMore = false;
-        } else {
-          releases = [
-            ...releases,
-            ...content.map((row) => mapReleaseRawToCard(row as Record<string, unknown>)),
-          ];
-          releasePage += 1;
-          releaseHasMore = content.length >= PAGE_SIZE;
-          loadState = 'ready';
-        }
-      }
-    } catch (err) {
-      if (seq !== requestSeq) return;
-      if (!appendReleases) {
-        errorMsg = err instanceof Error ? err.message : String(err);
-        loadState = 'error';
-      }
-    } finally {
-      if (seq === requestSeq) busy = false;
-    }
+  function clearQuery() {
+    query = '';
+    activeIndex = -1;
+    inputEl?.focus();
   }
 
-  async function loadMoreProfiles() {
-    const q = trimmed;
-    if (!q || busy || !profileHasMore || !window.anixApi?.search) return;
-    const seq = ++requestSeq;
-    busy = true;
-    try {
-      const data = await window.anixApi.search.profiles(q, profilePage);
-      if (seq !== requestSeq) return;
-      const content = extractContent(data);
-      if (!content.length) {
-        profileHasMore = false;
-        return;
-      }
-      profilesRoot = data;
-      const next = content
-        .map((row) => mapProfile(row as Record<string, unknown>, data))
-        .filter((p): p is ProfileHit => !!p);
-      const seen = new Set(profiles.map((p) => p.id));
-      profiles = [...profiles, ...next.filter((p) => !seen.has(p.id))];
-      profilePage += 1;
-      profileHasMore = content.length >= PAGE_SIZE;
-    } finally {
-      if (seq === requestSeq) busy = false;
+  /** Текст поля следует за страницей поиска; на других страницах — пусто. */
+  function syncFromRoute(route?: string) {
+    if (focused) return;
+    let pathname = getPath();
+    let params = getSearchParams();
+    if (typeof route === 'string' && route.startsWith('/')) {
+      const qi = route.indexOf('?');
+      pathname = qi >= 0 ? route.slice(0, qi) : route;
+      params = new URLSearchParams(qi >= 0 ? route.slice(qi + 1) : '');
+      // detail без query — тот же маршрут, параметры уже в URL
+      if (qi < 0 && pathname === getPath()) params = getSearchParams();
     }
+    query = pathname === '/search' ? params.get('q') ?? '' : '';
   }
 
-  async function loadMoreCollections() {
-    const q = trimmed;
-    if (!q || busy || !collectionHasMore || !window.anixApi?.search) return;
-    const seq = ++requestSeq;
-    busy = true;
-    try {
-      const data = await window.anixApi.search.collections(q, collectionPage);
-      if (seq !== requestSeq) return;
-      const content = extractContent(data);
-      if (!content.length) {
-        collectionHasMore = false;
-        return;
-      }
-      const next = content
-        .map((row) => mapCollection(row as Record<string, unknown>))
-        .filter((c) => c.id > 0);
-      const seen = new Set(collections.map((c) => c.id));
-      collections = [...collections, ...next.filter((c) => !seen.has(c.id))];
-      collectionPage += 1;
-      collectionHasMore = content.length >= PAGE_SIZE;
-    } finally {
-      if (seq === requestSeq) busy = false;
-    }
-  }
-
-  function onPanelScroll(e: Event) {
-    const el = e.currentTarget as HTMLElement | null;
-    if (!el || !trimmed || busy) return;
-    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (distance >= 240) return;
-    if (expanded === 'profiles') {
-      void loadMoreProfiles();
-      return;
-    }
-    if (expanded === 'collections') {
-      void loadMoreCollections();
-      return;
-    }
-    if (releaseHasMore) void runSearch(true);
-  }
-
-  function pickHistory(item: string) {
-    query = item;
-    resetExpanded();
-    void runSearch(false);
-    void tick().then(() => inputEl?.focus());
-  }
-
-  function expandSection(kind: 'profiles' | 'collections') {
-    expanded = kind;
-    if (kind === 'profiles' && profileHasMore && profiles.length < PAGE_SIZE * 2) {
-      void loadMoreProfiles();
-    }
-    if (kind === 'collections' && collectionHasMore && collections.length < PAGE_SIZE * 2) {
-      void loadMoreCollections();
-    }
-  }
-
-  function onGlobalKey(e: KeyboardEvent) {
-    if (!open || closing) return;
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      if (expanded) {
-        resetExpanded();
-        return;
-      }
-      void closeIsland();
-    }
-  }
-
-  /** Закрываем поиск при любом переходе — в т.ч. когда открыт тайтл из результатов. */
-  function onNavigate() {
-    if (open && !closing) void closeIsland();
+  /** Не терять фокус поля при клике по пунктам. */
+  function keepFocus(e: MouseEvent) {
+    e.preventDefault();
   }
 
   onMount(() => {
-    reducedMotion = prefersReducedMotion();
+    syncFromRoute();
     const onOpen = (e: Event) => {
-      const detail = (e as CustomEvent<{ q?: string }>).detail;
-      void openIsland(typeof detail?.q === 'string' ? detail.q : '');
+      const q = (e as CustomEvent<{ q?: string }>).detail?.q;
+      if (typeof q === 'string' && q) query = q;
+      inputEl?.focus();
+      inputEl?.select();
     };
-    const onFocus = () => void openIsland(query);
+    const onNavigate = (e: Event) => {
+      const detail = (e as CustomEvent<unknown>).detail;
+      syncFromRoute(typeof detail === 'string' ? detail : undefined);
+    };
+    const onPop = () => syncFromRoute();
+    const onResize = () => {
+      if (open) positionDrop();
+    };
     window.addEventListener('anix:openSearchIsland', onOpen as EventListener);
-    window.addEventListener('anix:focusSearch', onFocus);
-    window.addEventListener('keydown', onGlobalKey);
     window.addEventListener('anix:navigate', onNavigate);
-    window.addEventListener('hashchange', onNavigate);
-    window.addEventListener('popstate', onNavigate);
+    window.addEventListener('popstate', onPop);
+    window.addEventListener('hashchange', onPop);
+    window.addEventListener('resize', onResize);
     return () => {
       window.removeEventListener('anix:openSearchIsland', onOpen as EventListener);
-      window.removeEventListener('anix:focusSearch', onFocus);
-      window.removeEventListener('keydown', onGlobalKey);
       window.removeEventListener('anix:navigate', onNavigate);
-      window.removeEventListener('hashchange', onNavigate);
-      window.removeEventListener('popstate', onNavigate);
-      if (debounceTimer) clearTimeout(debounceTimer);
+      window.removeEventListener('popstate', onPop);
+      window.removeEventListener('hashchange', onPop);
+      window.removeEventListener('resize', onResize);
     };
   });
 </script>
 
-<div class="titlebar-island" class:titlebar-island--open={open}>
-  <button
-    type="button"
-    class="titlebar-island__pill"
-    class:titlebar-island__pill--hidden={pillObscured}
-    bind:this={pillEl}
-    aria-label="Поиск тайтлов"
-    onclick={onPillClick}
+<div class="titlebar-island" class:titlebar-island--focused={focused} bind:this={wrapEl}>
+  <form
+    class="titlebar-island__field"
+    role="search"
+    onsubmit={(e) => {
+      e.preventDefault();
+      submit();
+    }}
   >
-    <span class="titlebar-island__pill-icon" aria-hidden="true">{@html iconSearch(15)}</span>
-    <span class="titlebar-island__pill-text" class:titlebar-island__pill-text--query={!!trimmed}>
-      {trimmed || 'Поиск тайтлов'}
-    </span>
-    {#if !trimmed}
-      <kbd class="titlebar-island__pill-kbd">{shortcutLabel('Ctrl+K')}</kbd>
-    {/if}
-  </button>
-
-  {#if open}
-    <div
-      class="titlebar-island__layer"
-      class:titlebar-island__layer--visible={layerVisible}
-      class:titlebar-island__layer--closing={closing}
-      use:portal={{ lock: false }}
-    >
+    <span class="titlebar-island__field-icon" aria-hidden="true">{@html iconSearch(15)}</span>
+    <input
+      id="titlebar-search-input"
+      class="titlebar-island__input"
+      type="search"
+      placeholder="Поиск тайтлов, коллекций, пользователей"
+      autocomplete="off"
+      spellcheck="false"
+      aria-label="Поиск"
+      aria-autocomplete="list"
+      aria-expanded={showDrop}
+      aria-controls="titlebar-search-drop"
+      bind:this={inputEl}
+      bind:value={query}
+      onfocus={onFocus}
+      onblur={onBlur}
+      oninput={onInput}
+      onkeydown={onKeydown}
+    />
+    {#if trimmed}
       <button
         type="button"
-        class="titlebar-island__backdrop"
-        aria-label="Закрыть поиск"
-        onclick={onBackdropClick}
-      ></button>
-
-      <div
-        class="titlebar-island__panel"
-        class:titlebar-island__panel--ready={expandReady}
-        bind:this={panelEl}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Поиск"
+        class="titlebar-island__clear"
+        aria-label="Очистить"
+        onmousedown={keepFocus}
+        onclick={clearQuery}
       >
-        <div class="titlebar-island__bar">
-          <span class="titlebar-island__bar-icon" aria-hidden="true">{@html iconSearch(18)}</span>
-          <input
-            id="titlebar-search-input"
-            class="titlebar-island__input"
-            type="search"
-            placeholder="Тайтлы, коллекции, пользователи…"
-            autocomplete="off"
-            spellcheck="false"
-            bind:this={inputEl}
-            bind:value={query}
-            oninput={onInput}
-            onkeydown={onKeydown}
-          />
-          <div class="titlebar-island__bar-end">
-            <span class="titlebar-island__esc-hint" aria-hidden="true">Esc</span>
+        {@html iconX(13)}
+      </button>
+    {:else if !focused}
+      <kbd class="titlebar-island__kbd">{shortcutLabel('Ctrl+K')}</kbd>
+    {/if}
+  </form>
+</div>
+
+{#if showDrop}
+  <div
+    id="titlebar-search-drop"
+    class="titlebar-island__drop"
+    role="listbox"
+    aria-label="Подсказки поиска"
+    tabindex="-1"
+    style="top:{dropTop}px; left:{dropLeft}px; width:{dropWidth}px;"
+    bind:this={dropEl}
+    use:portal={{ lock: false }}
+    onmousedown={keepFocus}
+    transition:fly={{ y: -4, duration: 140, easing: cubicOut }}
+  >
+    {#if scopeOptions.length}
+      <section class="titlebar-island__group" aria-label="Где искать">
+        <h3 class="titlebar-island__group-title">Искать «{trimmed}»</h3>
+        {#each scopeOptions as opt (opt)}
+          {#if opt.kind === 'scope'}
+            {@const i = indexOf(opt)}
             <button
               type="button"
-              class="titlebar-island__close"
-              aria-label="Закрыть"
-              title="Закрыть"
-              onclick={() => void closeIsland()}
+              class="titlebar-island__row"
+              class:titlebar-island__row--active={activeIndex === i}
+              role="option"
+              aria-selected={activeIndex === i}
+              data-active={activeIndex === i}
+              onmouseenter={() => (activeIndex = i)}
+              onclick={() => choose(opt)}
             >
-              {@html iconX(16)}
+              <span class="titlebar-island__row-icon" aria-hidden="true">{@html opt.icon}</span>
+              <span class="titlebar-island__row-text">{opt.label}</span>
+              {#if opt.hint}
+                <span class="titlebar-island__row-hint">{opt.hint}</span>
+              {/if}
+              <span class="titlebar-island__row-go" aria-hidden="true">{@html iconArrowRight(14)}</span>
             </button>
-          </div>
-        </div>
-
-        <UiV2ScrollArea
-          class="titlebar-island__scroll"
-          viewportClass="titlebar-island__body"
-          padding="0.85rem 1rem 1.25rem"
-          onscroll={onPanelScroll}
-        >
-          {#if showHistory}
-            <section class="titlebar-island__section" aria-label="Недавние запросы">
-              <h3 class="titlebar-island__section-title">Недавние</h3>
-              <div class="titlebar-island__chips">
-                {#each recent as item (item)}
-                  <button
-                    type="button"
-                    class="titlebar-island__chip"
-                    onclick={() => pickHistory(item)}
-                  >{item}</button>
-                {/each}
-              </div>
-            </section>
-          {:else if loadState === 'loading' && !searchDone}
-            <p class="titlebar-island__state">Ищем…</p>
-          {:else if loadState === 'error'}
-            <p class="titlebar-island__state titlebar-island__state--err">{errorMsg || 'Ошибка поиска'}</p>
-          {:else if searchDone}
-            {#key expanded}
-              <div
-                class="titlebar-island__view"
-                in:fade={{ duration: reducedMotion ? 0 : FADE_MS, easing: cubicOut }}
-                out:fade={{ duration: reducedMotion ? 0 : FADE_MS, easing: cubicOut }}
-              >
-                {#if expanded === 'profiles'}
-                  <section class="titlebar-island__section" aria-label="Пользователи">
-                    <div class="titlebar-island__section-head">
-                      <h3 class="titlebar-island__section-title">Пользователи</h3>
-                      <button
-                        type="button"
-                        class="titlebar-island__more"
-                        onclick={resetExpanded}
-                      >
-                        <span aria-hidden="true">{@html iconArrowLeft(14)}</span>
-                        Назад
-                      </button>
-                    </div>
-                    {#if profiles.length}
-                      <div class="island-people-grid">
-                        {#each profiles as p (p.id)}
-                          {@const badgeUrl = resolveProfileBadgeUrl(p, p._root ?? profilesRoot)}
-                          <UiV2FeedPersonTile
-                            class="island-people-grid__item"
-                            title={p.login}
-                            avatar={p.avatar}
-                            showDot={!!p.is_online}
-                            badgeUrl={badgeUrl}
-                            badgeName={resolveBadgeName(p.badge)}
-                            profileId={p.id}
-                            onclick={(e) => {
-                              void closeIsland();
-                              handleUserProfileClick(p.id, e);
-                            }}
-                          />
-                        {/each}
-                      </div>
-                      {#if busy && profileHasMore}
-                        <p class="titlebar-island__state">Ещё…</p>
-                      {/if}
-                    {:else}
-                      <p class="titlebar-island__empty">Результат не найден</p>
-                    {/if}
-                  </section>
-                {:else if expanded === 'collections'}
-                  <section class="titlebar-island__section" aria-label="Коллекции">
-                    <div class="titlebar-island__section-head">
-                      <h3 class="titlebar-island__section-title">Коллекции</h3>
-                      <button
-                        type="button"
-                        class="titlebar-island__more"
-                        onclick={resetExpanded}
-                      >
-                        <span aria-hidden="true">{@html iconArrowLeft(14)}</span>
-                        Назад
-                      </button>
-                    </div>
-                    {#if collections.length}
-                      <div class="island-collections-grid">
-                        {#each collections as col (col.id)}
-                          <div
-                            class="island-collections-grid__card"
-                            onclick={() => void closeIsland()}
-                            onkeydown={(e) => e.key === 'Enter' && void closeIsland()}
-                            role="presentation"
-                          >
-                            <CollectionCard data={col} variant="cover" />
-                          </div>
-                        {/each}
-                      </div>
-                      {#if busy && collectionHasMore}
-                        <p class="titlebar-island__state">Ещё…</p>
-                      {/if}
-                    {:else}
-                      <p class="titlebar-island__empty">Результат не найден</p>
-                    {/if}
-                  </section>
-                {:else}
-                  <section class="titlebar-island__section" aria-label="Пользователи">
-                    <div class="titlebar-island__section-head">
-                      <h3 class="titlebar-island__section-title">Пользователи</h3>
-                      {#if profiles.length}
-                        <button
-                          type="button"
-                          class="titlebar-island__more"
-                          onclick={() => expandSection('profiles')}
-                        >
-                          Все
-                          <span aria-hidden="true">{@html iconArrowRight(14)}</span>
-                        </button>
-                      {/if}
-                    </div>
-                    {#if profiles.length}
-                      <TitleBarIslandCarousel label="Пользователи" measureKey={`p:${profiles.length}`}>
-                        {#each profiles as p (p.id)}
-                          {@const badgeUrl = resolveProfileBadgeUrl(p, p._root ?? profilesRoot)}
-                          <UiV2FeedPersonTile
-                            class="island-hcarousel__person"
-                            title={p.login}
-                            avatar={p.avatar}
-                            showDot={!!p.is_online}
-                            badgeUrl={badgeUrl}
-                            badgeName={resolveBadgeName(p.badge)}
-                            profileId={p.id}
-                            onclick={(e) => {
-                              void closeIsland();
-                              handleUserProfileClick(p.id, e);
-                            }}
-                          />
-                        {/each}
-                      </TitleBarIslandCarousel>
-                    {:else}
-                      <p class="titlebar-island__empty">Результат не найден</p>
-                    {/if}
-                  </section>
-
-                  <section class="titlebar-island__section" aria-label="Коллекции">
-                    <div class="titlebar-island__section-head">
-                      <h3 class="titlebar-island__section-title">Коллекции</h3>
-                      {#if collections.length}
-                        <button
-                          type="button"
-                          class="titlebar-island__more"
-                          onclick={() => expandSection('collections')}
-                        >
-                          Все
-                          <span aria-hidden="true">{@html iconArrowRight(14)}</span>
-                        </button>
-                      {/if}
-                    </div>
-                    {#if collections.length}
-                      <TitleBarIslandCarousel label="Коллекции" measureKey={`c:${collections.length}`}>
-                        {#each collections as col (col.id)}
-                          <div
-                            class="island-hcarousel__card"
-                            onclick={() => void closeIsland()}
-                            onkeydown={(e) => e.key === 'Enter' && void closeIsland()}
-                            role="presentation"
-                          >
-                            <CollectionCard data={col} variant="cover" />
-                          </div>
-                        {/each}
-                      </TitleBarIslandCarousel>
-                    {:else}
-                      <p class="titlebar-island__empty">Результат не найден</p>
-                    {/if}
-                  </section>
-
-                  <!-- svelte-ignore a11y_click_events_have_key_events -->
-                  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                  <section
-                    class="titlebar-island__section"
-                    aria-label="Связанное"
-                    onclick={() => {
-                      if (hasFranchise) void closeIsland();
-                    }}
-                  >
-                    <h3 class="titlebar-island__section-title">Связанное</h3>
-                    {#if hasFranchise && franchise}
-                      <div class="island-related">
-                        <UiV2SearchFranchise data={franchise} />
-                      </div>
-                    {:else}
-                      <p class="titlebar-island__empty">Результат не найден</p>
-                    {/if}
-                  </section>
-
-                  <!-- svelte-ignore a11y_click_events_have_key_events -->
-                  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                  <section
-                    class="titlebar-island__section"
-                    aria-label="Тайтлы"
-                    onclick={(e) => {
-                      const t = e.target as HTMLElement;
-                      if (t.closest('a, button, [role="button"], [role="link"]')) {
-                        queueMicrotask(() => void closeIsland());
-                      }
-                    }}
-                  >
-                    <div class="titlebar-island__section-head">
-                      <h3 class="titlebar-island__section-title">Тайтлы</h3>
-                    </div>
-                    {#if releases.length}
-                      <ReleaseCardsGrid items={releases} layout="mini" className="titlebar-island__grid" />
-                      {#if busy && releaseHasMore}
-                        <p class="titlebar-island__state">Ещё…</p>
-                      {/if}
-                    {:else}
-                      <p class="titlebar-island__empty">Результат не найден</p>
-                    {/if}
-                  </section>
-                {/if}
-              </div>
-            {/key}
-          {:else if open && !trimmed}
-            <p class="titlebar-island__state">Начните вводить название, коллекцию или ник</p>
           {/if}
-        </UiV2ScrollArea>
-      </div>
-    </div>
-  {/if}
-</div>
+        {/each}
+
+        <div class="titlebar-island__by">
+          <span class="titlebar-island__by-label">Тайтлы по</span>
+          {#each byOptions as opt (opt)}
+            {#if opt.kind === 'by'}
+              {@const i = indexOf(opt)}
+              <button
+                type="button"
+                class="titlebar-island__chip"
+                class:titlebar-island__chip--active={activeIndex === i}
+                role="option"
+                aria-selected={activeIndex === i}
+                data-active={activeIndex === i}
+                onmouseenter={() => (activeIndex = i)}
+                onclick={() => choose(opt)}
+              >{opt.label.toLowerCase()}</button>
+            {/if}
+          {/each}
+        </div>
+      </section>
+    {/if}
+
+    {#if historyOptions.length}
+      <section class="titlebar-island__group" aria-label="Недавние запросы">
+        <div class="titlebar-island__group-head">
+          <h3 class="titlebar-island__group-title">Недавние</h3>
+          {#if !trimmed}
+            <button type="button" class="titlebar-island__group-action" onclick={clearRecent}>
+              Очистить
+            </button>
+          {/if}
+        </div>
+        {#each historyOptions as opt (opt)}
+          {#if opt.kind === 'history'}
+            {@const i = indexOf(opt)}
+            <div
+              class="titlebar-island__row titlebar-island__row--history"
+              class:titlebar-island__row--active={activeIndex === i}
+              data-active={activeIndex === i}
+              role="presentation"
+              onmouseenter={() => (activeIndex = i)}
+            >
+              <button
+                type="button"
+                class="titlebar-island__row-main"
+                role="option"
+                aria-selected={activeIndex === i}
+                onclick={() => choose(opt)}
+              >
+                <span class="titlebar-island__row-icon" aria-hidden="true">{@html iconClock(15)}</span>
+                <span class="titlebar-island__row-text">{opt.value}</span>
+              </button>
+              <button
+                type="button"
+                class="titlebar-island__row-remove"
+                aria-label="Удалить из истории"
+                onclick={() => removeRecent(opt.value)}
+              >
+                {@html iconX(13)}
+              </button>
+            </div>
+          {/if}
+        {/each}
+      </section>
+    {/if}
+  </div>
+{/if}

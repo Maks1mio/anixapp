@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { iconChevronLeft, iconChevronRight } from '../icons';
 
   export interface UiV2TabItem {
@@ -40,8 +40,13 @@
   let indicatorW = $state(0);
   let indicatorVisible = $state(false);
   let indicatorAnimated = $state(false);
+  /** Фаза «растяжки» пилюли между старой и новой вкладкой. */
+  let indicatorStretch = $state(false);
+  let prevActiveId: string | null = null;
+  let stretchTimer: ReturnType<typeof setTimeout> | null = null;
 
   const SCROLL_EDGE = 4;
+  const STRETCH_MS = 160;
 
   function activeTabEl(): HTMLElement | null {
     const el = scrollEl;
@@ -49,18 +54,47 @@
     return el.querySelector(`[data-tab="${activeId}"]`) as HTMLElement | null;
   }
 
-  function updateIndicator() {
-    const el = scrollEl;
-    const nav = navEl;
+  function prefersReducedMotion(): boolean {
+    try {
+      return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Пилюля живёт внутри скролла — координаты от начала ленты, скролл её не двигает. */
+  function updateIndicator(stretch = false) {
     const tab = activeTabEl();
-    if (!el || !nav || !tab) {
+    if (!tab) {
       indicatorVisible = false;
       return;
     }
-
-    indicatorX = nav.offsetLeft + tab.offsetLeft - el.scrollLeft;
-    indicatorW = tab.offsetWidth;
-    indicatorVisible = indicatorW > 0;
+    const x = tab.offsetLeft;
+    const w = tab.offsetWidth;
+    if (stretchTimer) {
+      clearTimeout(stretchTimer);
+      stretchTimer = null;
+    }
+    if (stretch && indicatorVisible && indicatorAnimated && !prefersReducedMotion()) {
+      // Сначала тянемся от старой вкладки до новой, затем сжимаемся на новой
+      const left = Math.min(indicatorX, x);
+      const right = Math.max(indicatorX + indicatorW, x + w);
+      indicatorStretch = true;
+      indicatorX = left;
+      indicatorW = right - left;
+      stretchTimer = setTimeout(() => {
+        stretchTimer = null;
+        indicatorStretch = false;
+        const cur = activeTabEl();
+        indicatorX = cur?.offsetLeft ?? x;
+        indicatorW = cur?.offsetWidth ?? w;
+      }, STRETCH_MS);
+      return;
+    }
+    indicatorStretch = false;
+    indicatorX = x;
+    indicatorW = w;
+    indicatorVisible = w > 0;
   }
 
   function updateScrollState() {
@@ -71,7 +105,6 @@
     hasOverflow = overflow;
     canScrollLeft = overflow && scrollLeft > SCROLL_EDGE;
     canScrollRight = overflow && scrollLeft + clientWidth < scrollWidth - SCROLL_EDGE;
-    updateIndicator();
   }
 
   function scrollActiveTabIntoView() {
@@ -119,7 +152,12 @@
     tabs.length;
     if (!el || !nav) return;
     updateScrollState();
-    const ro = new ResizeObserver(() => updateScrollState());
+    // без подписки на activeId — смену вкладки анимирует эффект ниже
+    untrack(() => updateIndicator());
+    const ro = new ResizeObserver(() => {
+      updateScrollState();
+      if (!stretchTimer) updateIndicator();
+    });
     ro.observe(el);
     ro.observe(nav);
     for (const tab of el.querySelectorAll('.uiv2-tabs__tab')) {
@@ -135,16 +173,20 @@
       ro.disconnect();
       el.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
+      if (stretchTimer) clearTimeout(stretchTimer);
     };
   });
 
   $effect(() => {
-    activeId;
+    const id = activeId;
     tabs.length;
     const el = scrollEl;
     if (!el) return;
+    const changed = prevActiveId !== null && prevActiveId !== id;
+    prevActiveId = id;
     void tick().then(() => {
       updateScrollState();
+      updateIndicator(changed);
       scrollActiveTabIntoView();
     });
   });
@@ -166,6 +208,14 @@
       class:uiv2-tabs__nav--can-right={canScrollRight}
     >
       <div class="uiv2-tabs__scroll" bind:this={scrollEl} role="tablist">
+        <span
+          class="uiv2-tabs__indicator"
+          class:uiv2-tabs__indicator--visible={indicatorVisible}
+          class:uiv2-tabs__indicator--animated={indicatorAnimated}
+          class:uiv2-tabs__indicator--stretch={indicatorStretch}
+          style={`transform: translateX(${indicatorX}px); width: ${indicatorW}px;`}
+          aria-hidden="true"
+        ></span>
         {#each tabs as tab (tab.id)}
           {#if tab.dividerBefore}
             <span class="uiv2-tabs__divider" aria-hidden="true"></span>
@@ -228,12 +278,4 @@
     {/if}
   </div>
 
-  <div class="uiv2-tabs__track" aria-hidden="true">
-    <span
-      class="uiv2-tabs__indicator"
-      class:uiv2-tabs__indicator--visible={indicatorVisible}
-      class:uiv2-tabs__indicator--animated={indicatorAnimated}
-      style={`transform: translateX(${indicatorX}px); width: ${indicatorW}px;`}
-    ></span>
-  </div>
 </div>

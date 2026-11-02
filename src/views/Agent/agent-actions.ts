@@ -1,6 +1,7 @@
 /** Run an AAWA action button (validated server-side; re-checked here). */
 import type { AgentAction } from '../../services/agent-api';
 import { navigate } from '../../stores/navigation';
+import { openSearch, openSearchPage } from '../../search-controller';
 import { openSettingsModal } from '../../stores/modals';
 import { openSupportModal } from '../../stores/support-promo';
 import { openProfilePanel } from '../../stores/profile-panel';
@@ -63,7 +64,8 @@ export async function runAgentAction(a: AgentAction): Promise<boolean> {
       if (a.tab && SETTINGS_TABS.has(a.tab)) openSettingsModal(a.tab);
       return false;
     case 'search':
-      if (a.query) navigate(`/search?q=${encodeURIComponent(a.query)}`);
+      if (a.query) openSearchPage(a.query);
+      else openSearch();
       return false;
     case 'open_support':
       openSupportModal();

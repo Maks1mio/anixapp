@@ -87,7 +87,6 @@ export function resolveRoutePresence(input: DiscordPresenceRouteInput): Resolved
   }
   if (
     path === '/collections/create'
-    || path === '/collections/pick-release'
     || /^\/collections\/edit\/\d+$/.test(path)
   ) {
     return { ipcType: 'page', pageKey: 'discordRpcPageCollectionEdit', details: 'Редактор коллекции', state: 'В приложении' };
@@ -173,16 +172,6 @@ export function resolveRoutePresence(input: DiscordPresenceRouteInput): Resolved
       isSelf: !!ctx.profileIsSelf,
     };
   }
-  if (path === '/profile/friends') {
-    return {
-      ipcType: 'profile',
-      pageKey: 'discordRpcPageProfileFriends',
-      username: ctx.profileLogin || 'Пользователь',
-      avatarUrl: ctx.profileAvatar,
-      isSelf: true,
-      state: 'Друзья',
-    };
-  }
   if (path === '/profile/votes') {
     return {
       ipcType: 'profile',
@@ -204,15 +193,6 @@ export function resolveRoutePresence(input: DiscordPresenceRouteInput): Resolved
   }
   if (path === '/bookmarks') {
     return { ipcType: 'page', pageKey: 'discordRpcPageBookmarks', details: 'Закладки', state: 'В приложении' };
-  }
-  if (path === '/search') {
-    const q = ctx.searchQuery?.trim();
-    return {
-      ipcType: 'page',
-      pageKey: 'discordRpcPageSearch',
-      details: 'Поиск',
-      state: q && q.length >= 2 ? q : 'В приложении',
-    };
   }
   if (path === '/downloads') {
     return { ipcType: 'page', pageKey: 'discordRpcPageDownloads', details: 'Загрузки', state: 'В приложении' };

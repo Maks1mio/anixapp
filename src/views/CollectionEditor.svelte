@@ -144,12 +144,6 @@
     persistDraft();
   }
 
-  function openPicker() {
-    persistDraft();
-    const returnPath = editId ? `/collections/edit/${editId}` : '/collections/create';
-    navigate(`/collections/pick-release?return=${encodeURIComponent(returnPath)}`);
-  }
-
   function onDragStart(index: number) {
     dragIndex = index;
   }
@@ -348,10 +342,6 @@
     <div class="collection-editor__divider"></div>
 
     <div class="collection-editor__releases-head">
-      <button type="button" class="collection-editor__add-release" onclick={openPicker}>
-        <span aria-hidden="true">+</span>
-        <span>Добавить релиз</span>
-      </button>
       <span class="collection-editor__releases-count">{releases.length} из {COLLECTION_RELEASES_MAX}</span>
     </div>
 

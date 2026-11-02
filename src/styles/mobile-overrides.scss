@@ -15,9 +15,9 @@ html.mobile-mode {
 
     &__row { display: flex; align-items: center; height: 48px; gap: 0; background: transparent !important; }
     &__side { flex: none; display: flex; align-items: center; background: transparent !important; }
-    &__nav { flex: 1; min-width: 0; height: 48px !important; position: relative; background: transparent !important; }
+    &__nav { flex: 1; min-width: 0; height: 48px !important; position: relative; background: transparent !important; backdrop-filter: none !important; box-shadow: none !important; padding: 0 !important; border-radius: 0 !important; }
     &__scroll {
-      display: flex; gap: 0; height: 48px !important; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; background: transparent !important;
+      display: flex; gap: 0; height: 48px !important; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; background: transparent !important; mask-image: none !important; border-radius: 0 !important;
       &::-webkit-scrollbar { display: none; }
     }
     &__fade, &__arrow { display: none !important; }
@@ -42,6 +42,7 @@ html.mobile-mode {
       box-shadow: none !important; margin: 0;
     }
     &__track, &__indicator { display: none !important; }
+    &::after { display: none !important; }
     &__divider { display: none !important; }
   }
 

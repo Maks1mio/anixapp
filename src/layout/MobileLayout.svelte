@@ -14,7 +14,7 @@
   import { bindNotificationTaps, requestNativeNotifyPermission } from '../native/anix-notify';
   import { isAuthenticated, requireAuth } from '../stores/auth';
   import { ensureProfileId, loadSelfProfileGlobal } from '../utils/profile';
-  import { iconDownload, iconPlus, iconHome, iconCompass, iconBookmark, iconPanelTop, iconCircleUser, iconSearch, iconSettings, iconBell } from '../components/icons';
+  import { iconDownload, iconPlus, iconHome, iconCompass, iconBookmark, iconPanelTop, iconCircleUser, iconSettings, iconBell } from '../components/icons';
   import MobileSettings from './MobileSettings.svelte';
   import { bindNativeBackButton, minimizeNativeApp } from '../platform/mobile-back';
   import SidebarProfilePanel from '../components/SidebarProfilePanel.svelte';
@@ -61,9 +61,6 @@
   /** Корневые экраны разделов получают верхнюю панель с поиском; остальные — панель с «назад». */
   const isRoot = $derived(rootTab !== null && path !== '/overview/popular' && path !== '/schedule');
   const activeTab = $derived<Tab | null>(profileOpen ? 'profile' : rootTab);
-  const searchHint = $derived(
-    rootTab === 'feed' ? 'Поиск записей и блогов' : 'Поиск аниме',
-  );
 
   function goTab(tab: (typeof TABS)[number]) {
     if (tab.id === 'profile') {
@@ -193,15 +190,8 @@
 <div class="m-app">
   {#if isRoot}
     <header class="m-topbar">
-      {#if rootTab === 'bookmarks'}
-        <!-- как в Anixart: в панели поиск по текущей вкладке — его поле рисуют сами «Закладки» (mobile-overrides) -->
-        <div class="m-search-slot"></div>
-      {:else}
-        <button type="button" class="m-search" onclick={() => navigate('/search')} aria-label="Поиск">
-          {@html iconSearch(24)}
-          <span>{searchHint}</span>
-        </button>
-      {/if}
+      <!-- в «Закладках» сюда встаёт их поле поиска (mobile-overrides) -->
+      <div class="m-search-slot"></div>
       {#if $hasActiveDownloads}
         <!-- как в Anixart, в панели только настройки и уведомления; «Загрузки» появляются, пока что-то качается -->
         <button type="button" class="m-icon-btn" onclick={() => navigate('/downloads')} aria-label="Загрузки">
@@ -258,10 +248,7 @@
   {#if profileOpen && profileUserId != null}
     <div class="m-fullscreen m-fullscreen--profile">
       <header class="m-topbar">
-        <button type="button" class="m-search" onclick={() => { closeProfile(); navigate('/search'); }} aria-label="Поиск">
-          {@html iconSearch(24)}
-          <span>Поиск пользователей</span>
-        </button>
+        <div class="m-search-slot"></div>
         <button type="button" class="m-icon-btn" onclick={() => settingsModalOpen.set(true)} aria-label="Настройки">
           {@html iconSettings(24)}
         </button>

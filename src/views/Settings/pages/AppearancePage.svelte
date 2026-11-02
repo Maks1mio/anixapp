@@ -38,7 +38,7 @@
     setCardLayout(layout);
     cardLayout = layout;
     const p = typeof window !== 'undefined' ? window.location.pathname + window.location.search : '';
-    if (p === '/' || p.startsWith('/catalog') || p.startsWith('/search') || p.startsWith('/bookmarks')) {
+    if (p === '/' || p.startsWith('/catalog') || p.startsWith('/bookmarks')) {
       navigate(p);
     }
   }

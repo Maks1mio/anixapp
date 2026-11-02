@@ -1,34 +1,58 @@
 <script lang="ts">
+  import { onMount, onDestroy, untrack } from 'svelte';
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import CollectionCard, { type CollectionCardData } from '../components/CollectionCard.svelte';
-  import { onMount, onDestroy, untrack } from 'svelte';
-  import { navigate } from '../stores/navigation';
-  import { handleUserProfileClick } from '../stores/user-profile';
-  import Tabs from '../components/Tabs.svelte';
-  import ScrollArea from '../components/ScrollArea.svelte';
-  import UserBadge from '../components/UserBadge.svelte';
-  import AppBadges from '../components/AppBadges.svelte';
-  import UiV2SearchFranchise from '../components/uikit-v2/UiV2SearchFranchise.svelte';
-  import { iconSearch } from '../components/icons';
-  import { resolveBadgeName, resolveProfileBadgeUrl } from '../utils/badge';
-  import { addSearchHistory, clearSearchHistory, getSearchHistory } from '../utils/search-history';
-  import type { ReleaseCardData } from '../types/release';
-  import { resolveCdnAssetUrl } from '../utils/posterUrl';
-  import { mapReleaseRawToCard } from '../utils/release-card';
+  import UiV2SearchFranchise, { type UiV2SearchFranchiseData } from '../components/uikit-v2/UiV2SearchFranchise.svelte';
+  import UiV2FeedPersonTile from '../components/uikit-v2/UiV2FeedPersonTile.svelte';
+  import UiV2AnimeCardSkeleton from '../components/uikit-v2/UiV2AnimeCardSkeleton.svelte';
+  import UiV2CollectionCardSkeleton from '../components/uikit-v2/UiV2CollectionCardSkeleton.svelte';
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
+  import UiV2Tabs from '../components/uikit-v2/UiV2Tabs.svelte';
+  import { replacePath } from '../stores/navigation';
+  import { iconX } from '../components/icons';
+  import { handleUserProfileClick } from '../stores/user-profile';
+  import { resolveBadgeName, resolveProfileBadgeUrl } from '../utils/badge';
+  import { addSearchHistory } from '../utils/search-history';
+  import { mapReleaseRawToCard } from '../utils/release-card';
+  import { mapCollectionCard } from '../utils/collection';
   import { headlineFromLoadError } from '../utils/content-load-error';
+  import {
+    SEARCH_TABS,
+    RELEASE_SEARCH_BY_OPTIONS,
+    buildSearchRoute,
+    type SearchTab,
+  } from '../search-controller';
+  import type { ReleaseCardData } from '../types/release';
   import {
     buildViewStateKey,
     getViewState,
-    saveViewStateWithScroll,
+    saveViewStateData,
     restoreScrollTop,
     registerActiveScrollKey,
     flushActiveViewState,
-    saveViewStateData,
     beginScrollRestore,
   } from '../stores/view-state';
 
-  type SearchTab = 'releases' | 'profiles' | 'collections';
+  type ProfileHit = {
+    id: number;
+    login: string;
+    avatar: string | null;
+    isOnline: boolean;
+    badgeUrl: string | null;
+    badgeName: string | null;
+  };
+
+  type LoadState = 'loading' | 'error' | 'empty' | 'ready';
+
+  interface SearchViewState {
+    page: number;
+    hasMore: boolean;
+    loadState: LoadState;
+    releases: ReleaseCardData[];
+    collections: CollectionCardData[];
+    profiles: ProfileHit[];
+    franchise: UiV2SearchFranchiseData | null;
+  }
 
   interface Props {
     q?: string;
@@ -38,597 +62,338 @@
 
   let { q = '', tab = 'releases', searchBy = 0 }: Props = $props();
 
-  function mapCollectionToCardData(raw: Record<string, unknown>): CollectionCardData {
-    return {
-      id: raw.id as number,
-      title: (raw.title ?? raw.name ?? 'Без названия') as string,
-      image: resolveCdnAssetUrl(raw.image as string) || undefined,
-      description: (raw.description as string) || undefined,
-      releaseCount: typeof raw.release_count === 'number' ? raw.release_count : undefined,
-      notesCount: typeof raw.notes_count === 'number' ? raw.notes_count : (typeof raw.comment_count === 'number' ? raw.comment_count : undefined),
-      bookmarksCount: typeof raw.bookmarks_count === 'number' ? raw.bookmarks_count : undefined,
-      favoritesCount: typeof raw.favorites_count === 'number' ? raw.favorites_count : undefined,
-      isFavorite: !!(raw.is_favorite),
-    };
-  }
-
-  const SEARCH_TABS = [
-    { id: 'releases' as SearchTab,    label: 'Тайтлы' },
-    { id: 'collections' as SearchTab, label: 'Коллекции' },
-    { id: 'profiles' as SearchTab,    label: 'Пользователи' },
-  ];
-
+  const query = $derived(q.trim());
+  // Вкладка меняется без перемонтирования страницы — иначе у вкладок не играет анимация
   // svelte-ignore state_referenced_locally
-  let currentTab = $state<SearchTab>(tab);
-  // svelte-ignore state_referenced_locally
-  let currentQuery = $state(q);
-  // svelte-ignore state_referenced_locally
-  let inputValue = $state(q);
-  let recentSearches = $state<string[]>(getSearchHistory());
-  let searchFocused = $state(false);
-  let historyIndex = $state(-1);
-  let searchBlurTimer: ReturnType<typeof setTimeout> | null = null;
-  const matchingRecentSearches = $derived.by(() => {
-    const needle = inputValue.trim().toLocaleLowerCase('ru-RU');
-    return recentSearches
-      .filter((item) => !needle || item.toLocaleLowerCase('ru-RU').includes(needle));
-  });
+  let activeTab = $state<SearchTab>(tab);
+  const viewKey = () => buildViewStateKey('/search', { q: query, tab: activeTab, by: searchBy });
+  /** Уже загруженные вкладки этого запроса. */
+  const tabCache = new Map<SearchTab, SearchViewState>();
 
-  const showSearchSuggest = $derived(
-    searchFocused && matchingRecentSearches.length > 0,
-  );
-
-  $effect(() => {
-    inputValue;
-    if (historyIndex >= matchingRecentSearches.length) {
-      historyIndex = -1;
-    }
-  });
-
-  // svelte-ignore state_referenced_locally
-  let currentSearchBy = $state(searchBy);
-
-  // Sync when parent navigates to a new search (different q/tab props).
-  // Use untrack() to read currentQuery/currentTab without creating reactive
-  // dependencies — otherwise setting them inside the effect would re-trigger it.
-  $effect(() => {
-    const newQ = q;
-    const newTab = tab;
-    const newSearchBy = searchBy;
-    const prevQ = untrack(() => currentQuery);
-    const prevTab = untrack(() => currentTab);
-    const prevSearchBy = untrack(() => currentSearchBy);
-    if (newQ !== prevQ || newTab !== prevTab || newSearchBy !== prevSearchBy) {
-      currentQuery = newQ;
-      inputValue = newQ;
-      currentTab = newTab ?? 'releases';
-      currentSearchBy = newSearchBy ?? 0;
-      currentPage = 0;
-      hasMore = true;
-      isLoading = false;
-      releaseResults = [];
-      profileResults = [];
-      collectionResults = [];
-      franchiseData = null;
-      showEnd = false;
-      if (newQ) performSearch(false);
-      else loadState = 'hint';
-    }
-  });
-
-  let currentPage = $state(0);
-  let isLoading = $state(false);
+  let page = $state(0);
   let hasMore = $state(true);
-  let loadState = $state<'hint' | 'loading' | 'error' | 'empty' | 'ready'>('hint');
+  let isLoading = $state(false);
+  let loadState = $state<LoadState>('loading');
   let errorMsg = $state('');
+  let releases = $state<ReleaseCardData[]>([]);
+  let collections = $state<CollectionCardData[]>([]);
+  let profiles = $state<ProfileHit[]>([]);
+  let franchise = $state<UiV2SearchFranchiseData | null>(null);
 
-  let releaseResults = $state<ReleaseCardData[]>([]);
-  let profileResults = $state<any[]>([]);
-  let collectionResults = $state<any[]>([]);
-  let showEnd = $state(false);
-
-  interface FranchiseData {
-    images: string[];
-    name: string;
-    releaseCount?: number;
-    relatedId?: number;
-    firstReleaseId?: number;
-  }
-
-  interface SearchViewState {
-    currentTab: SearchTab;
-    currentQuery: string;
-    currentSearchBy: number;
-    currentPage: number;
-    hasMore: boolean;
-    loadState: 'hint' | 'loading' | 'error' | 'empty' | 'ready';
-    errorMsg: string;
-    releaseResults: ReleaseCardData[];
-    profileResults: any[];
-    collectionResults: any[];
-    showEnd: boolean;
-    franchiseData: FranchiseData | null;
-  }
-
-  const SEARCH_VIEW_KEY = () => buildViewStateKey('/search');
-
-  function hasSearchResults(state: SearchViewState): boolean {
-    if (state.currentTab === 'releases') return state.releaseResults.length > 0;
-    if (state.currentTab === 'profiles') return state.profileResults.length > 0;
-    return state.collectionResults.length > 0;
-  }
-
-  function searchSnapshot(): SearchViewState {
-    return {
-      currentTab,
-      currentQuery,
-      currentSearchBy,
-      currentPage,
-      hasMore,
-      loadState,
-      errorMsg,
-      releaseResults,
-      profileResults,
-      collectionResults,
-      showEnd,
-      franchiseData,
-    };
-  }
-
-  function onBeforeNavigate() {
-    if (hasSearchResults(searchSnapshot())) flushActiveViewState(searchSnapshot());
-  }
-
-  let franchiseData = $state<FranchiseData | null>(null);
-
+  let wrapEl = $state<HTMLElement | undefined>();
   let scrollEl: HTMLElement | null = null;
   let scrollListener: (() => void) | null = null;
-  let scrollAttached = false;
-  let wrapEl: HTMLElement | undefined = $state();
   let unregisterScrollKey: (() => void) | null = null;
+  let requestSeq = 0;
 
-  function getScrollEl(): HTMLElement | null {
-    return wrapEl?.closest('.page__scroll') as HTMLElement | null;
+  const byLabel = $derived(
+    RELEASE_SEARCH_BY_OPTIONS.find((o) => Number(o.value) === searchBy)?.label ?? '',
+  );
+  const itemCount = $derived(
+    activeTab === 'releases' ? releases.length : activeTab === 'collections' ? collections.length : profiles.length,
+  );
+
+  function extractContent(data: unknown): unknown[] {
+    const rec = data as { content?: unknown } | null;
+    let source: unknown = rec?.content ?? data;
+    if (source && !Array.isArray(source) && typeof source === 'object') {
+      const obj = source as Record<string, unknown>;
+      if (Array.isArray(obj.releases)) source = obj.releases;
+      else if (Array.isArray(obj.collections)) source = obj.collections;
+    }
+    return Array.isArray(source) ? source : [];
   }
 
-  function attachInfiniteScroll() {
-    if (scrollAttached) return;
-    const el = getScrollEl();
-    if (!el) return;
-    scrollAttached = true;
-    scrollEl = el;
-    scrollListener = () => {
-      if (!hasMore || isLoading) return;
-      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-      if (distance < 200) performSearch(true);
+  function mapProfile(raw: Record<string, unknown>, root: unknown): ProfileHit | null {
+    const id = Number(raw.id ?? 0);
+    if (!(id > 0)) return null;
+    return {
+      id,
+      login: typeof raw.login === 'string' && raw.login.trim() ? raw.login.trim() : `id${id}`,
+      avatar: typeof raw.avatar === 'string' ? raw.avatar : null,
+      isOnline: !!raw.is_online,
+      badgeUrl: resolveProfileBadgeUrl(raw, root) ?? null,
+      badgeName: resolveBadgeName(raw.badge) ?? null,
     };
-    el.addEventListener('scroll', scrollListener);
+  }
+
+  function mapFranchise(data: unknown, content: unknown[]): UiV2SearchFranchiseData | null {
+    const related = (data as { related?: Record<string, unknown> } | null)?.related;
+    if (!related) return null;
+    const first = content[0] as { id?: unknown } | undefined;
+    const value: UiV2SearchFranchiseData = {
+      images: Array.isArray(related.images) ? related.images.map(String) : [],
+      name: String(related.name_ru ?? related.name ?? ''),
+      releaseCount: typeof related.release_count === 'number' ? related.release_count : undefined,
+      relatedId: typeof related.id === 'number' ? related.id : undefined,
+      firstReleaseId: typeof first?.id === 'number' ? first.id : undefined,
+    };
+    return value.images.length || value.name ? value : null;
+  }
+
+  async function fetchPage(p: number): Promise<{ data: unknown; content: unknown[] }> {
+    const api = window.anixApi?.search;
+    if (!api) throw new Error('API поиска недоступно');
+    const data = activeTab === 'releases'
+      ? await api.releases(query, p, searchBy)
+      : activeTab === 'collections'
+        ? await api.collections(query, p)
+        : await api.profiles(query, p);
+    return { data, content: extractContent(data) };
+  }
+
+  async function loadPage() {
+    if (!query || isLoading || !hasMore) return;
+    const seq = ++requestSeq;
+    const first = page === 0;
+    isLoading = true;
+    if (first) loadState = 'loading';
+    try {
+      const { data, content } = await fetchPage(page);
+      if (seq !== requestSeq) return;
+
+      if (activeTab === 'releases') {
+        if (first && searchBy === 0) franchise = mapFranchise(data, content);
+        const seen = new Set(releases.map((r) => r.id));
+        const next = content
+          .map((row) => mapReleaseRawToCard(row as Record<string, unknown>))
+          .filter((r) => !seen.has(r.id));
+        releases = [...releases, ...next];
+      } else if (activeTab === 'collections') {
+        const seen = new Set(collections.map((c) => c.id));
+        const next = content
+          .map((row) => mapCollectionCard(row as Record<string, unknown>))
+          .filter((c) => c.id > 0 && !seen.has(c.id));
+        collections = [...collections, ...next];
+      } else {
+        const seen = new Set(profiles.map((p) => p.id));
+        const next = content
+          .map((row) => mapProfile(row as Record<string, unknown>, data))
+          .filter((p): p is ProfileHit => !!p && !seen.has(p.id));
+        profiles = [...profiles, ...next];
+      }
+
+      if (first) addSearchHistory(query);
+      page += 1;
+      hasMore = content.length > 0;
+      loadState = itemCount > 0 || franchise ? 'ready' : 'empty';
+      requestAnimationFrame(checkIfNeedsMore);
+    } catch (err) {
+      if (seq !== requestSeq) return;
+      if (first) {
+        errorMsg = headlineFromLoadError(err);
+        loadState = 'error';
+      } else {
+        hasMore = false;
+      }
+    } finally {
+      if (seq === requestSeq) isLoading = false;
+    }
+  }
+
+  function retry() {
+    page = 0;
+    hasMore = true;
+    void loadPage();
+  }
+
+  function checkIfNeedsMore() {
+    if (!scrollEl || !hasMore || isLoading || loadState !== 'ready') return;
+    const distance = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
+    if (distance < 400) void loadPage();
+  }
+
+  function attachScroll() {
+    if (scrollEl) return;
+    const el = (wrapEl?.closest('.page__scroll') as HTMLElement | null)
+      ?? document.getElementById('content');
+    if (!el) return;
+    scrollEl = el;
+    scrollListener = () => checkIfNeedsMore();
+    el.addEventListener('scroll', scrollListener, { passive: true });
   }
 
   function detachScroll() {
     if (scrollEl && scrollListener) scrollEl.removeEventListener('scroll', scrollListener);
     scrollEl = null;
     scrollListener = null;
-    scrollAttached = false;
   }
 
-  async function performSearch(append: boolean) {
-    if (!window.anixApi || !currentQuery.trim()) return;
-    if (isLoading || !hasMore) return;
-    if (!append) addSearchHistory(currentQuery.trim());
-    if (!append) recentSearches = getSearchHistory();
-    isLoading = true;
+  function snapshot(): SearchViewState {
+    return { page, hasMore, loadState, releases, collections, profiles, franchise };
+  }
 
-    if (!append) {
-      if (loadState !== 'error') loadState = 'loading';
-      currentPage = 0;
-      hasMore = true;
-      releaseResults = [];
-      profileResults = [];
-      collectionResults = [];
-      franchiseData = null;
-      showEnd = false;
+  function onBeforeNavigate() {
+    if (loadState === 'ready') flushActiveViewState(snapshot());
+  }
+
+  function applySnapshot(snap: SearchViewState) {
+    page = snap.page;
+    hasMore = snap.hasMore;
+    loadState = snap.loadState;
+    releases = snap.releases;
+    collections = snap.collections;
+    profiles = snap.profiles;
+    franchise = snap.franchise;
+  }
+
+  function showTab(next: SearchTab) {
+    if (next === activeTab) return;
+    if (loadState === 'ready') tabCache.set(activeTab, snapshot());
+    requestSeq += 1;
+    isLoading = false;
+    errorMsg = '';
+    activeTab = next;
+    const cached = tabCache.get(next) ?? getViewState<SearchViewState>(viewKey())?.data;
+    if (cached && cached.loadState === 'ready') {
+      applySnapshot(cached);
+      return;
     }
-
-    const q = currentQuery.trim();
-    const pageToLoad = currentPage;
-
-    try {
-      let promise: Promise<any>;
-      if (currentTab === 'releases') {
-        promise = window.anixApi.search.releases(q, pageToLoad, currentSearchBy);
-      } else if (currentTab === 'profiles') {
-        promise = window.anixApi.search.profiles(q, pageToLoad);
-      } else {
-        promise = window.anixApi.search.collections(q, pageToLoad);
-      }
-
-      const data = await promise;
-      let contentSource: any = data?.content ?? data;
-      if (contentSource && !Array.isArray(contentSource)) {
-        if (Array.isArray(contentSource.releases)) contentSource = contentSource.releases;
-        else if (Array.isArray(contentSource.collections)) contentSource = contentSource.collections;
-      }
-      const content = (Array.isArray(contentSource) ? contentSource : []) as any[];
-
-      if (!content.length) {
-        if (!append) loadState = 'empty';
-        showEnd = true;
-        hasMore = false;
-        isLoading = false;
-        return;
-      }
-
-      if (currentTab === 'releases') {
-        // Extract franchise data on first page
-        if (!append && data?.related) {
-          const rel = data.related;
-          franchiseData = {
-            images: Array.isArray(rel.images) ? rel.images : [],
-            name: rel.name_ru || rel.name || '',
-            releaseCount: typeof rel.release_count === 'number' ? rel.release_count : undefined,
-            relatedId: typeof rel.id === 'number' ? rel.id : undefined,
-            firstReleaseId: content[0] && typeof content[0].id === 'number' ? content[0].id : undefined,
-          };
-        }
-        releaseResults = append
-          ? [...releaseResults, ...content.map(mapReleaseRawToCard)]
-          : content.map(mapReleaseRawToCard);
-      } else if (currentTab === 'profiles') {
-        profileResults = append ? [...profileResults, ...content] : content;
-      } else {
-        collectionResults = append ? [...collectionResults, ...content] : content;
-      }
-
-      loadState = 'ready';
-      currentPage += 1;
-      isLoading = false;
-      attachInfiniteScroll();
-    } catch (err) {
-      errorMsg = headlineFromLoadError(err);
-      loadState = 'error';
-      isLoading = false;
-    }
+    applySnapshot({
+      page: 0,
+      hasMore: true,
+      loadState: 'loading',
+      releases: [],
+      collections: [],
+      profiles: [],
+      franchise: null,
+    });
+    if (query) void loadPage();
   }
 
-  function applyTabChange(newTab: SearchTab) {
-    if (currentTab === newTab) return;
-    currentTab = newTab;
-    currentPage = 0;
-    hasMore = true;
-    isLoading = false;
-    scrollAttached = false;
-    releaseResults = [];
-    profileResults = [];
-    collectionResults = [];
-    franchiseData = null;
-    navigate(currentQuery ? `/search?q=${encodeURIComponent(currentQuery)}&tab=${newTab}` : `/search?tab=${newTab}`);
-    if (currentQuery) performSearch(false);
-    else loadState = 'hint';
+  function switchTab(id: string) {
+    if (id === activeTab) return;
+    // Сначала URL (beforeNavigate сохранит текущую вкладку под её ключом), потом смена вкладки
+    replacePath(buildSearchRoute(query, id as SearchTab, id === 'releases' ? searchBy : 0));
+    showTab(id as SearchTab);
   }
 
-  function runSearch(rawQuery: string) {
-    const query = rawQuery.trim();
-    inputValue = query;
-    currentQuery = query;
-    currentPage = 0;
-    hasMore = true;
-    isLoading = false;
-    scrollAttached = false;
-    releaseResults = [];
-    profileResults = [];
-    collectionResults = [];
-    franchiseData = null;
-    showEnd = false;
+  // Назад/вперёд или внешний переход на другую вкладку того же запроса
+  $effect(() => {
+    const next = tab;
+    untrack(() => showTab(next));
+  });
 
-    const params = new URLSearchParams();
-    if (query) params.set('q', query);
-    if (currentTab !== 'releases') params.set('tab', currentTab);
-    if (currentTab === 'releases' && currentSearchBy > 0) params.set('by', String(currentSearchBy));
-    const queryString = params.toString();
-    navigate(queryString ? `/search?${queryString}` : '/search');
-
-    if (query) void performSearch(false);
-    else loadState = 'hint';
-  }
-
-  function submitSearch(event: SubmitEvent) {
-    event.preventDefault();
-    searchFocused = false;
-    runSearch(inputValue);
-  }
-
-  function clearRecentSearches() {
-    clearSearchHistory();
-    recentSearches = [];
-  }
-
-  function handleSearchFocus() {
-    if (searchBlurTimer != null) clearTimeout(searchBlurTimer);
-    recentSearches = getSearchHistory();
-    searchFocused = true;
-    historyIndex = -1;
-  }
-
-  function handleSearchInput() {
-    if (searchBlurTimer != null) clearTimeout(searchBlurTimer);
-    recentSearches = getSearchHistory();
-    searchFocused = true;
-  }
-
-  function handleSearchBlur() {
-    searchBlurTimer = setTimeout(() => {
-      const input = document.getElementById('search-page-input');
-      if (input === document.activeElement) return;
-      searchFocused = false;
-      historyIndex = -1;
-      searchBlurTimer = null;
-    }, 120);
-  }
-
-  function selectRecentSearch(query: string) {
-    if (searchBlurTimer != null) clearTimeout(searchBlurTimer);
-    searchFocused = false;
-    historyIndex = -1;
-    runSearch(query);
-  }
-
-  function handleSearchKeydown(event: KeyboardEvent) {
-    const items = matchingRecentSearches;
-    if (!searchFocused || items.length === 0) return;
-
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      historyIndex = (historyIndex + 1) % items.length;
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      historyIndex = (historyIndex - 1 + items.length) % items.length;
-    } else if (event.key === 'Enter' && historyIndex >= 0) {
-      event.preventDefault();
-      selectRecentSearch(items[historyIndex]);
-    } else if (event.key === 'Escape') {
-      historyIndex = -1;
-    }
-  }
-
-  function onLayoutChanged() {
-    if (!wrapEl || !currentQuery.trim()) return;
-    isLoading = false;
-    hasMore = true;
-    currentPage = 0;
-    performSearch(false);
-  }
-
-  function onSearchRequest(e: Event) {
-    const detail = (e as CustomEvent<{ q: string; tab: SearchTab }>).detail ?? {};
-    const newQ = detail.q ?? '';
-    const newTab: SearchTab = (detail.tab as SearchTab) ?? 'releases';
-    currentQuery = newQ;
-    inputValue = newQ;
-    currentTab = newTab;
-    currentPage = 0;
-    hasMore = true;
-    isLoading = false;
-    scrollAttached = false;
-    releaseResults = [];
-    profileResults = [];
-    collectionResults = [];
-    franchiseData = null;
-    showEnd = false;
-    if (newQ) performSearch(false);
-    else loadState = 'hint';
+  function switchSearchBy(value: string) {
+    const by = Number(value) || 0;
+    if (by === searchBy) return;
+    replacePath(buildSearchRoute(query, 'releases', by));
   }
 
   onMount(() => {
-    unregisterScrollKey = registerActiveScrollKey(() => SEARCH_VIEW_KEY());
+    unregisterScrollKey = registerActiveScrollKey(viewKey);
     window.addEventListener('anix:beforeNavigate', onBeforeNavigate);
-    window.addEventListener('anix:cardLayoutChanged', onLayoutChanged);
-    window.addEventListener('anix:searchRequest', onSearchRequest);
 
-    const cached = getViewState<SearchViewState>(SEARCH_VIEW_KEY());
-    if (
-      cached?.data
-      && hasSearchResults(cached.data)
-      && cached.data.currentQuery === currentQuery
-      && cached.data.currentTab === currentTab
-      && cached.data.currentSearchBy === currentSearchBy
-    ) {
-      const s = cached.data;
-      currentTab = s.currentTab;
-      currentQuery = s.currentQuery;
-      currentSearchBy = s.currentSearchBy;
-      currentPage = s.currentPage;
-      hasMore = s.hasMore;
-      loadState = s.loadState;
-      errorMsg = s.errorMsg;
-      releaseResults = s.releaseResults;
-      profileResults = s.profileResults;
-      collectionResults = s.collectionResults;
-      showEnd = s.showEnd;
-      franchiseData = s.franchiseData;
+    const cached = getViewState<SearchViewState>(viewKey());
+    if (cached?.data && cached.data.loadState === 'ready') {
+      applySnapshot(cached.data);
       if (cached.scrollTop > 0) beginScrollRestore();
       requestAnimationFrame(() => {
-        attachInfiniteScroll();
-        void restoreScrollTop(cached.scrollTop, { maxWaitMs: 8000 });
+        attachScroll();
+        void restoreScrollTop(cached.scrollTop, { maxWaitMs: 5000 });
       });
       return;
     }
 
-    if (currentQuery) performSearch(false);
+    requestAnimationFrame(attachScroll);
+    if (query) void loadPage();
+    else loadState = 'empty';
   });
 
   onDestroy(() => {
     window.removeEventListener('anix:beforeNavigate', onBeforeNavigate);
     unregisterScrollKey?.();
-    unregisterScrollKey = null;
-    saveViewStateData(SEARCH_VIEW_KEY(), searchSnapshot());
+    if (loadState === 'ready') saveViewStateData(viewKey(), snapshot());
     detachScroll();
-    window.removeEventListener('anix:cardLayoutChanged', onLayoutChanged);
-    window.removeEventListener('anix:searchRequest', onSearchRequest);
-    if (searchBlurTimer != null) clearTimeout(searchBlurTimer);
+    requestSeq += 1;
   });
-
 </script>
 
-<div class="view view-search" bind:this={wrapEl}>
-  <div class="search-page">
-    <header class="search-page__header">
-      <div class="search-page__heading">
-        <h1 class="search-page__title">Поиск</h1>
-        <p class="search-page__subtitle">Тайтлы, коллекции и пользователи — в одном месте</p>
-      </div>
+{#snippet byFilter()}
+  <button
+    type="button"
+    class="search-v2__filter"
+    aria-label="Сбросить поиск по полю"
+    onclick={() => switchSearchBy('0')}
+  >
+    по полю «{byLabel.toLowerCase()}»
+    <span aria-hidden="true">{@html iconX(12)}</span>
+  </button>
+{/snippet}
 
-      <div
-        class="search-page__form-wrap"
-        role="combobox"
-        aria-expanded={showSearchSuggest}
-        aria-controls="search-page-suggest"
-        aria-haspopup="listbox"
-      >
-        <form class="search-page__form" role="search" onsubmit={submitSearch}>
-          <span class="search-page__form-icon" aria-hidden="true">{@html iconSearch(20)}</span>
-          <input
-            id="search-page-input"
-            class="search-page__input"
-            type="search"
-            bind:value={inputValue}
-            placeholder="Введите название, имя пользователя или коллекции"
-            autocomplete="off"
-            spellcheck={false}
-            aria-label="Поисковый запрос"
-            aria-autocomplete="list"
-            onfocus={handleSearchFocus}
-            onblur={handleSearchBlur}
-            oninput={handleSearchInput}
-            onkeydown={handleSearchKeydown}
-          />
-          <button
-            type="submit"
-            class="search-page__submit"
-            disabled={!inputValue.trim()}
-          >
-            Найти
-          </button>
-        </form>
+<div class="view view-search-v2 discover-page" bind:this={wrapEl}>
+  <header class="search-v2__head">
+    <span class="search-v2__eyebrow">{query ? 'Поиск' : 'Поиск по Anixart'}</span>
+    <h1 class="search-v2__title">{query || 'Что ищем?'}</h1>
+    {#if !query}
+      <p class="search-v2__hint">Введите запрос в строке поиска сверху</p>
+    {/if}
+  </header>
 
-        {#if showSearchSuggest}
-          <div
-            id="search-page-suggest"
-            class="search-page__suggest"
-            role="listbox"
-            aria-label="Недавние запросы"
-          >
-            <div class="search-page__suggest-head">
-              <span class="search-page__suggest-section">Недавние запросы</span>
-              <button
-                type="button"
-                class="search-page__suggest-clear"
-                onmousedown={(event) => event.preventDefault()}
-                onclick={clearRecentSearches}
-              >
-                Очистить
-              </button>
-            </div>
+  {#if query}
+    <!-- Пустой слот справа съедал бы ширину капсулы — передаём его только с фильтром -->
+    <UiV2Tabs
+      class="search-v2__tabs"
+      tabs={SEARCH_TABS}
+      activeId={activeTab}
+      onChange={switchTab}
+      rightActions={activeTab === 'releases' && searchBy > 0 ? byFilter : undefined}
+    />
 
-            <ScrollArea extraClass="search-page__suggest-scroll">
-              {#each matchingRecentSearches as item, index (item)}
-                <button
-                  type="button"
-                  class="search-page__suggest-item"
-                  class:search-page__suggest-item--active={historyIndex === index}
-                  role="option"
-                  aria-selected={historyIndex === index}
-                  onmousedown={(event) => event.preventDefault()}
-                  onclick={() => selectRecentSearch(item)}
-                >
-                  {item}
-                </button>
-              {/each}
-            </ScrollArea>
-          </div>
-        {/if}
-      </div>
-    </header>
-
-    <div class="search-page__tabs-wrap">
-      <Tabs
-        tabs={SEARCH_TABS}
-        activeId={currentTab}
-        onChange={(id) => applyTabChange(id as SearchTab)}
-        rootClassName="bookmarks__tabs search-page__tabs-bar"
-      />
-    </div>
-
-    <div class="search-page__results">
-      {#if loadState === 'hint'}
-        <div class="search-page__state">
-          <span class="search-page__state-icon" aria-hidden="true">{@html iconSearch(24)}</span>
-          <p class="search-page__state-title">Начните поиск</p>
-          <p class="search-page__hint">Введите запрос в поле выше</p>
+    {#if loadState === 'loading'}
+      {#if activeTab === 'collections'}
+        <div class="collections-feed" aria-busy="true">
+          <UiV2CollectionCardSkeleton count={6} />
         </div>
-      {:else if loadState === 'loading'}
-        <div class="search-page__state">
-          <span class="search-page__loader" aria-hidden="true"></span>
-          <p class="search-page__state-title">Ищем «{currentQuery}»</p>
-        </div>
-      {:else if loadState === 'error'}
-        <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void performSearch(false)} />
-      {:else if loadState === 'empty'}
-        <div class="search-page__state">
-          <p class="search-page__state-title">Ничего не найдено</p>
-          <p class="search-page__empty">Попробуйте изменить запрос или выбрать другую вкладку</p>
+      {:else if activeTab === 'profiles'}
+        <div class="search-v2__people" aria-busy="true">
+          {#each Array.from({ length: 12 }) as _, i (i)}
+            <div class="search-v2__person-skeleton"></div>
+          {/each}
         </div>
       {:else}
-        {#if currentTab === 'releases'}
-          {#if franchiseData}
-            <UiV2SearchFranchise data={franchiseData} />
-          {/if}
-          <div class="search-page__results--wide" data-search-rel="releases">
-            <ReleaseCardsGrid items={releaseResults} />
-          </div>
-        {:else if currentTab === 'profiles'}
-          <div class="search-page__profiles" data-search-rel="profiles">
-            {#each profileResults as p}
-              {@const badgeUrl = resolveProfileBadgeUrl(p as Record<string, unknown>)}
-              <button
-                type="button"
-                class="search-page__profile"
-                onclick={(event) => handleUserProfileClick(p.id, event)}
-              >
-                <div
-                  class="search-page__profile-avatar"
-                  style={p.avatar ? `background-image:url('${resolveCdnAssetUrl(p.avatar)}')` : ''}
-                ></div>
-                <div class="search-page__profile-info">
-                  <span class="search-page__profile-name-row">
-                    <span class="search-page__profile-name">{p.login || ''}</span>
-                    <UserBadge url={badgeUrl} name={resolveBadgeName(p.badge)} size="sm" />
-                    <AppBadges userId={p.id} size="sm" />
-                  </span>
-                  {#if p.status}
-                    <span class="search-page__profile-status">{p.status}</span>
-                  {/if}
-                </div>
-                {#if p.is_online}
-                  <span class="search-page__profile-online"></span>
-                {/if}
-              </button>
-            {/each}
-          </div>
-        {:else}
-          <div class="search-page__collections search-page__collections-grid" data-search-rel="collections">
-            {#each collectionResults as c (c.id)}
-              <CollectionCard data={mapCollectionToCardData(c)} />
-            {/each}
-          </div>
-        {/if}
+        <div class="search-v2__skeleton-grid" aria-busy="true">
+          {#each Array.from({ length: 8 }) as _, i (i)}
+            <UiV2AnimeCardSkeleton />
+          {/each}
+        </div>
       {/if}
+    {:else if loadState === 'error'}
+      <UiV2ContentRetryOverlay message={errorMsg} onRetry={retry} />
+    {:else if loadState === 'empty'}
+      <div class="discover-page__empty">Ничего не найдено — попробуйте другой запрос или вкладку</div>
+    {:else if activeTab === 'releases'}
+      {#if franchise}
+        <UiV2SearchFranchise class="search-v2__franchise" data={franchise} />
+      {/if}
+      {#if releases.length}
+        <ReleaseCardsGrid items={releases} />
+      {/if}
+    {:else if activeTab === 'collections'}
+      <div class="collections-feed">
+        {#each collections as item (item.id)}
+          <CollectionCard data={item} variant="grid" />
+        {/each}
+      </div>
+    {:else}
+      <div class="search-v2__people">
+        {#each profiles as p (p.id)}
+          <UiV2FeedPersonTile
+            class="search-v2__person"
+            title={p.login}
+            avatar={p.avatar}
+            showDot={p.isOnline}
+            badgeUrl={p.badgeUrl}
+            badgeName={p.badgeName}
+            profileId={p.id}
+            onclick={(e) => handleUserProfileClick(p.id, e)}
+          />
+        {/each}
+      </div>
+    {/if}
 
-      {#if showEnd && loadState === 'ready'}
-        <div class="search-page__end">это всё :)</div>
-      {:else if isLoading && loadState === 'ready'}
-        <div class="search-page__loading">Загрузка…</div>
-      {/if}
-    </div>
-  </div>
+    {#if isLoading && loadState === 'ready'}
+      <div class="discover-page__loading discover-page__loading--inline">Загрузка…</div>
+    {/if}
+  {/if}
 </div>

@@ -408,3 +408,105 @@
     animation: none;
   }
 }
+
+// ——— Страница результатов (/search) ———
+
+.view-search-v2 {
+  padding-bottom: 2rem;
+}
+
+.search-v2__head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.5rem 0 1rem;
+}
+
+.search-v2__eyebrow {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--uiv2-fg-muted);
+}
+
+.search-v2__title {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--uiv2-fg-strong);
+  overflow-wrap: anywhere;
+}
+
+.search-v2__hint {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: var(--uiv2-fg-muted);
+}
+
+.search-v2__filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 2.5rem;
+  padding: 0 0.75rem 0 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--uiv2-chrome-active-bg);
+  color: var(--uiv2-chrome-active-fg);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  span {
+    display: flex;
+    opacity: 0.8;
+  }
+
+  &:hover span {
+    opacity: 1;
+  }
+}
+
+.search-v2__franchise {
+  margin-bottom: 1rem;
+}
+
+.search-v2__skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: 1rem 0.75rem;
+}
+
+.search-v2__people {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  gap: 1rem 0.6rem;
+  justify-items: center;
+}
+
+.search-v2__person {
+  width: 100%;
+  max-width: 6rem;
+
+  .feed-subs__avatar {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    overflow: hidden;
+    background: transparent;
+
+    .user-avatar {
+      width: 100%;
+      height: 100%;
+    }
+  }
+}
+
+.search-v2__person-skeleton {
+  width: 4.25rem;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--uiv2-hover-bg);
+}

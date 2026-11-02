@@ -72,7 +72,6 @@
   import CollectionsList from './views/CollectionsList.svelte';
   import MyCollections from './views/MyCollections.svelte';
   import CollectionEditor from './views/CollectionEditor.svelte';
-  import CollectionReleasePicker from './views/CollectionReleasePicker.svelte';
   import Catalog from './views/Catalog.svelte';
   import ReleaseCommentReplies from './views/ReleaseCommentReplies.svelte';
   import ReleaseCommentsPage from './views/ReleaseComments.svelte';
@@ -83,9 +82,9 @@
   import ProfileCollections from './views/ProfileCollections.svelte';
   import ProfileComments from './views/ProfileComments.svelte';
   import ProfileVideos from './views/ProfileVideos.svelte';
-  import Search from './views/Search.svelte';
   import Collection from './views/Collection.svelte';
-  import Notifications from './views/Notifications.svelte';
+  import Search from './views/Search.svelte';
+  import { isSearchTab, type SearchTab } from './search-controller';
   import Uikit from './views/Uikit.svelte';
   import UikitV2 from './views/UikitV2.svelte';
   import AnnouncementChat from './views/AnnouncementChat/page.svelte';
@@ -118,6 +117,7 @@
   import UiV2ExternalLinkConfirm from './components/uikit-v2/UiV2ExternalLinkConfirm.svelte';
   import Toast from './components/Toast.svelte';
   import TvDebugMetrics from './components/tv/TvDebugMetrics.svelte';
+  import DevPagesPanel from './components/DevPagesPanel.svelte';
 
   initTheme();
 
@@ -125,10 +125,12 @@
   let path = $state(getPath());
   /** Страница пары для телефона: tv.anixapp.com/?ref=… (QR с телевизора). */
   const pairRef = $derived(getSearchParams().get('ref')?.trim() ?? '');
-  let searchQ = $state('');
-  let searchTab = $state<'releases' | 'profiles' | 'collections'>('releases');
-  let searchBy = $state(0);
+  /** Ctrl+/ — список всех страниц (разметка на удаление). */
+  let devPagesOpen = $state(false);
   let collectionsWeek = $state(false);
+  let searchQ = $state('');
+  let searchTab = $state<SearchTab>('releases');
+  let searchBy = $state(0);
 
   let tvKept = $state<string[]>(rememberTvKeepAlive([], getPath()));
   const tvKeptCats = $derived(tvKeptCategoryIds(tvKept));
@@ -163,10 +165,11 @@
     const p = fromRoute
       ? new URLSearchParams(route.includes('?') ? route.slice(route.indexOf('?') + 1) : '')
       : getSearchParams();
-    searchQ = p.get('q') || '';
-    searchTab = (p.get('tab') || 'releases') as 'releases' | 'profiles' | 'collections';
-    searchBy = Number.parseInt(p.get('by') || '0', 10) || 0;
     collectionsWeek = p.get('week') === '1' || p.get('sort') === '4';
+    searchQ = p.get('q') || '';
+    const tab = p.get('tab');
+    searchTab = isSearchTab(tab) ? tab : 'releases';
+    searchBy = Number.parseInt(p.get('by') || '0', 10) || 0;
     if (fromRoute) {
       bookmarksUserId = bookmarksUserFromRoute(route);
     } else {
@@ -219,12 +222,10 @@
     if ($appScreen !== 'main') return;
     const routePath = path;
     const week = collectionsWeek;
-    const q = searchQ;
     clearDiscordContext();
     scheduleDiscordPresenceSync({
       path: routePath,
       collectionsWeek: week,
-      searchQuery: q,
     });
   });
 
@@ -268,8 +269,6 @@
   const articleMatch          = $derived(path.match(/^\/article\/(\d+)$/));
   const channelMatch          = $derived(path.match(/^\/channel\/(\d+)$/));
   const collectionEditMatch   = $derived(path.match(/^\/collections\/edit\/(\d+)$/));
-  const collectionPickMatch   = $derived(path === '/collections/pick-release');
-  const collectionPickReturn  = $derived(getSearchParams().get('return') || '/collections/create');
   const announcementChatMatch = $derived(path.match(/^\/announcement\/([^/]+)\/chat$/));
   const isWatchRoute = $derived(path === '/watch');
   /** Страница релиза на TV — фуллскрин по макету (без левой панели). */
@@ -835,6 +834,16 @@
 
     window.addEventListener('keydown', handleZoomKeydown);
 
+    function handleDevPagesKeydown(e: KeyboardEvent) {
+      const mod = e.ctrlKey || (isMac && e.metaKey);
+      // code — физическая клавиша (на русской раскладке key там «.»)
+      if (!mod || (e.code !== 'Slash' && e.key !== '/')) return;
+      e.preventDefault();
+      devPagesOpen = !devPagesOpen;
+    }
+
+    window.addEventListener('keydown', handleDevPagesKeydown);
+
     // Auth сначала (локальный токен), потом сеть — страницы ждут authReady
     setConnectionChecking();
     void (async () => {
@@ -873,6 +882,7 @@
       handlers.forEach(([evt, fn]) => window.removeEventListener(evt, fn));
       window.removeEventListener('lobby:wsJoined', onWsJoined);
       window.removeEventListener('keydown', handleZoomKeydown);
+      window.removeEventListener('keydown', handleDevPagesKeydown);
       window.removeEventListener('offline', onBrowserOffline);
       window.removeEventListener('online', onBrowserOnline);
       window.removeEventListener('anix:refresh-page', onSoftRefresh);
@@ -1014,8 +1024,6 @@
       {/key}
     {:else if path === '/collections/create'}
       <CollectionEditor />
-    {:else if collectionPickMatch}
-      <CollectionReleasePicker returnPath={collectionPickReturn} />
     {:else if path === '/collections/my'}
       <MyCollections />
     {:else if collectionMatch}
@@ -1046,22 +1054,14 @@
       {#key bookmarksUserId ?? 'self'}
         <Bookmarks id={bookmarksUserId} />
       {/key}
-    {:else if path === '/notifications'}
-      <Notifications />
     {:else if path === '/profile/votes'}
       <Bookmarks initialTab="votes" />
-    {:else if path === '/profile/friends'}
-      <ProfileFriends />
-    {:else if path === '/profile/collections'}
-      <ProfileCollections />
     {:else if path === '/profile/lists'}
       <Bookmarks listsOnly />
-    {:else if path === '/profile/comments'}
-      <ProfileComments />
-    {:else if path === '/profile/videos'}
-      <ProfileVideos />
     {:else if path === '/search'}
-      <Search q={searchQ} tab={searchTab} {searchBy} />
+      {#key `${searchQ}|${searchBy}`}
+        <Search q={searchQ} tab={searchTab} {searchBy} />
+      {/key}
     {:else if path === '/downloads'}
       {#if isMobileMode()}<MobileDownloads />{:else}<Downloads />{/if}
     {:else if path === '/uikit'}
@@ -1167,6 +1167,9 @@
 {/if}
 
 <Toast />
+{#if devPagesOpen && !isTvMode()}
+  <DevPagesPanel currentPath={path} onClose={() => (devPagesOpen = false)} />
+{/if}
 <!-- Anix+: модалка (алмаз в боковой панели) и одноразовое уведомление после входа -->
 {#if !isTvMode() && !isEmbeddedWebPlayer() && path !== '/feed/composer'}
   <SupportModal />

@@ -19,7 +19,6 @@
   import TitleInfoTrigger from '../../../components/TitleInfoTrigger.svelte';
   import ReleaseMetaInfoIcon from './ReleaseMetaInfoIcon.svelte';
   import type { ReleaseMetaInfoRow } from '../_metaInfo';
-  import { openReleaseMetaSearch } from '../../../utils/releaseMetaSearch';
   import type { ListStatusId } from '../_types';
   import { openImageLightbox, formatVoteCount } from '../_utils';
 import { requestOpenExternal } from '../../../utils/external-link';
@@ -306,14 +305,6 @@ import { requestOpenExternal } from '../../../utils/external-link';
               {#each row.segments as segment, index (index)}
                 {#if segment.airCalendar}
                   {@render airDate?.()}
-                {:else if segment.query != null && segment.searchBy != null}
-                  <button
-                    type="button"
-                    class="release-page__meta-info-link"
-                    onclick={() => openReleaseMetaSearch(segment.query!, segment.searchBy!)}
-                  >
-                    {segment.text}
-                  </button>
                 {:else}
                   {segment.text}
                 {/if}

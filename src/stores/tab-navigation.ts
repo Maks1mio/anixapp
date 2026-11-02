@@ -57,7 +57,6 @@ function initLastPaths(): void {
     lastPaths.set(id as SidebarTabId, root);
   }
   lastPaths.set('favorites', '/bookmarks?tab=favorites');
-  lastPaths.set('search', '/search');
 }
 
 /** Путь явно принадлежит корню секции сайдбара (не release/search и т.п.) */
@@ -74,7 +73,6 @@ export function resolveTabFromPath(path: string): NavigationContextId | null {
   }
   if (pathname === '/bookmarks' || pathname.startsWith('/bookmarks/')) return 'bookmarks';
   if (pathname === '/downloads' || pathname.startsWith('/downloads/')) return 'downloads';
-  if (pathname === '/search') return 'search';
   return null;
 }
 

@@ -40,7 +40,11 @@ function shouldTryNextOrigin(res, path, originIndex, total) {
   // Admin API must stay on the selected origin (no silent failover to prod).
   if (path.startsWith('/api/admin/')) return false;
   if (res.status >= 500) return true;
-  return (path.startsWith('/uploads/') || path.startsWith('/badges/')) && res.status === 404;
+  return (
+    path.startsWith('/uploads/')
+    || path.startsWith('/badges/')
+    || path.startsWith('/api/badges/images/')
+  ) && res.status === 404;
 }
 
 /** ffmpeg download / render can take minutes — never apply the short proxy timeout. */
@@ -317,7 +321,11 @@ async function proxyAnixback(req, res, url) {
         outHeaders[key] = value;
       }
     }
-    if (!outHeaders['cache-control']) {
+    if (!upstream.ok) {
+      // Не кэшируем ошибки: иначе 404 от локального бэка залипает после фолбэка на прод.
+      delete outHeaders['cache-control'];
+      outHeaders['Cache-Control'] = 'no-store';
+    } else if (!outHeaders['cache-control']) {
       if (path.startsWith('/fluo') || path.startsWith('/api/ads') || path.startsWith('/api/admin/ads') || path.startsWith('/embed/') || path.startsWith('/api/agent')) {
         outHeaders['Cache-Control'] = 'no-store, no-cache, must-revalidate';
       } else {

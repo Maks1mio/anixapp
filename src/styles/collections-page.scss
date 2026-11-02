@@ -19,29 +19,6 @@
   margin-bottom: 0.5rem;
 }
 
-.collections-page__search {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border: none;
-  border-radius: 999px;
-  background: transparent;
-  color: $color-text-muted;
-  cursor: pointer;
-  transition: color $transition, background $transition;
-
-  &:hover {
-    color: $color-text;
-    background: $color-surface-hover;
-  }
-
-  svg {
-    display: block;
-  }
-}
-
 .collections-header-actions {
   display: flex;
   flex-direction: column;
@@ -418,23 +395,6 @@
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 0.75rem;
-}
-
-.collection-editor__add-release {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: $color-text;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    color: $color-accent;
-  }
 }
 
 .collection-editor__releases-count {

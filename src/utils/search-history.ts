@@ -26,6 +26,15 @@ export function addSearchHistory(query: string): void {
   }
 }
 
+export function removeSearchHistory(query: string): void {
+  const list = getSearchHistory().filter((q) => q !== query);
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  } catch {
+    // ignore
+  }
+}
+
 export function clearSearchHistory(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);

@@ -5,7 +5,6 @@ import {
   recordTabNavigation,
   prepareSidebarTabSwitch,
   prepareIndependentNavigation,
-  prepareIndependentTabSwitch,
   tabIdFromHref,
   type IndependentTabId,
 } from './tab-navigation';
@@ -285,8 +284,4 @@ export function navigateSidebarTab(href: string): void {
 
 export function navigateIndependentTab(tabId: IndependentTabId, path: string): void {
   navigate(prepareIndependentNavigation(tabId, path));
-}
-
-export function navigateSearchTab(): void {
-  navigate(prepareIndependentTabSwitch('search', '/search'));
 }

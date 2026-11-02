@@ -6,8 +6,6 @@
   import CollectionsSortSelect from '../components/collections/CollectionsSortSelect.svelte';
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import { headlineFromLoadError } from '../utils/content-load-error';
-  import { iconSearch } from '../components/icons';
-  import { navigate } from '../stores/navigation';
   import {
     defaultCollectionListSort,
     initialCollectionListPage,
@@ -208,16 +206,6 @@
         <h1 class="view-header__title">{pageTitle}</h1>
         <p class="view-header__subtitle">{pageSubtitle}</p>
       </div>
-      {#if !week}
-        <button
-          type="button"
-          class="collections-page__search"
-          aria-label="Поиск коллекций"
-          onclick={() => navigate('/search?tab=collections')}
-        >
-          {@html iconSearch(20)}
-        </button>
-      {/if}
     </div>
   </div>
 

@@ -220,7 +220,7 @@
                 </span>
                 <span class="uiv2-reactions__login">
                   {profile.login}
-                  <UserBadge url={profile.badgeUrl} name={profile.badgeName} size="xs" />
+                  <UserBadge url={profile.badgeUrl} name={profile.badgeName} profileId={profile.id} size="xs" />
                   <AppBadges userId={profile.id} size="xs" />
                 </span>
                 <span

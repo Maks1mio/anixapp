@@ -7,6 +7,7 @@
   import { loadUserBadges, visibleAppBadges, type AppBadge } from '../services/badges-api';
   import { resolveAnixbackUploadUrl } from '../services/anixback-endpoint';
   import { isSupportBadge, onSupportBadgeActivate } from '../stores/support-promo';
+  import BadgeTip from './BadgeTip.svelte';
 
   type Size = 'xs' | 'sm' | 'md';
 
@@ -45,35 +46,35 @@
 </script>
 
 {#each badges as b (b.slug)}
-  {#if isSupportBadge(b.slug)}
-    <!-- Anix+ → модалка поддержки (span: значок часто лежит внутри кнопки профиля) -->
-    <span
-      class="app-badge-hit"
-      role="button"
-      tabindex="0"
-      aria-label="{b.name} — подробнее об Anix+"
-      onclick={onSupportBadgeActivate}
-      onkeydown={onSupportBadgeActivate}
-    >
+  <BadgeTip name={b.name} imageSrc={resolveAnixbackUploadUrl(b.image_url)}>
+    {#if isSupportBadge(b.slug)}
+      <!-- Anix+ → модалка поддержки (span: значок часто лежит внутри кнопки профиля) -->
+      <span
+        class="app-badge-hit"
+        role="button"
+        tabindex="0"
+        aria-label="{b.name} — подробнее об Anix+"
+        onclick={onSupportBadgeActivate}
+        onkeydown={onSupportBadgeActivate}
+      >
+        <img
+          class="app-badge app-badge--{size} {className}"
+          src={resolveAnixbackUploadUrl(b.image_url)}
+          alt={b.name}
+          loading="lazy"
+          decoding="async"
+        />
+      </span>
+    {:else}
       <img
         class="app-badge app-badge--{size} {className}"
         src={resolveAnixbackUploadUrl(b.image_url)}
         alt={b.name}
-        title={b.name}
         loading="lazy"
         decoding="async"
       />
-    </span>
-  {:else}
-    <img
-      class="app-badge app-badge--{size} {className}"
-      src={resolveAnixbackUploadUrl(b.image_url)}
-      alt={b.name}
-      title={b.name}
-      loading="lazy"
-      decoding="async"
-    />
-  {/if}
+    {/if}
+  </BadgeTip>
 {/each}
 
 <style>
@@ -116,4 +117,5 @@
     width: 1.35rem;
     height: 1.35rem;
   }
+
 </style>

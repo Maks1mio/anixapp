@@ -341,6 +341,7 @@
                   class="uiv2-release-friends__badge"
                   url={friend.badgeUrl}
                   name={friend.badgeName}
+                  profileId={friend.id}
                   size="sm"
                 />
                 <AppBadges userId={friend.id} size="sm" class="uiv2-release-friends__badge" />

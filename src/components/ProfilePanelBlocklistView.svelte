@@ -162,7 +162,7 @@
             <span class="profile-panel__friend-row-meta">
               <span class="profile-panel__friend-row-name">
                 {user.login}
-                <UserBadge url={badgeUrl} name={resolveBadgeName(user.badge)} size="xs" />
+                <UserBadge url={badgeUrl} name={resolveBadgeName(user.badge)} profileId={Number(user.id)} size="xs" />
                 <AppBadges userId={Number(user.id)} size="xs" />
               </span>
             </span>

@@ -5,6 +5,7 @@
   import { fetchCdnJson, toCdnProxyUrl } from '../../../../utils/posterUrl';
   import { iconBan } from '../../../../components/icons';
   import AppBadges from '../../../../components/AppBadges.svelte';
+  import BadgeTip from '../../../../components/BadgeTip.svelte';
 
   interface Props {
     profile:     any;
@@ -81,10 +82,10 @@
         <h1 class="profile__name">{profile.login || 'Профиль'}</h1>
 
         {#if profile.badge?.image_url}
+          <BadgeTip name={profile.badge.name || 'Значок Anixart'} url={profile.badge.image_url}>
           {#if isLottieBadgeUrl(profile.badge.image_url)}
             <span
               class="profile__badge-lottie"
-              title={profile.badge.name || 'Значок Anixart'}
               aria-label={profile.badge.name ?? ''}
               bind:this={badgeLottieEl}
             ></span>
@@ -93,9 +94,9 @@
               class="profile__badge-img"
               src={toCdnProxyUrl(profile.badge.image_url)}
               alt={profile.badge.name ?? ''}
-              title={profile.badge.name || 'Значок Anixart'}
             />
           {/if}
+          </BadgeTip>
         {/if}
         <AppBadges userId={Number(profile.id)} size="md" />
 

@@ -1,17 +1,20 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { fetchCdnJson, toCdnProxyUrl } from '../utils/posterUrl';
-  import { badgeNameByUrl, isLottieBadgeUrl, rememberBadgeName } from '../utils/badge';
+  import { badgeNameByUrl, isLottieBadgeUrl, loadProfileBadgeName, rememberBadgeName } from '../utils/badge';
+  import BadgeTip from './BadgeTip.svelte';
 
-  type Size = 'xs' | 'sm' | 'md' | 'lg';
+  type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
   type Props = {
     url?: string | null;
     name?: string | null;
     size?: Size;
     class?: string;
-    /** Показывать нативный title при наведении (по умолчанию да). */
+    /** Подсказка с крупным превью и названием при наведении (по умолчанию да). */
     showTooltip?: boolean;
+    /** Владелец значка: если API не прислал имя, подтянем его из профиля при наведении. */
+    profileId?: number | null;
   };
 
   let {
@@ -20,6 +23,7 @@
     size = 'sm',
     class: className = '',
     showTooltip = true,
+    profileId = null,
   }: Props = $props();
 
   let lottieEl = $state<HTMLElement | undefined>();
@@ -28,8 +32,24 @@
   const src = $derived(url?.trim() ? url.trim() : '');
   const isLottie = $derived(!!src && isLottieBadgeUrl(src));
   // API often omits the name (comments, feed): fall back to a name seen with the same image.
-  const resolvedName = $derived(name?.trim() || badgeNameByUrl(src) || (src ? 'Значок Anixart' : ''));
+  let loadedName = $state('');
+  const resolvedName = $derived(name?.trim() || loadedName || badgeNameByUrl(src) || (src ? 'Значок Anixart' : ''));
   const title = $derived(showTooltip ? resolvedName : '');
+
+  $effect(() => {
+    void src;
+    loadedName = '';
+  });
+
+  function onHover() {
+    if (!src || name?.trim() || loadedName || badgeNameByUrl(src)) return;
+    const id = Number(profileId ?? 0);
+    if (!(id > 0)) return;
+    const forSrc = src;
+    void loadProfileBadgeName(id, forSrc).then((n) => {
+      if (n && forSrc === src) loadedName = n;
+    });
+  }
 
   $effect(() => {
     if (src && name?.trim()) rememberBadgeName(src, name);
@@ -71,23 +91,29 @@
   onDestroy(() => destroyAnim());
 </script>
 
-{#if src}
+{#snippet badgeEl()}
   {#if isLottie}
     <span
       class="user-badge user-badge--{size} user-badge--lottie {className}"
-      title={title || undefined}
-      aria-label={title || 'Значок'}
+      aria-label={resolvedName || 'Значок'}
       bind:this={lottieEl}
     ></span>
   {:else}
     <img
       class="user-badge user-badge--{size} {className}"
       src={toCdnProxyUrl(src)}
-      alt={title || ''}
-      title={title || undefined}
+      alt={resolvedName || ''}
       loading="lazy"
       decoding="async"
     />
+  {/if}
+{/snippet}
+
+{#if src}
+  {#if title}
+    <BadgeTip name={resolvedName} url={src} onhover={onHover}>{@render badgeEl()}</BadgeTip>
+  {:else}
+    {@render badgeEl()}
   {/if}
 {/if}
 
@@ -119,6 +145,12 @@
     width: 2.4rem;
     height: 2.4rem;
   }
+
+  .user-badge--xl {
+    width: 4.5rem;
+    height: 4.5rem;
+  }
+
 
   .user-badge--lottie {
     overflow: hidden;

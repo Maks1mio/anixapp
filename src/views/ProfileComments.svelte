@@ -190,6 +190,7 @@
                       <UserBadge
                         url={item.profileBadgeUrl}
                         name={item.profileBadgeName}
+                        {profileId}
                         size="xs"
                       />
                       <AppBadges userId={profileId} size="xs" />

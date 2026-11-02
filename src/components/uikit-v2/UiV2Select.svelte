@@ -32,6 +32,8 @@
     disabled?: boolean;
     id?: string;
     class?: string;
+    /** Доп. класс на выпадающую панель (она порталится в body) */
+    panelClass?: string;
     /** Компактный триггер — только иконка (тулбары) */
     compact?: boolean;
     /** Крупный заголовок без рамки (сортировка ленты как на Android). */
@@ -49,6 +51,7 @@
     disabled = false,
     id = `uiv2-select-${Math.random().toString(36).slice(2, 9)}`,
     class: className = '',
+    panelClass = '',
     compact = false,
     appearance = 'default',
     ariaLabel,
@@ -267,7 +270,7 @@
     <div
       bind:this={panelEl}
       id={listboxId}
-      class="uiv2-select__panel"
+      class="uiv2-select__panel {panelClass}"
       class:uiv2-select__panel--up={!openDown}
       class:uiv2-select__panel--with-leading={showLeading}
       class:uiv2-select__panel--title={isTitle}

@@ -91,6 +91,54 @@ export function badgeNameByUrl(url: string | null | undefined): string {
   return loadBadgeNames()[badgeNameKey(url)] ?? '';
 }
 
+/** Запоминает имена всех значков из списка (коллекция профиля, витрина). */
+export function rememberBadgeNames(badges: Iterable<unknown> | null | undefined): void {
+  for (const b of badges ?? []) {
+    if (!b || typeof b !== 'object') continue;
+    const o = b as Record<string, unknown>;
+    const name = resolveBadgeName(o);
+    if (!name) continue;
+    for (const key of ['image_url', 'image_medium_url', 'image_small_url', 'image_preview_url']) {
+      if (typeof o[key] === 'string') rememberBadgeName(o[key] as string, name);
+    }
+  }
+}
+
+const profileBadgeNameRequests = new Map<number, Promise<string>>();
+
+/**
+ * Имя значка, когда API прислал только картинку: берём профиль владельца (profile/info)
+ * и кэшируем имя по URL. Один запрос на профиль.
+ */
+export function loadProfileBadgeName(profileId: number, url: string): Promise<string> {
+  const known = badgeNameByUrl(url);
+  if (known) return Promise.resolve(known);
+  if (!(profileId > 0) || typeof window === 'undefined') return Promise.resolve('');
+  let req = profileBadgeNameRequests.get(profileId);
+  if (!req) {
+    req = (async () => {
+      try {
+        const info = (await window.anixApi?.profile?.info(profileId)) as
+          | { profile?: Record<string, unknown> }
+          | undefined;
+        const p = info?.profile;
+        if (!p) return '';
+        const entity = resolveJacksonEntity(p.badge, info) ?? p.badge;
+        const name = resolveBadgeName(entity) || (typeof p.badge_name === 'string' ? p.badge_name.trim() : '');
+        const badgeUrl = resolveProfileBadgeUrl(p, info);
+        if (name && badgeUrl) rememberBadgeName(badgeUrl, name);
+        if (entity && typeof entity === 'object') rememberBadgeNames([entity]);
+        return name;
+      } catch {
+        profileBadgeNameRequests.delete(profileId);
+        return '';
+      }
+    })();
+    profileBadgeNameRequests.set(profileId, req);
+  }
+  return req.then((name) => badgeNameByUrl(url) || name);
+}
+
 /** Из профиля комментария / друга: badge | badge_url | badgeUrl */
 export function resolveProfileBadgeUrl(
   profile: Record<string, unknown> | null | undefined,

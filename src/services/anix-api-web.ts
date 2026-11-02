@@ -165,6 +165,7 @@ function buildWebAnixApi(): AnixApi {
       deleteVote: (releaseId) => invoke('anix:releaseDeleteVote', releaseId),
       schedule: () => invoke('anix:schedule'),
       continueWatching: (releaseId) => invoke('anix:releaseContinue', releaseId),
+      badges: (releaseId, page = 0) => invoke('anix:releaseBadges', releaseId, page),
     },
 
     comments: {
@@ -221,6 +222,8 @@ function buildWebAnixApi(): AnixApi {
       all: (page = 0, options = {}) => invoke('anix:collectionsAll', page, options),
       profileCollections: (profileId, page = 0) =>
         invoke('anix:collectionProfileCollections', profileId, page),
+      releaseCollections: (releaseId, page = 0, sort = 1) =>
+        invoke('anix:collectionReleaseCollections', releaseId, page, sort),
       favorites: (page = 0) => invoke('anix:collectionFavorites', page),
       getReleases: (id, page = 0) => invoke('anix:collectionReleases', id, page),
       getRandomRelease: (id) => invoke('anix:collectionRandomRelease', id),

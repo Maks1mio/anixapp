@@ -479,7 +479,6 @@ ipcRenderer.on('anix:articleUploadProgress', (_, data) => {
   window.dispatchEvent(new CustomEvent('anix:article-upload-progress', { detail: data ?? null }));
 });
 
-// ── Structured API (anixApi) — grouped endpoints like AniDesk ──
 contextBridge.exposeInMainWorld('anixApi', {
   client: {
     get baseUrl() { return '(use anixApi.client.getBaseUrl())'; },
@@ -582,6 +581,7 @@ contextBridge.exposeInMainWorld('anixApi', {
     deleteVote: (releaseId) => ipcRenderer.invoke('anix:releaseDeleteVote', releaseId),
     schedule: () => ipcRenderer.invoke('anix:schedule'),
     continueWatching: (releaseId) => ipcRenderer.invoke('anix:releaseContinue', releaseId),
+    badges: (releaseId, page = 0) => ipcRenderer.invoke('anix:releaseBadges', releaseId, page),
   },
 
   comments: {
@@ -641,6 +641,8 @@ contextBridge.exposeInMainWorld('anixApi', {
     all: (page = 0, options = {}) => ipcRenderer.invoke('anix:collectionsAll', page, options),
     profileCollections: (profileId, page = 0) =>
       ipcRenderer.invoke('anix:collectionProfileCollections', profileId, page),
+    releaseCollections: (releaseId, page = 0, sort = 1) =>
+      ipcRenderer.invoke('anix:collectionReleaseCollections', releaseId, page, sort),
     favorites: (page = 0) => ipcRenderer.invoke('anix:collectionFavorites', page),
     getReleases: (id, page = 0) => ipcRenderer.invoke('anix:collectionReleases', id, page),
     getRandomRelease: (id) => ipcRenderer.invoke('anix:collectionRandomRelease', id),

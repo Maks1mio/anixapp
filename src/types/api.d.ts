@@ -345,6 +345,8 @@ export interface AnixApi {
     schedule: () => Promise<Record<string, unknown>>;
     /** Релиз для «Продолжить просмотр» (Anixart 11+) */
     continueWatching?: (releaseId: number) => Promise<{ code?: number; release?: unknown } | null>;
+    /** GET release/{id}/badges/{page} (Anixart 10.5+) */
+    badges?: (releaseId: number, page?: number) => Promise<{ code?: number; content?: ApiBadge[]; total_count?: number; total_page_count?: number } | null>;
   };
 
   comments: {
@@ -457,6 +459,8 @@ export interface AnixApi {
     info: (id: number) => Promise<any>;
     all: (page?: number, options?: { sort?: number; where?: number; previousPage?: number }) => Promise<{ content?: unknown[]; last?: boolean; total_page_count?: number; current_page?: number }>;
     profileCollections: (profileId: number, page?: number) => Promise<{ content?: unknown[]; last?: boolean }>;
+    /** GET collection/all/release/{id}/{page}?sort= — коллекции с релизом */
+    releaseCollections?: (releaseId: number, page?: number, sort?: number) => Promise<{ code?: number; content?: unknown[]; last?: boolean; total_count?: number; total_page_count?: number }>;
     favorites: (page?: number) => Promise<{ content?: unknown[]; total_count?: number }>;
     getReleases: (id: number, page?: number) => Promise<any>;
     getRandomRelease: (id: number) => Promise<any>;

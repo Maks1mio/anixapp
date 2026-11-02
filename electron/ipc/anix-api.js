@@ -42,6 +42,18 @@ loggedHandle('anix:releaseById', async (_, id, extended = true) => {
   }
 });
 
+// Значки релиза (Anixart 10.5+): release/{id}/badges/{page}
+loggedHandle('anix:releaseBadges', async (_, id, page = 0) => {
+  const releaseId = toPositiveInt(id);
+  if (releaseId == null) return null;
+  try {
+    const client = getAnixart();
+    return await client.endpoints.release.badges(releaseId, page);
+  } catch (err) {
+    handleAnixError(err, 'releaseBadges');
+  }
+});
+
 // «Продолжить просмотр» (Anixart 11+): релиз для последнего просмотренного
 loggedHandle('anix:releaseContinue', async (_, id) => {
   const releaseId = toPositiveInt(id);
@@ -809,6 +821,15 @@ ipcMain.handle('anix:collectionProfileCollections', async (_, profileId, page = 
     return await client.endpoints.collection.profileCollections(profileId, page);
   } catch (err) {
     handleAnixError(err, 'collectionProfileCollections');
+  }
+});
+
+ipcMain.handle('anix:collectionReleaseCollections', async (_, releaseId, page = 0, sort = 1) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.collection.releaseCollections(releaseId, page, { sort });
+  } catch (err) {
+    handleAnixError(err, 'collectionReleaseCollections');
   }
 });
 

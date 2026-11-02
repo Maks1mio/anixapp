@@ -73,7 +73,7 @@
   <span class="uiv2-feed-person__name feed-subs__name">
     <span class="uiv2-feed-person__label">{title}</span>
     {#if showBadge}
-      <UserBadge url={badgeUrl} name={badgeName} size="xs" showTooltip={false} />
+      <UserBadge url={badgeUrl} name={badgeName} {profileId} size="xs" />
     {/if}
     {#if profileId}
       <AppBadges userId={profileId} size="xs" />

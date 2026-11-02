@@ -491,6 +491,7 @@
                   <UserBadge
                     url={node.profile.badgeUrl}
                     name={node.profile.badgeName}
+                    profileId={node.profile.id}
                     size="sm"
                     class="uiv2-comment__badge"
                   />

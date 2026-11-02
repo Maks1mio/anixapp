@@ -5,6 +5,7 @@
 import type { ApiBadge, ApiBadgeCollection } from '../types/api';
 import { resolveCdnAssetUrl } from './posterUrl';
 import { NOTIFICATION_LIST_STATUSES } from './notification-preferences';
+import { rememberBadgeNames } from './badge';
 
 export type BadgeRarity = 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGENDARY' | 'UNKNOWN';
 
@@ -139,6 +140,8 @@ export function toBadgeCollectionView(res: ApiBadgeCollection | null | undefined
 
   const all = [...(res?.showcased ?? []), ...(res?.recent ?? []), ...sections.flatMap((s) => s.items)];
   const selected = all.find((b) => b?.is_selected) ?? res?.profile?.badge ?? null;
+  // Имена для подсказок значков там, где API присылает только картинку (комментарии, друзья).
+  rememberBadgeNames(all);
 
   return {
     total: Number(res?.total_count) || sections.reduce((n, s) => n + s.count, 0),

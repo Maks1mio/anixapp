@@ -30,6 +30,7 @@
   } from '../views/Profile/_utils';
   import { resolveJacksonRefs } from '../utils/jackson-refs';
   import { badgeNameByUrl, rememberBadgeName } from '../utils/badge';
+  import BadgeTip from './BadgeTip.svelte';
   import { isSupportBadge, onSupportBadgeActivate } from '../stores/support-promo';
   import {
     hasProfilePrivacyRestrictions,
@@ -886,6 +887,7 @@
                       {#if badge?.image_url}
                         {@const badgeTitle = badge.name || badgeNameByUrl(badge.image_url) || 'Значок Anixart'}
                         <!-- Клик по значку Anixart → выбор значка (свой профиль) или витрина значков -->
+                        <BadgeTip name={badgeTitle} url={badge.image_url}>
                         <span
                           class="profile-panel__badge-hit"
                           role="button"
@@ -902,7 +904,6 @@
                           {#if isLottieBadgeUrl(badge.image_url)}
                             <span
                               class="profile-panel__badge"
-                              title={badgeTitle}
                               bind:this={badgeLottieEl}
                             ></span>
                           {:else}
@@ -910,10 +911,10 @@
                               class="profile-panel__badge-img"
                               src={toCdnProxyUrl(badge.image_url)}
                               alt={badge.name ?? ''}
-                              title={badgeTitle}
                             />
                           {/if}
                         </span>
+                        </BadgeTip>
                       {/if}
                       {#if profile.is_verified}
                         <span class="profile-panel__verified" title="Подтверждён">✓</span>
@@ -921,6 +922,7 @@
                       {#if appBadgesLoaded}
                         {#each appBadges as ab (ab.slug)}
                           {#if ab.status !== 'pending'}
+                            <BadgeTip name={ab.name} imageSrc={resolveAnixbackUploadUrl(ab.image_url)}>
                             {#if isSupportBadge(ab.slug)}
                               <span
                                 class="profile-panel__badge-hit"
@@ -934,7 +936,6 @@
                                   class="profile-panel__badge-img"
                                   src={resolveAnixbackUploadUrl(ab.image_url)}
                                   alt={ab.name}
-                                  title={ab.name}
                                   loading="lazy"
                                 />
                               </span>
@@ -943,10 +944,10 @@
                                 class="profile-panel__badge-img"
                                 src={resolveAnixbackUploadUrl(ab.image_url)}
                                 alt={ab.name}
-                                title={ab.name}
                                 loading="lazy"
                               />
                             {/if}
+                            </BadgeTip>
                           {/if}
                         {/each}
                       {/if}

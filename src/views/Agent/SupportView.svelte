@@ -581,7 +581,7 @@
                     <UserAvatar src={author?.avatar} label={authorName(m)} class="support-msg__avatar" />
                     <span class="support-msg__login">{authorName(m)}</span>
                   </button>
-                  {#if author?.badgeUrl}<UserBadge url={author.badgeUrl} name={author.badgeName} size="xs" />{/if}
+                  {#if author?.badgeUrl}<UserBadge url={author.badgeUrl} name={author.badgeName} profileId={m.author_id} size="xs" />{/if}
                   <AppBadges userId={m.author_id} size="xs" />
                   {#if m.author_kind === 'admin'}<span class="support-team">Команда</span>{/if}
                   <span class="support-msg__time">{time(m.created_at)}</span>

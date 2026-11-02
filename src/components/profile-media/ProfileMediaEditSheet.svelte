@@ -360,7 +360,7 @@
                   <h2 class="profile-panel__name">
                     <span class="profile-panel__name-text">{login}</span>
                     {#if preview.badgeUrl}
-                      <UserBadge url={preview.badgeUrl} name={preview.badgeName} size="md" showTooltip={false} />
+                      <UserBadge url={preview.badgeUrl} name={preview.badgeName} size="md" />
                     {/if}
                     {#if preview.verified}
                       <span class="profile-panel__verified">✓</span>

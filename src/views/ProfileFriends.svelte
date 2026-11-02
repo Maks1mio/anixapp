@@ -322,7 +322,7 @@
                 <div class="search-page__profile-info">
                   <span class="search-page__profile-name-row">
                     <span class="search-page__profile-name">{fr.login || ''}</span>
-                    <UserBadge url={badgeUrl} name={resolveBadgeName(fr.badge)} size="sm" />
+                    <UserBadge url={badgeUrl} name={resolveBadgeName(fr.badge)} profileId={fr.id} size="sm" />
                     <AppBadges userId={fr.id} size="sm" />
                   </span>
                 </div>
@@ -360,7 +360,7 @@
               <div class="search-page__profile-info">
                 <span class="search-page__profile-name-row">
                   <span class="search-page__profile-name">{fr.login || ''}</span>
-                  <UserBadge url={badgeUrl} name={resolveBadgeName(fr.badge)} size="sm" />
+                  <UserBadge url={badgeUrl} name={resolveBadgeName(fr.badge)} profileId={fr.id} size="sm" />
                   <AppBadges userId={fr.id} size="sm" />
                   {#if banLabel}
                     <span class="search-page__profile-ban" title={banNotice ?? undefined}>{banLabel}</span>

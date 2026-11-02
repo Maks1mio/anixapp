@@ -13,6 +13,7 @@
     onChange,
     onValuesChange,
     className,
+    panelClass,
     id,
     disabled = false,
     compact = false,
@@ -44,6 +45,7 @@
       desc: o.desc,
       warning: o.warning,
       disabled: o.disabled,
+      icon: o.icon,
     })),
   );
 </script>
@@ -78,6 +80,7 @@
     {compact}
     {id}
     class={className}
+    {panelClass}
     onChange={(v) => onChange?.(v)}
   />
 {/if}

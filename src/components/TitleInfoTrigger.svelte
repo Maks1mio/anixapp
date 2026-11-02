@@ -1,136 +1,259 @@
 <script lang="ts">
-  import { iconInfo, iconCopy, iconCheck } from './icons';
+  import { tick } from 'svelte';
+  import { scale } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
+  import { iconMoreHorizontal, iconCopy, iconCheck, iconHash, iconCodeXml, iconShare } from './icons';
   import { parseAltTitles } from '../utils/titleInfo';
-  import UiV2Tooltip from './uikit-v2/UiV2Tooltip.svelte';
+  import { showToast } from '../stores/toast';
+  import { DEFAULT_API_ENDPOINT } from '../constants/apiEndpoints';
+  import { copyTextToClipboard, releasePublicUrl } from '../utils/release-menu-v2';
+  import { portal } from '../actions/portal';
 
   interface Props {
     titleRu?: string;
     titleEn?: string;
     titleAlt?: string;
+    /** ID релиза — включает блок «ID / API-запрос / Поделиться» */
+    releaseId?: number;
     className?: string;
   }
 
-  let { titleRu = '', titleEn = '', titleAlt = '', className = '' }: Props = $props();
+  let { titleRu = '', titleEn = '', titleAlt = '', releaseId, className = '' }: Props = $props();
+
+  const GAP = 8;
+  const EDGE = 12;
 
   const ru = $derived(titleRu.trim());
   const en = $derived(titleEn.trim());
   const altTitles = $derived(parseAltTitles(titleAlt));
   const altText = $derived(altTitles.join('\n'));
 
-  const showRu = $derived(!!ru);
-  const showEn = $derived(!!en && en !== ru);
-  const showAlt = $derived(altTitles.length > 0);
-  const visible = $derived(showRu || showEn || showAlt);
+  type TitleRow = { id: string; label: string; value: string; lines: string[]; toast: string };
+
+  const titleRows = $derived.by(() => {
+    const rows: TitleRow[] = [];
+    if (ru) rows.push({ id: 'ru', label: 'Название', value: ru, lines: [ru], toast: 'Название скопировано' });
+    if (en && en !== ru) {
+      rows.push({ id: 'en', label: 'Оригинальное название', value: en, lines: [en], toast: 'Оригинальное название скопировано' });
+    }
+    if (altTitles.length > 0) {
+      rows.push({ id: 'alt', label: 'Альтернативные названия', value: altText, lines: altTitles, toast: 'Альтернативные названия скопированы' });
+    }
+    return rows;
+  });
+
+  const hasRelease = $derived(typeof releaseId === 'number' && releaseId > 0);
+  const visible = $derived(titleRows.length > 0 || hasRelease);
+  const shareUrl = $derived(hasRelease ? releasePublicUrl(releaseId!) : '');
+
+  let triggerEl = $state<HTMLButtonElement | null>(null);
+  let panelEl = $state<HTMLDivElement | null>(null);
+  let open = $state(false);
+  let panelLeft = $state(0);
+  let panelTop = $state(0);
+  let openUp = $state(false);
 
   let copiedId = $state<string | null>(null);
   let copyTimer: ReturnType<typeof setTimeout> | undefined;
 
-  async function copy(value: string, id: string) {
-    if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      copiedId = id;
-      clearTimeout(copyTimer);
-      copyTimer = setTimeout(() => {
-        copiedId = null;
-      }, 1400);
-    } catch {
-      /* ignore */
-    }
+  function layoutPanel() {
+    if (!triggerEl || !panelEl) return;
+    const a = triggerEl.getBoundingClientRect();
+    const w = panelEl.offsetWidth;
+    const h = panelEl.offsetHeight;
+    const spaceBelow = window.innerHeight - a.bottom - GAP - EDGE;
+    openUp = spaceBelow < h && a.top - GAP - EDGE > spaceBelow;
+    panelTop = openUp
+      ? Math.max(EDGE, a.top - GAP - h)
+      : Math.min(a.bottom + GAP, window.innerHeight - EDGE - h);
+    // Правый край панели — по правому краю кнопки (кнопка в конце ряда действий)
+    panelLeft = Math.max(EDGE, Math.min(a.right - w, window.innerWidth - EDGE - w));
   }
 
-  function stopBubble(e: MouseEvent) {
+  async function toggle(e: MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
+    open = !open;
+    if (!open) return;
+    await tick();
+    layoutPanel();
+  }
+
+  function close() {
+    open = false;
+  }
+
+  function onDocumentPointerDown(e: PointerEvent) {
+    const t = e.target as Node | null;
+    if (t && (panelEl?.contains(t) || triggerEl?.contains(t))) return;
+    close();
+  }
+
+  function onDocumentKeydown(e: KeyboardEvent) {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    close();
+    triggerEl?.focus();
+  }
+
+  $effect(() => {
+    if (!open) return;
+    document.addEventListener('pointerdown', onDocumentPointerDown, true);
+    document.addEventListener('keydown', onDocumentKeydown, true);
+    window.addEventListener('scroll', layoutPanel, true);
+    window.addEventListener('resize', layoutPanel);
+    return () => {
+      document.removeEventListener('pointerdown', onDocumentPointerDown, true);
+      document.removeEventListener('keydown', onDocumentKeydown, true);
+      window.removeEventListener('scroll', layoutPanel, true);
+      window.removeEventListener('resize', layoutPanel);
+    };
+  });
+
+  async function copy(value: string, id: string, toast: string) {
+    if (!value) return;
+    if (!(await copyTextToClipboard(value))) {
+      showToast('Не удалось скопировать', 'err');
+      return;
+    }
+    copiedId = id;
+    clearTimeout(copyTimer);
+    copyTimer = setTimeout(() => {
+      copiedId = null;
+    }, 1400);
+    showToast(toast);
+  }
+
+  async function apiRequestUrl(): Promise<string> {
+    let base = DEFAULT_API_ENDPOINT;
+    try {
+      const current = await window.anixApi?.client.getBaseUrl();
+      if (current) base = current;
+    } catch {
+      /* остаёмся на дефолтном эндпоинте */
+    }
+    return `${base.replace(/\/+$/, '')}/release/${releaseId}`;
+  }
+
+  async function share() {
+    if (!shareUrl) return;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: ru || en, url: shareUrl });
+        close();
+        return;
+      } catch (e) {
+        if ((e as DOMException)?.name === 'AbortError') return;
+      }
+    }
+    await copy(shareUrl, 'share', 'Ссылка скопирована');
   }
 </script>
 
 {#if visible}
-  <UiV2Tooltip
-    class="title-info-trigger {className}"
-    placement="bottom"
-    interactive={true}
-    showDelay={80}
-    hideDelay={120}
+  <button
+    bind:this={triggerEl}
+    type="button"
+    class="release-page__actions-chip release-page__actions-chip--more {className}"
+    class:release-page__actions-chip--pressed={open}
+    aria-label="Ещё"
+    aria-haspopup="menu"
+    aria-expanded={open}
+    onclick={toggle}
   >
-    <button
-      type="button"
-      class="title-info-trigger__btn"
-      aria-label="Названия"
-      onclick={stopBubble}
+    <span class="release-page__actions-chip-icon" aria-hidden="true">{@html iconMoreHorizontal(20)}</span>
+  </button>
+
+  {#if open}
+    <div
+      bind:this={panelEl}
+      class="uiv2-title-info-panel"
+      role="menu"
+      style:left="{panelLeft}px"
+      style:top="{panelTop}px"
+      style:transform-origin={openUp ? '100% 100%' : '100% 0'}
+      use:portal={{ lock: false }}
+      transition:scale={{ duration: 160, start: 0.96, easing: cubicOut }}
     >
-      <span class="title-info-trigger__icon" aria-hidden="true">{@html iconInfo(16)}</span>
-    </button>
-
-    {#snippet content()}
-      <div class="title-info-popover__inner uiv2-title-info">
-        {#if showRu}
-          <section class="uiv2-title-info__block">
-            <div class="uiv2-title-info__head">
-              <span class="uiv2-title-info__label">Название</span>
+      <div class="uiv2-title-info">
+        {#if titleRows.length > 0}
+          <div class="uiv2-title-info__group">
+            {#each titleRows as row (row.id)}
               <button
                 type="button"
-                class="uiv2-title-info__copy"
-                class:uiv2-title-info__copy--done={copiedId === 'ru'}
-                aria-label="Скопировать название"
-                onclick={(e) => {
-                  stopBubble(e);
-                  void copy(ru, 'ru');
-                }}
+                role="menuitem"
+                class="uiv2-title-info__row"
+                class:uiv2-title-info__row--done={copiedId === row.id}
+                aria-label="Скопировать: {row.label}"
+                onclick={() => void copy(row.value, row.id, row.toast)}
               >
-                {@html copiedId === 'ru' ? iconCheck(14) : iconCopy(14)}
+                <span class="uiv2-title-info__text">
+                  <span class="uiv2-title-info__label">{row.label}</span>
+                  <span class="uiv2-title-info__value">
+                    {#each row.lines as line, i}
+                      {#if i > 0}<br />{/if}{line}
+                    {/each}
+                  </span>
+                </span>
+                <span class="uiv2-title-info__copy" aria-hidden="true">
+                  {@html copiedId === row.id ? iconCheck(15) : iconCopy(15)}
+                </span>
               </button>
-            </div>
-            <p class="uiv2-title-info__value">{ru}</p>
-          </section>
+            {/each}
+          </div>
         {/if}
 
-        {#if showEn}
-          <section class="uiv2-title-info__block">
-            <div class="uiv2-title-info__head">
-              <span class="uiv2-title-info__label">Оригинальное название</span>
-              <button
-                type="button"
-                class="uiv2-title-info__copy"
-                class:uiv2-title-info__copy--done={copiedId === 'en'}
-                aria-label="Скопировать оригинальное название"
-                onclick={(e) => {
-                  stopBubble(e);
-                  void copy(en, 'en');
-                }}
-              >
-                {@html copiedId === 'en' ? iconCheck(14) : iconCopy(14)}
-              </button>
-            </div>
-            <p class="uiv2-title-info__value">{en}</p>
-          </section>
-        {/if}
+        {#if hasRelease}
+          {#if titleRows.length > 0}
+            <div class="uiv2-title-info__sep" role="separator"></div>
+          {/if}
+          <div class="uiv2-title-info__group">
+            <button
+              type="button"
+              role="menuitem"
+              class="uiv2-popup-menu__item uiv2-title-info__action"
+              onclick={() => void copy(String(releaseId), 'id', 'ID скопирован')}
+            >
+              <span
+                class="uiv2-popup-menu__icon"
+                class:uiv2-popup-menu__icon--success={copiedId === 'id'}
+                aria-hidden="true"
+              >{@html copiedId === 'id' ? iconCheck(18) : iconHash(18)}</span>
+              <span class="uiv2-popup-menu__label">Копировать ID</span>
+              <span class="uiv2-title-info__chip">{releaseId}</span>
+            </button>
 
-        {#if showAlt}
-          <section class="uiv2-title-info__block">
-            <div class="uiv2-title-info__head">
-              <span class="uiv2-title-info__label">Альтернативные названия</span>
-              <button
-                type="button"
-                class="uiv2-title-info__copy"
-                class:uiv2-title-info__copy--done={copiedId === 'alt'}
-                aria-label="Скопировать альтернативные названия"
-                onclick={(e) => {
-                  stopBubble(e);
-                  void copy(altText, 'alt');
-                }}
-              >
-                {@html copiedId === 'alt' ? iconCheck(14) : iconCopy(14)}
-              </button>
-            </div>
-            <p class="uiv2-title-info__value">
-              {#each altTitles as alt, i}
-                {#if i > 0}<br />{/if}{alt}
-              {/each}
-            </p>
-          </section>
+            <button
+              type="button"
+              role="menuitem"
+              class="uiv2-popup-menu__item uiv2-title-info__action"
+              onclick={async () => void copy(await apiRequestUrl(), 'api', 'API-запрос скопирован')}
+            >
+              <span
+                class="uiv2-popup-menu__icon"
+                class:uiv2-popup-menu__icon--success={copiedId === 'api'}
+                aria-hidden="true"
+              >{@html copiedId === 'api' ? iconCheck(18) : iconCodeXml(18)}</span>
+              <span class="uiv2-popup-menu__label">Копировать API-запрос</span>
+              <span class="uiv2-title-info__chip">GET</span>
+            </button>
+
+            <button
+              type="button"
+              role="menuitem"
+              class="uiv2-popup-menu__item uiv2-title-info__action"
+              onclick={() => void share()}
+            >
+              <span
+                class="uiv2-popup-menu__icon"
+                class:uiv2-popup-menu__icon--success={copiedId === 'share'}
+                aria-hidden="true"
+              >{@html copiedId === 'share' ? iconCheck(18) : iconShare(18)}</span>
+              <span class="uiv2-popup-menu__label">Поделиться</span>
+            </button>
+          </div>
         {/if}
       </div>
-    {/snippet}
-  </UiV2Tooltip>
+    </div>
+  {/if}
 {/if}

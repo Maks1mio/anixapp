@@ -27,7 +27,7 @@
     numToStatusId, ratingHue, mapCardData, formatEpisodeAdded,
   } from './_utils';
   import { isReleaseAnnounce, formatReleaseEpisodes } from '../../utils/release-card';
-  import { ReleaseHead, ReleaseAirCalendar, ReleaseVideos, ReleaseRating, ReleaseFriends, ReleaseRelated, ReleaseRecommendations, ReleaseScreenshots, ReleaseComments } from './components';
+  import { ReleaseHead, ReleaseAirCalendar, ReleaseVideos, ReleaseRating, ReleaseFriends, ReleaseRelated, ReleaseCollectionLinks, ReleaseRecommendations, ReleaseScreenshots, ReleaseComments } from './components';
   import { notifyFavoritesChanged } from '../../utils/favorites-events';
   import { applyReleaseListStatus } from '../../utils/release-list-status';
   import { enrichBlockedRelease } from '../../services/release-geo-bypass';
@@ -522,6 +522,7 @@
 
       <!-- Head: poster + info -->
       <ReleaseHead
+        {releaseId}
         {posterUrl} {posterAnimation} {title} {titleRu} {titleOriginal} {titleAlt}
         {ageRateText} {ageIsRestricted}
         {isFavorite} {favoritesCount}
@@ -578,6 +579,9 @@
           items={relatedCards}
         />
       {/if}
+
+      <!-- Значки / коллекции -->
+      <ReleaseCollectionLinks releaseId={id} {release} />
 
       <!-- Recommendations -->
       <ReleaseRecommendations items={recommendedCards} />

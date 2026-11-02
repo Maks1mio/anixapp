@@ -12,6 +12,8 @@ export interface SelectProps {
   onChange?: (value: string) => void;
   onValuesChange?: (values: string[]) => void;
   className?: string;
+  /** Доп. класс на выпадающую панель UiV2Select */
+  panelClass?: string;
   id?: string;
   disabled?: boolean;
   compact?: boolean;

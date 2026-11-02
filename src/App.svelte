@@ -79,6 +79,7 @@
   import ReleaseCommentsPage from './views/ReleaseComments.svelte';
   import Release from './views/Release/page.svelte';
   import Related from './views/Related.svelte';
+  import ReleaseCollections from './views/ReleaseCollections.svelte';
   import Bookmarks from './views/Bookmarks.svelte';
   import ProfileFriends from './views/ProfileFriends.svelte';
   import ProfileCollections from './views/ProfileCollections.svelte';
@@ -272,6 +273,7 @@
   const releaseCommentsMatch = $derived(path.match(/^\/release\/(\d+)\/comments$/));
   const releaseMatch          = $derived(path.match(/^\/release\/(\d+)$/));
   const relatedMatch          = $derived(path.match(/^\/release\/(\d+)\/related$/));
+  const releaseCollectionsMatch = $derived(path.match(/^\/release\/(\d+)\/collections$/));
   const profileVotesMatch     = $derived(path.match(/^\/profile\/(\d+)\/votes$/));
   const profileFriendsMatch   = $derived(path.match(/^\/profile\/(\d+)\/friends$/));
   const profileCollectionsMatch = $derived(path.match(/^\/profile\/(\d+)\/collections$/));
@@ -997,6 +999,10 @@
     {:else if relatedMatch}
       {#key relatedMatch[1]}
         <Related id={parseInt(relatedMatch[1], 10)} />
+      {/key}
+    {:else if releaseCollectionsMatch}
+      {#key releaseCollectionsMatch[1]}
+        <ReleaseCollections releaseId={parseInt(releaseCollectionsMatch[1], 10)} />
       {/key}
     {:else if releaseCommentRepliesMatch}
       {#key `${releaseCommentRepliesMatch[1]}-${releaseCommentRepliesMatch[2]}`}

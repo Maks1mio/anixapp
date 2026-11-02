@@ -287,7 +287,6 @@ html.mobile-mode {
     font: 700 20px/1.25 var(--m-font) !important;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
-  .release-page__title-info { flex: none; margin-top: 2px; color: var(--m-text-2); svg { width: 18px; height: 18px; } }
   .release-page__head--narrow .release-page__title-en, .release-page__title-en {
     display: flex !important; align-items: center; justify-content: space-between; gap: var(--m-space-3);
     margin: 2px 0 0 calc(18px + var(--m-space-3)) !important; text-align: left !important;

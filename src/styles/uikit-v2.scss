@@ -3051,8 +3051,12 @@
   padding: 0.48rem 0.72rem;
   border-radius: 8px;
   border: 0;
-  background: var(--uiv2-tooltip-bg, var(--uikit-v2-elevated));
-  box-shadow: var(--uiv2-chrome-shadow);
+  // Как панель статуса релиза (%release-light-panel): на тёмной теме не сливается со страницей
+  background: color-mix(in srgb, var(--uikit-v2-elevated) 88%, var(--uikit-v2-text) 9%);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--uikit-v2-text) 10%, transparent) inset,
+    0 0 0 0.5px color-mix(in srgb, var(--uikit-v2-text) 10%, transparent),
+    0 12px 32px color-mix(in srgb, #000 40%, transparent);
   color: var(--uiv2-tooltip-fg, var(--uikit-v2-text));
   pointer-events: none;
 }
@@ -3423,64 +3427,54 @@
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--uikit-v2-text) 12%, transparent);
 }
 
-.release-page__actions-status--watching .uiv2-select__field {
-  border-color: #6fa873 !important;
-}
+.release-page__actions-status {
+  --release-status-color: var(--uiv2-chrome-fg);
 
-.release-page__actions-status--watching .uiv2-select__value-label {
-  color: #6fa873;
-}
+  &--watching { --release-status-color: #6fa873; }
+  &--planned { --release-status-color: #a76fac; }
+  &--completed { --release-status-color: #6974ac; }
+  &--on_hold { --release-status-color: #d29742; }
+  &--dropped { --release-status-color: #c24e4d; }
 
-.release-page__actions-status--planned .uiv2-select__field {
-  border-color: #a76fac !important;
-}
+  .uiv2-select__field {
+    border: 0;
+    border-radius: 999px;
+    background: var(--uiv2-chrome-bg);
+    box-shadow: var(--uiv2-chrome-shadow);
+  }
 
-.release-page__actions-status--planned .uiv2-select__value-label {
-  color: #a76fac;
-}
+  // высота как у круглых чипов рядом (2.7rem), иначе ряд растягивает их в овал
+  .uiv2-select__trigger {
+    height: 2.7rem;
+    min-height: 0;
+    padding-block: 0;
+  }
 
-.release-page__actions-status--completed .uiv2-select__field {
-  border-color: #6974ac !important;
-}
+  .uiv2-select:not(.uiv2-select--disabled):hover .uiv2-select__field,
+  .uiv2-select--open .uiv2-select__field {
+    background: var(--uiv2-chrome-bg-hover);
+    box-shadow: var(--uiv2-chrome-shadow);
+  }
 
-.release-page__actions-status--completed .uiv2-select__value-label {
-  color: #6974ac;
-}
+  .uiv2-select__trigger {
+    padding-left: 1.1rem;
+    padding-right: 0.75rem;
+    font-weight: 600;
+  }
 
-.release-page__actions-status--on_hold .uiv2-select__field {
-  border-color: #d29742 !important;
-}
+  .uiv2-select__value-label,
+  .uiv2-select__chevron {
+    color: var(--release-status-color);
+  }
 
-.release-page__actions-status--on_hold .uiv2-select__value-label {
-  color: #d29742;
-}
+  &[class*='release-page__actions-status--'] .uiv2-select__field {
+    background: color-mix(in srgb, var(--release-status-color) 16%, var(--uikit-v2-elevated));
+  }
 
-.release-page__actions-status--dropped .uiv2-select__field {
-  border-color: #c24e4d !important;
-}
-
-.release-page__actions-status--dropped .uiv2-select__value-label {
-  color: #c24e4d;
-}
-
-.release-page__actions-status--watching .uiv2-select__chevron {
-  color: #6fa873 !important;
-}
-
-.release-page__actions-status--planned .uiv2-select__chevron {
-  color: #a76fac !important;
-}
-
-.release-page__actions-status--completed .uiv2-select__chevron {
-  color: #6974ac !important;
-}
-
-.release-page__actions-status--on_hold .uiv2-select__chevron {
-  color: #d29742 !important;
-}
-
-.release-page__actions-status--dropped .uiv2-select__chevron {
-  color: #c24e4d !important;
+  &[class*='release-page__actions-status--'] .uiv2-select:not(.uiv2-select--disabled):hover .uiv2-select__field,
+  &[class*='release-page__actions-status--'] .uiv2-select--open .uiv2-select__field {
+    background: color-mix(in srgb, var(--release-status-color) 24%, var(--uikit-v2-elevated));
+  }
 }
 
 .release-page__actions-status .uiv2-select__chevron {

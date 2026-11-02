@@ -2814,6 +2814,8 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
 .release-page__recommended-panel {
   position: relative;
   z-index: 1;
+  // Панель лежит на подложке .release-page__section-bg — затемнение карусели в её цвет
+  --carousel-fade-color: #{$color-surface-hover};
   padding: 1rem 0 1.1rem;
   box-sizing: border-box;
   min-width: 0;
@@ -3283,7 +3285,8 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   flex-direction: column;
   gap: 0.75rem;
   position: sticky;
-  top: calc(min(67rem, 100vw) * -0.373);
+  // влезает — у верхнего края, нет — нижним краем к низу окна; считается в ReleaseHead
+  top: var(--release-aside-sticky-top, 0.75rem);
   align-self: start;
   min-width: 0;
 }
@@ -3383,6 +3386,8 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .release-page__head--narrow .release-page__title-en {
+  justify-content: center;
+  max-width: 100%;
   margin-bottom: 0.25rem;
 }
 
@@ -3399,7 +3404,7 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
 .release-page__poster {
   position: relative;
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
   background: $color-surface;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
@@ -3424,7 +3429,8 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   outline: 3px solid transparent;
 
   &:hover {
-    outline: 3px solid $color-accent;
+    outline: 2px solid color-mix(in srgb, var(--uikit-v2-text) 55%, transparent);
+    outline-offset: 3px;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
   }
 }
@@ -3499,18 +3505,20 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   &--play {
     width: 100%;
-    padding: 0.82rem 1.35rem;
+    min-height: 2.9rem;
+    padding: 0 1.35rem;
     font-size: 1rem;
-    font-weight: 700;
-    color: #fff;
-    background: $color-accent;
-    border: none;
-    border-color: $color-accent;
-    border-radius: 10px;
-    box-shadow: none;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    color: var(--uiv2-chrome-on-accent-fg);
+    background: var(--uikit-v2-accent);
+    border: 0;
+    border-radius: 999px;
+    box-shadow: 0 1px 0 color-mix(in srgb, var(--uikit-v2-text) 12%, transparent) inset;
+    transition: background 0.2s ease, opacity 0.2s ease, transform 0.18s ease;
 
     .release-page__btn-icon {
-      color: #fff;
+      color: inherit;
     }
 
     .release-page__btn-label {
@@ -3521,13 +3529,26 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     &:hover:not(:disabled) {
-      background: $color-accent-hover;
-      border-color: $color-accent-hover;
-      color: #fff;
+      background: var(--uikit-v2-accent-hover);
+      border-color: transparent;
+      color: var(--uiv2-chrome-on-accent-fg);
+    }
 
-      .release-page__btn-icon {
-        color: #fff;
-      }
+    &:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--uikit-v2-accent) 50%, transparent);
+      outline-offset: 2px;
+    }
+
+    // «Скоро» / недоступно — нейтральная chrome-пилюля вместо бледного акцента
+    &.release-page__btn--disabled {
+      opacity: 1;
+      background: var(--uiv2-chrome-bg);
+      color: var(--uiv2-fg-muted);
+      box-shadow: var(--uiv2-chrome-shadow);
     }
   }
 
@@ -3558,48 +3579,67 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   margin-bottom: 0.15rem;
 }
 
-.release-page__title-info {
-  flex-shrink: 0;
-}
-
 .release-page__title {
   margin: 0;
   font-size: 1.85rem;
   font-weight: 700;
-  line-height: 1.25;
+  line-height: 1.2;
   color: $color-text;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
   overflow-wrap: anywhere;
+  // Длинные названия: не больше 3 строк, полное — в меню «⋯» и в подсказке
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+
+  &--long {
+    font-size: 1.55rem;
+  }
+
+  &--xlong {
+    font-size: 1.35rem;
+    line-height: 1.25;
+  }
 }
 
 .release-page__title-en {
   margin: 0 0 0.5rem;
   font-size: 0.95rem;
   font-weight: 500;
-  color: $color-text-muted;
+  color: var(--uiv2-fg-muted);
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.release-page__title-en-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .release-page__age {
   display: inline-flex;
   align-items: center;
-  padding: 0.15rem 0.45rem;
-  font-size: 0.75rem;
+  min-height: 1.35rem;
+  padding: 0 0.5rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  color: $color-text;
-  background: $color-surface-hover;
-  border: 1px solid $color-border;
-  border-radius: $radius-sm;
+  color: var(--uiv2-chrome-fg);
+  background: var(--uiv2-chrome-bg);
+  box-shadow: var(--uiv2-chrome-shadow);
+  border: 0;
+  border-radius: 999px;
   flex-shrink: 0;
   letter-spacing: 0.02em;
 
   &--restricted {
     color: #fff;
-    background: color-mix(in srgb, var(--color-error) 80%, transparent);
-    border-color: $color-error;
+    background: color-mix(in srgb, var(--uikit-v2-danger) 85%, transparent);
   }
 }
 
@@ -3686,57 +3726,72 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
-  min-height: 2.5rem;
-  padding: 0 0.85rem;
-  border: 1px solid color-mix(in srgb, $color-border 55%, $color-text-muted);
-  border-radius: 10px;
-  background: transparent;
-  color: $color-text;
+  gap: 0.4rem;
+  min-height: 2.7rem;
+  padding: 0 1.05rem 0 0.9rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--uiv2-chrome-bg);
+  box-shadow: var(--uiv2-chrome-shadow);
+  color: var(--uiv2-chrome-fg);
   font: inherit;
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1;
   cursor: pointer;
-  transition: background $transition, color $transition, border-color $transition, opacity $transition;
+  backdrop-filter: blur(10px);
+  transition: background 0.2s ease, color 0.2s ease, transform 0.18s ease;
   flex-shrink: 0;
 
   &:hover {
-    background: color-mix(in srgb, $color-text 6%, transparent);
-    border-color: color-mix(in srgb, $color-border 35%, $color-text-muted);
-    color: $color-text;
+    background: var(--uiv2-chrome-bg-hover);
+    color: var(--uiv2-chrome-fg);
+  }
+
+  &:active {
+    transform: scale(0.97);
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--uikit-v2-accent) 50%, transparent);
+    outline-offset: 2px;
   }
 
   &--active {
-    color: $color-accent;
-    background: color-mix(in srgb, var(--color-accent) 12%, $color-surface);
-    border-color: color-mix(in srgb, var(--color-accent) 45%, $color-border);
-  }
-
-  &--comments {
-    min-width: 2.5rem;
-    padding: 0 0.65rem;
-    color: $color-text-muted;
+    color: var(--uiv2-chrome-active-fg);
+    background: var(--uiv2-chrome-active-bg);
 
     &:hover {
-      color: $color-text;
+      color: var(--uiv2-chrome-active-fg);
+      background: color-mix(in srgb, var(--uikit-v2-accent) 22%, var(--uikit-v2-elevated));
     }
   }
 
-  &--notify {
-    min-width: 2.5rem;
-    padding: 0 0.65rem;
-    color: $color-text-muted;
+  &--comments,
+  &--notify,
+  &--more {
+    width: 2.7rem;
+    padding: 0;
+    color: var(--uiv2-chrome-fg-muted);
 
     &:hover {
-      color: $color-text;
+      color: var(--uiv2-chrome-fg);
     }
+  }
+
+  &--pressed {
+    color: var(--uiv2-chrome-fg);
+    background: var(--uiv2-chrome-bg-hover);
   }
 
   &--notify-on {
     color: #f59e0b;
-    border-color: color-mix(in srgb, #f59e0b 40%, $color-border);
-    background: color-mix(in srgb, #f59e0b 10%, $color-surface);
+    background: color-mix(in srgb, #f59e0b 14%, var(--uikit-v2-elevated));
+
+    &:hover {
+      color: #f59e0b;
+      background: color-mix(in srgb, #f59e0b 22%, var(--uikit-v2-elevated));
+    }
   }
 }
 
@@ -3778,12 +3833,16 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
 .release-page__meta-info--flat .release-page__meta-info-row {
   font-size: 0.875rem;
-  color: color-mix(in srgb, $color-text 88%, $color-text-muted);
+  color: var(--uiv2-fg-soft);
+}
+
+.release-page__meta-info--flat .release-page__meta-info-text {
+  color: var(--uiv2-fg-soft);
 }
 
 .release-page__meta-info--flat .release-page__meta-info-icon {
-  opacity: 0.65;
-  color: color-mix(in srgb, $color-text 70%, $color-text-muted);
+  opacity: 1;
+  color: var(--uiv2-fg-muted);
 }
 
 .release-page__meta-row {
@@ -3852,31 +3911,53 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
 // ── Note block (warnings, etc) ──
 .release-page__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
   margin-bottom: 0.75rem;
-  padding: 0.65rem 1rem;
-  font-size: 0.85rem;
-  line-height: 1.5;
-  color: $color-text;
-  background: $color-surface;
-  border: 1px solid $color-border;
-  border-left: 3px solid $color-accent;
-  border-radius: $radius-md;
+  padding: 0.8rem 1rem 0.8rem 0.85rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--uiv2-fg-strong);
+  background: color-mix(in srgb, var(--uikit-v2-accent) 7%, var(--uiv2-card-bg));
+  border: 0;
+  border-radius: 16px;
+  box-shadow: var(--uiv2-chrome-shadow);
   min-width: 0;
   max-width: 100%;
   overflow-wrap: anywhere;
   word-break: break-word;
 
   &--geo-warning {
-    border-left-color: #e8a317;
-    background: color-mix(in srgb, #e8a317 8%, $color-surface);
-    color: color-mix(in srgb, var(--color-text) 92%, #e8a317);
+    background: color-mix(in srgb, #e8a317 10%, var(--uiv2-card-bg));
+    color: color-mix(in srgb, var(--uikit-v2-text) 92%, #e8a317);
 
     strong {
       display: block;
       margin-bottom: 0.25rem;
       color: #f0c040;
     }
+
+    .release-page__note-icon {
+      color: #f0c040;
+    }
   }
+}
+
+.release-page__note-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  color: var(--uikit-v2-accent);
+
+  svg {
+    display: block;
+  }
+}
+
+.release-page__note-body {
+  flex: 1;
+  min-width: 0;
 }
 
 // ── Description with smooth collapse ──
@@ -3993,18 +4074,22 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   padding: 0;
   border: none;
   background: none;
-  color: inherit;
+  color: var(--uiv2-fg-strong);
   font: inherit;
   line-height: inherit;
-  text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, $color-text-muted 55%, transparent);
-  text-underline-offset: 0.15em;
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, var(--uikit-v2-text) 30%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
   cursor: pointer;
-  transition: color $transition, text-decoration-color $transition;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
 
-  &:hover {
-    color: $color-accent;
-    text-decoration-color: $color-accent;
+  &:hover,
+  &:focus-visible {
+    color: var(--uikit-v2-accent);
+    text-decoration-style: solid;
+    text-decoration-color: currentColor;
+    outline: none;
   }
 }
 

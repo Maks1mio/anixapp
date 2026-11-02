@@ -339,7 +339,7 @@
               ></span>
               <span class="profile-panel__friend-row-name">
                 {req.login || 'Без имени'}
-                <UserBadge url={badgeUrl} name={resolveBadgeName(req.badge)} size="xs" />
+                <UserBadge url={badgeUrl} name={resolveBadgeName(req.badge)} profileId={Number(req.id)} size="xs" />
                 <AppBadges userId={Number(req.id)} size="xs" />
               </span>
             </button>
@@ -383,7 +383,7 @@
               ></span>
               <span class="profile-panel__friend-row-name">
                 {req.login || 'Без имени'}
-                <UserBadge url={badgeUrl} name={resolveBadgeName(req.badge)} size="xs" />
+                <UserBadge url={badgeUrl} name={resolveBadgeName(req.badge)} profileId={Number(req.id)} size="xs" />
                 <AppBadges userId={Number(req.id)} size="xs" />
               </span>
             </button>
@@ -481,7 +481,7 @@
               <span class="profile-panel__friend-row-meta">
                 <span class="profile-panel__friend-row-name">
                   <span class="profile-panel__friend-row-login">{fr.login || 'Без имени'}</span>
-                  <UserBadge url={badgeUrl} name={resolveBadgeName(fr.badge)} size="xs" />
+                  <UserBadge url={badgeUrl} name={resolveBadgeName(fr.badge)} profileId={Number(fr.id)} size="xs" />
                   <AppBadges userId={Number(fr.id)} size="xs" />
                   {#if banLabel}
                     <span class="profile-panel__friend-row-ban" title={banNotice ?? undefined}>

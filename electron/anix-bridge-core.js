@@ -672,6 +672,11 @@ function createAnixBridgeCore(options = {}) {
       if (releaseId == null) return null;
       return c.getClient().endpoints.release.info(releaseId, extended);
     }),
+    'anix:releaseBadges': h((c, id, page = 0) => {
+      const releaseId = toPositiveInt(id);
+      if (releaseId == null) return null;
+      return c.getClient().endpoints.release.badges(releaseId, page);
+    }),
     'anix:releaseContinue': h((c, id) => {
       const releaseId = toPositiveInt(id);
       if (releaseId == null) return null;
@@ -927,6 +932,8 @@ function createAnixBridgeCore(options = {}) {
     }),
     'anix:collectionProfileCollections': h((c, profileId, page = 0) =>
       c.getClient().endpoints.collection.profileCollections(profileId, page)),
+    'anix:collectionReleaseCollections': h((c, releaseId, page = 0, sort = 1) =>
+      c.getClient().endpoints.collection.releaseCollections(releaseId, page, { sort })),
     'anix:collectionMyCreate': h((c, body) => c.getClient().endpoints.collectionMy.create(body)),
     'anix:collectionMyEdit': h((c, id, body) => c.getClient().endpoints.collectionMy.edit(id, body)),
     'anix:collectionMyEditImage': h(async (c, id, imageBase64, fileName = 'image.jpg') => {

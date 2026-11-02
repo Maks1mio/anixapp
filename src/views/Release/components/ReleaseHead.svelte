@@ -10,6 +10,8 @@
     iconBellPlus,
     iconBellRing,
     iconMoreVertical,
+    iconInfo,
+    iconTriangleAlert,
   } from '../../../components/icons';
   import { showToast } from '../../../stores/toast';
   import { portal } from '../../../actions/portal';
@@ -25,8 +27,10 @@ import { requestOpenExternal } from '../../../utils/external-link';
   import { toPosterDisplayUrl } from '../../../utils/posterUrl';
   import AnimatedMediaOverlay from '../../../components/AnimatedMediaOverlay.svelte';
   import { isMobileMode } from '../../../platform/mobile';
+  import { openSearchPage } from '../../../search-controller';
 
   interface Props {
+    releaseId?:      number;
     posterUrl:       string;
     /** Anixart 11+: анимированный постер (видео) */
     posterAnimation?: string;
@@ -65,6 +69,7 @@ import { requestOpenExternal } from '../../../utils/external-link';
   }
 
   let {
+    releaseId,
     posterUrl, posterAnimation, title, titleRu, titleOriginal, titleAlt, ageRateText, ageIsRestricted,
     isFavorite, favoritesCount,
     isViewBlocked,
@@ -101,6 +106,59 @@ import { requestOpenExternal } from '../../../utils/external-link';
     update();
     mq.addEventListener('change', update);
     return () => mq.removeEventListener('change', update);
+  });
+
+  // Липкая колонка «постер + Смотреть»: прилипает целиком у верхнего края; если не влезает
+  // по высоте — нижним краем к низу окна (кнопка всегда видна, постер обрезается сверху).
+  let asideEl = $state<HTMLElement | null>(null);
+  $effect(() => {
+    const aside = asideEl;
+    if (!aside) return;
+    const scroller = aside.closest<HTMLElement>('.page__scroll') ?? document.documentElement;
+    const GAP = 12;
+    const update = () => {
+      const top = Math.min(GAP, scroller.clientHeight - aside.offsetHeight - GAP);
+      aside.style.setProperty('--release-aside-sticky-top', `${top}px`);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(aside);
+    ro.observe(scroller);
+    return () => ro.disconnect();
+  });
+
+  /** Цвета статусов — те же, что у пилюли селекта (uikit-v2.scss) */
+  const STATUS_COLORS: Record<string, string> = {
+    watching: '#6fa873',
+    planned: '#a76fac',
+    completed: '#6974ac',
+    on_hold: '#d29742',
+    dropped: '#c24e4d',
+  };
+
+  const statusOptions = $derived(
+    selectOptions.map((o) => ({
+      ...o,
+      icon: `<span class="release-status-dot" style="--release-status-color:${STATUS_COLORS[o.value] ?? 'color-mix(in srgb, var(--uikit-v2-text) 35%, transparent)'}"></span>`,
+    })),
+  );
+
+  const titleLength = $derived((titleRu || title).length);
+  let titleEl = $state<HTMLElement | null>(null);
+  let titleClamped = $state(false);
+
+  // Полное название — в нативной подсказке, только если заголовок обрезан line-clamp
+  $effect(() => {
+    const el = titleEl;
+    void titleLength;
+    if (!el) return;
+    const check = () => {
+      titleClamped = el.scrollHeight - el.clientHeight > 2;
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
   });
 
   let moreOpen = $state(false);
@@ -172,18 +230,18 @@ import { requestOpenExternal } from '../../../utils/external-link';
 {#snippet briefBlock()}
   <div class="release-page__head-brief">
     <div class="release-page__title-row">
-      <TitleInfoTrigger
-        titleRu={titleRu || title}
-        titleEn={titleOriginal}
-        {titleAlt}
-        className="release-page__title-info"
-      />
-      <h1 class="release-page__title">{titleRu || title}</h1>
+      <h1
+        class="release-page__title"
+        class:release-page__title--long={titleLength > 48}
+        class:release-page__title--xlong={titleLength > 90}
+        title={titleClamped ? (titleRu || title) : undefined}
+        bind:this={titleEl}
+      >{titleRu || title}</h1>
     </div>
 
     {#if titleOriginal && titleOriginal !== titleRu}
       <p class="release-page__title-en">
-        {titleOriginal}
+        <span class="release-page__title-en-text">{titleOriginal}</span>
         <span class="{ageIsRestricted ? 'release-page__age release-page__age--restricted' : 'release-page__age'}">{ageRateText}</span>
       </p>
     {:else}
@@ -222,7 +280,8 @@ import { requestOpenExternal } from '../../../utils/external-link';
         </div>
       {:else}
         <Select
-          options={selectOptions}
+          options={statusOptions}
+          panelClass="release-status-panel"
           value={currentStatus ?? ''}
           placeholder={isMobileMode() ? 'Не смотрю' : 'Не в списке'}
           onChange={onSetStatus}
@@ -233,7 +292,8 @@ import { requestOpenExternal } from '../../../utils/external-link';
     <button
       type="button"
       class="release-page__actions-chip release-page__actions-chip--fav{isFavorite ? ' release-page__actions-chip--active' : ''}"
-      title={isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}
+      aria-label={isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}
+      aria-pressed={isFavorite}
       onclick={onToggleFavorite}
     >
       <span class="release-page__actions-chip-icon">{@html iconFlag(18, isFavorite)}</span>
@@ -246,7 +306,6 @@ import { requestOpenExternal } from '../../../utils/external-link';
       <button
         type="button"
         class="release-page__actions-chip release-page__actions-chip--notify{notifyEnabled ? ' release-page__actions-chip--notify-on' : ''}"
-        title={notifyEnabled ? 'Уведомления о сериях включены' : 'Настроить уведомления о сериях'}
         aria-label={notifyEnabled ? 'Уведомления о сериях включены' : 'Настроить уведомления о сериях'}
         onclick={() => onOpenNotify?.()}
       >
@@ -264,6 +323,13 @@ import { requestOpenExternal } from '../../../utils/external-link';
     >
       <span class="release-page__actions-chip-icon">{@html iconMessageCircle(18)}</span>
     </button>
+
+    <TitleInfoTrigger
+      titleRu={titleRu || title}
+      titleEn={titleOriginal}
+      {titleAlt}
+      {releaseId}
+    />
   </div>
 {/snippet}
 
@@ -309,6 +375,12 @@ import { requestOpenExternal } from '../../../utils/external-link';
               {#each row.segments as segment, index (index)}
                 {#if segment.airCalendar}
                   {@render airDate?.()}
+                {:else if segment.query}
+                  <button
+                    type="button"
+                    class="release-page__meta-info-link"
+                    onclick={() => openSearchPage(segment.query!, 'releases', segment.searchBy ?? 0)}
+                  >{segment.text}</button>
                 {:else}
                   {segment.text}
                 {/if}
@@ -321,12 +393,18 @@ import { requestOpenExternal } from '../../../utils/external-link';
 
     {#if isViewBlocked}
       <div class="release-page__note release-page__note--geo-warning" role="note">
-        <strong>Недоступно в РФ.</strong>
-        Этот тайтл официально заблокирован для просмотра в России. Вы можете попробовать воспроизвести
-        на свой страх и риск — видео может не открыться или быть ограничено источником.
+        <span class="release-page__note-icon" aria-hidden="true">{@html iconTriangleAlert(18)}</span>
+        <div class="release-page__note-body">
+          <strong>Недоступно в РФ.</strong>
+          Этот тайтл официально заблокирован для просмотра в России. Вы можете попробовать воспроизвести
+          на свой страх и риск — видео может не открыться или быть ограничено источником.
+        </div>
       </div>
     {:else if noteHtml}
-      <div class="release-page__note" onclick={onRichTextClick}>{@html noteHtml}</div>
+      <div class="release-page__note" role="note">
+        <span class="release-page__note-icon" aria-hidden="true">{@html iconInfo(18)}</span>
+        <div class="release-page__note-body" onclick={onRichTextClick}>{@html noteHtml}</div>
+      </div>
     {/if}
 
     {#if descClean}
@@ -372,7 +450,7 @@ import { requestOpenExternal } from '../../../utils/external-link';
   </div>
 
   {#if isWide}
-    <div class="release-page__head-aside-play">
+    <div class="release-page__head-aside-play" bind:this={asideEl}>
       {@render posterBlock()}
       {@render playBlock()}
     </div>

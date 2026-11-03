@@ -58,6 +58,7 @@
   import { formatDubberQuality, isDubberNovelty, readLastEpisodeTypeUpdateId, sortDubbersPinnedFirst } from '../utils/dubber-meta';
   import { listPlayableDubberSources, NO_EPISODE_PICK_OTHER_DUB } from '../utils/dubber-sources';
   import { isTvMode } from '../platform/tv';
+  import { releaseMedia } from '../services/release-media';
   import { restoreTvFocus, scheduleFocusTvOverlayContent } from '../services/tv-navigation';
   import { tvLongPress } from '../actions/tvLongPress';
   import UiV2Button from './uikit-v2/UiV2Button.svelte';
@@ -192,6 +193,9 @@
   const isTv = isTvMode();
   /** ПК: ТВ-подобные крупные карточки, но под мышь (ховеры, пин и отметка кнопками). */
   const isDesktop = !isTv && !isMobileMode();
+  /** Episode position → cover frame (anixmedia), PC only; the release page asks for them. */
+  const episodeCovers = $derived(isDesktop ? ($releaseMedia[releaseId]?.episodes ?? {}) : {});
+  const hasCovers = $derived(Object.keys(episodeCovers).length > 0);
   const watchedCount = $derived(episodes.filter(isEpisodeWatched).length);
   const remainingCount = $derived(Math.max(0, episodes.length - watchedCount));
   const lastWatchedEpisode = $derived.by(() => {
@@ -1222,21 +1226,33 @@
               </div>
               {/if}
 
-              <div class="watch-modal__episodes" bind:this={episodesListEl}>
+              <div class="watch-modal__episodes" class:watch-modal__episodes--covers={hasCovers} bind:this={episodesListEl}>
                 {#each filteredEpisodes as ep (ep.position)}
                   {@const watched = isEpisodeWatched(ep)}
                   {@const dlItem = isMobile ? mobileDlItem(ep.position) : undefined}
                   {@const downloaded = dlItem?.state === 'completed'}
                   {@const displayNum = episodeDisplayNumber(ep, episodes)}
                   {@const unnumbered = displayNum == null}
+                  {@const cover = episodeCovers[String(ep.position)]}
                   <article
                     class="watch-modal__episode-card"
                     class:watch-modal__episode-card--watched={watched}
                     class:watch-modal__episode-card--active={selectedEpisodePos === ep.position}
                     class:watch-modal__episode-card--unnumbered={unnumbered}
                     class:watch-modal__episode-card--next={(isTv || isDesktop) && nextEpisodePos === ep.position}
+                    class:watch-modal__episode-card--cover={!!cover}
                     data-position={ep.position}
                   >
+                    {#if cover}
+                      <img
+                        class="watch-modal__episode-cover"
+                        src={cover}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        onload={(e) => e.currentTarget.classList.add('watch-modal__episode-cover--on')}
+                      />
+                    {/if}
                     <button
                       type="button"
                       class="watch-modal__episode-main"

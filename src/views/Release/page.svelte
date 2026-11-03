@@ -8,6 +8,7 @@
   import { buildPosterUrl, buildScreenshotUrl, toPosterDisplayUrl } from '../../utils/posterUrl';
   import { setDiscordContext, refreshDiscordPresence } from '../../services/discord-presence';
   import { isTvMode } from '../../platform/tv';
+  import { releaseMedia, watchReleaseMedia } from '../../services/release-media';
   import {
     getTvReleaseOpenTarget,
     runTvReleaseOpenAnimation,
@@ -283,7 +284,17 @@
   });
 
   // ── Derived: lists / related / screenshots ────────────────────────────────
+  // Episode covers and screenshots from anixmedia — on PC only, asked for when the release opens.
+  const mediaEnabled = !isTvMode() && !isMobileMode();
+  $effect(() => {
+    if (!mediaEnabled || !id) return;
+    return watchReleaseMedia(id);
+  });
+
   const screenshots   = $derived.by(() => {
+    // Our 8 frames from the first episode are sharper than Anixart's; theirs until ours are ready.
+    const own = mediaEnabled ? $releaseMedia[id]?.screenshots : undefined;
+    if (own?.length) return own;
     if (!release) return [] as string[];
     const si = release.screenshot_images as string[] | undefined;
     if (si) return si.map((u) => buildScreenshotUrl(u));

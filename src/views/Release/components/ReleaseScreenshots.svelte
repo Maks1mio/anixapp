@@ -1,14 +1,12 @@
 <script lang="ts">
   import { openImageLightboxGallery } from '../_utils';
-  import { buildScreenshotUrl } from '../../../utils/posterUrl';
   import PosterImage from '../../../components/PosterImage.svelte';
 
+  /** Ready-to-load URLs: Anixart's (built by the page) or anixmedia's. */
   interface Props { screenshots: string[]; }
   let { screenshots }: Props = $props();
 
-  const urls = $derived(
-    screenshots.slice(0, 8).map((url) => buildScreenshotUrl(url)).filter(Boolean),
-  );
+  const urls = $derived(screenshots.slice(0, 8).filter(Boolean));
 </script>
 
 <div class="release-page__section">

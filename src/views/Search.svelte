@@ -10,7 +10,7 @@
   import UiV2Tabs from '../components/uikit-v2/UiV2Tabs.svelte';
   import DiscoverHero from '../components/DiscoverHero.svelte';
   import { replacePath } from '../stores/navigation';
-  import { iconX } from '../components/icons';
+  import { iconEyeOff, iconX } from '../components/icons';
   import { handleUserProfileClick } from '../stores/user-profile';
   import { resolveBadgeName, resolveProfileBadgeUrl } from '../utils/badge';
   import { addSearchHistory } from '../utils/search-history';
@@ -18,6 +18,7 @@
   import { collectionsBackdropUrl, mapCollectionCard } from '../utils/collection';
   import { toCdnProxyUrl, toPosterDisplayUrl } from '../utils/posterUrl';
   import { headlineFromLoadError } from '../utils/content-load-error';
+  import { searchCatalog, type CatalogHit } from '../services/catalog-search';
   import {
     SEARCH_TABS,
     RELEASE_SEARCH_BY_OPTIONS,
@@ -60,15 +61,17 @@
     q?: string;
     tab?: SearchTab;
     searchBy?: number;
+    /** Только тайтлы, скрытые из поиска Anixart (каталог anixback) */
+    hiddenOnly?: boolean;
   }
 
-  let { q = '', tab = 'releases', searchBy = 0 }: Props = $props();
+  let { q = '', tab = 'releases', searchBy = 0, hiddenOnly = false }: Props = $props();
 
   const query = $derived(q.trim());
   // Вкладка меняется без перемонтирования страницы — иначе у вкладок не играет анимация
   // svelte-ignore state_referenced_locally
   let activeTab = $state<SearchTab>(tab);
-  const viewKey = () => buildViewStateKey('/search', { q: query, tab: activeTab, by: searchBy });
+  const viewKey = () => buildViewStateKey('/search', { q: query, tab: activeTab, by: searchBy, hidden: hiddenOnly ? 1 : 0 });
   /** Уже загруженные вкладки этого запроса. */
   const tabCache = new Map<SearchTab, SearchViewState>();
 
@@ -139,7 +142,17 @@
     return value.images.length || value.name ? value : null;
   }
 
-  async function fetchPage(p: number): Promise<{ data: unknown; content: unknown[] }> {
+  /** done — выдача кончилась (Anixart об этом сообщает только пустой страницей). */
+  async function fetchPage(p: number): Promise<{ data: unknown; content: unknown[]; done?: boolean }> {
+    if (hiddenMode) {
+      const res = await searchCatalog(query, { by: searchBy, hiddenOnly: true, offset: releases.length });
+      if (!res) throw new Error('Каталог AnixApp недоступен');
+      return {
+        data: null,
+        content: res.hits.map((h) => ({ ...h.card, hiddenInAnixart: true })),
+        done: releases.length + res.hits.length >= res.total,
+      };
+    }
     const api = window.anixApi?.search;
     if (!api) throw new Error('API поиска недоступно');
     const data = activeTab === 'releases'
@@ -150,23 +163,44 @@
     return { data, content: extractContent(data) };
   }
 
+  /**
+   * Гибрид: выдача Anixart как есть + сверху тайтлы, скрытые из его поиска (найдены каталогом anixback).
+   * Если Anixart не нашёл ничего (опечатка, другая раскладка) — вся выдача каталога.
+   */
+  function mergeCatalog(hits: CatalogHit[]) {
+    const shown = new Set(releases.map((r) => r.id));
+    const fresh = hits.map((h) => h.card).filter((c) => !shown.has(c.id));
+    releases = releases.length
+      ? [...fresh.filter((c) => c.hiddenInAnixart), ...releases]
+      : fresh;
+  }
+
+  const hiddenMode = $derived(hiddenOnly && activeTab === 'releases');
+
   async function loadPage() {
     if (!query || isLoading || !hasMore) return;
     const seq = ++requestSeq;
     const first = page === 0;
     isLoading = true;
     if (first) loadState = 'loading';
+    const catalog = first && activeTab === 'releases' && !hiddenMode
+      ? searchCatalog(query, { by: searchBy }).then((res) => res?.hits ?? [])
+      : null;
     try {
-      const { data, content } = await fetchPage(page);
+      const { data, content, done } = await fetchPage(page);
+      const hits = catalog ? await catalog : null;
       if (seq !== requestSeq) return;
 
       if (activeTab === 'releases') {
-        if (first && searchBy === 0) franchise = mapFranchise(data, content);
+        if (first && searchBy === 0 && !hiddenMode) franchise = mapFranchise(data, content);
         const seen = new Set(releases.map((r) => r.id));
-        const next = content
-          .map((row) => mapReleaseRawToCard(row as Record<string, unknown>))
-          .filter((r) => !seen.has(r.id));
+        const next = hiddenMode
+          ? (content as ReleaseCardData[]).filter((r) => !seen.has(r.id))
+          : content
+            .map((row) => mapReleaseRawToCard(row as Record<string, unknown>))
+            .filter((r) => !seen.has(r.id));
         releases = [...releases, ...next];
+        if (hits) mergeCatalog(hits);
       } else if (activeTab === 'collections') {
         const seen = new Set(collections.map((c) => c.id));
         const next = content
@@ -183,12 +217,18 @@
 
       if (first) addSearchHistory(query);
       page += 1;
-      hasMore = content.length > 0;
+      hasMore = content.length > 0 && !done;
       loadState = itemCount > 0 || franchise ? 'ready' : 'empty';
       requestAnimationFrame(checkIfNeedsMore);
     } catch (err) {
+      const hits = catalog ? await catalog : [];
       if (seq !== requestSeq) return;
-      if (first) {
+      if (first && hits.length) {
+        // Anixart недоступен — хотя бы то, что знает каталог
+        releases = hits.map((h) => h.card);
+        hasMore = false;
+        loadState = 'ready';
+      } else if (first) {
         errorMsg = headlineFromLoadError(err);
         loadState = 'error';
       } else {
@@ -272,7 +312,7 @@
   function switchTab(id: string) {
     if (id === activeTab) return;
     // Сначала URL (beforeNavigate сохранит текущую вкладку под её ключом), потом смена вкладки
-    replacePath(buildSearchRoute(query, id as SearchTab, id === 'releases' ? searchBy : 0));
+    replacePath(buildSearchRoute(query, id as SearchTab, id === 'releases' ? searchBy : 0, hiddenOnly));
     showTab(id as SearchTab);
   }
 
@@ -285,7 +325,11 @@
   function switchSearchBy(value: string) {
     const by = Number(value) || 0;
     if (by === searchBy) return;
-    replacePath(buildSearchRoute(query, 'releases', by));
+    replacePath(buildSearchRoute(query, 'releases', by, hiddenOnly));
+  }
+
+  function toggleHiddenOnly() {
+    replacePath(buildSearchRoute(query, 'releases', searchBy, !hiddenOnly));
   }
 
   onMount(() => {
@@ -317,16 +361,30 @@
   });
 </script>
 
-{#snippet byFilter()}
-  <button
-    type="button"
-    class="search-v2__filter"
-    aria-label="Сбросить поиск по полю"
-    onclick={() => switchSearchBy('0')}
-  >
-    по полю «{byLabel.toLowerCase()}»
-    <span aria-hidden="true">{@html iconX(12)}</span>
-  </button>
+{#snippet releaseActions()}
+  <div class="search-v2__actions">
+    {#if searchBy > 0}
+      <button
+        type="button"
+        class="search-v2__filter"
+        aria-label="Сбросить поиск по полю"
+        onclick={() => switchSearchBy('0')}
+      >
+        по полю «{byLabel.toLowerCase()}»
+        <span aria-hidden="true">{@html iconX(12)}</span>
+      </button>
+    {/if}
+    <button
+      type="button"
+      class="search-v2__filter search-v2__filter--toggle"
+      class:is-active={hiddenOnly}
+      aria-pressed={hiddenOnly}
+      onclick={toggleHiddenOnly}
+    >
+      <span aria-hidden="true">{@html iconEyeOff(14)}</span>
+      только скрытые
+    </button>
+  </div>
 {/snippet}
 
 <div class="view view-search-v2 discover-page" bind:this={wrapEl}>
@@ -336,13 +394,13 @@
     backdrop={heroBackdrop}
   >
     {#if query}
-      <!-- Пустой слот справа съедал бы ширину капсулы — передаём его только с фильтром -->
+      <!-- Пустой слот справа съедал бы ширину капсулы — передаём его только для тайтлов -->
       <UiV2Tabs
         class="uiv2-tabs--static search-v2__tabs"
         tabs={SEARCH_TABS}
         activeId={activeTab}
         onChange={switchTab}
-        rightActions={activeTab === 'releases' && searchBy > 0 ? byFilter : undefined}
+        rightActions={activeTab === 'releases' ? releaseActions : undefined}
       />
     {/if}
   </DiscoverHero>
@@ -370,7 +428,11 @@
     {:else if loadState === 'error'}
       <UiV2ContentRetryOverlay message={errorMsg} onRetry={retry} />
     {:else if loadState === 'empty'}
-      <div class="discover-page__empty">Ничего не найдено — попробуйте другой запрос или вкладку</div>
+      <div class="discover-page__empty">
+        {hiddenMode
+          ? 'Скрытых в Anixart тайтлов по этому запросу нет'
+          : 'Ничего не найдено — попробуйте другой запрос или вкладку'}
+      </div>
     {:else if activeTab === 'releases'}
       {#if franchise}
         <UiV2SearchFranchise class="search-v2__franchise" data={franchise} />

@@ -181,6 +181,18 @@ function buildWebAnixApi(): AnixApi {
         edit: (commentId, body) => invoke('anix:releaseCommentEdit', commentId, body),
         delete: (commentId) => invoke('anix:releaseCommentDelete', commentId),
       },
+      collection: {
+        list: (collectionId, page = 0, sort = 1) => invoke('anix:collectionComments', collectionId, page, sort),
+        get: (commentId) => invoke('anix:collectionCommentById', commentId),
+        replies: (commentId, page = 0, sort = 2) =>
+          invoke('anix:collectionCommentReplies', commentId, page, sort),
+        vote: (commentId, vote) => invoke('anix:collectionCommentVote', commentId, vote),
+        votes: (commentId, page = 0, sort = 2) =>
+          invoke('anix:collectionCommentVotes', commentId, page, sort),
+        add: (collectionId, body) => invoke('anix:collectionCommentAdd', collectionId, body),
+        edit: (commentId, body) => invoke('anix:collectionCommentEdit', commentId, body),
+        delete: (commentId) => invoke('anix:collectionCommentDelete', commentId),
+      },
     },
 
     type: {
@@ -359,6 +371,10 @@ function buildWebAnixApi(): AnixApi {
       submitArticleComment: (body) => invoke('anix:reportArticleComment', body),
       releaseCommentReasons: () => invoke('anix:reportReleaseCommentReasons'),
       submitReleaseComment: (body) => invoke('anix:reportReleaseComment', body),
+      collectionReasons: () => invoke('anix:reportCollectionReasons'),
+      submitCollection: (body) => invoke('anix:reportCollection', body),
+      collectionCommentReasons: () => invoke('anix:reportCollectionCommentReasons'),
+      submitCollectionComment: (body) => invoke('anix:reportCollectionComment', body),
     },
 
     home: {

@@ -598,6 +598,19 @@ contextBridge.exposeInMainWorld('anixApi', {
       edit: (commentId, body) => ipcRenderer.invoke('anix:releaseCommentEdit', commentId, body),
       delete: (commentId) => ipcRenderer.invoke('anix:releaseCommentDelete', commentId),
     },
+    collection: {
+      list: (collectionId, page = 0, sort = 1) =>
+        ipcRenderer.invoke('anix:collectionComments', collectionId, page, sort),
+      get: (commentId) => ipcRenderer.invoke('anix:collectionCommentById', commentId),
+      replies: (commentId, page = 0, sort = 2) =>
+        ipcRenderer.invoke('anix:collectionCommentReplies', commentId, page, sort),
+      vote: (commentId, vote) => ipcRenderer.invoke('anix:collectionCommentVote', commentId, vote),
+      votes: (commentId, page = 0, sort = 2) =>
+        ipcRenderer.invoke('anix:collectionCommentVotes', commentId, page, sort),
+      add: (collectionId, body) => ipcRenderer.invoke('anix:collectionCommentAdd', collectionId, body),
+      edit: (commentId, body) => ipcRenderer.invoke('anix:collectionCommentEdit', commentId, body),
+      delete: (commentId) => ipcRenderer.invoke('anix:collectionCommentDelete', commentId),
+    },
   },
 
   type: {
@@ -777,6 +790,10 @@ contextBridge.exposeInMainWorld('anixApi', {
     submitArticleComment: (body) => ipcRenderer.invoke('anix:reportArticleComment', body),
     releaseCommentReasons: () => ipcRenderer.invoke('anix:reportReleaseCommentReasons'),
     submitReleaseComment: (body) => ipcRenderer.invoke('anix:reportReleaseComment', body),
+    collectionReasons: () => ipcRenderer.invoke('anix:reportCollectionReasons'),
+    submitCollection: (body) => ipcRenderer.invoke('anix:reportCollection', body),
+    collectionCommentReasons: () => ipcRenderer.invoke('anix:reportCollectionCommentReasons'),
+    submitCollectionComment: (body) => ipcRenderer.invoke('anix:reportCollectionComment', body),
   },
 
   home: {

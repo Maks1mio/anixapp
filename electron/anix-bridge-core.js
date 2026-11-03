@@ -903,6 +903,10 @@ function createAnixBridgeCore(options = {}) {
     'anix:reportArticleComment': h((c, body) => c.getClient().endpoints.report.articleComment(body)),
     'anix:reportReleaseCommentReasons': h((c) => c.getClient().endpoints.report.releaseCommentsReasons()),
     'anix:reportReleaseComment': h((c, body) => c.getClient().endpoints.report.releaseComment(body)),
+    'anix:reportCollectionReasons': h((c) => c.getClient().endpoints.report.collectionReasons()),
+    'anix:reportCollection': h((c, body) => c.getClient().endpoints.report.collection(body)),
+    'anix:reportCollectionCommentReasons': h((c) => c.getClient().endpoints.report.collectionCommentsReasons()),
+    'anix:reportCollectionComment': h((c, body) => c.getClient().endpoints.report.collectionComment(body)),
     'anix:channelSubscriptions': h((c, page = 0, opts = {}) =>
       c.getClient().endpoints.channel.subscriptions(
         page,
@@ -1288,6 +1292,43 @@ function createAnixBridgeCore(options = {}) {
     }),
     'anix:releaseCommentDelete': h(async (c, commentId) => {
       const res = await c.getClient().endpoints.releaseComment.delete(commentId);
+      if (res?.code !== DefaultResult.Ok) throw new Error(String(res?.code ?? 'comment delete failed'));
+      return res;
+    }),
+    'anix:collectionComments': h((c, collectionId, page = 0, sort = 1) =>
+      c.getClient().endpoints.collectionComment.comments(collectionId, page, { sort })),
+    'anix:collectionCommentReplies': h((c, commentId, page = 0, sort = 2) =>
+      c.getClient().endpoints.collectionComment.replies(commentId, page, { sort })),
+    'anix:collectionCommentVote': h(async (c, commentId, vote) => {
+      const res = await c.getClient().endpoints.collectionComment.vote(commentId, vote);
+      if (res?.code !== DefaultResult.Ok) throw new Error(String(res?.code ?? 'comment vote failed'));
+      return res;
+    }),
+    'anix:collectionCommentVotes': h((c, commentId, page = 0, sort = 2) =>
+      c.getClient().endpoints.collectionComment.votes(commentId, page, { sort })),
+    'anix:collectionCommentById': h((c, commentId) => c.getClient().endpoints.collectionComment.comment(commentId)),
+    'anix:collectionCommentAdd': h(async (c, collectionId, body) => {
+      const res = await c.getClient().endpoints.collectionComment.add(collectionId, {
+        message: body.message,
+        spoiler: !!(body.spoiler ?? body.isSpoiler),
+        parentCommentId: body.parentCommentId ?? null,
+        replyToProfileId: body.replyToProfileId ?? null,
+      });
+      if (res?.code != null && res.code !== DefaultResult.Ok) {
+        throw new Error(String(res.code ?? 'comment add failed'));
+      }
+      return res;
+    }),
+    'anix:collectionCommentEdit': h(async (c, commentId, body) => {
+      const res = await c.getClient().endpoints.collectionComment.edit(commentId, {
+        message: body.message,
+        spoiler: !!(body.spoiler ?? body.isSpoiler),
+      });
+      if (res?.code !== DefaultResult.Ok) throw new Error(String(res?.code ?? 'comment edit failed'));
+      return res;
+    }),
+    'anix:collectionCommentDelete': h(async (c, commentId) => {
+      const res = await c.getClient().endpoints.collectionComment.delete(commentId);
       if (res?.code !== DefaultResult.Ok) throw new Error(String(res?.code ?? 'comment delete failed'));
       return res;
     }),

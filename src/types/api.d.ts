@@ -387,6 +387,40 @@ export interface AnixApi {
       ) => Promise<{ code?: number }>;
       delete: (commentId: number) => Promise<{ code?: number }>;
     };
+    /** Комментарии к коллекции — те же формы, что и у релиза */
+    collection: {
+      list: (collectionId: number, page?: number, sort?: number) => Promise<{
+        content?: Record<string, unknown>[];
+        total_count?: number;
+        total_elements?: number;
+        last?: boolean;
+      }>;
+      get: (commentId: number) => Promise<Record<string, unknown>>;
+      replies: (commentId: number, page?: number, sort?: number) => Promise<{
+        content?: Record<string, unknown>[];
+      }>;
+      vote: (commentId: number, vote: number) => Promise<{ code?: number }>;
+      votes: (
+        commentId: number,
+        page?: number,
+        sort?: number,
+      ) => Promise<{ content?: Record<string, unknown>[]; last?: boolean }>;
+      add: (
+        collectionId: number,
+        body: {
+          message: string;
+          isSpoiler?: boolean;
+          spoiler?: boolean;
+          parentCommentId?: number | null;
+          replyToProfileId?: number | null;
+        },
+      ) => Promise<{ comment?: Record<string, unknown>; code?: number }>;
+      edit: (
+        commentId: number,
+        body: { message: string; isSpoiler?: boolean; spoiler?: boolean },
+      ) => Promise<{ code?: number }>;
+      delete: (commentId: number) => Promise<{ code?: number }>;
+    };
   };
 
   type: {
@@ -852,6 +886,10 @@ export interface AnixApi {
     submitArticleComment?: (body: { entity_id: number; reason_id: number }) => Promise<{ code?: number }>;
     releaseCommentReasons?: () => Promise<Array<{ id: number; title?: string; name?: string; text?: string }>>;
     submitReleaseComment?: (body: { entity_id: number; reason_id: number }) => Promise<{ code?: number }>;
+    collectionReasons?: () => Promise<Array<{ id: number; title?: string; name?: string; text?: string }>>;
+    submitCollection?: (body: { entity_id: number; reason_id: number }) => Promise<{ code?: number }>;
+    collectionCommentReasons?: () => Promise<Array<{ id: number; title?: string; name?: string; text?: string }>>;
+    submitCollectionComment?: (body: { entity_id: number; reason_id: number }) => Promise<{ code?: number }>;
   };
 
   home: {

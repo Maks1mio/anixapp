@@ -32,6 +32,8 @@
     previewLimit?: number;
     showAllHref?: string;
     releaseId?: number;
+    /** Комментарии коллекции вместо релиза */
+    collectionId?: number;
     mode?: 'preview' | 'full';
     showComposer?: boolean;
     composerDock?: boolean;
@@ -56,6 +58,7 @@
     previewLimit = 5,
     showAllHref,
     releaseId,
+    collectionId,
     mode = 'preview',
     showComposer = false,
     composerDock = false,
@@ -67,6 +70,10 @@
     onItemsChange,
     onCommentAdded,
   }: Props = $props();
+
+  const targetId = $derived(collectionId ?? releaseId);
+  const source = $derived<'release' | 'collection'>(collectionId != null ? 'collection' : 'release');
+  const api = () => (collectionId != null ? window.anixApi?.comments?.collection : window.anixApi?.comments?.release);
 
   let nodes = $state<UiV2CommentNode[]>([]);
   let submitting = $state(false);
@@ -95,7 +102,7 @@
   const visibleNodes = $derived(isPreview ? nodes.slice(0, previewLimit) : nodes);
   const showHeaderLink = $derived(isPreview && !!showAllHref);
   const showHeader = $derived(Boolean(title) || Boolean(subtitle) || showHeaderLink);
-  const useInlineComposer = $derived(showComposer && !!releaseId && !composerDock);
+  const useInlineComposer = $derived(showComposer && !!targetId && !composerDock);
   const useInlineReply = $derived(!composerDock);
 
   $effect(() => {
@@ -132,13 +139,14 @@
         voteCount: updated.voteCount,
       }),
     );
-    if (!window.anixApi?.comments?.release || !prev) return;
+    const commentsApi = api();
+    if (!commentsApi || !prev) return;
     const id = typeof updated.id === 'number' ? updated.id : Number(updated.id);
     const apiVote = apiVotePayload(
       (prev.userVote ?? 0) as CommentVoteValue,
       (updated.userVote ?? 0) as CommentVoteValue,
     );
-    window.anixApi.comments.release.vote(id, apiVote).catch(() => {
+    commentsApi.vote(id, apiVote).catch(() => {
       syncItems(
         patchUiV2CommentNode(nodes, updated.id, {
           userVote: prev.userVote,
@@ -170,9 +178,10 @@
 
   async function loadReplies(node: UiV2CommentNode) {
     const commentId = typeof node.id === 'number' ? node.id : Number(node.id);
-    if (!Number.isFinite(commentId) || !window.anixApi?.comments?.release?.replies) return;
+    const commentsApi = api();
+    if (!Number.isFinite(commentId) || !commentsApi?.replies) return;
     try {
-      const data = await window.anixApi.comments.release.replies(commentId, 0, 2);
+      const data = await commentsApi.replies(commentId, 0, 2);
       const list = normalizeCommentsFromResponse(data as Record<string, unknown>);
       const replies = list.map((c) => commentDataToUiV2Node(c));
       syncItems(setUiV2CommentReplies(nodes, node.id, replies));
@@ -182,12 +191,13 @@
   }
 
   async function submitNew(payload: UiV2CommentComposerPayload, parent: UiV2CommentNode | null = null) {
-    if (!releaseId || !window.anixApi?.comments?.release) return;
+    const commentsApi = api();
+    if (!targetId || !commentsApi) return;
     submitting = true;
     try {
       const replyTarget = parent ? uiV2NodeToCommentData(parent) : null;
-      const res = (await window.anixApi.comments.release.add(
-        releaseId,
+      const res = (await commentsApi.add(
+        targetId,
         buildReleaseCommentAddBody(payload, { replyTarget }),
       )) as { comment?: Record<string, unknown>; code?: number };
 
@@ -222,7 +232,8 @@
   }
 
   async function handleEdit(node: UiV2CommentNode, payload: UiV2CommentComposerPayload) {
-    if (!window.anixApi?.comments?.release?.edit) return;
+    const commentsApi = api();
+    if (!commentsApi?.edit) return;
     const prev = findNode(nodes, node.id);
     if (!prev) return;
     const id = typeof node.id === 'number' ? node.id : Number(node.id);
@@ -236,7 +247,7 @@
     );
 
     try {
-      await window.anixApi.comments.release.edit(id, {
+      await commentsApi.edit(id, {
         message: payload.message,
         isSpoiler: payload.isSpoiler,
       });
@@ -252,7 +263,8 @@
   }
 
   async function handleDelete(node: UiV2CommentNode) {
-    if (!window.anixApi?.comments?.release?.delete) return;
+    const commentsApi = api();
+    if (!commentsApi?.delete) return;
     const prev = findNode(nodes, node.id);
     if (!prev) return;
     const id = typeof node.id === 'number' ? node.id : Number(node.id);
@@ -265,7 +277,7 @@
     );
 
     try {
-      await window.anixApi.comments.release.delete(id);
+      await commentsApi.delete(id);
     } catch {
       syncItems(
         patchUiV2CommentNode(nodes, node.id, {
@@ -323,6 +335,7 @@
       nodes={visibleNodes}
       {selfProfileId}
       enableInlineReply={useInlineReply}
+      reactionsSource={source}
       onVote={handleVote}
       onReply={handleReply}
       onLoadReplies={loadReplies}
@@ -350,7 +363,7 @@
       {@render commentsBody()}
     </div>
 
-    {#if showComposer && releaseId}
+    {#if showComposer && targetId}
       <div class="anix-comments__dock uiv2-comments-composer" id="comments-composer">
         <UiV2CommentComposer
           busy={submitting}

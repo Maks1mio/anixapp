@@ -85,6 +85,7 @@
   import ProfileComments from './views/ProfileComments.svelte';
   import ProfileVideos from './views/ProfileVideos.svelte';
   import Collection from './views/Collection.svelte';
+  import CollectionCommentsPage from './views/CollectionComments.svelte';
   import Search from './views/Search.svelte';
   import { isSearchTab, type SearchTab } from './search-controller';
   import Uikit from './views/Uikit.svelte';
@@ -142,6 +143,7 @@
   let searchQ = $state('');
   let searchTab = $state<SearchTab>('releases');
   let searchBy = $state(0);
+  let searchHiddenOnly = $state(false);
 
   let tvKept = $state<string[]>(rememberTvKeepAlive([], getPath()));
   const tvKeptCats = $derived(tvKeptCategoryIds(tvKept));
@@ -182,6 +184,7 @@
     const tab = p.get('tab');
     searchTab = isSearchTab(tab) ? tab : 'releases';
     searchBy = Number.parseInt(p.get('by') || '0', 10) || 0;
+    searchHiddenOnly = p.get('hidden') === '1';
     if (fromRoute) {
       bookmarksUserId = bookmarksUserFromRoute(route);
     } else {
@@ -286,6 +289,7 @@
   const profileCommentsId     = $derived(profileCommentsMatch?.[1] ? parseInt(profileCommentsMatch[1], 10) : null);
   const profileVideosId       = $derived(profileVideosMatch?.[1] ? parseInt(profileVideosMatch[1], 10) : null);
   const collectionMatch       = $derived(path.match(/^\/collection\/(\d+)$/));
+  const collectionCommentsMatch = $derived(path.match(/^\/collection\/(\d+)\/comments$/));
   const articleMatch          = $derived(path.match(/^\/article\/(\d+)$/));
   const channelMatch          = $derived(path.match(/^\/channel\/(\d+)$/));
   const collectionEditMatch   = $derived(path.match(/^\/collections\/edit\/(\d+)$/));
@@ -1048,6 +1052,10 @@
       {/key}
     {:else if path === '/collections/create'}
       <CollectionEditor />
+    {:else if collectionCommentsMatch}
+      {#key collectionCommentsMatch[1]}
+        <CollectionCommentsPage collectionId={parseInt(collectionCommentsMatch[1], 10)} />
+      {/key}
     {:else if collectionMatch}
       {#key collectionMatch[1]}
         <Collection id={parseInt(collectionMatch[1], 10)} />
@@ -1081,8 +1089,8 @@
     {:else if path === '/profile/lists'}
       <Bookmarks listsOnly />
     {:else if path === '/search'}
-      {#key `${searchQ}|${searchBy}`}
-        <Search q={searchQ} tab={searchTab} {searchBy} />
+      {#key `${searchQ}|${searchBy}|${searchHiddenOnly}`}
+        <Search q={searchQ} tab={searchTab} {searchBy} hiddenOnly={searchHiddenOnly} />
       {/key}
     {:else if path === '/downloads'}
       {#if isMobileMode()}<MobileDownloads />{:else}<Downloads />{/if}

@@ -11,7 +11,7 @@
 
   export type UiV2ReactionVote = 'up' | 'down';
   /** post — оценки самой записи канала (article/votes). */
-  export type UiV2ReactionsSource = 'release' | 'article' | 'post';
+  export type UiV2ReactionsSource = 'release' | 'article' | 'post' | 'collection';
 
   export type UiV2ReactionProfile = {
     id: number;
@@ -86,6 +86,11 @@
         throw new Error('API реакций недоступно');
       }
       data = await window.anixApi.article.commentVotes(id, 0, sort);
+    } else if (source === 'collection') {
+      if (!window.anixApi?.comments?.collection?.votes) {
+        throw new Error('API реакций недоступно');
+      }
+      data = await window.anixApi.comments.collection.votes(id, 0, sort);
     } else {
       if (!window.anixApi?.comments?.release?.votes) {
         throw new Error('API реакций недоступно');
@@ -108,7 +113,9 @@
         ? !!window.anixApi?.article?.votes
         : source === 'article'
           ? !!window.anixApi?.article?.commentVotes
-          : !!window.anixApi?.comments?.release?.votes;
+          : source === 'collection'
+            ? !!window.anixApi?.comments?.collection?.votes
+            : !!window.anixApi?.comments?.release?.votes;
     if (!apiReady) {
       loadState = 'error';
       errorText = 'API реакций недоступно';

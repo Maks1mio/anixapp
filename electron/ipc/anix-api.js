@@ -621,6 +621,38 @@ ipcMain.handle('anix:reportReleaseComment', async (_, body) => {
   }
 });
 
+ipcMain.handle('anix:reportCollectionReasons', async () => {
+  try {
+    return await getAnixart().endpoints.report.collectionReasons();
+  } catch (err) {
+    handleAnixError(err, 'reportCollectionReasons');
+  }
+});
+
+ipcMain.handle('anix:reportCollection', async (_, body) => {
+  try {
+    return await getAnixart().endpoints.report.collection(body);
+  } catch (err) {
+    handleAnixError(err, 'reportCollection');
+  }
+});
+
+ipcMain.handle('anix:reportCollectionCommentReasons', async () => {
+  try {
+    return await getAnixart().endpoints.report.collectionCommentsReasons();
+  } catch (err) {
+    handleAnixError(err, 'reportCollectionCommentReasons');
+  }
+});
+
+ipcMain.handle('anix:reportCollectionComment', async (_, body) => {
+  try {
+    return await getAnixart().endpoints.report.collectionComment(body);
+  } catch (err) {
+    handleAnixError(err, 'reportCollectionComment');
+  }
+});
+
 ipcMain.handle('anix:reportChannelReasons', async () => {
   try {
     const client = getAnixart();
@@ -2075,6 +2107,94 @@ ipcMain.handle('anix:releaseCommentDelete', async (_, commentId) => {
     return res;
   } catch (err) {
     handleAnixError(err, 'releaseCommentDelete');
+  }
+});
+
+ipcMain.handle('anix:collectionComments', async (_, collectionId, page = 0, sort = 1) => {
+  try {
+    return await getAnixart().endpoints.collectionComment.comments(collectionId, page, { sort });
+  } catch (err) {
+    handleAnixError(err, 'collectionComments');
+  }
+});
+
+ipcMain.handle('anix:collectionCommentReplies', async (_, commentId, page = 0, sort = 2) => {
+  try {
+    return await getAnixart().endpoints.collectionComment.replies(commentId, page, { sort });
+  } catch (err) {
+    handleAnixError(err, 'collectionCommentReplies');
+  }
+});
+
+ipcMain.handle('anix:collectionCommentVote', async (_, commentId, vote) => {
+  try {
+    const res = await getAnixart().endpoints.collectionComment.vote(commentId, vote);
+    if (res?.code !== DefaultResult.Ok) {
+      return Promise.reject(new Error(String(res?.code ?? 'comment vote failed')));
+    }
+    return res;
+  } catch (err) {
+    handleAnixError(err, 'collectionCommentVote');
+  }
+});
+
+ipcMain.handle('anix:collectionCommentVotes', async (_, commentId, page = 0, sort = 2) => {
+  try {
+    return await getAnixart().endpoints.collectionComment.votes(commentId, page, { sort });
+  } catch (err) {
+    handleAnixError(err, 'collectionCommentVotes');
+  }
+});
+
+ipcMain.handle('anix:collectionCommentById', async (_, commentId) => {
+  try {
+    return await getAnixart().endpoints.collectionComment.comment(commentId);
+  } catch (err) {
+    handleAnixError(err, 'collectionCommentById');
+  }
+});
+
+ipcMain.handle('anix:collectionCommentAdd', async (_, collectionId, body) => {
+  try {
+    const res = await getAnixart().endpoints.collectionComment.add(collectionId, {
+      message: body.message,
+      spoiler: !!(body.spoiler ?? body.isSpoiler),
+      parentCommentId: body.parentCommentId ?? null,
+      replyToProfileId: body.replyToProfileId ?? null,
+    });
+    if (res?.code != null && res.code !== DefaultResult.Ok) {
+      return Promise.reject(new Error(String(res.code ?? 'comment add failed')));
+    }
+    return res;
+  } catch (err) {
+    handleAnixError(err, 'collectionCommentAdd');
+  }
+});
+
+ipcMain.handle('anix:collectionCommentEdit', async (_, commentId, body) => {
+  try {
+    const res = await getAnixart().endpoints.collectionComment.edit(commentId, {
+      message: body.message,
+      spoiler: !!(body.spoiler ?? body.isSpoiler),
+    });
+    if (res?.code !== DefaultResult.Ok) {
+      return Promise.reject(new Error(String(res?.code ?? 'comment edit failed')));
+    }
+    return res;
+  } catch (err) {
+    handleAnixError(err, 'collectionCommentEdit');
+  }
+});
+
+ipcMain.handle('anix:collectionCommentDelete', async (_, commentId) => {
+  try {
+    const res = await getAnixart().endpoints.collectionComment.delete(commentId);
+    if (res?.code !== DefaultResult.Ok) {
+      return Promise.reject(new Error(String(res?.code ?? 'comment delete failed')));
+    }
+    return res;
+  } catch (err) {
+    handleAnixError(err, 'collectionCommentDelete');
   }
 });
 }

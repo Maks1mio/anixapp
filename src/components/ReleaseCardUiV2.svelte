@@ -13,6 +13,7 @@
   import { applyReleaseListStatus } from '../utils/release-list-status';
   import type { ReleaseCardData } from '../types/release';
   import { formatReleaseEpisodes } from '../utils/release-card';
+  import { isReleaseHiddenInAnixart } from '../services/hidden-releases';
 
   interface Props {
     data: ReleaseCardData;
@@ -46,6 +47,21 @@
   }: Props = $props();
 
   const id = $derived(data.id);
+  /** Пометка из каталога anixback — для карточек вне поиска (главная, подборки…). */
+  let hiddenInAnixart = $state(false);
+  $effect(() => {
+    const releaseId = id;
+    hiddenInAnixart = !!data.hiddenInAnixart;
+    if (!releaseId || data.hiddenInAnixart) return;
+    let alive = true;
+    void isReleaseHiddenInAnixart(releaseId).then((hidden) => {
+      if (alive) hiddenInAnixart = hidden;
+    });
+    return () => {
+      alive = false;
+    };
+  });
+
   const isHistory = $derived(cardVariant === 'history' || !!data.historyView);
   const title = $derived(data.titleRu || data.titleEn || 'Без названия');
   const genres = $derived(
@@ -135,6 +151,7 @@
   {showMenu}
   {showTvOpenHint}
   {compact}
+  posterNote={hiddenInAnixart ? 'скрыт в Anixart' : null}
   onclick={openRelease}
   onFavoriteChange={handleFavoriteChange}
   onListStatusChange={handleListStatusChange}

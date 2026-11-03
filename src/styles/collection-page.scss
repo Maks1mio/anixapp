@@ -1,6 +1,16 @@
 @use 'variables' as *;
 
+// Страница коллекции. Хром тихий (токены uikit-v2), цвет живёт в обложке
+// и в полосе статусов — это те же цвета списков, что и во всём приложении.
+
 .view-collection {
+  --collection-st-watching: #6fa873;
+  --collection-st-planned: #a76fac;
+  --collection-st-completed: #6974ac;
+  --collection-st-on_hold: #d29742;
+  --collection-st-dropped: #c24e4d;
+  --collection-st-none: color-mix(in srgb, var(--uiv2-fg-muted) 45%, transparent);
+
   max-width: 56rem;
   margin: 0 auto;
   width: 100%;
@@ -8,84 +18,23 @@
   overflow-x: clip;
 }
 
-.collection-page,
-.collection-page__body {
-  min-width: 0;
-  max-width: 100%;
-  overflow-x: clip;
-}
-
-.collection-page__head {
-  margin-bottom: 0rem;
-}
-
-.collection-page__loading {
-  color: $color-text-muted;
-  font-size: 0.95rem;
-}
-
-.collection-info__title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.25rem;
-}
-
-.collection-header__author {
+.collection-page {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 0.15rem;
-  flex-shrink: 0;
+  gap: 24px;
+  min-width: 0;
+  max-width: 100%;
 }
 
-.collection-header__author-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: none;
-  border: none;
-  padding: 0;
-  font: inherit;
-  color: $color-text;
-  text-decoration: none;
-  font-weight: 500;
-  cursor: pointer;
-  &:hover {
-    color: $color-accent;
-  }
-}
+// ── Обложка ──────────────────────────────────────────────────────────────────
 
-.collection-header__author-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
-  background: $color-surface-hover;
-  background-size: cover;
-  background-position: center;
-  flex-shrink: 0;
-}
-
-.collection-header__author-name {
-  font-size: 0.95rem;
-}
-
-.collection-header__author-label {
-  font-size: 0.75rem;
-  color: $color-text-muted;
-}
-
-.collection-banner {
+.collection-cover {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 9;
-  max-height: min(28vh, 220px);
-  border-radius: $radius-lg;
+  height: 240px;
+  border-radius: 20px;
   overflow: hidden;
-  background: $color-surface-hover;
-  margin-bottom: 1rem;
+  background: var(--uiv2-surface-subtle);
 
   img {
     width: 100%;
@@ -95,262 +44,235 @@
   }
 }
 
-.collection-banner__placeholder {
-  width: 100%;
-  height: 100%;
-  background: $color-surface-hover;
+// ── Шапка ────────────────────────────────────────────────────────────────────
+
+.collection-head {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  margin-top: -4px;
 }
 
-.collection-info {
-  margin-bottom: 1rem;
+.collection-head__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
 }
 
-.collection-info__title {
+.collection-head__title {
   margin: 0;
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: $color-text;
   flex: 1;
   min-width: 0;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.collection-info__date {
-  margin: 0 0 0.75rem;
-  font-size: 0.85rem;
-  color: $color-text-muted;
-}
-
-.collection-info__actions {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.collection-info__action {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.4rem 0.75rem;
-  border-radius: $radius-md;
-  font-size: 0.85rem;
-  color: $color-text-muted;
-  background: $color-surface-hover;
-  border: 1px solid $color-border;
-  transition: background $transition, color $transition, border-color $transition;
-  &:hover {
-    background: $color-border;
-    color: $color-text;
-  }
-  &--active {
-    color: $color-accent;
-    background: color-mix(in srgb, var(--color-accent) 12%, transparent);
-    border-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
-    &:hover {
-      background: color-mix(in srgb, var(--color-accent) 20%, transparent);
-      border-color: color-mix(in srgb, var(--color-accent) 50%, transparent);
-      color: $color-accent;
-    }
-  }
-}
-
-.collection-info__action-icon {
-  display: inline-flex;
-  align-items: center;
-}
-
-.collection-desc {
-  margin-bottom: 1.5rem;
-  padding: 1rem 0;
-  border-top: 1px solid $color-border;
-}
-
-.collection-private-notice {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-  padding: 1rem 1.15rem;
-  border-radius: 12px;
-  background: $color-surface;
-  border: 1px solid $color-border;
-}
-
-.collection-private-notice__icon {
-  display: inline-flex;
-  flex-shrink: 0;
-  margin-top: 0.1rem;
-  color: $color-text-muted;
-}
-
-.collection-private-notice__text {
-  margin: 0;
-  font-size: 0.9rem;
-  line-height: 1.5;
-  color: $color-text-muted;
-}
-
-.collection-owner-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-}
-
-.collection-owner-actions__btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  min-height: 2.75rem;
-  padding: 0.65rem 1rem;
-  border-radius: 10px;
-  font-size: 0.95rem;
-  font-weight: 500;
-  font-family: inherit;
-  color: $color-text;
-  background: $color-surface-hover;
-  border: 1px solid $color-border;
-  cursor: pointer;
-  transition: background $transition, color $transition, border-color $transition;
-
-  &:hover:not(:disabled) {
-    background: $color-border;
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  &--danger:hover:not(:disabled) {
-    color: $color-error;
-    border-color: color-mix(in srgb, $color-error 35%, $color-border);
-    background: color-mix(in srgb, $color-error 8%, $color-surface-hover);
-  }
-}
-
-.collection-owner-actions__icon {
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.collection-desc__text {
-  font-size: 0.9rem;
-  line-height: 1.55;
-  color: $color-text-muted;
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-}
-
-.collection-stats {
-  margin-bottom: 1.5rem;
-  padding: 1.25rem 1.25rem 1.5rem;
-  border-radius: 12px;
-  background: $color-surface;
-  border: 1px solid $color-border;
-  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.03);
-}
-
-.collection-stats__title {
-  margin: 0 0 1rem;
-  font-size: 0.875rem;
+  font-size: 1.75rem;
   font-weight: 600;
-  color: $color-text-muted;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  line-height: 1.2;
+  color: var(--uiv2-fg-strong);
+  overflow-wrap: anywhere;
 }
 
-.collection-stats__bar-wrap {
-  margin-bottom: 1rem;
+.collection-head__lock {
+  display: inline-flex;
+  vertical-align: -1px;
+  margin-right: 8px;
+  color: var(--uiv2-fg-muted);
+}
+
+.collection-head__tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+
+  .uiv2-btn__label {
+    min-width: 1ch;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.collection-head__bookmark-icon {
+  display: inline-flex;
+
+  &--on svg {
+    fill: currentColor;
+  }
+}
+
+.collection-head__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  font-size: 0.875rem;
+  color: var(--uiv2-fg-muted);
+}
+
+.collection-head__author {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--uiv2-fg);
+  cursor: pointer;
+  transition: color 0.15s ease;
+
+  &:hover {
+    color: var(--uiv2-fg-strong);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--uiv2-border-strong);
+    outline-offset: 2px;
+    border-radius: 999px;
+  }
+}
+
+.collection-head__author .collection-head__avatar {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.collection-head__author-name {
+  font-weight: 500;
+}
+
+.collection-head__sep {
+  color: var(--uiv2-fg-muted);
+}
+
+.collection-head__date {
+  font-variant-numeric: tabular-nums;
+}
+
+.collection-head__desc {
+  margin: 0;
+  max-width: 44rem;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--uiv2-fg-soft);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.collection-head__private {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--uiv2-fg-muted);
+}
+
+// ── Статистика по спискам ────────────────────────────────────────────────────
+
+.collection-stats.uiv2-card {
+  padding: 16px 20px;
 }
 
 .collection-stats__bar {
   display: flex;
-  height: 10px;
-  border-radius: 999px;
+  gap: 2px;
+  height: 12px;
+  margin: 4px 0 16px;
+  border-radius: 6px;
   overflow: hidden;
-  background: $color-border;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
-  & > span {
-    display: block;
-    min-width: 4px;
-    transition: width 0.25s ease;
-    border-radius: 0;
-    &:first-child { border-radius: 999px 0 0 999px; }
-    &:last-child { border-radius: 0 999px 999px 0; }
-    &:only-child { border-radius: 999px; }
+}
+
+.collection-stats__seg {
+  flex-basis: 0;
+  min-width: 4px;
+
+  @each $key in watching, planned, completed, on_hold, dropped, none {
+    &--#{$key} { background: var(--collection-st-#{$key}); }
   }
 }
 
 .collection-stats__legend {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 32px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.collection-stats__item {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1.25rem;
-  margin-bottom: 1.25rem;
-  font-size: 0.8rem;
-  color: $color-text-muted;
-}
-
-.collection-stats__legend-item {
-  display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.04);
-  i {
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-    flex-shrink: 0;
+  gap: 8px;
+  min-width: 0;
+  font-size: 0.875rem;
+  color: var(--uiv2-fg-soft);
+}
+
+.collection-stats__item--zero {
+  color: var(--uiv2-fg-muted);
+
+  .collection-stats__dot {
+    opacity: 0.4;
   }
 }
 
-.collection-stats__random {
-  display: inline-flex;
+.collection-stats__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+
+  @each $key in watching, planned, completed, on_hold, dropped, none {
+    &--#{$key} { background: var(--collection-st-#{$key}); }
+  }
+}
+
+.collection-stats__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collection-stats__count {
+  font-variant-numeric: tabular-nums;
+  color: var(--uiv2-fg-strong);
+}
+
+.collection-stats__item--zero .collection-stats__count {
+  color: var(--uiv2-fg-muted);
+}
+
+.collection-stats__foot {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 0.65rem 1.25rem;
-  border-radius: 10px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #fff;
-  background: $color-accent;
-  border: none;
-  cursor: pointer;
-  transition: background $transition, transform 0.15s ease;
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-accent) 35%, transparent);
-  &:hover {
-    background: $color-accent-hover;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px color-mix(in srgb, var(--color-accent) 40%, transparent);
-  }
-  &:active {
-    transform: translateY(0);
-  }
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--uiv2-border-subtle);
 }
 
-.collection-stats__random-icon {
-  font-size: 1.15rem;
-  opacity: 0.95;
-  line-height: 1;
+.collection-stats__share {
+  font-size: 0.8125rem;
+  color: var(--uiv2-fg-muted);
+  font-variant-numeric: tabular-nums;
 }
 
-.collection-releases__loading {
-  padding: 2rem;
-  text-align: center;
-  color: $color-text-muted;
-  font-size: 0.9rem;
-}
+// ── Релизы ───────────────────────────────────────────────────────────────────
 
 .collection-releases {
   min-width: 0;
+}
+
+.collection-releases__empty {
+  margin: 0;
+  padding: 32px 0;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--uiv2-fg-muted);
 }
 
 .collection-releases__grid {
@@ -360,11 +282,11 @@
 
 .collection-releases__grid.release-cards-grid {
   grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
-  gap: 1rem 0.85rem;
+  gap: 16px 12px;
 }
 
 .collection-releases__grid.release-cards-grid-root--wide {
-  gap: 1rem;
+  gap: 16px;
 }
 
 .view-collection .uiv2-anime-card {
@@ -374,12 +296,63 @@
 
 .view-collection .uiv2-anime-card__title {
   overflow-wrap: anywhere;
-  word-break: break-word;
 }
 
-.collection-releases__more {
-  padding: 1.25rem 0;
-  text-align: center;
-  font-size: 0.875rem;
-  color: $color-text-muted;
+// ── Комментарии ──────────────────────────────────────────────────────────────
+
+.collection-comments {
+  min-width: 0;
+  padding-bottom: 32px;
+
+  .anix-comments {
+    margin-top: 0;
+  }
+}
+
+// ── Скелетоны ────────────────────────────────────────────────────────────────
+
+.collection-cover--skeleton {
+  border-radius: 20px;
+}
+
+.collection-skel {
+  display: block;
+}
+
+.collection-skel--title {
+  width: 45%;
+  height: 28px;
+}
+
+.collection-skel--meta {
+  width: 30%;
+  height: 16px;
+}
+
+.collection-skel-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+@media (max-width: 720px) {
+  .collection-cover {
+    height: 180px;
+    border-radius: 16px;
+  }
+
+  .collection-head__title {
+    font-size: 1.375rem;
+  }
+
+  .collection-stats__legend {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 16px;
+  }
+
+  .collection-stats__foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }

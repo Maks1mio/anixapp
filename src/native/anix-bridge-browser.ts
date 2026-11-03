@@ -767,6 +767,10 @@ export function createBrowserAnixBridge() {
     'anix:reportArticleComment': h((c, body) => c.getClient().endpoints.report.articleComment(body)),
     'anix:reportReleaseCommentReasons': h((c) => c.getClient().endpoints.report.releaseCommentsReasons()),
     'anix:reportReleaseComment': h((c, body) => c.getClient().endpoints.report.releaseComment(body)),
+    'anix:reportCollectionReasons': h((c) => c.getClient().endpoints.report.collectionReasons()),
+    'anix:reportCollection': h((c, body) => c.getClient().endpoints.report.collection(body)),
+    'anix:reportCollectionCommentReasons': h((c) => c.getClient().endpoints.report.collectionCommentsReasons()),
+    'anix:reportCollectionComment': h((c, body) => c.getClient().endpoints.report.collectionComment(body)),
     'anix:channelSubscriptions': h((c, page = 0, opts = {}) => {
       const query: Record<string, number> = {};
       if (typeof (opts as { sort?: number })?.sort === 'number') {
@@ -1084,6 +1088,27 @@ export function createBrowserAnixBridge() {
         spoiler: !!(body.spoiler ?? body.isSpoiler),
       })),
     'anix:releaseCommentDelete': h((c, commentId) => c.getClient().endpoints.releaseComment.delete(commentId)),
+    'anix:collectionComments': h((c, collectionId, page = 0, sort = 1) =>
+      c.getClient().endpoints.collectionComment.comments(collectionId, page, { sort })),
+    'anix:collectionCommentReplies': h((c, commentId, page = 0, sort = 2) =>
+      c.getClient().endpoints.collectionComment.replies(commentId, page, { sort })),
+    'anix:collectionCommentVote': h((c, commentId, vote) => c.getClient().endpoints.collectionComment.vote(commentId, vote)),
+    'anix:collectionCommentVotes': h((c, commentId, page = 0, sort = 2) =>
+      c.getClient().endpoints.collectionComment.votes(commentId, page, { sort })),
+    'anix:collectionCommentById': h((c, commentId) => c.getClient().endpoints.collectionComment.comment(commentId)),
+    'anix:collectionCommentAdd': h((c, collectionId, body) =>
+      c.getClient().endpoints.collectionComment.add(collectionId, {
+        message: body.message,
+        spoiler: !!(body.spoiler ?? body.isSpoiler),
+        parentCommentId: body.parentCommentId ?? null,
+        replyToProfileId: body.replyToProfileId ?? null,
+      })),
+    'anix:collectionCommentEdit': h((c, commentId, body) =>
+      c.getClient().endpoints.collectionComment.edit(commentId, {
+        message: body.message,
+        spoiler: !!(body.spoiler ?? body.isSpoiler),
+      })),
+    'anix:collectionCommentDelete': h((c, commentId) => c.getClient().endpoints.collectionComment.delete(commentId)),
   };
 
   async function invoke(channel: string, args: unknown[] = []) {

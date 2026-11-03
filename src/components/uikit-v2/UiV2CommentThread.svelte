@@ -93,7 +93,7 @@
     /** Клик по телу комментария (например открыть релиз в ленте недели) */
     onCommentClick?: (node: UiV2CommentNode) => void;
     /** Источник API для «Посмотреть реакции» */
-    reactionsSource?: 'release' | 'article';
+    reactionsSource?: 'release' | 'article' | 'collection';
     /** Подгрузка ответов, когда API отдал только replyCount */
     onLoadReplies?: (node: UiV2CommentNode) => Promise<void> | void;
     /** Отправка ответа на комментарий */

@@ -1,6 +1,6 @@
 import { showToast } from '../stores/toast';
 
-export type CommentReportSource = 'release' | 'article';
+export type CommentReportSource = 'release' | 'article' | 'collection';
 export type CommentReportReason = { id: number; label: string };
 
 const cache = new Map<CommentReportSource, CommentReportReason[]>();
@@ -18,7 +18,12 @@ export function ensureCommentReportReasons(source: CommentReportSource): Promise
   if (inflight) return inflight;
 
   const api = window.anixApi?.report;
-  const fetcher = source === 'article' ? api?.articleCommentReasons : api?.releaseCommentReasons;
+  const fetcher =
+    source === 'article'
+      ? api?.articleCommentReasons
+      : source === 'collection'
+        ? api?.collectionCommentReasons
+        : api?.releaseCommentReasons;
   if (!fetcher) return Promise.resolve([]);
 
   const request = fetcher()
@@ -45,7 +50,12 @@ export async function submitCommentReport(
   reasonId: number,
 ): Promise<void> {
   const api = window.anixApi?.report;
-  const submit = source === 'article' ? api?.submitArticleComment : api?.submitReleaseComment;
+  const submit =
+    source === 'article'
+      ? api?.submitArticleComment
+      : source === 'collection'
+        ? api?.submitCollectionComment
+        : api?.submitReleaseComment;
   if (!submit || !(commentId > 0) || !(reasonId > 0)) {
     showToast('Жалобы недоступны', 'err');
     return;

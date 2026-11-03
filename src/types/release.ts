@@ -49,4 +49,6 @@ export interface ReleaseCardData {
   ageRating?: number;
   /** is_adult из API */
   isAdult?: boolean;
+  /** Anixart не отдаёт тайтл в своём поиске — найден через каталог anixback */
+  hiddenInAnixart?: boolean;
 }

@@ -106,6 +106,8 @@
     showTvOpenHint?: boolean;
     /** Горизонтальная: без панели фактов, жанры — чипами (топы, рейтинги) */
     compact?: boolean;
+    /** Плашка в углу постера («скрыт в Anixart») */
+    posterNote?: string | null;
     class?: string;
     onclick?: (e: MouseEvent) => void;
     onMore?: (e: MouseEvent) => void;
@@ -153,6 +155,7 @@
     prependMenuItems,
     showTvOpenHint = false,
     compact = false,
+    posterNote = null,
     class: className = '',
     onclick,
     onMore,
@@ -544,6 +547,9 @@
         <span class="uiv2-anime-card__poster-fallback" aria-hidden="true"></span>
       {/if}
       <span class="uiv2-anime-card__poster-veil" aria-hidden="true"></span>
+      {#if posterNote}
+        <span class="uiv2-anime-card__poster-note">{posterNote}</span>
+      {/if}
       {#if hasMenu}
         <span class="uiv2-anime-card__more-slot">
           <UiV2RoundButton
@@ -645,6 +651,9 @@
           <span class="uiv2-anime-card__poster-fallback" aria-hidden="true"></span>
         {/if}
         <span class="uiv2-anime-card__poster-veil" aria-hidden="true"></span>
+        {#if posterNote}
+          <span class="uiv2-anime-card__poster-note">{posterNote}</span>
+        {/if}
       </div>
       {#if posterStatusBadge}
         <div

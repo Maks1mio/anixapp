@@ -26,10 +26,16 @@ export function isSearchTab(value: string | null | undefined): value is SearchTa
   return value === 'releases' || value === 'collections' || value === 'profiles';
 }
 
-export function buildSearchRoute(query: string, tab: SearchTab = 'releases', searchBy = 0): string {
+export function buildSearchRoute(
+  query: string,
+  tab: SearchTab = 'releases',
+  searchBy = 0,
+  hiddenOnly = false,
+): string {
   const params = new URLSearchParams({ q: query.trim() });
   if (tab !== 'releases') params.set('tab', tab);
   if (tab === 'releases' && searchBy > 0) params.set('by', String(searchBy));
+  if (tab === 'releases' && hiddenOnly) params.set('hidden', '1');
   return `/search?${params.toString()}`;
 }
 

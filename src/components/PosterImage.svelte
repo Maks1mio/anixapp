@@ -76,9 +76,10 @@
       round = 0;
       loaded = false;
       failed = false;
+      retrying = false;
       imgSrc = candidates[0] || next;
       clearLoadTimer();
-      if (next) armLoadTimer();
+      if (next && inView) armLoadTimer();
     });
   });
 
@@ -113,6 +114,13 @@
   let hostIdx = 0;
   let round = 0;
   let loadTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Картинка подошла к экрану. Ленивая (`loading="lazy"`) до этого не грузится вовсе —
+   * таймаут, взведённый раньше, принимал ожидание за зависший хост и уводил её в ретраи.
+   */
+  let inView = untrack(() => loading) === 'eager';
+  /** Уже была ошибка: ленивая картинка под `display:none` не загрузится — повторы грузим сразу. */
+  let retrying = $state(false);
 
   function clearLoadTimer() {
     if (loadTimer != null) {
@@ -158,11 +166,12 @@
       retryTimer = null;
       const base = list[hostIdx % list.length];
       imgSrc = round === 0 && hostIdx === 0 ? base : withBust(base, round * 10 + hostIdx);
-      armLoadTimer();
+      if (inView) armLoadTimer();
     }, delay);
   }
 
   function handleError() {
+    retrying = true;
     loaded = false;
     clearLoadTimer();
     const list = candidates;
@@ -181,6 +190,25 @@
       return;
     }
     tryCandidate(150);
+  }
+
+  /** Таймаут — только для картинки у экрана; ленивую браузер начинает грузить сам, когда она подходит к нему. */
+  function watchInView(node: HTMLImageElement) {
+    if (inView || typeof IntersectionObserver === 'undefined') {
+      inView = true;
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        io.disconnect();
+        inView = true;
+        if (!loaded && loadTimer == null && retryTimer == null) armLoadTimer();
+      },
+      { rootMargin: '400px 0px' },
+    );
+    io.observe(node);
+    return { destroy: () => io.disconnect() };
   }
 
   /** Сеть вернулась / приложение снова на экране — повторяем сразу, если картинка так и не загрузилась. */
@@ -211,10 +239,11 @@
     class:poster-image--loaded={loaded}
     src={imgSrc}
     {alt}
-    {loading}
+    loading={retrying ? 'eager' : loading}
     decoding="async"
     onload={handleLoad}
     onerror={handleError}
+    use:watchInView
     style:display={failed && !loaded ? 'none' : null}
   />
 {/if}

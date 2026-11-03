@@ -15,9 +15,11 @@
     actions?: Snippet;
     /** Нижняя полоса баннера (вкладки, фильтры) — дублируется в компактной панели */
     children?: Snippet;
+    /** Под нижней полосой, только в полном баннере (строка фильтров) — в компактную панель не попадает */
+    below?: Snippet;
   }
 
-  let { title, subtitle, backdrop, backLabel = 'Назад', onBack, actions, children }: Props = $props();
+  let { title, subtitle, backdrop, backLabel = 'Назад', onBack, actions, children, below }: Props = $props();
 
   /** Последний известный фон: пока список перезагружается, старый цвет держится до прихода нового */
   let shownBackdrop = $state<string | null>(null);
@@ -103,6 +105,12 @@
   {#if children}
     <div class="discover-hero__foot">
       {@render children()}
+    </div>
+  {/if}
+
+  {#if below}
+    <div class="discover-hero__below">
+      {@render below()}
     </div>
   {/if}
 </header>

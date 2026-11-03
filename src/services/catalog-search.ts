@@ -49,3 +49,37 @@ export async function searchCatalog(
     return null;
   }
 }
+
+export interface CatalogBrowseParams {
+  /** popular (в избранном), grade, votes (число оценок), year, updated, new */
+  sort: string;
+  yearFrom?: number;
+  yearTo?: number;
+  season?: number;
+  genres?: string[];
+  statusId?: number;
+  categoryId?: number;
+  offset: number;
+  limit: number;
+}
+
+/**
+ * Список по статистике AnixApp — anixback's mirror (`/releases/browse`), с сортировками,
+ * которых нет у /filter Anixart. Бросает ошибку: вызывающий показывает экран повтора.
+ */
+export async function browseCatalog(p: CatalogBrowseParams): Promise<{ total: number; items: ReleaseCardData[] }> {
+  const params = new URLSearchParams({ sort: p.sort, offset: String(p.offset), limit: String(p.limit) });
+  if (p.yearFrom != null) params.set('year_from', String(p.yearFrom));
+  if (p.yearTo != null) params.set('year_to', String(p.yearTo));
+  if (p.season != null) params.set('season', String(p.season));
+  if (p.genres?.length) params.set('genres', p.genres.join(','));
+  if (p.statusId != null) params.set('status_id', String(p.statusId));
+  if (p.categoryId != null) params.set('category_id', String(p.categoryId));
+  const res = await fetch(`${getApiBase()}/releases/browse?${params}`, { signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) throw new Error(res.status === 429 ? 'Слишком много запросов — подождите минуту' : `Каталог AnixApp недоступен (${res.status})`);
+  const data = (await res.json()) as { total?: number; releases?: Array<Record<string, unknown>> };
+  const items = (data.releases ?? [])
+    .filter((raw) => Number(raw.id) > 0)
+    .map((raw) => ({ ...mapReleaseRawToCard(raw), hiddenInAnixart: raw.hidden_in_anixart === true }));
+  return { total: Number(data.total ?? items.length), items };
+}

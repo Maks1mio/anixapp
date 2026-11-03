@@ -261,6 +261,88 @@
   flex: 0 1 auto;
 }
 
+// Чья статистика: Anixart / AnixApp — справа от заголовка
+.popular-source {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.popular-source__label {
+  font-size: 0.8125rem;
+  color: var(--uiv2-fg-muted);
+}
+
+.popular-source__tabs.uiv2-tabs {
+  position: relative;
+  top: auto;
+  z-index: auto;
+  margin: 0;
+  padding: 0;
+  background: none;
+
+  &::after {
+    display: none;
+  }
+
+  .uiv2-tabs__nav {
+    background: color-mix(in srgb, var(--uikit-v2-bg) 40%, transparent);
+  }
+}
+
+// Строка фильтров под вкладками: сортировка шире, остальное поровну
+.discover-hero__below {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+  margin-top: -0.35rem;
+}
+
+.popular-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+
+  .uiv2-select__field {
+    background: color-mix(in srgb, var(--uikit-v2-bg) 40%, transparent);
+  }
+
+  // Пояснения пунктов — только в списке, поля одной высоты
+  .uiv2-select__trigger .uiv2-select__value-desc {
+    display: none;
+  }
+}
+
+.popular-filters__extra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  min-height: 2rem;
+}
+
+.popular-filters__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.875rem;
+  color: var(--uiv2-fg-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.popular-filters__reset {
+  margin-left: auto;
+}
+
+@container (max-width: 48rem) {
+  .popular-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 // Топ-3: пьедестал 2 · 1 · 3
 .popular-podium {
   --podium-gold: #f2c14e;

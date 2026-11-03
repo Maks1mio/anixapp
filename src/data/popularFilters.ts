@@ -1,0 +1,212 @@
+/**
+ * Фильтры вкладки «Популярное» (десктоп): поверх вкладки — год, сезон, жанр, сортировка.
+ * Всё уходит в тот же POST /filter/{page}, что и вкладки (FilterRequest Anixart).
+ */
+import { ALL_GENRES, SEASONS } from './filterOptions';
+import { getPopularTabFilterArgs, type PopularTabId } from './popularTabs';
+
+/** «Всё» есть только на десктопе — TV держит свои четыре ряда. */
+export type PopularViewTab = 'all' | PopularTabId;
+
+export const POPULAR_VIEW_TABS: readonly { id: PopularViewTab; label: string }[] = [
+  { id: 'all', label: 'Всё' },
+  { id: 'ongoing', label: 'Онгоинги' },
+  { id: 'finished', label: 'Завершённые' },
+  { id: 'movies', label: 'Фильмы' },
+  { id: 'ova', label: 'OVA' },
+];
+
+/** Чья статистика: /filter Anixart или каталог AnixApp (anixback). */
+export type PopularSource = 'anixart' | 'anixapp';
+
+export const POPULAR_SOURCE_TABS: readonly { id: PopularSource; label: string }[] = [
+  { id: 'anixart', label: 'Anixart' },
+  { id: 'anixapp', label: 'AnixApp' },
+];
+
+export type PopularSort = 'popular' | 'grade' | 'votes' | 'year' | 'updated';
+
+export interface PopularFilters {
+  source: PopularSource;
+  sort: PopularSort;
+  /** 'any' | '2025' | '2010s' | 'old' */
+  year: string;
+  /** 'any' | '1'…'4' (SEASONS.id) */
+  season: string;
+  /** 'any' | название жанра */
+  genre: string;
+  /** Не показывать то, что уже в «Просмотрено» (нужен вход). */
+  hideWatched: boolean;
+}
+
+export const DEFAULT_POPULAR_FILTERS: PopularFilters = {
+  source: 'anixart',
+  sort: 'popular',
+  year: 'any',
+  season: 'any',
+  genre: 'any',
+  hideWatched: false,
+};
+
+/** FilterSortType Anixart: 0 обновление, 1 оценка, 2 год, 3 популярность. */
+const SORT_VALUE: Record<Exclude<PopularSort, 'votes'>, number> = { popular: 3, grade: 1, year: 2, updated: 0 };
+
+type SortOption = { value: PopularSort; label: string; desc: string };
+
+const SORT_OPTIONS: Record<PopularSource, SortOption[]> = {
+  anixart: [
+    { value: 'popular', label: 'Популярные', desc: 'Рейтинг популярности Anixart' },
+    { value: 'grade', label: 'С высокой оценкой', desc: 'Лучшие по оценке зрителей' },
+    { value: 'year', label: 'Самые новые', desc: 'Сначала свежие по году выхода' },
+    { value: 'updated', label: 'Недавно обновлённые', desc: 'Новые серии и изменения' },
+  ],
+  anixapp: [
+    { value: 'popular', label: 'Популярные', desc: 'Больше всего в избранном' },
+    { value: 'votes', label: 'Больше всего оценок', desc: 'Число поставленных оценок' },
+    { value: 'grade', label: 'С высокой оценкой', desc: 'При равной — где больше оценок' },
+    { value: 'year', label: 'Самые новые', desc: 'Сначала свежие по году выхода' },
+    { value: 'updated', label: 'Недавно обновлённые', desc: 'Новые серии и изменения' },
+  ],
+};
+
+export function popularSortOptions(source: PopularSource): SortOption[] {
+  return SORT_OPTIONS[source];
+}
+
+/** Сортировки, которой нет у нового источника, — заменяем на «Популярные». */
+export function withSource(f: PopularFilters, source: PopularSource): PopularFilters {
+  const sort = SORT_OPTIONS[source].some((o) => o.value === f.sort) ? f.sort : 'popular';
+  return { ...f, source, sort, hideWatched: source === 'anixart' ? f.hideWatched : false };
+}
+
+const SEASON_MONTHS: Record<number, string> = {
+  1: 'январь – март',
+  2: 'апрель – июнь',
+  3: 'июль – сентябрь',
+  4: 'октябрь – декабрь',
+};
+
+export const POPULAR_SEASON_OPTIONS: { value: string; label: string; desc?: string }[] = [
+  { value: 'any', label: 'Любой сезон' },
+  ...SEASONS.map((s) => ({ value: String(s.id), label: s.label, desc: SEASON_MONTHS[s.id] })),
+];
+
+const DECADES: { value: string; label: string; from?: number; to: number }[] = [
+  { value: '2010s', label: '2010-е', from: 2010, to: 2019 },
+  { value: '2000s', label: '2000-е', from: 2000, to: 2009 },
+  { value: '1990s', label: '1990-е', from: 1990, to: 1999 },
+  { value: 'old', label: 'До 1990', to: 1989 },
+];
+
+/** Последние годы по одному, дальше — десятилетия. */
+export function popularYearOptions(now = new Date().getFullYear()): { value: string; label: string; desc?: string }[] {
+  const years = Array.from({ length: now - 2019 }, (_, i) => now - i);
+  return [
+    { value: 'any', label: 'Любой год' },
+    ...years.map((y) => ({
+      value: String(y),
+      label: String(y),
+      desc: y === now ? 'Этот год' : y === now - 1 ? 'Прошлый год' : undefined,
+    })),
+    ...DECADES.map((d) => ({ value: d.value, label: d.label })),
+  ];
+}
+
+export const POPULAR_GENRE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'any', label: 'Любой жанр' },
+  ...[...ALL_GENRES]
+    .sort((a, b) => a.localeCompare(b, 'ru'))
+    .map((g) => ({ value: g, label: g.charAt(0).toUpperCase() + g.slice(1) })),
+];
+
+function yearRange(year: string): { start_year?: number; end_year?: number } {
+  if (year === 'any') return {};
+  const decade = DECADES.find((d) => d.value === year);
+  if (decade) return { start_year: decade.from, end_year: decade.to };
+  const y = Number(year);
+  return Number.isFinite(y) ? { start_year: y, end_year: y } : {};
+}
+
+/** Тело POST /filter/{page}: условия вкладки + фильтры поверх. */
+export function popularFilterArgs(tab: PopularViewTab, f: PopularFilters): Record<string, unknown> {
+  const body: Record<string, unknown> = tab === 'all' ? {} : { ...getPopularTabFilterArgs(tab) };
+  body.sort = f.sort === 'votes' ? 3 : SORT_VALUE[f.sort];
+  Object.assign(body, yearRange(f.year));
+  if (f.season !== 'any') body.season = Number(f.season);
+  if (f.genre !== 'any') body.genres = [f.genre];
+  if (f.hideWatched) body.profile_list_exclusions = [3];
+  return body;
+}
+
+/** Условия вкладки для каталога AnixApp (у него нет фильтра по числу серий). */
+const BROWSE_TAB: Record<PopularViewTab, { statusId?: number; categoryId?: number }> = {
+  all: {},
+  ongoing: { statusId: 2 },
+  finished: { statusId: 1 },
+  movies: { categoryId: 2 },
+  ova: { categoryId: 3 },
+};
+
+/** Параметры /releases/browse (без страницы). */
+export function popularBrowseParams(tab: PopularViewTab, f: PopularFilters) {
+  const years = yearRange(f.year);
+  return {
+    ...BROWSE_TAB[tab],
+    sort: f.sort,
+    yearFrom: years.start_year,
+    yearTo: years.end_year,
+    season: f.season === 'any' ? undefined : Number(f.season),
+    genres: f.genre === 'any' ? undefined : [f.genre],
+  };
+}
+
+/** Сброс фильтров не трогает выбранный источник. */
+export function isDefaultPopularFilters(f: PopularFilters): boolean {
+  return (Object.keys(DEFAULT_POPULAR_FILTERS) as (keyof PopularFilters)[]).every(
+    (k) => k === 'source' || f[k] === DEFAULT_POPULAR_FILTERS[k],
+  );
+}
+
+/** Ключ для кеша списка: источник + вкладка + все фильтры. */
+export function popularFiltersKey(f: PopularFilters): string {
+  return [f.source, f.sort, f.year, f.season, f.genre, f.hideWatched ? 1 : 0].join('|');
+}
+
+/** «Осень 2025 · фэнтези» — подпись в шапке под заголовком. */
+export function describePopularFilters(f: PopularFilters): string {
+  const parts: string[] = [];
+  const season = SEASONS.find((s) => String(s.id) === f.season)?.label;
+  const year = f.year === 'any' ? '' : (DECADES.find((d) => d.value === f.year)?.label ?? f.year);
+  if (season && year) parts.push(`${season} ${year}`);
+  else if (season) parts.push(season);
+  else if (year) parts.push(year);
+  if (f.genre !== 'any') parts.push(f.genre);
+  return parts.join(' · ');
+}
+
+const STORAGE_KEY = 'anixapp.popular.filters';
+
+export function loadPopularFilters(): PopularFilters {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as Partial<PopularFilters> | null;
+    if (!raw || typeof raw !== 'object') return { ...DEFAULT_POPULAR_FILTERS };
+    const f = { ...DEFAULT_POPULAR_FILTERS, ...raw };
+    if (!POPULAR_SOURCE_TABS.some((t) => t.id === f.source)) f.source = 'anixart';
+    if (!SORT_OPTIONS[f.source].some((o) => o.value === f.sort)) f.sort = 'popular';
+    if (!popularYearOptions().some((o) => o.value === f.year)) f.year = 'any';
+    if (!POPULAR_SEASON_OPTIONS.some((o) => o.value === f.season)) f.season = 'any';
+    if (!POPULAR_GENRE_OPTIONS.some((o) => o.value === f.genre)) f.genre = 'any';
+    f.hideWatched = f.source === 'anixart' && f.hideWatched === true;
+    return f;
+  } catch {
+    return { ...DEFAULT_POPULAR_FILTERS };
+  }
+}
+
+export function savePopularFilters(f: PopularFilters): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(f));
+  } catch {
+    /* приватный режим — фильтры живут до перезапуска */
+  }
+}

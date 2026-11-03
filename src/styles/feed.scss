@@ -2513,6 +2513,17 @@
   padding: 0.5rem 0 0.25rem;
 }
 
+.feed-page__sentinel {
+  height: 1px;
+}
+
+.feed-page__end {
+  margin: 0.25rem 0 0.5rem;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
+}
+
 .feed-aside {
   position: sticky;
   top: var(--feed-search-sticky-top);
@@ -4118,8 +4129,8 @@
   max-height: min(88vh, 640px);
   overflow: hidden;
   border-radius: 16px;
-  border: 1px solid color-mix(in srgb, var(--uikit-v2-text, #{-text}) 12%, transparent);
-  background: color-mix(in srgb, var(--uikit-v2-surface, #{-surface}) 96%, #000);
+  border: 1px solid color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 12%, transparent);
+  background: color-mix(in srgb, var(--uikit-v2-surface, #{$color-surface}) 96%, #000);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
 }
 
@@ -4134,13 +4145,13 @@
   height: 32px;
   border: 0;
   border-radius: 999px;
-  color: var(--uiv2-fg-muted, #{-text-muted});
-  background: color-mix(in srgb, var(--uikit-v2-text, #{-text}) 8%, transparent);
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
+  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 8%, transparent);
   cursor: pointer;
 
   &:hover:not(:disabled) {
-    color: var(--uiv2-fg-strong, #{-text});
-    background: color-mix(in srgb, var(--uikit-v2-text, #{-text}) 14%, transparent);
+    color: var(--uiv2-fg-strong, #{$color-text});
+    background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 14%, transparent);
   }
 
   &:disabled {
@@ -4170,8 +4181,8 @@
   inset: 12%;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 35% 30%, color-mix(in srgb, #{-accent} 55%, #fff), transparent 55%),
-    radial-gradient(circle at 70% 70%, color-mix(in srgb, #{-accent} 35%, transparent), transparent 60%);
+    radial-gradient(circle at 35% 30%, color-mix(in srgb, #{$color-accent} 55%, #fff), transparent 55%),
+    radial-gradient(circle at 70% 70%, color-mix(in srgb, #{$color-accent} 35%, transparent), transparent 60%);
   opacity: 0.9;
   filter: blur(2px);
 }
@@ -4186,14 +4197,14 @@
   font-size: 2.6rem;
   line-height: 1;
   color: #fff;
-  background: linear-gradient(160deg, color-mix(in srgb, #{-accent} 88%, #fff), #{-accent});
-  box-shadow: 0 10px 28px color-mix(in srgb, #{-accent} 35%, transparent);
+  background: linear-gradient(160deg, color-mix(in srgb, #{$color-accent} 88%, #fff), #{$color-accent});
+  box-shadow: 0 10px 28px color-mix(in srgb, #{$color-accent} 35%, transparent);
 }
 
 .blog-create-modal__loading {
   margin: 0.5rem 0 1rem;
   text-align: center;
-  color: var(--uiv2-fg-muted, #{-text-muted});
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
   font-size: 0.9rem;
 }
 
@@ -4212,7 +4223,7 @@
 .blog-create-modal__level-current {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--uiv2-fg-strong, #{-text});
+  color: var(--uiv2-fg-strong, #{$color-text});
 }
 
 .blog-create-modal__level-min {
@@ -4221,7 +4232,7 @@
   font-size: 0.8rem;
   font-weight: 600;
   color: #fff;
-  background: #{-accent};
+  background: #{$color-accent};
 }
 
 .blog-create-modal__bar {
@@ -4229,14 +4240,14 @@
   height: 10px;
   overflow: hidden;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--uikit-v2-text, #{-text}) 12%, transparent);
+  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 12%, transparent);
 }
 
 .blog-create-modal__bar-fill {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #{-accent};
+  background: #{$color-accent};
   transition: width 40ms linear;
 }
 
@@ -4256,7 +4267,7 @@
   flex: 0 0 2px;
   width: 2px;
   height: 4px;
-  background: color-mix(in srgb, var(--uikit-v2-text, #{-text}) 34%, transparent);
+  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 34%, transparent);
 }
 
 .blog-create-modal__hint {
@@ -4270,7 +4281,7 @@
   font: inherit;
   font-size: 0.82rem;
   line-height: 1.4;
-  color: var(--uiv2-fg-muted, #{-text-muted});
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
   cursor: pointer;
 }
 
@@ -4278,7 +4289,7 @@
   display: inline;
   text-decoration: underline;
   text-underline-offset: 2px;
-  color: var(--uiv2-fg-strong, #{-text});
+  color: var(--uiv2-fg-strong, #{$color-text});
 }
 
 .blog-create-modal__title {
@@ -4287,7 +4298,7 @@
   font-size: 1.35rem;
   font-weight: 700;
   line-height: 1.25;
-  color: var(--uiv2-fg-strong, #{-text});
+  color: var(--uiv2-fg-strong, #{$color-text});
 }
 
 .blog-create-modal__features {
@@ -4312,7 +4323,7 @@
   width: 28px;
   height: 28px;
   margin-top: 0.1rem;
-  color: #{-accent};
+  color: #{$color-accent};
 }
 
 .blog-create-modal__feature-text {
@@ -4323,14 +4334,14 @@
   margin: 0;
   font-size: 0.92rem;
   font-weight: 700;
-  color: var(--uiv2-fg-strong, #{-text});
+  color: var(--uiv2-fg-strong, #{$color-text});
 }
 
 .blog-create-modal__feature-desc {
   margin: 0.15rem 0 0;
   font-size: 0.88rem;
   line-height: 1.35;
-  color: var(--uiv2-fg-muted, #{-text-muted});
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
 }
 
 .blog-create-modal__actions {
@@ -4367,8 +4378,8 @@
   overflow: auto;
   padding: 1.25rem 1.35rem 1.15rem;
   border-radius: 14px;
-  border: 1px solid color-mix(in srgb, var(--uikit-v2-text, #{-text}) 12%, transparent);
-  background: color-mix(in srgb, var(--uikit-v2-surface, #{-surface}) 96%, #000);
+  border: 1px solid color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 12%, transparent);
+  background: color-mix(in srgb, var(--uikit-v2-surface, #{$color-surface}) 96%, #000);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
 }
 
@@ -4376,14 +4387,14 @@
   margin: 0 0 0.85rem;
   font-size: 1.15rem;
   font-weight: 700;
-  color: var(--uiv2-fg-strong, #{-text});
+  color: var(--uiv2-fg-strong, #{$color-text});
 }
 
 .blog-create-help__body {
   margin: 0 0 0.75rem;
   font-size: 0.9rem;
   line-height: 1.45;
-  color: var(--uiv2-fg-muted, #{-text-muted});
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
   white-space: pre-wrap;
 }
 
@@ -4416,8 +4427,8 @@
   max-height: min(88vh, 640px);
   overflow: hidden;
   border-radius: 16px;
-  border: 1px solid color-mix(in srgb, var(--uikit-v2-text, #{-text}) 12%, transparent);
-  background: color-mix(in srgb, var(--uikit-v2-surface, #{-surface}) 96%, #000);
+  border: 1px solid color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 12%, transparent);
+  background: color-mix(in srgb, var(--uikit-v2-surface, #{$color-surface}) 96%, #000);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
 }
 
@@ -4433,7 +4444,7 @@
   margin: 0;
   font-size: 1.15rem;
   font-weight: 700;
-  color: var(--uiv2-fg-strong, #{-text});
+  color: var(--uiv2-fg-strong, #{$color-text});
 }
 
 .channel-create-modal__close {
@@ -4443,13 +4454,13 @@
   height: 32px;
   border: 0;
   border-radius: 999px;
-  color: var(--uiv2-fg-muted, #{-text-muted});
-  background: color-mix(in srgb, var(--uikit-v2-text, #{-text}) 8%, transparent);
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
+  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 8%, transparent);
   cursor: pointer;
 
   &:hover:not(:disabled) {
-    color: var(--uiv2-fg-strong, #{-text});
-    background: color-mix(in srgb, var(--uikit-v2-text, #{-text}) 14%, transparent);
+    color: var(--uiv2-fg-strong, #{$color-text});
+    background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 14%, transparent);
   }
 
   &:disabled {
@@ -4475,7 +4486,7 @@
 
   input {
     margin-top: 0.2rem;
-    accent-color: #{-accent};
+    accent-color: #{$color-accent};
   }
 }
 
@@ -4483,23 +4494,273 @@
   display: block;
   font-size: 0.92rem;
   font-weight: 650;
-  color: var(--uiv2-fg-strong, #{-text});
+  color: var(--uiv2-fg-strong, #{$color-text});
 }
 
 .channel-create-modal__check-desc {
   display: block;
   margin-top: 0.1rem;
   font-size: 0.82rem;
-  color: var(--uiv2-fg-muted, #{-text-muted});
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
 }
 
 .channel-create-modal__hint {
   margin: 0;
   font-size: 0.85rem;
   line-height: 1.4;
-  color: #{-error};
+  color: #{$color-error};
 }
 
 .channel-create-modal__foot {
   padding: 0.75rem 1.25rem 1.15rem;
+}
+
+// ---- Настройки канала ----
+
+.channel-settings__panel {
+  width: min(100%, 480px);
+  max-height: min(88vh, 720px);
+
+  &--sub {
+    height: min(88vh, 600px);
+  }
+}
+
+.channel-settings__head {
+  justify-content: flex-start;
+  padding-bottom: 0.6rem;
+
+  .channel-create-modal__title {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+.channel-settings__nav {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border: 0;
+  background: none;
+  color: var(--uikit-v2-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease;
+
+  & + & {
+    border-top: 1px solid var(--uiv2-border-subtle);
+  }
+
+  &:hover {
+    background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 5%, transparent);
+  }
+}
+
+.channel-settings__nav-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--uiv2-fg-muted);
+}
+
+.channel-settings__nav-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+.channel-settings__nav-chevron {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--uiv2-fg-muted);
+}
+
+.channel-settings__scroll {
+  flex: 1 1 auto;
+}
+
+.channel-settings__body {
+  padding-bottom: 1rem;
+}
+
+// Описание растёт под текст — скроллится только модалка, без нативного скролла в поле.
+.channel-settings__desc .uiv2-outlined-field__input--area {
+  field-sizing: content;
+  resize: none;
+  overflow: hidden;
+}
+
+.channel-settings__media {
+  position: relative;
+  margin-bottom: 0.9rem;
+}
+
+.channel-settings__cover {
+  position: relative;
+  height: 8.5rem;
+  border-radius: 20px;
+  background-color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 6%, transparent);
+  background-position: center;
+  background-size: cover;
+
+  &--empty {
+    background-image: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 22%, transparent),
+      color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 6%, transparent)
+    );
+  }
+}
+
+.channel-settings__cover-actions {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.channel-settings__avatar {
+  position: absolute;
+  left: 1rem;
+  bottom: -1.4rem;
+  width: 4.5rem;
+  height: 4.5rem;
+  padding: 0;
+  overflow: hidden;
+  border: 3px solid color-mix(in srgb, var(--uikit-v2-surface, #{$color-surface}) 96%, #000);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 8%, transparent);
+  cursor: pointer;
+
+  .user-avatar {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+
+  &--busy {
+    opacity: 0.6;
+  }
+}
+
+.channel-settings__avatar-hint {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 0.15rem 0;
+  font-size: 0.66rem;
+  font-weight: 650;
+  text-align: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.channel-settings__avatar:hover:not(:disabled) .channel-settings__avatar-hint,
+.channel-settings__avatar:focus-visible .channel-settings__avatar-hint,
+.channel-settings__avatar--busy .channel-settings__avatar-hint {
+  opacity: 1;
+}
+
+.channel-settings__file {
+  display: none;
+}
+
+.channel-settings__note,
+.channel-settings__empty {
+  margin: 0.25rem 0;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
+}
+
+.channel-settings .uiv2-settings__group--pad > .uiv2-settings__row {
+  padding: 0;
+}
+
+.uiv2-settings__group > .channel-settings__empty {
+  margin: 0;
+  padding: 0.85rem 1rem;
+}
+
+.channel-settings__row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem 0.6rem 1rem;
+
+  & + & {
+    border-top: 1px solid var(--uiv2-border-subtle);
+  }
+}
+
+.channel-settings__person {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.channel-settings__person-avatar {
+  flex: 0 0 2.4rem;
+  width: 2.4rem;
+  height: 2.4rem;
+  overflow: hidden;
+  border-radius: 50%;
+
+  .user-avatar {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.channel-settings__person-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.channel-settings__person-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--uiv2-fg-strong, #{$color-text});
+}
+
+.channel-settings__person-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
+}
+
+// Pill-поле по умолчанию flex: 1 — в колонке тела модалки оно растягивалось на всю высоту
+.channel-settings .channel-settings__pick {
+  flex: 0 0 auto;
+}
+
+.channel-settings__block-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }

@@ -543,6 +543,34 @@ ipcMain.handle('anix:articlePin', async (_, id, isPinned) => {
   }
 });
 
+ipcMain.handle('anix:articleVotes', async (_, id, page = 0, sort = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.article.votes(id, page, { sort: Number(sort) || 0 });
+  } catch (err) {
+    handleAnixError(err, 'articleVotes');
+  }
+});
+
+ipcMain.handle('anix:articleReposts', async (_, id, page = 0, sort = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.article.reposts(id, page, { sort: Number(sort) || 0 });
+  } catch (err) {
+    handleAnixError(err, 'articleReposts');
+  }
+});
+
+// Статистика просмотров (как в мобильном клиенте): view / open / read.
+ipcMain.handle('anix:articleEvent', async (_, body) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.article.hits(body);
+  } catch (err) {
+    handleAnixError(err, 'articleEvent');
+  }
+});
+
 ipcMain.handle('anix:reportArticleReasons', async () => {
   try {
     const client = getAnixart();
@@ -558,6 +586,38 @@ ipcMain.handle('anix:reportArticle', async (_, body) => {
     return await client.endpoints.report.article(body);
   } catch (err) {
     handleAnixError(err, 'reportArticle');
+  }
+});
+
+ipcMain.handle('anix:reportArticleCommentReasons', async () => {
+  try {
+    return await getAnixart().endpoints.report.articleCommentsReasons();
+  } catch (err) {
+    handleAnixError(err, 'reportArticleCommentReasons');
+  }
+});
+
+ipcMain.handle('anix:reportArticleComment', async (_, body) => {
+  try {
+    return await getAnixart().endpoints.report.articleComment(body);
+  } catch (err) {
+    handleAnixError(err, 'reportArticleComment');
+  }
+});
+
+ipcMain.handle('anix:reportReleaseCommentReasons', async () => {
+  try {
+    return await getAnixart().endpoints.report.releaseCommentsReasons();
+  } catch (err) {
+    handleAnixError(err, 'reportReleaseCommentReasons');
+  }
+});
+
+ipcMain.handle('anix:reportReleaseComment', async (_, body) => {
+  try {
+    return await getAnixart().endpoints.report.releaseComment(body);
+  } catch (err) {
+    handleAnixError(err, 'reportReleaseComment');
   }
 });
 
@@ -1642,6 +1702,63 @@ ipcMain.handle('anix:channelDeleteCover', async (_, channelId) => {
     return await client.endpoints.channel.deleteCover(channelId);
   } catch (err) {
     handleAnixError(err, 'channelDeleteCover');
+  }
+});
+
+ipcMain.handle('anix:channelUploadAvatar', async (_, channelId, imageBase64, fileName = 'image.jpg') => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.channel.uploadAvatar(channelId, imageBase64, fileName);
+  } catch (err) {
+    handleAnixError(err, 'channelUploadAvatar');
+  }
+});
+
+ipcMain.handle('anix:channelEdit', async (_, channelId, body) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.channel.edit(channelId, body);
+  } catch (err) {
+    handleAnixError(err, 'channelEdit');
+  }
+});
+
+ipcMain.handle('anix:channelBlocks', async (_, channelId, page = 0) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.channel.blocks(channelId, page);
+  } catch (err) {
+    handleAnixError(err, 'channelBlocks');
+  }
+});
+
+ipcMain.handle('anix:channelBlockManage', async (_, channelId, body) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.channel.blockManage(channelId, body);
+  } catch (err) {
+    handleAnixError(err, 'channelBlockManage');
+  }
+});
+
+ipcMain.handle('anix:channelPermissions', async (_, channelId, page = 0, permission = 1) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.channel.permissions(channelId, page, { permission: Number(permission) || 0 });
+  } catch (err) {
+    handleAnixError(err, 'channelPermissions');
+  }
+});
+
+ipcMain.handle('anix:channelPermissionManage', async (_, channelId, profileId, permission) => {
+  try {
+    const client = getAnixart();
+    return await client.endpoints.channel.permissionManage(channelId, {
+      target_profile_id: Number(profileId),
+      permission: Number(permission) || 0,
+    });
+  } catch (err) {
+    handleAnixError(err, 'channelPermissionManage');
   }
 });
 

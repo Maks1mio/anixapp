@@ -1,7 +1,11 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import Tabs from '../components/Tabs.svelte';
-  import TopReleaseRow from '../components/TopReleaseRow.svelte';
+  import UiV2Tabs from '../components/uikit-v2/UiV2Tabs.svelte';
+  import UiV2AnimeCardSkeleton from '../components/uikit-v2/UiV2AnimeCardSkeleton.svelte';
+  import ReleaseCardUiV2 from '../components/ReleaseCardUiV2.svelte';
+  import DiscoverHero from '../components/DiscoverHero.svelte';
+  import { iconFlame } from '../components/icons';
+  import { toCdnProxyUrl, toPosterDisplayUrl } from '../utils/posterUrl';
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import { headlineFromLoadError } from '../utils/content-load-error';
   import { mapCardData } from './Release/_utils';
@@ -84,6 +88,13 @@
   let unregisterScrollKey: (() => void) | null = null;
 
   const tabs = POPULAR_TAB_DEFS.map((t) => ({ id: t.id, label: t.label }));
+  const PODIUM_SIZE = 3;
+
+  const podium = $derived(items.slice(0, PODIUM_SIZE));
+  const rest = $derived(items.slice(PODIUM_SIZE));
+  const heroBackdrop = $derived(
+    items[0]?.poster ? toPosterDisplayUrl(toCdnProxyUrl(items[0].poster), 'cardVertical') : null,
+  );
 
   async function loadPage() {
     if (!window.anixApi || isLoading || !hasMore) return;
@@ -187,29 +198,58 @@
 </script>
 
 <div class="view view-popular discover-page" bind:this={wrapEl}>
-  <div class="view-header">
-    <h1 class="view-header__title">Популярное</h1>
-    <p class="view-header__subtitle">Топ релизов по категориям</p>
-  </div>
-
-  <Tabs tabs={tabs} activeId={activeTab} rootClassName="releases-type" onChange={onTabChange} />
+  <DiscoverHero title="Популярное" subtitle="Топ релизов по категориям" backdrop={heroBackdrop}>
+    <UiV2Tabs {tabs} activeId={activeTab} onChange={onTabChange} class="uiv2-tabs--static popular-tabs" />
+  </DiscoverHero>
 
   {#if loadState === 'loading' && items.length === 0}
-    <div class="discover-page__loading">Загрузка…</div>
+    <div class="popular-podium popular-podium--skeleton" aria-busy="true">
+      {#each [2, 1, 3] as place (place)}
+        <div class="popular-podium__place popular-podium__place--{place}">
+          <UiV2AnimeCardSkeleton variant="vertical" />
+          <div class="popular-podium__step"></div>
+        </div>
+      {/each}
+    </div>
   {:else if loadState === 'error'}
     <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadPage()} />
   {:else if loadState === 'empty'}
-    <div class="discover-page__empty">Ничего не найдено</div>
+    <div class="discover-empty">
+      <span class="discover-empty__icon" aria-hidden="true">{@html iconFlame(26)}</span>
+      <p class="discover-empty__title">Ничего не найдено</p>
+    </div>
   {:else}
-    <ol class="top-release-list">
-      {#each items as item, index (item.id)}
-        <li class="top-release-list__item">
-          <TopReleaseRow rank={index + 1} data={item} />
+    <ol class="popular-podium">
+      {#each podium as item, index (item.id)}
+        <li class="popular-podium__place popular-podium__place--{index + 1}">
+          <ReleaseCardUiV2 data={item} variant="vertical" />
+          <div class="popular-podium__step">
+            <span class="popular-podium__rank">{index + 1}</span>
+          </div>
         </li>
       {/each}
     </ol>
+
+    {#if rest.length}
+      <ol class="popular-list" start={PODIUM_SIZE + 1}>
+        {#each rest as item, index (item.id)}
+          <li class="popular-row">
+            <span class="popular-row__rank">{index + PODIUM_SIZE + 1}</span>
+            <div class="popular-row__card">
+              <ReleaseCardUiV2 data={item} variant="horizontal" compact />
+            </div>
+          </li>
+        {/each}
+      </ol>
+    {/if}
     {#if isLoading}
-      <div class="discover-page__loading discover-page__loading--inline">Загрузка…</div>
+      <div class="popular-list" aria-busy="true">
+        {#each [0, 1] as i (i)}
+          <div class="popular-row popular-row--skeleton">
+            <UiV2AnimeCardSkeleton variant="horizontal" />
+          </div>
+        {/each}
+      </div>
     {/if}
   {/if}
 </div>

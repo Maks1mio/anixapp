@@ -8,13 +8,15 @@
   import UiV2CollectionCardSkeleton from '../components/uikit-v2/UiV2CollectionCardSkeleton.svelte';
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import UiV2Tabs from '../components/uikit-v2/UiV2Tabs.svelte';
+  import DiscoverHero from '../components/DiscoverHero.svelte';
   import { replacePath } from '../stores/navigation';
   import { iconX } from '../components/icons';
   import { handleUserProfileClick } from '../stores/user-profile';
   import { resolveBadgeName, resolveProfileBadgeUrl } from '../utils/badge';
   import { addSearchHistory } from '../utils/search-history';
   import { mapReleaseRawToCard } from '../utils/release-card';
-  import { mapCollectionCard } from '../utils/collection';
+  import { collectionsBackdropUrl, mapCollectionCard } from '../utils/collection';
+  import { toCdnProxyUrl, toPosterDisplayUrl } from '../utils/posterUrl';
   import { headlineFromLoadError } from '../utils/content-load-error';
   import {
     SEARCH_TABS,
@@ -79,6 +81,12 @@
   let collections = $state<CollectionCardData[]>([]);
   let profiles = $state<ProfileHit[]>([]);
   let franchise = $state<UiV2SearchFranchiseData | null>(null);
+  /** Фон баннера — обложка первого результата активной вкладки */
+  const heroBackdrop = $derived.by(() => {
+    if (activeTab === 'collections') return collectionsBackdropUrl(collections);
+    const poster = releases[0]?.poster;
+    return poster ? toPosterDisplayUrl(toCdnProxyUrl(poster), 'cardVertical') : null;
+  });
 
   let wrapEl = $state<HTMLElement | undefined>();
   let scrollEl: HTMLElement | null = null;
@@ -322,23 +330,24 @@
 {/snippet}
 
 <div class="view view-search-v2 discover-page" bind:this={wrapEl}>
-  <header class="search-v2__head">
-    <span class="search-v2__eyebrow">{query ? 'Поиск' : 'Поиск по Anixart'}</span>
-    <h1 class="search-v2__title">{query || 'Что ищем?'}</h1>
-    {#if !query}
-      <p class="search-v2__hint">Введите запрос в строке поиска сверху</p>
+  <DiscoverHero
+    title={query || 'Что ищем?'}
+    subtitle={query ? 'Результаты поиска' : 'Введите запрос в строке поиска сверху'}
+    backdrop={heroBackdrop}
+  >
+    {#if query}
+      <!-- Пустой слот справа съедал бы ширину капсулы — передаём его только с фильтром -->
+      <UiV2Tabs
+        class="uiv2-tabs--static search-v2__tabs"
+        tabs={SEARCH_TABS}
+        activeId={activeTab}
+        onChange={switchTab}
+        rightActions={activeTab === 'releases' && searchBy > 0 ? byFilter : undefined}
+      />
     {/if}
-  </header>
+  </DiscoverHero>
 
   {#if query}
-    <!-- Пустой слот справа съедал бы ширину капсулы — передаём его только с фильтром -->
-    <UiV2Tabs
-      class="search-v2__tabs"
-      tabs={SEARCH_TABS}
-      activeId={activeTab}
-      onChange={switchTab}
-      rightActions={activeTab === 'releases' && searchBy > 0 ? byFilter : undefined}
-    />
 
     {#if loadState === 'loading'}
       {#if activeTab === 'collections'}

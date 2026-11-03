@@ -259,6 +259,15 @@ function buildWebAnixApi(): AnixApi {
       uploadCover: (channelId, imageBase64, fileName) =>
         invoke('anix:channelUploadCover', channelId, imageBase64, fileName),
       deleteCover: (channelId) => invoke('anix:channelDeleteCover', channelId),
+      uploadAvatar: (channelId, imageBase64, fileName) =>
+        invoke('anix:channelUploadAvatar', channelId, imageBase64, fileName),
+      edit: (channelId, body) => invoke('anix:channelEdit', channelId, body),
+      blocks: (channelId, page = 0) => invoke('anix:channelBlocks', channelId, page),
+      blockManage: (channelId, body) => invoke('anix:channelBlockManage', channelId, body),
+      permissions: (channelId, page = 0, permission = 1) =>
+        invoke('anix:channelPermissions', channelId, page, permission),
+      permissionManage: (channelId, profileId, permission) =>
+        invoke('anix:channelPermissionManage', channelId, profileId, permission),
       createBlog: () => invoke('anix:channelCreateBlog'),
       create: (body) => invoke('anix:channelCreate', body),
     },
@@ -326,6 +335,9 @@ function buildWebAnixApi(): AnixApi {
       mute: (id) => invoke('anix:articleMute', id),
       unmute: (id) => invoke('anix:articleUnmute', id),
       setPinned: (id, isPinned) => invoke('anix:articlePin', id, isPinned),
+      votes: (id, page = 0, sort = 0) => invoke('anix:articleVotes', id, page, sort),
+      reposts: (id, page = 0, sort = 0) => invoke('anix:articleReposts', id, page, sort),
+      event: (body) => invoke('anix:articleEvent', body),
       commentsPopular: (id) => invoke('anix:articleCommentsPopular', id),
       comments: (id, page = 0, sort = 2) => invoke('anix:articleComments', id, page, sort),
       commentAdd: (id, body) => invoke('anix:articleCommentAdd', id, body),
@@ -343,6 +355,10 @@ function buildWebAnixApi(): AnixApi {
       submitArticle: (body) => invoke('anix:reportArticle', body),
       channelReasons: () => invoke('anix:reportChannelReasons'),
       submitChannel: (body) => invoke('anix:reportChannel', body),
+      articleCommentReasons: () => invoke('anix:reportArticleCommentReasons'),
+      submitArticleComment: (body) => invoke('anix:reportArticleComment', body),
+      releaseCommentReasons: () => invoke('anix:reportReleaseCommentReasons'),
+      submitReleaseComment: (body) => invoke('anix:reportReleaseComment', body),
     },
 
     home: {

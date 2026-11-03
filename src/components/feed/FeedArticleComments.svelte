@@ -61,27 +61,59 @@
     onPreviewCommentChange?.(preview);
   }
 
+  /** Защита от бесконечной догрузки: дальше этого числа страниц не идём. */
+  const MAX_COMMENT_PAGES = 20;
+
+  /** Выше — больше плюсов; при равенстве — кто написал раньше. */
+  function sortByRating(list: UiV2CommentNode[]): UiV2CommentNode[] {
+    return [...list].sort((a, b) => (
+      (Number(b.voteCount) || 0) - (Number(a.voteCount) || 0)
+      || (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0)
+    ));
+  }
+
   async function loadComments() {
     loading = true;
     try {
       const api = window.anixApi?.article;
-      const res = api?.comments
-        ? await api.comments(articleId, 0, 2)
-        : await api?.commentsPopular?.(articleId);
-      const list = normalizeCommentsFromResponse(
-        (res ?? {}) as Record<string, unknown>,
-      );
-      nodes = list.map((c) => commentDataToUiV2Node(c));
+      let apiTotal = 0;
+      const all: UiV2CommentNode[] = [];
+      const seen = new Set<string>();
+      if (api?.comments) {
+        // Сортировка по рейтингу нужна по всему списку — собираем все страницы.
+        for (let page = 0; page < MAX_COMMENT_PAGES; page += 1) {
+          const res = await api.comments(articleId, page, 2);
+          const list = normalizeCommentsFromResponse((res ?? {}) as Record<string, unknown>);
+          const rec = (res ?? {}) as { total_count?: number; total_page_count?: number };
+          if (page === 0) apiTotal = Number(rec.total_count) || 0;
+          let added = 0;
+          for (const c of list) {
+            const node = commentDataToUiV2Node(c);
+            const key = String(node.id);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            all.push(node);
+            added += 1;
+          }
+          const totalPages = Number(rec.total_page_count) || 0;
+          if (added === 0 || (totalPages > 0 && page + 1 >= totalPages)) break;
+          if (totalPages === 0 && apiTotal > 0 && all.length >= apiTotal) break;
+        }
+      } else if (api?.commentsPopular) {
+        const res = await api.commentsPopular(articleId);
+        apiTotal = Number((res as { total_count?: number } | undefined)?.total_count) || 0;
+        for (const c of normalizeCommentsFromResponse((res ?? {}) as Record<string, unknown>)) {
+          all.push(commentDataToUiV2Node(c));
+        }
+      }
+      nodes = sortByRating(all);
       emitPreview(nodes);
-      const apiTotal = Number(
-        (res as { total_count?: number } | undefined)?.total_count,
-      );
-      if (Number.isFinite(apiTotal) && apiTotal > 0) {
+      if (apiTotal > 0) {
         knownTotal = apiTotal;
         onCountChange?.(apiTotal);
-      } else if (list.length > knownTotal) {
-        knownTotal = list.length;
-        onCountChange?.(list.length);
+      } else if (all.length > knownTotal) {
+        knownTotal = all.length;
+        onCountChange?.(all.length);
       }
     } catch {
       nodes = [];

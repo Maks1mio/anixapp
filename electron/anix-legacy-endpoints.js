@@ -93,6 +93,10 @@ function attachLegacyEndpoints(client) {
     return ep.channel.coverUpload(channelId, Buffer.from(base64, 'base64'), fileName);
   };
   ep.channel.deleteCover = (channelId) => ep.channel.coverDelete(channelId);
+  ep.channel.uploadAvatar = (channelId, imageBase64, fileName = 'image.jpg') => {
+    const base64 = typeof imageBase64 === 'string' ? imageBase64.replace(/^data:[^;]+;base64,/, '') : '';
+    return ep.channel.avatarUpload(channelId, Buffer.from(base64, 'base64'), fileName);
+  };
 
   const profileById = ep.profile.byId.bind(ep.profile);
   const profileInfo = ep.profile.info.bind(ep.profile);

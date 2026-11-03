@@ -72,6 +72,11 @@
   } from '../../utils/comment';
   import type { CommentData } from '../../types/comment';
   import { requestOpenExternal } from '../../utils/external-link';
+  import {
+    ensureCommentReportReasons,
+    getCommentReportReasons,
+    submitCommentReport,
+  } from '../../utils/comment-report';
   import { tick } from 'svelte';
 
   type Props = {
@@ -140,6 +145,8 @@
   let replyBusy = $state(false);
   let editingId = $state<string | null>(null);
   let editBusy = $state(false);
+  /** Инкремент после загрузки причин жалоб — пересобрать меню. */
+  let reportTick = $state(0);
 
   function isMine(node: UiV2CommentNode): boolean {
     if (selfProfileId == null) return false;
@@ -172,13 +179,22 @@
         });
       }
     }
-    items.push({
-      id: 'report',
-      label: 'Пожаловаться',
-      icon: iconTriangleAlert(16),
-      danger: true,
-      dividerBefore: true,
-    });
+    // На свой комментарий жаловаться нельзя.
+    if (!isMine(node) && !node.isDeleted) {
+      void reportTick;
+      const reasons = getCommentReportReasons(reactionsSource);
+      items.push({
+        id: 'report',
+        label: 'Пожаловаться',
+        icon: iconTriangleAlert(16),
+        danger: true,
+        dividerBefore: true,
+        submenuWide: true,
+        children: reasons.length > 0
+          ? reasons.map((r) => ({ id: `report:${r.id}`, label: r.label }))
+          : [{ id: 'report:loading', label: 'Загрузка причин…', disabled: true }],
+      });
+    }
     return items;
   }
 
@@ -330,6 +346,14 @@
     menuX = r.left + r.width / 2;
     menuY = r.bottom + 4;
     menuOpen = true;
+    loadReportReasons();
+  }
+
+  function loadReportReasons() {
+    if (getCommentReportReasons(reactionsSource).length > 0) return;
+    void ensureCommentReportReasons(reactionsSource).then(() => {
+      reportTick += 1;
+    });
   }
 
   function onContextMenu(node: UiV2CommentNode, e: MouseEvent) {
@@ -339,6 +363,7 @@
     menuX = e.clientX;
     menuY = e.clientY;
     menuOpen = true;
+    loadReportReasons();
   }
 
   function startReply(node: UiV2CommentNode) {
@@ -401,6 +426,11 @@
       if (window.confirm('Удалить комментарий?')) {
         void onDelete(menuNode);
       }
+    }
+    if (id.startsWith('report:')) {
+      const reasonId = Number(id.slice('report:'.length));
+      const commentId = Number(menuNode.id);
+      if (reasonId > 0 && commentId > 0) void submitCommentReport(reactionsSource, commentId, reasonId);
     }
     onMenuSelect?.(id, menuNode);
   }

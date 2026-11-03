@@ -10,7 +10,8 @@
   import { handleUserProfileClick } from '../../stores/user-profile';
 
   export type UiV2ReactionVote = 'up' | 'down';
-  export type UiV2ReactionsSource = 'release' | 'article';
+  /** post — оценки самой записи канала (article/votes). */
+  export type UiV2ReactionsSource = 'release' | 'article' | 'post';
 
   export type UiV2ReactionProfile = {
     id: number;
@@ -75,7 +76,12 @@
     if (!Number.isFinite(id) || id <= 0) return [];
 
     let data: { content?: unknown[] } | null = null;
-    if (source === 'article') {
+    if (source === 'post') {
+      if (!window.anixApi?.article?.votes) {
+        throw new Error('API реакций недоступно');
+      }
+      data = await window.anixApi.article.votes(id, 0, sort);
+    } else if (source === 'article') {
       if (!window.anixApi?.article?.commentVotes) {
         throw new Error('API реакций недоступно');
       }
@@ -98,9 +104,11 @@
     if (!Number.isFinite(id) || id <= 0) return;
 
     const apiReady =
-      source === 'article'
-        ? !!window.anixApi?.article?.commentVotes
-        : !!window.anixApi?.comments?.release?.votes;
+      source === 'post'
+        ? !!window.anixApi?.article?.votes
+        : source === 'article'
+          ? !!window.anixApi?.article?.commentVotes
+          : !!window.anixApi?.comments?.release?.votes;
     if (!apiReady) {
       loadState = 'error';
       errorText = 'API реакций недоступно';

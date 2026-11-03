@@ -1,3 +1,26 @@
+<script lang="ts" module>
+  import { channelAvatarUrl } from '../../utils/feed-article';
+
+  /** Один запрос профиля на всю ленту, а не на каждую карточку. */
+  let selfAvatarPromise: Promise<string | null> | null = null;
+  let selfAvatarAt = 0;
+  const SELF_AVATAR_TTL_MS = 60_000;
+
+  function loadSelfAvatar(): Promise<string | null> {
+    if (selfAvatarPromise && Date.now() - selfAvatarAt < SELF_AVATAR_TTL_MS) return selfAvatarPromise;
+    selfAvatarAt = Date.now();
+    const request = window.anixApi?.profile?.self?.();
+    selfAvatarPromise = request
+      ? request
+          .then((data: { profile?: { avatar?: string | null } }) => (
+            channelAvatarUrl(data?.profile?.avatar ?? null) || null
+          ))
+          .catch(() => null)
+      : Promise.resolve(null);
+    return selfAvatarPromise;
+  }
+</script>
+
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { FeedArticle } from '../../types/feed';
@@ -5,6 +28,9 @@
     type UiV2FeedPostLastComment,
   } from '../uikit-v2/UiV2FeedPost.svelte';
   import FeedArticleComments from './FeedArticleComments.svelte';
+  import UiV2CommentReactions from '../uikit-v2/UiV2CommentReactions.svelte';
+  import UiV2ArticleReposts from '../uikit-v2/UiV2ArticleReposts.svelte';
+  import { trackArticleEvent, type ArticleEntryPoint } from '../../utils/feed-article-events';
   import { feedArticleToUiV2FeedPost } from '../../utils/uikit-v2-feed-post';
   import { handleUserProfileClick } from '../../stores/user-profile';
   import {
@@ -13,9 +39,8 @@
     getFeedArticleMenuSession,
   } from '../../utils/feed-article-menu';
   import { runFeedArticleMenuAction } from '../../utils/feed-article-menu-actions';
+  import type { UiV2PopupMenuItem } from '../uikit-v2/UiV2PopupMenu.svelte';
   import { loadArticleTopComment, setArticleTopCommentCache, clearArticleTopCommentCache } from '../../utils/feed-top-comment';
-  import { channelAvatarUrl } from '../../utils/feed-article';
-  import { showToast } from '../../stores/toast';
 
   interface Props {
     article: FeedArticle;
@@ -36,6 +61,8 @@
     menuPinAvailable?: boolean;
     /** Скрытие записи в меню (в ленте — да). */
     menuMuteAvailable?: boolean;
+    /** Откуда показана запись — для статистики просмотров. */
+    entryPoint?: ArticleEntryPoint;
   }
 
   let {
@@ -53,6 +80,7 @@
     hideSubscribe = false,
     menuPinAvailable = false,
     menuMuteAvailable = true,
+    entryPoint = 'unknown',
   }: Props = $props();
 
   let voteBusy = $state(false);
@@ -116,6 +144,23 @@
   });
 
   $effect(() => {
+    const el = cardRoot;
+    const id = Number(article.id);
+    const point = entryPoint;
+    if (!el || !(id > 0)) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        io.disconnect();
+        trackArticleEvent('view', id, point);
+      },
+      { threshold: 0.5 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  });
+
+  $effect(() => {
     if (selected) {
       commentsOpen = true;
       commentsFocusWrite = false;
@@ -129,8 +174,8 @@
     void ensureFeedArticleMenuSession().then(() => {
       menuSessionTick += 1;
     });
-    void window.anixApi?.profile?.self?.().then((data: { profile?: { avatar?: string | null } }) => {
-      selfAvatar = channelAvatarUrl(data?.profile?.avatar ?? null) || null;
+    void loadSelfAvatar().then((url) => {
+      selfAvatar = url;
     });
   });
 
@@ -225,7 +270,19 @@
       onRepost?.(result.article);
     }
   }
+
+  function openRepostArticle(repost: FeedArticle) {
+    onOpen?.(repost);
+  }
 </script>
+
+{#snippet menuSubmenu(item: UiV2PopupMenuItem)}
+  {#if item.id === 'votes'}
+    <UiV2CommentReactions commentId={Number(article.id)} source="post" />
+  {:else if item.id === 'reposts'}
+    <UiV2ArticleReposts articleId={Number(article.id)} onOpen={openRepostArticle} />
+  {/if}
+{/snippet}
 
 {#key article.id}
 <div
@@ -249,6 +306,7 @@
     onRepostClick={() => openRepost()}
     onRepostChannel={onChannel}
     onMenuSelect={handleMenuSelect}
+    {menuSubmenu}
     onNeedMore={loadFullPreview}
     onOpenComments={openComments}
     onShare={async () => {
@@ -256,7 +314,7 @@
         onRepost(article);
         return;
       }
-      showToast('Репост скоро будет доступен', 'info');
+      await runFeedArticleMenuAction('share', article);
     }}
     onVote={async (_data, next) => {
       if (voteBusy || !onVote) return;
@@ -292,3 +350,4 @@
   {/if}
 </div>
 {/key}
+

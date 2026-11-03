@@ -439,6 +439,7 @@
               {article}
               selected={selectedArticleId === article.id}
               hideSubscribe={true}
+              entryPoint="channel"
               onOpen={onOpenArticle}
               onChannel={onOpenChannel}
               onVote={onVoteArticle}

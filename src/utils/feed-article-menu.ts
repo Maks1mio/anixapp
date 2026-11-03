@@ -64,7 +64,6 @@ export function buildFeedArticleMenuItems(
 ): UiV2PopupMenuItem[] {
   const pinAvailable = options.pinAvailable ?? false;
   const muteAvailable = options.muteAvailable ?? true;
-  const privilegeLevel = options.privilegeLevel ?? 0;
   const reportReasons = options.reportReasons ?? [];
 
   const channel = article.channel;
@@ -82,8 +81,9 @@ export function buildFeedArticleMenuItems(
     items.push({ id: 'unpin', label: 'Открепить', icon: iconPin(16) });
   }
 
-  items.push({ id: 'votes', label: 'Оценили', icon: iconHeart(16) });
-  items.push({ id: 'reposts', label: 'Репостнули', icon: iconShare(16) });
+  // Списки — подменю со стрелкой, как «Посмотреть реакции» у комментариев.
+  items.push({ id: 'votes', label: 'Оценили', icon: iconHeart(16), customSubmenu: true, submenuWide: true });
+  items.push({ id: 'reposts', label: 'Репостнули', icon: iconShare(16), customSubmenu: true, submenuWide: true });
 
   if (isAdmin) {
     items.push({
@@ -133,16 +133,6 @@ export function buildFeedArticleMenuItems(
       reportItem.submenuWide = true;
     }
     items.push(reportItem);
-  }
-
-  if (privilegeLevel >= 3) {
-    items.push({
-      id: 'process',
-      label: 'Обработать',
-      icon: iconTriangleAlert(16),
-      danger: true,
-      dividerBefore: true,
-    });
   }
 
   return items;

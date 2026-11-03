@@ -678,6 +678,15 @@ contextBridge.exposeInMainWorld('anixApi', {
     uploadCover: (channelId, imageBase64, fileName) =>
       ipcRenderer.invoke('anix:channelUploadCover', channelId, imageBase64, fileName),
     deleteCover: (channelId) => ipcRenderer.invoke('anix:channelDeleteCover', channelId),
+    uploadAvatar: (channelId, imageBase64, fileName) =>
+      ipcRenderer.invoke('anix:channelUploadAvatar', channelId, imageBase64, fileName),
+    edit: (channelId, body) => ipcRenderer.invoke('anix:channelEdit', channelId, body),
+    blocks: (channelId, page = 0) => ipcRenderer.invoke('anix:channelBlocks', channelId, page),
+    blockManage: (channelId, body) => ipcRenderer.invoke('anix:channelBlockManage', channelId, body),
+    permissions: (channelId, page = 0, permission = 1) =>
+      ipcRenderer.invoke('anix:channelPermissions', channelId, page, permission),
+    permissionManage: (channelId, profileId, permission) =>
+      ipcRenderer.invoke('anix:channelPermissionManage', channelId, profileId, permission),
     createBlog: () => ipcRenderer.invoke('anix:channelCreateBlog'),
     create: (body) => ipcRenderer.invoke('anix:channelCreate', body),
   },
@@ -740,6 +749,9 @@ contextBridge.exposeInMainWorld('anixApi', {
     mute: (id) => ipcRenderer.invoke('anix:articleMute', id),
     unmute: (id) => ipcRenderer.invoke('anix:articleUnmute', id),
     setPinned: (id, isPinned) => ipcRenderer.invoke('anix:articlePin', id, isPinned),
+    votes: (id, page = 0, sort = 0) => ipcRenderer.invoke('anix:articleVotes', id, page, sort),
+    reposts: (id, page = 0, sort = 0) => ipcRenderer.invoke('anix:articleReposts', id, page, sort),
+    event: (body) => ipcRenderer.invoke('anix:articleEvent', body),
     commentsPopular: (id) => ipcRenderer.invoke('anix:articleCommentsPopular', id),
     comments: (id, page = 0, sort = 2) =>
       ipcRenderer.invoke('anix:articleComments', id, page, sort),
@@ -761,6 +773,10 @@ contextBridge.exposeInMainWorld('anixApi', {
     submitArticle: (body) => ipcRenderer.invoke('anix:reportArticle', body),
     channelReasons: () => ipcRenderer.invoke('anix:reportChannelReasons'),
     submitChannel: (body) => ipcRenderer.invoke('anix:reportChannel', body),
+    articleCommentReasons: () => ipcRenderer.invoke('anix:reportArticleCommentReasons'),
+    submitArticleComment: (body) => ipcRenderer.invoke('anix:reportArticleComment', body),
+    releaseCommentReasons: () => ipcRenderer.invoke('anix:reportReleaseCommentReasons'),
+    submitReleaseComment: (body) => ipcRenderer.invoke('anix:reportReleaseComment', body),
   },
 
   home: {

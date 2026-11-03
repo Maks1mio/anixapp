@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import UiV2FeedPostMediaView from './UiV2FeedPostMedia.svelte';
   import UiV2ArticleBlocks from './UiV2ArticleBlocks.svelte';
   import UiV2FeedPostEmbed from './UiV2FeedPostEmbed.svelte';
@@ -138,6 +139,8 @@
     onVote?: (data: UiV2FeedPostData, nextVote: ArticleVoteValue) => void | Promise<void>;
     onSubscribe?: (channelId: number, nextSubscribed: boolean) => void | Promise<void>;
     onShare?: (data: UiV2FeedPostData) => void | Promise<void>;
+    /** Содержимое подменю для пунктов с customSubmenu (оценили, репостнули). */
+    menuSubmenu?: Snippet<[UiV2PopupMenuItem]>;
     onRepostClick?: (data: UiV2FeedPostData) => void;
     onRepostChannel?: (channelId: number) => void;
     onSignedAuthor?: (authorId: number, e: MouseEvent) => void;
@@ -167,6 +170,7 @@
     onVote,
     onSubscribe,
     onShare,
+    menuSubmenu,
     onRepostClick,
     onRepostChannel,
     onSignedAuthor,
@@ -716,4 +720,5 @@
     menuOpen = false;
   }}
   onSelect={handleMenuSelect}
+  submenuContent={menuSubmenu}
 />

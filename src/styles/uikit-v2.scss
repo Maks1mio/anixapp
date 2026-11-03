@@ -4362,6 +4362,62 @@
   font-variant-numeric: tabular-nums;
 }
 
+// Компактная горизонтальная (топы): небольшой постер, жанры чипами
+.uiv2-anime-card--compact {
+  gap: 1rem;
+  align-items: center;
+
+  .uiv2-anime-card__media {
+    width: 6.25rem;
+  }
+
+  .uiv2-anime-card__poster--h {
+    border-radius: 10px;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
+  }
+
+  .uiv2-anime-card__desc {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    white-space: normal;
+  }
+}
+
+.uiv2-anime-card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.1rem;
+}
+
+.uiv2-anime-card__chip {
+  display: inline-flex;
+  align-items: center;
+  height: 1.5rem;
+  padding: 0 0.6rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--uiv2-card-pill-bg);
+  color: var(--uiv2-card-pill-fg);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 550;
+  line-height: 1;
+  white-space: nowrap;
+
+  &:is(button) {
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+
+    &:hover {
+      background: var(--uiv2-chrome-bg-hover);
+      color: var(--uikit-v2-text);
+    }
+  }
+}
+
 .uiv2-anime-card__meta-panel {
   margin-top: 0.15rem;
   padding: 0.65rem 0.75rem;
@@ -5382,6 +5438,30 @@
   overflow-y: auto;
 }
 
+// Края гаснут маской там, где за ними есть контент
+.uiv2-scroll-area--fade {
+  --uiv2-scroll-fade-top: 0px;
+  --uiv2-scroll-fade-bottom: 0px;
+
+  &.uiv2-scroll-area--can-up {
+    --uiv2-scroll-fade-top: var(--uiv2-scroll-fade-size, 2rem);
+  }
+
+  &.uiv2-scroll-area--can-down {
+    --uiv2-scroll-fade-bottom: var(--uiv2-scroll-fade-size, 2rem);
+  }
+
+  > .uiv2-scroll-area__viewport {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 var(--uiv2-scroll-fade-top),
+      #000 calc(100% - var(--uiv2-scroll-fade-bottom)),
+      transparent 100%
+    );
+  }
+}
+
 .uiv2-scroll-area--x > .uiv2-scroll-area__viewport,
 .uiv2-scroll-area--x:not(:has(> .uiv2-scroll-area__viewport)) {
   overflow-x: auto;
@@ -5513,6 +5593,23 @@ body.uiv2-scroll-dragging * {
 
   .uiv2-scroll-area__viewport {
     padding: 0 0.35rem;
+  }
+}
+
+// Без фильтров (репосты): высота по содержимому, длинный список скроллится.
+.uiv2-reactions.uiv2-reactions--auto {
+  height: auto;
+
+  // flex-basis 0 у вложенных блоков растягивает их до max-height — берём по содержимому.
+  .uiv2-reactions__body,
+  .uiv2-reactions__scroll.uiv2-scroll-area,
+  .uiv2-scroll-area__viewport {
+    flex: 0 1 auto;
+    height: auto;
+  }
+
+  .uiv2-scroll-area__viewport {
+    max-height: min(70vh, 25rem);
   }
 }
 
@@ -5707,48 +5804,54 @@ body.uiv2-scroll-dragging * {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  padding-top: 0.6rem;
 
   &__stack {
-    position: relative;
-    height: 1.1rem;
-    margin: 0 0.4rem;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3rem;
   }
 
   &__sheet {
     position: absolute;
-    left: 0;
-    right: 0;
-    height: 0.55rem;
+    inset: 0;
+    border-radius: 18px 18px 0 0 !important;
 
     &--back {
-      top: 0;
       transform: scaleX(0.86);
     }
 
     &--mid {
-      top: 0.28rem;
+      top: 0.3rem;
       transform: scaleX(0.93);
     }
   }
 
   &__card {
-    margin-top: 0.55rem;
-    border-radius: 16px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    padding: 0.4rem;
+    border-radius: 18px;
     overflow: hidden;
     border: 1px solid var(--uiv2-border-subtle);
-    background: var(--uiv2-surface-subtle);
+    background: color-mix(in srgb, var(--uikit-v2-elevated) 60%, var(--uikit-v2-bg));
   }
 
   &__media {
     width: 100%;
-    aspect-ratio: 16 / 10;
+    aspect-ratio: 16 / 9;
+    border-radius: 14px !important;
   }
 
   &__footer {
     display: flex;
     flex-direction: column;
-    gap: 0.45rem;
-    padding: 0.85rem 0.95rem 1rem;
+    gap: 0.5rem;
+    padding: 0.8rem 0.45rem 0.3rem;
   }
 
   &__title {
@@ -5757,8 +5860,19 @@ body.uiv2-scroll-dragging * {
   }
 
   &__meta {
-    width: 46%;
+    width: 88%;
     height: 0.72rem;
+  }
+
+  &__chips {
+    display: flex;
+    gap: 0.35rem;
+    margin-top: 0.3rem;
+  }
+
+  &__chip {
+    width: 3.2rem;
+    height: 1.75rem;
   }
 }
 
@@ -6663,11 +6777,15 @@ button.uiv2-air-cal__day {
 
 /* ——— V2 collection card ——— */
 .uiv2-collection {
+  --uiv2-collection-radius: 18px;
+  --uiv2-collection-inset: 0.4rem;
   position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
   min-width: 0;
+  // Место под «колоду» листов над карточкой
+  padding-top: 0.6rem;
   cursor: default;
 
   &[role='button'] {
@@ -6675,86 +6793,141 @@ button.uiv2-air-cal__day {
   }
 
   &:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 55%, transparent);
-    outline-offset: 3px;
-    border-radius: 18px;
+    outline: none;
+
+    .uiv2-collection__card {
+      outline: 2px solid color-mix(in srgb, var(--uikit-v2-accent, #{$color-accent}) 55%, transparent);
+      outline-offset: 3px;
+    }
   }
 }
 
-.uiv2-collection__stack {
+// Листы позади карточки — веером раскрываются при наведении
+.uiv2-collection__deck {
   position: absolute;
-  inset: 0 0.4rem auto;
-  height: 1.1rem;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3rem;
   pointer-events: none;
   z-index: 0;
 }
 
 .uiv2-collection__sheet {
   position: absolute;
-  left: 0;
-  right: 0;
-  border-radius: 14px 14px 0 0;
-  border: 1px solid color-mix(in srgb, var(--uiv2-hover-subtle) 80%, transparent);
+  inset: 0;
+  border-radius: var(--uiv2-collection-radius) var(--uiv2-collection-radius) 0 0;
+  border: 1px solid var(--uiv2-border-subtle);
+  border-bottom: none;
+  transform-origin: 50% 100%;
+  transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
 
   &--back {
-    top: 0;
-    height: 0.55rem;
-    background: color-mix(in srgb, var(--uikit-v2-elevated, #{$color-surface-hover}) 70%, #000);
+    background: color-mix(in srgb, var(--uikit-v2-text) 7%, var(--uikit-v2-bg));
     transform: scaleX(0.86);
   }
 
   &--mid {
-    top: 0.28rem;
-    height: 0.55rem;
-    background: color-mix(in srgb, var(--uikit-v2-elevated, #{$color-surface-hover}) 85%, #000);
+    top: 0.3rem;
+    background: color-mix(in srgb, var(--uikit-v2-text) 12%, var(--uikit-v2-bg));
     transform: scaleX(0.93);
+  }
+
+  .uiv2-collection[role='button']:hover &--back {
+    transform: translate(-0.35rem, -0.2rem) rotate(-3deg) scaleX(0.86);
+  }
+
+  .uiv2-collection[role='button']:hover &--mid {
+    transform: translate(0.3rem, -0.05rem) rotate(2deg) scaleX(0.93);
   }
 }
 
 .uiv2-collection__card {
   position: relative;
   z-index: 1;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
-  margin-top: 0.55rem;
-  border-radius: 16px;
+  flex: 1;
+  border-radius: var(--uiv2-collection-radius);
   overflow: hidden;
-  background: color-mix(in srgb, var(--uikit-v2-elevated, #{$color-surface-hover}) 78%, #0c0c0e);
-  border: 1px solid color-mix(in srgb, var(--uiv2-selected-bg) 85%, transparent);
+  background: color-mix(in srgb, var(--uikit-v2-elevated, #{$color-surface-hover}) 60%, var(--uikit-v2-bg));
+  border: 1px solid var(--uiv2-border-subtle);
   box-shadow:
     0 1px 0 var(--uiv2-hover-subtle) inset,
-    0 12px 28px rgba(0, 0, 0, 0.32);
+    0 10px 28px color-mix(in srgb, #000 26%, transparent);
   transition:
-    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 0.18s ease;
+    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.2s ease,
+    box-shadow 0.25s ease;
+
+  .uiv2-collection--grid & {
+    padding: var(--uiv2-collection-inset);
+  }
 
   .uiv2-collection[role='button']:hover & {
-    transform: translateY(-2px);
-    border-color: color-mix(in srgb, color-mix(in srgb, var(--uikit-v2-text) 12%, transparent) 80%, transparent);
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--uikit-v2-text) 14%, transparent);
+    box-shadow:
+      0 1px 0 var(--uiv2-hover-subtle) inset,
+      0 18px 40px color-mix(in srgb, #000 36%, transparent);
+  }
+}
+
+// Размытая обложка — цветная подсветка карточки в тон коллекции
+.uiv2-collection__ambient {
+  position: absolute;
+  top: -30%;
+  left: -30%;
+  z-index: -1;
+  width: 160%;
+  height: 160%;
+  object-fit: cover;
+  filter: blur(42px) saturate(1.3);
+  opacity: 0.08;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+
+  .uiv2-collection[role='button']:hover & {
+    opacity: 0.14;
   }
 }
 
 .uiv2-collection__media {
   position: relative;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 16 / 9;
   overflow: hidden;
-  background: var(--uikit-v2-elevated, #{$color-surface-hover});
+  border-radius: calc(var(--uiv2-collection-radius) - var(--uiv2-collection-inset));
+  background: var(--uiv2-surface-raised);
 
-  img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+  .uiv2-collection--cover & {
+    aspect-ratio: 16 / 10;
+    border-radius: 0;
+  }
+}
+
+.uiv2-collection__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+
+  .uiv2-collection[role='button']:hover & {
+    transform: scale(1.045);
   }
 }
 
 .uiv2-collection__media-fallback {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   height: 100%;
+  color: var(--uiv2-fg-muted);
   background:
-    linear-gradient(145deg, var(--uiv2-selected-bg), transparent 45%),
-    linear-gradient(160deg, #2f2f38, #15151a);
+    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--uikit-v2-accent) 22%, transparent), transparent 60%),
+    linear-gradient(160deg, var(--uiv2-surface-raised), var(--uiv2-surface-subtle));
 }
 
 .uiv2-collection__veil {
@@ -6762,21 +6935,21 @@ button.uiv2-air-cal__day {
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(180deg, rgba(0, 0, 0, 0.42) 0%, transparent 30%),
-    linear-gradient(180deg, transparent 38%, rgba(0, 0, 0, 0.55) 68%, rgba(0, 0, 0, 0.88) 100%);
-  opacity: 0;
-  transition: opacity 0.18s ease;
+    linear-gradient(180deg, rgba(0, 0, 0, 0.32) 0%, transparent 30%),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.42) 0%, transparent 32%);
 
   .uiv2-collection--cover & {
-    opacity: 1;
+    background:
+      linear-gradient(180deg, rgba(0, 0, 0, 0.42) 0%, transparent 30%),
+      linear-gradient(180deg, transparent 38%, rgba(0, 0, 0, 0.55) 68%, rgba(0, 0, 0, 0.88) 100%);
   }
 }
 
 .uiv2-collection__top {
   position: absolute;
-  top: 0.45rem;
-  right: 0.45rem;
-  left: 0.45rem;
+  top: 0.5rem;
+  right: 0.5rem;
+  left: 0.5rem;
   z-index: 3;
   display: flex;
   align-items: flex-start;
@@ -6797,29 +6970,36 @@ button.uiv2-air-cal__day {
   pointer-events: none;
 }
 
-.uiv2-collection__lock {
+// Стеклянная плашка поверх обложки (приватность, число релизов)
+.uiv2-collection__glass {
   display: inline-flex;
-  flex-shrink: 0;
-}
-
-.uiv2-collection__lock-btn {
-  pointer-events: none;
-  opacity: 1 !important;
-  cursor: default;
-  background: var(--uiv2-media-control-bg) !important;
-  border: 1px solid var(--uiv2-media-control-border) !important;
-  color: var(--uiv2-media-control-fg) !important;
-  box-shadow: var(--uiv2-media-control-shadow) !important;
+  align-items: center;
+  gap: 0.3rem;
+  height: 1.6rem;
+  padding: 0 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--uiv2-media-control-fg);
+  background: var(--uiv2-media-control-bg);
+  border: 1px solid var(--uiv2-media-control-border);
+  box-shadow: var(--uiv2-media-control-shadow);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 
   svg {
-    stroke-width: 2.15;
-    stroke: currentColor;
+    display: block;
+    flex-shrink: 0;
   }
+}
 
-  &:disabled {
-    opacity: 1;
-    color: var(--uiv2-media-control-fg) !important;
-  }
+.uiv2-collection__count {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  z-index: 2;
 }
 
 .uiv2-collection__more-slot {
@@ -6854,11 +7034,6 @@ button.uiv2-air-cal__day {
   &:hover:not(:disabled) {
     background: var(--uiv2-media-control-bg-hover) !important;
   }
-
-  &:disabled {
-    opacity: 1;
-    color: var(--uiv2-media-control-fg) !important;
-  }
 }
 
 .uiv2-collection__cover-text {
@@ -6882,14 +7057,17 @@ button.uiv2-air-cal__day {
   -webkit-box-orient: vertical;
   overflow: hidden;
 
+  .uiv2-collection--grid & {
+    font-size: 1rem;
+  }
+
   &--cover {
     color: var(--uiv2-on-image-fg);
     text-shadow: var(--uiv2-on-image-shadow);
   }
 }
 
-.uiv2-collection__cover-meta,
-.uiv2-collection__stat {
+.uiv2-collection__cover-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -6900,28 +7078,8 @@ button.uiv2-air-cal__day {
   font-weight: 600;
   letter-spacing: 0.01em;
   line-height: 1;
-}
-
-.uiv2-collection--cover {
-  .uiv2-collection__cover-meta {
-    color: var(--uiv2-on-image-fg-muted);
-    text-shadow: var(--uiv2-on-image-shadow);
-  }
-
-  .uiv2-collection__stat {
-    color: color-mix(in srgb, var(--uiv2-on-image-fg-muted) 88%, transparent);
-    text-shadow: var(--uiv2-on-image-shadow);
-  }
-}
-
-.uiv2-collection__cover-meta {
-  color: color-mix(in srgb, var(--uikit-v2-text) 92%, transparent);
-  text-shadow: none;
-}
-
-.uiv2-collection__stat {
-  color: var(--uikit-v2-muted, #{$color-text-muted});
-  text-shadow: none;
+  color: var(--uiv2-on-image-fg-muted);
+  text-shadow: var(--uiv2-on-image-shadow);
 }
 
 .uiv2-collection__meta-item {
@@ -6982,19 +7140,82 @@ button.uiv2-air-cal__day {
 .uiv2-collection__body {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  padding: 0.75rem 0.85rem 0.85rem;
+  flex: 1;
+  gap: 0.35rem;
+  padding: 0.75rem 0.45rem 0.3rem;
 }
 
 .uiv2-collection__desc {
   margin: 0;
-  font-size: 0.78rem;
-  line-height: 1.4;
+  font-size: 0.8rem;
+  line-height: 1.45;
   color: var(--uikit-v2-muted, #{$color-text-muted});
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.uiv2-collection__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: auto;
+  padding-top: 0.4rem;
+}
+
+.uiv2-collection__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 1.75rem;
+  padding: 0 0.65rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--uiv2-card-pill-bg);
+  color: var(--uiv2-fg-soft);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1;
+
+  svg {
+    display: block;
+    flex-shrink: 0;
+  }
+
+  &--action {
+    cursor: pointer;
+    transition:
+      background 0.15s ease,
+      color 0.15s ease,
+      transform 0.15s ease;
+
+    &:hover {
+      background: var(--uiv2-chrome-bg-hover);
+      color: var(--uikit-v2-text);
+    }
+
+    &:active {
+      transform: scale(0.94);
+    }
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--uikit-v2-accent) 55%, transparent);
+      outline-offset: 2px;
+    }
+  }
+
+  &--on {
+    color: var(--uikit-v2-accent);
+    background: color-mix(in srgb, var(--uikit-v2-accent) 16%, transparent);
+
+    &.uiv2-collection__chip--action:hover {
+      color: var(--uikit-v2-accent);
+      background: color-mix(in srgb, var(--uikit-v2-accent) 24%, transparent);
+    }
+  }
 }
 
 .uikit-v2-collections-grid {
@@ -10358,6 +10579,13 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
   color: inherit;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.uiv2-reactions__meta {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  color: var(--uiv2-fg-muted, #{$color-text-muted});
   white-space: nowrap;
 }
 

@@ -28,6 +28,8 @@
     /** Звёзды для оценки прямо в карточке */
     onVote?: (id: number, stars: number) => void;
     voteBusy?: boolean;
+    /** Компактная горизонтальная карточка (без панели фактов) */
+    compact?: boolean;
   }
 
   let {
@@ -40,6 +42,7 @@
     showTvOpenHint = false,
     onVote,
     voteBusy = false,
+    compact = false,
   }: Props = $props();
 
   const id = $derived(data.id);
@@ -131,6 +134,7 @@
   prependMenuItems={historyMenu}
   {showMenu}
   {showTvOpenHint}
+  {compact}
   onclick={openRelease}
   onFavoriteChange={handleFavoriteChange}
   onListStatusChange={handleListStatusChange}

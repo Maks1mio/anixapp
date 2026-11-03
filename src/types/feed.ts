@@ -41,6 +41,7 @@ export interface FeedChannel {
   is_administrator_or_higher?: boolean;
   /** Участники могут предлагать записи на модерацию. */
   is_article_suggestion_enabled?: boolean;
+  is_commenting_enabled?: boolean;
   subscriber_count?: number;
   article_count?: number;
   creation_date?: number;

@@ -54,7 +54,8 @@ function isFeedAppPath(pathname: string): boolean {
 }
 
 export function defaultFeedHistoryView(): FeedHistoryView {
-  return { tab: 'my', channelId: null, postId: null, searchQuery: '', scrollTop: 0 };
+  // Лента по умолчанию открывается на «Свежее».
+  return { tab: 'latest', channelId: null, postId: null, searchQuery: '', scrollTop: 0 };
 }
 
 export function feedHistoryViewEquals(
@@ -90,7 +91,7 @@ function readRawState(): Record<string, unknown> {
 function parseFeedView(raw: unknown): FeedHistoryView | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
-  const tab = String(o.tab ?? 'my') || 'my';
+  const tab = String(o.tab ?? 'latest') || 'latest';
   const channelRaw = o.channelId == null ? null : Number(o.channelId);
   const postRaw = o.postId == null ? null : Number(o.postId);
   const scrollRaw = o.scrollTop == null ? 0 : Number(o.scrollTop);

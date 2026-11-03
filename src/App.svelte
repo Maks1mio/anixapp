@@ -72,7 +72,6 @@
   import FeedComposerWindow from './views/FeedComposerWindow.svelte';
   import Popular from './views/Popular.svelte';
   import CollectionsList from './views/CollectionsList.svelte';
-  import MyCollections from './views/MyCollections.svelte';
   import CollectionEditor from './views/CollectionEditor.svelte';
   import Catalog from './views/Catalog.svelte';
   import ReleaseCommentReplies from './views/ReleaseCommentReplies.svelte';
@@ -1049,8 +1048,6 @@
       {/key}
     {:else if path === '/collections/create'}
       <CollectionEditor />
-    {:else if path === '/collections/my'}
-      <MyCollections />
     {:else if collectionMatch}
       {#key collectionMatch[1]}
         <Collection id={parseInt(collectionMatch[1], 10)} />
@@ -1071,8 +1068,8 @@
       <Popular />
     {:else if path === '/schedule'}
       <Overview />
-    {:else if path === '/collections'}
-      <CollectionsList week={collectionsWeek} />
+    {:else if path === '/collections' || path === '/collections/my'}
+      <CollectionsList week={collectionsWeek} mine={path === '/collections/my'} />
     {:else if path === '/catalog'}
       <Catalog />
     {:else if path === '/bookmarks'}

@@ -27,6 +27,7 @@
     iconPause,
   } from '../../components/icons';
   import UiV2Button from '../../components/uikit-v2/UiV2Button.svelte';
+  import DiscoverHero from '../../components/DiscoverHero.svelte';
   import UiV2OutlinedField from '../../components/uikit-v2/UiV2OutlinedField.svelte';
   import UiV2PillField from '../../components/uikit-v2/UiV2PillField.svelte';
   import UiV2Tooltip from '../../components/uikit-v2/UiV2Tooltip.svelte';
@@ -34,6 +35,7 @@
   import UiV2ContentRetryOverlay from '../../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
 
   let rooms = $state<FluoRoomListItem[]>([]);
+  const heroBackdrop = $derived(rooms.length ? frameOf(rooms[0]) : null);
   let loadState = $state<'loading' | 'ready' | 'error'>('loading');
   let errorMsg = $state('');
   let joinCode = $state('');
@@ -290,25 +292,7 @@
 </script>
 
 <div class="view view-fluo fluo-page">
-  <header class="fluo-page__hero">
-    <div class="fluo-page__hero-top">
-      <div class="fluo-page__brand">
-        <span class="fluo-page__brand-icon" aria-hidden="true">{@html iconSignal(22)}</span>
-        <div class="fluo-page__brand-text">
-          <h1 class="fluo-page__title">Fluo</h1>
-          <p class="fluo-page__subtitle">Комнаты совместного просмотра</p>
-        </div>
-      </div>
-      <UiV2Button
-        label="Создать комнату"
-        variant="primary"
-        class="fluo-page__create"
-        onclick={openCreate}
-      >
-        {#snippet icon()}{@html iconPlus(16)}{/snippet}
-      </UiV2Button>
-    </div>
-
+  <DiscoverHero title="Fluo" subtitle="Комнаты совместного просмотра" backdrop={heroBackdrop}>
     <div class="fluo-page__toolbar" role="group" aria-label="Вход по коду комнаты">
       <UiV2PillField
         label="Код комнаты"
@@ -332,11 +316,19 @@
         disabled={joinBusy || !joinCode.trim()}
         onclick={() => void handleQuickJoin()}
       />
+      <UiV2Button
+        label="Создать комнату"
+        variant="chrome"
+        class="fluo-page__create"
+        onclick={openCreate}
+      >
+        {#snippet icon()}{@html iconPlus(16)}{/snippet}
+      </UiV2Button>
     </div>
     {#if joinHint}
       <p class="fluo-page__hint" class:fluo-page__hint--error={joinHintError} role="status">{joinHint}</p>
     {/if}
-  </header>
+  </DiscoverHero>
 
   {#if loadState === 'loading'}
     <div class="fluo-page__state fluo-page__state--loading" aria-busy="true" aria-live="polite" transition:fade={{ duration: 160 }}>
@@ -561,74 +553,15 @@
     container-type: inline-size;
   }
 
-  .fluo-page__hero {
-    display: flex;
-    flex-direction: column;
-    gap: 0.85rem;
-    margin-bottom: 1.5rem;
-    padding: 1.1rem 1.15rem 1.05rem;
-    border-radius: 18px;
-    border: 1px solid var(--uiv2-border-subtle, transparent);
-    background:
-      linear-gradient(
-        165deg,
-        color-mix(in srgb, var(--uikit-v2-accent, var(--color-accent)) 10%, transparent) 0%,
-        transparent 42%
-      ),
-      var(--uiv2-card-bg, var(--color-surface, #161616));
-    box-shadow: var(--uiv2-chrome-shadow, none);
-  }
-
-  .fluo-page__hero-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.85rem 1rem;
-    flex-wrap: wrap;
-  }
-
-  .fluo-page__brand {
-    display: flex;
-    align-items: center;
-    gap: 0.7rem;
-    min-width: 0;
-  }
-
-  .fluo-page__brand-icon {
-    display: grid;
-    place-items: center;
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--uikit-v2-accent, var(--color-accent)) 16%, transparent);
-    color: var(--uikit-v2-accent, var(--color-accent));
-    flex-shrink: 0;
-  }
-
-  .fluo-page__brand-text {
-    min-width: 0;
-  }
-
-  .fluo-page__title {
-    margin: 0;
-    font-size: 1.45rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    line-height: 1.15;
-    color: var(--uiv2-fg-strong, var(--color-text, #fff));
-  }
-
-  .fluo-page__subtitle {
-    margin: 0.2rem 0 0;
-    font-size: 0.85rem;
-    color: var(--uiv2-fg-muted, rgba(255, 255, 255, 0.55));
-  }
-
   .fluo-page__toolbar {
     display: flex;
     align-items: center;
     gap: 0.55rem;
     flex-wrap: wrap;
+  }
+
+  .fluo-page :global(.fluo-page__create) {
+    margin-left: auto;
   }
 
   .fluo-page :global(.fluo-page__code) {
@@ -637,7 +570,7 @@
   }
 
   .fluo-page__hint {
-    margin: 0;
+    margin: 0.6rem 0 0;
     font-size: 0.82rem;
     color: var(--uiv2-fg-muted, rgba(255, 255, 255, 0.55));
   }
@@ -1084,15 +1017,6 @@
       grid-template-columns: 1fr;
     }
 
-    .fluo-page__hero-top {
-      flex-direction: column;
-      align-items: stretch;
-    }
-
-    .fluo-page :global(.fluo-page__create) {
-      width: 100%;
-    }
-
     .fluo-page__toolbar {
       flex-direction: column;
       align-items: stretch;
@@ -1107,11 +1031,6 @@
     .fluo-page__grid,
     .fluo-page__skeleton-grid {
       grid-template-columns: 1fr;
-    }
-
-    .fluo-page__hero-top {
-      flex-direction: column;
-      align-items: stretch;
     }
 
     .fluo-page__toolbar {

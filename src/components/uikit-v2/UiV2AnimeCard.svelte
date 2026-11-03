@@ -104,6 +104,8 @@
     prependMenuItems?: UiV2PopupMenuItem[];
     /** Показывать подсказку «Перейти к тайтлу» на TV при фокусе */
     showTvOpenHint?: boolean;
+    /** Горизонтальная: без панели фактов, жанры — чипами (топы, рейтинги) */
+    compact?: boolean;
     class?: string;
     onclick?: (e: MouseEvent) => void;
     onMore?: (e: MouseEvent) => void;
@@ -150,6 +152,7 @@
     menuItems,
     prependMenuItems,
     showTvOpenHint = false,
+    compact = false,
     class: className = '',
     onclick,
     onMore,
@@ -621,6 +624,7 @@
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <div
     class="uiv2-anime-card uiv2-anime-card--horizontal {className}"
+    class:uiv2-anime-card--compact={compact}
     class:uiv2-anime-card--menu-open={menuOpen}
     role={onclick ? 'button' : 'group'}
     tabindex={onclick ? 0 : undefined}
@@ -724,7 +728,23 @@
         <p class="uiv2-anime-card__desc">{descriptionText}</p>
       {/if}
 
-      {#if hasMetaLinks || genres.length}
+      {#if compact}
+        {#if genres.length}
+          <div class="uiv2-anime-card__chips">
+            {#each genres.slice(0, 4) as genre (genre)}
+              {#if canLinkGenre}
+                <button
+                  type="button"
+                  class="uiv2-anime-card__chip"
+                  onclick={(e) => stopGenre(genre, e)}
+                >{genre}</button>
+              {:else}
+                <span class="uiv2-anime-card__chip">{genre}</span>
+              {/if}
+            {/each}
+          </div>
+        {/if}
+      {:else if hasMetaLinks || genres.length}
         <div class="uiv2-anime-card__meta-panel">
           <div class="uiv2-anime-card__meta-lines">
             {#each metaLinks as link (link.kind)}

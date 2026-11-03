@@ -573,6 +573,47 @@ export interface AnixApi {
       fileName?: string,
     ) => Promise<{ code?: number; url?: string }>;
     deleteCover: (channelId: number) => Promise<{ code?: number; url?: string }>;
+    uploadAvatar?: (
+      channelId: number,
+      imageBase64: string,
+      fileName?: string,
+    ) => Promise<{ code?: number; url?: string }>;
+    /** Администратор и выше (code 6 — нет прав). */
+    edit?: (
+      channelId: number,
+      body: {
+        title: string;
+        description: string;
+        is_commenting_enabled: boolean;
+        is_article_suggestion_enabled: boolean;
+      },
+    ) => Promise<{ code?: number; channel?: unknown }>;
+    blocks?: (
+      channelId: number,
+      page?: number,
+    ) => Promise<{ content?: unknown[]; total_count?: number; total_page_count?: number }>;
+    blockManage?: (
+      channelId: number,
+      body: {
+        target_profile_id: number;
+        is_blocked: boolean;
+        reason: string | null;
+        expire_date: number | null;
+        is_reason_showing_enabled: boolean;
+        is_perm_blocked: boolean;
+      },
+    ) => Promise<{ code?: number }>;
+    /** permission: 1 — администраторы, 2 — создатель. */
+    permissions?: (
+      channelId: number,
+      page?: number,
+      permission?: number,
+    ) => Promise<{ content?: unknown[]; total_count?: number; total_page_count?: number }>;
+    permissionManage?: (
+      channelId: number,
+      profileId: number,
+      permission: number,
+    ) => Promise<{ code?: number }>;
     createBlog: () => Promise<{ code?: number; channel?: { id?: number; cover?: string } }>;
     create: (body: {
       title: string;
@@ -739,6 +780,24 @@ export interface AnixApi {
     mute: (id: number) => Promise<{ code?: number }>;
     unmute: (id: number) => Promise<{ code?: number }>;
     setPinned: (id: number, isPinned: boolean) => Promise<{ code?: number }>;
+    /** Профили, оценившие запись. */
+    votes?: (
+      id: number,
+      page?: number,
+      sort?: number,
+    ) => Promise<{ content?: unknown[]; total_count?: number; total_page_count?: number }>;
+    /** Записи-репосты этой записи. */
+    reposts?: (
+      id: number,
+      page?: number,
+      sort?: number,
+    ) => Promise<{ content?: unknown[]; total_count?: number; total_page_count?: number }>;
+    /** Статистика: view — показ в списке, open — открытие записи. */
+    event?: (body: {
+      type: 'view' | 'open' | 'read';
+      entry_point: 'unknown' | 'article' | 'channel' | 'feed' | 'latest' | 'search';
+      articles: number[];
+    }) => Promise<{ code?: number }>;
     commentsPopular: (id: number) => Promise<{ content?: unknown[]; total_count?: number }>;
     comments: (
       id: number,
@@ -789,6 +848,10 @@ export interface AnixApi {
       reason_id?: number;
       message?: string;
     }) => Promise<{ code?: number }>;
+    articleCommentReasons?: () => Promise<Array<{ id: number; title?: string; name?: string; text?: string }>>;
+    submitArticleComment?: (body: { entity_id: number; reason_id: number }) => Promise<{ code?: number }>;
+    releaseCommentReasons?: () => Promise<Array<{ id: number; title?: string; name?: string; text?: string }>>;
+    submitReleaseComment?: (body: { entity_id: number; reason_id: number }) => Promise<{ code?: number }>;
   };
 
   home: {

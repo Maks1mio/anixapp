@@ -104,6 +104,8 @@
     iconX,
   } from '../components/icons';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
+  import { infiniteScroll } from '../actions/infiniteScroll';
+  import { trackArticleEvent, type ArticleEntryPoint } from '../utils/feed-article-events';
 
   type FeedTab = 'my' | 'latest' | 'managed' | 'history' | 'drafts' | 'search';
   type LoadState = 'idle' | 'loading' | 'ready' | 'empty' | 'error' | 'need-auth';
@@ -147,7 +149,8 @@
     is_blog?: boolean;
   }
 
-  let tab = $state<FeedTab>('my');
+  /** По умолчанию открывается «Свежее». */
+  let tab = $state<FeedTab>('latest');
   let dateFilter = $state<FeedDateFilter>(0);
   let channelFilterId = $state<number | null>(null);
   let subscriptions = $state<FeedChannel[]>([]);
@@ -420,6 +423,13 @@
   );
 
   const searchNeedle = $derived(searchQuery.trim().toLowerCase());
+  const viewEntryPoint = $derived.by((): ArticleEntryPoint => {
+    if (postViewActive) return 'article';
+    if (tab === 'search') return 'search';
+    if (tab === 'latest') return 'latest';
+    if (tab === 'my') return channelFilterId != null ? 'channel' : 'feed';
+    return 'unknown';
+  });
   const listFilterNeedle = $derived(listFilterQuery.trim().toLowerCase());
   /** Вкладка «Поиск» — API-поиск; на managed/history — локальный фильтр. */
   const searchMode = $derived(tab === 'search');
@@ -947,7 +957,7 @@
   async function applyFeedHistoryView(view: FeedHistoryView) {
     feedHistoryApplying = true;
     try {
-      const nextTab = isFeedTab(view.tab) ? view.tab : 'my';
+      const nextTab = isFeedTab(view.tab) ? view.tab : 'latest';
       const nextChannel = nextTab === 'my' && view.channelId != null && view.channelId > 0
         ? view.channelId
         : null;
@@ -1023,7 +1033,7 @@
     restoreListScrollAfterPost();
   }
 
-  /** Повторный клик по «Лента» в сайдбаре: список «Моя лента», без открытого поста. */
+  /** Повторный клик по «Лента» в сайдбаре: «Свежее», без открытого поста. */
   function resetFeedToHome() {
     allSubsOpen = false;
     stampCurrentFeedScroll();
@@ -1031,8 +1041,8 @@
       discardPostView();
       persistFeedSnapshot();
     }
-    const needReload = tab !== 'my' || channelFilterId != null;
-    tab = 'my';
+    const needReload = tab !== 'latest' || channelFilterId != null;
+    tab = 'latest';
     channelFilterId = null;
     listFilterQuery = '';
     if (searchQuery) {
@@ -1063,6 +1073,7 @@
       saveViewStateWithScroll(FEED_VIEW_KEY(), feedListSnapshot());
     }
 
+    if (!samePost) trackArticleEvent('open', id, entering ? viewEntryPoint : 'article');
     focusArticle = article;
     selectedArticleId = id;
 
@@ -1185,6 +1196,31 @@
       searchArticles = searchArticles.filter((a) => a.channel?.id !== channelId);
       moreArticles = moreArticles.filter((a) => a.channel?.id !== channelId);
     }
+  }
+
+  /** Канал отредактирован в настройках — обновить везде, где он показан. */
+  function patchChannelInfo(channelId: number, patch: Partial<FeedChannel>) {
+    const merge = <T extends FeedChannel | null | undefined>(ch: T): T => (
+      ch && ch.id === channelId ? { ...ch, ...patch } : ch
+    );
+    sidebarChannel = merge(sidebarChannel);
+    focusChannel = merge(focusChannel);
+    subscriptions = subscriptions.map((ch) => merge(ch));
+    const patchArticle = (a: FeedArticle): FeedArticle => (
+      a.channel?.id === channelId ? { ...a, channel: { ...a.channel, ...patch } } : a
+    );
+    articles = articles.map(patchArticle);
+    moreArticles = moreArticles.map(patchArticle);
+    if (focusArticle) focusArticle = patchArticle(focusArticle);
+    managed = managed.map((ch) => (
+      ch.id === channelId
+        ? {
+            ...ch,
+            ...(patch.title != null ? { title: patch.title } : {}),
+            ...(patch.avatar != null ? { avatar: patch.avatar } : {}),
+          }
+        : ch
+    ));
   }
 
   async function fetchPage(nextPage: number, append: boolean): Promise<void> {
@@ -2236,7 +2272,7 @@
 
     const applyHistorySelection = (): boolean => {
       if (!historyView) return false;
-      const histTab = isFeedTab(historyView.tab) ? historyView.tab : 'my';
+      const histTab = isFeedTab(historyView.tab) ? historyView.tab : 'latest';
       const histChannel = histTab === 'my' && historyView.channelId != null && historyView.channelId > 0
         ? historyView.channelId
         : null;
@@ -2356,6 +2392,16 @@
       <button
         type="button"
         class="feed-side__item"
+        class:feed-side__item--active={tab === 'latest'}
+        aria-current={tab === 'latest' ? 'page' : undefined}
+        onclick={() => onTabChange('latest')}
+      >
+        <span class="feed-side__item-icon" aria-hidden="true">{@html iconFlame(18)}</span>
+        <span class="feed-side__item-label">Свежее</span>
+      </button>
+      <button
+        type="button"
+        class="feed-side__item"
         class:feed-side__item--active={tab === 'my'}
         aria-current={tab === 'my' ? 'page' : undefined}
         aria-label={feedNavAvatars.length > 0
@@ -2381,16 +2427,6 @@
             {/each}
           </span>
         {/if}
-      </button>
-      <button
-        type="button"
-        class="feed-side__item"
-        class:feed-side__item--active={tab === 'latest'}
-        aria-current={tab === 'latest' ? 'page' : undefined}
-        onclick={() => onTabChange('latest')}
-      >
-        <span class="feed-side__item-icon" aria-hidden="true">{@html iconFlame(18)}</span>
-        <span class="feed-side__item-label">Свежее</span>
       </button>
       <button
         type="button"
@@ -2800,6 +2836,7 @@
             hideSubscribe={hidePostSubscribe}
             onArticleRemove={onArticleRemove}
             onArticleChange={onArticleChange}
+              entryPoint={viewEntryPoint}
             onRepost={(article) => void openComposer(null, article)}
             onEdit={(article) => void openComposer(null, null, null, { editArticle: article })}
           />
@@ -2819,6 +2856,7 @@
             hideSubscribe={hidePostSubscribe}
                 onArticleRemove={onArticleRemove}
                 onArticleChange={onArticleChange}
+              entryPoint={viewEntryPoint}
                 onRepost={(article) => void openComposer(null, article)}
             onEdit={(article) => void openComposer(null, null, null, { editArticle: article })}
               />
@@ -2826,14 +2864,18 @@
           {/if}
         </div>
         {#if moreHasMore}
-          <div class="feed-page__more">
-            <UiV2Button
-              variant="chrome"
-              label={moreBusy ? 'Загрузка…' : 'Ещё'}
-              disabled={moreBusy}
-              onclick={loadMoreFocusChannel}
-            />
-          </div>
+          {#if moreBusy && moreArticles.length > 0}
+            <UiV2FeedPostSkeleton count={1} />
+          {/if}
+          <div
+            class="feed-page__sentinel"
+            aria-hidden="true"
+            use:infiniteScroll={{
+              onLoad: loadMoreFocusChannel,
+              enabled: () => moreHasMore && !moreBusy,
+              rootMargin: '600px',
+            }}
+          ></div>
         {/if}
       {:else if searchMode}
         {#if !searchNeedle}
@@ -2913,6 +2955,7 @@
             hideSubscribe={hidePostSubscribe}
                     onArticleRemove={onArticleRemove}
                     onArticleChange={onArticleChange}
+              entryPoint={viewEntryPoint}
                     onRepost={(article) => void openComposer(null, article)}
             onEdit={(article) => void openComposer(null, null, null, { editArticle: article })}
                   />
@@ -2921,14 +2964,18 @@
             </section>
           {/if}
           {#if searchHasMore}
-            <div class="feed-page__more">
-              <UiV2Button
-                variant="chrome"
-                label={searchBusy ? 'Загрузка…' : 'Ещё'}
-                disabled={searchBusy}
-                onclick={loadMore}
-              />
-            </div>
+            {#if searchBusy}
+              <UiV2FeedPostSkeleton count={1} />
+            {/if}
+            <div
+              class="feed-page__sentinel"
+              aria-hidden="true"
+              use:infiniteScroll={{
+                onLoad: loadMore,
+                enabled: () => searchHasMore && !searchBusy && searchLoadState === 'ready',
+                rootMargin: '600px',
+              }}
+            ></div>
           {/if}
         {/if}
       {:else if tab === 'history'}
@@ -2967,6 +3014,7 @@
             hideSubscribe={hidePostSubscribe}
                         onArticleRemove={onArticleRemove}
                         onArticleChange={onArticleChange}
+              entryPoint={viewEntryPoint}
                         onRepost={(article) => void openComposer(null, article)}
             onEdit={(article) => void openComposer(null, null, null, { editArticle: article })}
                       />
@@ -3038,20 +3086,27 @@
             hideSubscribe={hidePostSubscribe}
               onArticleRemove={onArticleRemove}
               onArticleChange={onArticleChange}
+              entryPoint={viewEntryPoint}
               onRepost={(article) => void openComposer(null, article)}
             onEdit={(article) => void openComposer(null, null, null, { editArticle: article })}
             />
           {/each}
         </div>
         {#if hasMore}
-          <div class="feed-page__more">
-            <UiV2Button
-              variant="chrome"
-              label={loadingMore ? 'Загрузка…' : 'Ещё'}
-              disabled={loadingMore}
-              onclick={loadMore}
-            />
-          </div>
+          {#if loadingMore}
+            <UiV2FeedPostSkeleton count={1} />
+          {/if}
+          <div
+            class="feed-page__sentinel"
+            aria-hidden="true"
+            use:infiniteScroll={{
+              onLoad: loadMore,
+              enabled: () => hasMore && !loadingMore && loadState === 'ready',
+              rootMargin: '600px',
+            }}
+          ></div>
+        {:else if visibleArticles.length > 0}
+          <p class="feed-page__end">Вы всё посмотрели</p>
         {/if}
       {/if}
     </div>
@@ -3067,6 +3122,7 @@
         onWrite={() => void openComposer(groupAsideChannel.id)}
         onMuted={(channelId) => patchChannelMuted(channelId, true)}
         onUnmuted={(channelId) => patchChannelMuted(channelId, false)}
+        onUpdated={patchChannelInfo}
       />
     </aside>
   {/if}

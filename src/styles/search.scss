@@ -415,34 +415,6 @@
   padding-bottom: 2rem;
 }
 
-.search-v2__head {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.5rem 0 1rem;
-}
-
-.search-v2__eyebrow {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--uiv2-fg-muted);
-}
-
-.search-v2__title {
-  margin: 0;
-  font-size: 1.75rem;
-  font-weight: 700;
-  line-height: 1.2;
-  color: var(--uiv2-fg-strong);
-  overflow-wrap: anywhere;
-}
-
-.search-v2__hint {
-  margin: 0.2rem 0 0;
-  font-size: 0.85rem;
-  color: var(--uiv2-fg-muted);
-}
-
 .search-v2__filter {
   display: inline-flex;
   align-items: center;

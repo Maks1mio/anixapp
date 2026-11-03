@@ -58,16 +58,6 @@ export async function runFeedArticleMenuAction(
     }
   }
 
-  if (actionId === 'votes') {
-    showToast('Список оценивших скоро будет в desktop-версии', 'info');
-    return { kind: 'none' };
-  }
-
-  if (actionId === 'reposts') {
-    showToast('Список репостнувших скоро будет в desktop-версии', 'info');
-    return { kind: 'none' };
-  }
-
   if (actionId === 'edit') {
     return { kind: 'edit', article };
   }
@@ -150,11 +140,6 @@ export async function runFeedArticleMenuAction(
 
   if (actionId === 'report') {
     showToast('Выберите причину жалобы', 'info');
-    return { kind: 'none' };
-  }
-
-  if (actionId === 'process') {
-    showToast('Модерация записей в desktop-версии пока недоступна', 'info');
     return { kind: 'none' };
   }
 

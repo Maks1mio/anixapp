@@ -4,6 +4,7 @@
     iconCopy,
     iconFlag,
     iconFilm,
+    iconLayoutGrid,
     iconLock,
     iconMessageCircle,
     iconMoreHorizontal,
@@ -190,6 +191,12 @@
     }, 1400);
   }
 
+  function onFavoriteChip(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    void handleMenuSelect('favorite');
+  }
+
   async function handleMenuSelect(id: string) {
     if (id === 'favorite') {
       const next = !localFavorite;
@@ -238,31 +245,29 @@
   onkeydown={onclick ? onKeydown : undefined}
   oncontextmenu={onContextMenu}
 >
-  <div class="uiv2-collection__stack" aria-hidden="true">
+  <div class="uiv2-collection__deck" aria-hidden="true">
     <span class="uiv2-collection__sheet uiv2-collection__sheet--back"></span>
     <span class="uiv2-collection__sheet uiv2-collection__sheet--mid"></span>
   </div>
 
   <div class="uiv2-collection__card">
+    {#if variant === 'grid' && displayImageUrl}
+      <img class="uiv2-collection__ambient" src={displayImageUrl} alt="" aria-hidden="true" loading="lazy" decoding="async" />
+    {/if}
+
     <div class="uiv2-collection__media">
       {#if displayImageUrl}
-        <img src={displayImageUrl} alt="" loading="lazy" decoding="async" />
+        <img class="uiv2-collection__img" src={displayImageUrl} alt="" loading="lazy" decoding="async" />
       {:else}
-        <span class="uiv2-collection__media-fallback" aria-hidden="true"></span>
+        <span class="uiv2-collection__media-fallback" aria-hidden="true">{@html iconLayoutGrid(28)}</span>
       {/if}
       <span class="uiv2-collection__veil" aria-hidden="true"></span>
 
       <div class="uiv2-collection__top">
         {#if data.isPrivate}
-          <span class="uiv2-collection__lock" title="Приватная коллекция" aria-label="Приватная">
-            <UiV2RoundButton
-              size="sm"
-              label="Приватная"
-              class="uiv2-collection__more uiv2-collection__lock-btn"
-              disabled
-            >
-              {@html iconLock(16)}
-            </UiV2RoundButton>
+          <span class="uiv2-collection__glass" aria-label="Приватная коллекция">
+            {@html iconLock(13)}
+            <span>Приватная</span>
           </span>
         {:else}
           <span class="uiv2-collection__top-spacer" aria-hidden="true"></span>
@@ -282,6 +287,13 @@
           </span>
         {/if}
       </div>
+
+      {#if variant === 'grid' && typeof data.releaseCount === 'number'}
+        <span class="uiv2-collection__glass uiv2-collection__count">
+          {@html iconFilm(13)}
+          <span>{data.releaseCount} {releaseWord(data.releaseCount)}</span>
+        </span>
+      {/if}
 
       {#if variant === 'cover'}
         <div class="uiv2-collection__cover-text">
@@ -327,36 +339,36 @@
         {#if data.description}
           <p class="uiv2-collection__desc">{data.description}</p>
         {/if}
-        {#if hasCoverMeta}
-          <p class="uiv2-collection__stat">
-            {#if typeof data.releaseCount === 'number'}
-              <span class="uiv2-collection__meta-item">
-                <span class="uiv2-collection__meta-icon" aria-hidden="true">{@html iconFilm(13)}</span>
-                <span class="uiv2-collection__meta-text">{data.releaseCount} в коллекции</span>
-              </span>
-            {/if}
+        {#if typeof data.notesCount === 'number' || showFavoritesMeta}
+          <div class="uiv2-collection__foot">
             {#if typeof data.notesCount === 'number'}
-              {#if typeof data.releaseCount === 'number'}
-                <span class="uiv2-collection__meta-sep" aria-hidden="true">·</span>
-              {/if}
-              <span class="uiv2-collection__meta-item">
-                <span class="uiv2-collection__meta-icon" aria-hidden="true">{@html iconMessageCircle(13)}</span>
-                <span class="uiv2-collection__meta-text">{formatCount(data.notesCount)}</span>
+              <span class="uiv2-collection__chip" aria-label="Комментарии: {data.notesCount}">
+                {@html iconMessageCircle(14)}
+                <span>{formatCount(data.notesCount)}</span>
               </span>
             {/if}
             {#if showFavoritesMeta}
-              {#if typeof data.releaseCount === 'number' || typeof data.notesCount === 'number'}
-                <span class="uiv2-collection__meta-sep" aria-hidden="true">·</span>
+              {#if onFavoriteChange}
+                <button
+                  type="button"
+                  class="uiv2-collection__chip uiv2-collection__chip--action"
+                  class:uiv2-collection__chip--on={localFavorite}
+                  aria-pressed={localFavorite}
+                  aria-label={localFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}
+                  onclick={onFavoriteChip}
+                  onkeydown={(e) => e.stopPropagation()}
+                >
+                  {@html iconFlag(14, localFavorite)}
+                  <span>{formatCount(localFavoritesCount)}</span>
+                </button>
+              {:else}
+                <span class="uiv2-collection__chip" class:uiv2-collection__chip--on={localFavorite}>
+                  {@html iconFlag(14, localFavorite)}
+                  <span>{formatCount(localFavoritesCount)}</span>
+                </span>
               {/if}
-              <span
-                class="uiv2-collection__meta-item"
-                class:uiv2-collection__meta-item--fav={localFavorite}
-              >
-                <span class="uiv2-collection__meta-icon" aria-hidden="true">{@html iconFlag(13, localFavorite)}</span>
-                <span class="uiv2-collection__meta-text">{formatCount(localFavoritesCount)}</span>
-              </span>
             {/if}
-          </p>
+          </div>
         {/if}
       </div>
     {/if}

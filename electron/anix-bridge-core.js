@@ -819,6 +819,16 @@ function createAnixBridgeCore(options = {}) {
       c.getClient().endpoints.article.create(channelId, body)),
     'anix:articleEdit': h((c, articleId, body) =>
       c.getClient().endpoints.article.edit(articleId, body)),
+    'anix:articleDelete': h((c, id) => c.getClient().endpoints.article.delete(id)),
+    'anix:articleMute': h((c, id) => c.getClient().endpoints.article.mute(id)),
+    'anix:articleUnmute': h((c, id) => c.getClient().endpoints.article.unmute(id)),
+    'anix:articlePin': h((c, id, isPinned) =>
+      c.getClient().endpoints.article.editIsPinned(id, { is_pinned: !!isPinned })),
+    'anix:articleVotes': h((c, id, page = 0, sort = 0) =>
+      c.getClient().endpoints.article.votes(id, page, { sort: Number(sort) || 0 })),
+    'anix:articleReposts': h((c, id, page = 0, sort = 0) =>
+      c.getClient().endpoints.article.reposts(id, page, { sort: Number(sort) || 0 })),
+    'anix:articleEvent': h((c, body) => c.getClient().endpoints.article.hits(body)),
     'anix:articleSuggestionCreate': h((c, channelId, body) =>
       c.getClient().endpoints.articleSuggestion.create(channelId, body)),
     'anix:articleSuggestions': h((c, page = 0, opts = {}) => {
@@ -889,6 +899,10 @@ function createAnixBridgeCore(options = {}) {
     'anix:reportArticle': h((c, body) => c.getClient().endpoints.report.article(body)),
     'anix:reportChannelReasons': h((c) => c.getClient().endpoints.report.channelReasons()),
     'anix:reportChannel': h((c, body) => c.getClient().endpoints.report.channel(body)),
+    'anix:reportArticleCommentReasons': h((c) => c.getClient().endpoints.report.articleCommentsReasons()),
+    'anix:reportArticleComment': h((c, body) => c.getClient().endpoints.report.articleComment(body)),
+    'anix:reportReleaseCommentReasons': h((c) => c.getClient().endpoints.report.releaseCommentsReasons()),
+    'anix:reportReleaseComment': h((c, body) => c.getClient().endpoints.report.releaseComment(body)),
     'anix:channelSubscriptions': h((c, page = 0, opts = {}) =>
       c.getClient().endpoints.channel.subscriptions(
         page,
@@ -1151,6 +1165,19 @@ function createAnixBridgeCore(options = {}) {
       c.getClient().endpoints.channel.uploadCover(channelId, imageBase64, fileName)),
     'anix:channelDeleteCover': h((c, channelId) =>
       c.getClient().endpoints.channel.deleteCover(channelId)),
+    'anix:channelUploadAvatar': h((c, channelId, imageBase64, fileName = 'image.jpg') =>
+      c.getClient().endpoints.channel.uploadAvatar(channelId, imageBase64, fileName)),
+    'anix:channelEdit': h((c, channelId, body) => c.getClient().endpoints.channel.edit(channelId, body)),
+    'anix:channelBlocks': h((c, channelId, page = 0) => c.getClient().endpoints.channel.blocks(channelId, page)),
+    'anix:channelBlockManage': h((c, channelId, body) =>
+      c.getClient().endpoints.channel.blockManage(channelId, body)),
+    'anix:channelPermissions': h((c, channelId, page = 0, permission = 1) =>
+      c.getClient().endpoints.channel.permissions(channelId, page, { permission: Number(permission) || 0 })),
+    'anix:channelPermissionManage': h((c, channelId, profileId, permission) =>
+      c.getClient().endpoints.channel.permissionManage(channelId, {
+        target_profile_id: Number(profileId),
+        permission: Number(permission) || 0,
+      })),
     'anix:channelCreateBlog': h((c) => c.getClient().endpoints.channel.createBlog()),
     'anix:channelCreate': h((c, body) => c.getClient().endpoints.channel.create({
       title: String(body?.title ?? '').trim(),

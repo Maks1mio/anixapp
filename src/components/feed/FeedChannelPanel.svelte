@@ -5,6 +5,7 @@
   import UserAvatar from '../UserAvatar.svelte';
   import AppBadges from '../AppBadges.svelte';
   import FeedDirectoryModal from './FeedDirectoryModal.svelte';
+  import ChannelSettingsModal from './ChannelSettingsModal.svelte';
   import { openProfilePanel } from '../../stores/profile-panel';
   import type { FeedChannel } from '../../types/feed';
   import {
@@ -23,6 +24,7 @@
   import {
     iconChevronDown,
     iconPencil,
+    iconSettings,
   } from '../icons';
   import {
     buildFeedChannelMenuItems,
@@ -39,6 +41,7 @@
     onWrite?: () => void;
     onMuted?: (channelId: number) => void;
     onUnmuted?: (channelId: number) => void;
+    onUpdated?: (channelId: number, patch: Partial<FeedChannel>) => void;
   };
 
   let {
@@ -49,6 +52,7 @@
     onWrite,
     onMuted,
     onUnmuted,
+    onUpdated,
   }: Props = $props();
 
   let infoOpen = $state(false);
@@ -58,6 +62,7 @@
   let reportTick = $state(0);
   let subscribers = $state<DirectoryPerson[]>([]);
   let directoryOpen = $state(false);
+  let settingsOpen = $state(false);
 
   const channelId = $derived(Number(channel.id ?? 0));
   const title = $derived(channel.title?.trim() || (channel.is_blog ? 'Блог' : 'Группа'));
@@ -65,6 +70,10 @@
   const avatar = $derived(channelAvatarUrl(channel.avatar));
   const subs = $derived(channelSubscriberCount(channel));
   const subscribed = $derived(!!channel.is_subscribed);
+  /** Блог настраивается через профиль; у канала — админам и создателю. */
+  const canManage = $derived(
+    !channel.is_blog && (!!channel.is_creator || !!channel.is_administrator_or_higher),
+  );
   const description = $derived((channel.description ?? '').trim());
   const createdLabel = $derived(formatFeedRelativeTime(channel.creation_date));
   const updatedLabel = $derived(formatFeedRelativeTime(channel.last_article_date));
@@ -104,6 +113,7 @@
     infoOpen = false;
     moreOpen = false;
     directoryOpen = false;
+    settingsOpen = false;
     if (!(id > 0)) {
       subscribers = [];
       return;
@@ -213,6 +223,16 @@
             {#snippet icon()}{@html iconPencil(16)}{/snippet}
           </UiV2Button>
         {/if}
+        {#if canManage}
+          <UiV2Button
+            variant="chrome"
+            size="sm"
+            label="Настройки"
+            onclick={() => { settingsOpen = true; }}
+          >
+            {#snippet icon()}{@html iconSettings(16)}{/snippet}
+          </UiV2Button>
+        {/if}
         <UiV2Button
           variant="chrome"
           size="sm"
@@ -276,6 +296,15 @@
   onClose={() => { moreOpen = false; }}
   onSelect={onMoreSelect}
 />
+
+{#if canManage}
+  <ChannelSettingsModal
+    open={settingsOpen}
+    {channel}
+    onClose={() => { settingsOpen = false; }}
+    onUpdated={(patch) => onUpdated?.(channel.id, patch)}
+  />
+{/if}
 
 <FeedDirectoryModal
   open={directoryOpen}

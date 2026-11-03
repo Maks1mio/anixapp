@@ -73,10 +73,14 @@ export function popularSortOptions(source: PopularSource): SortOption[] {
   return SORT_OPTIONS[source];
 }
 
-/** Сортировки, которой нет у нового источника, — заменяем на «Популярные». */
+/** Фильтры живут только в режиме AnixApp: при смене источника выбор сохраняется на потом. */
 export function withSource(f: PopularFilters, source: PopularSource): PopularFilters {
-  const sort = SORT_OPTIONS[source].some((o) => o.value === f.sort) ? f.sort : 'popular';
-  return { ...f, source, sort, hideWatched: source === 'anixart' ? f.hideWatched : false };
+  return { ...f, source };
+}
+
+/** Что реально уходит в запрос: у Anixart строки фильтров нет — его вкладки как есть. */
+export function effectivePopularFilters(f: PopularFilters): PopularFilters {
+  return f.source === 'anixart' ? { ...DEFAULT_POPULAR_FILTERS, source: 'anixart' } : f;
 }
 
 const SEASON_MONTHS: Record<number, string> = {
@@ -192,11 +196,11 @@ export function loadPopularFilters(): PopularFilters {
     if (!raw || typeof raw !== 'object') return { ...DEFAULT_POPULAR_FILTERS };
     const f = { ...DEFAULT_POPULAR_FILTERS, ...raw };
     if (!POPULAR_SOURCE_TABS.some((t) => t.id === f.source)) f.source = 'anixart';
-    if (!SORT_OPTIONS[f.source].some((o) => o.value === f.sort)) f.sort = 'popular';
+    if (!SORT_OPTIONS.anixapp.some((o) => o.value === f.sort)) f.sort = 'popular';
     if (!popularYearOptions().some((o) => o.value === f.year)) f.year = 'any';
     if (!POPULAR_SEASON_OPTIONS.some((o) => o.value === f.season)) f.season = 'any';
     if (!POPULAR_GENRE_OPTIONS.some((o) => o.value === f.genre)) f.genre = 'any';
-    f.hideWatched = f.source === 'anixart' && f.hideWatched === true;
+    f.hideWatched = false;
     return f;
   } catch {
     return { ...DEFAULT_POPULAR_FILTERS };

@@ -2,13 +2,11 @@
   import { onMount, onDestroy } from 'svelte';
   import UiV2Tabs from '../components/uikit-v2/UiV2Tabs.svelte';
   import UiV2Select from '../components/uikit-v2/UiV2Select.svelte';
-  import UiV2Toggle from '../components/uikit-v2/UiV2Toggle.svelte';
   import UiV2Button from '../components/uikit-v2/UiV2Button.svelte';
   import UiV2AnimeCardSkeleton from '../components/uikit-v2/UiV2AnimeCardSkeleton.svelte';
   import ReleaseCardUiV2 from '../components/ReleaseCardUiV2.svelte';
   import DiscoverHero from '../components/DiscoverHero.svelte';
   import { iconFlame, iconRotateCcw } from '../components/icons';
-  import { isAuthenticated } from '../stores/auth';
   import { browseCatalog } from '../services/catalog-search';
   import { toCdnProxyUrl, toPosterDisplayUrl } from '../utils/posterUrl';
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
@@ -24,6 +22,7 @@
     POPULAR_SOURCE_TABS,
     POPULAR_VIEW_TABS,
     describePopularFilters,
+    effectivePopularFilters,
     isDefaultPopularFilters,
     loadPopularFilters,
     popularBrowseParams,
@@ -58,7 +57,7 @@
     errorMsg: string;
   }
 
-  const POPULAR_VIEW_KEY = (tab: PopularViewTab = activeTab, f: PopularFilters = filters) =>
+  const POPULAR_VIEW_KEY = (tab: PopularViewTab = activeTab, f: PopularFilters = effectivePopularFilters(filters)) =>
     buildViewStateKey('/overview/popular', { ptab: tab, pf: popularFiltersKey(f) });
 
   function findBestPopularCache(): ViewStateEntry<PopularViewState> | null {
@@ -111,9 +110,11 @@
 
   const tabs = POPULAR_VIEW_TABS.map((t) => ({ id: t.id, label: t.label }));
   const yearOptions = popularYearOptions();
-  const filtersSummary = $derived(describePopularFilters(filters));
-  const filtersDirty = $derived(!isDefaultPopularFilters(filters));
-  const sortOptions = $derived(popularSortOptions(filters.source));
+  /** Фильтры, с которыми идёт запрос (у Anixart — всегда по умолчанию). */
+  const applied = $derived(effectivePopularFilters(filters));
+  const filtersSummary = $derived(describePopularFilters(applied));
+  const filtersDirty = $derived(!isDefaultPopularFilters(applied));
+  const sortOptions = popularSortOptions('anixapp');
   const sourceTabs = POPULAR_SOURCE_TABS.map((t) => ({ id: t.id, label: t.label }));
   /** Страница каталога AnixApp: меньше 25 в ответе — дальше нет. */
   const BROWSE_PAGE = 25;
@@ -138,9 +139,9 @@
 
     try {
       let cards: ReleaseCardData[];
-      if (filters.source === 'anixapp') {
+      if (applied.source === 'anixapp') {
         const res = await browseCatalog({
-          ...popularBrowseParams(activeTab, filters),
+          ...popularBrowseParams(activeTab, applied),
           offset: nextPage * BROWSE_PAGE,
           limit: BROWSE_PAGE,
         });
@@ -150,7 +151,7 @@
       } else {
         const data = await window.anixApi.release.filter(
           nextPage,
-          toIpcArgs(popularFilterArgs(activeTab, filters)),
+          toIpcArgs(popularFilterArgs(activeTab, applied)),
           true,
         ) as { content?: unknown[] };
         if (gen !== loadGen) return;
@@ -231,10 +232,12 @@
 
   function setFilters(next: PopularFilters) {
     if (popularFiltersKey(next) === popularFiltersKey(filters)) return;
+    const sameList =
+      popularFiltersKey(effectivePopularFilters(next)) === popularFiltersKey(effectivePopularFilters(filters));
     saveViewStateWithScroll(POPULAR_VIEW_KEY(), popularSnapshot());
     filters = next;
     savePopularFilters(next);
-    showCurrent();
+    if (!sameList) showCurrent();
   }
 
   function patchFilters(patch: Partial<PopularFilters>) {
@@ -270,11 +273,63 @@
   });
 </script>
 
+{#snippet filtersRow()}
+      <div class="popular-filters">
+        <UiV2Select
+          class="popular-chip"
+          panelClass="popular-chip__panel"
+          ariaLabel="Сортировка"
+          options={sortOptions}
+          value={filters.sort}
+          onChange={(v) => patchFilters({ sort: v as PopularFilters['sort'] })}
+        />
+        <span class="popular-filters__sep" aria-hidden="true"></span>
+        <UiV2Select
+          class="popular-chip {filters.year !== 'any' ? 'popular-chip--on' : ''}"
+          panelClass="popular-chip__panel"
+          ariaLabel="Год"
+          options={yearOptions}
+          value={filters.year}
+          onChange={(v) => patchFilters({ year: v })}
+        />
+        <UiV2Select
+          class="popular-chip {filters.season !== 'any' ? 'popular-chip--on' : ''}"
+          panelClass="popular-chip__panel"
+          ariaLabel="Сезон"
+          options={POPULAR_SEASON_OPTIONS}
+          value={filters.season}
+          onChange={(v) => patchFilters({ season: v })}
+        />
+        <UiV2Select
+          class="popular-chip {filters.genre !== 'any' ? 'popular-chip--on' : ''}"
+          panelClass="popular-chip__panel"
+          ariaLabel="Жанр"
+          options={POPULAR_GENRE_OPTIONS}
+          value={filters.genre}
+          onChange={(v) => patchFilters({ genre: v })}
+        />
+
+        <div class="popular-filters__end">
+          {#if filtersDirty}
+            <UiV2Button
+              label="Сбросить"
+              size="sm"
+              variant="ghost"
+              onclick={() => setFilters({ ...DEFAULT_POPULAR_FILTERS, source: filters.source })}
+            >
+              {#snippet icon()}{@html iconRotateCcw(14)}{/snippet}
+            </UiV2Button>
+          {/if}
+        </div>
+      </div>
+{/snippet}
+
 <div class="view view-popular discover-page" bind:this={wrapEl}>
   <DiscoverHero
     title="Популярное"
     subtitle={filtersSummary || 'Топ релизов по категориям'}
     backdrop={heroBackdrop}
+    below={filters.source === 'anixapp' ? filtersRow : undefined}
   >
     {#snippet actions()}
       <div class="popular-source">
@@ -290,63 +345,6 @@
 
     <UiV2Tabs {tabs} activeId={activeTab} onChange={onTabChange} class="uiv2-tabs--static popular-tabs" />
 
-    {#snippet below()}
-      <div class="popular-filters">
-        <UiV2Select
-          class="popular-filters__field popular-filters__field--sort"
-          label="Сортировка"
-          options={sortOptions}
-          value={filters.sort}
-          onChange={(v) => patchFilters({ sort: v as PopularFilters['sort'] })}
-        />
-        <UiV2Select
-          class="popular-filters__field"
-          label="Год"
-          options={yearOptions}
-          value={filters.year}
-          onChange={(v) => patchFilters({ year: v })}
-        />
-        <UiV2Select
-          class="popular-filters__field"
-          label="Сезон"
-          options={POPULAR_SEASON_OPTIONS}
-          value={filters.season}
-          onChange={(v) => patchFilters({ season: v })}
-        />
-        <UiV2Select
-          class="popular-filters__field"
-          label="Жанр"
-          options={POPULAR_GENRE_OPTIONS}
-          value={filters.genre}
-          onChange={(v) => patchFilters({ genre: v })}
-        />
-      </div>
-      {#if (filters.source === 'anixart' && $isAuthenticated) || filtersDirty}
-        <div class="popular-filters__extra">
-          {#if filters.source === 'anixart' && $isAuthenticated}
-            <label class="popular-filters__toggle">
-              <UiV2Toggle
-                label="Скрыть просмотренное"
-                checked={filters.hideWatched}
-                onChange={(next) => patchFilters({ hideWatched: next })}
-              />
-              <span>Скрыть просмотренное</span>
-            </label>
-          {/if}
-          {#if filtersDirty}
-            <UiV2Button
-              label="Сбросить фильтры"
-              size="sm"
-              variant="ghost"
-              class="popular-filters__reset"
-              onclick={() => setFilters({ ...DEFAULT_POPULAR_FILTERS, source: filters.source })}
-            >
-              {#snippet icon()}{@html iconRotateCcw(14)}{/snippet}
-            </UiV2Button>
-          {/if}
-        </div>
-      {/if}
-    {/snippet}
   </DiscoverHero>
 
   {#if loadState === 'loading' && items.length === 0}

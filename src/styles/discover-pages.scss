@@ -288,60 +288,112 @@
   .uiv2-tabs__nav {
     background: color-mix(in srgb, var(--uikit-v2-bg) 40%, transparent);
   }
+
+  // Два сегмента одной ширины: подсветка у любого края стоит на одинаковом отступе
+  .uiv2-tabs__scroll {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+  }
+
+  .uiv2-tabs__tab {
+    justify-content: center;
+    padding: 0 12px;
+  }
 }
 
-// Строка фильтров под вкладками: сортировка шире, остальное поровну
+// Строка фильтров под вкладками: компактные чипы в тон капсуле вкладок
 .discover-hero__below {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
   min-width: 0;
-  margin-top: -0.35rem;
+  margin-top: -0.5rem;
 }
 
 .popular-filters {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 1fr));
-  gap: 0.6rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+// Чип: UiV2Select без подписи, по ширине значения
+.uiv2-select.popular-chip {
+  display: inline-block;
+  width: auto;
 
   .uiv2-select__field {
+    border: 1px solid color-mix(in srgb, var(--uikit-v2-text) 8%, transparent);
+    border-radius: 999px;
     background: color-mix(in srgb, var(--uikit-v2-bg) 40%, transparent);
   }
 
-  // Пояснения пунктов — только в списке, поля одной высоты
-  .uiv2-select__trigger .uiv2-select__value-desc {
+  &:not(.uiv2-select--disabled):hover .uiv2-select__field {
+    border-color: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
+    background: color-mix(in srgb, var(--uikit-v2-text) 6%, transparent);
+  }
+
+  &.uiv2-select--open .uiv2-select__field {
+    border-color: color-mix(in srgb, var(--uikit-v2-text) 24%, transparent);
+    box-shadow: none;
+    background: color-mix(in srgb, var(--uikit-v2-text) 8%, transparent);
+  }
+
+  .uiv2-select__trigger {
+    gap: 0.25rem;
+    min-height: 2.25rem;
+    padding: 0 0.5rem 0 0.875rem;
+    font-size: 0.875rem;
+  }
+
+  .uiv2-select__value-label {
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--uiv2-fg-muted);
+  }
+
+  // Пояснения пунктов — только в списке
+  .uiv2-select__value-desc {
     display: none;
+  }
+
+  .uiv2-select__chevron {
+    width: 1.25rem;
+    height: 1.25rem;
+    background: none;
+    box-shadow: none;
   }
 }
 
-.popular-filters__extra {
+// Выбрано не «Любой…» — чип заметнее, видно, что фильтр включён
+.uiv2-select.popular-chip--on .uiv2-select__field,
+.uiv2-select.popular-chip:first-child .uiv2-select__field {
+  border-color: color-mix(in srgb, var(--uikit-v2-text) 14%, transparent);
+  background: color-mix(in srgb, var(--uikit-v2-text) 8%, transparent);
+}
+
+.uiv2-select.popular-chip--on .uiv2-select__value-label,
+.uiv2-select.popular-chip:first-child .uiv2-select__value-label {
+  color: var(--uikit-v2-text);
+}
+
+// Список шире чипа: длинные жанры не режутся
+.popular-chip__panel {
+  min-width: 13rem;
+}
+
+.popular-filters__sep {
+  width: 1px;
+  height: 1.25rem;
+  margin: 0 0.25rem;
+  background: color-mix(in srgb, var(--uikit-v2-text) 12%, transparent);
+}
+
+.popular-filters__end {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  min-height: 2rem;
-}
-
-.popular-filters__toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  font-size: 0.875rem;
-  color: var(--uiv2-fg-muted);
-  cursor: pointer;
-  user-select: none;
-}
-
-.popular-filters__reset {
+  gap: 1rem;
   margin-left: auto;
 }
 
-@container (max-width: 48rem) {
-  .popular-filters {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
 
 // Топ-3: пьедестал 2 · 1 · 3
 .popular-podium {

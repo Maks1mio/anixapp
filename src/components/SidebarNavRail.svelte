@@ -4,6 +4,7 @@
   import { isSidebarTabActive } from '../stores/tab-navigation';
   import { isAuthenticated, requireAuth } from '../stores/auth';
   import { activeDownloadsCount, downloadsOverallProgress } from '../stores/downloads';
+  import { supportInbox, supportInboxLabel } from '../stores/support-inbox';
   import { iconChevronDown } from './icons';
   import UiV2Tooltip from './uikit-v2/UiV2Tooltip.svelte';
   import {
@@ -27,6 +28,7 @@
   }: Props = $props();
 
   const downloadsBadge = $derived($activeDownloadsCount);
+  const supportNews = $derived(supportInboxLabel($supportInbox));
   const dlProgress = $derived($downloadsOverallProgress);
   const showDlProgress = $derived(dlProgress > 0 && downloadsBadge > 0);
   const dlRingOffset = $derived(100 - dlProgress);
@@ -111,7 +113,9 @@
     {/if}
   {:else}
     {@html item.icon}
-    {#if item.beta}
+    {#if item.href === '/agent' && $supportInbox.unread > 0}
+      <span class="uiv2-sidenav__note">{ $supportInbox.unread > 9 ? '9+' : $supportInbox.unread }</span>
+    {:else if item.beta}
       <span class="uiv2-sidenav__beta" aria-hidden="true">β</span>
     {/if}
   {/if}
@@ -127,10 +131,11 @@
     {#if entry.kind === 'item'}
       {@const item = entry.item}
       {@const on = isActive(item.href)}
+      {@const news = item.href === '/agent' ? supportNews : ''}
       <UiV2Tooltip
-        text={item.beta ? '' : item.label}
-        title={item.beta ? item.label : ''}
-        meta={item.beta ? 'beta' : undefined}
+        text={news || (item.beta ? '' : item.label)}
+        title={news || item.beta ? item.label : ''}
+        meta={news || (item.beta ? 'beta' : undefined)}
         placement={tooltipPlacement}
         class="uiv2-sidenav__tip"
       >
@@ -140,7 +145,7 @@
           class:uiv2-sidenav__tab--active={on}
           class:uiv2-sidenav__tab--downloads={item.href === '/downloads'}
           class:uiv2-sidenav__tab--guest={item.href === '/bookmarks' && !$isAuthenticated}
-          aria-label={item.beta ? `${item.label} (beta)` : item.label}
+          aria-label={news ? `${item.label}: ${news}` : item.beta ? `${item.label} (beta)` : item.label}
           aria-current={on ? 'page' : undefined}
           onclick={(e) => goTo(item, e)}
         >

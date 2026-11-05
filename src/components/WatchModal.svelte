@@ -31,6 +31,7 @@
   import Page from './Page.svelte';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import { infiniteScroll } from '../actions/infiniteScroll';
+  import { cachedCover } from '../actions/cachedCover';
   import {
     getWatchModalState,
     saveWatchModalState,
@@ -218,11 +219,21 @@
   );
   const coversWaiting = $derived(coversBusy && coversReady < episodes.length);
 
-  /** Fades a cover in once loaded; a cached one can finish before an `onload` handler is attached. */
-  function revealOnLoad(img: HTMLImageElement) {
-    const show = () => img.classList.add('watch-modal__episode-cover--on');
-    if (img.complete && img.naturalWidth > 0) show();
-    else img.addEventListener('load', show, { once: true });
+  const COVER_BLUR_KEY = 'anix:episodeCoverBlur';
+  function readCoverBlur(): boolean {
+    try { return localStorage.getItem(COVER_BLUR_KEY) !== '0'; } catch { return true; }
+  }
+  /** Unwatched frames stay blurred until this is turned off. One setting for every release. */
+  let coverBlur = $state(readCoverBlur());
+  function toggleCoverBlur() {
+    coverBlur = !coverBlur;
+    try { localStorage.setItem(COVER_BLUR_KEY, coverBlur ? '1' : '0'); } catch { /* ignore */ }
+  }
+  /** The big number is gone from the card, so a title without one keeps it here. */
+  function episodeLabel(ep: Episode, num: number | string): string {
+    const name = ep.name?.trim();
+    if (!name) return `Серия ${num}`;
+    return name.includes(String(num)) ? name : `${num}. ${name}`;
   }
   const watchedCount = $derived(episodes.filter(isEpisodeWatched).length);
   const remainingCount = $derived(Math.max(0, episodes.length - watchedCount));
@@ -661,7 +672,7 @@
     if (lastWatchedEpisode) scrollToEpisode(lastWatchedEpisode.position);
   }
 
-  async function openDubber(dubber: Dubber, preferredSourceId?: number) {
+  async function openDubber(dubber: Dubber, preferredSourceId?: number, focusEpisode?: number) {
     modalView = 'episodes';
     selectedDubber = dubber;
     sources = [];
@@ -693,8 +704,10 @@
         ? srcs
         : [...srcs.filter((s) => s.id === preferredSourceId), ...srcs.filter((s) => s.id !== preferredSourceId)];
       for (const src of ordered) {
-        if (selectedDubber !== dubber) return;
-        if (await selectSource(src, false)) break;
+        // «Продолжить» передаёт сырой объект из ответа API, а $state хранит прокси.
+        // Ссылки не равны, хотя это та же озвучка — тогда список серий так и не запрашивается.
+        if (selectedDubber?.id !== dubber.id) return;
+        if (await selectSource(src, false, focusEpisode)) break;
       }
       await tick();
       focusTvModalContent();
@@ -704,8 +717,8 @@
     }
   }
 
-  /** true, если у источника есть серии. */
-  async function selectSource(source: Source, resetSearch = true): Promise<boolean> {
+  /** true, если у источника есть серии. focusEpisode — серия по таймкоду, а не последняя с галочкой. */
+  async function selectSource(source: Source, resetSearch = true, focusEpisode?: number): Promise<boolean> {
     if (!selectedDubber) return false;
     selectedSourceId = source.id;
     selectedEpisodePos = null;
@@ -722,9 +735,14 @@
         episodesError = NO_EPISODE_PICK_OTHER_DUB;
         return false;
       }
+      const focus = focusEpisode != null && episodes.some((ep) => ep.position === focusEpisode)
+        ? focusEpisode
+        : null;
+      if (focus != null) selectedEpisodePos = focus;
       await tick();
       focusTvModalContent();
-      if (lastWatchedEpisode) window.setTimeout(() => scrollToEpisode(lastWatchedEpisode!.position), 80);
+      const scrollPos = focus ?? lastWatchedEpisode?.position;
+      if (scrollPos != null) window.setTimeout(() => scrollToEpisode(scrollPos), 80);
       return true;
     } catch {
       episodesLoading = false;
@@ -996,10 +1014,7 @@
           // «Продолжить»: сразу последняя озвучка и серия, которые смотрел пользователь.
           const targetDubber = target && types.find((d) => d.id === target.dubberId);
           if (target && targetDubber) {
-            await openDubber(targetDubber, target.sourceId);
-            selectedEpisodePos = target.episode;
-            // Позже прокрутки к последней отмеченной серии внутри selectSource.
-            window.setTimeout(() => scrollToEpisode(target.episode), 160);
+            await openDubber(targetDubber, target.sourceId, target.episode);
             return;
           }
 
@@ -1189,6 +1204,7 @@
                   <button type="button" aria-label="Скрыть подсказку" onclick={() => hideHint('episodes')}>{@html closeIconSvg}</button>
                 </div>
               {/if}
+              <div class="watch-modal__episodes-bar">
               {#if sources.length > 0}
                 <div class="watch-modal__source-pills" aria-label="Источники">
                   {#each sources as source (source.id)}
@@ -1225,6 +1241,16 @@
                   <button type="button" class="watch-modal__tv-action" onclick={() => confirmSetAllWatched(false)} disabled={actionBusy !== '' || watchedCount === 0}>
                     Снять отметки
                   </button>
+                  {#if hasCovers || coversWaiting}
+                    <button
+                      type="button"
+                      class="watch-modal__tv-action"
+                      aria-pressed={coverBlur}
+                      onclick={toggleCoverBlur}
+                    >
+                      {coverBlur ? 'Убрать блюр' : 'Включить блюр'}
+                    </button>
+                  {/if}
                   <span class="watch-modal__tv-progress">
                     Просмотрено {watchedCount} из {episodes.length}
                     <span class="watch-modal__tv-hint">Удерживайте OK на серии — отметить</span>
@@ -1245,6 +1271,15 @@
                   <UiV2Button label="Скачать" ariaHaspopup="dialog" onclick={() => (desktopDlOpen = true)} disabled={!selectedSource || episodes.length === 0}>
                     {#snippet icon()}{@html downloadIconSvg}{/snippet}
                   </UiV2Button>
+                  <div class="watch-modal__desk-end">
+                  {#if hasCovers || coversWaiting}
+                    <UiV2Button
+                      label={coverBlur ? 'Убрать блюр' : 'Включить блюр'}
+                      title={coverBlur ? 'Показать кадры непросмотренных серий' : 'Скрыть кадры непросмотренных серий'}
+                      ariaPressed={coverBlur}
+                      onclick={toggleCoverBlur}
+                    />
+                  {/if}
                   <label class="watch-modal__desk-search">
                     <span class="watch-modal__episodes-search-icon" aria-hidden="true">{@html searchIconSvg}</span>
                     <input
@@ -1255,6 +1290,7 @@
                       onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearchEpisode(); } }}
                     />
                   </label>
+                  </div>
                 </div>
               {:else}
               <div class="watch-modal__episodes-toolbar" role="search">
@@ -1290,6 +1326,7 @@
                 </div>
               </div>
               {/if}
+              </div>
 
               {#if coversWaiting}
                 <p class="watch-modal__covers-note" role="status">
@@ -1312,7 +1349,8 @@
                   {@const downloaded = dlItem?.state === 'completed'}
                   {@const displayNum = episodeDisplayNumber(ep, episodes)}
                   {@const unnumbered = displayNum == null}
-                  {@const cover = episodeCovers[String(ep.position)]}
+                  {@const frame = episodeCovers[String(ep.position)]}
+                  {@const cover = frame?.url}
                   {@const coverMissing = !cover && coversMissing.has(ep.position)}
                   {@const coverPending = !cover && !coverMissing && coversWaiting}
                   {@const progress = progressByEpisode.get(ep.position)}
@@ -1323,19 +1361,28 @@
                     class:watch-modal__episode-card--unnumbered={unnumbered}
                     class:watch-modal__episode-card--next={(isTv || isDesktop) && nextEpisodePos === ep.position}
                     class:watch-modal__episode-card--cover={!!cover}
+                    class:watch-modal__episode-card--spoiler={coverBlur && !watched && !!cover}
                     class:watch-modal__episode-card--cover-pending={coverPending}
                     class:watch-modal__episode-card--cover-missing={coverMissing}
                     data-position={ep.position}
                   >
                     {#if cover}
-                      <img
-                        class="watch-modal__episode-cover"
-                        src={cover}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                        use:revealOnLoad
-                      />
+                      <span class="watch-modal__episode-frame" aria-hidden="true">
+                        <img
+                          class="watch-modal__episode-cover"
+                          alt=""
+                          decoding="async"
+                          use:cachedCover={cover}
+                        />
+                        {#if frame?.alt && !(coverBlur && !watched)}
+                          <img
+                            class="watch-modal__episode-cover watch-modal__episode-cover--alt"
+                            alt=""
+                            decoding="async"
+                            use:cachedCover={frame.alt}
+                          />
+                        {/if}
+                      </span>
                     {/if}
                     <button
                       type="button"
@@ -1349,8 +1396,7 @@
                           {ep.name?.trim() || 'Смотреть онлайн'}
                         </span>
                       {:else}
-                        <span class="watch-modal__episode-num">{displayNum}</span>
-                        <span class="watch-modal__episode-name">{ep.name || `Серия ${displayNum}`}</span>
+                        <span class="watch-modal__episode-name">{episodeLabel(ep, displayNum)}</span>
                       {/if}
                       {#if progress}
                         <span class="watch-modal__episode-time">{fmtTime(progress.position_sec)} / {fmtTime(progress.duration_sec)}</span>

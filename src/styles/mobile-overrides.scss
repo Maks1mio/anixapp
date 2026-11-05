@@ -242,7 +242,6 @@ html.mobile-mode {
       &--watched .watch-modal__episode-name { color: var(--m-text-3) !important; }
     }
     &__episode-main { flex: 1 1 auto !important; width: auto !important; min-width: 0; display: flex !important; align-items: center; background: transparent !important; border: 0 !important; padding: var(--m-space-4) 0 !important; text-align: left; }
-    &__episode-num { display: none !important; }
     &__episode-name { font: 500 20px/1.2 var(--m-font) !important; color: var(--m-text) !important; }
     &__episode-actions { display: flex !important; flex: none; flex-direction: row !important; gap: 0; margin: 0 !important; padding: 0 !important; width: auto !important; }
     &__episode-mini {

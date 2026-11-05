@@ -21,6 +21,7 @@
   import Page from '../components/Page.svelte';
   import UiV2Tooltip from '../components/uikit-v2/UiV2Tooltip.svelte';
   import { openSupportModal, supportModalUnseen } from '../stores/support-promo';
+  import { watchSupportInbox } from '../stores/support-inbox';
   import UiV2MediaLightbox from '../components/uikit-v2/UiV2MediaLightbox.svelte';
   import { feedMediaLightbox } from '../utils/feed-media-lightbox';
   import { requestOpenExternal } from '../utils/external-link';
@@ -446,8 +447,10 @@
     loadSelfProfile();
     const onAuthChanged = () => loadSelfProfile();
     window.addEventListener('anix:authChanged', onAuthChanged);
+    const stopSupportInbox = watchSupportInbox();
 
     return () => {
+      stopSupportInbox();
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('app:openSettings', onMenuOpenSettings);
       window.removeEventListener('app:menuNavigate', onMenuNavigate);

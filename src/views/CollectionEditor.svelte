@@ -1,6 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { iconArrowLeft, iconCheck, iconX } from '../components/icons';
+  import { iconCheck, iconImage, iconRotateCcw } from '../components/icons';
+  import CollectionReleaseList from '../components/collections/CollectionReleaseList.svelte';
+  import CollectionReleaseSearch from '../components/collections/CollectionReleaseSearch.svelte';
+  import UiV2BackBar from '../components/uikit-v2/UiV2BackBar.svelte';
+  import UiV2Button from '../components/uikit-v2/UiV2Button.svelte';
+  import UiV2Card from '../components/uikit-v2/UiV2Card.svelte';
+  import UiV2OutlinedField from '../components/uikit-v2/UiV2OutlinedField.svelte';
+  import UiV2Select from '../components/uikit-v2/UiV2Select.svelte';
+  import UiV2SettingsRow from '../components/uikit-v2/UiV2SettingsRow.svelte';
+  import UiV2Skeleton from '../components/uikit-v2/UiV2Skeleton.svelte';
+  import UiV2Toggle from '../components/uikit-v2/UiV2Toggle.svelte';
   import { navigate } from '../stores/navigation';
   import { showToast } from '../stores/toast';
   import { compressImageForUpload } from '../utils/compressImage';
@@ -8,22 +18,19 @@
     COLLECTION_CREATE_ERROR_MESSAGES,
     COLLECTION_DESCRIPTION_MAX,
     COLLECTION_RELEASES_MAX,
+    COLLECTION_RELEASE_SORTS,
     COLLECTION_TITLE_MAX,
     clearCollectionEditorDraft,
     loadCollectionEditorDraft,
     saveCollectionEditorDraft,
+    sortCollectionReleases,
+    type CollectionReleaseSort,
   } from '../utils/collection';
   import { COLLECTION_RULES_FORBIDDEN, COLLECTION_RULES_FOOTER } from '../utils/collectionRules';
   import { ensureProfileId } from '../utils/profile';
   import UiV2Tooltip from '../components/uikit-v2/UiV2Tooltip.svelte';
-  import {
-    mapReleaseRawToCard,
-    releaseCardMeta,
-    releaseCardTitle,
-    releaseListStatusLabel,
-  } from '../utils/release-card';
-  import type { ReleaseCardData } from '../types/release';
-  import { buildPosterUrl, toPosterDisplayUrl } from '../utils/posterUrl';
+  import { releaseRawToStored } from '../utils/release-card';
+  import { buildPosterUrl } from '../utils/posterUrl';
 
   interface Props {
     editId?: number | null;
@@ -41,11 +48,14 @@
   let isSaving = $state(false);
   let isLoading = $state(false);
   let loadError = $state('');
-  let dragIndex = $state<number | null>(null);
+  /** Последняя применённая сортировка; сбрасывается, как только порядок меняют руками. */
+  let appliedSort = $state<CollectionReleaseSort | null>(null);
+  let orderBeforeSort: Record<string, unknown>[] | null = null;
 
   let fileInput: HTMLInputElement | undefined = $state();
 
-  const releaseCards = $derived(releases.map((raw) => mapReleaseRawToCard(raw)));
+  const selectedIds = $derived(new Set(releases.map((r) => Number(r.id))));
+  const isFull = $derived(releases.length >= COLLECTION_RELEASES_MAX);
   const pageTitle = $derived(editId ? 'Редактирование коллекции' : 'Создание коллекции');
   const canSave = $derived(title.trim().length > 0 && !isSaving && !isLoading);
 
@@ -139,27 +149,31 @@
     reader.readAsDataURL(compressed);
   }
 
-  function removeRelease(index: number) {
-    releases = releases.filter((_, i) => i !== index);
-    persistDraft();
-  }
-
-  function onDragStart(index: number) {
-    dragIndex = index;
-  }
-
-  function onDragOver(e: DragEvent) {
-    e.preventDefault();
-  }
-
-  function onDrop(index: number) {
-    if (dragIndex == null || dragIndex === index) return;
-    const next = [...releases];
-    const [moved] = next.splice(dragIndex, 1);
-    next.splice(index, 0, moved);
+  function setOrder(next: Record<string, unknown>[]) {
     releases = next;
-    dragIndex = null;
-    persistDraft();
+    appliedSort = null;
+    orderBeforeSort = null;
+  }
+
+  function removeRelease(id: number) {
+    setOrder(releases.filter((r) => Number(r.id) !== id));
+  }
+
+  function toggleRelease(raw: Record<string, unknown>) {
+    const id = Number(raw.id);
+    if (selectedIds.has(id)) removeRelease(id);
+    else if (!isFull) setOrder([...releases, releaseRawToStored(raw)]);
+  }
+
+  function applySort(value: string) {
+    const sort = value as CollectionReleaseSort;
+    orderBeforeSort ??= releases;
+    releases = sortCollectionReleases(releases, sort);
+    appliedSort = sort;
+  }
+
+  function undoSort() {
+    if (orderBeforeSort) setOrder(orderBeforeSort);
   }
 
   async function save() {
@@ -248,140 +262,113 @@
 </script>
 
 <div class="view collection-editor">
-  <div class="collection-editor__toolbar">
-    <button type="button" class="collection-editor__back" aria-label="Назад" onclick={goBack}>
-      {@html iconArrowLeft(20)}
-    </button>
-    <h1 class="collection-editor__title">{pageTitle}</h1>
-    <button
-      type="button"
-      class="collection-editor__save"
-      aria-label="Сохранить"
+  <header class="collection-editor__head">
+    <UiV2BackBar segments={[{ label: pageTitle, active: true }]} onBack={goBack} />
+    <UiV2Button
+      label={isSaving ? 'Сохранение…' : 'Сохранить'}
+      variant="primary"
       disabled={!canSave}
       onclick={() => void save()}
     >
-      {@html iconCheck(20)}
-    </button>
-  </div>
+      {#snippet icon()}{@html iconCheck(16)}{/snippet}
+    </UiV2Button>
+  </header>
 
   {#if isLoading}
-    <div class="discover-page__loading">Загрузка…</div>
+    <div class="collection-editor__stack" aria-busy="true">
+      <UiV2Skeleton tag="div" class="collection-editor__cover-skeleton" rounded="lg" />
+      <UiV2Skeleton tag="div" class="collection-editor__rows-skeleton" rounded="lg" />
+    </div>
   {:else if loadError}
-    <div class="discover-page__error">
+    <UiV2Card class="collection-editor__error">
       <p>{loadError}</p>
-      <button type="button" class="discover-page__retry" onclick={goBack}>Назад</button>
-    </div>
+      <UiV2Button label="Назад" onclick={goBack} />
+    </UiV2Card>
   {:else}
-    <div class="collection-editor__cover">
-      {#if imagePreview}
-        <div class="collection-editor__cover-preview">
-          <img src={imagePreview} alt="" />
-          <button type="button" class="collection-editor__cover-replace" onclick={() => fileInput?.click()}>
-            Заменить обложку
-          </button>
+    <div class="collection-editor__stack">
+      <UiV2Card label="Оформление коллекции">
+        <div class="collection-editor__cover" class:collection-editor__cover--empty={!imagePreview}>
+          {#if imagePreview}
+            <img src={imagePreview} alt="" />
+          {/if}
+          <UiV2Button
+            label={imagePreview ? 'Заменить обложку' : 'Загрузить обложку'}
+            size="sm"
+            onclick={() => fileInput?.click()}
+          >
+            {#snippet icon()}{@html iconImage(16)}{/snippet}
+          </UiV2Button>
+          <input bind:this={fileInput} type="file" accept="image/*" hidden onchange={onImageSelected} />
         </div>
-      {:else}
-        <button type="button" class="collection-editor__cover-upload" onclick={() => fileInput?.click()}>
-          <span aria-hidden="true">+</span>
-          <span>Загрузить обложку</span>
-        </button>
-      {/if}
-      <input bind:this={fileInput} type="file" accept="image/*" hidden onchange={onImageSelected} />
-    </div>
 
-    <div class="collection-editor__field">
-      <input
-        class="collection-editor__input"
-        type="text"
-        placeholder="Название коллекции"
-        maxlength={COLLECTION_TITLE_MAX}
-        bind:value={title}
-      />
-      <div class="collection-editor__counter">{title.length}/{COLLECTION_TITLE_MAX}</div>
-    </div>
+        <div class="collection-editor__field">
+          <UiV2OutlinedField label="Название коллекции" maxlength={COLLECTION_TITLE_MAX} bind:value={title} />
+          <span class="collection-editor__counter">{title.length}/{COLLECTION_TITLE_MAX}</span>
+        </div>
 
-    <div class="collection-editor__field">
-      <textarea
-        class="collection-editor__textarea"
-        placeholder="Описание"
-        maxlength={COLLECTION_DESCRIPTION_MAX}
-        bind:value={description}
-      ></textarea>
-      <div class="collection-editor__counter">{description.length}/{COLLECTION_DESCRIPTION_MAX}</div>
-    </div>
+        <div class="collection-editor__field">
+          <UiV2OutlinedField
+            label="Описание"
+            multiline
+            rows={4}
+            maxlength={COLLECTION_DESCRIPTION_MAX}
+            bind:value={description}
+          />
+          <span class="collection-editor__counter">{description.length}/{COLLECTION_DESCRIPTION_MAX}</span>
+        </div>
 
-    <div class="collection-editor__privacy">
-      <span>Доступно только мне</span>
-      <label class="settings-toggle-switch" aria-label="Приватная коллекция">
-        <input type="checkbox" bind:checked={isPrivate} />
-        <span class="settings-toggle-switch__track"></span>
-        <span class="settings-toggle-switch__thumb"></span>
-      </label>
-    </div>
+        <UiV2SettingsRow title="Доступно только мне">
+          <UiV2Toggle label="Доступно только мне" checked={isPrivate} onChange={(next) => (isPrivate = next)} />
+        </UiV2SettingsRow>
 
-    <div class="collection-editor__rules">
-      Создавая коллекцию, Вы подтверждаете, что ознакомлены с
-      <UiV2Tooltip placement="top" interactive={true} showDelay={80} hideDelay={150}>
-        <button type="button" class="collection-editor__rules-link">правилами</button>
-        {#snippet content()}
-          <div class="uiv2-rules-popover">
-            <p class="uiv2-rules-popover__title">Правила</p>
-            <p class="uiv2-rules-popover__heading">Запрещено:</p>
-            <ul class="uiv2-rules-popover__list">
-              {#each COLLECTION_RULES_FORBIDDEN as rule}
-                <li>{rule}</li>
-              {/each}
-            </ul>
-            <p class="uiv2-rules-popover__footer">{COLLECTION_RULES_FOOTER}</p>
+        <p class="collection-editor__rules">
+          Создавая коллекцию, Вы подтверждаете, что ознакомлены с
+          <UiV2Tooltip placement="top" interactive={true} showDelay={80} hideDelay={150}>
+            <button type="button" class="collection-editor__rules-link">правилами</button>
+            {#snippet content()}
+              <div class="uiv2-rules-popover">
+                <p class="uiv2-rules-popover__title">Правила</p>
+                <p class="uiv2-rules-popover__heading">Запрещено:</p>
+                <ul class="uiv2-rules-popover__list">
+                  {#each COLLECTION_RULES_FORBIDDEN as rule}
+                    <li>{rule}</li>
+                  {/each}
+                </ul>
+                <p class="uiv2-rules-popover__footer">{COLLECTION_RULES_FOOTER}</p>
+              </div>
+            {/snippet}
+          </UiV2Tooltip>
+        </p>
+      </UiV2Card>
+
+      <UiV2Card title="Тайтлы" pill={`${releases.length} из ${COLLECTION_RELEASES_MAX}`}>
+        <CollectionReleaseSearch {selectedIds} full={isFull} onToggle={toggleRelease} />
+
+        {#if releases.length > 1}
+          <div class="collection-editor__sort">
+            <UiV2Select
+              class="popular-chip"
+              panelClass="popular-chip__panel"
+              ariaLabel="Сортировать тайтлы"
+              placeholder="Сортировать по"
+              options={COLLECTION_RELEASE_SORTS}
+              value={appliedSort}
+              onChange={applySort}
+            />
+            {#if appliedSort}
+              <UiV2Button label="Вернуть как было" size="sm" variant="ghost" onclick={undoSort}>
+                {#snippet icon()}{@html iconRotateCcw(14)}{/snippet}
+              </UiV2Button>
+            {/if}
           </div>
-        {/snippet}
-      </UiV2Tooltip>
-      »
-    </div>
+        {/if}
 
-    <div class="collection-editor__divider"></div>
-
-    <div class="collection-editor__releases-head">
-      <span class="collection-editor__releases-count">{releases.length} из {COLLECTION_RELEASES_MAX}</span>
-    </div>
-
-    <div class="collection-editor__releases" role="list">
-    {#each releaseCards as card, index (card.id ?? index)}
-      {@const statusLabel = releaseListStatusLabel(card.listStatus)}
-      <div
-        class="collection-editor__release{dragIndex === index ? ' collection-editor__release--dragging' : ''}"
-        role="listitem"
-        draggable="true"
-        ondragstart={() => onDragStart(index)}
-        ondragover={onDragOver}
-        ondrop={() => onDrop(index)}
-      >
-        <span class="collection-editor__drag" aria-hidden="true">⋮⋮</span>
-        <div class="collection-editor__release-poster">
-          {#if card.poster}
-            <img src={toPosterDisplayUrl(card.poster, 'cardHorizontal')} alt="" />
-          {/if}
-          {#if statusLabel}
-            <div class="collection-editor__release-badge">{statusLabel}</div>
-          {/if}
-        </div>
-        <div class="collection-editor__release-body">
-          <h3 class="collection-editor__release-title">{releaseCardTitle(card)}</h3>
-          <p class="collection-editor__release-meta">{releaseCardMeta(card)}</p>
-          {#if card.description}
-            <p class="collection-editor__release-desc">{card.description}</p>
-          {/if}
-        </div>
-        <button
-          type="button"
-          class="collection-editor__release-remove"
-          aria-label="Удалить релиз"
-          onclick={() => removeRelease(index)}
-        >
-          {@html iconX(18)}
-        </button>
-      </div>
-    {/each}
+        {#if releases.length}
+          <CollectionReleaseList {releases} onReorder={setOrder} onRemove={removeRelease} />
+        {:else}
+          <p class="collection-editor__empty">Найдите тайтл через поиск, и он появится здесь</p>
+        {/if}
+      </UiV2Card>
     </div>
   {/if}
 </div>

@@ -20,6 +20,8 @@
     title?: string;
     ariaHaspopup?: 'dialog' | 'menu' | 'listbox' | 'tree' | 'grid' | boolean;
     ariaExpanded?: boolean;
+    /** Для кнопок-переключателей: текущее состояние. */
+    ariaPressed?: boolean;
     onclick?: (e: MouseEvent) => void;
   };
 
@@ -35,6 +37,7 @@
     title,
     ariaHaspopup,
     ariaExpanded,
+    ariaPressed,
     onclick,
   }: Props = $props();
 </script>
@@ -49,6 +52,7 @@
   {title}
   aria-haspopup={ariaHaspopup}
   aria-expanded={ariaExpanded}
+  aria-pressed={ariaPressed}
   {onclick}
 >
   {#if icon}

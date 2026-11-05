@@ -122,7 +122,7 @@
 <div class="bm-tools" role="toolbar" aria-label="Действия списка">
   <div class="bm-tools__search">
     <UiV2PillField
-      size="lg"
+      size="md"
       type="search"
       label={searchPlaceholder}
       value={searchValue}
@@ -131,7 +131,7 @@
       oninput={onSearchInput}
       onkeydown={onSearchKeydown}
     >
-      {#snippet icon()}{@html iconSearch(18)}{/snippet}
+      {#snippet icon()}{@html iconSearch(16)}{/snippet}
     </UiV2PillField>
     {#if searchValue}
       <button type="button" class="bm-tools__clear" aria-label="Очистить поиск" onclick={onSearchClear}>
@@ -142,7 +142,7 @@
 
   {#if showListControls}
     <UiV2Button
-      size="lg"
+      size="md"
       label={sortLabel}
       class="bm-tools__menu-btn"
       ariaHaspopup="menu"
@@ -155,7 +155,7 @@
 
     {#if showFilter}
       <UiV2Button
-        size="lg"
+        size="md"
         label={bookmarkAnnounceFilterLabel(filter)}
         class="bm-tools__menu-btn {filter !== 0 ? 'bm-tools__menu-btn--active' : ''}"
         ariaHaspopup="menu"
@@ -168,8 +168,8 @@
     {/if}
 
     {#if showRandom}
-      <UiV2RoundButton size="lg" label="Случайный тайтл из списка" disabled={randomDisabled} onclick={onRandom}>
-        {@html iconShuffle(18)}
+      <UiV2RoundButton size="md" label="Случайный тайтл из списка" disabled={randomDisabled} onclick={onRandom}>
+        {@html iconShuffle(16)}
       </UiV2RoundButton>
     {/if}
   {/if}
@@ -180,6 +180,7 @@
   x={menuX}
   y={menuY}
   placement="anchor"
+  dropdown
   anchor={menuAnchor}
   items={menu === 'sort' ? sortItems : filterItems}
   onClose={() => (menu = null)}

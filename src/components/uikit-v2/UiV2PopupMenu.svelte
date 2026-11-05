@@ -63,6 +63,8 @@
     items: UiV2PopupMenuItem[];
     /** 'point' — у курсора; 'anchor' — рядом с кнопкой (x/y = центр кнопки) */
     placement?: 'point' | 'anchor';
+    /** Как выпадающий список: под кнопкой anchor (или над ней), вровень с её краем. x/y не используются. */
+    dropdown?: boolean;
     onClose?: () => void;
     onSelect?: (id: string, item: UiV2PopupMenuItem) => void;
     /** Изменение toggle / radio */
@@ -96,6 +98,7 @@
     y = 0,
     items = [],
     placement = 'point',
+    dropdown = false,
     onClose,
     onSelect,
     onCheckedChange,
@@ -353,6 +356,17 @@
     const h = el.offsetHeight || el.getBoundingClientRect().height;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+
+    if (dropdown && anchor) {
+      const r = anchor.getBoundingClientRect();
+      openDown = vh - pad - r.bottom >= h + gap || vh - r.bottom >= r.top;
+      openRight = vw - pad - r.left >= w;
+      left = Math.max(pad, Math.min(openRight ? r.left : r.right - w, vw - pad - w));
+      top = Math.max(pad, Math.min(openDown ? r.bottom + gap : r.top - gap - h, vh - pad - h));
+      originX = `${Math.max(0, Math.min(100, ((r.left + r.width / 2 - left) / Math.max(1, w)) * 100))}%`;
+      originY = openDown ? '0%' : '100%';
+      return;
+    }
 
     const spaceBelow = vh - pad - y;
     const spaceAbove = y - pad;

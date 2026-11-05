@@ -118,7 +118,8 @@
   }
 }
 
-.uiv2-sidenav__beta {
+.uiv2-sidenav__beta,
+.uiv2-sidenav__note {
   position: absolute;
   top: -1px;
   right: -2px;
@@ -138,6 +139,11 @@
   line-height: 1;
   pointer-events: none;
   box-shadow: 0 0 0 1.5px color-mix(in srgb, $color-bg 85%, transparent);
+}
+
+.uiv2-sidenav__note {
+  min-width: 1.05rem;
+  font-size: 0.62rem;
 }
 
 .uiv2-sidenav__folder {

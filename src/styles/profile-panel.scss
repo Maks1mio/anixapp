@@ -1174,6 +1174,33 @@ $pp-btn-bg-hover: var(--pp-btn-bg-hover);
   }
 }
 
+/* Навигация, поиск и вкладки прилипают к верху одним блоком; фон — как у панели. */
+.profile-panel__friends-top {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding-bottom: 0.5rem;
+  background: $color-bg;
+}
+
+.profile-panel__friends-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0.15rem 0.9rem 0;
+
+  /* Вкладки живут в этой шапке: своих отступов страницы им не нужно. */
+  .uiv2-tabs {
+    position: static;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+.profile-panel__friends-list-wrap .profile-panel__friends-section-head {
+  margin-top: 0.35rem;
+}
+
 .profile-panel__friends-section-head {
   display: flex;
   align-items: center;
@@ -1212,6 +1239,7 @@ $pp-btn-bg-hover: var(--pp-btn-bg-hover);
 }
 
 .profile-panel__friends-ban-filter {
+  margin-left: auto;
   gap: 0.4rem;
   flex-shrink: 0;
   font-size: 0.76rem;

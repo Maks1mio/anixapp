@@ -8,6 +8,7 @@
   import { resolveBadgeName, resolveProfileBadgeUrl } from '../utils/badge';
   import { resolveCdnAssetUrl } from '../utils/posterUrl';
   import UiV2BackBar from './uikit-v2/UiV2BackBar.svelte';
+  import UiV2Tabs from './uikit-v2/UiV2Tabs.svelte';
   import {
     getProfileBanDurationLabel,
     getProfileBanNotice,
@@ -55,6 +56,21 @@
   let errorMsg = $state('');
   let requestBusyId = $state(0);
   let showBannedOnly = $state(false);
+  let requestsReady = $state(false);
+  let activeTab = $state('friends');
+
+  /** Вкладки только в своём профиле: заявки чужих не видны. */
+  const tabs = $derived([
+    { id: 'friends', label: 'Мои друзья', badge: friendCount || undefined },
+    { id: 'in', label: 'Заявки в друзья', badge: requestsIn.length || undefined },
+    { id: 'out', label: 'Исходящие', badge: requestsOut.length || undefined },
+  ]);
+
+  function setTab(id: string) {
+    activeTab = id;
+    const scroller = rootEl?.closest('.page__scroll');
+    if (scroller) scroller.scrollTop = 0;
+  }
 
   /** Поиск по друзьям через search/profile/friends (Anixart 11+). */
   const canSearchFriends = typeof window !== 'undefined' && !!window.anixApi?.search?.friends;
@@ -64,6 +80,8 @@
 
   function onSearchInput(e: Event) {
     searchQuery = (e.currentTarget as HTMLInputElement).value;
+    // Поиск идёт по друзьям: результаты должны быть видны с любой вкладки.
+    if (searchQuery && activeTab !== 'friends') setTab('friends');
     if (searchTimer) clearTimeout(searchTimer);
     searchTimer = setTimeout(restartFriends, 350);
   }
@@ -92,7 +110,6 @@
   let banScanRunning = $state(false);
   let banScanner: FriendBanScanner | null = null;
 
-  const hasAnyRequests = $derived(requestsIn.length > 0 || requestsOut.length > 0);
   const friendsWithBan = $derived(
     friends.map((fr) => mergeBanFields(fr, banFieldsById[Number(fr.id)])),
   );
@@ -181,7 +198,7 @@
       if (seq !== loadSeq) return;
       const content = data?.content ?? [];
       if (!content.length) {
-        if (!append) loadState = query ? 'ready' : hasAnyRequests ? 'ready' : 'empty';
+        if (!append) loadState = query ? 'ready' : 'empty';
         hasMore = false;
         loading = false;
         return;
@@ -212,7 +229,7 @@
     if (!el) return;
     scrollEl = el;
     scrollListener = () => {
-      if (!hasMore || loading) return;
+      if (!hasMore || loading || activeTab !== 'friends') return;
       const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
       if (distance < 220) void loadFriends(true);
     };
@@ -296,6 +313,7 @@
 
   onMount(async () => {
     await loadRequests();
+    requestsReady = true;
     await loadFriends(false);
     attachScroll();
   });
@@ -309,19 +327,49 @@
 </script>
 
 <div class="profile-panel__friends-view" bind:this={rootEl}>
-  <header class="profile-panel__friends-head">
-    <UiV2BackBar
-      segments={[
-        { label: 'Друзья', active: true },
-        { label: login },
-      ]}
-      onBack={onBack}
-    />
-  </header>
+  <div class="profile-panel__friends-top">
+    <header class="profile-panel__friends-head">
+      <UiV2BackBar
+        segments={[
+          { label: 'Друзья', active: true },
+          { label: login },
+        ]}
+        onBack={onBack}
+      />
+    </header>
 
-  {#if isMyProfile && requestsIn.length}
+    <div class="profile-panel__friends-controls">
+      {#if canSearchFriends}
+        <div class="profile-friends__search profile-panel__friends-search">
+          <UiV2PillField
+            type="search"
+            label="Поиск по друзьям"
+            value={searchQuery}
+            autocomplete="off"
+            spellcheck={false}
+            oninput={onSearchInput}
+            onkeydown={onSearchKeydown}
+          >
+            {#snippet icon()}{@html iconSearch(16)}{/snippet}
+          </UiV2PillField>
+          {#if searchQuery}
+            <button type="button" class="profile-friends__search-clear" aria-label="Очистить поиск" onclick={onSearchClear}>
+              {@html iconX(14)}
+            </button>
+          {/if}
+        </div>
+      {/if}
+      {#if isMyProfile}
+        <UiV2Tabs {tabs} activeId={activeTab} onChange={setTab} />
+      {/if}
+    </div>
+  </div>
+
+  {#if isMyProfile && activeTab === 'in'}
     <section class="profile-panel__requests" aria-label="Заявки в друзья">
-      <h3 class="profile-panel__friends-section-title">Заявки в друзья</h3>
+      {#if requestsReady && !requestsIn.length}
+        <p class="profile-panel__state">Заявок нет</p>
+      {/if}
       <ul class="profile-panel__request-list">
         {#each requestsIn as req (req.id)}
           {@const av = avatarOf(req)}
@@ -363,9 +411,11 @@
     </section>
   {/if}
 
-  {#if isMyProfile && requestsOut.length}
+  {#if isMyProfile && activeTab === 'out'}
     <section class="profile-panel__requests" aria-label="Исходящие заявки">
-      <h3 class="profile-panel__friends-section-title">Исходящие заявки</h3>
+      {#if requestsReady && !requestsOut.length}
+        <p class="profile-panel__state">Исходящих заявок нет</p>
+      {/if}
       <ul class="profile-panel__request-list">
         {#each requestsOut as req (req.id)}
           {@const av = avatarOf(req)}
@@ -401,14 +451,17 @@
     </section>
   {/if}
 
-  <section class="profile-panel__friends-list-wrap" aria-label="Мои друзья">
+  {#if !isMyProfile || activeTab === 'friends'}
+  <section class="profile-panel__friends-list-wrap" aria-label={isMyProfile ? 'Мои друзья' : 'Друзья'}>
     <div class="profile-panel__friends-section-head">
-      <h3 class="profile-panel__friends-section-title" id="profile-panel-friends-heading">
-        {isMyProfile ? 'Мои друзья' : 'Друзья'}
-        {#if listCount > 0}
-          <span class="profile-panel__friends-badge">{listCount}</span>
-        {/if}
-      </h3>
+      {#if !isMyProfile || showBannedOnly}
+        <h3 class="profile-panel__friends-section-title">
+          {showBannedOnly ? 'Забаненные' : 'Друзья'}
+          {#if listCount > 0}
+            <span class="profile-panel__friends-badge">{listCount}</span>
+          {/if}
+        </h3>
+      {/if}
       {#if scanningBanned}
         <span class="profile-panel__friends-scan" aria-live="polite">{scanLabel}</span>
       {/if}
@@ -419,34 +472,13 @@
       />
     </div>
 
-    {#if canSearchFriends}
-      <div class="profile-friends__search profile-panel__friends-search">
-        <UiV2PillField
-          type="search"
-          label="Поиск по друзьям"
-          value={searchQuery}
-          autocomplete="off"
-          spellcheck={false}
-          oninput={onSearchInput}
-          onkeydown={onSearchKeydown}
-        >
-          {#snippet icon()}{@html iconSearch(16)}{/snippet}
-        </UiV2PillField>
-        {#if searchQuery}
-          <button type="button" class="profile-friends__search-clear" aria-label="Очистить поиск" onclick={onSearchClear}>
-            {@html iconX(14)}
-          </button>
-        {/if}
-      </div>
-    {/if}
-
     {#if loadState === 'loading' && !friends.length}
       <p class="profile-panel__state">Загрузка…</p>
     {:else if loadState === 'error'}
       <p class="profile-panel__state">{errorMsg || 'Не удалось загрузить'}</p>
     {:else if searchQuery.trim() && loadState === 'ready' && !friends.length}
       <p class="profile-panel__state">Ничего не найдено</p>
-    {:else if loadState === 'empty' && !hasAnyRequests}
+    {:else if loadState === 'empty'}
       <p class="profile-panel__state">Нет друзей</p>
     {:else if showBannedOnly && !visibleFriends.length}
       <p class="profile-panel__state" aria-live="polite">
@@ -455,7 +487,6 @@
     {:else if visibleFriends.length}
       <ul
         class="profile-panel__friend-rows"
-        aria-labelledby="profile-panel-friends-heading"
         aria-busy={scanningBanned ? 'true' : undefined}
       >
         {#each visibleFriends as fr (fr.id)}
@@ -512,4 +543,5 @@
       {/if}
     {/if}
   </section>
+  {/if}
 </div>

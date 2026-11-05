@@ -20,15 +20,18 @@
     POPULAR_GENRE_OPTIONS,
     POPULAR_SEASON_OPTIONS,
     POPULAR_SOURCE_TABS,
-    POPULAR_VIEW_TABS,
+    POPULAR_STATUS_OPTIONS,
     describePopularFilters,
     effectivePopularFilters,
+    isAnixappOnlyTab,
     isDefaultPopularFilters,
     loadPopularFilters,
     popularBrowseParams,
     popularFilterArgs,
     popularSortOptions,
     popularFiltersKey,
+    popularTabStatus,
+    popularViewTabs,
     popularYearOptions,
     savePopularFilters,
     withSource,
@@ -62,7 +65,7 @@
 
   function findBestPopularCache(): ViewStateEntry<PopularViewState> | null {
     let best: ViewStateEntry<PopularViewState> | null = null;
-    for (const tab of POPULAR_VIEW_TABS) {
+    for (const tab of popularViewTabs(filters.source)) {
       const entry = getViewState<PopularViewState>(POPULAR_VIEW_KEY(tab.id));
       if (!entry?.data || entry.data.items.length === 0) continue;
       if (!best || entry.savedAt >= best.savedAt) best = entry;
@@ -108,12 +111,15 @@
   let scrollListener: (() => void) | null = null;
   let unregisterScrollKey: (() => void) | null = null;
 
-  const tabs = POPULAR_VIEW_TABS.map((t) => ({ id: t.id, label: t.label }));
+  const tabs = $derived(popularViewTabs(filters.source).map((t) => ({ id: t.id, label: t.label })));
   const yearOptions = popularYearOptions();
   /** Фильтры, с которыми идёт запрос (у Anixart — всегда по умолчанию). */
   const applied = $derived(effectivePopularFilters(filters));
   const filtersSummary = $derived(describePopularFilters(applied));
   const filtersDirty = $derived(!isDefaultPopularFilters(applied));
+  /** Онгоинги и Завершённые задают статус сами: чип показывает его, смена уводит на «Всё». */
+  const tabStatus = $derived(popularTabStatus(activeTab));
+  const statusValue = $derived(tabStatus ?? filters.status);
   const sortOptions = popularSortOptions('anixapp');
   const sourceTabs = POPULAR_SOURCE_TABS.map((t) => ({ id: t.id, label: t.label }));
   /** Страница каталога AnixApp: меньше 25 в ответе — дальше нет. */
@@ -223,11 +229,18 @@
     resetAndLoad();
   }
 
+  function setView(tab: PopularViewTab, next: PopularFilters) {
+    saveViewStateWithScroll(POPULAR_VIEW_KEY(), popularSnapshot());
+    activeTab = tab;
+    filters = next;
+    savePopularFilters(next);
+    showCurrent();
+  }
+
   function onTabChange(id: string) {
     if (id === activeTab) return;
-    saveViewStateWithScroll(POPULAR_VIEW_KEY(), popularSnapshot());
-    activeTab = id as PopularViewTab;
-    showCurrent();
+    const tab = id as PopularViewTab;
+    setView(tab, popularTabStatus(tab) == null ? filters : { ...filters, status: 'any' });
   }
 
   function setFilters(next: PopularFilters) {
@@ -244,8 +257,15 @@
     setFilters({ ...filters, ...patch });
   }
 
+  function onStatusChange(status: string) {
+    if (tabStatus == null) patchFilters({ status });
+    else setView('all', { ...filters, status });
+  }
+
   function onSourceChange(id: string) {
-    setFilters(withSource(filters, id as PopularSource));
+    const next = withSource(filters, id as PopularSource);
+    if (next.source === 'anixart' && isAnixappOnlyTab(activeTab)) setView('all', next);
+    else setFilters(next);
   }
 
   onMount(() => {
@@ -307,6 +327,14 @@
           options={POPULAR_GENRE_OPTIONS}
           value={filters.genre}
           onChange={(v) => patchFilters({ genre: v })}
+        />
+        <UiV2Select
+          class="popular-chip {statusValue !== 'any' ? 'popular-chip--on' : ''}"
+          panelClass="popular-chip__panel"
+          ariaLabel="Статус"
+          options={POPULAR_STATUS_OPTIONS}
+          value={statusValue}
+          onChange={onStatusChange}
         />
 
         <div class="popular-filters__end">

@@ -6,14 +6,16 @@ import { ALL_GENRES, SEASONS } from './filterOptions';
 import { getPopularTabFilterArgs, type PopularTabId } from './popularTabs';
 
 /** «Всё» есть только на десктопе — TV держит свои четыре ряда. */
-export type PopularViewTab = 'all' | PopularTabId;
+export type PopularViewTab = 'all' | PopularTabId | 'series' | 'specials';
 
 export const POPULAR_VIEW_TABS: readonly { id: PopularViewTab; label: string }[] = [
   { id: 'all', label: 'Всё' },
   { id: 'ongoing', label: 'Онгоинги' },
   { id: 'finished', label: 'Завершённые' },
+  { id: 'series', label: 'Сериалы' },
   { id: 'movies', label: 'Фильмы' },
   { id: 'ova', label: 'OVA' },
+  { id: 'specials', label: 'Спешлы' },
 ];
 
 /** Чья статистика: /filter Anixart или каталог AnixApp (anixback). */
@@ -24,7 +26,16 @@ export const POPULAR_SOURCE_TABS: readonly { id: PopularSource; label: string }[
   { id: 'anixapp', label: 'AnixApp' },
 ];
 
-export type PopularSort = 'popular' | 'grade' | 'votes' | 'year' | 'updated';
+/** Этих типов нет в условиях вкладок Anixart: только каталог AnixApp. */
+export function isAnixappOnlyTab(tab: PopularViewTab): tab is 'series' | 'specials' {
+  return tab === 'series' || tab === 'specials';
+}
+
+export function popularViewTabs(source: PopularSource) {
+  return POPULAR_VIEW_TABS.filter((t) => source === 'anixapp' || !isAnixappOnlyTab(t.id));
+}
+
+export type PopularSort = 'popular' | 'grade' | 'votes' | 'episodes' | 'year' | 'updated' | 'new' | 'title';
 
 export interface PopularFilters {
   source: PopularSource;
@@ -35,6 +46,8 @@ export interface PopularFilters {
   season: string;
   /** 'any' | название жанра */
   genre: string;
+  /** 'any' | id статуса (POPULAR_STATUS_OPTIONS) */
+  status: string;
   /** Не показывать то, что уже в «Просмотрено» (нужен вход). */
   hideWatched: boolean;
 }
@@ -45,11 +58,12 @@ export const DEFAULT_POPULAR_FILTERS: PopularFilters = {
   year: 'any',
   season: 'any',
   genre: 'any',
+  status: 'any',
   hideWatched: false,
 };
 
 /** FilterSortType Anixart: 0 обновление, 1 оценка, 2 год, 3 популярность. */
-const SORT_VALUE: Record<Exclude<PopularSort, 'votes'>, number> = { popular: 3, grade: 1, year: 2, updated: 0 };
+const SORT_VALUE: Partial<Record<PopularSort, number>> = { popular: 3, grade: 1, year: 2, updated: 0 };
 
 type SortOption = { value: PopularSort; label: string; desc: string };
 
@@ -64,8 +78,11 @@ const SORT_OPTIONS: Record<PopularSource, SortOption[]> = {
     { value: 'popular', label: 'Популярные', desc: 'Больше всего в избранном' },
     { value: 'votes', label: 'Больше всего оценок', desc: 'Число поставленных оценок' },
     { value: 'grade', label: 'С высокой оценкой', desc: 'При равной — где больше оценок' },
+    { value: 'episodes', label: 'Больше всего серий', desc: 'По числу вышедших серий' },
     { value: 'year', label: 'Самые новые', desc: 'Сначала свежие по году выхода' },
     { value: 'updated', label: 'Недавно обновлённые', desc: 'Новые серии и изменения' },
+    { value: 'new', label: 'Новые в каталоге', desc: 'Недавно появились в каталоге' },
+    { value: 'title', label: 'По названию', desc: 'От А до Я' },
   ],
 };
 
@@ -123,6 +140,15 @@ export const POPULAR_GENRE_OPTIONS: { value: string; label: string }[] = [
     .map((g) => ({ value: g, label: g.charAt(0).toUpperCase() + g.slice(1) })),
 ];
 
+/** id как в каталоге anixback (GET /animedata/filters); 0 — «Не известно». */
+export const POPULAR_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: 'any', label: 'Любой статус' },
+  { value: '0', label: 'Не известно' },
+  { value: '1', label: 'Вышел' },
+  { value: '2', label: 'Выходит' },
+  { value: '3', label: 'Анонс' },
+];
+
 function yearRange(year: string): { start_year?: number; end_year?: number } {
   if (year === 'any') return {};
   const decade = DECADES.find((d) => d.value === year);
@@ -133,8 +159,9 @@ function yearRange(year: string): { start_year?: number; end_year?: number } {
 
 /** Тело POST /filter/{page}: условия вкладки + фильтры поверх. */
 export function popularFilterArgs(tab: PopularViewTab, f: PopularFilters): Record<string, unknown> {
-  const body: Record<string, unknown> = tab === 'all' ? {} : { ...getPopularTabFilterArgs(tab) };
-  body.sort = f.sort === 'votes' ? 3 : SORT_VALUE[f.sort];
+  const body: Record<string, unknown> =
+    tab === 'all' || isAnixappOnlyTab(tab) ? {} : { ...getPopularTabFilterArgs(tab) };
+  body.sort = SORT_VALUE[f.sort] ?? 3;
   Object.assign(body, yearRange(f.year));
   if (f.season !== 'any') body.season = Number(f.season);
   if (f.genre !== 'any') body.genres = [f.genre];
@@ -149,13 +176,22 @@ const BROWSE_TAB: Record<PopularViewTab, { statusId?: number; categoryId?: numbe
   finished: { statusId: 1 },
   movies: { categoryId: 2 },
   ova: { categoryId: 3 },
+  series: { categoryId: 1 },
+  specials: { categoryId: 6 },
 };
+
+/** Статус, который вкладка задаёт сама: 'any' в фильтрах, значение показывает чип. */
+export function popularTabStatus(tab: PopularViewTab): string | undefined {
+  const { statusId } = BROWSE_TAB[tab];
+  return statusId == null ? undefined : String(statusId);
+}
 
 /** Параметры /releases/browse (без страницы). */
 export function popularBrowseParams(tab: PopularViewTab, f: PopularFilters) {
   const years = yearRange(f.year);
   return {
     ...BROWSE_TAB[tab],
+    ...(f.status === 'any' ? {} : { statusId: Number(f.status) }),
     sort: f.sort,
     yearFrom: years.start_year,
     yearTo: years.end_year,
@@ -173,7 +209,7 @@ export function isDefaultPopularFilters(f: PopularFilters): boolean {
 
 /** Ключ для кеша списка: источник + вкладка + все фильтры. */
 export function popularFiltersKey(f: PopularFilters): string {
-  return [f.source, f.sort, f.year, f.season, f.genre, f.hideWatched ? 1 : 0].join('|');
+  return [f.source, f.sort, f.year, f.season, f.genre, f.status, f.hideWatched ? 1 : 0].join('|');
 }
 
 /** «Осень 2025 · фэнтези» — подпись в шапке под заголовком. */
@@ -185,6 +221,8 @@ export function describePopularFilters(f: PopularFilters): string {
   else if (season) parts.push(season);
   else if (year) parts.push(year);
   if (f.genre !== 'any') parts.push(f.genre);
+  const status = POPULAR_STATUS_OPTIONS.find((o) => o.value === f.status && o.value !== 'any');
+  if (status) parts.push(status.label);
   return parts.join(' · ');
 }
 
@@ -200,6 +238,7 @@ export function loadPopularFilters(): PopularFilters {
     if (!popularYearOptions().some((o) => o.value === f.year)) f.year = 'any';
     if (!POPULAR_SEASON_OPTIONS.some((o) => o.value === f.season)) f.season = 'any';
     if (!POPULAR_GENRE_OPTIONS.some((o) => o.value === f.genre)) f.genre = 'any';
+    if (!POPULAR_STATUS_OPTIONS.some((o) => o.value === f.status)) f.status = 'any';
     f.hideWatched = false;
     return f;
   } catch {

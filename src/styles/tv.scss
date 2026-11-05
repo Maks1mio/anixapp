@@ -4608,7 +4608,13 @@ html.tv-mode .watch-modal--tv {
   /* Серии */
   .watch-modal__episodes-view {
     gap: 0;
-    padding: 0.35rem 2.2rem 2.2rem;
+    padding: 0 2.2rem 2.2rem;
+  }
+
+  .watch-modal__episodes-bar {
+    --wm-bar-bg: #0d0d0d;
+    margin: 0 -2.2rem;
+    padding: 0.35rem 2.2rem 0.85rem;
   }
 
   .watch-modal__download-status {
@@ -4649,20 +4655,10 @@ html.tv-mode .watch-modal--tv {
   .watch-modal__episode-main {
     position: relative;
     height: 100%;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 0.6rem;
     padding: 1rem 1.2rem;
     border-radius: inherit;
-  }
-
-  .watch-modal__episode-num {
-    font-size: 2rem;
-    font-weight: 800;
-    color: #ffffff;
-  }
-
-  .watch-modal__episode-card--watched .watch-modal__episode-num {
-    color: #40c463;
   }
 
   .watch-modal__episode-name {
@@ -4695,7 +4691,7 @@ html.tv-mode .watch-modal--tv {
     }
   }
 
-  /* Обложки серий: кадр на всю карточку, номер и название поверх него. */
+  /* Обложки серий: кадр на всю карточку, название поверх него. */
   .watch-modal__episodes--covers {
     grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
   }
@@ -4707,13 +4703,21 @@ html.tv-mode .watch-modal--tv {
     min-height: 0;
   }
 
+  .watch-modal__episode-frame {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    overflow: hidden;
+    overflow: clip;
+    pointer-events: none;
+  }
+
   .watch-modal__episode-cover {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border-radius: inherit;
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.25s ease;
@@ -4723,8 +4727,28 @@ html.tv-mode .watch-modal--tv {
     opacity: 1;
   }
 
+  .watch-modal__episode-cover--instant:not(.watch-modal__episode-cover--alt) {
+    transition: none;
+  }
+
+  .watch-modal__episode-cover--alt,
+  .watch-modal__episode-cover--alt.watch-modal__episode-cover--on {
+    opacity: 0;
+    transition: opacity 0.35s ease;
+  }
+
+  /* На ТВ вместо наведения — фокус на карточке. */
+  .watch-modal__episode-card:has(.watch-modal__episode-main[data-tv-focus='true']) .watch-modal__episode-cover--alt.watch-modal__episode-cover--on {
+    opacity: 1;
+  }
+
   .watch-modal__episode-card--watched .watch-modal__episode-cover {
     filter: brightness(0.55) saturate(0.7);
+  }
+
+  .watch-modal__episode-card--spoiler .watch-modal__episode-cover {
+    filter: blur(22px) brightness(0.4) saturate(0.8);
+    transform: scale(1.14);
   }
 
   .watch-modal__episode-card--cover .watch-modal__episode-main,
@@ -4733,7 +4757,6 @@ html.tv-mode .watch-modal--tv {
     background: linear-gradient(to top, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.15) 60%, transparent);
   }
 
-  .watch-modal__episode-card--cover .watch-modal__episode-num,
   .watch-modal__episode-card--cover .watch-modal__episode-name {
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
   }

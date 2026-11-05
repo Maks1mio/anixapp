@@ -103,6 +103,70 @@ export function randomCollectionListSort(): number {
   return defaultCollectionListSort();
 }
 
+export type CollectionReleaseSort =
+  | 'popular'
+  | 'grade'
+  | 'votes'
+  | 'episodes'
+  | 'year'
+  | 'updated'
+  | 'new'
+  | 'title';
+
+export const COLLECTION_RELEASE_SORTS: { value: CollectionReleaseSort; label: string }[] = [
+  { value: 'popular', label: 'Популярные' },
+  { value: 'grade', label: 'По оценке' },
+  { value: 'votes', label: 'По количеству оценок' },
+  { value: 'episodes', label: 'По количеству серий' },
+  { value: 'year', label: 'По году' },
+  { value: 'updated', label: 'Недавно обновлённые' },
+  { value: 'new', label: 'Новые в каталоге' },
+  { value: 'title', label: 'По названию' },
+];
+
+/** Те же поля и порядок, что SORT_SQL в anixback: пустые значения в конце, при равенстве новее id. */
+const SORT_FIELDS: Record<Exclude<CollectionReleaseSort, 'title'>, string[]> = {
+  popular: ['favorites_count'],
+  grade: ['grade', 'vote_count'],
+  votes: ['vote_count'],
+  episodes: ['episodes_released', 'episodes_total'],
+  year: ['year'],
+  updated: ['last_update_date'],
+  new: [],
+};
+
+function sortNumber(value: unknown): number {
+  if (value == null || value === '') return -Infinity;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : -Infinity;
+}
+
+function releaseSortTitle(raw: Record<string, unknown>): string {
+  return String(raw.title_ru ?? raw.title_original ?? '').trim();
+}
+
+/** Разовая пересортировка списка в редакторе: новый массив, исходный не меняется. */
+export function sortCollectionReleases(
+  releases: Record<string, unknown>[],
+  sort: CollectionReleaseSort,
+): Record<string, unknown>[] {
+  if (sort === 'title') {
+    return [...releases].sort((a, b) => {
+      const [ta, tb] = [releaseSortTitle(a), releaseSortTitle(b)];
+      if (!ta || !tb) return ta ? -1 : tb ? 1 : 0;
+      return ta.localeCompare(tb, 'ru');
+    });
+  }
+  const fields = SORT_FIELDS[sort];
+  return [...releases].sort((a, b) => {
+    for (const field of fields) {
+      const [va, vb] = [sortNumber(a[field]), sortNumber(b[field])];
+      if (va !== vb) return vb > va ? 1 : -1;
+    }
+    return sortNumber(b.id) - sortNumber(a.id);
+  });
+}
+
 export function loadCollectionEditorDraft(): CollectionEditorDraft | null {
   try {
     const raw = sessionStorage.getItem(COLLECTION_EDITOR_DRAFT_KEY);

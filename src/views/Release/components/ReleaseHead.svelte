@@ -341,7 +341,6 @@ import { requestOpenExternal } from '../../../utils/external-link';
           type="button"
           class="release-page__btn release-page__btn--play{playBtnDisabled ? ' release-page__btn--disabled' : ''}"
           disabled={playBtnDisabled}
-          title={playBtnText}
           onclick={onWatch}
           data-tv-focus-priority="play"
         >

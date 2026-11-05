@@ -107,6 +107,7 @@
   x={menuX}
   y={menuY}
   placement="anchor"
+  dropdown
   anchor={menuBtn}
   items={menuItems}
   onClose={() => (menuOpen = false)}

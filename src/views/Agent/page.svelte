@@ -48,6 +48,7 @@
   import AgentMessageView from './AgentMessageView.svelte';
   import SupportView from './SupportView.svelte';
   import { agentMode, openSupportTicket, requestedTicket, type AgentMode } from './support-store';
+  import { setSupportInbox } from '../../stores/support-inbox';
   import { TICKET_CATEGORIES, TICKET_STATUSES, fetchTickets, type Ticket } from '../../services/support-api';
   import {
     PERSONA_LOOKS,
@@ -93,10 +94,15 @@
   let ticketsLoading = $state(false);
   let supportAdmin = $state(false);
   let supportUnread = $state(0);
+  /** Part of `supportUnread` on the viewer's own tickets; the rest is the team inbox. */
+  let mineUnread = $state(0);
   let ticketScope = $state<'mine' | 'all'>('mine');
+  /** The first load may open «Все» for a waiting team inbox; after that the tab is the user's. */
+  let scopeSettled = false;
   let ticketFilter = $state<'active' | 'closed'>('active');
   let activeTicket = $state<string | null>(null);
   const mode = $derived($agentMode);
+  const listedTickets = $derived([...tickets].sort((a, b) => Number(!!b.unread) - Number(!!a.unread)));
 
   let scroller = $state<HTMLDivElement | null>(null);
   let textarea = $state<HTMLTextAreaElement | null>(null);
@@ -256,6 +262,7 @@
       boot = 'ready';
       supportAdmin = meRes.support?.admin ?? false;
       supportUnread = meRes.support?.unread ?? 0;
+      setSupportInbox(supportUnread, supportAdmin);
       if ($agentMode === 'support') void loadTickets();
       if (meRes.quota.limit <= 0) void loadTierLimits();
       const last = readLastChat();
@@ -325,9 +332,18 @@
     ticketsLoading = true;
     try {
       const res = await fetchTickets({ scope: ticketScope, status: ticketFilter === 'closed' ? 'closed' : 'active' });
-      tickets = res.tickets;
       supportAdmin = res.admin;
       supportUnread = res.unread;
+      mineUnread = res.unread_mine ?? 0;
+      setSupportInbox(supportUnread, supportAdmin);
+      const openTeamInbox = !scopeSettled && res.admin && res.unread_mine != null && res.unread > res.unread_mine;
+      scopeSettled = true;
+      if (openTeamInbox) {
+        ticketScope = 'all';
+        await loadTickets();
+        return;
+      }
+      tickets = res.tickets;
     } catch (err) {
       banner = describe(err);
     } finally {
@@ -336,6 +352,7 @@
   }
 
   function setTicketScope(next: 'mine' | 'all') {
+    scopeSettled = true;
     if (next === ticketScope) return;
     ticketScope = next;
     void loadTickets();
@@ -359,6 +376,8 @@
     if (t?.unread) {
       tickets = tickets.map((x) => (x.id === id ? { ...x, unread: false } : x));
       supportUnread = Math.max(0, supportUnread - 1);
+      if (t.user_id === me?.user_id) mineUnread = Math.max(0, mineUnread - 1);
+      setSupportInbox(supportUnread, supportAdmin);
     }
   }
 
@@ -801,8 +820,8 @@
       <div class="agent-ticket-filters">
         {#if supportAdmin}
           <div class="agent-seg" role="radiogroup" aria-label="Чьи обращения">
-            <button type="button" role="radio" aria-checked={ticketScope === 'mine'} class:on={ticketScope === 'mine'} onclick={() => setTicketScope('mine')}>Мои</button>
-            <button type="button" role="radio" aria-checked={ticketScope === 'all'} class:on={ticketScope === 'all'} onclick={() => setTicketScope('all')}>Все</button>
+            <button type="button" role="radio" aria-checked={ticketScope === 'mine'} class:on={ticketScope === 'mine'} onclick={() => setTicketScope('mine')}>Мои{#if mineUnread > 0}<span class="agent-seg__count">{mineUnread > 99 ? '99+' : mineUnread}</span>{/if}</button>
+            <button type="button" role="radio" aria-checked={ticketScope === 'all'} class:on={ticketScope === 'all'} onclick={() => setTicketScope('all')}>Все{#if supportUnread > 0}<span class="agent-seg__count">{supportUnread > 99 ? '99+' : supportUnread}</span>{/if}</button>
           </div>
         {/if}
         <div class="agent-seg" role="radiogroup" aria-label="Статус">
@@ -814,11 +833,12 @@
         {#if !ticketsLoading && tickets.length === 0}
           <p class="agent-side__empty">{ticketFilter === 'closed' ? 'Закрытых обращений нет' : 'Обращений пока нет'}</p>
         {/if}
-        {#each tickets as t (t.id)}
+        {#each listedTickets as t (t.id)}
           <button
             type="button"
             class="agent-ticket"
             class:agent-ticket--active={t.id === activeTicket}
+            class:agent-ticket--unread={t.unread}
             onclick={() => openTicket(t.id)}
           >
             <span class="agent-ticket__top">
@@ -1263,6 +1283,16 @@
       color 0.15s ease;
   }
 
+  .agent-seg__count {
+    margin-left: 0.3rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: var(--uikit-v2-accent, #e35454);
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 800;
+  }
+
   .agent-seg button.on {
     background: color-mix(in srgb, var(--agent-accent) 20%, var(--uikit-v2-elevated, #2a2a2a));
     color: var(--uikit-v2-text, #fff);
@@ -1286,6 +1316,11 @@
   .agent-ticket:hover,
   .agent-ticket--active {
     background: color-mix(in srgb, var(--uikit-v2-text, #fff) 7%, transparent);
+  }
+
+  .agent-ticket--unread {
+    background: color-mix(in srgb, var(--uikit-v2-accent, #e35454) 16%, transparent);
+    box-shadow: inset 3px 0 0 var(--uikit-v2-accent, #e35454);
   }
 
   .agent-ticket__top {

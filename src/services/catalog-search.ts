@@ -5,6 +5,8 @@ import type { ReleaseCardData } from '../types/release';
 /** Hit from anixback's copy of the Anixart catalog (`/releases/search`). */
 export interface CatalogHit {
   card: ReleaseCardData;
+  /** The release as the API returned it, in the shape of an Anixart list item. */
+  raw: Record<string, unknown>;
   /** Every query word is in the titles (or the field matched); otherwise a typo / wrong-layout match. */
   exact: boolean;
 }
@@ -42,6 +44,7 @@ export async function searchCatalog(
       .filter((raw) => Number(raw.id) > 0)
       .map((raw) => ({
         card: { ...mapReleaseRawToCard(raw), hiddenInAnixart: raw.hidden_in_anixart === true },
+        raw,
         exact: raw.exact === true,
       }));
     return { total: Number(data.total ?? hits.length), hits };
@@ -51,7 +54,7 @@ export async function searchCatalog(
 }
 
 export interface CatalogBrowseParams {
-  /** popular (в избранном), grade, votes (число оценок), year, updated, new */
+  /** popular (в избранном), grade, votes (число оценок), year, updated, new, title, episodes */
   sort: string;
   yearFrom?: number;
   yearTo?: number;

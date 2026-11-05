@@ -120,7 +120,7 @@ export function fetchTickets(opts: { scope?: 'mine' | 'all'; status?: TicketStat
   const q = new URLSearchParams();
   if (opts.scope) q.set('scope', opts.scope);
   if (opts.status) q.set('status', opts.status);
-  return agentJson<{ tickets: Ticket[]; admin: boolean; unread: number }>(`/agent/support/tickets?${q.toString()}`);
+  return agentJson<{ tickets: Ticket[]; admin: boolean; unread: number; unread_mine?: number }>(`/agent/support/tickets?${q.toString()}`);
 }
 
 export function fetchTicket(id: string, after = 0) {

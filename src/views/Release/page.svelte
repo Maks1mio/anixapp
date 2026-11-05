@@ -9,6 +9,7 @@
   import { setDiscordContext, refreshDiscordPresence } from '../../services/discord-presence';
   import { isTvMode } from '../../platform/tv';
   import { releaseMedia, watchReleaseMedia } from '../../services/release-media';
+  import { loadContinueTarget, type ContinueTarget } from '../../services/watch-continue';
   import {
     getTvReleaseOpenTarget,
     runTvReleaseOpenAnimation,
@@ -234,6 +235,7 @@
 
   const playBtnText     = $derived.by(() => {
     if (isViewBlocked || hasEpisodesReleased) {
+      if (continueTarget) return 'Продолжить';
       if (resumeInfo.episode && resumeInfo.dubber) {
         return `${resumeInfo.episode} · ${resumeInfo.dubber}`;
       }
@@ -247,6 +249,7 @@
 
   const episodeAddedText = $derived.by(() => {
     if (playBtnDisabled) return null;
+    if (continueTarget) return continueTarget.label;
     return formatEpisodeAdded(release?.episode_last_update);
   });
 
@@ -335,8 +338,34 @@
 
   function handleWatch() {
     if (!releaseId) return;
-    openWatchModal(releaseId, titleRu || title || titleOriginal || 'Без названия');
+    openWatchModal(releaseId, titleRu || title || titleOriginal || 'Без названия', continueTarget);
   }
+
+  /** Что пользователь смотрел последним; обновляется, когда закрылся плеер. */
+  let continueTarget = $state<ContinueTarget | null>(null);
+  $effect(() => {
+    const target = id;
+    if (!target) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refresh = () => {
+      void loadContinueTarget(target).then((next) => {
+        if (!cancelled) continueTarget = next;
+      });
+    };
+    const onPlayerClosed = () => {
+      clearTimeout(timer);
+      timer = setTimeout(refresh, 800);
+    };
+    continueTarget = null;
+    refresh();
+    window.addEventListener('player:windowClosed', onPlayerClosed);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      window.removeEventListener('player:windowClosed', onPlayerClosed);
+    };
+  });
 
   async function setStatus(value: string) {
     if (!requireAuth()) return;

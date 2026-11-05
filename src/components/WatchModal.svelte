@@ -34,6 +34,7 @@
   import {
     getWatchModalState,
     saveWatchModalState,
+    takeWatchModalTarget,
   } from '../stores/modals';
   import {
     iconMic,
@@ -660,7 +661,7 @@
     if (lastWatchedEpisode) scrollToEpisode(lastWatchedEpisode.position);
   }
 
-  async function openDubber(dubber: Dubber) {
+  async function openDubber(dubber: Dubber, preferredSourceId?: number) {
     modalView = 'episodes';
     selectedDubber = dubber;
     sources = [];
@@ -688,7 +689,10 @@
         return;
       }
       // Счётчик серий в API бывает неточным: пустой источник — пробуем следующий.
-      for (const src of srcs) {
+      const ordered = preferredSourceId == null
+        ? srcs
+        : [...srcs.filter((s) => s.id === preferredSourceId), ...srcs.filter((s) => s.id !== preferredSourceId)];
+      for (const src of ordered) {
         if (selectedDubber !== dubber) return;
         if (await selectSource(src, false)) break;
       }
@@ -966,6 +970,7 @@
     focusTvModalContent();
 
     const cached = getWatchModalState(releaseId);
+    const target = takeWatchModalTarget();
 
     const api = window.anixApi;
     if (!Number.isFinite(releaseId) || releaseId <= 0 || !api?.release?.getDubbers) {
@@ -987,6 +992,16 @@
           void api.release.info?.(releaseId).then((infoRes: { release?: unknown }) => {
             lastEpisodeTypeUpdateId = readLastEpisodeTypeUpdateId(infoRes?.release ?? infoRes);
           }).catch(() => {});
+
+          // «Продолжить»: сразу последняя озвучка и серия, которые смотрел пользователь.
+          const targetDubber = target && types.find((d) => d.id === target.dubberId);
+          if (target && targetDubber) {
+            await openDubber(targetDubber, target.sourceId);
+            selectedEpisodePos = target.episode;
+            // Позже прокрутки к последней отмеченной серии внутри selectSource.
+            window.setTimeout(() => scrollToEpisode(target.episode), 160);
+            return;
+          }
 
           if (!cached) return;
 

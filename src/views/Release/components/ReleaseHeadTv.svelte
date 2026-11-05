@@ -30,6 +30,8 @@
     canVote:        boolean;
     playDisabled:   boolean;
     playSubtitle:   string;
+    /** Есть что продолжить: кнопка ведёт сразу в серию. */
+    playContinue:   boolean;
     qualityLabels:  string[];
     isFavorite:     boolean;
     credits:        ReleaseCreditRow[];
@@ -65,6 +67,7 @@
     canVote,
     playDisabled,
     playSubtitle,
+    playContinue,
     qualityLabels,
     isFavorite,
     credits,
@@ -201,7 +204,7 @@
         title={playSubtitle || 'Смотреть'}
         onclick={onWatch}
       >
-        <span class="tv-release-hero__play-title">{playDisabled ? 'Скоро' : 'Смотреть'}</span>
+        <span class="tv-release-hero__play-title">{playDisabled ? 'Скоро' : playContinue ? 'Продолжить' : 'Смотреть'}</span>
         {#if !playDisabled && playSubtitle}
           <span class="tv-release-hero__play-sub">{playSubtitle}</span>
         {/if}

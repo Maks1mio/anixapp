@@ -2,6 +2,7 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import { requireAuth } from '../stores/auth';
   import { openWatchModal } from '../stores/modals';
+  import { loadContinueTarget, type ContinueTarget } from '../services/watch-continue';
   import { buildPosterUrl, buildScreenshotUrl, toPosterDisplayUrl } from '../utils/posterUrl';
   import {
     getTvReleaseOpenTarget,
@@ -254,7 +255,23 @@
     };
   });
 
+  /** Что пользователь смотрел последним: кнопка ведёт сразу туда. */
+  let continueTarget = $state<ContinueTarget | null>(null);
+  $effect(() => {
+    const target = releaseId;
+    continueTarget = null;
+    if (!target) return;
+    let cancelled = false;
+    void loadContinueTarget(target).then((next) => {
+      if (!cancelled) continueTarget = next;
+    });
+    return () => {
+      cancelled = true;
+    };
+  });
+
   const playSubtitle = $derived.by(() => {
+    if (continueTarget) return continueTarget.label;
     if (resumeInfo.episode && resumeInfo.dubber) return `${resumeInfo.episode} · ${resumeInfo.dubber}`;
     return resumeInfo.episode || resumeInfo.dubber || '';
   });
@@ -302,7 +319,7 @@
 
   function handleWatch() {
     if (!releaseId || playBtnDisabled) return;
-    openWatchModal(releaseId, titleRu || title || titleOriginal || 'Без названия');
+    openWatchModal(releaseId, titleRu || title || titleOriginal || 'Без названия', continueTarget);
   }
 
   function openStatusPicker() {
@@ -549,6 +566,7 @@
         {canVote}
         playDisabled={playBtnDisabled}
         {playSubtitle}
+        playContinue={!!continueTarget}
         {qualityLabels}
         {isFavorite}
         credits={creditRows}

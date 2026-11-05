@@ -146,6 +146,14 @@ export function getAnixbackEndpointMode(): AnixbackEndpointMode {
   return currentMode;
 }
 
+let endpointReady: Promise<void> | null = null;
+
+/** For windows without App.svelte (the player): the saved endpoint, loaded once. */
+export function whenAnixbackEndpointReady(): Promise<void> {
+  endpointReady ??= initAnixbackEndpoint().catch(() => undefined);
+  return endpointReady;
+}
+
 export async function initAnixbackEndpoint(): Promise<void> {
   if (viteOriginOverride()) return;
 

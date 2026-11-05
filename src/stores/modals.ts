@@ -79,7 +79,24 @@ export function toggleNotificationsModal(): void {
   notificationsModalOpen.update((open) => !open);
 }
 
-export function openWatchModal(releaseId: number, releaseTitle: string): void {
+/** Куда сразу открыть окно серий: озвучка, источник и серия, которые смотрели последними. */
+export interface WatchModalTarget {
+  dubberId?: number;
+  sourceId: number;
+  episode: number;
+}
+
+let watchModalTarget: WatchModalTarget | null = null;
+
+/** Окно серий забирает цель один раз: следующее открытие снова обычное. */
+export function takeWatchModalTarget(): WatchModalTarget | null {
+  const target = watchModalTarget;
+  watchModalTarget = null;
+  return target;
+}
+
+export function openWatchModal(releaseId: number, releaseTitle: string, target?: WatchModalTarget | null): void {
+  watchModalTarget = target ?? null;
   watchModalReleaseId.set(releaseId);
   watchModalReleaseTitle.set(releaseTitle);
   watchModalOpen.set(true);

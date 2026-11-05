@@ -10,7 +10,7 @@
   import { iconX } from './icons';
   import { isAuthenticated } from '../stores/auth';
   import { navigate } from '../stores/navigation';
-  import { openWatchModal } from '../stores/modals';
+  import { isPlayerWindowOpen, openWatchModal } from '../stores/modals';
   import { mapHistoryRawToReleaseCard } from '../utils/historyCard';
   import { toPosterDisplayUrl } from '../utils/posterUrl';
   import { launchPlayer } from '../utils/watch-nav';
@@ -20,6 +20,7 @@
   import type { ReleaseCardData } from '../types/release';
 
   const DISMISS_KEY = 'anix:continueWatchingDismissed';
+  const LIVE_REFRESH_MS = 15_000;
 
   let item = $state<ReleaseCardData | null>(null);
   let opening = $state(false);
@@ -129,6 +130,19 @@
     reloadTimer = setTimeout(() => void load(), 800);
     reloadRetryTimer = setTimeout(() => void load(), 3500);
   }
+
+  /** Пока плеер открыт в своём окне, таймкод на карточке идёт вслед за просмотром. */
+  $effect(() => {
+    const releaseId = item?.id;
+    if (!$isPlayerWindowOpen || !releaseId) return;
+    const timer = setInterval(() => {
+      void fetchWatchProgress(releaseId).then((items) => {
+        if (!items || item?.id !== releaseId) return;
+        progress = items[0] && isResumable(items[0]) ? items[0] : null;
+      });
+    }, LIVE_REFRESH_MS);
+    return () => clearInterval(timer);
+  });
 
   onMount(() => {
     if ($isAuthenticated) void load();

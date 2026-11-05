@@ -1,5 +1,5 @@
 /** Where the user stopped in each episode (anixback); the bridge attaches the Anixart token. */
-import { getAnixbackDirectOrigin } from './anixback-endpoint';
+import { getAnixbackDirectOrigin, whenAnixbackEndpointReady } from './anixback-endpoint';
 
 export interface WatchProgress {
   release_id: number;
@@ -27,8 +27,17 @@ export function isResumable(p: Pick<WatchProgress, 'position_sec' | 'duration_se
   return p.position_sec >= MIN_RESUME_SEC && !isWatchFinished(p);
 }
 
+let endpointKnown = false;
+
 function send(method: 'GET' | 'PUT', extra: { query?: Record<string, number>; body?: unknown }) {
-  return window.anixApi?.client?.watchProgress?.({ origin: getAnixbackDirectOrigin(), method, ...extra });
+  const request = () =>
+    window.anixApi?.client?.watchProgress?.({ origin: getAnixbackDirectOrigin(), method, ...extra });
+  // Once known, the call goes out synchronously: the last save happens while the player window closes.
+  if (endpointKnown) return request();
+  return whenAnixbackEndpointReady().then(() => {
+    endpointKnown = true;
+    return request();
+  });
 }
 
 /** Timecodes of a release, newest first; `null` when they could not be read. */

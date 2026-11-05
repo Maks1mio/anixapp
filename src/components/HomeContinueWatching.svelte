@@ -1,10 +1,11 @@
 <script lang="ts">
   /**
    * «Продолжить просмотр» на главной (как в Anixart 11): последний релиз из истории.
-   * «Смотреть» берёт свежий релиз через release/{id}/continue и открывает плеер,
+   * Если серия брошена на середине, показывает таймкод и «Смотреть» открывает плеер прямо с него.
+   * Иначе «Смотреть» берёт свежий релиз через release/{id}/continue и открывает окно серий,
    * «Скрыть» прячет карточку до следующего просмотра.
    */
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import UiV2Card from './uikit-v2/UiV2Card.svelte';
   import { iconX } from './icons';
   import { isAuthenticated } from '../stores/auth';
@@ -12,12 +13,20 @@
   import { openWatchModal } from '../stores/modals';
   import { mapHistoryRawToReleaseCard } from '../utils/historyCard';
   import { toPosterDisplayUrl } from '../utils/posterUrl';
+  import { launchPlayer } from '../utils/watch-nav';
+  import { getCurrentRoomId } from '../services/lobby-state';
+  import { fetchWatchProgress, isResumable, type WatchProgress } from '../services/watch-progress';
+  import { fmtTime } from '../views/Watch/_utils';
   import type { ReleaseCardData } from '../types/release';
 
   const DISMISS_KEY = 'anix:continueWatchingDismissed';
 
   let item = $state<ReleaseCardData | null>(null);
   let opening = $state(false);
+  /** Брошенная на середине серия этого релиза. */
+  let progress = $state<WatchProgress | null>(null);
+  /** Подпись серии из истории Anixart и её позиция: таймкод может быть от другой серии. */
+  let historyEpisodePosition: number | null = null;
 
   function dismissKeyOf(card: ReleaseCardData): string {
     return `${card.id}:${card.historyView?.viewedAt ?? ''}`;
@@ -39,7 +48,14 @@
       const raw = data?.content?.[0];
       if (!raw) return;
       const card = mapHistoryRawToReleaseCard(raw);
-      if (!card.id || isDismissed(card)) return;
+      if (!card.id || isDismissed(card)) {
+        item = null;
+        return;
+      }
+      const lastEp = raw.last_view_episode as { position?: unknown } | undefined;
+      historyEpisodePosition = typeof lastEp?.position === 'number' ? lastEp.position : null;
+      const latest = (await fetchWatchProgress(card.id))?.[0];
+      progress = latest && isResumable(latest) ? latest : null;
       item = card;
     } catch {
       // блок необязательный — без истории просто не показываем
@@ -47,9 +63,16 @@
   }
 
   const title = $derived(item?.titleRu || item?.titleEn || 'Без названия');
-  const subtitle = $derived(
-    [item?.historyView?.episodeLabel, item?.historyView?.dubberLabel].filter(Boolean).join(' · '),
-  );
+  const subtitle = $derived.by(() => {
+    const p = progress;
+    if (!p) return [item?.historyView?.episodeLabel, item?.historyView?.dubberLabel].filter(Boolean).join(' · ');
+    const sameEpisode = historyEpisodePosition === p.episode_position;
+    return [
+      sameEpisode ? item?.historyView?.episodeLabel : `${p.episode_position} серия`,
+      p.dubber_name || (sameEpisode ? item?.historyView?.dubberLabel : ''),
+      `${fmtTime(p.position_sec)} из ${fmtTime(p.duration_sec)}`,
+    ].filter(Boolean).join(' · ');
+  });
   const poster = $derived(item?.poster ? toPosterDisplayUrl(item.poster, 'cardVertical') : '');
 
   async function watch() {
@@ -57,6 +80,20 @@
     if (!card?.id || opening) return;
     opening = true;
     try {
+      // В комнате выбор серии идёт через окно серий: там голосование и права хоста.
+      if (progress?.source_id && !getCurrentRoomId()) {
+        await launchPlayer({
+          releaseId: card.id,
+          sourceId: progress.source_id,
+          ep: progress.episode_position,
+          title,
+          sourceName: progress.source_name ?? '',
+          dubberId: progress.dubber_id ?? undefined,
+          dubberName: progress.dubber_name ?? undefined,
+          resume: true,
+        });
+        return;
+      }
       const res = await window.anixApi?.release?.continueWatching?.(card.id);
       if (res && res.code != null && res.code !== 0 && !res.release) {
         navigate(`/release/${card.id}`);
@@ -80,8 +117,28 @@
     item = null;
   }
 
+  /**
+   * Плеер закрылся: его последний таймкод ещё в пути. Первый раз — чтобы обновить быстро,
+   * второй — на случай, если запись дошла позже (первая проверка токена на сервере бывает долгой).
+   */
+  let reloadTimer: ReturnType<typeof setTimeout> | undefined;
+  let reloadRetryTimer: ReturnType<typeof setTimeout> | undefined;
+  function reloadAfterPlayer() {
+    clearTimeout(reloadTimer);
+    clearTimeout(reloadRetryTimer);
+    reloadTimer = setTimeout(() => void load(), 800);
+    reloadRetryTimer = setTimeout(() => void load(), 3500);
+  }
+
   onMount(() => {
     if ($isAuthenticated) void load();
+    window.addEventListener('player:windowClosed', reloadAfterPlayer);
+  });
+
+  onDestroy(() => {
+    clearTimeout(reloadTimer);
+    clearTimeout(reloadRetryTimer);
+    window.removeEventListener('player:windowClosed', reloadAfterPlayer);
   });
 </script>
 
@@ -102,6 +159,11 @@
         </button>
         {#if subtitle}
           <span class="home-continue__sub">{subtitle}</span>
+        {/if}
+        {#if progress}
+          <span class="home-continue__bar" aria-hidden="true">
+            <span style:width="{(progress.position_sec / progress.duration_sec) * 100}%"></span>
+          </span>
         {/if}
       </div>
       <div class="home-continue__actions">
@@ -180,6 +242,22 @@
     color: var(--uiv2-fg-muted);
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .home-continue__bar {
+    overflow: hidden;
+    width: min(100%, 16rem);
+    height: 3px;
+    margin-top: 0.3rem;
+    border-radius: 999px;
+    background: var(--uiv2-hover-bg);
+
+    > span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--uikit-v2-accent, #e65454);
+    }
   }
 
   .home-continue__actions {

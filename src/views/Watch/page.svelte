@@ -57,6 +57,8 @@
   import LobbyActionLogPanel from './components/LobbyActionLogPanel.svelte';
   import LobbyChooserOverlay from './components/LobbyChooserOverlay.svelte';
   import NextEpisodePreview from './components/NextEpisodePreview.svelte';
+  import ResumePrompt from './components/ResumePrompt.svelte';
+  import { WatchResume } from './_useWatchResume.svelte';
   import UiV2Button from '../../components/uikit-v2/UiV2Button.svelte';
   import { registerPlayerMuteToggle } from './core/player-mute';
   import type { PlayerChromeProps } from './shells/PlayerChrome.svelte';
@@ -309,6 +311,7 @@
 
   function seekBySeconds(delta: number) {
     if (!videoEl || !player.useVideo || isNaN(videoEl.duration)) return;
+    closeResumeBySeek();
     const next = Math.min(Math.max(0, videoEl.currentTime + delta), videoEl.duration);
     if (inLobbyRoom()) {
       player.currentTime = next;
@@ -1252,6 +1255,113 @@
 
   function inLobbyRoom(): boolean {
     return inLobby || !!getCurrentRoomId();
+  }
+
+  // ── Where the user stopped (solo only, a room owns the position) ───────────
+  const resume = new WatchResume();
+  /** The player was opened with «Смотреть» on the home card: continue without asking. */
+  let autoResumeOnce = params.get('resume') === '1';
+  /** The player was told where to start (deep link, room join). */
+  let startsElsewhereOnce = initialSeek != null;
+
+  const progressKey = $derived.by(() => {
+    if (isLocalPlaybackMode) return '';
+    const rId = positiveId(watchState.releaseId);
+    const ep = episodeIndex(watchState.ep);
+    return rId != null && ep != null ? `${rId}:${ep}` : '';
+  });
+
+  function progressContext() {
+    return {
+      release_id: positiveId(watchState.releaseId) ?? 0,
+      episode_position: episodeIndex(watchState.ep) ?? 0,
+      source_id: positiveId(watchState.sourceId),
+      source_name: watchState.sourceName || null,
+      dubber_id: positiveId(watchState.dubberId),
+      dubber_name: watchState.dubberName || null,
+    };
+  }
+
+  $effect(() => {
+    const key = progressKey;
+    untrack(() => {
+      const rId = positiveId(watchState.releaseId) ?? 0;
+      const ep = episodeIndex(watchState.ep) ?? 0;
+      resume.openEpisode(key, rId, ep, {
+        room: inLobbyRoom() || !!initialLobbyCode || initialLobbyIdle || params.get('applyRoomPlayback') === '1',
+        startsElsewhere: startsElsewhereOnce,
+        autoAccept: autoResumeOnce,
+      });
+      startsElsewhereOnce = false;
+      autoResumeOnce = false;
+    });
+  });
+
+  $effect(() => {
+    if (inLobby) untrack(() => resume.enterRoom());
+  });
+
+  // The question appears only once the episode has really loaded.
+  $effect(() => {
+    if (!resume.isPending) return;
+    if (!player.useVideo || player.loadState !== 'ready' || player.switching) return;
+    void player.bufferedRanges;
+    void player.duration;
+    untrack(() => {
+      const v = videoEl;
+      if (!v || v.readyState < 2) return;
+      if (inLobbyRoom()) {
+        resume.enterRoom();
+        return;
+      }
+      if (!(player.duration > 0)) {
+        resume.close();
+        doAutoPlay();
+        return;
+      }
+      if (!resume.showPrompt(v.currentTime)) return;
+      if (resume.answeredYes) {
+        acceptResume();
+        return;
+      }
+      try { v.pause(); } catch { /* ignore */ }
+      player.paused = true;
+      showAndSchedule();
+    });
+  });
+
+  function trackWatchProgress(v: HTMLVideoElement) {
+    resume.track(progressContext(), v.currentTime, v.duration, {
+      solid: !inLobbyRoom() && !player.switching && !localMediaSwap && player.useVideo && player.loadState === 'ready',
+      playing: !v.paused,
+    });
+  }
+
+  function acceptResume() {
+    const position = resume.accept();
+    if (position == null) return;
+    player.currentTime = position;
+    fluo.setProgress(position, { origin: 'user' });
+    fluo.play({ origin: 'user' });
+    player.paused = false;
+    showAndSchedule();
+  }
+
+  function declineResume() {
+    resume.decline(progressContext(), videoEl?.duration ?? 0);
+    player.currentTime = 0;
+    fluo.setProgress(0, { origin: 'user' });
+    fluo.play({ origin: 'user' });
+    player.paused = false;
+    showAndSchedule();
+  }
+
+  /** Picked a place on the timeline while being asked: start playing from there. */
+  function closeResumeBySeek() {
+    if (!resume.prompt) return;
+    resume.close();
+    fluo.play({ origin: 'user' });
+    player.paused = false;
   }
 
   function rememberLobbyJoinSeek(t: unknown): void {
@@ -2339,6 +2449,11 @@
   // ── Player controls ────────────────────────────────────────────────────────
   function togglePlay() {
     if (!videoEl) return;
+    if (resume.prompt) {
+      // Play means «go on»: the destructive «С начала» takes an explicit click.
+      acceptResume();
+      return;
+    }
     const willPlay = videoEl.paused;
     if (inLobbyRoom()) {
       isApplyingSync = true;
@@ -2365,6 +2480,7 @@
     const el = e.currentTarget as HTMLElement;
     const pct = (e.clientX - el.getBoundingClientRect().left) / el.offsetWidth;
     if (videoEl && !isNaN(videoEl.duration)) {
+      closeResumeBySeek();
       const targetTime = pct * videoEl.duration;
       player.currentTime = targetTime;
       if (inLobbyRoom()) {
@@ -3032,7 +3148,7 @@
   const skipPrompt = $derived.by((): SkipMarkKind | null => {
     if (!skipMarks || !player.useVideo || player.loadState !== 'ready' || player.switching) return null;
     const t = player.currentTime;
-    if (lobbyWaitOverlay) return null;
+    if (lobbyWaitOverlay || resume.prompt) return null;
     if (skipMarkActive(t, skipMarks.opening, 'opening')) return 'opening';
     if (skipMarkActive(t, skipMarks.ending, 'ending')) return 'ending';
     return null;
@@ -3338,7 +3454,7 @@
   }
 
   function doAutoPlay() {
-    if (localMediaSwap) return;
+    if (localMediaSwap || resume.holdsPlayback) return;
     if (pendingSync) { applyPendingSync(); return; }
     if (preventAutoPause || isApplyingSync) return;
     if (inLobbyRoom() && (player.paused || lastLobbyPausedIntent === true)) return;
@@ -3701,6 +3817,7 @@
       player.duration    = v.duration || 0;
       readVideoBuffer(v);
       resyncPresenceIfDrifted(v);
+      trackWatchProgress(v);
       if (player.upscaleEnabled && isGpuAvailable() && player.useVideo && !core.upscale.active
         && v.readyState >= 2 && v.videoWidth >= 2 && player.loadState === 'ready' && !player.switching) {
         scheduleUpscaleRestart();
@@ -3710,6 +3827,10 @@
       }
     }, { signal });
     el.addEventListener('play',  () => {
+      if (resume.holdsPlayback) {
+        try { el.pause(); } catch { /* ignore */ }
+        return;
+      }
       if (isApplyingSync || localMediaSwap || preventAutoPause) return;
       if (inLobbyRoom()) {
         if (lastLobbyPausedIntent === true) {
@@ -3732,6 +3853,7 @@
       restoreAfterPip();
     }, { signal });
     el.addEventListener('pause', () => {
+      resume.flush();
       if (isApplyingSync || localMediaSwap || preventAutoPause || el.seeking) return;
       if (inLobbyRoom()) {
         if (lastLobbyPausedIntent === false) {
@@ -3830,7 +3952,10 @@
       }).catch(() => {});
     }
 
-    const flushEqOnLeave = () => persistEqSettings({ immediate: true });
+    const flushEqOnLeave = () => {
+      persistEqSettings({ immediate: true });
+      resume.flush();
+    };
     window.addEventListener('pagehide', flushEqOnLeave);
     window.addEventListener('beforeunload', flushEqOnLeave);
 
@@ -4015,6 +4140,8 @@
 
       ['player:changeContent', ((e: CustomEvent) => {
         const p = e.detail as any;
+        autoResumeOnce = !!p?.resume;
+        startsElsewhereOnce = typeof p?.currentTime === 'number' && p.currentTime > 0.5;
         if (p?.externalUrl) {
           if (inLobbyRoom()) {
             showOsd('В комнате нельзя открыть внешнее видео', { warn: true });
@@ -4450,6 +4577,7 @@
       videoListenersAbort?.abort();
       videoListenersAbort = null;
       persistEqSettings({ immediate: true });
+      resume.flush();
       window.removeEventListener('pagehide', flushEqOnLeave);
       window.removeEventListener('beforeunload', flushEqOnLeave);
       handlers.forEach(([evt, fn]) => window.removeEventListener(evt, fn));
@@ -4780,6 +4908,15 @@
             player.switching = true;
             if (nextEpisodePosition != null) goToEpisode(nextEpisodePosition);
           }}
+        />
+      {/if}
+
+      {#if resume.prompt && player.loadState === 'ready' && !player.switching}
+        <ResumePrompt
+          position={resume.prompt.position}
+          duration={resume.prompt.duration}
+          onaccept={acceptResume}
+          ondecline={declineResume}
         />
       {/if}
 

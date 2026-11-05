@@ -43,9 +43,32 @@ const POLL_FOR_MS = 15 * 60_000;
 
 /**
  * Release opened: refresh its catalog data, ask for covers (queues new episodes, if any) and
- * poll while frames are being grabbed. Returns the stop function for the page's cleanup.
+ * poll while frames are being grabbed. Returns the stop function for the caller's cleanup.
+ * The release page and the watch modal share one watcher.
  */
 export function watchReleaseMedia(releaseId: number): () => void {
+  let watcher = watchers.get(releaseId);
+  if (!watcher) {
+    watcher = { refs: 0, stop: startWatching(releaseId) };
+    watchers.set(releaseId, watcher);
+  }
+  const shared = watcher;
+  shared.refs += 1;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    shared.refs -= 1;
+    if (shared.refs === 0) {
+      shared.stop();
+      watchers.delete(releaseId);
+    }
+  };
+}
+
+const watchers = new Map<number, { refs: number; stop: () => void }>();
+
+function startWatching(releaseId: number): () => void {
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
   const until = Date.now() + POLL_FOR_MS;

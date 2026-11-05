@@ -1043,6 +1043,7 @@ async function createPlayerWindow(params) {
       : {}),
     ...(params.paused != null ? { paused: params.paused ? '1' : '0' } : {}),
     ...(params.applyRoomPlayback ? { applyRoomPlayback: '1' } : {}),
+    ...(params.resume ? { resume: '1' } : {}),
   };
   const hasLocalFile = typeof params.localFile === 'string' && params.localFile.trim() !== '';
   const hasExternalUrl = typeof params.externalUrl === 'string' && params.externalUrl.trim() !== '';
@@ -1155,6 +1156,7 @@ async function openPlayerWithParams(params) {
     ...(typeof params.currentTime === 'number' ? { currentTime: params.currentTime } : {}),
     ...(params.paused != null ? { paused: !!params.paused } : {}),
     ...(applyRoomPlayback ? { applyRoomPlayback: true } : {}),
+    ...(params.resume ? { resume: true } : {}),
     ...(wantsSourceWeb ? { sourceWeb: true } : {}),
     ...(sourceEmbedUrl ? { sourceEmbedUrl } : {}),
   };

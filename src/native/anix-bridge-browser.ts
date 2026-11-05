@@ -91,6 +91,37 @@ async function sendAppPresence(payload: unknown, token: string | null, savedProf
   }
 }
 
+/** Mirror of electron/lib/anixapp-watch-progress.js for the native/browser bridge. */
+async function requestWatchProgress(request: unknown, token: string | null, profileId: number | null): Promise<unknown> {
+  const r = (request && typeof request === 'object' ? request : {}) as Record<string, unknown>;
+  const origin = typeof r.origin === 'string' ? r.origin.replace(/\/$/, '') : '';
+  if (!PRESENCE_ORIGIN.test(origin)) return { ok: false, error: 'origin not allowed' };
+  const userId = toPositiveInt(profileId);
+  if (!token || !userId) return { ok: false, status: 401, error: 'not signed in' };
+  const method = r.method === 'PUT' ? 'PUT' : 'GET';
+  const url = new URL(`${origin}/api/watch-progress`);
+  for (const [key, value] of Object.entries((r.query ?? {}) as Record<string, unknown>)) {
+    url.searchParams.set(key, String(value));
+  }
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Anixart-User-Id': String(userId),
+        'X-Anixart-Token': token,
+      },
+      ...(method === 'PUT' ? { body: JSON.stringify(r.body ?? {}) } : {}),
+      signal: AbortSignal.timeout(10000),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) return { ok: false, status: res.status, error: data?.error ?? `HTTP ${res.status}` };
+    return data ?? { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 /** Mirror of electron/lib/anixapp-agent.js: Anixart token → chat agent session id. */
 async function requestAgentSession(origin: unknown, token: string | null, profileId: number | null): Promise<unknown> {
   const o = typeof origin === 'string' ? origin.replace(/\/$/, '') : '';
@@ -362,6 +393,10 @@ export function createBrowserAnixBridge() {
     'anix:appPresence': async (c, [payload]) => {
       const cfg = c.loadConfig();
       return sendAppPresence(payload, cfg.token, cfg.profileId);
+    },
+    'anix:watchProgress': async (c, [request]) => {
+      const cfg = c.loadConfig();
+      return requestWatchProgress(request, cfg.token, cfg.profileId);
     },
     'anix:agentSession': async (c, [origin]) => {
       const cfg = c.loadConfig();

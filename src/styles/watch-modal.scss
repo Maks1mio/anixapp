@@ -845,6 +845,38 @@
   }
 }
 
+/* Где пользователь остановился: таймкод и полоска по нижнему краю карточки. */
+.watch-modal__episode-time {
+  align-self: flex-end;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.55);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.watch-modal__episode-progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  overflow: hidden;
+  height: 4px;
+  border-radius: 0 0 16px 16px;
+  background: rgb(255 255 255 / 0.22);
+  pointer-events: none;
+
+  > span {
+    display: block;
+    height: 100%;
+    background: $color-accent;
+  }
+}
+
 .watch-modal__episode-actions {
   display: flex;
   gap: 0.35rem;
@@ -1287,6 +1319,18 @@
   .watch-modal__episode-name--solo {
     font-size: 0.95rem;
     color: $color-text;
+  }
+
+  /* Таймкод — справа снизу, напротив названия серии. */
+  .watch-modal__episode-time {
+    position: absolute;
+    right: 0.7rem;
+    bottom: 0.85rem;
+    z-index: 2;
+  }
+
+  .watch-modal__episode-card:has(.watch-modal__episode-time) .watch-modal__episode-name {
+    padding-right: 5.75rem;
   }
 
   /* Галочка «просмотрено»: на просмотренных — всегда, на остальных — на ховере. */

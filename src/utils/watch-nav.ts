@@ -22,6 +22,8 @@ export interface WatchLaunchParams {
   applyRoomPlayback?: boolean;
   /** Телефон: «Веб-плеер» — показать плеер источника (iframe) вместо прямого потока. */
   webPlayer?: boolean;
+  /** Продолжить с сохранённого таймкода без вопроса. */
+  resume?: boolean;
 }
 
 export function canOpenInAppPlayer(): boolean {
@@ -63,6 +65,7 @@ function toPlayerPayload(params: WatchLaunchParams) {
     ...(params.paused != null ? { paused: params.paused } : {}),
     ...(params.applyRoomPlayback ? { applyRoomPlayback: true } : {}),
     ...(params.webPlayer ? { webPlayer: true } : {}),
+    ...(params.resume ? { resume: true } : {}),
   };
 }
 
@@ -80,6 +83,7 @@ export function openInAppPlayer(params: WatchLaunchParams): Promise<void> {
     ...(payload.dubberName ? { dubberName: payload.dubberName } : {}),
     ...(params.lobbyIdle ? { lobbyIdle: '1' } : {}),
     ...(params.webPlayer ? { webplayer: '1' } : {}),
+    ...(params.resume ? { resume: '1' } : {}),
   });
   navigate(`/watch?${qs.toString()}`);
   if (alreadyWatching && !params.lobbyIdle) {

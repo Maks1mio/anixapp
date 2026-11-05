@@ -492,6 +492,7 @@ contextBridge.exposeInMainWorld('anixApi', {
     getAuthStatus: () => ipcRenderer.invoke('anix:getAuthStatus'),
     checkConnection: () => ipcRenderer.invoke('anix:checkConnection'),
     appPresence: (payload) => ipcRenderer.invoke('anix:appPresence', payload),
+    watchProgress: (request) => ipcRenderer.invoke('anix:watchProgress', request),
     agentSession: (origin) => ipcRenderer.invoke('anix:agentSession', origin),
     testOffline: () => ipcRenderer.invoke('anix:testOffline'),
   },

@@ -306,6 +306,13 @@ ipcMain.handle('anix:appPresence', (_event, payload) => {
   return sendAnixappPresence(payload, cfg.token, cfg.profileId);
 });
 
+// Таймкоды просмотра в anixback: токен добавляется здесь, в рендерер он не уходит.
+ipcMain.handle('anix:watchProgress', (_event, request) => {
+  const { requestWatchProgress } = require('../lib/anixapp-watch-progress');
+  const cfg = config.loadConfig();
+  return requestWatchProgress(request, cfg.token, cfg.profileId);
+});
+
 // Сессия чат-агента: токен Anixart меняется на id сессии здесь, в рендерер не уходит.
 ipcMain.handle('anix:agentSession', (_event, origin) => {
   const { requestAgentSession } = require('../lib/anixapp-agent');

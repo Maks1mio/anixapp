@@ -58,7 +58,9 @@
   import { formatDubberQuality, isDubberNovelty, readLastEpisodeTypeUpdateId, sortDubbersPinnedFirst } from '../utils/dubber-meta';
   import { listPlayableDubberSources, NO_EPISODE_PICK_OTHER_DUB } from '../utils/dubber-sources';
   import { isTvMode } from '../platform/tv';
-  import { releaseMedia } from '../services/release-media';
+  import { releaseMedia, watchReleaseMedia } from '../services/release-media';
+  import { fetchWatchProgress, isResumable, type WatchProgress } from '../services/watch-progress';
+  import { fmtTime } from '../views/Watch/_utils';
   import { restoreTvFocus, scheduleFocusTvOverlayContent } from '../services/tv-navigation';
   import { tvLongPress } from '../actions/tvLongPress';
   import UiV2Button from './uikit-v2/UiV2Button.svelte';
@@ -193,17 +195,23 @@
   const isTv = isTvMode();
   /** ПК: ТВ-подобные крупные карточки, но под мышь (ховеры, пин и отметка кнопками). */
   const isDesktop = !isTv && !isMobileMode();
-  /** Episode position → cover frame (anixmedia), PC only; the release page asks for them. */
-  const episodeCovers = $derived(isDesktop ? ($releaseMedia[releaseId]?.episodes ?? {}) : {});
+  /** Covers on PC and TV. The modal asks for them itself: it also opens from the home page. */
+  const coversEnabled = isDesktop || isTv;
+  $effect(() => {
+    if (!coversEnabled || !Number.isFinite(releaseId) || releaseId <= 0) return;
+    return watchReleaseMedia(releaseId);
+  });
+  /** Episode position → cover frame (anixmedia). */
+  const episodeCovers = $derived(coversEnabled ? ($releaseMedia[releaseId]?.episodes ?? {}) : {});
   const hasCovers = $derived(Object.keys(episodeCovers).length > 0);
-  /** The server is still grabbing frames for this release (the release page keeps polling). */
+  /** The server is still grabbing frames for this release. */
   const coversBusy = $derived.by(() => {
-    if (!isDesktop) return false;
+    if (!coversEnabled) return false;
     const state = $releaseMedia[releaseId]?.state;
     return state === 'planning' || state === 'working';
   });
   /** Episodes the players don't have: a stub card instead of a frame. */
-  const coversMissing = $derived(new Set(isDesktop ? ($releaseMedia[releaseId]?.missing ?? []) : []));
+  const coversMissing = $derived(new Set(coversEnabled ? ($releaseMedia[releaseId]?.missing ?? []) : []));
   const coversReady = $derived(
     episodes.filter((ep) => episodeCovers[String(ep.position)] || coversMissing.has(ep.position)).length,
   );
@@ -224,9 +232,31 @@
     }
     return last;
   });
-  /** Серия, с которой продолжать: следующая после последней отмеченной (или первая). */
+  /** Где пользователь остановился: позиция серии → таймкод, только незавершённые. */
+  let watchProgress = $state<WatchProgress[]>([]);
+  const progressByEpisode = $derived(
+    new Map(watchProgress.filter(isResumable).map((p) => [p.episode_position, p])),
+  );
+  /** Последняя брошенная на середине серия, если дальше неё пользователь ещё не ушёл. */
+  const resumeEpisode = $derived.by(() => {
+    const latest = watchProgress[0];
+    if (!latest || !isResumable(latest)) return null;
+    if (!episodes.some((ep) => ep.position === latest.episode_position)) return null;
+    const last = lastWatchedEpisode;
+    return last && last.position > latest.episode_position ? null : latest;
+  });
+
+  function loadWatchProgress() {
+    if (!Number.isFinite(releaseId) || releaseId <= 0) return;
+    void fetchWatchProgress(releaseId).then((items) => {
+      if (items) watchProgress = items;
+    });
+  }
+
+  /** Серия, с которой продолжать: брошенная на середине, иначе следующая после последней отмеченной (или первая). */
   const nextEpisodePos = $derived.by(() => {
     if (episodes.length === 0) return null;
+    if (resumeEpisode) return resumeEpisode.episode_position;
     const last = lastWatchedEpisode;
     if (!last) return episodes[0].position;
     const next = episodes
@@ -929,6 +959,7 @@
   }
 
   onMount(() => {
+    loadWatchProgress();
     stopDlWatch = isMobile ? watchDownloads() : null;
     document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', handleKeydown);
@@ -1170,7 +1201,7 @@
                       class="watch-modal__tv-action watch-modal__tv-action--primary"
                       onclick={() => handleEpisodePlay(nextEpisode.position)}
                     >
-                      {lastWatchedEpisode ? 'Продолжить' : 'Начать'} · {nextNum != null ? `${nextNum} серия` : (nextEpisode.name || 'серия')}
+                      {lastWatchedEpisode || resumeEpisode ? 'Продолжить' : 'Начать'} · {nextNum != null ? `${nextNum} серия` : (nextEpisode.name || 'серия')}{resumeEpisode ? ` · ${fmtTime(resumeEpisode.position_sec)}` : ''}
                     </button>
                   {/if}
                   <button type="button" class="watch-modal__tv-action" onclick={() => confirmSetAllWatched(true)} disabled={actionBusy !== '' || remainingCount === 0}>
@@ -1190,7 +1221,7 @@
                     {@const nextNum = episodeDisplayNumber(nextEpisode, episodes)}
                     <UiV2Button
                       variant="primary"
-                      label="{lastWatchedEpisode ? 'Продолжить' : 'Начать'} · {nextNum != null ? `${nextNum} серия` : (nextEpisode.name || 'серия')}"
+                      label="{lastWatchedEpisode || resumeEpisode ? 'Продолжить' : 'Начать'} · {nextNum != null ? `${nextNum} серия` : (nextEpisode.name || 'серия')}{resumeEpisode ? ` · ${fmtTime(resumeEpisode.position_sec)}` : ''}"
                       onclick={() => handleEpisodePlay(nextEpisode.position)}
                     />
                   {/if}
@@ -1269,6 +1300,7 @@
                   {@const cover = episodeCovers[String(ep.position)]}
                   {@const coverMissing = !cover && coversMissing.has(ep.position)}
                   {@const coverPending = !cover && !coverMissing && coversWaiting}
+                  {@const progress = progressByEpisode.get(ep.position)}
                   <article
                     class="watch-modal__episode-card"
                     class:watch-modal__episode-card--watched={watched}
@@ -1305,6 +1337,9 @@
                         <span class="watch-modal__episode-num">{displayNum}</span>
                         <span class="watch-modal__episode-name">{ep.name || `Серия ${displayNum}`}</span>
                       {/if}
+                      {#if progress}
+                        <span class="watch-modal__episode-time">{fmtTime(progress.position_sec)} / {fmtTime(progress.duration_sec)}</span>
+                      {/if}
                       {#if coverPending}
                         <span class="watch-modal__episode-pending">обложка добавляется…</span>
                       {:else if coverMissing}
@@ -1314,6 +1349,11 @@
                         <span class="watch-modal__episode-check" aria-label="Просмотрено">{@html checkIconSvg}</span>
                       {/if}
                     </button>
+                    {#if progress}
+                      <span class="watch-modal__episode-progress" aria-hidden="true">
+                        <span style:width="{(progress.position_sec / progress.duration_sec) * 100}%"></span>
+                      </span>
+                    {/if}
                     {#if isDesktop}
                       <button
                         type="button"

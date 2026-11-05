@@ -7,6 +7,8 @@ export interface ReleaseMedia {
   state: 'none' | 'planning' | 'working' | 'ready' | 'empty';
   /** episode position → cover URL */
   episodes: Record<string, string>;
+  /** episodes the players don't have: no frame will come, a stub instead */
+  missing?: number[];
   screenshots: string[];
   pending: number;
 }

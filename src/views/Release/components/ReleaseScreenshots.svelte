@@ -7,6 +7,12 @@
   let { screenshots }: Props = $props();
 
   const urls = $derived(screenshots.slice(0, 8).filter(Boolean));
+
+  /**
+   * anixmedia frames live on our own host: a plain <img>. PosterImage is for Anixart's CDN —
+   * after 8 s it switches to a made-up `mirror-*` host, which doesn't exist for ours.
+   */
+  const isOwnMedia = (url: string) => url.includes('/api/anixapp/files/');
 </script>
 
 <div class="release-page__section">
@@ -19,7 +25,11 @@
         aria-label="Смотреть скриншот"
         onclick={(e) => openImageLightboxGallery(urls, i, e.currentTarget as HTMLElement)}
       >
-        <PosterImage src={fullUrl} alt="" />
+        {#if isOwnMedia(fullUrl)}
+          <img src={fullUrl} alt="" loading="lazy" decoding="async" />
+        {:else}
+          <PosterImage src={fullUrl} alt="" />
+        {/if}
       </button>
     {/each}
   </div>

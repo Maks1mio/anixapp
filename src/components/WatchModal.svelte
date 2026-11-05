@@ -196,6 +196,25 @@
   /** Episode position → cover frame (anixmedia), PC only; the release page asks for them. */
   const episodeCovers = $derived(isDesktop ? ($releaseMedia[releaseId]?.episodes ?? {}) : {});
   const hasCovers = $derived(Object.keys(episodeCovers).length > 0);
+  /** The server is still grabbing frames for this release (the release page keeps polling). */
+  const coversBusy = $derived.by(() => {
+    if (!isDesktop) return false;
+    const state = $releaseMedia[releaseId]?.state;
+    return state === 'planning' || state === 'working';
+  });
+  /** Episodes the players don't have: a stub card instead of a frame. */
+  const coversMissing = $derived(new Set(isDesktop ? ($releaseMedia[releaseId]?.missing ?? []) : []));
+  const coversReady = $derived(
+    episodes.filter((ep) => episodeCovers[String(ep.position)] || coversMissing.has(ep.position)).length,
+  );
+  const coversWaiting = $derived(coversBusy && coversReady < episodes.length);
+
+  /** Fades a cover in once loaded; a cached one can finish before an `onload` handler is attached. */
+  function revealOnLoad(img: HTMLImageElement) {
+    const show = () => img.classList.add('watch-modal__episode-cover--on');
+    if (img.complete && img.naturalWidth > 0) show();
+    else img.addEventListener('load', show, { once: true });
+  }
   const watchedCount = $derived(episodes.filter(isEpisodeWatched).length);
   const remainingCount = $derived(Math.max(0, episodes.length - watchedCount));
   const lastWatchedEpisode = $derived.by(() => {
@@ -1226,7 +1245,21 @@
               </div>
               {/if}
 
-              <div class="watch-modal__episodes" class:watch-modal__episodes--covers={hasCovers} bind:this={episodesListEl}>
+              {#if coversWaiting}
+                <p class="watch-modal__covers-note" role="status">
+                  <span class="watch-modal__covers-spinner" aria-hidden="true"></span>
+                  <span>
+                    Обложки серий добавляет сервер — готово {coversReady} из {episodes.length}.
+                    Спасибо, что помогаете их собирать!
+                  </span>
+                </p>
+              {/if}
+
+              <div
+                class="watch-modal__episodes"
+                class:watch-modal__episodes--covers={hasCovers || coversWaiting}
+                bind:this={episodesListEl}
+              >
                 {#each filteredEpisodes as ep (ep.position)}
                   {@const watched = isEpisodeWatched(ep)}
                   {@const dlItem = isMobile ? mobileDlItem(ep.position) : undefined}
@@ -1234,6 +1267,8 @@
                   {@const displayNum = episodeDisplayNumber(ep, episodes)}
                   {@const unnumbered = displayNum == null}
                   {@const cover = episodeCovers[String(ep.position)]}
+                  {@const coverMissing = !cover && coversMissing.has(ep.position)}
+                  {@const coverPending = !cover && !coverMissing && coversWaiting}
                   <article
                     class="watch-modal__episode-card"
                     class:watch-modal__episode-card--watched={watched}
@@ -1241,6 +1276,8 @@
                     class:watch-modal__episode-card--unnumbered={unnumbered}
                     class:watch-modal__episode-card--next={(isTv || isDesktop) && nextEpisodePos === ep.position}
                     class:watch-modal__episode-card--cover={!!cover}
+                    class:watch-modal__episode-card--cover-pending={coverPending}
+                    class:watch-modal__episode-card--cover-missing={coverMissing}
                     data-position={ep.position}
                   >
                     {#if cover}
@@ -1250,7 +1287,7 @@
                         alt=""
                         loading="lazy"
                         decoding="async"
-                        onload={(e) => e.currentTarget.classList.add('watch-modal__episode-cover--on')}
+                        use:revealOnLoad
                       />
                     {/if}
                     <button
@@ -1267,6 +1304,11 @@
                       {:else}
                         <span class="watch-modal__episode-num">{displayNum}</span>
                         <span class="watch-modal__episode-name">{ep.name || `Серия ${displayNum}`}</span>
+                      {/if}
+                      {#if coverPending}
+                        <span class="watch-modal__episode-pending">обложка добавляется…</span>
+                      {:else if coverMissing}
+                        <span class="watch-modal__episode-pending">кадра нет</span>
                       {/if}
                       {#if isTv && watched}
                         <span class="watch-modal__episode-check" aria-label="Просмотрено">{@html checkIconSvg}</span>

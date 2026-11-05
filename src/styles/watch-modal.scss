@@ -1336,6 +1336,83 @@
     opacity: 1;
   }
 
+  /* Сервер ещё снимает кадры: полоска над сеткой и мерцающие заглушки на месте обложек. */
+  .watch-modal__covers-note {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0 0.2rem 0.75rem;
+    padding: 0.6rem 0.9rem;
+    border-radius: 12px;
+    background: color-mix(in srgb, $color-text 6%, transparent);
+    color: $color-text-muted;
+    font-size: 0.82rem;
+    line-height: 1.35;
+  }
+
+  .watch-modal__covers-spinner {
+    flex: none;
+    width: 0.95rem;
+    height: 0.95rem;
+    border: 2px solid color-mix(in srgb, $color-text 25%, transparent);
+    border-top-color: $color-text;
+    border-radius: 50%;
+    animation: watch-modal-cover-spin 0.9s linear infinite;
+  }
+
+  .watch-modal__episode-card--cover-pending {
+    aspect-ratio: 16 / 9;
+    min-height: 0;
+    overflow: hidden;
+    background:
+      linear-gradient(100deg, transparent 30%, color-mix(in srgb, $color-text 7%, transparent) 50%, transparent 70%)
+        0 0 / 250% 100% no-repeat,
+      var(--wm-card);
+    animation: watch-modal-cover-shimmer 1.6s ease-in-out infinite;
+  }
+
+  /* Серии нет у плеера — кадра не будет: ровная карточка-заглушка того же размера, что и обложки. */
+  .watch-modal__episode-card--cover-missing {
+    aspect-ratio: 16 / 9;
+    min-height: 0;
+    overflow: hidden;
+    background:
+      repeating-linear-gradient(
+        135deg,
+        transparent 0 10px,
+        color-mix(in srgb, $color-text 4%, transparent) 10px 20px
+      ),
+      var(--wm-card);
+  }
+
+  .watch-modal__episode-pending {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: $color-text-muted;
+  }
+
+  @keyframes watch-modal-cover-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes watch-modal-cover-shimmer {
+    from {
+      background-position: 100% 0, 0 0;
+    }
+    to {
+      background-position: -150% 0, 0 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .watch-modal__covers-spinner,
+    .watch-modal__episode-card--cover-pending {
+      animation: none;
+    }
+  }
+
   /* Обложки серий (кадр из серии): карточки шире, номер и название — поверх кадра. */
   .watch-modal__episodes--covers {
     grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));

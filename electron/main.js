@@ -70,7 +70,7 @@ function ensureWindowsNotificationIdentity() {
 }
 
 // TV dev can run alongside desktop dev (separate userData → separate single-instance lock).
-if (process.env.ANIXAPP_TV === '1') {
+if (process.env.ANIXAPP_TV === '1' && !DEV_PREV) {
   app.setPath('userData', path.join(app.getPath('userData'), '-tv-dev'));
 }
 

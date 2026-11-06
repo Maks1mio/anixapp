@@ -27,6 +27,8 @@ export default defineConfig(({ command, mode }) => {
 
   return {
   root: rootDir,
+  // dev:all: у TV другие alias, с общим кэшем серверы перезаписывали бы зависимости друг друга.
+  cacheDir: process.env.ANIXAPP_VITE_CACHE_DIR || undefined,
   // Dev: absolute `/` so SPA routes (/watch, /release/…) don't 404 Vite deps.
   // Build: `./` so Electron file:// / Capacitor still resolves assets.
   base: command === 'serve' || webBase ? '/' : './',

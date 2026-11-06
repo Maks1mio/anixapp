@@ -10,7 +10,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const DEV_PREV_DIR = 'anixapp-dev-prev';
+// ANIXAPP_DEV_PROFILE: своя папка профиля для каждого окна `npm run dev:all`.
+const DEV_PREV_DIR = process.env.ANIXAPP_DEV_PROFILE || 'anixapp-dev-prev';
 const SEED_FILES = ['auth.json', 'home-custom-filters.json'];
 const SEED_DIRS = ['Local Storage'];
 

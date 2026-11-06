@@ -8,6 +8,7 @@
     "scripts": {
         "install:no-esbuild-postinstall": "cross-env ESBUILD_SKIP_POSTINSTALL=1 yarn install",
         "dev": "vite",
+        "dev:all": "node scripts/dev-all.mjs",
         "build:icon": "node scripts/build-icon.js",
         "build:sounds": "node scripts/generate-notification-sounds.js",
         "build": "vite build && npm run build:icon && node scripts/inject-oauth-env.js && electron-builder --publish=never",

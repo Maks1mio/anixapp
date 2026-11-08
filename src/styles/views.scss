@@ -5751,3 +5751,17 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   height: 100%;
   object-fit: cover;
 }
+
+// Шапка релиза на ПК: заголовок с подписью, кнопки, сведения — внутри групп ближе, между группами дальше
+html:not(.tv-mode):not(.mobile-mode) {
+  .release-page__head:not(.release-page__head--narrow) {
+    .release-page__head-top { gap: 0; }
+    .release-page__head-intro { margin-bottom: 0.25rem; }
+    .release-page__actions { margin-bottom: 1.25rem; }
+  }
+
+  .release-page__meta-info--flat {
+    gap: 0.25rem;
+    margin-bottom: 0.75rem;
+  }
+}

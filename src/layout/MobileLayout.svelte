@@ -12,6 +12,9 @@
   import MobileDock from './MobileDock.svelte';
   import MobileRail from './MobileRail.svelte';
   import MobilePullRefresh from './MobilePullRefresh.svelte';
+  import UiV2MediaLightbox from '../components/uikit-v2/UiV2MediaLightbox.svelte';
+  import { closeFeedMediaLightbox, feedMediaLightbox } from '../utils/feed-media-lightbox';
+  import { randomReleaseId, shuffleRandomRelease } from '../stores/random-release';
   import { bookmarksSearchLabel, bookmarksSearchOpen, bookmarksSearchQuery, closeBookmarksSearch } from '../stores/mobile-bookmarks-search';
   import { mobileNavOrder, mobilePhoneBarSize, moveMobileNavTabAcross, swapMobileNavTabs, PHONE_BAR_MAX, PHONE_BAR_MIN, type MobileNavTab } from '../stores/mobile-nav';
   import { isScrollRestorePending } from '../stores/view-state';
@@ -23,7 +26,7 @@
   import { bindNotificationTaps, requestNativeNotifyPermission } from '../native/anix-notify';
   import { isAuthenticated, requireAuth } from '../stores/auth';
   import { ensureProfileId, loadSelfProfileGlobal } from '../utils/profile';
-  import { iconDownload, iconPlus, iconCircleUser, iconSearch, iconSettings, iconBell } from '../components/icons';
+  import { iconDownload, iconPlus, iconShuffle, iconCircleUser, iconSearch, iconSettings, iconBell } from '../components/icons';
   import { SIDEBAR_NAV_ITEMS, type SidebarNavId } from '../constants/sidebar-nav';
   import MobileSettings from './MobileSettings.svelte';
   import MobileSearch from './MobileSearch.svelte';
@@ -134,6 +137,7 @@
 
   /** Страница релиза: «назад» плавает поверх размытой обложки, а не занимает отдельную полосу. */
   const floatBack = $derived(/^\/release\/\d+$/.test(path));
+  const canShuffle = $derived(floatBack && $randomReleaseId === Number(path.split('/').pop()));
   /** Разделы со своей шапкой (DiscoverHero): заголовок уже в ней, назад ведёт системная кнопка. */
   const ownHeader = $derived(['/overview/popular', '/fluo'].includes(path));
 
@@ -260,7 +264,8 @@
 
   /** «Назад» системы, когда ни один экран не перехватил: сначала закрываем слои, потом история, потом сворачиваем. */
   function onNativeBack() {
-    if (moreOpen) moreOpen = false;
+    if (get(feedMediaLightbox)) closeFeedMediaLightbox();
+    else if (moreOpen) moreOpen = false;
     else if (get(watchModalOpen)) watchModalOpen.set(false);
     else if (profileOpen) backInProfile();
     else if (bookmarksSearching) closeBookmarksSearch();
@@ -402,9 +407,16 @@
       <button type="button" class="m-icon-btn" onclick={goBack} aria-label="Назад">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
       </button>
-      <button type="button" class="m-icon-btn m-icon-btn--end" onclick={() => navigate('/collections/create')} aria-label="Добавить в коллекцию">
-        {@html iconPlus(24)}
-      </button>
+      <div class="m-float-actions">
+        <button type="button" class="m-icon-btn m-icon-btn--end" onclick={() => window.dispatchEvent(new Event('anix:release-add-to-collection'))} aria-label="Добавить в коллекцию">
+          {@html iconPlus(24)}
+        </button>
+        {#if canShuffle}
+          <button type="button" class="m-icon-btn" onclick={() => void shuffleRandomRelease()} aria-label="Другой случайный релиз">
+            {@html iconShuffle(22)}
+          </button>
+        {/if}
+      </div>
     </header>
   {/if}
 
@@ -488,6 +500,8 @@
     {/snippet}
   </MobileDock>
 
+  <UiV2MediaLightbox />
+
   {#if profileOpen && profileUserId != null}
     <div class="m-fullscreen m-fullscreen--profile" onscrollcapture={onContentScroll}>
       <header class="m-topbar">
@@ -546,7 +560,7 @@
   .m-topbar--float {
     position: absolute;
     z-index: 15;
-    top: calc(env(safe-area-inset-top) + 20px);
+    top: calc(env(safe-area-inset-top) + 34px); /* вровень с верхом обложки */
     /* По краям страницы (56rem, как у остальных), на узком экране — обычные поля */
     --m-float-inset: max(var(--m-space-4), calc((100% - var(--m-rail-w) - 56rem) / 2 + var(--m-gutter)));
     left: calc(var(--m-rail-left) + var(--m-float-inset));
@@ -554,12 +568,20 @@
     min-height: 0;
     padding: 0 !important; /* у общего .m-topbar поля заданы сильнее, и кнопки стояли не по краю контента */
     justify-content: space-between;
+    align-items: flex-start !important;
     transition: transform 0.2s ease;
 
     .m-icon-btn { width: 48px; height: 48px; border-radius: 16px; background: var(--m-surface-chip); box-shadow: inset 0 0 0 1px var(--m-outline-variant); color: var(--m-text); }
   }
 
-  .m-topbar--float-hidden { transform: translateY(calc(-100% - env(safe-area-inset-top) - 16px)); }
+  @media (min-width: 600px) {
+    .m-topbar--float { top: calc(env(safe-area-inset-top) + 20px); }
+  }
+
+  .m-float-actions { display: flex; flex-direction: column; gap: var(--m-space-2); }
+
+  /* За верхний край целиком: кнопки стоят ниже него на высоту отступа */
+  .m-topbar--float-hidden { transform: translateY(calc(-100% - env(safe-area-inset-top) - 48px)); }
 
   .m-app { position: relative; }
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { openRandomRelease } from '../stores/random-release';
   import { onMount, onDestroy } from 'svelte';
   import { navigate } from '../stores/navigation';
   import { isMobileMode } from '../platform/mobile';
@@ -155,8 +156,10 @@
     if (!window.anixApi || randomBusy) return;
     randomBusy = true;
     try {
-      const data = (await window.anixApi.release.random(true)) as { release?: { id?: number } } | null;
-      if (data?.release?.id) navigate(`/release/${data.release.id}`);
+      await openRandomRelease(async () => {
+        const data = (await window.anixApi!.release.random(true)) as { release?: { id?: number } } | null;
+        return data?.release?.id;
+      });
     } catch { /* ignore */ } finally { randomBusy = false; }
   }
   function openBanner(b: OverviewBanner) {

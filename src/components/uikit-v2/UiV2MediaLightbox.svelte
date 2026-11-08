@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isMobileMode } from '../../platform/mobile';
   import { onMount } from 'svelte';
   import {
     closeFeedMediaLightbox,
@@ -38,7 +39,7 @@
   const item = $derived(lightbox?.items[lightbox.index] ?? null);
   const total = $derived(lightbox?.items.length ?? 0);
   const canNav = $derived(total > 1);
-  const canUpscale = $derived(!!item && item.kind !== 'video');
+  const canUpscale = $derived(!!item && item.kind !== 'video' && !isMobileMode());
   const gpuOk = $derived(isGpuAvailable());
 
   let overlayEl = $state<HTMLDivElement | null>(null);

@@ -2,12 +2,14 @@
   import { tick } from 'svelte';
   import { scale } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
-  import { iconMoreHorizontal, iconCopy, iconCheck, iconHash, iconCodeXml, iconShare } from './icons';
+  import { iconMoreHorizontal, iconCopy, iconCheck, iconHash, iconCodeXml, iconShare, iconDownload } from './icons';
   import { parseAltTitles } from '../utils/titleInfo';
   import { showToast } from '../stores/toast';
   import { DEFAULT_API_ENDPOINT } from '../constants/apiEndpoints';
   import { copyTextToClipboard, releasePublicUrl } from '../utils/release-menu-v2';
   import { portal } from '../actions/portal';
+  import { isMobileMode } from '../platform/mobile';
+  import UiV2PopupMenu, { type UiV2PopupMenuItem } from './uikit-v2/UiV2PopupMenu.svelte';
 
   interface Props {
     titleRu?: string;
@@ -16,9 +18,11 @@
     /** ID релиза — включает блок «ID / API-запрос / Поделиться» */
     releaseId?: number;
     className?: string;
+    /** Телефон и планшет: пункт скачивания серий. */
+    onDownload?: () => void;
   }
 
-  let { titleRu = '', titleEn = '', titleAlt = '', releaseId, className = '' }: Props = $props();
+  let { titleRu = '', titleEn = '', titleAlt = '', releaseId, className = '', onDownload }: Props = $props();
 
   const GAP = 8;
   const EDGE = 12;
@@ -53,6 +57,45 @@
   let panelTop = $state(0);
   let openUp = $state(false);
 
+  /** Телефон и планшет: те же действия в общей шторке вместо всплывающей панели. */
+  let sheetOpen = $state(false);
+  const COPY_LINE = 'copy-line:';
+
+  const titleItems = $derived(titleRows.flatMap((row, rowIndex): UiV2PopupMenuItem[] => [
+    { id: `label:${row.id}`, label: row.label, type: 'label', dividerBefore: rowIndex > 0 },
+    ...row.lines.map((line, i): UiV2PopupMenuItem => ({
+      id: `${COPY_LINE}${rowIndex}:${i}`,
+      label: line,
+      icon: iconCopy(20),
+    })),
+  ]));
+
+  const sheetItems = $derived.by((): UiV2PopupMenuItem[] => {
+    const items: UiV2PopupMenuItem[] = [];
+    if (onDownload) items.push({ id: 'download', label: 'Скачать серии…', icon: iconDownload(22) });
+    if (hasRelease) items.push({ id: 'share', label: 'Поделиться', icon: iconShare(22) });
+    if (titleItems.length) items.push({ id: 'titles', label: 'Названия', icon: iconCopy(22), children: titleItems });
+    if (hasRelease) {
+      items.push(
+        { id: 'id', label: 'Копировать ID', icon: iconHash(22), valueText: String(releaseId), dividerBefore: items.length > 0 },
+        { id: 'api', label: 'Копировать API-запрос', icon: iconCodeXml(22), valueText: 'GET' },
+      );
+    }
+    return items;
+  });
+
+  async function onSheetSelect(id: string) {
+    if (id === 'download') onDownload?.();
+    else if (id === 'share') await share();
+    else if (id === 'id') await copy(String(releaseId), 'id', 'ID скопирован');
+    else if (id === 'api') await copy(await apiRequestUrl(), 'api', 'API-запрос скопирован');
+    else if (id.startsWith(COPY_LINE)) {
+      const [rowIndex, lineIndex] = id.slice(COPY_LINE.length).split(':').map(Number);
+      const row = titleRows[rowIndex];
+      if (row) await copy(row.lines[lineIndex], `title:${row.id}`, row.toast);
+    }
+  }
+
   let copiedId = $state<string | null>(null);
   let copyTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -73,6 +116,10 @@
   async function toggle(e: MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
+    if (isMobileMode()) {
+      sheetOpen = true;
+      return;
+    }
     open = !open;
     if (!open) return;
     await tick();
@@ -163,6 +210,15 @@
   >
     <span class="release-page__actions-chip-icon" aria-hidden="true">{@html iconMoreHorizontal(20)}</span>
   </button>
+
+  <UiV2PopupMenu
+    open={sheetOpen}
+    x={0}
+    y={0}
+    items={sheetItems}
+    onClose={() => { sheetOpen = false; }}
+    onSelect={(id) => void onSheetSelect(id)}
+  />
 
   {#if open}
     <div

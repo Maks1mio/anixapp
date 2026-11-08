@@ -4,7 +4,6 @@
    * за пальцем; отпущенная встаёт к ближайшей стороне экрана. Сторону читают отступы страниц (--m-rail-left/right).
    */
   import type { Snippet } from 'svelte';
-  import { fade } from 'svelte/transition';
   import { scrollEdges } from '../actions/sheet';
   import { navReorder, type NavReorderParams } from '../actions/navReorder';
   import { mobileRailSide, setMobileRailSide, type MobileRailSide } from '../stores/mobile-nav';
@@ -179,14 +178,6 @@
   }
 </script>
 
-{#if capsule}
-  <!-- Место, куда встанет панель: у каждой стороны своё, одно задвигается за край, другое выдвигается -->
-  <div aria-hidden="true" transition:fade={{ duration: 160 }}>
-    <div class="m-rail-slot m-rail-slot--left" class:m-rail-slot--on={targetSide === 'left'}></div>
-    <div class="m-rail-slot m-rail-slot--right" class:m-rail-slot--on={targetSide === 'right'}></div>
-  </div>
-{/if}
-
 <nav
   class="m-rail"
   class:m-rail--pulled={pull > 0}
@@ -213,7 +204,7 @@
   $spring: linear(0, 0.16, 0.452, 0.715, 0.894, 0.992, 1.032, 1.038, 1.03, 1.019, 1.009, 1.003, 1, 0.999, 0.999, 0.999, 0.999, 1, 1, 1, 1, 1, 1, 1, 1);
 
   /* Телефон: разделы в нижней панели */
-  .m-rail, .m-rail-slot { display: none; }
+  .m-rail { display: none; }
 
   @media (min-width: 600px) {
     .m-rail {
@@ -281,31 +272,6 @@
       :global(.m-nav-item__label) { max-height: 0; opacity: 0; }
     }
 
-    .m-rail-slot {
-      position: fixed;
-      top: 0;
-      z-index: 29;
-      display: block;
-      width: var(--m-rail-w);
-      height: 100dvh;
-      background: var(--m-surface-block);
-      transition: transform 0.3s $sheet-ease;
-    }
-
-    .m-rail-slot--left {
-      left: 0;
-      border-radius: 0 20px 20px 0;
-      transform: translateX(-100%);
-    }
-
-    .m-rail-slot--right {
-      right: 0;
-      border-radius: 20px 0 0 20px;
-      transform: translateX(100%);
-    }
-
-    .m-rail-slot--on { transform: none; }
-
     /* Разделы не влезли по высоте: у края, за которым они продолжаются, — затухание и линия */
     .m-rail__list {
       --edge-top: 0px;
@@ -334,6 +300,6 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .m-rail, .m-rail-slot { transition: none; }
+    .m-rail { transition: none; }
   }
 </style>

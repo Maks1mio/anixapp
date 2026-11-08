@@ -4,7 +4,6 @@
   import { navigate } from '../../stores/navigation';
   import { requireAuth, isAuthenticated } from '../../stores/auth';
   import { openWatchModal } from '../../stores/modals';
-  import { isMobileMode } from '../../platform/mobile';
   import { buildPosterUrl, buildScreenshotUrl, toPosterDisplayUrl } from '../../utils/posterUrl';
   import { setDiscordContext, refreshDiscordPresence } from '../../services/discord-presence';
   import { isTvMode } from '../../platform/tv';
@@ -294,6 +293,9 @@
     return watchReleaseMedia(id);
   });
 
+  /** Фон шапки на телефоне и планшете: только наши кадры, у Anixart они слишком мелкие для всего экрана. */
+  const backdropImages = $derived(mediaEnabled ? ($releaseMedia[id]?.screenshots ?? []) : []);
+
   const screenshots   = $derived.by(() => {
     // Our 8 frames from the first episode are sharper than Anixart's; theirs until ours are ready.
     const own = mediaEnabled ? $releaseMedia[id]?.screenshots : undefined;
@@ -319,7 +321,7 @@
 
   // ── Select options ────────────────────────────────────────────────────────
   const selectOptions = $derived([
-    { value: '', label: isMobileMode() ? 'Не смотрю' : 'Не в списке' },
+    { value: '', label: 'Не в списке' },
     ...LIST_STATUSES.map(s => ({ value: s.id, label: s.label })),
   ] as SelectOption[]);
 
@@ -569,6 +571,7 @@
         {isViewBlocked} {noteHtml} {descHtml} {descClean} {descNeedsTruncate} {descCollapsed}
         {metaInfoRows} {playBtnText} {playBtnDisabled} {episodeAddedText}
         {currentStatus} {selectOptions}
+        {backdropImages}
         {notifyEnabled}
         showNotify={showNotifyBell}
         onToggleFavorite={toggleFavorite}

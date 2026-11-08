@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { openRandomRelease } from '../stores/random-release';
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import ReleaseCardsGridSkeleton from '../components/ReleaseCardsGridSkeleton.svelte';
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
@@ -7,7 +8,6 @@
   import HomeTabRenameModal from '../components/HomeTabRenameModal.svelte';
   import { headlineFromLoadError } from '../utils/content-load-error';
   import { onMount, onDestroy, untrack } from 'svelte';
-  import { navigate } from '../stores/navigation';
   import { requireAuth } from '../stores/auth';
   import Tabs, { type TabItem } from '../components/Tabs.svelte';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../components/uikit-v2/UiV2PopupMenu.svelte';
@@ -461,9 +461,10 @@
     if (!window.anixApi || randomLoading) return;
     randomLoading = true;
     try {
-      const data = await window.anixApi.release.random(true) as any;
-      const release = data?.release as { id?: number } | undefined;
-      if (release?.id) navigate(`/release/${release.id}`);
+      await openRandomRelease(async () => {
+        const data = await window.anixApi!.release.random(true) as any;
+        return (data?.release as { id?: number } | undefined)?.id;
+      });
     } catch { /* ignore */ }
     finally {
       randomLoading = false;

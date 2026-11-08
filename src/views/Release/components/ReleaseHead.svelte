@@ -9,24 +9,21 @@
     iconChevronDown,
     iconBellPlus,
     iconBellRing,
-    iconMoreVertical,
     iconInfo,
     iconTriangleAlert,
   } from '../../../components/icons';
-  import { showToast } from '../../../stores/toast';
-  import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../../../components/uikit-v2/UiV2PopupMenu.svelte';
   import MobileDownloadFlow from '../../../components/MobileDownloadFlow.svelte';
   import { downloadsAvailable } from '../../../native/anix-downloads';
-  import { iconDownload, iconShare } from '../../../components/icons';
   import TitleInfoTrigger from '../../../components/TitleInfoTrigger.svelte';
   import ReleaseMetaInfoIcon from './ReleaseMetaInfoIcon.svelte';
   import type { ReleaseMetaInfoRow } from '../_metaInfo';
   import type { ListStatusId } from '../_types';
-  import { openImageLightbox, formatVoteCount } from '../_utils';
+  import { openImageLightbox, openImageLightboxGallery, formatVoteCount } from '../_utils';
 import { requestOpenExternal } from '../../../utils/external-link';
   import { toPosterDisplayUrl } from '../../../utils/posterUrl';
   import AnimatedMediaOverlay from '../../../components/AnimatedMediaOverlay.svelte';
   import { isMobileMode } from '../../../platform/mobile';
+  import MobileReleaseBackdrop from './MobileReleaseBackdrop.svelte';
   import { openSearchPage } from '../../../search-controller';
 
   interface Props {
@@ -64,6 +61,8 @@ import { requestOpenExternal } from '../../../utils/external-link';
     airDate?:          Snippet;
     /** TV: широкая шапка и кнопка статуса вместо Select */
     tvMode?:           boolean;
+    /** Кадры для фона шапки на телефоне и планшете. */
+    backdropImages?: string[];
     statusButtonLabel?: string;
     onOpenStatusPicker?: () => void;
   }
@@ -83,6 +82,7 @@ import { requestOpenExternal } from '../../../utils/external-link';
     airDate,
     tvMode = false,
     statusButtonLabel = 'В список',
+    backdropImages = [],
     onOpenStatusPicker,
   }: Props = $props();
 
@@ -164,29 +164,16 @@ import { requestOpenExternal } from '../../../utils/external-link';
     return () => ro.disconnect();
   });
 
-  let moreOpen = $state(false);
-  const moreItems = $derived<UiV2PopupMenuItem[]>([
-    ...(downloadsAvailable() ? [{ id: 'download', label: 'Скачать серии…', icon: iconDownload(22) }] : []),
-    { id: 'share', label: 'Поделиться', icon: iconShare(22) },
-  ]);
   let downloadOpen = $state(false);
   function currentReleaseId(): number {
     return parseInt(/release\/(\d+)/.exec(window.location.pathname)?.[1] ?? '0', 10);
   }
 
-  /** Телефон: «⋮» рядом с «Воспроизвести» — поделиться ссылкой на релиз. */
-  async function shareRelease() {
-    const id = /release\/(\d+)/.exec(window.location.pathname)?.[1];
-    if (!id) return;
-    const url = `https://anixart.app/release/${id}`;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: titleRu || title, url });
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      showToast('Ссылка скопирована');
-    } catch { /* пользователь закрыл диалог */ }
+  /** На телефоне и планшете от обложки можно листать дальше, по кадрам из фона. */
+  function openPoster(origin: HTMLElement) {
+    const poster = displayPosterUrl || posterUrl;
+    if (isMobileMode() && backdropImages.length) openImageLightboxGallery([poster, ...backdropImages], 0, origin);
+    else openImageLightbox(poster, origin);
   }
 
   function scrollToComments() {
@@ -217,11 +204,11 @@ import { requestOpenExternal } from '../../../utils/external-link';
     data-tv-release-poster
     role={posterUrl ? 'button' : undefined}
     tabindex={posterUrl ? 0 : undefined}
-    onclick={(e) => posterUrl && openImageLightbox(displayPosterUrl || posterUrl, e.currentTarget as HTMLElement)}
+    onclick={(e) => posterUrl && openPoster(e.currentTarget as HTMLElement)}
     onkeydown={(e) => {
       if (e.key === 'Enter' && posterUrl) {
         e.preventDefault();
-        openImageLightbox(displayPosterUrl || posterUrl, e.currentTarget as HTMLElement);
+        openPoster(e.currentTarget as HTMLElement);
       }
     }}
   >
@@ -290,7 +277,7 @@ import { requestOpenExternal } from '../../../utils/external-link';
           options={statusOptions}
           panelClass="release-status-panel"
           value={currentStatus ?? ''}
-          placeholder={isMobileMode() ? 'Не смотрю' : 'Не в списке'}
+          placeholder="Не в списке"
           onChange={onSetStatus}
         />
       {/if}
@@ -336,6 +323,7 @@ import { requestOpenExternal } from '../../../utils/external-link';
       titleEn={titleOriginal}
       {titleAlt}
       {releaseId}
+      onDownload={isMobileMode() && downloadsAvailable() ? () => { downloadOpen = true; } : undefined}
     />
   </div>
 {/snippet}
@@ -356,11 +344,6 @@ import { requestOpenExternal } from '../../../utils/external-link';
           {/if}
           <span class="release-page__btn-label">{playBtnText}</span>
         </button>
-        {#if isMobileMode()}
-          <button type="button" class="release-page__more" aria-label="Ещё" onclick={() => (moreOpen = true)}>
-            {@html iconMoreVertical(22)}
-          </button>
-        {/if}
       </div>
     </div>
 
@@ -431,8 +414,7 @@ import { requestOpenExternal } from '../../../utils/external-link';
 
 <div class="release-page__head" class:release-page__head--narrow={!isWide}>
   {#if isMobileMode() && displayPosterUrl}
-    <!-- Телефон: размытая обложка за шапкой, как в референсе -->
-    <div class="m-release-bg" aria-hidden="true" style="background-image:url({displayPosterUrl})"></div>
+    <MobileReleaseBackdrop images={backdropImages} fallback={displayPosterUrl} />
   {/if}
   <div class="release-page__head-top">
     <div class="release-page__head-intro">
@@ -466,19 +448,6 @@ import { requestOpenExternal } from '../../../utils/external-link';
     {@render bodyBlock()}
   {/if}
 </div>
-
-<UiV2PopupMenu
-  open={moreOpen}
-  sheet
-  x={0}
-  y={0}
-  items={moreItems}
-  onClose={() => { moreOpen = false; }}
-  onSelect={(id) => {
-    if (id === 'download') downloadOpen = true;
-    else if (id === 'share') void shareRelease();
-  }}
-/>
 
 {#if downloadOpen}
   <MobileDownloadFlow

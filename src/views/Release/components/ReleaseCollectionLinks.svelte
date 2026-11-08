@@ -40,6 +40,12 @@
     if (!requireAuth()) return;
     addOpen = true;
   }
+
+  // Кнопка «+» в верхней панели мобильной версии лежит вне страницы
+  $effect(() => {
+    window.addEventListener('anix:release-add-to-collection', openAdd);
+    return () => window.removeEventListener('anix:release-add-to-collection', openAdd);
+  });
 </script>
 
 <div class="release-page__section release-links">

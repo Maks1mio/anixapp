@@ -14,7 +14,6 @@
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../components/uikit-v2/UiV2PopupMenu.svelte';
   import UiV2Card from '../components/uikit-v2/UiV2Card.svelte';
   import UiV2Button from '../components/uikit-v2/UiV2Button.svelte';
-  import { navigate } from '../stores/navigation';
   import { requireAuth } from '../stores/auth';
   import { notifyVotesChanged } from '../utils/favorites-events';
   import { handleUserProfileClick } from '../stores/user-profile';
@@ -30,6 +29,7 @@
   import { mapReleaseRawToCard } from '../utils/release-card';
   import { mapHistoryRawToReleaseCard } from '../utils/historyCard';
   import { iconHome } from '../components/icons';
+  import { openRandomRelease } from '../stores/random-release';
   import { bookmarksSearchLabel, bookmarksSearchQuery, closeBookmarksSearch } from '../stores/mobile-bookmarks-search';
   import {
     getDefaultBookmarksTab,
@@ -1071,18 +1071,22 @@
     if (!window.anixApi || randomLoading || totalCount === 0 || isVotesTab) return;
     randomLoading = true;
     try {
-      let res: Record<string, unknown> | undefined;
-      if (activeTab === 'favorites') {
-        res = await window.anixApi.release.randomFavorite(true) as Record<string, unknown>;
-      } else {
-        const tab = TABS.find((t) => t.id === activeTab);
-        const profileId = await ensureProfileId();
-        if (!tab?.type || typeof profileId !== 'number') return;
-        res = await window.anixApi.release.randomProfileList(profileId, tab.type, true) as Record<string, unknown>;
-      }
-      const release = (res?.release ?? res) as Record<string, unknown> | undefined;
-      const rid = release?.id ?? release?.['@id'];
-      if (typeof rid === 'number') navigate(`/release/${rid}`);
+      // Вкладка запоминается: кнопка повтора на странице тайтла выбирает из того же списка
+      const tabId = activeTab;
+      await openRandomRelease(async () => {
+        let res: Record<string, unknown> | undefined;
+        if (tabId === 'favorites') {
+          res = await window.anixApi!.release.randomFavorite(true) as Record<string, unknown>;
+        } else {
+          const tab = TABS.find((t) => t.id === tabId);
+          const profileId = await ensureProfileId();
+          if (!tab?.type || typeof profileId !== 'number') return null;
+          res = await window.anixApi!.release.randomProfileList(profileId, tab.type, true) as Record<string, unknown>;
+        }
+        const release = (res?.release ?? res) as Record<string, unknown> | undefined;
+        const rid = release?.id ?? release?.['@id'];
+        return typeof rid === 'number' ? rid : null;
+      });
     } catch {
       /* ignore */
     } finally {

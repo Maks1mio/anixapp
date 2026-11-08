@@ -1,6 +1,10 @@
 <script lang="ts">
   import { onMount, onDestroy, untrack } from 'svelte';
   import CollectionCard from '../components/CollectionCard.svelte';
+  import { swipeTabs } from '../actions/swipeTabs';
+  import { isMobileMode } from '../platform/mobile';
+  import TabPeek from '../components/TabPeek.svelte';
+  import { createTabPrefetch, tabNeighbors, TAB_PEEK_ITEMS } from '../utils/tab-prefetch.svelte';
   import UiV2CollectionCardSkeleton from '../components/uikit-v2/UiV2CollectionCardSkeleton.svelte';
   import CollectionsHeaderActions from '../components/collections/CollectionsHeaderActions.svelte';
   import DiscoverHero from '../components/DiscoverHero.svelte';
@@ -121,8 +125,58 @@
     }
     if (sort === selectedSort) return;
     selectedSort = sort;
+    const seed = isMobileMode() ? tabPrefetch.get(String(sort)) : undefined;
+    if (seed?.items.length) {
+      loadToken += 1;
+      isLoading = false;
+      applySnapshot(seed);
+      return;
+    }
     resetList();
     void loadPage();
+  }
+
+  /** Первая страница соседних сортировок: при свайпе рядом едет уже настоящий список. */
+  const tabPrefetch = createTabPrefetch<CollectionsViewState>(async (id) => {
+    const sort = Number(id);
+    const requestPage = initialCollectionListPage(sort);
+    const data = (await window.anixApi!.collection.all(requestPage, {
+      sort,
+      where: 1,
+      previousPage: initialCollectionPreviousPage(),
+    })) as { content?: unknown[]; last?: boolean; total_page_count?: number; current_page?: number };
+    const content = (data?.content ?? []) as Record<string, unknown>[];
+    const currentPage = typeof data.current_page === 'number' ? data.current_page : requestPage;
+    return {
+      items: content.map(mapCollectionCard),
+      page: requestPage + 1,
+      previousPage: requestPage,
+      hasMore: data.last === true
+        ? false
+        : typeof data.total_page_count === 'number'
+          ? currentPage + 1 < data.total_page_count
+          : content.length >= 25,
+      loadState: content.length ? 'ready' : 'empty',
+      errorMsg: '',
+      selectedSort: sort,
+    };
+  });
+  const peekTabs = $derived(tabNeighbors(sortTabs.map((t) => t.id), String(selectedSort)));
+
+  $effect(() => {
+    if (!isMobileMode() || mine || week || loadState === 'loading') return;
+    const { prev, next } = peekTabs;
+    untrack(() => {
+      if (prev) tabPrefetch.ensure(prev);
+      if (next) tabPrefetch.ensure(next);
+    });
+  });
+
+  function swipeToTab(dir: 1 | -1): boolean {
+    const nextTab = sortTabs[sortTabs.findIndex((t) => t.id === String(selectedSort)) + dir];
+    if (!nextTab) return false;
+    onSortChange(Number(nextTab.id));
+    return true;
   }
 
   function toggleMine() {
@@ -372,6 +426,21 @@
         <p class="discover-empty__title">Коллекций пока нет</p>
       </div>
     {/if}
+  {:else if isMobileMode() && !mine && !week}
+    <div use:swipeTabs={{ onSwipe: swipeToTab, activeId: String(selectedSort) }}>
+      <div class="collections-feed">
+        {#each items as item (item.id)}
+          <CollectionCard data={item} variant="grid" />
+        {/each}
+      </div>
+      {#if peekTabs.prev}<TabPeek dir={-1}>{@render collectionsPeek(peekTabs.prev)}</TabPeek>{/if}
+      {#if peekTabs.next}<TabPeek dir={1}>{@render collectionsPeek(peekTabs.next)}</TabPeek>{/if}
+    </div>
+    {#if isLoading}
+      <div class="collections-feed" aria-busy="true">
+        <UiV2CollectionCardSkeleton count={2} />
+      </div>
+    {/if}
   {:else}
     <div class="collections-feed">
       {#each items as item (item.id)}
@@ -385,3 +454,16 @@
     {/if}
   {/if}
 </div>
+
+{#snippet collectionsPeek(id: string)}
+  {@const seed = tabPrefetch.get(id)}
+  <div class="collections-feed">
+    {#if seed}
+      {#each seed.items.slice(0, TAB_PEEK_ITEMS) as item (item.id)}
+        <CollectionCard data={item} variant="grid" />
+      {/each}
+    {:else}
+      <UiV2CollectionCardSkeleton count={6} />
+    {/if}
+  </div>
+{/snippet}

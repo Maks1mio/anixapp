@@ -5,6 +5,9 @@
    * Всё собрано из uikit-v2: UiV2Tabs, UiV2ReleaseCarousel, ReleaseCardUiV2, CollectionCard, UiV2CommentThread.
    */
   import { navigate } from '../../stores/navigation';
+  import { swipeTabs } from '../../actions/swipeTabs';
+  import { isMobileMode } from '../../platform/mobile';
+  import TabPeek from '../TabPeek.svelte';
   import { showToast } from '../../stores/toast';
   import { resolveCdnAssetUrl } from '../../utils/posterUrl';
   import { mapReleaseRawToCard } from '../../utils/release-card';
@@ -136,6 +139,17 @@
     active != null && sections.includes(active) ? active : (sections[0] ?? null),
   );
   const tabs = $derived(sections.map((id) => ({ id: String(id), label: LABELS[id] })));
+  const peekSections = $derived.by(() => {
+    const i = current == null ? -1 : sections.indexOf(current);
+    return { prev: i < 0 ? undefined : sections[i - 1], next: i < 0 ? undefined : sections[i + 1] };
+  });
+
+  function swipeToSection(dir: 1 | -1): boolean {
+    const next = current == null ? undefined : sections[sections.indexOf(current) + dir];
+    if (next == null) return false;
+    active = next;
+    return true;
+  }
 
   let pinSheetOpen = $state(false);
   let pinBusy = $state(false);
@@ -183,6 +197,72 @@
   );
 </script>
 
+{#snippet sectionBody(id: SectionId)}
+      {#if id === 0}
+        <div class="profile-panel__stats">
+          <ProfileStatsSection {profile} {profileId} {isMyProfile} plain />
+        </div>
+      {:else if id === 1}
+        {#if votes.length}
+          <UiV2ReleaseCarousel measureKey={votes.length}>
+            {#each votes as item (item.id)}
+              <div class="uiv2-carousel__item">
+                <ReleaseCardUiV2 data={item} variant="vertical" />
+              </div>
+            {/each}
+          </UiV2ReleaseCarousel>
+        {:else}
+          <p class="pp-sections__empty">Оценок пока нет</p>
+        {/if}
+      {:else if id === 2}
+        {#if collections.length}
+          <UiV2ReleaseCarousel measureKey={collections.length} class="pp-sections__carousel--wide">
+            {#each collections as c (c.id)}
+              <div class="uiv2-carousel__item">
+                <CollectionCard data={c} />
+              </div>
+            {/each}
+          </UiV2ReleaseCarousel>
+        {:else}
+          <p class="pp-sections__empty">Коллекций пока нет</p>
+        {/if}
+      {:else if id === 3}
+        {#if comments.length}
+          <OverviewCommentsWeek items={comments} />
+        {:else}
+          <p class="pp-sections__empty">Комментариев пока нет</p>
+        {/if}
+      {:else if id === 4}
+        {#if videos.length}
+          <UiV2ReleaseCarousel measureKey={videos.length} class="pp-sections__carousel--wide">
+            {#each videos as v (v.id)}
+              {@const img = v.image ? resolveCdnAssetUrl(String(v.image)) : ''}
+              <div class="uiv2-carousel__item">
+                <button type="button" class="pp-sections__video" onclick={() => showAll(4)}>
+                  <span class="pp-sections__video-img">{#if img}<img src={img} alt="" loading="lazy" />{/if}</span>
+                  <span class="pp-sections__video-title">{String(v.title ?? '')}</span>
+                </button>
+              </div>
+            {/each}
+          </UiV2ReleaseCarousel>
+        {:else}
+          <p class="pp-sections__empty">Видео пока нет</p>
+        {/if}
+      {:else if id === 5}
+        {#if badges.length}
+          <div class="pp-sections__badges">
+            {#each badges as b (b.id)}
+              <BadgeTile badge={b} compact onclick={(x) => (openBadge = x)} />
+            {/each}
+          </div>
+        {:else}
+          <p class="pp-sections__empty">
+            {isMyProfile ? 'Закрепите значки на витрине — они появятся здесь' : 'Значков пока нет'}
+          </p>
+        {/if}
+      {/if}
+{/snippet}
+
 {#if sections.length && current != null}
   <section class="pp-sections uiv2-card" aria-label="Разделы профиля">
     <UiV2Tabs
@@ -205,70 +285,10 @@
       {/snippet}
     </UiV2Tabs>
 
-    <div class="pp-sections__body" role="tabpanel">
-      {#if current === 0}
-        <div class="profile-panel__stats">
-          <ProfileStatsSection {profile} {profileId} {isMyProfile} plain />
-        </div>
-      {:else if current === 1}
-        {#if votes.length}
-          <UiV2ReleaseCarousel measureKey={votes.length}>
-            {#each votes as item (item.id)}
-              <div class="uiv2-carousel__item">
-                <ReleaseCardUiV2 data={item} variant="vertical" />
-              </div>
-            {/each}
-          </UiV2ReleaseCarousel>
-        {:else}
-          <p class="pp-sections__empty">Оценок пока нет</p>
-        {/if}
-      {:else if current === 2}
-        {#if collections.length}
-          <UiV2ReleaseCarousel measureKey={collections.length} class="pp-sections__carousel--wide">
-            {#each collections as c (c.id)}
-              <div class="uiv2-carousel__item">
-                <CollectionCard data={c} />
-              </div>
-            {/each}
-          </UiV2ReleaseCarousel>
-        {:else}
-          <p class="pp-sections__empty">Коллекций пока нет</p>
-        {/if}
-      {:else if current === 3}
-        {#if comments.length}
-          <OverviewCommentsWeek items={comments} />
-        {:else}
-          <p class="pp-sections__empty">Комментариев пока нет</p>
-        {/if}
-      {:else if current === 4}
-        {#if videos.length}
-          <UiV2ReleaseCarousel measureKey={videos.length} class="pp-sections__carousel--wide">
-            {#each videos as v (v.id)}
-              {@const img = v.image ? resolveCdnAssetUrl(String(v.image)) : ''}
-              <div class="uiv2-carousel__item">
-                <button type="button" class="pp-sections__video" onclick={() => showAll(4)}>
-                  <span class="pp-sections__video-img">{#if img}<img src={img} alt="" loading="lazy" />{/if}</span>
-                  <span class="pp-sections__video-title">{String(v.title ?? '')}</span>
-                </button>
-              </div>
-            {/each}
-          </UiV2ReleaseCarousel>
-        {:else}
-          <p class="pp-sections__empty">Видео пока нет</p>
-        {/if}
-      {:else if current === 5}
-        {#if badges.length}
-          <div class="pp-sections__badges">
-            {#each badges as b (b.id)}
-              <BadgeTile badge={b} compact onclick={(x) => (openBadge = x)} />
-            {/each}
-          </div>
-        {:else}
-          <p class="pp-sections__empty">
-            {isMyProfile ? 'Закрепите значки на витрине — они появятся здесь' : 'Значков пока нет'}
-          </p>
-        {/if}
-      {/if}
+    <div class="pp-sections__body" role="tabpanel" use:swipeTabs={{ onSwipe: swipeToSection, enabled: isMobileMode(), activeId: String(current) }}>
+      {@render sectionBody(current)}
+      {#if peekSections.prev != null}<TabPeek dir={-1}>{@render sectionBody(peekSections.prev)}</TabPeek>{/if}
+      {#if peekSections.next != null}<TabPeek dir={1}>{@render sectionBody(peekSections.next)}</TabPeek>{/if}
     </div>
 
     {#if current === 0}

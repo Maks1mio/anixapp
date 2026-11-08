@@ -5,7 +5,7 @@
   import HomeCustomFilterView from '../components/HomeCustomFilterView.svelte';
   import HomeTabRenameModal from '../components/HomeTabRenameModal.svelte';
   import { headlineFromLoadError } from '../utils/content-load-error';
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
   import { navigate } from '../stores/navigation';
   import { requireAuth } from '../stores/auth';
   import Tabs, { type TabItem } from '../components/Tabs.svelte';
@@ -18,6 +18,9 @@
   import AnnouncementBanner from '../components/AnnouncementBanner.svelte';
   import HomeContinueWatching from '../components/HomeContinueWatching.svelte';
   import { swipeTabs } from '../actions/swipeTabs';
+  import { isAuthenticated } from '../stores/auth';
+  import TabPeek from '../components/TabPeek.svelte';
+  import { createTabPrefetch, tabNeighbors, TAB_PEEK_ITEMS } from '../utils/tab-prefetch.svelte';
   import { isMobileMode } from '../platform/mobile';
   import {
     isHomeCustomTabConfigured,
@@ -253,7 +256,10 @@
     if (nextPage === 0 && loadState !== 'error') loadState = 'loading';
 
     try {
+      const requestedTab = activeTab;
       const data = await window.anixApi.release.filter(nextPage, toIpcArgs(getFilterArgs(activeTab)), true) as any;
+      // Пока шёл запрос, перелистнули на другую вкладку
+      if (requestedTab !== activeTab) return;
       const content = (data?.content ?? []) as Record<string, unknown>[];
       if (!content.length) {
         hasMore = false;
@@ -307,6 +313,23 @@
     items = [];
   }
 
+  /** Первая страница соседних вкладок: при свайпе рядом едет уже настоящий список. */
+  const tabPrefetch = createTabPrefetch<ReleaseCardData[]>(async (id) => {
+    if (id === 'my' && (!customTabConfigured || !$isAuthenticated)) return [];
+    const data = await window.anixApi?.release.filter(0, toIpcArgs(getFilterArgs(id as HomeTabId)), true) as { content?: Record<string, unknown>[] };
+    return (data?.content ?? []).map((raw) => mapReleaseRawToCard(raw));
+  });
+  const peekTabs = $derived(tabNeighbors(homeTabs.map((t) => t.id), activeTab));
+
+  $effect(() => {
+    if (!isMobileMode() || loadState === 'loading') return;
+    const { prev, next } = peekTabs;
+    untrack(() => {
+      if (prev) tabPrefetch.ensure(prev);
+      if (next) tabPrefetch.ensure(next);
+    });
+  });
+
   /** Свайп по списку (телефон): соседняя вкладка; «Моя вкладка» без входа пропускается как обычно. */
   function swipeToTab(dir: 1 | -1): boolean {
     const i = homeTabs.findIndex((t) => t.id === activeTab);
@@ -321,6 +344,17 @@
     if (tabId === 'my' && !requireAuth()) return;
     saveViewStateWithScroll(HOME_VIEW_KEY(activeTab), homeSnapshot());
     activeTab = tabId;
+
+    const prefetched = isMobileMode() ? tabPrefetch.get(tabId) : undefined;
+    if (prefetched?.length) {
+      isLoading = false;
+      items = prefetched;
+      page = 1;
+      hasMore = true;
+      loadState = 'ready';
+      requestAnimationFrame(checkIfNeedsMore);
+      return;
+    }
 
     const cached = getViewState<HomeViewState>(HOME_VIEW_KEY(tabId));
     if (cached?.data && cached.data.items.length > 0) {
@@ -432,6 +466,7 @@
   }
 
   function forceRefreshHome() {
+    tabPrefetch.clear();
     for (const tabId of HOME_TAB_IDS) {
       removeViewState(HOME_VIEW_KEY(tabId));
     }
@@ -546,8 +581,10 @@
     {/snippet}
   </Tabs>
 
-  <div class="home-content" use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode() }}>
-    <HomeContinueWatching />
+  <!-- На телефоне карточка над перелистываемым списком: она общая для всех вкладок -->
+  {#if isMobileMode()}<HomeContinueWatching />{/if}
+  <div class="home-content" use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab }}>
+    {#if !isMobileMode()}<HomeContinueWatching />{/if}
     <div class="home-list">
       {#if loadState === 'unconfigured' || showMyTabEmpty}
         <div class="home-my-tab-empty">
@@ -574,8 +611,19 @@
         </div>
       {/if}
     </div>
+    {#if peekTabs.prev}<TabPeek dir={-1}>{@render homePeek(peekTabs.prev)}</TabPeek>{/if}
+    {#if peekTabs.next}<TabPeek dir={1}>{@render homePeek(peekTabs.next)}</TabPeek>{/if}
   </div>
 </div>
+
+{#snippet homePeek(id: string)}
+  {@const cards = tabPrefetch.get(id)}
+  {#if cards?.length}
+    <div class="bookmarks__grid"><ReleaseCardsGrid items={cards.slice(0, TAB_PEEK_ITEMS)} /></div>
+  {:else if !cards}
+    <div class="bookmarks__grid"><ReleaseCardsGridSkeleton /></div>
+  {/if}
+{/snippet}
 
 {#if filterModalOpen}
   <HomeCustomFilterView

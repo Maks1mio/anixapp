@@ -1,4 +1,5 @@
 import {
+  iconBell,
   iconBookmark,
   iconCompass,
   iconFlame,
@@ -34,6 +35,7 @@ export const TV_NAV_ITEMS: TvNavItem[] = [
       `<svg width="${TV_ICON_SIZE}" height="${TV_ICON_SIZE}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${TV_ICON_STROKE}" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>`,
     ),
   },
+  { id: 'notifications', href: '/notifications', label: 'Уведомления', icon: tvNavIcon(iconBell(TV_ICON_SIZE)) },
   {
     id: 'settings',
     href: '/settings',
@@ -68,6 +70,7 @@ export const TV_SHELL_PATHS = new Set([
   '/overview/popular',
   '/bookmarks',
   '/search',
+  '/notifications',
   '/settings',
   '/profile',
 ]);

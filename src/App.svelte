@@ -118,7 +118,7 @@
   } from './tv/keepAlive';
   import { isTvUnsupportedPath } from './tv/nav';
   import WebPlayerShell from './components/WebPlayerShell.svelte';
-  import { isEmbeddedWebPlayer } from './utils/watch-nav';
+  import { isEmbeddedWebPlayer, playerWindowOpener } from './utils/watch-nav';
   import { startAppPresence } from './services/app-presence';
   import SupportModal from './components/SupportModal.svelte';
   import SupportPromo from './components/SupportPromo.svelte';
@@ -521,7 +521,7 @@
           ...(action ? { action } : {}),
         };
         lobbyCurrentPlayback.set(pb);
-        if (window.electron?.syncPlayerState) {
+        if (playerWindowOpener() && window.electron?.syncPlayerState) {
           window.electron.syncPlayerState(pb);
           window.electron?.sendParticipantsToPlayer?.(getCurrentParticipants());
         } else if (isEmbeddedWebPlayer()) {
@@ -968,6 +968,13 @@
       </TvKeepAlive>
     {/each}
 
+    <!-- Не держим в keep-alive: при каждом входе список должен быть свежим -->
+    {#if path === '/notifications'}
+      <TvKeepAlive keepKey="notifications" active>
+        <NotificationsModal page />
+      </TvKeepAlive>
+    {/if}
+
     {#if isWatchRoute}
       <TvKeepAlive keepKey="watch" active>
         <TvPlayerShell />
@@ -1092,6 +1099,8 @@
       {#key `${searchQ}|${searchBy}|${searchHiddenOnly}`}
         <Search q={searchQ} tab={searchTab} {searchBy} hiddenOnly={searchHiddenOnly} />
       {/key}
+    {:else if path === '/notifications'}
+      <NotificationsModal page />
     {:else if path === '/downloads'}
       {#if isMobileMode()}<MobileDownloads />{:else}<Downloads />{/if}
     {:else if path === '/uikit'}
@@ -1134,15 +1143,12 @@
   {/if}
 
 {:else if isMobileMode()}
-  <MobileLayout currentPath={path}>
+  <MobileLayout currentPath={path} search={{ q: searchQ, tab: searchTab, by: searchBy, hiddenOnly: searchHiddenOnly }}>
     {#key pageRefreshKey}
       {@render appRoutes()}
     {/key}
   </MobileLayout>
 
-  {#if $notificationsModalOpen}
-    <NotificationsModal onClose={() => notificationsModalOpen.set(false)} />
-  {/if}
   {#if $watchModalOpen}
     <WatchModal
       releaseId={$watchModalReleaseId}
@@ -1174,7 +1180,7 @@
     </Layout>
   {/if}
 
-  {#if $notificationsModalOpen}
+  {#if $notificationsModalOpen && !isTvMode()}
     <NotificationsModal onClose={() => notificationsModalOpen.set(false)} />
   {/if}
   {#if $watchModalOpen}

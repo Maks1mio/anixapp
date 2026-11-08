@@ -2,8 +2,9 @@
   import type { Snippet } from 'svelte';
   import { navigateSidebarTab, navigate } from '../stores/navigation';
   import { isSidebarTabActive } from '../stores/tab-navigation';
-  import { settingsModalOpen } from '../stores/modals';
-  import { requireAuth } from '../stores/auth';
+  import { notificationsModalOpen, settingsModalOpen } from '../stores/modals';
+  import { notificationUnreadCount, refreshNotificationUnreadCount } from '../stores/notifications';
+  import { isAuthenticated, requireAuth } from '../stores/auth';
   import { closeProfilePanel, profilePanelOpen, profilePanelUserId } from '../stores/profile-panel';
   import { TV_NAV_ITEMS, TV_PROFILE_NAV_ITEM, TV_POWER_NAV_ITEM, tvNavHref, type TvNavItem } from '../tv/nav';
   import { tvSystemMenuOpen } from '../services/tv-input';
@@ -25,13 +26,13 @@
 
   const isProfileRoute = $derived(routePath === '/profile' || /^\/profile\/\d+$/.test(routePath));
   /** Поиск, настройки и профиль — не вкладки сайдбара ПК: подсвечиваются только на своём маршруте. */
-  const isStandaloneRoute = $derived(isProfileRoute || routePath === '/settings' || routePath === '/search');
+  const isStandaloneRoute = $derived(isProfileRoute || ['/settings', '/search', '/notifications'].includes(routePath));
 
   function isActive(item: TvNavItem): boolean {
     if ('action' in item && item.action === 'profile') return isProfileRoute;
     const href = tvNavHref(item);
     if (!href) return false;
-    if (href === '/settings' || href === '/search') return routePath === href;
+    if (href === '/settings' || href === '/search' || href === '/notifications') return routePath === href;
     if (isStandaloneRoute) return false;
     return isSidebarTabActive(href, currentPath ?? '');
   }
@@ -61,7 +62,7 @@
     }
     const href = tvNavHref(item);
     if (!href) return;
-    if (href === '/bookmarks' && !requireAuth()) {
+    if ((href === '/bookmarks' || href === '/notifications') && !requireAuth()) {
       returnTvFocusToContent();
       return;
     }
@@ -80,6 +81,27 @@
     if (!$settingsModalOpen) return;
     settingsModalOpen.set(false);
     if (routePath !== '/settings') navigate('/settings');
+  });
+
+  // Уведомления на TV — тоже отдельный экран, а не всплывающая панель
+  $effect(() => {
+    if (!$notificationsModalOpen) return;
+    notificationsModalOpen.set(false);
+    if (routePath !== '/notifications') navigate('/notifications');
+  });
+
+  const inNotifications = $derived(routePath === '/notifications');
+
+  // Счётчик на пункте рейла: при входе в аккаунт, раз в минуту и при входе/выходе из списка
+  $effect(() => {
+    if (!$isAuthenticated) {
+      notificationUnreadCount.set(0);
+      return;
+    }
+    void inNotifications;
+    void refreshNotificationUnreadCount();
+    const poll = window.setInterval(() => void refreshNotificationUnreadCount(), 60_000);
+    return () => window.clearInterval(poll);
   });
 
   function onNavClick(event: MouseEvent, item: TvNavItem) {
@@ -116,6 +138,9 @@
               <span class="tv-layout__rail-item-leading">
                 <span class="tv-layout__rail-icon" aria-hidden="true">{@html item.icon}</span>
                 <span class="tv-layout__rail-active-mark" aria-hidden="true"></span>
+                {#if item.id === 'notifications' && $notificationUnreadCount > 0}
+                  <span class="tv-layout__rail-badge">{$notificationUnreadCount > 99 ? '99+' : $notificationUnreadCount}</span>
+                {/if}
               </span>
               <span class="tv-layout__rail-label">{item.label}</span>
             </button>

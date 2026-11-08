@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
+  import { swipeTabs } from '../actions/swipeTabs';
+  import { isMobileMode } from '../platform/mobile';
+  import TabPeek from '../components/TabPeek.svelte';
+  import { createTabPrefetch, tabNeighbors, TAB_PEEK_ITEMS } from '../utils/tab-prefetch.svelte';
   import { navigate } from '../stores/navigation';
   import Tabs from '../components/Tabs.svelte';
   import UserAvatar from '../components/UserAvatar.svelte';
@@ -115,10 +119,43 @@
     }
   }
 
+  /** Первая страница соседних вкладок: при свайпе рядом едет уже настоящий список. */
+  const tabPrefetch = createTabPrefetch<ProfileCommentPreviewItem[]>(async (id) => {
+    const data = resolveJacksonRefs(await fetchPage(id as CommentTabId, 0) as Record<string, unknown>);
+    return ((data?.content ?? []) as Record<string, unknown>[])
+      .map((raw) => mapProfileCommentPreview({ ...raw, comment_type: id }, jacksonRoot ?? undefined))
+      .filter((item): item is ProfileCommentPreviewItem => item != null);
+  });
+  const peekTabs = $derived(tabNeighbors(COMMENT_TABS.map((t) => t.id), activeTab));
+
+  $effect(() => {
+    if (!isMobileMode() || loadState !== 'ready') return;
+    const { prev, next } = peekTabs;
+    untrack(() => {
+      if (prev) tabPrefetch.ensure(prev);
+      if (next) tabPrefetch.ensure(next);
+    });
+  });
+
+  function swipeToTab(dir: 1 | -1): boolean {
+    const nextTab = COMMENT_TABS[COMMENT_TABS.findIndex((t) => t.id === activeTab) + dir];
+    if (!nextTab) return false;
+    onTabChange(nextTab.id);
+    return true;
+  }
+
   function onTabChange(tabId: string) {
     if (tabId === activeTab) return;
     activeTab = tabId as CommentTabId;
     revealed = {};
+    const seed = isMobileMode() ? tabPrefetch.get(tabId) : undefined;
+    if (seed?.length) {
+      items = seed;
+      page = 1;
+      hasMore = seed.length >= 25;
+      loadState = 'ready';
+      return;
+    }
     void load(false);
   }
 
@@ -174,8 +211,22 @@
       {:else if loadState === 'empty'}
         <p class="search-page__empty">Комментариев нет</p>
       {:else}
+        <div use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab }}>
+          {@render commentList(items)}
+          {#if peekTabs.prev}<TabPeek dir={-1}>{@render commentsPeek(peekTabs.prev)}</TabPeek>{/if}
+          {#if peekTabs.next}<TabPeek dir={1}>{@render commentsPeek(peekTabs.next)}</TabPeek>{/if}
+        </div>
+      {/if}
+      {#if isLoading && loadState === 'ready'}
+        <div class="search-page__loading">Загрузка…</div>
+      {/if}
+    </div>
+  </div>
+</div>
+
+{#snippet commentList(list: ProfileCommentPreviewItem[])}
         <div class="overview-comments-week">
-          {#each items as item (item.id)}
+          {#each list as item (item.id)}
             {@const hidden = isCommentContentHidden(
               { isSpoiler: item.isSpoiler, isDeleted: false, voteCount: item.voteCount },
               !!revealed[item.id],
@@ -238,10 +289,15 @@
             </article>
           {/each}
         </div>
-      {/if}
-      {#if isLoading && loadState === 'ready'}
-        <div class="search-page__loading">Загрузка…</div>
-      {/if}
-    </div>
-  </div>
-</div>
+{/snippet}
+
+{#snippet commentsPeek(id: string)}
+  {@const list = tabPrefetch.get(id)}
+  {#if list?.length}
+    {@render commentList(list.slice(0, TAB_PEEK_ITEMS))}
+  {:else if list}
+    <p class="search-page__empty">Комментариев нет</p>
+  {:else}
+    <div class="search-page__loading">Загрузка…</div>
+  {/if}
+{/snippet}

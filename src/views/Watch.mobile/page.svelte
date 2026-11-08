@@ -1089,7 +1089,7 @@
   }
   .mw__track-buffered, .mw__track-played { position: absolute; left: 0; top: 0; bottom: 0; border-radius: inherit; }
   .mw__track-buffered { background: rgba(255, 255, 255, 0.35); }
-  .mw__track-played { background: var(--m-primary, #d0bcff); }
+  .mw__track-played { background: var(--m-primary, #e35454); }
   .mw__track-segments {
     position: absolute;
     inset: 0;
@@ -1105,7 +1105,7 @@
     height: 14px;
     margin: -7px 0 0 -7px;
     border-radius: 50%;
-    background: var(--m-primary, #d0bcff);
+    background: var(--m-primary, #e35454);
     box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.25);
   }
   .mw__bubble {
@@ -1219,7 +1219,7 @@
     width: 40px;
     height: 40px;
     border: 3px solid rgba(255, 255, 255, 0.2);
-    border-top-color: var(--m-primary, #d0bcff);
+    border-top-color: var(--m-primary, #e35454);
     border-radius: 50%;
     animation: mw-spin 0.9s linear infinite;
   }
@@ -1280,7 +1280,7 @@
     border-radius: 10px;
     border: 1px solid rgba(255, 255, 255, 0.25);
     font-size: 14px;
-    &--on { border-color: transparent; background: var(--m-primary, #d0bcff); color: var(--m-on-primary, #381e72); font-weight: 600; }
+    &--on { border-color: transparent; background: var(--m-primary, #e35454); color: var(--m-on-primary, #ffffff); font-weight: 600; }
   }
   .mw__row {
     display: flex;
@@ -1292,7 +1292,7 @@
     text-align: left;
     font-size: 15px;
     &:active { background: rgba(255, 255, 255, 0.08); }
-    &--on { color: var(--m-primary, #d0bcff); font-weight: 600; }
+    &--on { color: var(--m-primary, #e35454); font-weight: 600; }
   }
   .mw__row-num { flex: none; min-width: 28px; font-variant-numeric: tabular-nums; color: rgba(255, 255, 255, 0.55); }
   .mw__row--on .mw__row-num { color: inherit; }

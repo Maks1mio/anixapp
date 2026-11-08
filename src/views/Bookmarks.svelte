@@ -4,11 +4,12 @@
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import { headlineFromLoadError } from '../utils/content-load-error';
   import { swipeTabs } from '../actions/swipeTabs';
+  import TabPeek from '../components/TabPeek.svelte';
+  import { createTabPrefetch, tabNeighbors, TAB_PEEK_ITEMS } from '../utils/tab-prefetch.svelte';
   import { isMobileMode } from '../platform/mobile';
   import UiV2CollectionCardSkeleton from '../components/uikit-v2/UiV2CollectionCardSkeleton.svelte';
   import CollectionCard from '../components/CollectionCard.svelte';
-  import BookmarksToolbar from '../components/BookmarksToolbar.svelte';
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
   import Tabs, { type TabItem } from '../components/Tabs.svelte';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../components/uikit-v2/UiV2PopupMenu.svelte';
   import UiV2Card from '../components/uikit-v2/UiV2Card.svelte';
@@ -353,7 +354,7 @@
   let tabMenuX = $state(0);
   let tabMenuY = $state(0);
   let tabMenuPlacement = $state<'point' | 'anchor'>('point');
-  let tabMenuKind = $state<'context' | 'default-picker' | null>(null);
+  let tabMenuKind = $state<'context' | null>(null);
   let tabMenuTabId = $state<TabId | null>(null);
   let profileLogin = $state('');
   let profileAvatar = $state('');
@@ -362,16 +363,6 @@
   let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
   const tabMenuItems = $derived.by((): UiV2PopupMenuItem[] => {
-    if (tabMenuKind === 'default-picker') {
-      return SELF_TABS.map((tab) => ({
-        id: `bookmark-default-${tab.id}`,
-        label: tab.label,
-        type: 'radio' as const,
-        checked: defaultBookmarksTab === tab.id,
-        keepOpen: true,
-      }));
-    }
-
     if (tabMenuKind === 'context' && tabMenuTabId) {
       return [{ id: 'set-default', label: 'Назначить по умолчанию', icon: iconHome(18) }];
     }
@@ -526,13 +517,15 @@
     }
   }
 
-  async function fetchPage(page: number): Promise<FetchPageResult> {
+  async function fetchPage(page: number, tabId: TabId = activeTab): Promise<FetchPageResult> {
+    const listSort = tabId === activeTab ? selectedSort : getBookmarksSort();
+    const listAnnounce = tabId === activeTab ? announceFilter : getBookmarksAnnounceFilter();
     if (!window.anixApi) return { content: [], total: 0, exhaustive: true };
 
     const q = searchQuery.trim();
     const api = window.anixApi;
 
-    if (activeTab === 'collections') {
+    if (tabId === 'collections') {
       if (q) {
         if (page > 0) return { content: [], total: 0, exhaustive: true };
         return scanAllPagesForQuery(q, async (p) => {
@@ -546,7 +539,7 @@
       return { content, total: extractTotalCount(data, content.length) };
     }
 
-    if (activeTab === 'history') {
+    if (tabId === 'history') {
       if (q) {
         if (page > 0) return { content: [], total: 0, exhaustive: true };
         return scanAllPagesForQuery(q, async (p) => {
@@ -560,7 +553,7 @@
       return { content, total: extractTotalCount(data, content.length) };
     }
 
-    if (activeTab === 'votes' && votesMode === 'unvoted') {
+    if (tabId === 'votes' && votesMode === 'unvoted') {
       const fetchUnvoted = async (p: number) => {
         const data = await api.profile.getUnvotedReleases?.(p) as Record<string, unknown> | null;
         const content = (data?.content ?? []) as Record<string, unknown>[];
@@ -573,7 +566,7 @@
       return fetchUnvoted(page);
     }
 
-    if (activeTab === 'votes') {
+    if (tabId === 'votes') {
       const profileId = await ensureProfileId();
       if (typeof profileId !== 'number') return { content: [], total: 0, exhaustive: true };
       if (q) {
@@ -593,21 +586,21 @@
       return { content, total: extractTotalCount(data, content.length) };
     }
 
-    if (activeTab === 'favorites') {
+    if (tabId === 'favorites') {
       if (q) {
         if (page > 0) return { content: [], total: 0, exhaustive: true };
         return scanAllPagesForQuery(q, async (p) => {
-          const data = await api.favorites.all(p, selectedSort, announceFilter, 0) as Record<string, unknown>;
+          const data = await api.favorites.all(p, listSort, listAnnounce, 0) as Record<string, unknown>;
           const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
           return { content, total: extractTotalCount(data, content.length) };
         });
       }
-      const data = await api.favorites.all(page, selectedSort, announceFilter, 0) as Record<string, unknown>;
+      const data = await api.favorites.all(page, listSort, listAnnounce, 0) as Record<string, unknown>;
       const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
       return { content, total: extractTotalCount(data, content.length) };
     }
 
-    const tab = TABS.find((t) => t.id === activeTab)!;
+    const tab = TABS.find((t) => t.id === tabId)!;
     const profileId = await ensureProfileId();
     if (typeof profileId !== 'number' || tab.type == null) {
       return { content: [], total: 0, exhaustive: true };
@@ -632,8 +625,8 @@
           profileId,
           tab.type!,
           p,
-          selectedSort,
-          announceFilter,
+          listSort,
+          listAnnounce,
           0,
         ) as Record<string, unknown>;
         const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
@@ -645,8 +638,8 @@
       profileId,
       tab.type,
       page,
-      selectedSort,
-      announceFilter,
+      listSort,
+      listAnnounce,
       0,
     ) as Record<string, unknown>;
     const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
@@ -773,6 +766,37 @@
     }
   }
 
+  type TabSeed = {
+    items: ReleaseCardData[];
+    collectionItems: CollectionCardData[];
+    total: number;
+    hasMore: boolean;
+    nextPage: number;
+  };
+
+  /** Первая страница соседних вкладок: при свайпе рядом едет уже настоящий список. */
+  const tabPrefetch = createTabPrefetch<TabSeed>(async (id) => {
+    const tabId = id as TabId;
+    const { content, total, exhaustive } = await fetchPage(0, tabId);
+    return {
+      items: tabId === 'collections' ? [] : content.map(tabId === 'history' ? mapHistoryToReleaseCard : mapReleaseToCardData),
+      collectionItems: tabId === 'collections' ? content.map(mapCollectionToCardData) : [],
+      total,
+      hasMore: !exhaustive && (tabId === 'votes' ? content.length >= 25 && !(total > 0 && 25 >= total) : content.length > 0),
+      nextPage: 1,
+    };
+  });
+  const peekTabs = $derived(tabNeighbors(TABS.map((t) => t.id), activeTab));
+
+  $effect(() => {
+    if (!isMobileMode() || loadState === 'loading' || searchQuery) return;
+    const { prev, next } = peekTabs;
+    untrack(() => {
+      if (prev) tabPrefetch.ensure(prev);
+      if (next) tabPrefetch.ensure(next);
+    });
+  });
+
   function swipeToTab(dir: 1 | -1): boolean {
     const i = TABS.findIndex((t) => t.id === activeTab);
     const next = TABS[i + dir];
@@ -804,6 +828,24 @@
       searchQuery = '';
     }
 
+    const seed = !resetSort && !force && isMobileMode() ? tabPrefetch.get(tabId) : undefined;
+    if (seed && (seed.items.length > 0 || seed.collectionItems.length > 0)) {
+      if (tabUsesSort(tabId)) {
+        selectedSort = getBookmarksSort();
+        announceFilter = getBookmarksAnnounceFilter();
+      }
+      items = seed.items;
+      collectionItems = seed.collectionItems;
+      totalCount = seed.total;
+      hasMore = seed.hasMore;
+      nextPage = seed.nextPage;
+      showEnd = !seed.hasMore;
+      errorMsg = '';
+      loadState = 'ready';
+      tryLoadMoreIfNeeded();
+      return;
+    }
+
     if (!resetSort && !force) {
       const cached = getViewState<BookmarksViewState>(BOOKMARKS_VIEW_KEY());
       if (
@@ -818,7 +860,10 @@
       }
     }
 
-    if (force) invalidateViewStatePrefix(listsBasePath());
+    if (force) {
+      invalidateViewStatePrefix(listsBasePath());
+      tabPrefetch.clear();
+    }
     if (tabUsesSort(tabId)) {
       selectedSort = getBookmarksSort();
       announceFilter = getBookmarksAnnounceFilter();
@@ -874,6 +919,7 @@
   }
 
   function applyListChangeToCurrentTab(releaseId: number, statusId: string | null) {
+    tabPrefetch.clear();
     const belongsHere = isReleaseListTab && statusId === activeTab;
     if (belongsHere) {
       items = items.map((item) => (
@@ -1036,19 +1082,6 @@
     tryLoadMoreIfNeeded();
   }
 
-  function handleTabsSettingsClick(e: MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    const btn = e.currentTarget as HTMLElement;
-    const rect = btn.getBoundingClientRect();
-    tabMenuKind = 'default-picker';
-    tabMenuTabId = null;
-    tabMenuX = (rect.left + rect.right) / 2;
-    tabMenuY = (rect.top + rect.bottom) / 2;
-    tabMenuPlacement = 'anchor';
-    tabMenuOpen = true;
-  }
-
   function handleTabContextMenu(tab: TabItem, e: MouseEvent) {
     if (isOtherProfile) return;
     tabMenuKind = 'context';
@@ -1118,7 +1151,6 @@
 </script>
 
 <div class="view view-bookmarks" bind:this={wrapEl}>
-  {#if desktopLayout}
     <BookmarksDesktopHead
       title={isOtherProfile ? 'Списки' : listsOnly ? 'Мои списки' : 'Закладки'}
       login={profileLogin}
@@ -1132,66 +1164,8 @@
       onExport={() => (exportOpen = true)}
       onImport={() => (importOpen = true)}
     />
-  {:else}
-    <div class="bookmarks__user-header">
-      <button
-        type="button"
-        class="bookmarks__user"
-        onclick={(e) => handleUserProfileClick(profileIdForPanel, e)}
-        title="Открыть профиль"
-      >
-        <span
-          class="bookmarks__user-avatar"
-          style={headerAvatarUrl ? `background-image:url('${headerAvatarUrl}')` : undefined}
-          aria-hidden="true"
-        ></span>
-        <span class="bookmarks__user-name">{profileLogin || (isOtherProfile ? 'Профиль' : 'Мои списки')}</span>
-      </button>
 
-      <div class="bookmarks__user-actions">
-        {#if (isReleaseListTab || (isVotesTab && votesMode === 'voted')) && loadState !== 'loading'}
-          <BookmarksToolbar
-            {totalCount}
-            sort={isVotesTab ? voteSort : selectedSort}
-            onSortChange={isVotesTab ? onVoteSortChange : onSortChange}
-            sortOptions={isVotesTab ? VOTE_SORT_OPTIONS : undefined}
-            showRandom={isReleaseListTab}
-            onRandom={onRandom}
-            {randomLoading}
-          >
-            {#snippet leadingActions()}
-              {#if !isListsPage}
-                <button
-                  type="button"
-                  class="bookmarks-toolbar__icon-btn"
-                  title="Изменить вкладку по умолчанию"
-                  aria-label="Изменить вкладку по умолчанию"
-                  onclick={handleTabsSettingsClick}
-                >
-                  {@html iconHome(18)}
-                </button>
-              {/if}
-            {/snippet}
-          </BookmarksToolbar>
-        {:else}
-          {#if (isVotesTab || isFavoritesTab || isHistoryTab || isCollectionsTab) && loadState === 'ready' && totalCount > 0}
-            <span class="bookmarks-toolbar__count" title="Всего в списке">{totalCount}</span>
-          {/if}
-          {#if !isListsPage}
-            <button
-              type="button"
-              class="bookmarks-toolbar__icon-btn"
-              title="Изменить вкладку по умолчанию"
-              aria-label="Изменить вкладку по умолчанию"
-              onclick={handleTabsSettingsClick}
-            >
-              {@html iconHome(18)}
-            </button>
-          {/if}
-        {/if}
-      </div>
-    </div>
-
+  {#if !desktopLayout}
     <label class="bookmarks__search">
       <span class="bookmarks__search-icon" aria-hidden="true">{@html iconSearch(18)}</span>
       <input
@@ -1229,8 +1203,8 @@
     onTabContextMenu={isListsPage ? undefined : handleTabContextMenu}
   />
 
-  {#if desktopLayout}
     <BookmarksDesktopTools
+      hideSearch={!desktopLayout}
       {searchPlaceholder}
       searchValue={searchInput}
       {onSearchInput}
@@ -1246,7 +1220,6 @@
       {onFilterChange}
       {onRandom}
     />
-  {/if}
 
   {#if isVotesTab && !isOtherProfile}
     {#if votesMode === 'unvoted'}
@@ -1262,7 +1235,7 @@
     {/if}
   {/if}
 
-  <div class="bookmarks__content" use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode() }}>
+  <div class="bookmarks__content" use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab }}>
     <div class="bookmarks__grid">
       {#if loadState === 'loading'}
         {#if isCollectionsTab}
@@ -1311,8 +1284,33 @@
         <ReleaseCardsGridSkeleton count={4} />
       {/if}
     {/if}
+    {#if peekTabs.prev}<TabPeek dir={-1}>{@render bookmarksPeek(peekTabs.prev)}</TabPeek>{/if}
+    {#if peekTabs.next}<TabPeek dir={1}>{@render bookmarksPeek(peekTabs.next)}</TabPeek>{/if}
   </div>
 </div>
+
+{#snippet bookmarksPeek(id: string)}
+  {@const seed = tabPrefetch.get(id)}
+  <div class="bookmarks__grid">
+    {#if !seed}
+      {#if id === 'collections'}
+        <div class="bookmarks__collections"><UiV2CollectionCardSkeleton count={6} /></div>
+      {:else}
+        <ReleaseCardsGridSkeleton />
+      {/if}
+    {:else if id === 'collections'}
+      <div class="bookmarks__collections">
+        {#each seed.collectionItems.slice(0, TAB_PEEK_ITEMS) as c (c.id)}
+          <CollectionCard data={c} />
+        {/each}
+      </div>
+    {:else if seed.items.length}
+      <ReleaseCardsGrid items={seed.items.slice(0, TAB_PEEK_ITEMS)} variant={id === 'history' ? 'history' : undefined} />
+    {:else}
+      <p class="bookmarks__empty">Здесь пока ничего нет.</p>
+    {/if}
+  </div>
+{/snippet}
 
 <UiV2PopupMenu
   open={tabMenuOpen}

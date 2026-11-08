@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
+  import { swipeTabs } from '../actions/swipeTabs';
+  import { isMobileMode } from '../platform/mobile';
+  import TabPeek from '../components/TabPeek.svelte';
+  import { createTabPrefetch, tabNeighbors, TAB_PEEK_ITEMS } from '../utils/tab-prefetch.svelte';
   import UiV2Tabs from '../components/uikit-v2/UiV2Tabs.svelte';
   import UiV2Select from '../components/uikit-v2/UiV2Select.svelte';
   import UiV2Button from '../components/uikit-v2/UiV2Button.svelte';
@@ -132,6 +136,40 @@
     items[0]?.poster ? toPosterDisplayUrl(toCdnProxyUrl(items[0].poster), 'cardVertical') : null,
   );
 
+  /** Фильтры, с которыми откроется вкладка: Онгоинги и Завершённые сбрасывают статус (см. onTabChange). */
+  function filtersForTab(tab: PopularViewTab): PopularFilters {
+    return effectivePopularFilters(popularTabStatus(tab) == null ? filters : { ...filters, status: 'any' });
+  }
+
+  /** Первая страница соседних вкладок: при свайпе рядом едет уже настоящий список. */
+  const tabPrefetch = createTabPrefetch<ReleaseCardData[]>(async (id) => {
+    const tab = id as PopularViewTab;
+    const f = filtersForTab(tab);
+    if (f.source === 'anixapp') {
+      return (await browseCatalog({ ...popularBrowseParams(tab, f), offset: 0, limit: BROWSE_PAGE })).items;
+    }
+    const data = await window.anixApi?.release.filter(0, toIpcArgs(popularFilterArgs(tab, f)), true) as { content?: unknown[] };
+    return ((data?.content ?? []) as Record<string, unknown>[]).map(mapCardData);
+  });
+  const peekTabs = $derived(tabNeighbors(tabs.map((t) => t.id), activeTab));
+
+  $effect(() => {
+    if (!isMobileMode() || loadState === 'loading') return;
+    void popularFiltersKey(applied);
+    const { prev, next } = peekTabs;
+    untrack(() => {
+      if (prev) tabPrefetch.ensure(prev);
+      if (next) tabPrefetch.ensure(next);
+    });
+  });
+
+  function swipeToTab(dir: 1 | -1): boolean {
+    const nextTab = tabs[tabs.findIndex((t) => t.id === activeTab) + dir];
+    if (!nextTab) return false;
+    onTabChange(nextTab.id);
+    return true;
+  }
+
   /** Растёт при смене вкладки или фильтров: ответ на старый запрос отбрасываем. */
   let loadGen = 0;
 
@@ -217,6 +255,19 @@
 
   /** Показать список для текущих вкладки и фильтров: из кеша или заново. */
   function showCurrent() {
+    const prefetched = isMobileMode() ? tabPrefetch.get(activeTab) : undefined;
+    if (prefetched?.length) {
+      loadGen += 1;
+      isLoading = false;
+      items = prefetched;
+      page = 1;
+      hasMore = applied.source !== 'anixapp' || prefetched.length >= BROWSE_PAGE;
+      loadState = 'ready';
+      errorMsg = '';
+      requestAnimationFrame(checkIfNeedsMore);
+      return;
+    }
+
     const cached = getViewState<PopularViewState>(POPULAR_VIEW_KEY(activeTab));
     if (cached?.data && cached.data.items.length > 0) {
       loadGen += 1;
@@ -250,7 +301,10 @@
     saveViewStateWithScroll(POPULAR_VIEW_KEY(), popularSnapshot());
     filters = next;
     savePopularFilters(next);
-    if (!sameList) showCurrent();
+    if (!sameList) {
+      tabPrefetch.clear();
+      showCurrent();
+    }
   }
 
   function patchFilters(patch: Partial<PopularFilters>) {
@@ -395,28 +449,14 @@
       {/if}
     </div>
   {:else}
-    <ol class="popular-podium">
-      {#each podium as item, index (item.id)}
-        <li class="popular-podium__place popular-podium__place--{index + 1}">
-          <ReleaseCardUiV2 data={item} variant="vertical" />
-          <div class="popular-podium__step">
-            <span class="popular-podium__rank">{index + 1}</span>
-          </div>
-        </li>
-      {/each}
-    </ol>
-
-    {#if rest.length}
-      <ol class="popular-list" start={PODIUM_SIZE + 1}>
-        {#each rest as item, index (item.id)}
-          <li class="popular-row">
-            <span class="popular-row__rank">{index + PODIUM_SIZE + 1}</span>
-            <div class="popular-row__card">
-              <ReleaseCardUiV2 data={item} variant="horizontal" compact />
-            </div>
-          </li>
-        {/each}
-      </ol>
+    {#if isMobileMode()}
+      <div use:swipeTabs={{ onSwipe: swipeToTab, activeId: activeTab }}>
+        {@render popularList(items)}
+        {#if peekTabs.prev}<TabPeek dir={-1}>{@render popularPeek(peekTabs.prev)}</TabPeek>{/if}
+        {#if peekTabs.next}<TabPeek dir={1}>{@render popularPeek(peekTabs.next)}</TabPeek>{/if}
+      </div>
+    {:else}
+      {@render popularList(items)}
     {/if}
     {#if isLoading}
       <div class="popular-list" aria-busy="true">
@@ -429,3 +469,42 @@
     {/if}
   {/if}
 </div>
+
+{#snippet popularList(list: ReleaseCardData[])}
+    <ol class="popular-podium">
+      {#each list.slice(0, PODIUM_SIZE) as item, index (item.id)}
+        <li class="popular-podium__place popular-podium__place--{index + 1}">
+          <ReleaseCardUiV2 data={item} variant="vertical" />
+          <div class="popular-podium__step">
+            <span class="popular-podium__rank">{index + 1}</span>
+          </div>
+        </li>
+      {/each}
+    </ol>
+
+    {#if list.length > PODIUM_SIZE}
+      <ol class="popular-list" start={PODIUM_SIZE + 1}>
+        {#each list.slice(PODIUM_SIZE) as item, index (item.id)}
+          <li class="popular-row">
+            <span class="popular-row__rank">{index + PODIUM_SIZE + 1}</span>
+            <div class="popular-row__card">
+              <ReleaseCardUiV2 data={item} variant="horizontal" compact />
+            </div>
+          </li>
+        {/each}
+      </ol>
+    {/if}
+{/snippet}
+
+{#snippet popularPeek(id: string)}
+  {@const cards = tabPrefetch.get(id)}
+  {#if cards?.length}
+    {@render popularList(cards.slice(0, TAB_PEEK_ITEMS))}
+  {:else if !cards}
+    <div class="popular-list" aria-busy="true">
+      {#each [0, 1, 2, 3] as i (i)}
+        <div class="popular-row popular-row--skeleton"><UiV2AnimeCardSkeleton variant="horizontal" /></div>
+      {/each}
+    </div>
+  {/if}
+{/snippet}

@@ -42,6 +42,16 @@
   opacity: 0;
 }
 
+/* Отдельная страница (телефон, планшет, TV): тот же контент, но без плавающей панели */
+.notifications-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  color: var(--uikit-v2-text, #{$color-text});
+  font-family: var(--uikit-v2-font, inherit);
+}
+
 .notifications-modal__header {
   display: flex;
   align-items: center;

@@ -15,6 +15,8 @@
   import { BOOKMARK_ANNOUNCE_FILTERS, bookmarkAnnounceFilterLabel } from '../../constants/bookmarkFilter';
 
   type Props = {
+    /** Телефон и планшет: поле поиска стоит в верхней панели приложения. */
+    hideSearch?: boolean;
     searchPlaceholder: string;
     searchValue: string;
     onSearchInput: (e: Event) => void;
@@ -35,6 +37,7 @@
   };
 
   let {
+    hideSearch = false,
     searchPlaceholder,
     searchValue,
     onSearchInput,
@@ -120,6 +123,7 @@
 </script>
 
 <div class="bm-tools" role="toolbar" aria-label="Действия списка">
+  {#if !hideSearch}
   <div class="bm-tools__search">
     <UiV2PillField
       size="md"
@@ -139,6 +143,7 @@
       </button>
     {/if}
   </div>
+  {/if}
 
   {#if showListControls}
     <UiV2Button

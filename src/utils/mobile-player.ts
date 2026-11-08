@@ -2,7 +2,7 @@
  * Выбор плеера на телефоне («Выберите плеер»): веб-плеер источника, АниксПлеер (наш AnixApp Player по Intent API),
  * встроенный плеер (/watch на hls.js) и сторонний (системный выбор). Настройка хранится локально.
  */
-import { launchPlayer, type WatchLaunchParams } from './watch-nav';
+import { launchPlayer, playerWindowOpener, type WatchLaunchParams } from './watch-nav';
 
 export type MobilePlayerKind = 'web' | 'anix' | 'builtin' | 'external';
 
@@ -411,8 +411,9 @@ export async function launchWithKind(
   }
   if (kind === 'web') {
     // Desktop: Kodik в iframe из 127.0.0.1 не играет — открываем URL источника top-level.
-    if (window.electron?.openPlayerWindow) {
-      await window.electron.openPlayerWindow({
+    const openWindow = playerWindowOpener();
+    if (openWindow) {
+      await openWindow({
         releaseId: String(params.releaseId),
         sourceId: String(params.sourceId),
         ep: String(params.ep),

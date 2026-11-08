@@ -343,6 +343,22 @@ html.tv-hints .watch-modal__tv-hint {
   vertical-align: middle;
 }
 
+.tv-layout__rail-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.3rem;
+  border-radius: 0.625rem;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.25rem;
+  text-align: center;
+}
+
 .tv-layout__rail-icon {
   display: inline-flex;
   align-items: center;
@@ -5153,5 +5169,19 @@ html.tv-mode .tv-vote__action[data-tv-focus='true'] {
 @keyframes watch-modal-tv-cover-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+// Уведомления — страница: крупнее для 10-foot UI, по центру экрана
+.notifications-page {
+  html.tv-mode & {
+    width: min(100%, 60rem);
+    height: 100vh;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 0;
+    font-size: 1.15em;
+
+    .notifications-modal__heading { font-size: 1.75rem; }
+    .notifications-modal__item[data-tv-focus='true'] { outline: 3px solid var(--color-text); outline-offset: -3px; border-radius: 0.75rem; }
   }
 }

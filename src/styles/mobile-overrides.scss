@@ -119,7 +119,7 @@ html.mobile-mode {
 }
 
 html.mobile-mode {
-  // desktop-каркас фиксирует высоту окна и скроллит внутренние области; на телефоне скроллится документ
+  // Документ на всю высоту окна; страницы прокручивает .m-app__scroll (.page__scroll) в MobileLayout
   &, body, #app { height: auto !important; min-height: 100dvh; overflow: visible !important; }
   body { overflow-x: hidden; }
 
@@ -259,7 +259,7 @@ html.mobile-mode {
   .view-release { padding: 0 !important; max-width: none !important; }
   .release-page__head { position: relative; padding: 0 var(--m-gutter) !important; margin-bottom: 0 !important; }
   .m-release-bg {
-    position: absolute; left: 50%; width: 100vw; margin-left: -50vw; top: -120px; height: 700px; z-index: 0; pointer-events: none; overflow: hidden;
+    position: absolute; left: 50%; width: calc(100vw - var(--m-rail-w)); margin-left: calc((100vw - var(--m-rail-w)) / -2); top: -120px; height: 700px; z-index: 0; pointer-events: none; overflow: hidden;
     &::before {
       content: ''; position: absolute; inset: -40px; background: inherit; background-size: cover; background-position: center top;
       filter: blur(30px) brightness(0.32) saturate(0.9);
@@ -465,7 +465,7 @@ html.mobile-mode {
 // ── Промо Anix+: карточка над таб-баром на всю ширину, а не desktop-тост в углу ──
 html.mobile-mode {
   .support-promo {
-    left: var(--m-gutter) !important;
+    left: calc(var(--m-rail-w) + var(--m-gutter)) !important;
     right: var(--m-gutter) !important;
     bottom: calc(var(--m-nav-h) + env(safe-area-inset-bottom) + var(--m-space-3)) !important;
     width: auto !important;
@@ -478,7 +478,7 @@ html.mobile-mode {
 }
 
 // ── Закладки, как в Anixart: поиск по вкладке стоит в верхней панели (MobileLayout оставляет под него место),
-//    под вкладками — строка «N всего · сортировка · рандом»; аватар/ник и кнопка «по умолчанию» не нужны ──
+//    остальное как на ПК: шапка с меню, вкладки, сортировка, фильтр анонсов и случайный тайтл ──
 html.mobile-mode {
   .view-bookmarks { display: flex !important; flex-direction: column; padding: 0 !important; }
   .bookmarks__search {
@@ -497,44 +497,31 @@ html.mobile-mode {
     svg { width: 24px; height: 24px; color: var(--m-text-2); }
   }
   .bookmarks__search-input { font: 400 16px var(--m-font) !important; color: var(--m-text) !important; &::placeholder { color: var(--m-text-2); } }
-  .bookmarks__tabs { order: 1; }
-  .bookmarks__user-header {
-    order: 2;
-    display: flex !important; align-items: center; height: auto !important; min-height: 0 !important;
-    margin: 0 !important; padding: var(--m-space-3) var(--m-gutter) 0 !important;
-    &:not(:has(.bookmarks-toolbar, .bookmarks-toolbar__count)) { display: none !important; }
+  .bookmarks__tabs { order: 2; }
+  // Шапка и инструменты — те же компоненты, что на ПК (BookmarksDesktopHead, BookmarksDesktopTools)
+  .bm-head {
+    order: 1;
+    margin: 0 !important;
+    padding: var(--m-space-1) var(--m-gutter) var(--m-space-2) !important;
   }
-  .bookmarks__user, .bookmarks__user-actions > .bookmarks-toolbar__icon-btn,
-  .bookmarks-toolbar__actions > .bookmarks-toolbar__icon-btn:first-child { display: none !important; }
-  .bookmarks__user-actions { flex: 1; display: flex; align-items: center; width: 100%; }
-  .bookmarks-toolbar { flex: 1; display: flex !important; align-items: center; justify-content: space-between; gap: var(--m-space-3); }
-  .bookmarks-toolbar__count {
-    display: inline !important; // desktop-контейнерный запрос прячет счётчик на узкой ширине
-    padding: 0 !important; border: 0 !important; background: none !important;
-    font: 400 16px var(--m-font) !important; color: var(--m-text-2) !important;
-    &::after { content: ' всего'; }
+  .bm-head__profile { min-width: 0; padding: 0 !important; background: none !important; }
+  .bm-head__avatar { width: 44px !important; height: 44px !important; }
+  .bm-head__title { font: 600 18px/1.2 var(--m-font) !important; color: var(--m-text) !important; }
+  .bm-head__meta { font: 400 13px/1.3 var(--m-font) !important; color: var(--m-text-2) !important; }
+  .bm-tools {
+    order: 3;
+    flex-wrap: nowrap !important;
+    gap: var(--m-space-2) !important;
+    margin: 0 !important;
+    padding: var(--m-space-3) var(--m-gutter) 0 !important;
+    overflow-x: auto;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+    &:not(:has(button)) { display: none; }
+    > * { flex: none; }
   }
-  .bookmarks-toolbar__actions { display: flex; align-items: center; gap: var(--m-space-3); margin-left: auto; }
-  .bookmarks-toolbar__sort .uiv2-select__field, .bookmarks-toolbar__actions > .bookmarks-toolbar__icon-btn {
-    height: 44px !important; min-height: 0 !important; border: 0 !important; border-radius: var(--m-radius-pill) !important;
-    background: var(--m-surface-sheet) !important; box-shadow: none !important; color: var(--m-text) !important;
-  }
-  .bookmarks-toolbar__sort .uiv2-select__field { padding: 0 var(--m-space-4) !important; font: 500 15px var(--m-font) !important; }
-  // «≡ По добавлению ▾» — одна строка, направление сортировки видно в открытом списке
-  .bookmarks-toolbar__sort .uiv2-select__trigger {
-    height: 44px !important; min-height: 0 !important; padding: 0 var(--m-space-3) 0 var(--m-space-4) !important;
-    border: 0 !important; background: transparent !important; box-shadow: none !important; gap: var(--m-space-2) !important;
-    color: var(--m-text) !important; font: 500 15px var(--m-font) !important;
-    &::before {
-      content: ''; flex: none; width: 20px; height: 20px; margin-right: 6px; background: currentColor;
-      -webkit-mask: linear-gradient(currentColor 0 0) 0 4px / 20px 2px no-repeat, linear-gradient(currentColor 0 0) 0 9px / 14px 2px no-repeat, linear-gradient(currentColor 0 0) 0 14px / 8px 2px no-repeat;
-      mask: linear-gradient(#000 0 0) 0 4px / 20px 2px no-repeat, linear-gradient(#000 0 0) 0 9px / 14px 2px no-repeat, linear-gradient(#000 0 0) 0 14px / 8px 2px no-repeat;
-    }
-  }
-  .bookmarks-toolbar__sort .uiv2-select__value-desc { display: none !important; }
-  .bookmarks-toolbar__sort .uiv2-select__chevron { background: transparent !important; border: 0 !important; width: auto !important; height: auto !important; color: var(--m-text) !important; }
-  .bookmarks-toolbar__actions > .bookmarks-toolbar__icon-btn { width: 56px !important; svg { width: 22px; height: 22px; } }
-  .bookmarks__content { order: 3; }
+  .uiv2-card.bookmarks__unvoted { order: 4; margin: var(--m-space-3) var(--m-gutter) 0 !important; }
+  .bookmarks__content { order: 5; }
   .bookmarks__collections { padding: var(--m-space-3) var(--m-gutter) var(--m-space-5) !important; gap: var(--m-space-4) var(--m-space-3) !important; }
 }
 
@@ -736,4 +723,134 @@ html.mobile-mode {
       display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
     }
   }
+}
+
+// ── Уведомления — страница: заголовок на одной строке с «назад» из верхней панели, скроллится список ──
+html.mobile-mode {
+  .notifications-page {
+    // 69 — внутренняя верхняя панель (12 + 48 + 9)
+    height: calc(100dvh - 69px - var(--m-nav-h) - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    .notifications-modal__header { margin: -57px 0 9px 48px; min-height: 48px; padding: 0 var(--m-space-2); border-bottom: 0; }
+    .notifications-modal__heading { font: 600 20px/1.2 var(--m-font); }
+  }
+}
+
+// ── «Продолжить просмотр»: телефон — как строка релиза (постер слева, кнопка под текстом), планшет — в один ряд ──
+html.mobile-mode {
+  .home-continue {
+    position: relative;
+    margin: var(--m-space-2) var(--m-gutter) var(--m-space-2);
+    padding: var(--m-space-3);
+    border-radius: 20px;
+    background: var(--m-surface-block);
+    box-shadow: none;
+  }
+  .home-continue__row {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    grid-template-rows: 1fr auto;
+    gap: var(--m-space-2) var(--m-space-3);
+    align-items: start;
+  }
+  .home-continue__poster { grid-row: 1 / 3; width: 72px; border-radius: var(--m-radius-md); }
+  // справа от текста — крестик
+  .home-continue__meta { padding-right: 28px; gap: 2px; }
+  .home-continue__kicker { font-size: 13px; color: var(--m-text-2); }
+  .home-continue__title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    color: var(--m-text);
+    font: 600 16px/1.25 var(--m-font);
+    white-space: normal;
+  }
+  .home-continue__sub { font-size: 13px; color: var(--m-text-2); }
+  .home-continue__bar { width: 100%; margin-top: var(--m-space-1); background: var(--m-outline-variant); > span { background: var(--m-primary); } }
+  .home-continue__actions .uiv2-btn { height: 40px; padding: 0 var(--m-space-5); border-radius: var(--m-radius-pill); font: 600 14px var(--m-font); }
+  .home-continue__dismiss { position: absolute; top: var(--m-space-1); right: var(--m-space-1); width: var(--m-touch); height: var(--m-touch); color: var(--m-text-2); }
+}
+
+@media (min-width: 600px) {
+  html.mobile-mode {
+    .home-continue__row { grid-template-columns: 72px minmax(0, 1fr) auto; grid-template-rows: auto; align-items: center; }
+    .home-continue__poster { grid-row: auto; }
+    .home-continue__meta { padding-right: 0; }
+    .home-continue__actions { padding-right: 40px; }
+    .home-continue__dismiss { top: 50%; right: var(--m-space-2); transform: translateY(-50%); }
+  }
+}
+
+// ── Результаты поиска: без баннера ПК, вкладки как на главной, отступы как у списков ──
+html.mobile-mode {
+  .view-search-v2 { padding: 0 0 var(--m-space-4) !important; }
+  .search-v2__results-label { margin: var(--m-space-4) var(--m-gutter) 0; color: var(--m-text-2); font-size: 15px; }
+  .search-v2__franchise { margin: var(--m-space-3) var(--m-gutter) 0; }
+  .search-v2__people { padding: var(--m-space-4) var(--m-gutter) 0; }
+  .search-v2__skeleton-grid { padding: var(--m-space-4) var(--m-gutter) 0; }
+  .view-search-v2 .collections-feed { padding: var(--m-space-4) var(--m-gutter) 0; }
+}
+
+// ── Верхняя панель и вкладки закреплены: при прокрутке вниз уходят, при прокрутке вверх возвращаются ──
+html.mobile-mode {
+  .m-app__scroll {
+    --m-bars-h: 69px;                 // верхняя панель: 12 + 48 + 9
+    --m-sticky-top: var(--m-bars-h);  // куда прилипают вкладки внутри страниц
+    &--no-bar, &--bars-hidden { --m-sticky-top: 0px; }
+
+    > .m-topbar {
+      position: sticky;
+      top: 0;
+      z-index: 14;
+      background: var(--m-bg);
+      transition: transform 0.2s ease;
+    }
+    &--bars-hidden > .m-topbar { transform: translateY(-100%); }
+  }
+
+  // sticky не работает внутри контейнера с overflow
+  .view-home, .view-bookmarks, .view-search-v2 { overflow: visible !important; }
+
+  // Статичные вкладки (в баннерах страниц) не прилипают: top сдвинул бы их относительно своего места
+  .m-app__content .uiv2-tabs:not(.uiv2-tabs--static) { top: var(--m-sticky-top) !important; }
+
+  // Вкладки разделов у самого верха страницы уезжают вместе с панелью
+  .m-app__content .releases-type, .m-app__content .bookmarks__tabs, .m-app__content .search-v2__tabs {
+    position: sticky !important;
+    top: var(--m-bars-h) !important;
+    transition: transform 0.2s ease;
+  }
+  .m-app__scroll--bars-hidden .releases-type, .m-app__scroll--bars-hidden .bookmarks__tabs, .m-app__scroll--bars-hidden .search-v2__tabs {
+    transform: translateY(calc(-1 * var(--m-bars-h) - 48px));
+  }
+
+  // Поле поиска «Закладок» стоит в слоте верхней панели и должно двигаться с ней
+  .bookmarks__search {
+    position: sticky !important;
+    top: var(--m-space-3);
+    z-index: 15;
+    transition: transform 0.2s ease;
+  }
+  .m-app__scroll--bars-hidden .bookmarks__search { transform: translateY(calc(-1 * var(--m-bars-h))); }
+}
+
+// ── Перелистывание вкладок: соседняя вкладка за краем экрана (TabPeek), едет вместе со списком ──
+html.mobile-mode {
+  // clip, а не hidden: не создаёт области прокрутки, закреплённые вкладки внутри продолжают прилипать.
+  // Запас 69px — высота верхней панели: поле поиска «Закладок» стоит в ней, выше начала контента
+  .m-app__content { overflow: clip; overflow-clip-margin: 69px; min-height: calc(100% - 69px); }
+  .pp-sections { overflow: clip; }
+
+  .tab-peek {
+    position: absolute;
+    top: var(--tab-peek-top, 0px);
+    width: 100%;
+    // В покое панель заранее отрисована, но скрыта и не удлиняет короткую страницу
+    max-height: calc(100dvh - 140px);
+    overflow: hidden;
+    visibility: hidden;
+    pointer-events: none;
+    &--next { left: 100%; }
+    &--prev { left: -100%; }
+  }
+  [data-tab-swiping] > .tab-peek { max-height: 100dvh; visibility: visible; }
 }

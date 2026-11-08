@@ -175,13 +175,13 @@ function isLightTheme(v: ThemeVars): boolean {
 }
 
 /**
- * Палитры встроенных тем на телефоне — как у Anixart (Material 3: фон #121212, текст #e0e0e0, акцент лавандовый).
- * Desktop-варианты тех же тем (#0d0d0d, красный акцент) на телефоне выглядели бы чужеродно.
+ * Палитры встроенных тем на телефоне: поверхности свои (Material 3: фон #121212, текст #e0e0e0),
+ * акцент — фирменный красный, один на все платформы (см. colorAccent в BUILT_IN_THEMES).
  */
 const MOBILE_PALETTES: Record<string, { bg: string; text: string; text2: string; accent: string; onAccent: string }> = {
-  dark:   { bg: '#121212', text: '#e0e0e0', text2: '#9e9e9e', accent: '#d0bcff', onAccent: '#381e72' },
-  amoled: { bg: '#000000', text: '#e6e1e5', text2: '#9f9f9f', accent: '#d0bcff', onAccent: '#381e72' },
-  light:  { bg: '#fafafa', text: '#1f1f1f', text2: '#6b6b6b', accent: '#6750a4', onAccent: '#ffffff' },
+  dark:   { bg: '#121212', text: '#e0e0e0', text2: '#9e9e9e', accent: '#e35454', onAccent: '#ffffff' },
+  amoled: { bg: '#000000', text: '#e6e1e5', text2: '#9f9f9f', accent: '#e35454', onAccent: '#ffffff' },
+  light:  { bg: '#fafafa', text: '#1f1f1f', text2: '#6b6b6b', accent: '#e35454', onAccent: '#ffffff' },
 };
 
 /** Телефон: тема задаёт базовые цвета --mt-*, остальные мобильные токены выводятся из них (_mobile-tokens.scss). */

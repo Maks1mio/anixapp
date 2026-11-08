@@ -2,8 +2,7 @@
 // Мобильные токены дизайна. Активны только под `html.mobile-mode` — desktop и TV не затрагиваются.
 //
 // Основа — стоковая палитра Material 3 dark (роли neutral/secondary/primary) на чисто чёрном фоне.
-// Нейтральный каркас M3 общий для многих приложений; узнаваемость конкретного бренда (акцент, маскот)
-// здесь НЕ воспроизводится: акцент — временный из набора M3 (primary #D0BCFF), потом заменяется одной строкой.
+// Нейтральный каркас M3 общий для многих приложений; акцент — фирменный красный AnixApp, как на ПК (#E35454).
 //
 // Значения сняты по референс-скринам (1272×2772 px ≈ 433×943 dp, 1 dp ≈ 2.94 px); строки с «≈» уточняются
 // наложением на странице-эталоне (mobile-reference.html).
@@ -39,8 +38,8 @@ html.mobile-mode {
   --m-outline-variant: color-mix(in srgb, var(--m-text) 24%, var(--m-bg)); // обводка плиток/выбора
   --m-divider: color-mix(in srgb, var(--m-text) 10%, var(--m-bg));
 
-  --m-primary: var(--mt-accent, #d0bcff);       // M3 primary
-  --m-on-primary: var(--mt-on-accent, #381e72);
+  --m-primary: var(--mt-accent, #e35454);       // акцент AnixApp
+  --m-on-primary: var(--mt-on-accent, #ffffff);
   --m-secondary-container: color-mix(in srgb, var(--m-primary) 26%, var(--m-bg)); // пилюля навбара (#484456)
   --m-on-secondary-container: color-mix(in srgb, var(--m-primary) 30%, var(--m-text));
   --m-fill-button: var(--m-text);               // залитая кнопка «Воспроизвести», «Применить»
@@ -83,7 +82,8 @@ html.mobile-mode {
   --m-touch: 44px;                 // минимальная тач-цель
   --m-poster-w: 104px;             // постер списка — замер Anixart 104×156dp
   --m-poster-h: 156px;
-  --m-nav-h: 80px;
+  --m-nav-h: 80px;                 // нижний таб-бар телефона (на планшете его нет, см. ниже)
+  --m-rail-w: 0px;                 // левая панель планшета
   --m-nav-pill-w: 64px;
   --m-nav-pill-h: 32px;
   --m-field-h: 50px;
@@ -142,4 +142,12 @@ html.mobile-mode {
   font-family: var(--m-font);
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
+}
+
+// Планшет: разделы в левой панели, нижнего таб-бара нет. Нулевая --m-nav-h убирает и все отступы под него.
+@media (min-width: 600px) {
+  html.mobile-mode {
+    --m-nav-h: 0px;
+    --m-rail-w: 88px;
+  }
 }

@@ -522,13 +522,14 @@
     background: var(--m-bg);
     color: var(--m-text);
     padding-top: env(safe-area-inset-top);
-    padding-left: var(--m-rail-left);
-    padding-right: var(--m-rail-right);
   }
 
+  /* Отступ под панель разделов внутри прокрутки: фон страницы заходит под неё и виден в скруглённых углах */
   .m-app__scroll {
     flex: 1;
     min-height: 0;
+    padding-left: var(--m-rail-left);
+    padding-right: var(--m-rail-right);
     overscroll-behavior: contain;
   }
 
@@ -545,15 +546,17 @@
   .m-topbar--float {
     position: absolute;
     z-index: 15;
-    top: calc(env(safe-area-inset-top) + 8px);
-    left: calc(var(--m-rail-left) + var(--m-space-4));
-    right: calc(var(--m-rail-right) + var(--m-space-4));
+    top: calc(env(safe-area-inset-top) + 20px);
+    /* По краям страницы (56rem, как у остальных), на узком экране — обычные поля */
+    --m-float-inset: max(var(--m-space-4), calc((100% - var(--m-rail-w) - 56rem) / 2 + var(--m-gutter)));
+    left: calc(var(--m-rail-left) + var(--m-float-inset));
+    right: calc(var(--m-rail-right) + var(--m-float-inset));
     min-height: 0;
-    padding: 0;
+    padding: 0 !important; /* у общего .m-topbar поля заданы сильнее, и кнопки стояли не по краю контента */
     justify-content: space-between;
     transition: transform 0.2s ease;
 
-    .m-icon-btn { width: 48px; height: 48px; border-radius: 16px; background: color-mix(in srgb, var(--m-bg) 72%, transparent); color: var(--m-text); backdrop-filter: blur(6px); }
+    .m-icon-btn { width: 48px; height: 48px; border-radius: 16px; background: var(--m-surface-chip); box-shadow: inset 0 0 0 1px var(--m-outline-variant); color: var(--m-text); }
   }
 
   .m-topbar--float-hidden { transform: translateY(calc(-100% - env(safe-area-inset-top) - 16px)); }

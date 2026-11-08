@@ -33,6 +33,8 @@ const INCOMING_DRIFT_PX = 28;
 const TAP_FADE_MS = 220;
 /** Вкладка сменяется в тот же момент; если не сменилась (например, нужен вход) — копия не нужна. */
 const SNAPSHOT_TTL_MS = 100;
+/** Подъём к началу страницы после смены вкладки. */
+const PAGE_GLIDE_MS = 320;
 
 const snapshotTakers = new Set<(dir: 1 | -1) => void>();
 
@@ -73,7 +75,8 @@ export function swipeTabs(node: HTMLElement, params: SwipeTabsParams) {
   /** Верх видимой области на момент жеста и был ли список прокручен за неё. */
   let visibleTop = 0;
   let listScrolled = false;
-  let snapshot: { overlay: HTMLElement; contentTop: number; dir: 1 | -1; timer: number } | null = null;
+  let snapshot: { overlay: HTMLElement; contentTop: number; visibleTop: number; scrolled: boolean; dir: 1 | -1; timer: number } | null = null;
+  let pageGlide: Animation | null = null;
   let fadeOverlay: HTMLElement | null = null;
   let fadeAnimations: Animation[] = [];
 
@@ -100,6 +103,21 @@ export function swipeTabs(node: HTMLElement, params: SwipeTabsParams) {
   function alignListTop(top: number) {
     const area = scroller();
     if (area) area.scrollTop += node.getBoundingClientRect().top - top;
+  }
+
+  /**
+   * Вкладка сбросила прокрутку: страница не перескакивает, а плавно опускается от места, где список был виден.
+   * Закреплённые вкладки стояли там же, поэтому едут вместе с ней, шапка выходит сверху из-под панели.
+   */
+  function glideFrom(top: number) {
+    const page = node.closest<HTMLElement>('.m-app__content');
+    const delta = top - node.getBoundingClientRect().top;
+    pageGlide?.cancel();
+    if (!page || Math.abs(delta) < 1 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    pageGlide = page.animate(
+      { transform: [`translate3d(0, ${delta}px, 0)`, 'none'] },
+      { duration: PAGE_GLIDE_MS, easing: EASING },
+    );
   }
 
   /** Значения читает mobile-overrides.scss; ms > 0 — плавно довести до них, 0 — идти за пальцем. */
@@ -154,9 +172,12 @@ export function swipeTabs(node: HTMLElement, params: SwipeTabsParams) {
     overlay.setAttribute('aria-hidden', 'true');
     overlay.inert = true;
     overlay.style.cssText = 'position:absolute;left:0;top:0;width:100%;margin:0;box-sizing:border-box;overflow:hidden;pointer-events:none;';
+    const visible = current.enabled === false ? 0 : measureVisibleTop();
     snapshot = {
       overlay,
       contentTop,
+      visibleTop: visible,
+      scrolled: current.enabled !== false && node.getBoundingClientRect().top < visible,
       dir,
       timer: window.setTimeout(dropSnapshot, SNAPSHOT_TTL_MS),
     };
@@ -180,6 +201,7 @@ export function swipeTabs(node: HTMLElement, params: SwipeTabsParams) {
   function playFade(snap: NonNullable<typeof snapshot>) {
     clearFade();
     alignAfterTap();
+    if (snap.scrolled) glideFrom(snap.visibleTop);
     const { overlay, dir } = snap;
     const incoming = [...node.children].filter(isOwnContent);
     overlay.style.maxHeight = '100dvh';
@@ -271,7 +293,9 @@ export function swipeTabs(node: HTMLElement, params: SwipeTabsParams) {
         }
         settle();
         // Экран мог сам вернуться к началу страницы: тогда список уже не выше видимой области
-        if (listScrolled && node.getBoundingClientRect().top < visibleTop) alignListTop(visibleTop);
+        if (!listScrolled) return;
+        if (node.getBoundingClientRect().top < visibleTop) alignListTop(visibleTop);
+        else glideFrom(visibleTop);
       });
     });
   }
@@ -300,6 +324,7 @@ export function swipeTabs(node: HTMLElement, params: SwipeTabsParams) {
       snapshotTakers.delete(takeSnapshot);
       dropSnapshot();
       clearFade();
+      pageGlide?.cancel();
       node.removeEventListener('touchstart', onStart);
       node.removeEventListener('touchmove', onMove);
       node.removeEventListener('touchend', onEnd);

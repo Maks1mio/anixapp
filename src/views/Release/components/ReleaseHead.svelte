@@ -88,8 +88,11 @@ import { requestOpenExternal } from '../../../utils/external-link';
 
   const displayPosterUrl = $derived(toPosterDisplayUrl(posterUrl, 'releaseHero'));
 
+  /** Постер слева и описание справа: на планшете с той же ширины, что и его левая панель. */
+  const WIDE_QUERY = isMobileMode() ? '(min-width: 600px)' : '(min-width: 961px)';
+
   let mqWide = $state(
-    typeof window !== 'undefined' ? window.matchMedia('(min-width: 961px)').matches : true,
+    typeof window !== 'undefined' ? window.matchMedia(WIDE_QUERY).matches : true,
   );
   const isWide = $derived(tvMode || mqWide);
 
@@ -99,7 +102,7 @@ import { requestOpenExternal } from '../../../utils/external-link';
 
   $effect(() => {
     if (tvMode) return;
-    const mq = window.matchMedia('(min-width: 961px)');
+    const mq = window.matchMedia(WIDE_QUERY);
     const update = () => {
       mqWide = mq.matches;
     };

@@ -52,8 +52,6 @@ html.mobile-mode {
     &__divider { display: none !important; }
   }
 
-  // «Случайный релиз» на Главной есть в «Обзоре»; в Anixart справа у вкладок ничего нет
-  .releases-type .uiv2-tabs__side--right { display: none !important; }
 
   .release-cards-grid-root, .release-cards-grid-root--wide { gap: 33px !important; padding: var(--m-space-4) 0 var(--m-space-5); }
 
@@ -267,13 +265,14 @@ html.mobile-mode {
 // ── Страница релиза (референс: размытая обложка, заголовок слева, ряд действий, светлая «Воспроизвести») ──
 // Размеры сняты со скрина референса (918 px ≈ 412 dp) с поправкой на Onest (шире оригинального шрифта).
 html.mobile-mode {
-  .view-release { padding: 0 !important; max-width: none !important; }
+  // Без карточки ПК-версии: её заливка давала светлую полосу под размытой обложкой
+  .view-release { padding: 0 !important; max-width: none !important; border-radius: 0 !important; background: none !important; backdrop-filter: none; transform: none; }
   .release-page__head { position: relative; padding: 0 var(--m-gutter) !important; margin-bottom: 0 !important; }
   .m-release-bg {
-    position: absolute; left: 50%; width: calc(100vw - var(--m-rail-w)); margin-left: calc((100vw - var(--m-rail-w)) / -2); top: -120px; height: 700px; z-index: 0; pointer-events: none; overflow: hidden;
+    position: absolute; left: 50%; width: 100vw; margin-left: calc(-50vw + (var(--m-rail-right) - var(--m-rail-left)) / 2); top: -120px; height: 700px; z-index: 0; pointer-events: none; overflow: hidden;
     &::before {
-      content: ''; position: absolute; inset: -40px; background: inherit; background-size: cover; background-position: center top;
-      filter: blur(30px) brightness(0.32) saturate(0.9);
+      content: ''; position: absolute; inset: 0; background: inherit; background-size: cover; background-position: center top;
+      filter: brightness(0.16) saturate(0.9);
     }
     &::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 45%, var(--m-bg) 100%); }
   }
@@ -299,7 +298,7 @@ html.mobile-mode {
   }
   .release-page__head--narrow .release-page__title-en, .release-page__title-en {
     display: flex !important; align-items: center; justify-content: space-between; gap: var(--m-space-3);
-    margin: 2px 0 0 calc(18px + var(--m-space-3)) !important; text-align: left !important;
+    margin: 2px 0 0 !important; text-align: left !important;
     color: var(--m-text-3) !important; font: 400 14px/1.3 var(--m-font) !important;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
@@ -358,6 +357,35 @@ html.mobile-mode {
   .release-page__meta-info-row svg { width: 20px; height: 20px; }
   .release-page__meta-info-text { display: block; text-align: left !important; font: 400 15px/1.35 var(--m-font) !important; color: var(--m-text) !important; }
   .release-page__meta-info-text a, .release-page__meta-info-link { display: inline !important; text-align: left; }
+}
+
+// Телефон: кнопки не помещаются в ряд, крайняя обрезалась экраном. Ряд листается и начинается от поля
+@media (max-width: 599.98px) {
+  html.mobile-mode .release-page__actions {
+    width: auto;
+    margin-inline: calc(-1 * var(--m-gutter));
+    padding-inline: var(--m-gutter);
+    gap: var(--m-space-2);
+    overflow-x: auto;
+    scrollbar-width: none;
+    > * { flex: none; }
+  }
+}
+
+// Планшет: раскладка ПК (постер с кнопкой слева, описание справа) в ширину остальных страниц
+@media (min-width: 600px) {
+  html.mobile-mode {
+    .view-release { max-width: 56rem !important; }
+    // Сверху остаётся полоса под кнопки «назад» и «добавить в коллекцию»
+    .release-page__head { padding-top: calc(72px + env(safe-area-inset-top)) !important; margin-bottom: var(--m-space-4) !important; }
+    .release-page__head-aside-play { position: sticky !important; }
+    .release-page__head-aside-play .release-page__poster { width: 100% !important; border-radius: var(--m-radius-lg) !important; }
+    .release-page__head-brief { padding-top: 0 !important; }
+    .release-page__title { font: 700 26px/1.25 var(--m-font) !important; }
+    .release-page__title-en { justify-content: flex-start !important; }
+    .release-page__play-slot { margin: 0 !important; }
+    .release-page__head-body { margin-top: var(--m-space-2); }
+  }
 }
 
 // ── Загрузки в окне «Выберите серию» ──
@@ -865,7 +893,10 @@ html.mobile-mode {
   .discover-hero__actions { flex: none; margin-left: 0; }
 
   // Под верхней панелью, если она есть на странице
-  .discover-hero-dock { top: var(--m-sticky-top, 0px); margin: 0 calc(-1 * var(--m-gutter)); transition: top 0.2s ease; }
+  .discover-hero-dock { top: 0; margin: 0 calc(-1 * var(--m-gutter)); transition: transform 0.2s ease; }
+  // Отступ постоянный, а уезжает она тем же сдвигом, что и панель: иначе они расходятся и между ними видна щель
+  .m-app__scroll:not(.m-app__scroll--no-bar) .discover-hero-dock { top: var(--m-bars-h); }
+  .m-app__scroll--bars-hidden:not(.m-app__scroll--no-bar) .discover-hero-dock { transform: translateY(calc(-1 * var(--m-bars-h))); }
   .discover-hero-dock__bar { padding: 0; background: var(--m-bg); transition: none; &::after { display: none; } }
 
   // Популярное: чья статистика — переключатель из двух сегментов, видно, что это кнопки

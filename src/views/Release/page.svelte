@@ -287,8 +287,8 @@
   });
 
   // ── Derived: lists / related / screenshots ────────────────────────────────
-  // Episode covers and screenshots from anixmedia — on PC only, asked for when the release opens.
-  const mediaEnabled = !isTvMode() && !isMobileMode();
+  // Screenshots from anixmedia, asked for when the release opens.
+  const mediaEnabled = !isTvMode();
   $effect(() => {
     if (!mediaEnabled || !id) return;
     return watchReleaseMedia(id);

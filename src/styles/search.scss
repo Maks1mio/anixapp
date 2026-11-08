@@ -438,24 +438,6 @@
   &:hover span {
     opacity: 1;
   }
-
-  &--toggle {
-    padding: 0 1rem 0 0.85rem;
-    background: transparent;
-    color: var(--uiv2-chrome-fg, inherit);
-    opacity: 0.75;
-    transition: background 0.15s ease, opacity 0.15s ease;
-
-    &:hover {
-      opacity: 1;
-    }
-
-    &.is-active {
-      background: var(--uiv2-chrome-active-bg);
-      color: var(--uiv2-chrome-active-fg);
-      opacity: 1;
-    }
-  }
 }
 
 .search-v2__actions {

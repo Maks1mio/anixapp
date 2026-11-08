@@ -14,7 +14,7 @@
     iconTriangleAlert,
   } from '../../../components/icons';
   import { showToast } from '../../../stores/toast';
-  import { portal } from '../../../actions/portal';
+  import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../../../components/uikit-v2/UiV2PopupMenu.svelte';
   import MobileDownloadFlow from '../../../components/MobileDownloadFlow.svelte';
   import { downloadsAvailable } from '../../../native/anix-downloads';
   import { iconDownload, iconShare } from '../../../components/icons';
@@ -162,6 +162,10 @@ import { requestOpenExternal } from '../../../utils/external-link';
   });
 
   let moreOpen = $state(false);
+  const moreItems = $derived<UiV2PopupMenuItem[]>([
+    ...(downloadsAvailable() ? [{ id: 'download', label: 'Скачать серии…', icon: iconDownload(22) }] : []),
+    { id: 'share', label: 'Поделиться', icon: iconShare(22) },
+  ]);
   let downloadOpen = $state(false);
   function currentReleaseId(): number {
     return parseInt(/release\/(\d+)/.exec(window.location.pathname)?.[1] ?? '0', 10);
@@ -460,21 +464,18 @@ import { requestOpenExternal } from '../../../utils/external-link';
   {/if}
 </div>
 
-{#if moreOpen}
-  <div class="m-sheet-scrim" role="presentation" use:portal>
-    <button type="button" class="m-sheet-scrim__bg" aria-label="Закрыть" onclick={() => (moreOpen = false)}></button>
-    <div class="m-sheet-menu" role="menu">
-      {#if downloadsAvailable()}
-        <button type="button" role="menuitem" onclick={() => { moreOpen = false; downloadOpen = true; }}>
-          {@html iconDownload(22)}<span>Скачать серии…</span>
-        </button>
-      {/if}
-      <button type="button" role="menuitem" onclick={() => { moreOpen = false; void shareRelease(); }}>
-        {@html iconShare(22)}<span>Поделиться</span>
-      </button>
-    </div>
-  </div>
-{/if}
+<UiV2PopupMenu
+  open={moreOpen}
+  sheet
+  x={0}
+  y={0}
+  items={moreItems}
+  onClose={() => { moreOpen = false; }}
+  onSelect={(id) => {
+    if (id === 'download') downloadOpen = true;
+    else if (id === 'share') void shareRelease();
+  }}
+/>
 
 {#if downloadOpen}
   <MobileDownloadFlow

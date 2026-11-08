@@ -4091,6 +4091,25 @@ html.tv-mode:not(.tv-android) .tv-watch__video {
   }
 }
 
+.tv-watch__resume {
+  align-items: center;
+}
+
+.tv-watch__resume-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-right: 0.8rem;
+  font-size: 1.05rem;
+  color: rgba(255, 255, 255, 0.7);
+
+  b {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: #fff;
+  }
+}
+
 /* Настройки и серии — боковые панели в одном стиле. */
 .tv-watch__settings,
 .tv-watch__panel {

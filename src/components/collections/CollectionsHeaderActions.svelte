@@ -22,6 +22,7 @@
   <button
     type="button"
     class="collections-header-actions__btn collections-header-actions__btn--create"
+    aria-label="Создать"
     onclick={onCreate}
   >
     {@html iconPlus(15)}

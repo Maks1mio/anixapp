@@ -71,6 +71,7 @@
   import Feed from './views/Feed.svelte';
   import FeedComposerWindow from './views/FeedComposerWindow.svelte';
   import Popular from './views/Popular.svelte';
+  import FilteredReleases from './views/FilteredReleases.svelte';
   import CollectionsList from './views/CollectionsList.svelte';
   import CollectionEditor from './views/CollectionEditor.svelte';
   import Catalog from './views/Catalog.svelte';
@@ -143,7 +144,6 @@
   let searchQ = $state('');
   let searchTab = $state<SearchTab>('releases');
   let searchBy = $state(0);
-  let searchHiddenOnly = $state(false);
 
   let tvKept = $state<string[]>(rememberTvKeepAlive([], getPath()));
   const tvKeptCats = $derived(tvKeptCategoryIds(tvKept));
@@ -184,7 +184,6 @@
     const tab = p.get('tab');
     searchTab = isSearchTab(tab) ? tab : 'releases';
     searchBy = Number.parseInt(p.get('by') || '0', 10) || 0;
-    searchHiddenOnly = p.get('hidden') === '1';
     if (fromRoute) {
       bookmarksUserId = bookmarksUserFromRoute(route);
     } else {
@@ -1095,9 +1094,11 @@
       <Bookmarks initialTab="votes" />
     {:else if path === '/profile/lists'}
       <Bookmarks listsOnly />
+    {:else if path === '/filtered'}
+      <FilteredReleases />
     {:else if path === '/search'}
-      {#key `${searchQ}|${searchBy}|${searchHiddenOnly}`}
-        <Search q={searchQ} tab={searchTab} {searchBy} hiddenOnly={searchHiddenOnly} />
+      {#key `${searchQ}|${searchBy}`}
+        <Search q={searchQ} tab={searchTab} {searchBy} />
       {/key}
     {:else if path === '/notifications'}
       <NotificationsModal page />
@@ -1143,7 +1144,7 @@
   {/if}
 
 {:else if isMobileMode()}
-  <MobileLayout currentPath={path} search={{ q: searchQ, tab: searchTab, by: searchBy, hiddenOnly: searchHiddenOnly }}>
+  <MobileLayout currentPath={path} search={{ q: searchQ, tab: searchTab, by: searchBy }}>
     {#key pageRefreshKey}
       {@render appRoutes()}
     {/key}

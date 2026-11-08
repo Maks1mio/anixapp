@@ -99,8 +99,15 @@
   function swipeToFilter(dir: 1 | -1): boolean {
     const next = FILTERS[FILTERS.findIndex((f) => f.id === filter) + dir];
     if (!next) return false;
-    filter = next.id;
+    selectFilter(next.id);
     return true;
+  }
+
+  /** Другая вкладка всегда открывается с начала списка. */
+  function selectFilter(id: NotificationFilterId) {
+    filter = id;
+    const scroller = document.querySelector('.notifications-modal__tabs')?.closest('[data-page-scroll]');
+    if (scroller) scroller.scrollTop = 0;
   }
 
   const filterTabs = $derived.by((): UiV2TabItem[] =>
@@ -491,18 +498,16 @@
             class="uiv2-tabs--static notifications-modal__tabs"
             tabs={filterTabs}
             activeId={filter}
-            onChange={(id) => { filter = id as NotificationFilterId; }}
+            onChange={(id) => selectFilter(id as NotificationFilterId)}
           />
 
-          {#if page && isMobileMode()}
-            <div use:swipeTabs={{ onSwipe: swipeToFilter, activeId: filter }}>
-              {@render notificationRows(filteredNotifications)}
+          <div use:swipeTabs={{ onSwipe: swipeToFilter, enabled: page && isMobileMode(), activeId: filter }}>
+            {@render notificationRows(filteredNotifications)}
+            {#if page}
               {#if peekFilters.prev}<TabPeek dir={-1}>{@render notificationRows(notificationsFor(peekFilters.prev))}</TabPeek>{/if}
               {#if peekFilters.next}<TabPeek dir={1}>{@render notificationRows(notificationsFor(peekFilters.next))}</TabPeek>{/if}
-            </div>
-          {:else}
-            {@render notificationRows(filteredNotifications)}
-          {/if}
+            {/if}
+          </div>
         {/if}
       </div>
     </Page>

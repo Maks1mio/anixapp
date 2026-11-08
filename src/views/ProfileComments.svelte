@@ -148,6 +148,8 @@
     if (tabId === activeTab) return;
     activeTab = tabId as CommentTabId;
     revealed = {};
+    const scroller = wrapEl?.closest('.page__scroll');
+    if (scroller) scroller.scrollTop = 0;
     const seed = isMobileMode() ? tabPrefetch.get(tabId) : undefined;
     if (seed?.length) {
       items = seed;
@@ -204,19 +206,19 @@
     <Tabs tabs={[...COMMENT_TABS]} activeId={activeTab} onChange={onTabChange} />
 
     <div class="search-page__results">
-      {#if loadState === 'loading'}
-        <div class="search-page__loading">Загрузка…</div>
-      {:else if loadState === 'error'}
-        <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void load(false)} />
-      {:else if loadState === 'empty'}
-        <p class="search-page__empty">Комментариев нет</p>
-      {:else}
-        <div use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab }}>
+      <div use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab }}>
+        {#if loadState === 'loading'}
+          <div class="search-page__loading">Загрузка…</div>
+        {:else if loadState === 'error'}
+          <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void load(false)} />
+        {:else if loadState === 'empty'}
+          <p class="search-page__empty">Комментариев нет</p>
+        {:else}
           {@render commentList(items)}
           {#if peekTabs.prev}<TabPeek dir={-1}>{@render commentsPeek(peekTabs.prev)}</TabPeek>{/if}
           {#if peekTabs.next}<TabPeek dir={1}>{@render commentsPeek(peekTabs.next)}</TabPeek>{/if}
-        </div>
-      {/if}
+        {/if}
+      </div>
       {#if isLoading && loadState === 'ready'}
         <div class="search-page__loading">Загрузка…</div>
       {/if}

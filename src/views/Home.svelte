@@ -2,7 +2,8 @@
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import ReleaseCardsGridSkeleton from '../components/ReleaseCardsGridSkeleton.svelte';
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
-  import HomeCustomFilterView from '../components/HomeCustomFilterView.svelte';
+  import ReleaseFilterPanel from '../components/ReleaseFilterPanel.svelte';
+  import { FILTER_HINT } from '../data/filterOptions';
   import HomeTabRenameModal from '../components/HomeTabRenameModal.svelte';
   import { headlineFromLoadError } from '../utils/content-load-error';
   import { onMount, onDestroy, untrack } from 'svelte';
@@ -31,6 +32,7 @@
     serializeHomeCustomTabData,
     setDefaultHomeTab,
     toFilterRequest,
+    DEFAULT_CUSTOM_FILTER,
     type HomeCustomTabData,
   } from '../utils/homeCustomTab';
 
@@ -47,6 +49,7 @@
     getViewState,
     saveViewStateWithScroll,
     restoreScrollTop,
+    resetScrollTop,
     registerActiveScrollKey,
     flushActiveViewState,
     saveViewStateData,
@@ -344,6 +347,8 @@
     if (tabId === 'my' && !requireAuth()) return;
     saveViewStateWithScroll(HOME_VIEW_KEY(activeTab), homeSnapshot());
     activeTab = tabId;
+    // Другая вкладка всегда открывается с начала страницы
+    resetScrollTop();
 
     const prefetched = isMobileMode() ? tabPrefetch.get(tabId) : undefined;
     if (prefetched?.length) {
@@ -359,7 +364,7 @@
     const cached = getViewState<HomeViewState>(HOME_VIEW_KEY(tabId));
     if (cached?.data && cached.data.items.length > 0) {
       applyHomeSnapshot(cached.data);
-      void restoreHomeScroll(cached.scrollTop);
+      void restoreHomeScroll(0);
       return;
     }
 
@@ -626,9 +631,11 @@
 {/snippet}
 
 {#if filterModalOpen}
-  <HomeCustomFilterView
-    initial={customTabData}
-    onSave={onFilterSave}
+  <ReleaseFilterPanel
+    title="Настройки вкладки"
+    notice={FILTER_HINT}
+    initial={customTabData.filter ?? DEFAULT_CUSTOM_FILTER}
+    onApply={(filter) => void onFilterSave({ ...customTabData, filter })}
     onClose={() => { filterModalOpen = false; }}
   />
 {/if}

@@ -568,8 +568,8 @@
     {/if}
   {/snippet}
 
-  {#if isMyProfile && isMobileMode()}
-    <div use:swipeTabs={{ onSwipe: swipeToTab, activeId: activeTab }}>
+  {#if isMyProfile}
+    <div use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab }}>
       {@render friendsTabBody(activeTab)}
       {#if peekTabs.prev}<TabPeek dir={-1}>{@render friendsTabBody(peekTabs.prev)}</TabPeek>{/if}
       {#if peekTabs.next}<TabPeek dir={1}>{@render friendsTabBody(peekTabs.next)}</TabPeek>{/if}

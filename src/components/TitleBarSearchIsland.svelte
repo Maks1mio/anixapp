@@ -3,6 +3,9 @@
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { portal } from '../actions/portal';
+  import ReleaseFilterPanel from './ReleaseFilterPanel.svelte';
+  import { navigate } from '../stores/navigation';
+  import { loadSearchFilter, saveSearchFilter } from '../utils/searchFilter';
   import { shortcutLabel } from '../utils/platform';
   import { getPath, getSearchParams } from '../router';
   import {
@@ -13,6 +16,7 @@
     iconLayoutGrid,
     iconUsers,
     iconArrowRight,
+    iconSlidersHorizontal,
   } from './icons';
   import {
     getSearchHistory,
@@ -43,6 +47,7 @@
   let dropTop = $state(0);
   let dropLeft = $state(0);
   let dropWidth = $state(0);
+  let filterPanelOpen = $state(false);
 
   const trimmed = $derived(query.trim());
 
@@ -271,8 +276,30 @@
     {:else if !focused}
       <kbd class="titlebar-island__kbd">{shortcutLabel('Ctrl+K')}</kbd>
     {/if}
+    <button
+      type="button"
+      class="titlebar-island__clear"
+      aria-label="Поиск по фильтру"
+      onclick={() => { filterPanelOpen = true; }}
+    >
+      {@html iconSlidersHorizontal(15)}
+    </button>
   </form>
 </div>
+
+{#if filterPanelOpen}
+  <ReleaseFilterPanel
+    title="Фильтр"
+    initial={loadSearchFilter()}
+    applyLabel="Показать"
+    onApply={(filter) => {
+      saveSearchFilter(filter);
+      filterPanelOpen = false;
+      navigate('/filtered');
+    }}
+    onClose={() => { filterPanelOpen = false; }}
+  />
+{/if}
 
 {#if showDrop}
   <div

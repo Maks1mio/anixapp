@@ -8,11 +8,14 @@
   import { get } from 'svelte/store';
   import type { Snippet } from 'svelte';
   import { navigate } from '../stores/navigation';
+  import { scrollEdges } from '../actions/sheet';
+  import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../components/uikit-v2/UiV2PopupMenu.svelte';
   import { isScrollRestorePending } from '../stores/view-state';
   import { notificationsModalOpen, settingsModalOpen, watchModalOpen, openSettingsModal, closeSettingsModal } from '../stores/modals';
   import { notificationUnreadCount, refreshNotificationUnreadCount } from '../stores/notifications';
   import { loadDeviceNotificationSettings, resetDeviceNotificationBaseline, startDeviceNotificationPolling } from '../stores/device-notifications';
   import { supportModalOpen } from '../stores/support-promo';
+  import { supportInbox, supportInboxLabel, watchSupportInbox } from '../stores/support-inbox';
   import { bindNotificationTaps, requestNativeNotifyPermission } from '../native/anix-notify';
   import { isAuthenticated, requireAuth } from '../stores/auth';
   import { ensureProfileId, loadSelfProfileGlobal } from '../utils/profile';
@@ -37,12 +40,12 @@
     children?: Snippet;
     currentPath?: string;
     /** Состояние страницы результатов — показывается в поле поиска и фильтрах. */
-    search?: { q: string; tab: SearchTab; by: number; hiddenOnly: boolean };
+    search?: { q: string; tab: SearchTab; by: number };
   }
   let { children, currentPath = '/', search }: Props = $props();
 
   type Tab = SidebarNavId | 'profile';
-  type NavEntry = { id: Tab; label: string; short: string; href: string | null; icon: string };
+  type NavEntry = { id: Tab; label: string; short: string; href: string | null; icon: string; beta?: boolean };
 
   /** Короткие подписи для узкой левой панели и нижнего таб-бара. */
   const SHORT_LABELS: Partial<Record<SidebarNavId, string>> = { agent: 'ИИ' };
@@ -53,6 +56,7 @@
     short: SHORT_LABELS[item.id] ?? item.label,
     href: item.href,
     icon: item.icon,
+    beta: item.beta,
   }));
   const PROFILE: NavEntry = { id: 'profile', label: 'Профиль', short: 'Профиль', href: null, icon: iconCircleUser(24) };
 
@@ -96,6 +100,8 @@
 
   /** Страница релиза: «назад» плавает поверх размытой обложки, а не занимает отдельную полосу. */
   const floatBack = $derived(/^\/release\/\d+$/.test(path));
+  /** Разделы со своей шапкой (DiscoverHero): заголовок уже в ней, назад ведёт системная кнопка. */
+  const ownHeader = $derived(['/overview/popular', '/collections', '/collections/my', '/fluo'].includes(path));
 
   const rootTab = $derived.by((): Tab | null => {
     if (path === '/' || path === '/catalog') return 'home';
@@ -116,6 +122,28 @@
   const activeTab = $derived<Tab | null>(profileOpen ? 'profile' : rootTab);
   /** «Ещё» подсвечен, когда открытый раздел лежит в шторке. */
   const moreActive = $derived(moreOpen || PHONE_MORE.some((e) => e.id === activeTab));
+  /** Ответы от ИИ-помощниц: как на ПК, новость важнее пометки beta. */
+  const aiUnread = $derived($supportInbox.unread);
+  const aiUnreadLabel = $derived(aiUnread > 9 ? '9+' : String(aiUnread));
+  const aiNews = $derived(supportInboxLabel($supportInbox));
+
+  function moreBadge(entry: NavEntry): string | undefined {
+    if (entry.id === 'agent' && aiNews) return aiNews;
+    return entry.beta ? 'BETA' : undefined;
+  }
+
+  function navAriaLabel(entry: NavEntry): string | undefined {
+    if (entry.id === 'agent' && aiNews) return `${entry.label}: ${aiNews}`;
+    return entry.beta ? `${entry.label} (beta)` : undefined;
+  }
+
+  const moreItems = $derived(PHONE_MORE.map((entry): UiV2PopupMenuItem => ({
+    id: entry.id,
+    label: entry.label,
+    icon: entry.icon,
+    checked: activeTab === entry.id,
+    badge: moreBadge(entry),
+  })));
 
   function goTab(tab: NavEntry) {
     moreOpen = false;
@@ -237,6 +265,7 @@
   onMount(() => {
     initConnectivity();
     const stopNotifications = startNotifications();
+    const stopSupportInbox = watchSupportInbox();
     // Anix+ на телефоне — раздел настроек, а не desktop-модалка (промо «Подробнее», значки и т.п.)
     const unsubSupport = supportModalOpen.subscribe((open) => {
       if (!open) return;
@@ -265,6 +294,7 @@
     return () => {
       window.removeEventListener('anix:profileUpdated', syncAvatar);
       stopNotifications();
+      stopSupportInbox();
       unsubSupport();
       unbindBack();
       stopDl();
@@ -282,6 +312,7 @@
     class:m-nav-item--active={activeTab === tab.id}
     data-tab={tab.id}
     aria-current={activeTab === tab.id ? 'page' : undefined}
+    aria-label={navAriaLabel(tab)}
     onclick={() => goTab(tab)}
   >
     <span class="m-nav-item__pill">
@@ -289,6 +320,11 @@
         <img class="m-nav-avatar" src={avatarUrl} alt="" onerror={() => { avatarUrl = null; }} />
       {:else}
         {@html tab.icon}
+      {/if}
+      {#if tab.id === 'agent' && aiUnread > 0}
+        <span class="m-nav-badge" aria-hidden="true">{aiUnreadLabel}</span>
+      {:else if tab.beta}
+        <span class="m-nav-badge" aria-hidden="true">β</span>
       {/if}
     </span>
     <span class="m-nav-item__label">{tab.short}</span>
@@ -304,7 +340,7 @@
 
 <div class="m-app">
   <nav class="m-rail" aria-label="Разделы">
-    <div class="m-rail__list">
+    <div class="m-rail__list" use:scrollEdges>
       {#each SECTIONS as tab (tab.id)}
         {@render navItem(tab)}
       {/each}
@@ -330,7 +366,7 @@
     id="content"
     class="m-app__scroll page__scroll"
     class:m-app__scroll--bars-hidden={barsHidden}
-    class:m-app__scroll--no-bar={floatBack}
+    class:m-app__scroll--no-bar={floatBack || ownHeader}
     data-page-scroll
     onscroll={onContentScroll}
   >
@@ -357,13 +393,13 @@
         {#if $notificationUnreadCount > 0}<span class="m-badge-count">{unreadLabel}</span>{/if}
       </button>
     </header>
-  {:else if !floatBack}
+  {:else if !floatBack && !ownHeader}
     <header class="m-topbar m-topbar--inner">
       <button type="button" class="m-icon-btn" onclick={goBack} aria-label="Назад">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
       </button>
       {#if path === '/search'}
-        <MobileSearch value={search?.q} tab={search?.tab} searchBy={search?.by} hiddenOnly={search?.hiddenOnly} />
+        <MobileSearch value={search?.q} tab={search?.tab} searchBy={search?.by} />
       {/if}
     </header>
   {/if}
@@ -389,32 +425,28 @@
       class="m-nav-item"
       class:m-nav-item--active={moreActive}
       aria-expanded={moreOpen}
+      aria-label={aiNews ? `Ещё: ${aiNews}` : undefined}
       onclick={() => { moreOpen = !moreOpen; }}
     >
-      <span class="m-nav-item__pill">{@html iconMoreHorizontal(24)}</span>
+      <span class="m-nav-item__pill">
+        {@html iconMoreHorizontal(24)}
+        {#if aiUnread > 0}<span class="m-nav-badge" aria-hidden="true">{aiUnreadLabel}</span>{/if}
+      </span>
       <span class="m-nav-item__label">Ещё</span>
     </button>
   </nav>
 
-  {#if moreOpen}
-    <button type="button" class="m-overlay m-more-scrim" aria-label="Закрыть" onclick={() => { moreOpen = false; }}></button>
-    <div class="m-sheet m-more" role="dialog" aria-label="Все разделы">
-      <div class="m-sheet__handle"></div>
-      <div class="m-more__grid">
-        {#each PHONE_MORE as tab (tab.id)}
-          <button
-            type="button"
-            class="m-more__item"
-            class:m-more__item--active={activeTab === tab.id}
-            onclick={() => goTab(tab)}
-          >
-            <span class="m-more__icon">{@html tab.icon}</span>
-            <span>{tab.label}</span>
-          </button>
-        {/each}
-      </div>
-    </div>
-  {/if}
+  <UiV2PopupMenu
+    open={moreOpen}
+    x={0}
+    y={0}
+    items={moreItems}
+    onClose={() => { moreOpen = false; }}
+    onSelect={(id) => {
+      const tab = PHONE_MORE.find((entry) => entry.id === id);
+      if (tab) goTab(tab);
+    }}
+  />
 
   {#if profileOpen && profileUserId != null}
     <div class="m-fullscreen m-fullscreen--profile">
@@ -541,6 +573,23 @@
     pointer-events: none;
   }
 
+  /* Угол иконки, а не пилюли: ширина пилюли на телефоне и планшете разная */
+  .m-nav-badge {
+    position: absolute;
+    top: -1px;
+    left: calc(50% + 5px);
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: #e5484d;
+    color: #fff;
+    font: 700 11px/16px var(--m-font);
+    text-align: center;
+    pointer-events: none;
+    box-shadow: 0 0 0 2px var(--m-surface-sheet);
+  }
+
   /* Телефон: нижний таб-бар. Планшет (≥600px, см. --m-rail-w): левая панель со всеми разделами. */
   .m-rail { display: none; }
 
@@ -556,7 +605,7 @@
       width: var(--m-rail-w);
       display: flex;
       flex-direction: column;
-      padding: calc(env(safe-area-inset-top) + var(--m-space-3)) 0 calc(env(safe-area-inset-bottom) + var(--m-space-3));
+      padding: 0 0 calc(env(safe-area-inset-bottom) + var(--m-space-3));
       background: var(--m-surface-sheet);
 
       /* flex-basis: в таб-баре .m-nav-item растягивается на ширину, здесь — стопкой по высоте */
@@ -565,14 +614,30 @@
       :global(.m-nav-item__label) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     }
 
+    /* Разделы не влезли по высоте: у края, за которым они продолжаются, — затухание и линия */
     .m-rail__list {
+      --edge-top: 0px;
+      --edge-bottom: 0px;
       flex: 1;
       min-height: 0;
+      /* Отступ внутри списка: при прокрутке разделы доходят до самого верха, а не обрываются раньше */
+      padding-top: calc(env(safe-area-inset-top) + var(--m-space-3));
       overflow-y: auto;
       scrollbar-width: none;
+      mask-image: linear-gradient(
+        to bottom,
+        transparent 0,
+        #000 var(--edge-top),
+        #000 calc(100% - var(--edge-bottom)),
+        transparent 100%
+      );
     }
+    :global(.m-rail__list[data-more-above]) { --edge-top: calc(env(safe-area-inset-top) + 24px); }
+    :global(.m-rail__list[data-more-below]) { --edge-bottom: 24px; }
 
     .m-rail__footer { flex: none; padding-top: var(--m-space-2); }
+    :global(.m-rail__list[data-more-below] + .m-rail__footer) { box-shadow: 0 -1px 0 var(--m-outline-variant); }
+
   }
 
   .m-nav-avatar {
@@ -581,47 +646,6 @@
     height: 28px;
     border-radius: 50%;
     object-fit: cover;
-  }
-
-  .m-more-scrim { border: 0; padding: 0; z-index: 40; }
-
-  .m-more__grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--m-space-2);
-    padding-bottom: var(--m-space-2);
-  }
-
-  .m-more__item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--m-space-2);
-    min-width: 0;
-    padding: var(--m-space-3) var(--m-space-1);
-    border: 0;
-    border-radius: 16px;
-    background: none;
-    color: var(--m-text);
-    font: 500 13px/1.25 var(--m-font);
-    text-align: center;
-    &:active { background: var(--m-press); }
-  }
-
-  .m-more__icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 52px;
-    height: 52px;
-    border-radius: 18px;
-    background: var(--m-surface-raised);
-    :global(svg) { width: 24px; height: 24px; }
-  }
-
-  .m-more__item--active .m-more__icon {
-    background: var(--m-secondary-container);
-    color: var(--m-on-secondary-container);
   }
 
   .m-search-slot { flex: 1; min-width: 0; height: 48px; margin-right: var(--m-space-2); }

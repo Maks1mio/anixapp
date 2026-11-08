@@ -4,7 +4,7 @@
    * касание — показать/скрыть панели, двойное касание по краю — перемотка, горизонтальный жест — перемотка
    * с превью, вертикальный справа — громкость, слева — яркость, удержание — 2×. Экран всегда альбомный.
    */
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, untrack } from 'svelte';
   import { fade } from 'svelte/transition';
   import { getWatchParams } from '../../router';
   import { navigate } from '../../stores/navigation';
@@ -21,6 +21,8 @@
     type SkipMarks,
   } from '../Watch/_skipMarks';
   import { setSkipAutoPref } from '../Watch/_skipPrefs';
+  import { WatchResume } from '../Watch/_useWatchResume.svelte';
+  import ResumePrompt from '../Watch/components/ResumePrompt.svelte';
   import { episodeDisplayNumber } from '../../utils/episode-display';
   import { isCapacitorNative } from '../../native/anix-api-native';
   import { loadAppSettings } from '../../utils/app-settings';
@@ -171,6 +173,83 @@
     return Number.isFinite(n) && n > 0 ? n : null;
   }
 
+  // ── Где пользователь остановился ─────────────────────────────────────────────────────────
+  const resume = new WatchResume();
+  /** Плеер открыт кнопкой «Смотреть» на главной: продолжаем без вопроса. */
+  let autoResumeOnce = params.get('resume') === '1';
+
+  const progressKey = $derived(positiveId(releaseId) != null && Number.isInteger(ep) && ep >= 0 ? `${releaseId}:${ep}` : '');
+
+  function progressContext() {
+    return {
+      release_id: positiveId(releaseId) ?? 0,
+      episode_position: ep,
+      source_id: positiveId(sourceId),
+      source_name: sourceName || null,
+      dubber_id: positiveId(dubberId),
+      dubber_name: dubberName || null,
+    };
+  }
+
+  $effect(() => {
+    const key = progressKey;
+    untrack(() => {
+      resume.openEpisode(key, positiveId(releaseId) ?? 0, ep, { room: false, startsElsewhere: false, autoAccept: autoResumeOnce });
+      autoResumeOnce = false;
+    });
+  });
+
+  // Вопрос появляется, только когда серия действительно загрузилась.
+  $effect(() => {
+    if (!resume.isPending || !useVideo || loadState !== 'ready' || switching) return;
+    void bufferedPct;
+    void duration;
+    untrack(askResume);
+  });
+
+  function askResume() {
+    const video = videoEl;
+    if (!video || !resume.isPending || !useVideo || loadState !== 'ready' || switching || video.readyState < 2) return;
+    if (!(video.duration > 0)) {
+      resume.close();
+      video.play().catch(() => {});
+      return;
+    }
+    if (!resume.showPrompt(video.currentTime)) {
+      if (video.paused) video.play().catch(() => {});
+      return;
+    }
+    if (resume.answeredYes) {
+      acceptResume();
+      return;
+    }
+    video.pause();
+    markFirstFrame();
+    controlsVisible = true;
+  }
+
+  function acceptResume() {
+    const position = resume.accept();
+    if (position == null) return;
+    fluo.setProgress(position, { origin: 'user' });
+    fluo.play({ origin: 'user' });
+    syncPlaybackState();
+  }
+
+  function declineResume() {
+    resume.decline(progressContext(), videoEl?.duration ?? 0);
+    fluo.setProgress(0, { origin: 'user' });
+    fluo.play({ origin: 'user' });
+    syncPlaybackState();
+  }
+
+  /** Во время вопроса выбрали место на таймлайне: играем оттуда. */
+  function closeResumeBySeek() {
+    if (!resume.prompt) return;
+    resume.close();
+    fluo.play({ origin: 'user' });
+  }
+
   // ── Панели ───────────────────────────────────────────────────────────────────────────────
   function scheduleHide() {
     if (hideTimer) window.clearTimeout(hideTimer);
@@ -286,22 +365,36 @@
     const video = videoEl;
     if (!video) return;
     const onPlaying = () => markFirstFrame();
-    const onTime = () => { if (video.currentTime > 0.05 && !video.paused) markFirstFrame(); };
+    const onTime = () => {
+      if (video.currentTime > 0.05 && !video.paused) markFirstFrame();
+      resume.track(progressContext(), video.currentTime, video.duration, {
+        solid: !switching && useVideo && loadState === 'ready',
+        playing: !video.paused,
+      });
+    };
     // автозапуск заблокирован — не держим загрузку вечно, показываем паузу
     const onLoaded = () => {
+      askResume();
       if (firstFrame || firstFrameTimer) return;
       firstFrameTimer = window.setTimeout(() => { firstFrameTimer = 0; if (video.paused) markFirstFrame(); }, 3500);
     };
     const onEnded = () => { if (nextEp != null) void loadEpisode(nextEp); else showControls(); };
+    // сохранённый таймкод ждёт ответа: автозапуск не должен убежать вперёд
+    const onPlay = () => { if (resume.holdsPlayback) video.pause(); };
+    const onPause = () => resume.flush();
     video.addEventListener('playing', onPlaying);
     video.addEventListener('timeupdate', onTime);
     video.addEventListener('loadeddata', onLoaded);
     video.addEventListener('ended', onEnded);
+    video.addEventListener('play', onPlay);
+    video.addEventListener('pause', onPause);
     return () => {
       video.removeEventListener('playing', onPlaying);
       video.removeEventListener('timeupdate', onTime);
       video.removeEventListener('loadeddata', onLoaded);
       video.removeEventListener('ended', onEnded);
+      video.removeEventListener('play', onPlay);
+      video.removeEventListener('pause', onPause);
     };
   });
 
@@ -436,6 +529,12 @@
   // ── Управление ───────────────────────────────────────────────────────────────────────────
   function togglePlay() {
     if (!useVideo || !videoEl) return;
+    if (resume.prompt) {
+      // Play значит «дальше»: «С начала» стирает таймкод и требует явного нажатия.
+      acceptResume();
+      showControls();
+      return;
+    }
     if (videoEl.paused) fluo.play({ origin: 'user' });
     else fluo.pause({ origin: 'user' });
     syncPlaybackState();
@@ -445,6 +544,7 @@
   function seekTo(t: number) {
     if (!useVideo || !videoEl || !(videoEl.duration > 0)) return;
     fluo.setProgress(Math.max(0, Math.min(videoEl.duration - 0.1, t)), { origin: 'user' });
+    closeResumeBySeek();
     syncPlaybackState();
   }
 
@@ -700,12 +800,21 @@
     let unbindNative = () => {};
     void bindNativeBackButton(goBack).then((fn) => { unbindNative = fn; });
 
+    // приложение могут свернуть и выгрузить в любой момент, не дожидаясь паузы
+    const flushOnHide = () => { if (document.visibilityState === 'hidden') resume.flush(); };
+    const flushOnLeave = () => resume.flush();
+    document.addEventListener('visibilitychange', flushOnHide);
+    window.addEventListener('pagehide', flushOnLeave);
+
     void (async () => {
       try { episodes = await loadEpisodesList(); } catch { /* ignore */ }
       await loadEpisode(ep);
     })();
 
     return () => {
+      resume.flush();
+      document.removeEventListener('visibilitychange', flushOnHide);
+      window.removeEventListener('pagehide', flushOnLeave);
       offBack();
       unbindNative();
       if (document.documentElement.classList.contains('mobile-native')) setOrientation('portrait');
@@ -795,6 +904,15 @@
         <button type="button" class="mw__btn" onclick={goBack}>Назад</button>
       </div>
     </div>
+  {/if}
+
+  {#if resume.prompt && loadState === 'ready' && !switching}
+    <ResumePrompt
+      position={resume.prompt.position}
+      duration={resume.prompt.duration}
+      onaccept={acceptResume}
+      ondecline={declineResume}
+    />
   {/if}
 
   {#if locked}

@@ -1,65 +1,40 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { onMount } from 'svelte';
-  import { fade } from 'svelte/transition';
   import { iconChevronLeft } from './icons';
   import UiV2RoundButton from './uikit-v2/UiV2RoundButton.svelte';
+  import { isMobileMode } from '../platform/mobile';
 
   interface Props {
     title: string;
     subtitle?: string;
-    /** Картинка для размытого фона баннера (обложка первого элемента) */
-    backdrop?: string | null;
     backLabel?: string;
     onBack?: () => void;
     actions?: Snippet;
-    /** Нижняя полоса баннера (вкладки, фильтры) — дублируется в компактной панели */
+    /** Полоса под заголовком (вкладки) — при прокрутке закрепляется у верхнего края */
     children?: Snippet;
-    /** Под нижней полосой, только в полном баннере (строка фильтров) — в компактную панель не попадает */
-    below?: Snippet;
   }
 
-  let { title, subtitle, backdrop, backLabel = 'Назад', onBack, actions, children, below }: Props = $props();
+  let { title, subtitle, backLabel = 'Назад', onBack, actions, children }: Props = $props();
 
-  /** Последний известный фон: пока список перезагружается, старый цвет держится до прихода нового */
-  let shownBackdrop = $state<string | null>(null);
-  /** Баннер ушёл под верхний край — показываем компактную панель поверх контента */
+  /** Шапка ушла под верхний край — показываем её полосу поверх контента */
   let docked = $state(false);
   let heroEl: HTMLElement | undefined = $state();
-
-  $effect(() => {
-    if (backdrop) shownBackdrop = backdrop;
-  });
 
   onMount(() => {
     if (!heroEl) return;
     const root = (heroEl.closest('.page__scroll') as HTMLElement | null)
       ?? document.getElementById('content');
-    // Панель не меняет раскладку (лежит поверх), поэтому прокрутка не дёргается
+    // Панель не меняет раскладку (лежит поверх), поэтому прокрутка не дёргается.
+    // Отступ — низ вкладок в закреплённой панели: она появляется, когда настоящие встали на её место.
     const io = new IntersectionObserver(
       ([entry]) => { docked = !entry.isIntersecting; },
-      { root, rootMargin: '-72px 0px 0px 0px', threshold: 0 },
+      { root, rootMargin: `-${isMobileMode() ? 48 : 52}px 0px 0px 0px`, threshold: 0 },
     );
     io.observe(heroEl);
     return () => io.disconnect();
   });
 </script>
-
-{#snippet background()}
-  <div class="discover-hero__bg" aria-hidden="true">
-    {#if shownBackdrop}
-      {#key shownBackdrop}
-        <img
-          class="discover-hero__backdrop"
-          src={shownBackdrop}
-          alt=""
-          decoding="async"
-          transition:fade={{ duration: 900 }}
-        />
-      {/key}
-    {/if}
-  </div>
-{/snippet}
 
 <div class="discover-hero-dock">
   <div
@@ -68,19 +43,15 @@
     aria-hidden={!docked}
     inert={!docked}
   >
-    {@render background()}
-    <span class="discover-hero__title discover-hero-dock__title">{title}</span>
     {#if children}
-      <div class="discover-hero__foot discover-hero-dock__foot">
+      <div class="discover-hero__foot">
         {@render children()}
       </div>
     {/if}
   </div>
 </div>
 
-<header class="discover-hero" class:discover-hero--with-foot={!!children} bind:this={heroEl}>
-  {@render background()}
-
+<header class="discover-hero" bind:this={heroEl}>
   <div class="discover-hero__head">
     <div class="discover-hero__lead">
       {#if onBack}
@@ -105,12 +76,6 @@
   {#if children}
     <div class="discover-hero__foot">
       {@render children()}
-    </div>
-  {/if}
-
-  {#if below}
-    <div class="discover-hero__below">
-      {@render below()}
     </div>
   {/if}
 </header>

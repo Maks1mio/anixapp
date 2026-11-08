@@ -170,8 +170,10 @@
     }
   }
 
-  function onScrollOrResize() {
+  function onScrollOrResize(e: Event) {
     if (!open) return;
+    // Своя прокрутка списка положение панели не меняет; пересчёт на каждый шаг заставлял её дёргаться
+    if (e.target instanceof Node && panelEl?.contains(e.target)) return;
     if (!isTriggerVisible()) {
       closePanel();
       return;

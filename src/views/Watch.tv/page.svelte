@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount, tick } from 'svelte';
+  import { onDestroy, onMount, tick, untrack } from 'svelte';
   import { getWatchParams } from '../../router';
   import { navigate } from '../../stores/navigation';
   import { PlayerCore } from '../Watch/core/PlayerCore';
@@ -15,8 +15,9 @@
     type SkipMarks,
   } from '../Watch/_skipMarks';
   import { setSkipAutoPref } from '../Watch/_skipPrefs';
+  import { WatchResume } from '../Watch/_useWatchResume.svelte';
   import { episodeDisplayNumber } from '../../utils/episode-display';
-  import { scheduleFocusTvOverlayContent, focusTvWatchPlay } from '../../services/tv-navigation';
+  import { scheduleFocusTvOverlayContent, focusTvWatchPlay, focusTvWatchResume } from '../../services/tv-navigation';
   import { tvInputDevice, type TvInputAction } from '../../services/tv-input';
   import TvInputGlyph from '../../components/tv/TvInputGlyph.svelte';
   import { getTvWatchArt } from '../../services/tv-release-transition';
@@ -215,6 +216,88 @@
     return Number.isFinite(n) && n > 0 ? n : null;
   }
 
+  // ── Где пользователь остановился ──────────────────────────────────────────
+  const resume = new WatchResume();
+  /** Плеер открыт кнопкой «Смотреть» на главной: продолжаем без вопроса. */
+  let autoResumeOnce = params.get('resume') === '1';
+
+  const progressKey = $derived(positiveId(releaseId) != null && Number.isInteger(ep) && ep >= 0 ? `${releaseId}:${ep}` : '');
+
+  function progressContext() {
+    return {
+      release_id: positiveId(releaseId) ?? 0,
+      episode_position: ep,
+      source_id: positiveId(sourceId),
+      source_name: sourceName || null,
+      dubber_id: positiveId(dubberId),
+      dubber_name: dubberName || null,
+    };
+  }
+
+  $effect(() => {
+    const key = progressKey;
+    untrack(() => {
+      resume.openEpisode(key, positiveId(releaseId) ?? 0, ep, { room: false, startsElsewhere: false, autoAccept: autoResumeOnce });
+      autoResumeOnce = false;
+    });
+  });
+
+  // Вопрос появляется, только когда серия действительно загрузилась.
+  $effect(() => {
+    if (!resume.isPending || !useVideo || loadState !== 'ready' || switching) return;
+    void bufferedPct;
+    void duration;
+    untrack(askResume);
+  });
+
+  function askResume() {
+    const video = videoEl;
+    if (!video || !resume.isPending || !useVideo || loadState !== 'ready' || switching || video.readyState < 2) return;
+    if (!(video.duration > 0)) {
+      resume.close();
+      video.play().catch(() => {});
+      return;
+    }
+    if (!resume.showPrompt(video.currentTime)) {
+      if (video.paused) video.play().catch(() => {});
+      return;
+    }
+    if (resume.answeredYes) {
+      acceptResume();
+      return;
+    }
+    video.pause();
+    markFirstFrame();
+    showOverlay();
+    void tick().then(() => focusTvWatchResume());
+  }
+
+  function acceptResume() {
+    const position = resume.accept();
+    if (position == null) return;
+    fluo.setProgress(position, { origin: 'user' });
+    fluo.play({ origin: 'user' });
+    syncPlaybackState();
+    showOverlay();
+    void tick().then(() => focusTvWatchPlay());
+  }
+
+  function declineResume() {
+    resume.decline(progressContext(), videoEl?.duration ?? 0);
+    fluo.setProgress(0, { origin: 'user' });
+    fluo.play({ origin: 'user' });
+    syncPlaybackState();
+    showOverlay();
+    void tick().then(() => focusTvWatchPlay());
+  }
+
+  /** Во время вопроса выбрали место на таймлайне: играем оттуда. */
+  function closeResumeBySeek() {
+    if (!resume.prompt) return;
+    resume.close();
+    fluo.play({ origin: 'user' });
+  }
+
   function bindCoreEls() {
     core.video = videoEl;
     // TV: без Anime4K — canvas апскейла не нужен.
@@ -257,7 +340,7 @@
 
   function canAutoHide(): boolean {
     if (loadState !== 'ready' || switching || !firstFrame) return false;
-    if (panelOpen || settingsOpen || skipPromptVisible) return false;
+    if (panelOpen || settingsOpen || skipPromptVisible || resume.prompt) return false;
     if (scrubbing) return false;
     return true;
   }
@@ -300,9 +383,17 @@
     const onPlaying = () => markFirstFrame();
     const onTime = () => {
       if (video.currentTime > 0.05 && !video.paused) markFirstFrame();
+      resume.track(progressContext(), video.currentTime, video.duration, {
+        solid: !switching && useVideo && loadState === 'ready',
+        playing: !video.paused,
+      });
     };
+    // Сохранённый таймкод ждёт ответа: автозапуск не должен убежать вперёд.
+    const onPlay = () => { if (resume.holdsPlayback) video.pause(); };
+    const onPause = () => resume.flush();
     // Автозапуск заблокирован — не держим загрузку вечно, показываем паузу.
     const onLoaded = () => {
+      askResume();
       if (firstFrame || firstFrameTimer) return;
       firstFrameTimer = window.setTimeout(() => {
         firstFrameTimer = 0;
@@ -317,10 +408,14 @@
     video.addEventListener('playing', onPlaying);
     video.addEventListener('timeupdate', onTime);
     video.addEventListener('loadeddata', onLoaded);
+    video.addEventListener('play', onPlay);
+    video.addEventListener('pause', onPause);
     video.addEventListener('resize', relayout);
     video.addEventListener('playing', relayout);
     window.addEventListener('resize', relayout);
     return () => {
+      video.removeEventListener('play', onPlay);
+      video.removeEventListener('pause', onPause);
       video.removeEventListener('resize', relayout);
       video.removeEventListener('playing', relayout);
       window.removeEventListener('resize', relayout);
@@ -403,6 +498,7 @@
     if (!useVideo || !videoEl || !(videoEl.duration > 0)) return;
     const clamped = Math.max(0, Math.min(100, pct));
     videoEl.currentTime = (clamped / 100) * videoEl.duration;
+    closeResumeBySeek();
     seekPreviewPct = clamped;
     scrubbing = false;
     syncPlaybackState();
@@ -640,6 +736,11 @@
 
   function togglePlay() {
     if (!useVideo || !videoEl) return;
+    if (resume.prompt) {
+      // Play значит «дальше»: «С начала» стирает таймкод и требует явного нажатия.
+      acceptResume();
+      return;
+    }
     if (videoEl.paused) fluo.play({ origin: 'user' });
     else fluo.pause({ origin: 'user' });
     syncPlaybackState();
@@ -651,6 +752,7 @@
     const prev = videoEl.currentTime;
     const next = Math.max(0, Math.min(videoEl.duration, prev + seconds));
     fluo.setProgress(next, { origin: 'user' });
+    closeResumeBySeek();
     if (Math.abs(next - prev) >= 0.5) flashSeek(seconds);
     syncPlaybackState();
     if (showUi) showOverlay();
@@ -780,8 +882,8 @@
       showOverlay();
       return;
     }
-    // Пока грузится или ошибка — прятать нечего: «Назад» выходит из плеера.
-    if (loadState !== 'ready' || switching || awaitingFirstFrame) {
+    // Пока грузится, ошибка или ждём ответа про таймкод — прятать нечего: «Назад» выходит из плеера.
+    if (loadState !== 'ready' || switching || awaitingFirstFrame || resume.prompt) {
       goBack();
       return;
     }
@@ -863,16 +965,25 @@
     window.addEventListener('tv-watch:seek', onTvSeek);
     window.addEventListener('tv-watch:action', onTvWatchAction);
 
+    // Приложение могут свернуть и выгрузить в любой момент, не дожидаясь паузы.
+    const flushOnHide = () => { if (document.visibilityState === 'hidden') resume.flush(); };
+    const flushOnLeave = () => resume.flush();
+    document.addEventListener('visibilitychange', flushOnHide);
+    window.addEventListener('pagehide', flushOnLeave);
+
     void (async () => {
       try {
         episodes = await loadEpisodesList();
       } catch { /* ignore */ }
       await loadEpisode(ep);
       await tick();
-      focusTvWatchPlay();
+      if (!resume.prompt) focusTvWatchPlay();
     })();
 
     return () => {
+      resume.flush();
+      document.removeEventListener('visibilitychange', flushOnHide);
+      window.removeEventListener('pagehide', flushOnLeave);
       window.removeEventListener('keydown', onPlayerActivity, true);
       if (firstFrameTimer) window.clearTimeout(firstFrameTimer);
       window.removeEventListener('player:changeContent', onPlayerChangeContent);
@@ -1012,7 +1123,24 @@
         </div>
 
         <footer class="tv-watch__dock">
-          {#if skipPromptVisible}
+          {#if resume.prompt}
+            <div class="tv-watch__skip-row tv-watch__resume" role="group" aria-label="Продолжить просмотр">
+              <span class="tv-watch__resume-text">
+                <b>Продолжить с {formatTime(resume.prompt.position)}?</b>
+                <span>Вы остановились на {formatTime(resume.prompt.position)} из {formatTime(resume.prompt.duration)}</span>
+              </span>
+              <button
+                type="button"
+                class="tv-watch__skip-btn tv-watch__skip-btn--accent tv-watch__resume-go"
+                onclick={acceptResume}
+              >
+                Продолжить
+              </button>
+              <button type="button" class="tv-watch__skip-btn tv-watch__skip-btn--ghost" onclick={declineResume}>
+                С начала
+              </button>
+            </div>
+          {:else if skipPromptVisible}
             <div class="tv-watch__skip-row">
               <button
                 type="button"

@@ -1881,11 +1881,11 @@
   // Одинаково на всех страницах: зазор сверху в залипшем состоянии и отступ до контента
   padding: 0.75rem 0 0.5rem;
   margin-bottom: 0.6rem;
-  // Сверху плотнее, книзу прозрачнее — контент под липкой полосой видно
+  // Сверху плотнее, книзу прозрачнее — контент уходит под липкую полосу постепенно
   background: linear-gradient(
     to bottom,
     var(--uikit-v2-bg) 0%,
-    color-mix(in srgb, var(--uikit-v2-bg) 70%, transparent) 100%
+    color-mix(in srgb, var(--uikit-v2-bg) 88%, transparent) 100%
   );
   --uiv2-tabs-capsule: color-mix(in srgb, var(--uikit-v2-text) 7%, transparent);
 
@@ -1896,13 +1896,24 @@
     left: 0;
     right: 0;
     top: 100%;
-    height: 1.25rem;
+    height: 3.5rem;
+    // Только у закреплённой полосы: в покое фейд лёг бы на панель под вкладками
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    // Промежуточные точки: прозрачность спадает по кривой, поэтому не видно, где фейд заканчивается
     background: linear-gradient(
       to bottom,
-      color-mix(in srgb, var(--uikit-v2-bg) 70%, transparent) 0%,
+      color-mix(in srgb, var(--uikit-v2-bg) 88%, transparent) 0%,
+      color-mix(in srgb, var(--uikit-v2-bg) 70%, transparent) 25%,
+      color-mix(in srgb, var(--uikit-v2-bg) 44%, transparent) 50%,
+      color-mix(in srgb, var(--uikit-v2-bg) 18%, transparent) 75%,
       transparent 100%
     );
     pointer-events: none;
+  }
+
+  &--stuck::after {
+    opacity: 1;
   }
 
   &--static {
@@ -4917,6 +4928,30 @@
   white-space: normal;
 }
 
+.uiv2-popup-menu__badge {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+// Текущий выбор справа от пункта
+.uiv2-popup-menu__value {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  color: var(--uiv2-fg-muted);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .uiv2-popup-menu__chevron {
   display: inline-flex;
   align-items: center;
@@ -4930,6 +4965,270 @@
     display: block;
   }
 }
+
+// ——— Меню шторкой снизу (UiV2PopupMenu: телефон, планшет и prop sheet на ПК) ———
+// Уровни подменю листаются внутри шторки, её высота плавно следует за содержимым.
+// Порталится в body; под mobile-mode цвета берутся из мобильных токенов, на ПК — из uikit.
+.uiv2-menu-sheet {
+  --sheet-bg: var(--m-surface-sheet, var(--uikit-v2-elevated));
+  --sheet-text: var(--m-text, var(--uikit-v2-text));
+  --sheet-muted: var(--m-text-2, var(--uiv2-fg-muted));
+  --sheet-press: var(--m-press, var(--uiv2-hover-bg));
+  --sheet-danger: var(--m-danger, var(--uikit-v2-accent));
+  --sheet-selected-bg: var(--m-secondary-container, var(--uiv2-selected-bg));
+  --sheet-selected-fg: var(--m-on-secondary-container, var(--uikit-v2-text));
+  --sheet-font: var(--m-font, inherit);
+  position: fixed;
+  inset: 0;
+  z-index: 12040;
+}
+
+.uiv2-menu-sheet--in-place {
+  position: absolute;
+  z-index: 40;
+}
+
+.uiv2-menu-sheet__scrim {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.uiv2-menu-sheet__panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom);
+  border-radius: 28px 28px 0 0;
+  background: var(--sheet-bg);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.32);
+  color: var(--sheet-text);
+
+  // Планшет и ПК: компактная шторка по центру, а не на всю ширину
+  @media (min-width: 600px) {
+    width: min(480px, calc(100% - 32px));
+    margin: 0 auto;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    padding-bottom: 0;
+    border-radius: 28px;
+  }
+}
+
+.uiv2-menu-sheet__head {
+  flex: none;
+  padding: 8px 8px 8px;
+  touch-action: none;
+}
+
+.uiv2-menu-sheet__handle {
+  display: block;
+  width: 32px;
+  height: 4px;
+  margin: 0 auto 8px;
+  border-radius: 999px;
+  background: var(--sheet-muted);
+  opacity: 0.6;
+}
+
+.uiv2-menu-sheet__bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.uiv2-menu-sheet__back {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--sheet-text);
+  cursor: pointer;
+
+  &:active {
+    background: var(--sheet-press);
+  }
+}
+
+.uiv2-menu-sheet__title {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--sheet-font);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Страницы уровней лежат друг на друге, пока меняются; высоту задаёт измеренная текущая
+.uiv2-menu-sheet__body {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  max-height: calc(80dvh - 72px);
+  transition: height 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.uiv2-menu-sheet__body .uiv2-menu-sheet__page {
+  position: absolute;
+  inset: 0;
+}
+
+.uiv2-menu-sheet__viewport {
+  height: 100%;
+}
+
+// Разделители появляются, только когда содержимое действительно уходит за край
+.uiv2-menu-sheet__body::before,
+.uiv2-menu-sheet__body::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  height: 1px;
+  background: color-mix(in srgb, var(--sheet-text) 12%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.uiv2-menu-sheet__body::before {
+  top: 0;
+}
+
+.uiv2-menu-sheet__body::after {
+  bottom: 0;
+}
+
+.uiv2-menu-sheet__body[data-more-above]::before,
+.uiv2-menu-sheet__body[data-more-below]::after {
+  opacity: 1;
+}
+
+.uiv2-menu-sheet__inner {
+  padding: 0 8px 12px;
+}
+
+.uiv2-menu-sheet__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.uiv2-menu-sheet .uiv2-popup-menu__row {
+  display: flex;
+  align-items: center;
+}
+
+.uiv2-menu-sheet .uiv2-popup-menu__item {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--sheet-text);
+  font-family: var(--sheet-font);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+
+  // Касание не должно оставлять подсветку на строке
+  @media (hover: hover) {
+    &:hover {
+      background: var(--sheet-press);
+    }
+  }
+
+  @media (hover: none) {
+    &:hover {
+      background: none;
+    }
+  }
+
+  &:active {
+    background: var(--sheet-press);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.uiv2-menu-sheet .uiv2-popup-menu__item--danger {
+  color: var(--sheet-danger);
+}
+
+.uiv2-menu-sheet .uiv2-popup-menu__item--checked,
+.uiv2-menu-sheet .uiv2-popup-menu__item--checked:hover {
+  background: var(--sheet-selected-bg);
+  color: var(--sheet-selected-fg);
+}
+
+.uiv2-menu-sheet .uiv2-popup-menu__label {
+  flex: 1;
+  min-width: 0;
+}
+
+.uiv2-menu-sheet .uiv2-popup-menu__value {
+  color: var(--sheet-muted);
+  font-size: 14px;
+}
+
+.uiv2-menu-sheet .uiv2-popup-menu__chevron {
+  flex: none;
+  color: var(--sheet-muted);
+}
+
+.uiv2-menu-sheet .uiv2-popup-menu__icon {
+  flex: none;
+  display: inline-flex;
+  color: var(--sheet-muted);
+
+  svg {
+    width: 22px;
+    height: 22px;
+  }
+}
+
+// Опасный пункт целиком в его цвете; пустое место под значок не держим; галочка выбранного — в конце строки
+.uiv2-menu-sheet .uiv2-popup-menu__item--danger .uiv2-popup-menu__icon {
+  color: inherit;
+}
+
+.uiv2-menu-sheet .uiv2-popup-menu__icon:empty {
+  display: none;
+}
+
+.uiv2-menu-sheet .uiv2-popup-menu__icon--check {
+  order: 2;
+  color: inherit;
+}
+
 
 .uiv2-popup-menu__trailing-tip.uiv2-tooltip__trigger {
   display: inline-flex;
@@ -13215,4 +13514,137 @@ $uiv2-comment-thread: color-mix(in srgb, var(--uikit-v2-text) 16%, transparent);
   .uiv2-settings__keybind--listen {
     animation: none;
   }
+}
+
+// ——— Фильтр релизов (ReleaseFilterPanel) поверх оформления шторки ———
+// Заголовок, подписи групп, строки и кнопки снизу начинаются на одной линии (20px от края)
+.release-filter .uiv2-menu-sheet__head {
+  padding-inline: 20px 8px;
+}
+
+.release-filter__title {
+  flex: 1;
+}
+
+.release-filter .uiv2-menu-sheet__body {
+  max-height: calc(88dvh - 136px);
+}
+
+.release-filter .uiv2-popup-menu__item {
+  min-height: 48px;
+  padding-block: 4px;
+}
+
+.release-filter__row .uiv2-popup-menu__value {
+  max-width: 55%;
+}
+
+.release-filter__row--set .uiv2-popup-menu__value {
+  color: var(--sheet-text);
+}
+
+.release-filter__group {
+  margin: 16px 12px 4px;
+  color: var(--sheet-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.release-filter__note {
+  margin: 0 12px 12px;
+  color: var(--sheet-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.release-filter__note--warn {
+  color: var(--sheet-danger);
+}
+
+.release-filter__desc {
+  display: block;
+  margin-top: 2px;
+  color: var(--sheet-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.release-filter__search {
+  box-sizing: border-box;
+  width: calc(100% - 24px);
+  height: 40px;
+  margin: 0 12px 8px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  outline: 0;
+  background: var(--sheet-press);
+  color: var(--sheet-text);
+  font-family: var(--sheet-font);
+  font-size: 15px;
+  font-weight: 400;
+
+  &::placeholder {
+    color: var(--sheet-muted);
+  }
+}
+
+// Как учитывать жанры: сегменты одной ширины
+.release-filter__modes {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  margin: 0 12px 8px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--sheet-press);
+}
+
+.release-filter__mode {
+  min-height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--sheet-muted);
+  font-family: var(--sheet-font);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &--on {
+    background: var(--sheet-bg);
+    color: var(--sheet-text);
+  }
+}
+
+.release-filter__years {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 0 12px 4px;
+}
+
+.release-filter__foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px 20px;
+}
+
+// ПК: окно по центру, ручка потягивания не нужна
+html:not(.mobile-mode) .release-filter .uiv2-menu-sheet__panel {
+  top: 0;
+  bottom: 0;
+  height: fit-content;
+  margin: auto;
+  width: min(520px, calc(100% - 32px));
+  border-radius: 20px;
+}
+
+html:not(.mobile-mode) .release-filter .uiv2-menu-sheet__handle {
+  display: none;
 }

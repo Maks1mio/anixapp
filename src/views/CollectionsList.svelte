@@ -18,7 +18,6 @@
   import { headlineFromLoadError } from '../utils/content-load-error';
   import {
     COLLECTION_SORT_OPTIONS,
-    collectionsBackdropUrl,
     defaultCollectionListSort,
     initialCollectionListPage,
     initialCollectionPreviousPage,
@@ -31,6 +30,7 @@
     getViewState,
     saveViewStateWithScroll,
     restoreScrollTop,
+    resetScrollTop,
     registerActiveScrollKey,
     saveViewStateData,
   } from '../stores/view-state';
@@ -85,7 +85,6 @@
         : 'Пользовательские коллекции релизов',
   );
 
-  const heroBackdrop = $derived(collectionsBackdropUrl(items));
 
   const sortTabs = COLLECTION_SORT_OPTIONS.map((o) => ({ id: String(o.value), label: o.label }));
 
@@ -125,6 +124,7 @@
     }
     if (sort === selectedSort) return;
     selectedSort = sort;
+    resetScrollTop();
     const seed = isMobileMode() ? tabPrefetch.get(String(sort)) : undefined;
     if (seed?.items.length) {
       loadToken += 1;
@@ -388,71 +388,69 @@
   });
 </script>
 
+{#snippet headerActions()}
+  <CollectionsHeaderActions myActive={mine} onMy={toggleMine} onCreate={createCollection} />
+{/snippet}
+
 <div class="view view-collections-list discover-page collections-page" bind:this={wrapEl}>
-  <DiscoverHero title={pageTitle} subtitle={pageSubtitle} backdrop={heroBackdrop}>
+  <!-- На телефоне вкладкам нужна вся ширина: «Мои» и «Создать» стоят рядом с заголовком -->
+  <DiscoverHero
+    title={pageTitle}
+    subtitle={pageSubtitle}
+    actions={isMobileMode() && !week ? headerActions : undefined}
+  >
     {#if !week}
       <UiV2Tabs
         tabs={sortTabs}
         activeId={mine ? '' : String(selectedSort)}
         onChange={(id) => onSortChange(Number(id))}
         class="uiv2-tabs--static collections-page__tabs"
-      >
-        {#snippet rightActions()}
-          <CollectionsHeaderActions myActive={mine} onMy={toggleMine} onCreate={createCollection} />
-        {/snippet}
-      </UiV2Tabs>
+        rightActions={isMobileMode() ? undefined : headerActions}
+      />
     {/if}
   </DiscoverHero>
 
-  {#if loadState === 'loading' && items.length === 0}
-    <div class="collections-feed" aria-busy="true">
-      <UiV2CollectionCardSkeleton count={6} />
-    </div>
-  {:else if loadState === 'error'}
-    <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadPage()} />
-  {:else if loadState === 'empty'}
-    {#if mine}
-      <div class="discover-empty">
-        <span class="discover-empty__icon" aria-hidden="true">{@html iconFolder(26)}</span>
-        <p class="discover-empty__title">Ой, а тут коллекций нет!</p>
-        <p class="discover-empty__text">Соберите любимые релизы в подборку и поделитесь ею с другими</p>
-        <UiV2Button label="Создать коллекцию" variant="primary" onclick={createCollection}>
-          {#snippet icon()}{@html iconPlus(16)}{/snippet}
-        </UiV2Button>
+  <!-- Скелетон и пустое состояние внутри блока: смена вкладки плавная, даже пока список грузится -->
+  <div use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode() && !mine && !week, activeId: String(selectedSort) }}>
+    {#if loadState === 'loading' && items.length === 0}
+      <div class="collections-feed" aria-busy="true">
+        <UiV2CollectionCardSkeleton count={6} />
       </div>
+    {:else if loadState === 'error'}
+      <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadPage()} />
+    {:else if loadState === 'empty'}
+      {#if mine}
+        <div class="discover-empty">
+          <span class="discover-empty__icon" aria-hidden="true">{@html iconFolder(26)}</span>
+          <p class="discover-empty__title">Ой, а тут коллекций нет!</p>
+          <p class="discover-empty__text">Соберите любимые релизы в подборку и поделитесь ею с другими</p>
+          <UiV2Button label="Создать коллекцию" variant="primary" onclick={createCollection}>
+            {#snippet icon()}{@html iconPlus(16)}{/snippet}
+          </UiV2Button>
+        </div>
+      {:else}
+        <div class="discover-empty">
+          <span class="discover-empty__icon" aria-hidden="true">{@html iconLayoutGrid(26)}</span>
+          <p class="discover-empty__title">Коллекций пока нет</p>
+        </div>
+      {/if}
     {:else}
-      <div class="discover-empty">
-        <span class="discover-empty__icon" aria-hidden="true">{@html iconLayoutGrid(26)}</span>
-        <p class="discover-empty__title">Коллекций пока нет</p>
-      </div>
-    {/if}
-  {:else if isMobileMode() && !mine && !week}
-    <div use:swipeTabs={{ onSwipe: swipeToTab, activeId: String(selectedSort) }}>
       <div class="collections-feed">
         {#each items as item (item.id)}
           <CollectionCard data={item} variant="grid" />
         {/each}
       </div>
-      {#if peekTabs.prev}<TabPeek dir={-1}>{@render collectionsPeek(peekTabs.prev)}</TabPeek>{/if}
-      {#if peekTabs.next}<TabPeek dir={1}>{@render collectionsPeek(peekTabs.next)}</TabPeek>{/if}
-    </div>
-    {#if isLoading}
-      <div class="collections-feed" aria-busy="true">
-        <UiV2CollectionCardSkeleton count={2} />
-      </div>
+      {#if isLoading}
+        <div class="collections-feed" aria-busy="true">
+          <UiV2CollectionCardSkeleton count={2} />
+        </div>
+      {/if}
+      {#if !mine && !week}
+        {#if peekTabs.prev}<TabPeek dir={-1}>{@render collectionsPeek(peekTabs.prev)}</TabPeek>{/if}
+        {#if peekTabs.next}<TabPeek dir={1}>{@render collectionsPeek(peekTabs.next)}</TabPeek>{/if}
+      {/if}
     {/if}
-  {:else}
-    <div class="collections-feed">
-      {#each items as item (item.id)}
-        <CollectionCard data={item} variant="grid" />
-      {/each}
-    </div>
-    {#if isLoading}
-      <div class="collections-feed" aria-busy="true">
-        <UiV2CollectionCardSkeleton count={2} />
-      </div>
-    {/if}
-  {/if}
+  </div>
 </div>
 
 {#snippet collectionsPeek(id: string)}

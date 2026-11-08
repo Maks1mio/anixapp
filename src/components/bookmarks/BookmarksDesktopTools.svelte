@@ -31,6 +31,8 @@
     /** Свой набор сортировок (например, для «Оценок»); подпись кнопки — desc пункта */
     sortOptions?: readonly BookmarkSortOption[];
     showRandom?: boolean;
+    /** Вместо кнопок на вкладках без них (телефон): строка остаётся, список не прыгает */
+    note?: string;
     onSortChange: (sort: number) => void;
     onFilterChange: (filter: number) => void;
     onRandom: () => void;
@@ -49,6 +51,7 @@
     randomDisabled,
     sortOptions,
     showRandom = true,
+    note = '',
     onSortChange,
     onFilterChange,
     onRandom,
@@ -143,6 +146,10 @@
       </button>
     {/if}
   </div>
+  {/if}
+
+  {#if hideSearch && !showListControls && note}
+    <span class="bm-tools__note">{note}</span>
   {/if}
 
   {#if showListControls}

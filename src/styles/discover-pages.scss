@@ -30,118 +30,14 @@
   min-width: 8rem;
 }
 
-// ——— Hero header (Коллекции, Популярное) ———
+// ——— Шапка разделов (Популярное, Коллекции, Fluo, Поиск) ———
 
-// Баннер: размытая обложка первого элемента + заголовок + вкладки внизу
+// Лежит прямо на фоне страницы: цвет на экране дают обложки, а не шапка
 .discover-hero {
-  position: relative;
-  isolation: isolate;
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
-  margin: -0.5rem 0 1rem;
-  padding: 1.35rem 1.35rem 1.25rem;
-  border-radius: 22px;
-  border: 1px solid var(--uiv2-border-subtle);
-  background: color-mix(in srgb, var(--uikit-v2-elevated) 55%, var(--uikit-v2-bg));
-  box-shadow:
-    0 1px 0 var(--uiv2-hover-subtle) inset,
-    0 14px 36px color-mix(in srgb, #000 24%, transparent);
-
-  &--with-foot {
-    padding-bottom: 0.9rem;
-  }
-}
-
-// Компактная панель при прокрутке: лежит поверх контента (высота 0 в потоке),
-// поэтому появление не меняет раскладку и не дёргает прокрутку
-.discover-hero-dock {
-  position: sticky;
-  top: calc(-1 * var(--page-scroll-padding, 0rem) + 0.5rem);
-  z-index: 20;
-  height: 0;
-}
-
-.discover-hero-dock__bar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  isolation: isolate;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.45rem 0.5rem 0.45rem 1.1rem;
-  border-radius: 999px;
-  border: 1px solid var(--uiv2-border-subtle);
-  background: color-mix(in srgb, var(--uikit-v2-elevated) 55%, var(--uikit-v2-bg));
-  box-shadow:
-    0 1px 0 var(--uiv2-hover-subtle) inset,
-    0 12px 32px color-mix(in srgb, #000 45%, transparent);
-  opacity: 0;
-  transform: translateY(-0.6rem) scale(0.98);
-  pointer-events: none;
-  transition:
-    opacity 0.2s ease,
-    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
-
-  &--visible {
-    opacity: 1;
-    transform: none;
-    pointer-events: auto;
-  }
-
-  .discover-hero__backdrop {
-    opacity: 0.22;
-  }
-}
-
-.discover-hero-dock__bar .discover-hero-dock__title {
-  flex: 0 0 auto;
-  max-width: 40%;
-  font-size: 1.1rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.discover-hero-dock__foot {
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  min-width: 0;
-}
-
-.discover-hero__bg {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  overflow: clip;
-  border-radius: inherit;
-  pointer-events: none;
-  background: radial-gradient(90% 140% at 0% 0%, color-mix(in srgb, var(--uikit-v2-accent) 18%, transparent), transparent 60%);
-
-  // Затемнение к левому краю — текст всегда читается
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background:
-      linear-gradient(90deg, color-mix(in srgb, var(--uikit-v2-bg) 45%, transparent) 0%, transparent 70%),
-      linear-gradient(0deg, color-mix(in srgb, var(--uikit-v2-bg) 35%, transparent) 0%, transparent 55%);
-  }
-}
-
-.discover-hero__backdrop {
-  position: absolute;
-  top: -40%;
-  left: -10%;
-  width: 120%;
-  height: 180%;
-  object-fit: cover;
-  filter: blur(44px) saturate(1.5);
-  opacity: 0.34;
+  gap: 0.75rem;
+  margin: 0 0 1.25rem;
 }
 
 .discover-hero__head {
@@ -152,10 +48,46 @@
   gap: 0.75rem 1.25rem;
 }
 
+.discover-hero__lead {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.discover-hero__text {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.discover-hero__title {
+  min-width: 0;
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--uikit-v2-text);
+}
+
+.discover-hero__subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.35;
+  color: var(--uiv2-fg-muted);
+}
+
+.discover-hero__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+// Вкладки — обычная капсула приложения, только без липкой подложки: закрепление делает панель ниже
 .discover-hero__foot {
   min-width: 0;
 
-  // Вкладки внутри баннера: без липкой подложки и собственных отступов
   .uiv2-tabs {
     position: relative;
     top: auto;
@@ -168,46 +100,61 @@
       display: none;
     }
   }
+}
 
-  .uiv2-tabs__nav {
-    background: color-mix(in srgb, var(--uikit-v2-bg) 40%, transparent);
+// При прокрутке закреплена только полоса вкладок. Лежит поверх контента (высота 0 в потоке),
+// поэтому появление не меняет раскладку и не дёргает прокрутку
+.discover-hero-dock {
+  position: sticky;
+  top: calc(-1 * var(--page-scroll-padding, 0rem));
+  z-index: 20;
+  height: 0;
+}
+
+.discover-hero-dock__bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 0.75rem 0 0.5rem;
+  background: linear-gradient(
+    to bottom,
+    var(--uikit-v2-bg) 0%,
+    color-mix(in srgb, var(--uikit-v2-bg) 88%, transparent) 100%
+  );
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+
+  // Как под обычными вкладками: контент уходит под полосу постепенно
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    height: 3.5rem;
+    // Промежуточные точки: прозрачность спадает по кривой, поэтому не видно, где фейд заканчивается
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--uikit-v2-bg) 88%, transparent) 0%,
+      color-mix(in srgb, var(--uikit-v2-bg) 70%, transparent) 25%,
+      color-mix(in srgb, var(--uikit-v2-bg) 44%, transparent) 50%,
+      color-mix(in srgb, var(--uikit-v2-bg) 18%, transparent) 75%,
+      transparent 100%
+    );
+    pointer-events: none;
+  }
+
+  &--visible {
+    opacity: 1;
+    pointer-events: auto;
   }
 }
 
-.discover-hero__lead {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  min-width: 0;
-}
-
-.discover-hero__text {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.discover-hero__title {
-  min-width: 0;
-  margin: 0;
-  font-size: 1.85rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
-  color: var(--uikit-v2-text);
-}
-
-.discover-hero__subtitle {
-  margin: 0.25rem 0 0;
-  font-size: 0.88rem;
-  line-height: 1.35;
-  color: var(--uiv2-fg-soft);
-}
-
-.discover-hero__actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-left: auto;
+// Поле кода Fluo — не вкладки, закреплять нечего
+.view-fluo .discover-hero-dock {
+  display: none;
 }
 
 .discover-empty {
@@ -256,23 +203,7 @@
 
 // ——— Popular (TopFragment) ———
 
-// Вкладки в шапке рядом с заголовком: капсула по содержимому, без липкой подложки
-.popular-tabs .uiv2-tabs__nav {
-  flex: 0 1 auto;
-}
-
-// Чья статистика: Anixart / AnixApp — справа от заголовка
-.popular-source {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.popular-source__label {
-  font-size: 0.8125rem;
-  color: var(--uiv2-fg-muted);
-}
-
+// Чья статистика: переключатель из двух сегментов справа от заголовка
 .popular-source__tabs.uiv2-tabs {
   position: relative;
   top: auto;
@@ -286,7 +217,7 @@
   }
 
   .uiv2-tabs__nav {
-    background: color-mix(in srgb, var(--uikit-v2-bg) 40%, transparent);
+    flex: 0 1 auto;
   }
 
   // Два сегмента одной ширины: подсветка у любого края стоит на одинаковом отступе
@@ -298,32 +229,84 @@
 
   .uiv2-tabs__tab {
     justify-content: center;
-    padding: 0 12px;
+    padding: 0 0.75rem;
   }
 }
 
-// Строка фильтров под вкладками: компактные чипы в тон капсуле вкладок
-.discover-hero__below {
-  min-width: 0;
-  margin-top: -0.5rem;
+// Место кнопки фильтров сжимается вместе с зазором, поэтому капсула вкладок едет за ней.
+// Зазор — отступ самого места: у полосы и её края своих нет, иначе без кнопки оставалась бы пустота
+.popular-main-tabs .uiv2-tabs__row {
+  gap: 0;
 }
 
-.popular-filters {
+.popular-main-tabs .uiv2-tabs__side--left {
+  padding-right: 0;
+}
+
+.popular-filters-slot {
+  --slot-width: 2.5rem;
+  --slot-gap: 0.75rem;
+  flex: none;
+  width: var(--slot-width);
+  margin-right: var(--slot-gap);
+  transform-origin: left center;
+  transition:
+    width 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+    margin-right 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.18s ease,
+    transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+
+  &--hidden {
+    width: 0;
+    margin-right: 0;
+    opacity: 0;
+    transform: scale(0.7);
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+// Кнопка фильтров — такая же круглая, как настройки вкладок на Главной; число выбранных на её углу
+.popular-filters-btn {
+  position: relative;
+
+  &--on {
+    color: var(--uikit-v2-text);
+  }
+}
+
+.popular-filters-btn__count {
+  position: absolute;
+  top: 0;
+  right: 0;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  justify-content: center;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.25rem;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: var(--uikit-v2-accent);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
-// Чип: UiV2Select без подписи, по ширине значения
+// Чип-селект без подписи, по ширине значения (сортировка тайтлов в редакторе коллекции)
 .uiv2-select.popular-chip {
   display: inline-block;
   width: auto;
 
   .uiv2-select__field {
-    border: 1px solid color-mix(in srgb, var(--uikit-v2-text) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--uikit-v2-text) 14%, transparent);
     border-radius: 999px;
-    background: color-mix(in srgb, var(--uikit-v2-bg) 40%, transparent);
+    background: color-mix(in srgb, var(--uikit-v2-text) 8%, transparent);
   }
 
   &:not(.uiv2-select--disabled):hover .uiv2-select__field {
@@ -347,10 +330,9 @@
   .uiv2-select__value-label {
     font-weight: 500;
     letter-spacing: 0;
-    color: var(--uiv2-fg-muted);
+    color: var(--uikit-v2-text);
   }
 
-  // Пояснения пунктов — только в списке
   .uiv2-select__value-desc {
     display: none;
   }
@@ -363,37 +345,9 @@
   }
 }
 
-// Выбрано не «Любой…» — чип заметнее, видно, что фильтр включён
-.uiv2-select.popular-chip--on .uiv2-select__field,
-.uiv2-select.popular-chip:first-child .uiv2-select__field {
-  border-color: color-mix(in srgb, var(--uikit-v2-text) 14%, transparent);
-  background: color-mix(in srgb, var(--uikit-v2-text) 8%, transparent);
-}
-
-.uiv2-select.popular-chip--on .uiv2-select__value-label,
-.uiv2-select.popular-chip:first-child .uiv2-select__value-label {
-  color: var(--uikit-v2-text);
-}
-
-// Список шире чипа: длинные жанры не режутся
 .popular-chip__panel {
   min-width: 13rem;
 }
-
-.popular-filters__sep {
-  width: 1px;
-  height: 1.25rem;
-  margin: 0 0.25rem;
-  background: color-mix(in srgb, var(--uikit-v2-text) 12%, transparent);
-}
-
-.popular-filters__end {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-left: auto;
-}
-
 
 // Топ-3: пьедестал 2 · 1 · 3
 .popular-podium {
@@ -421,18 +375,6 @@
 
   &--1 {
     order: 2;
-
-    // Мягкое свечение за лидером
-    &::before {
-      content: '';
-      position: absolute;
-      inset: 10% -12% 20%;
-      z-index: -1;
-      border-radius: 50%;
-      background: radial-gradient(closest-side, color-mix(in srgb, var(--podium-gold) 24%, transparent), transparent);
-      filter: blur(24px);
-      pointer-events: none;
-    }
   }
 
   &--2 {
@@ -480,7 +422,6 @@
   letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
   color: var(--podium-tone);
-  text-shadow: 0 2px 14px color-mix(in srgb, var(--podium-tone) 45%, transparent);
 
   .popular-podium__place--1 & {
     font-size: 2.1rem;

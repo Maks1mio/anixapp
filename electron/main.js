@@ -100,6 +100,7 @@ const { LIST_STATUS_TO_TYPE } = require('./lib/constants');
 const { getIconPath, getMacDockIconPath } = require('./lib/paths');
 const { applyUiZoom } = require('./lib/ui-zoom');
 const { createDiscordSettings } = require('./lib/discord-settings');
+const { isDevHandheldWindow } = require('./lib/dev-window-layout');
 const { createIpcHelpers } = require('./lib/ipc-helpers');
 const { applyGpuFlags } = require('./setup/gpu-flags');
 const { setupSessionRequestHeaders } = require('./setup/session-headers');
@@ -132,7 +133,10 @@ app.on('second-instance', (_event, commandLine) => {
 setupDeepLinks(app);
 
 let discordRpc = null;
-try { discordRpc = require('./discord-rpc'); } catch (_) {}
+// Окна телефона и планшета в dev:all имитируют мобильную версию, а Discord RPC есть только на ПК.
+if (!isDevHandheldWindow()) {
+  try { discordRpc = require('./discord-rpc'); } catch (_) {}
+}
 
 const discord = createDiscordSettings(discordRpc);
 const { handleAnixError, loggedHandle } = createIpcHelpers({ isDev, logger, state });

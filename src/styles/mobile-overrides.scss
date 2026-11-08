@@ -13,7 +13,8 @@ html.mobile-mode {
     margin: 0 !important;
     color: var(--m-text-tab);
 
-    &__row { display: flex; align-items: center; height: 48px; gap: 0; background: transparent !important; }
+    // Линия под полосой на всех экранах; индикатор вкладки лежит поверх неё
+    &__row { display: flex; align-items: center; height: 48px; gap: 0; background: transparent !important; box-shadow: inset 0 -1px 0 var(--m-divider); }
     &__side { flex: none; display: flex; align-items: center; background: transparent !important; }
     &__nav { flex: 1; min-width: 0; height: 48px !important; position: relative; background: transparent !important; backdrop-filter: none !important; box-shadow: none !important; padding: 0 !important; border-radius: 0 !important; }
     &__scroll {
@@ -26,14 +27,19 @@ html.mobile-mode {
       background: transparent !important; border: 0 !important; border-radius: 0 !important;
       color: var(--m-text-tab) !important; font: 500 15px/1 var(--m-font) !important;
       -webkit-tap-highlight-color: transparent;
-      // Индикатор Anixart — по ширине текста, 3dp, скруглённый, у нижнего края полосы
       .uiv2-tabs__tab-label { position: relative; display: inline-flex; align-items: center; height: 48px; }
-      &--active {
-        color: var(--m-text) !important; font-weight: 600 !important;
-        .uiv2-tabs__tab-label::after {
-          content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
-          border-radius: 3px 3px 0 0; background: var(--m-text);
-        }
+      &--active { color: var(--m-text) !important; font-weight: 600 !important; }
+    }
+    // Индикатор Anixart — по ширине текста (ширина вкладки минус её отступы), 3dp, скруглённый, у нижнего края.
+    // Одна планка на полосу: едет от вкладки к вкладке, как капсула на ПК
+    &__indicator {
+      top: 0; bottom: 0; background: none !important; box-shadow: none !important; border-radius: 0 !important;
+      &::after {
+        content: ''; position: absolute; left: 14px; right: 14px; bottom: 0; height: 3px;
+        border-radius: 3px 3px 0 0; background: var(--m-text);
+      }
+      &--animated:not(.uiv2-tabs__indicator--stretch) {
+        transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), width 0.24s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.18s ease;
       }
     }
     &__tool-btn {
@@ -41,7 +47,7 @@ html.mobile-mode {
       background: transparent !important; color: var(--m-text-2) !important; border: 0 !important;
       box-shadow: none !important; margin: 0;
     }
-    &__track, &__indicator { display: none !important; }
+    &__track { display: none !important; }
     &::after { display: none !important; }
     &__divider { display: none !important; }
   }
@@ -71,6 +77,11 @@ html.mobile-mode {
       img { width: 100%; height: 100%; object-fit: cover; }
     }
     .uiv2-anime-card__poster-veil { display: none !important; }
+    // Постер узкий: плашка на всю ширину, чтобы подпись не обрезалась
+    .uiv2-anime-card__poster-note {
+      top: 0; left: 0; right: 0; max-width: none; padding: 3px 4px; border: 0; border-radius: 0;
+      font: 500 11px/14px var(--m-font); text-align: center;
+    }
 
     .uiv2-anime-card__content { flex: 1; min-width: 0; padding: 0 !important; background: transparent !important; }
     .uiv2-anime-card__title-row { display: flex; align-items: flex-start; gap: var(--m-space-2); }
@@ -266,7 +277,7 @@ html.mobile-mode {
     }
     &::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 45%, var(--m-bg) 100%); }
   }
-  .release-page__head > *:not(.m-release-bg):not(.m-sheet-scrim):not(.m-flow-scrim) { position: relative; z-index: 1; }
+  .release-page__head > *:not(.m-release-bg):not(.m-flow-scrim) { position: relative; z-index: 1; }
   .release-page__head-top { padding: 0 !important; align-items: stretch !important; }
   .release-page__actions { width: 100%; }
 
@@ -439,15 +450,8 @@ html.mobile-mode {
     &__danger { color: var(--m-danger) !important; } }
 }
 
-// ── Меню «⋮» на странице релиза; плашка выбора плеера в окне серий ──
+// ── Плашка выбора плеера в окне серий ──
 html.mobile-mode {
-  .m-sheet-scrim { position: fixed; inset: 0; z-index: 70; display: flex; align-items: flex-end; background: rgba(0, 0, 0, 0.5); }
-  .m-sheet-scrim__bg { position: absolute; inset: 0; border: 0; background: none; padding: 0; }
-  .m-sheet-menu {
-    position: relative; width: 100%; padding: var(--m-space-3) var(--m-space-2) calc(var(--m-space-3) + env(safe-area-inset-bottom));
-    border-radius: 28px 28px 0 0; background: var(--m-surface-sheet);
-    button { display: flex; align-items: center; gap: var(--m-space-4); width: 100%; height: 56px; padding: 0 var(--m-space-4); border: 0; background: none; color: var(--m-text); font: 400 17px var(--m-font); text-align: left; svg { width: 22px; height: 22px; color: var(--m-text-2); } }
-  }
   .watch-modal__player-pick {
     display: flex; align-items: center; justify-content: space-between; width: calc(100% - 2 * var(--m-gutter)); margin: 0 var(--m-gutter) var(--m-space-2);
     padding: 10px var(--m-space-4); border: 1.5px solid var(--m-outline-variant); border-radius: 16px; background: transparent; color: var(--m-text-2); font: 400 14px var(--m-font);
@@ -459,7 +463,7 @@ html.mobile-mode {
 // Под открытой шторкой/диалогом страница не прокручивается
 html.mobile-mode.m-scroll-lock { &, body { overflow: hidden !important; touch-action: none; } }
 html.mobile-mode {
-  .m-flow__body, .m-sheet-menu, .m-flow__dubs { overscroll-behavior: contain; touch-action: pan-y; }
+  .m-flow__body, .uiv2-menu-sheet__viewport, .m-flow__dubs { overscroll-behavior: contain; touch-action: pan-y; }
 }
 
 // ── Промо Anix+: карточка над таб-баром на всю ширину, а не desktop-тост в углу ──
@@ -514,13 +518,16 @@ html.mobile-mode {
     gap: var(--m-space-2) !important;
     margin: 0 !important;
     padding: var(--m-space-3) var(--m-gutter) 0 !important;
+    // Строка есть на всех вкладках, даже без кнопок: при перелистывании список не прыгает
+    box-sizing: border-box;
+    min-height: 52px;
     overflow-x: auto;
     scrollbar-width: none;
     &::-webkit-scrollbar { display: none; }
-    &:not(:has(button)) { display: none; }
     > * { flex: none; }
   }
-  .uiv2-card.bookmarks__unvoted { order: 4; margin: var(--m-space-3) var(--m-gutter) 0 !important; }
+  .bm-tools__note { color: var(--m-text-2); font: 400 14px/20px var(--m-font); }
+  .uiv2-card.bookmarks__unvoted { margin: var(--m-space-3) var(--m-gutter) 0 !important; }
   .bookmarks__content { order: 5; }
   .bookmarks__collections { padding: var(--m-space-3) var(--m-gutter) var(--m-space-5) !important; gap: var(--m-space-4) var(--m-space-3) !important; }
 }
@@ -783,8 +790,29 @@ html.mobile-mode {
 // ── Результаты поиска: без баннера ПК, вкладки как на главной, отступы как у списков ──
 html.mobile-mode {
   .view-search-v2 { padding: 0 0 var(--m-space-4) !important; }
-  .search-v2__results-label { margin: var(--m-space-4) var(--m-gutter) 0; color: var(--m-text-2); font-size: 15px; }
-  .search-v2__franchise { margin: var(--m-space-3) var(--m-gutter) 0; }
+  .search-v2__actions { padding: var(--m-space-3) var(--m-gutter) 0; }
+  .search-v2__filter {
+    height: 36px; background: var(--m-secondary-container); color: var(--m-on-secondary-container);
+    font: 500 14px var(--m-font);
+  }
+  // width: 100% вместе с боковыми отступами выводил карточку за правый край экрана
+  .search-v2__franchise {
+    width: calc(100% - 2 * var(--m-gutter)); margin: var(--m-space-4) var(--m-gutter) 0; gap: var(--m-space-3); padding: var(--m-space-3);
+    background: var(--m-surface-block); box-shadow: none;
+    &:active:not(:disabled) { background: var(--m-surface-chip); }
+    .uiv2-franchise__deck { width: 72px; height: 62px; }
+    .uiv2-franchise__poster { width: 44px; height: 62px; border-radius: 8px; box-shadow: none; }
+    .uiv2-franchise__poster:nth-child(2) { left: 14px; }
+    .uiv2-franchise__poster:nth-child(3) { left: 28px; }
+    .uiv2-franchise__title {
+      font: 500 15px/20px var(--m-font); white-space: normal;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    }
+    .uiv2-franchise__meta { color: var(--m-text-2); font: 400 13px/18px var(--m-font); }
+    // Вся карточка нажимается: вместо кнопки «Перейти» только стрелка, текст получает всю ширину
+    .uiv2-franchise__action { padding: 0; background: none !important; color: var(--m-text-2) !important; }
+    .uiv2-franchise__action-label { display: none; }
+  }
   .search-v2__people { padding: var(--m-space-4) var(--m-gutter) 0; }
   .search-v2__skeleton-grid { padding: var(--m-space-4) var(--m-gutter) 0; }
   .view-search-v2 .collections-feed { padding: var(--m-space-4) var(--m-gutter) 0; }
@@ -817,6 +845,7 @@ html.mobile-mode {
   .m-app__content .releases-type, .m-app__content .bookmarks__tabs, .m-app__content .search-v2__tabs {
     position: sticky !important;
     top: var(--m-bars-h) !important;
+    z-index: 10; // у вкладок поиска (--static) z-index: auto, и карточки перекрывали их при прокрутке
     transition: transform 0.2s ease;
   }
   .m-app__scroll--bars-hidden .releases-type, .m-app__scroll--bars-hidden .bookmarks__tabs, .m-app__scroll--bars-hidden .search-v2__tabs {
@@ -833,7 +862,157 @@ html.mobile-mode {
   .m-app__scroll--bars-hidden .bookmarks__search { transform: translateY(calc(-1 * var(--m-bars-h))); }
 }
 
-// ── Перелистывание вкладок: соседняя вкладка за краем экрана (TabPeek), едет вместе со списком ──
+// ── Шапка разделов (DiscoverHero): Популярное, Коллекции, Fluo ──────────────────────────────────
+// Та же шапка, что на ПК, с отступами и размерами телефона. Вкладки на всю ширину, как на Главной.
+html.mobile-mode {
+  .view-popular, .view-collections-list, .view-fluo, .view-filtered {
+    overflow: visible !important; // иначе закреплённые вкладки не прилипают
+    padding: 0 var(--m-gutter) var(--m-space-4) !important;
+  }
+
+  .discover-hero {
+    margin: 0 calc(-1 * var(--m-gutter)) var(--m-space-4);
+    padding-top: var(--m-space-4);
+  }
+  .discover-hero__head { flex-wrap: nowrap; align-items: center; padding: 0 var(--m-gutter); }
+  .discover-hero__lead { flex: 1 1 0; }
+  .discover-hero__title { font: 600 24px/32px var(--m-font); letter-spacing: 0; color: var(--m-text); }
+  .discover-hero__subtitle { margin-top: 2px; font: 400 14px/20px var(--m-font); color: var(--m-text-2); }
+  .discover-hero__actions { flex: none; margin-left: 0; }
+
+  .discover-hero-dock { top: 0; margin: 0 calc(-1 * var(--m-gutter)); }
+  .discover-hero-dock__bar { padding: 0; background: var(--m-bg); transition: none; &::after { display: none; } }
+
+  // Популярное: чья статистика — переключатель из двух сегментов, видно, что это кнопки
+  .popular-source__tabs.uiv2-tabs {
+    background: transparent !important;
+    .uiv2-tabs__row, .uiv2-tabs__nav, .uiv2-tabs__scroll { height: 36px !important; min-height: 0; }
+    .uiv2-tabs__row { box-shadow: none; }
+    .uiv2-tabs__nav { border-radius: var(--m-radius-pill) !important; background: var(--m-surface-sheet) !important; }
+    .uiv2-tabs__scroll { overflow: hidden; border-radius: var(--m-radius-pill) !important; }
+    .uiv2-tabs__tab { height: 36px; padding: 0 var(--m-space-3); border-radius: var(--m-radius-pill) !important; font-size: 13px !important; }
+    .uiv2-tabs__tab-label { height: 36px; }
+    // Здесь индикатор — заливка сегмента, она переезжает к выбранному
+    .uiv2-tabs__indicator { background: var(--m-surface-raised) !important; border-radius: var(--m-radius-pill) !important; }
+    .uiv2-tabs__indicator::after { display: none; }
+  }
+
+  // Кнопка фильтров слева от вкладок, как настройки вкладок на Главной
+  .popular-filters-slot { --slot-width: 52px; --slot-gap: 0px; }
+  .popular-filters-btn--on { color: var(--m-text) !important; }
+  .popular-filters-btn__count { top: 6px; right: 8px; background: var(--m-primary); color: var(--m-on-primary); }
+
+  // Коллекции: «Мои» и «Создать» рядом с заголовком
+  .collections-header-actions { gap: var(--m-space-2); min-height: 0; padding: 0; background: none; box-shadow: none; }
+  .collections-header-actions__btn {
+    justify-content: center;
+    height: 36px;
+    padding: 0 var(--m-space-3);
+    border-radius: var(--m-radius-pill);
+    background: var(--m-surface-sheet);
+    color: var(--m-text-2);
+    font: 500 14px/1 var(--m-font);
+    &--active { background: var(--m-surface-raised); color: var(--m-text); }
+    &--create {
+      width: 36px;
+      padding: 0;
+      color: var(--m-text);
+      span { display: none; }
+      svg { width: 24px; height: 24px; }
+    }
+  }
+
+  .view-filtered .bookmarks__grid { margin: 0 calc(-1 * var(--m-gutter)); }
+
+  // Fluo: поле кода во всю ширину, кнопки под ним поровну
+  .view-fluo .discover-hero__foot { padding: 0 var(--m-gutter) var(--m-space-3); }
+  .view-fluo .fluo-page__toolbar { gap: var(--m-space-2); }
+  .view-fluo .fluo-page__code { flex: 1 0 100%; max-width: none; }
+  .view-fluo .fluo-page__toolbar .uiv2-btn { flex: 1 1 0; margin-left: 0; }
+
+  // Топ-3: постеры с номером на обложке вместо ступеней, подписи на одной линии
+  .popular-podium {
+    grid-template-columns: 1fr 1.14fr 1fr;
+    align-items: start;
+    gap: var(--m-space-2);
+    margin: 0 auto var(--m-space-5);
+  }
+  // Боковые ниже лидера ровно настолько, чтобы низ обложек и подписи совпали (2:3 от разницы ширины)
+  .popular-podium__place--2, .popular-podium__place--3 { margin-top: 21%; }
+  .popular-podium__place { gap: 0; }
+  .popular-podium__place .uiv2-anime-card__poster { border-radius: var(--m-radius-md); box-shadow: none; }
+  .popular-podium__step {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    z-index: 2;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--podium-tone);
+    pointer-events: none;
+  }
+  .popular-podium--skeleton .popular-podium__step { display: none; }
+  .popular-podium__rank,
+  .popular-podium__place--1 .popular-podium__rank {
+    font: 700 14px/1 var(--m-font);
+    letter-spacing: 0;
+    color: #141414;
+  }
+  .popular-podium .uiv2-anime-card__title {
+    display: -webkit-box;
+    overflow: hidden;
+    min-height: 2.5em;
+    margin: var(--m-space-2) 0 0;
+    color: var(--m-text);
+    font: 500 13px/1.25 var(--m-font);
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .popular-podium .uiv2-anime-card__meta { margin-top: var(--m-space-1); color: var(--m-text-2); font-size: 12px; }
+  // В узкой колонке хватает места на серии и рейтинг, год лишний
+  .popular-podium .uiv2-anime-card__meta-sep,
+  .popular-podium .uiv2-anime-card__meta-sep ~ .uiv2-anime-card__meta-text { display: none; }
+
+  // С четвёртого места — обычный список, как на Главной, номер на обложке
+  .view-popular .popular-list { gap: var(--m-space-5); margin: 0 calc(-1 * var(--m-gutter)); }
+  .popular-row {
+    position: relative;
+    display: block;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    &:hover { background: transparent; }
+    &--skeleton { padding: 0 var(--m-gutter); }
+  }
+  .popular-row .uiv2-anime-card--compact { align-items: flex-start; }
+  .popular-row .uiv2-anime-card__chips { display: none; }
+  .popular-row__rank {
+    position: absolute;
+    top: 6px;
+    left: calc(var(--m-gutter) + 6px);
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 var(--m-space-1);
+    box-sizing: border-box;
+    border-radius: var(--m-radius-pill);
+    background: rgba(0, 0, 0, 0.72);
+    color: #fff;
+    font: 700 13px/1 var(--m-font);
+    letter-spacing: 0;
+    pointer-events: none;
+    -webkit-text-stroke: 0;
+  }
+}
+
+// ── Перелистывание вкладок: соседняя вкладка (TabPeek) проявляется на месте текущей, та гаснет ──
 html.mobile-mode {
   // clip, а не hidden: не создаёт области прокрутки, закреплённые вкладки внутри продолжают прилипать.
   // Запас 69px — высота верхней панели: поле поиска «Закладок» стоит в ней, выше начала контента
@@ -843,14 +1022,30 @@ html.mobile-mode {
   .tab-peek {
     position: absolute;
     top: var(--tab-peek-top, 0px);
+    left: 0;
     width: 100%;
     // В покое панель заранее отрисована, но скрыта и не удлиняет короткую страницу
     max-height: calc(100dvh - 140px);
     overflow: hidden;
     visibility: hidden;
     pointer-events: none;
-    &--next { left: 100%; }
-    &--prev { left: -100%; }
   }
-  [data-tab-swiping] > .tab-peek { max-height: 100dvh; visibility: visible; }
+
+  // Значения задаёт actions/swipeTabs; показывается только соседняя вкладка со стороны свайпа
+  [data-tab-swiping] > :not(.tab-peek) {
+    opacity: calc(1 - var(--tab-swipe-p, 0));
+    transform: translate3d(var(--tab-swipe-x, 0), 0, 0);
+    transition: var(--tab-swipe-transition, none);
+    will-change: opacity, transform;
+  }
+
+  [data-tab-swiping='1'] > [data-tab-peek='1'],
+  [data-tab-swiping='-1'] > [data-tab-peek='-1'] {
+    max-height: 100dvh;
+    visibility: visible;
+    opacity: var(--tab-swipe-p, 0);
+    transform: translate3d(var(--tab-swipe-in-x, 0), 0, 0);
+    transition: var(--tab-swipe-transition, none);
+    will-change: opacity, transform;
+  }
 }

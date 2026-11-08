@@ -42,6 +42,7 @@
     getViewState,
     saveViewStateWithScroll,
     restoreScrollTop,
+    resetScrollTop,
     invalidateViewStatePrefix,
     registerActiveScrollKey,
     flushActiveViewState,
@@ -818,8 +819,11 @@
     }
 
     const keepErrorOverlay = tabId === activeTab && loadState === 'error';
-    if (tabId !== activeTab) votesMode = 'voted';
+    const tabChanged = tabId !== activeTab;
+    if (tabChanged) votesMode = 'voted';
     activeTab = tabId;
+    // Другая вкладка всегда открывается с начала страницы
+    if (tabChanged) resetScrollTop();
     syncTabToUrl(tabId);
 
     if (!force) {
@@ -855,7 +859,7 @@
         && snapshotMatchesCurrentSort(cached.data)
       ) {
         applyBookmarksSnapshot(cached.data);
-        restoreBookmarksScroll(cached.scrollTop);
+        restoreBookmarksScroll(tabChanged ? 0 : cached.scrollTop);
         return;
       }
     }
@@ -1033,12 +1037,19 @@
   }
 
   /** «Смотрю · 3 тайтла» — сколько в открытой вкладке */
-  const headSummary = $derived.by(() => {
+  const listControlsShown = $derived(isReleaseListTab || (isVotesTab && votesMode === 'voted'));
+  const countLabel = $derived.by(() => {
     if (loadState !== 'ready' || totalCount <= 0) return '';
     const noun = isCollectionsTab
       ? pluralRu(totalCount, 'коллекция', 'коллекции', 'коллекций')
       : pluralRu(totalCount, 'тайтл', 'тайтла', 'тайтлов');
-    return `${activeTabMeta?.label ?? 'Список'} · ${totalCount} ${noun}`;
+    return `${totalCount} ${noun}`;
+  });
+  const headSummary = $derived.by(() => {
+    if (!countLabel) return '';
+    const tab = activeTabMeta?.label ?? 'Список';
+    // На телефоне у вкладок без кнопок число стоит в строке инструментов
+    return !desktopLayout && !listControlsShown ? tab : `${tab} · ${countLabel}`;
   });
 
   async function onRandom() {
@@ -1209,7 +1220,8 @@
       searchValue={searchInput}
       {onSearchInput}
       onSearchClear={clearSearch}
-      showListControls={isReleaseListTab || (isVotesTab && votesMode === 'voted')}
+      showListControls={listControlsShown}
+      note={countLabel}
       showFilter={isReleaseListTab}
       showRandom={isReleaseListTab}
       sortOptions={isVotesTab ? VOTE_SORT_OPTIONS : undefined}
@@ -1221,21 +1233,21 @@
       {onRandom}
     />
 
-  {#if isVotesTab && !isOtherProfile}
-    {#if votesMode === 'unvoted'}
-      <UiV2Card class="bookmarks__unvoted" label="Оцените релизы">
-        <p class="bookmarks__unvoted-text">Оцените просмотренные релизы — оценка сохраняется сразу</p>
-        <UiV2Button label="К оценкам" onclick={() => setVotesMode('voted')} />
-      </UiV2Card>
-    {:else if hasUnvoted && !searchQuery}
-      <UiV2Card class="bookmarks__unvoted" label="Неоценённые релизы">
-        <p class="bookmarks__unvoted-text">У вас есть просмотренные, но ещё не оценённые релизы</p>
-        <UiV2Button label="Оценить" variant="light" onclick={() => setVotesMode('unvoted')} />
-      </UiV2Card>
-    {/if}
-  {/if}
-
   <div class="bookmarks__content" use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab }}>
+    <!-- Подсказка про оценки — часть вкладки: меняется вместе со списком и не сдвигает его скачком -->
+    {#if isVotesTab && !isOtherProfile}
+      {#if votesMode === 'unvoted'}
+        <UiV2Card class="bookmarks__unvoted" label="Оцените релизы">
+          <p class="bookmarks__unvoted-text">Оцените просмотренные релизы — оценка сохраняется сразу</p>
+          <UiV2Button label="К оценкам" onclick={() => setVotesMode('voted')} />
+        </UiV2Card>
+      {:else if hasUnvoted && !searchQuery}
+        <UiV2Card class="bookmarks__unvoted" label="Неоценённые релизы">
+          <p class="bookmarks__unvoted-text">У вас есть просмотренные, но ещё не оценённые релизы</p>
+          <UiV2Button label="Оценить" variant="light" onclick={() => setVotesMode('unvoted')} />
+        </UiV2Card>
+      {/if}
+    {/if}
     <div class="bookmarks__grid">
       {#if loadState === 'loading'}
         {#if isCollectionsTab}

@@ -11,6 +11,8 @@ export type Uiv2ScrollAxis = 'y' | 'x' | 'both';
 export type Uiv2CustomScrollOptions = {
   axis?: Uiv2ScrollAxis;
   viewportSelector?: string;
+  /** Показывать ползунок при любой прокрутке (пальцем нет ни колеса, ни наведения). */
+  showOnScroll?: boolean;
 };
 
 const DEFAULT_VIEWPORT = '.uiv2-scroll-area__viewport, [data-uiv2-scroll]';
@@ -32,6 +34,7 @@ export function uiv2CustomScroll(
 
   let axis: Uiv2ScrollAxis = options.axis ?? 'y';
   let viewportSelector = options.viewportSelector ?? DEFAULT_VIEWPORT;
+  let showOnScroll = options.showOnScroll ?? false;
 
   const vTrack = root.querySelector<HTMLElement>('.uiv2-scroll-area__v-track');
   const vThumb = root.querySelector<HTMLElement>('.uiv2-scroll-area__v-thumb');
@@ -411,10 +414,17 @@ export function uiv2CustomScroll(
     scheduleScrollbarHide();
   }
 
+  function onScrollShow() {
+    if (!showOnScroll) return;
+    setScrollbarsVisible(true);
+    scheduleScrollbarHide();
+  }
+
   function attachListeners() {
     if (!scrollEl) return;
 
     scrollEl.addEventListener('scroll', updateScrollbars);
+    scrollEl.addEventListener('scroll', onScrollShow, { passive: true });
     scrollEl.addEventListener('wheel', onWheel, { passive: true });
     vTrack?.addEventListener('wheel', onVTrackWheel, { passive: false });
     hTrack?.addEventListener('wheel', onHTrackWheel, { passive: false });
@@ -441,6 +451,7 @@ export function uiv2CustomScroll(
 
     if (scrollEl) {
       scrollEl.removeEventListener('scroll', updateScrollbars);
+      scrollEl.removeEventListener('scroll', onScrollShow);
       scrollEl.removeEventListener('wheel', onWheel);
     }
     vTrack?.removeEventListener('wheel', onVTrackWheel);
@@ -463,6 +474,7 @@ export function uiv2CustomScroll(
   function mount(next: Uiv2CustomScrollOptions) {
     axis = next.axis ?? 'y';
     viewportSelector = next.viewportSelector ?? DEFAULT_VIEWPORT;
+    showOnScroll = next.showOnScroll ?? false;
     applyAxisClasses();
     detachListeners();
     if (!bindViewport()) return;
@@ -473,7 +485,7 @@ export function uiv2CustomScroll(
 
   return {
     update(next: Uiv2CustomScrollOptions) {
-      mount({ axis, viewportSelector, ...next });
+      mount({ axis, viewportSelector, showOnScroll, ...next });
     },
     destroy() {
       detachListeners();

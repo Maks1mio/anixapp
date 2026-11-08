@@ -318,6 +318,7 @@ html.mobile-mode {
     font-size: 13px;
     font-weight: 500;
     &__pill {
+      position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -386,29 +387,6 @@ html.mobile-mode {
     background: var(--m-bg);
   }
 
-  // ── Шторка (bottom sheet) ────────────────────────────────────────────────────────────────
-  .m-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 40; }
-  .m-sheet {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 41;
-    max-height: 88dvh;
-    overflow: auto;
-    border-radius: var(--m-radius-xl) var(--m-radius-xl) 0 0;
-    background: var(--m-surface-sheet);
-    padding: var(--m-space-3) var(--m-gutter) calc(var(--m-space-4) + env(safe-area-inset-bottom));
-    &__handle {
-      width: 32px;
-      height: 4px;
-      margin: 0 auto var(--m-space-3);
-      border-radius: var(--m-radius-pill);
-      background: var(--m-text-3);
-      opacity: 0.6;
-    }
-    &__title { margin: 0 0 var(--m-space-2); font-size: 22px; font-weight: 500; }
-  }
   .m-choice {
     @extend .m-btn-reset;
     display: flex;

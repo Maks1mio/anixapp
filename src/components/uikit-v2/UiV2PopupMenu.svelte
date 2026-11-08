@@ -51,8 +51,6 @@
     showReset?: boolean;
     resetValue?: number;
     resetLabel?: string;
-    /** Красная метка справа от подписи: «BETA», «Вам ответили» */
-    badge?: string;
     /** Кнопка справа от пункта (вне основного button — валидный HTML) */
     trailingIcon?: string;
     trailingLabel?: string;
@@ -1044,9 +1042,6 @@
           <span class="uiv2-popup-menu__icon uiv2-popup-menu__icon--empty" aria-hidden="true"></span>
         {/if}
         <span class="uiv2-popup-menu__label">{item.label}</span>
-        {#if item.badge}
-          <span class="uiv2-popup-menu__badge">{item.badge}</span>
-        {/if}
         {#if item.valueText}
           <span class="uiv2-popup-menu__value">{item.valueText}</span>
         {/if}

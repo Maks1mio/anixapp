@@ -27,9 +27,10 @@
       ?? document.getElementById('content');
     // Панель не меняет раскладку (лежит поверх), поэтому прокрутка не дёргается.
     // Отступ — низ вкладок в закреплённой панели: она появляется, когда настоящие встали на её место.
+    const barAbove = root?.querySelector<HTMLElement>(':scope > .m-topbar')?.offsetHeight ?? 0;
     const io = new IntersectionObserver(
       ([entry]) => { docked = !entry.isIntersecting; },
-      { root, rootMargin: `-${isMobileMode() ? 48 : 52}px 0px 0px 0px`, threshold: 0 },
+      { root, rootMargin: `-${(isMobileMode() ? 48 : 52) + barAbove}px 0px 0px 0px`, threshold: 0 },
     );
     io.observe(heroEl);
     return () => io.disconnect();

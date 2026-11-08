@@ -469,8 +469,8 @@ html.mobile-mode {
 // ── Промо Anix+: карточка над таб-баром на всю ширину, а не desktop-тост в углу ──
 html.mobile-mode {
   .support-promo {
-    left: calc(var(--m-rail-w) + var(--m-gutter)) !important;
-    right: var(--m-gutter) !important;
+    left: calc(var(--m-rail-left) + var(--m-gutter)) !important;
+    right: calc(var(--m-rail-right) + var(--m-gutter)) !important;
     bottom: calc(var(--m-nav-h) + env(safe-area-inset-bottom) + var(--m-space-3)) !important;
     width: auto !important;
     max-width: none !important;
@@ -481,26 +481,10 @@ html.mobile-mode {
   }
 }
 
-// ── Закладки, как в Anixart: поиск по вкладке стоит в верхней панели (MobileLayout оставляет под него место),
+// ── Закладки, как в Anixart: поиск по вкладке открывается из верхней панели (MobileLayout),
 //    остальное как на ПК: шапка с меню, вкладки, сортировка, фильтр анонсов и случайный тайтл ──
 html.mobile-mode {
   .view-bookmarks { display: flex !important; flex-direction: column; padding: 0 !important; }
-  .bookmarks__search {
-    order: 0;
-    position: relative; z-index: 6;
-    // высота верхней панели: 12 + 48 + 9 (mobile-components .m-topbar); справа — две иконки по 48 + отступ
-    margin: -57px 104px 9px var(--m-gutter) !important;
-    width: auto !important;
-    height: 48px !important;
-    border: 0 !important;
-    border-radius: var(--m-radius-pill) !important;
-    background: var(--m-surface-sheet) !important;
-    box-shadow: none !important;
-    padding: 0 var(--m-space-4) !important;
-    gap: 13px;
-    svg { width: 24px; height: 24px; color: var(--m-text-2); }
-  }
-  .bookmarks__search-input { font: 400 16px var(--m-font) !important; color: var(--m-text) !important; &::placeholder { color: var(--m-text-2); } }
   .bookmarks__tabs { order: 2; }
   // Шапка и инструменты — те же компоненты, что на ПК (BookmarksDesktopHead, BookmarksDesktopTools)
   .bm-head {
@@ -851,15 +835,15 @@ html.mobile-mode {
   .m-app__scroll--bars-hidden .releases-type, .m-app__scroll--bars-hidden .bookmarks__tabs, .m-app__scroll--bars-hidden .search-v2__tabs {
     transform: translateY(calc(-1 * var(--m-bars-h) - 48px));
   }
+}
 
-  // Поле поиска «Закладок» стоит в слоте верхней панели и должно двигаться с ней
-  .bookmarks__search {
-    position: sticky !important;
-    top: var(--m-space-3);
-    z-index: 15;
-    transition: transform 0.2s ease;
+// Планшет: содержимое верхней панели по ширине страницы (56rem, как у .view), фон остаётся во всю ширину
+@media (min-width: 600px) {
+  html.mobile-mode :is(.m-app__scroll, .m-fullscreen--profile) > .m-topbar {
+    --m-page-inset: calc((100% - 56rem) / 2);
+    padding-left: max(var(--m-gutter), var(--m-page-inset));
+    padding-right: max(var(--m-space-1), var(--m-page-inset));
   }
-  .m-app__scroll--bars-hidden .bookmarks__search { transform: translateY(calc(-1 * var(--m-bars-h))); }
 }
 
 // ── Шапка разделов (DiscoverHero): Популярное, Коллекции, Fluo ──────────────────────────────────
@@ -880,7 +864,8 @@ html.mobile-mode {
   .discover-hero__subtitle { margin-top: 2px; font: 400 14px/20px var(--m-font); color: var(--m-text-2); }
   .discover-hero__actions { flex: none; margin-left: 0; }
 
-  .discover-hero-dock { top: 0; margin: 0 calc(-1 * var(--m-gutter)); }
+  // Под верхней панелью, если она есть на странице
+  .discover-hero-dock { top: var(--m-sticky-top, 0px); margin: 0 calc(-1 * var(--m-gutter)); transition: top 0.2s ease; }
   .discover-hero-dock__bar { padding: 0; background: var(--m-bg); transition: none; &::after { display: none; } }
 
   // Популярное: чья статистика — переключатель из двух сегментов, видно, что это кнопки

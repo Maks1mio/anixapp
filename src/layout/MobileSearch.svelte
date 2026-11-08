@@ -6,22 +6,27 @@
   import { iconClock, iconSlidersHorizontal, iconX } from '../components/icons';
   import ReleaseFilterPanel from '../components/ReleaseFilterPanel.svelte';
   import { loadSearchFilter, saveSearchFilter } from '../utils/searchFilter';
-  import { buildSearchRoute, type SearchTab } from '../search-controller';
+  import { buildSearchRoute, SEARCH_PLACEHOLDERS, type SearchTab } from '../search-controller';
   import { navigate } from '../stores/navigation';
-  import { addSearchHistory, clearSearchHistory, getSearchHistory } from '../utils/search-history';
+  import { addSearchHistory, clearSearchHistory, getSearchHistory, type SearchHistoryScope } from '../utils/search-history';
 
   interface Props {
     /** Запрос, вкладка и поле поиска из адреса страницы. */
     value?: string;
     tab?: SearchTab;
     searchBy?: number;
+    /** Поиск внутри страницы (закладки): своя подпись и история, запрос уходит сюда, а не на /search. */
+    local?: { label: string; onQuery: (query: string) => void };
   }
-  let { value = '', tab = 'releases', searchBy = 0 }: Props = $props();
+  let { value = '', tab = 'releases', searchBy = 0, local }: Props = $props();
+
+  const historyScope = $derived<SearchHistoryScope>(local ? 'bookmarks' : tab);
+  const placeholder = $derived(local?.label ?? SEARCH_PLACEHOLDERS[tab]);
 
   let query = $derived(value);
   let focused = $state(false);
   let filterPanelOpen = $state(false);
-  let recent = $state<string[]>(getSearchHistory());
+  let recent = $state<string[]>([]);
   let inputEl = $state<HTMLInputElement | null>(null);
 
   const showHistory = $derived(!value || focused);
@@ -30,13 +35,17 @@
     return recent.filter((item) => item.toLocaleLowerCase('ru-RU').includes(needle));
   });
 
+  $effect(() => {
+    recent = getSearchHistory(historyScope);
+  });
+
   // Пустой экран поиска сразу готов к вводу
   $effect(() => {
     if (!value) inputEl?.focus();
   });
 
   function onFocus() {
-    recent = getSearchHistory();
+    recent = getSearchHistory(historyScope);
     focused = true;
   }
 
@@ -45,18 +54,23 @@
     if (!q) return;
     query = q;
     inputEl?.blur();
-    addSearchHistory(q);
+    addSearchHistory(q, historyScope);
     if (q === value) return;
+    if (local) {
+      local.onQuery(q);
+      return;
+    }
     navigate(buildSearchRoute(q, tab, tab === 'releases' ? searchBy : 0));
   }
 
   function clearInput() {
     query = '';
+    if (local && value) local.onQuery('');
     inputEl?.focus();
   }
 
   function clearAll() {
-    clearSearchHistory();
+    clearSearchHistory(historyScope);
     recent = [];
   }
 
@@ -69,8 +83,8 @@
     type="search"
     enterkeyhint="search"
     autocomplete="off"
-    placeholder="Поиск"
-    aria-label="Поиск"
+    {placeholder}
+    aria-label={placeholder}
     onfocus={onFocus}
     onblur={() => { focused = false; }}
   />
@@ -80,9 +94,11 @@
       {@html iconX(24)}
     </button>
   {/if}
-  <button type="button" class="m-icon-btn" aria-label="Поиск по фильтру" onclick={() => { filterPanelOpen = true; }}>
-    {@html iconSlidersHorizontal(24)}
-  </button>
+  {#if !local}
+    <button type="button" class="m-icon-btn" aria-label="Поиск по фильтру" onclick={() => { filterPanelOpen = true; }}>
+      {@html iconSlidersHorizontal(24)}
+    </button>
+  {/if}
 </form>
 
 {#if showHistory}
@@ -147,8 +163,8 @@
   .m-search-history {
     position: fixed;
     top: calc(env(safe-area-inset-top) + 69px);
-    left: var(--m-rail-w);
-    right: 0;
+    left: var(--m-rail-left);
+    right: var(--m-rail-right);
     bottom: calc(var(--m-nav-h) + env(safe-area-inset-bottom));
     z-index: 15;
     overflow-y: auto;

@@ -1,15 +1,19 @@
 <script lang="ts">
   /**
    * Каркас мобильного режима (html.mobile-mode): верхняя панель с поиском, разделы как на ПК
-   * (телефон — нижний таб-бар и шторка «Ещё», планшет — левая панель), полноэкранные «Профиль» и «Настройки».
+   * (телефон — нижняя панель-шторка, планшет — боковая панель), полноэкранные «Профиль» и «Настройки».
    * Содержимое — те же вью, что и в desktop, но под мобильными токенами.
    */
   import { onMount } from 'svelte';
+  import { slide } from 'svelte/transition';
   import { get } from 'svelte/store';
   import type { Snippet } from 'svelte';
-  import { navigate } from '../stores/navigation';
-  import { scrollEdges } from '../actions/sheet';
-  import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../components/uikit-v2/UiV2PopupMenu.svelte';
+  import { navigate, refreshCurrentPage } from '../stores/navigation';
+  import MobileDock from './MobileDock.svelte';
+  import MobileRail from './MobileRail.svelte';
+  import MobilePullRefresh from './MobilePullRefresh.svelte';
+  import { bookmarksSearchLabel, bookmarksSearchOpen, bookmarksSearchQuery, closeBookmarksSearch } from '../stores/mobile-bookmarks-search';
+  import { mobileNavOrder, mobilePhoneBarSize, moveMobileNavTabAcross, swapMobileNavTabs, PHONE_BAR_MAX, PHONE_BAR_MIN, type MobileNavTab } from '../stores/mobile-nav';
   import { isScrollRestorePending } from '../stores/view-state';
   import { notificationsModalOpen, settingsModalOpen, watchModalOpen, openSettingsModal, closeSettingsModal } from '../stores/modals';
   import { notificationUnreadCount, refreshNotificationUnreadCount } from '../stores/notifications';
@@ -19,11 +23,11 @@
   import { bindNotificationTaps, requestNativeNotifyPermission } from '../native/anix-notify';
   import { isAuthenticated, requireAuth } from '../stores/auth';
   import { ensureProfileId, loadSelfProfileGlobal } from '../utils/profile';
-  import { iconDownload, iconPlus, iconCircleUser, iconMoreHorizontal, iconSearch, iconSettings, iconBell } from '../components/icons';
+  import { iconDownload, iconPlus, iconCircleUser, iconSearch, iconSettings, iconBell } from '../components/icons';
   import { SIDEBAR_NAV_ITEMS, type SidebarNavId } from '../constants/sidebar-nav';
   import MobileSettings from './MobileSettings.svelte';
   import MobileSearch from './MobileSearch.svelte';
-  import type { SearchTab } from '../search-controller';
+  import { buildSearchRoute, SEARCH_PLACEHOLDERS, type SearchTab } from '../search-controller';
   import { bindNativeBackButton, minimizeNativeApp } from '../platform/mobile-back';
   import SidebarProfilePanel from '../components/SidebarProfilePanel.svelte';
   import {
@@ -44,8 +48,7 @@
   }
   let { children, currentPath = '/', search }: Props = $props();
 
-  type Tab = SidebarNavId | 'profile';
-  type NavEntry = { id: Tab; label: string; short: string; href: string | null; icon: string; beta?: boolean };
+  type NavEntry = { id: MobileNavTab; label: string; short: string; href: string | null; icon: string; beta?: boolean };
 
   /** Короткие подписи для узкой левой панели и нижнего таб-бара. */
   const SHORT_LABELS: Partial<Record<SidebarNavId, string>> = { agent: 'ИИ' };
@@ -60,11 +63,33 @@
   }));
   const PROFILE: NavEntry = { id: 'profile', label: 'Профиль', short: 'Профиль', href: null, icon: iconCircleUser(24) };
 
-  /** Телефон: в таб-баре только частые разделы, остальное — в шторке «Ещё». */
-  const PHONE_BAR_IDS: Tab[] = ['home', 'overview', 'bookmarks', 'profile'];
   const ALL_ENTRIES = [...SECTIONS, PROFILE];
-  const PHONE_BAR = PHONE_BAR_IDS.map((id) => ALL_ENTRIES.find((e) => e.id === id)!);
-  const PHONE_MORE = SECTIONS.filter((e) => !PHONE_BAR_IDS.includes(e.id));
+  /** Порядок один на оба устройства: телефон показывает первые разделы в панели, остальные в шторке. */
+  const orderedEntries = $derived($mobileNavOrder.map((id) => ALL_ENTRIES.find((e) => e.id === id)!));
+  const phoneBar = $derived(orderedEntries.slice(0, $mobilePhoneBarSize));
+  const phoneMore = $derived(orderedEntries.slice($mobilePhoneBarSize));
+  /** На планшете профиль всегда внизу панели; линия отделяет от остальных те же главные разделы. */
+  const railEntries = $derived(orderedEntries.filter((e) => e.id !== 'profile'));
+  const railMainCount = $derived(phoneBar.filter((e) => e.id !== 'profile').length);
+
+  let moreOpen = $state(false);
+  let liftedTab = $state<string | null>(null);
+  /** Откуда подняли раздел: обмены во время переноса на зоны не влияют. */
+  let liftedFromBar = $state(false);
+  /** Пока раздел подняли, появляется место, куда его можно отпустить, если ряд можно изменить. */
+  const barHasFreeCell = $derived(liftedTab != null && !liftedFromBar && $mobilePhoneBarSize < PHONE_BAR_MAX);
+  const canDropBelow = $derived(liftedTab != null && liftedFromBar && moreOpen && $mobilePhoneBarSize > PHONE_BAR_MIN);
+  const navReorderParams = {
+    onSwap: swapMobileNavTabs,
+    onZone: (id: string, zone: string) => {
+      const [area, index] = zone.split(':');
+      moveMobileNavTabAcross(id, area === 'bar', index == null ? undefined : Number(index));
+    },
+    onLift: (id: string | null) => {
+      if (id) liftedFromBar = phoneBar.some((e) => e.id === id);
+      liftedTab = id;
+    },
+  };
 
   /** Свой аватар на кнопке профиля; без него (гость, нет фото, не загрузился) — обычная иконка. */
   let avatarUrl = $state<string | null>(null);
@@ -72,14 +97,22 @@
     avatarUrl = (window as unknown as { __anixProfile?: { avatar?: string | null } }).__anixProfile?.avatar ?? null;
   }
 
-  /** Верхняя панель и вкладки: при прокрутке вниз уходят, при прокрутке вверх возвращаются. */
+  /** Верхняя и нижняя панели и вкладки: при прокрутке вниз уходят, при прокрутке вверх возвращаются. */
   const BARS_ALWAYS_SHOWN_PX = 120;
   const BARS_TOGGLE_DELTA_PX = 10;
   let barsHidden = $state(false);
   let scrollAnchor = 0;
 
+  function showBars() {
+    barsHidden = false;
+    scrollAnchor = 0;
+  }
+
   function onContentScroll(e: Event) {
-    const y = (e.currentTarget as HTMLElement).scrollTop;
+    const scroller = e.target as HTMLElement;
+    // В профиль событие приходит и от вложенных лент; панелями управляет только прокрутка страницы
+    if (!scroller.matches('.page__scroll')) return;
+    const y = scroller.scrollTop;
     // Восстановление позиции при возврате на страницу — не жест пользователя
     if (isScrollRestorePending() || y < BARS_ALWAYS_SHOWN_PX) {
       if (y < BARS_ALWAYS_SHOWN_PX) barsHidden = false;
@@ -92,18 +125,19 @@
     scrollAnchor = y;
   }
 
-  let moreOpen = $state(false);
   let profileOpen = $state(false);
   let profileUserId = $state<number | null>(null);
 
   const path = $derived((currentPath.split('?')[0] || '/').replace(/\/+$/, '') || '/');
 
+  const inCollections = $derived(path === '/collections' || path === '/collections/my');
+
   /** Страница релиза: «назад» плавает поверх размытой обложки, а не занимает отдельную полосу. */
   const floatBack = $derived(/^\/release\/\d+$/.test(path));
   /** Разделы со своей шапкой (DiscoverHero): заголовок уже в ней, назад ведёт системная кнопка. */
-  const ownHeader = $derived(['/overview/popular', '/collections', '/collections/my', '/fluo'].includes(path));
+  const ownHeader = $derived(['/overview/popular', '/fluo'].includes(path));
 
-  const rootTab = $derived.by((): Tab | null => {
+  const rootTab = $derived.by((): MobileNavTab | null => {
     if (path === '/' || path === '/catalog') return 'home';
     if (path === '/overview/popular' || path.startsWith('/overview/popular/')) return 'popular';
     if (path === '/overview' || path === '/schedule') return 'overview';
@@ -116,34 +150,21 @@
     return null;
   });
   /** Корневые экраны разделов получают верхнюю панель с поиском; остальные — панель с «назад». */
-  const isRoot = $derived(['/', '/catalog', '/overview', '/bookmarks', '/feed'].includes(path));
-  /** В «Закладках» слот поиска занимает их собственное поле (mobile-overrides). */
-  const hasOwnSearch = $derived(path === '/bookmarks');
-  const activeTab = $derived<Tab | null>(profileOpen ? 'profile' : rootTab);
-  /** «Ещё» подсвечен, когда открытый раздел лежит в шторке. */
-  const moreActive = $derived(moreOpen || PHONE_MORE.some((e) => e.id === activeTab));
+  const isRoot = $derived(['/', '/catalog', '/overview', '/bookmarks', '/feed'].includes(path) || inCollections);
+  /** В закладках поле открывается в верхней панели, а результаты остаются на странице, в текущей вкладке. */
+  const bookmarksSearching = $derived(path === '/bookmarks' && $bookmarksSearchOpen);
+  const activeTab = $derived<MobileNavTab | null>(profileOpen ? 'profile' : rootTab);
   /** Ответы от ИИ-помощниц: как на ПК, новость важнее пометки beta. */
   const aiUnread = $derived($supportInbox.unread);
   const aiUnreadLabel = $derived(aiUnread > 9 ? '9+' : String(aiUnread));
   const aiNews = $derived(supportInboxLabel($supportInbox));
-
-  function moreBadge(entry: NavEntry): string | undefined {
-    if (entry.id === 'agent' && aiNews) return aiNews;
-    return entry.beta ? 'BETA' : undefined;
-  }
+  /** Раздел ИИ убран в шторку, а там есть новое: на панели счётчика не видно. */
+  const aiHiddenNews = $derived(aiUnread > 0 && phoneMore.some((e) => e.id === 'agent'));
 
   function navAriaLabel(entry: NavEntry): string | undefined {
     if (entry.id === 'agent' && aiNews) return `${entry.label}: ${aiNews}`;
     return entry.beta ? `${entry.label} (beta)` : undefined;
   }
-
-  const moreItems = $derived(PHONE_MORE.map((entry): UiV2PopupMenuItem => ({
-    id: entry.id,
-    label: entry.label,
-    icon: entry.icon,
-    checked: activeTab === entry.id,
-    badge: moreBadge(entry),
-  })));
 
   function goTab(tab: NavEntry) {
     moreOpen = false;
@@ -158,13 +179,22 @@
   // На новой странице панели снова на месте
   $effect(() => {
     void path;
-    barsHidden = false;
-    scrollAnchor = 0;
+    showBars();
+    moreOpen = false;
   });
 
+  /** Из профиля поиск идёт по пользователям, из коллекций — по коллекциям. */
+  const searchScope = $derived<SearchTab>(profileOpen ? 'profiles' : inCollections ? 'collections' : 'releases');
+  const searchLabel = $derived(path === '/bookmarks' && !profileOpen ? $bookmarksSearchLabel : SEARCH_PLACEHOLDERS[searchScope]);
+
   function openSearch() {
+    if (path === '/bookmarks' && !profileOpen) {
+      bookmarksSearchOpen.set(true);
+      return;
+    }
+    const route = searchScope === 'releases' ? '/search' : buildSearchRoute('', searchScope);
     closeProfile();
-    navigate('/search');
+    navigate(route);
   }
 
   function openNotifications() {
@@ -195,12 +225,25 @@
     resetProfilePanelHistory();
     profilePanelOpen.set(true);
     profileOpen = true;
+    showBars();
   }
 
   function closeProfile() {
     if (!profileOpen) return;
     profileOpen = false;
     profilePanelOpen.set(false);
+    showBars();
+  }
+
+  /** На экранах с формами обновление стёрло бы введённое. */
+  const canPullRefresh = $derived(
+    !/\/(create|edit|composer)(\/|$)/.test(path) && (!profileOpen || $profilePanelInnerView === 'overview'),
+  );
+  let profileRefreshKey = $state(0);
+
+  function refreshFromPull() {
+    if (profileOpen) profileRefreshKey += 1;
+    else refreshCurrentPage();
   }
 
   function goBack() {
@@ -220,6 +263,7 @@
     if (moreOpen) moreOpen = false;
     else if (get(watchModalOpen)) watchModalOpen.set(false);
     else if (profileOpen) backInProfile();
+    else if (bookmarksSearching) closeBookmarksSearch();
     else if (path !== '/') goBack();
     else void minimizeNativeApp();
   }
@@ -305,11 +349,12 @@
   });
 </script>
 
-{#snippet navItem(tab: NavEntry)}
+{#snippet navItem(tab: NavEntry, label?: string)}
   <button
     type="button"
     class="m-nav-item"
     class:m-nav-item--active={activeTab === tab.id}
+    class:m-nav-item--lifted={liftedTab === tab.id}
     data-tab={tab.id}
     aria-current={activeTab === tab.id ? 'page' : undefined}
     aria-label={navAriaLabel(tab)}
@@ -317,7 +362,7 @@
   >
     <span class="m-nav-item__pill">
       {#if tab.id === 'profile' && avatarUrl && $isAuthenticated}
-        <img class="m-nav-avatar" src={avatarUrl} alt="" onerror={() => { avatarUrl = null; }} />
+        <img class="m-nav-avatar" src={avatarUrl} alt="" draggable="false" onerror={() => { avatarUrl = null; }} />
       {:else}
         {@html tab.icon}
       {/if}
@@ -327,28 +372,30 @@
         <span class="m-nav-badge" aria-hidden="true">β</span>
       {/if}
     </span>
-    <span class="m-nav-item__label">{tab.short}</span>
+    <span class="m-nav-item__label">{label ?? tab.short}</span>
   </button>
 {/snippet}
 
 {#snippet searchEntry()}
   <button type="button" class="m-search" onclick={openSearch}>
     {@html iconSearch(24)}
-    <span>Поиск</span>
+    <span>{searchLabel}</span>
   </button>
 {/snippet}
 
 <div class="m-app">
-  <nav class="m-rail" aria-label="Разделы">
-    <div class="m-rail__list" use:scrollEdges>
-      {#each SECTIONS as tab (tab.id)}
+  <MobilePullRefresh enabled={canPullRefresh} onRefresh={refreshFromPull} />
+  <MobileRail reorder={navReorderParams} locked={liftedTab != null}>
+    {#snippet list()}
+      {#each railEntries as tab, i (tab.id)}
         {@render navItem(tab)}
+        {#if i === railMainCount - 1}<hr class="m-rail__sep" />{/if}
       {/each}
-    </div>
-    <div class="m-rail__footer">
+    {/snippet}
+    {#snippet footer()}
       {@render navItem(PROFILE)}
-    </div>
-  </nav>
+    {/snippet}
+  </MobileRail>
 
   {#if floatBack}
     <header class="m-topbar m-topbar--inner m-topbar--float" class:m-topbar--float-hidden={barsHidden}>
@@ -370,14 +417,9 @@
     data-page-scroll
     onscroll={onContentScroll}
   >
-  {#if isRoot}
+  {#if isRoot && !bookmarksSearching}
     <header class="m-topbar">
-      {#if hasOwnSearch}
-        <!-- в «Закладках» сюда встаёт их поле поиска (mobile-overrides) -->
-        <div class="m-search-slot"></div>
-      {:else}
-        {@render searchEntry()}
-      {/if}
+      {@render searchEntry()}
       {#if $hasActiveDownloads}
         <!-- как в Anixart, в панели только настройки и уведомления; «Загрузки» появляются, пока что-то качается -->
         <button type="button" class="m-icon-btn" onclick={() => navigate('/downloads')} aria-label="Загрузки">
@@ -395,11 +437,16 @@
     </header>
   {:else if !floatBack && !ownHeader}
     <header class="m-topbar m-topbar--inner">
-      <button type="button" class="m-icon-btn" onclick={goBack} aria-label="Назад">
+      <button type="button" class="m-icon-btn" onclick={bookmarksSearching ? closeBookmarksSearch : goBack} aria-label="Назад">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
       </button>
       {#if path === '/search'}
         <MobileSearch value={search?.q} tab={search?.tab} searchBy={search?.by} />
+      {:else if bookmarksSearching}
+        <MobileSearch
+          value={$bookmarksSearchQuery}
+          local={{ label: $bookmarksSearchLabel, onQuery: (q) => bookmarksSearchQuery.set(q) }}
+        />
       {/if}
     </header>
   {/if}
@@ -416,40 +463,33 @@
   </main>
   </div>
 
-  <nav class="m-navbar" aria-label="Разделы">
-    {#each PHONE_BAR as tab (tab.id)}
-      {@render navItem(tab)}
-    {/each}
-    <button
-      type="button"
-      class="m-nav-item"
-      class:m-nav-item--active={moreActive}
-      aria-expanded={moreOpen}
-      aria-label={aiNews ? `Ещё: ${aiNews}` : undefined}
-      onclick={() => { moreOpen = !moreOpen; }}
-    >
-      <span class="m-nav-item__pill">
-        {@html iconMoreHorizontal(24)}
-        {#if aiUnread > 0}<span class="m-nav-badge" aria-hidden="true">{aiUnreadLabel}</span>{/if}
-      </span>
-      <span class="m-nav-item__label">Ещё</span>
-    </button>
-  </nav>
-
-  <UiV2PopupMenu
-    open={moreOpen}
-    x={0}
-    y={0}
-    items={moreItems}
-    onClose={() => { moreOpen = false; }}
-    onSelect={(id) => {
-      const tab = PHONE_MORE.find((entry) => entry.id === id);
-      if (tab) goTab(tab);
-    }}
-  />
+  <MobileDock
+    bind:open={moreOpen}
+    hidden={barsHidden}
+    alert={aiHiddenNews}
+    columns={$mobilePhoneBarSize}
+    reorder={navReorderParams}
+    locked={liftedTab != null}
+  >
+    {#snippet bar()}
+      {#each phoneBar as tab, i (tab.id)}
+        {#if barHasFreeCell}<div class="m-nav-free m-nav-free--gap" data-nav-drop={`bar:${i}`}></div>{/if}
+        {@render navItem(tab)}
+      {/each}
+      {#if barHasFreeCell}<div class="m-nav-free" data-nav-drop="bar"></div>{/if}
+    {/snippet}
+    {#snippet more()}
+      {#if canDropBelow}
+        <div class="m-nav-dropzone" data-nav-drop="more" transition:slide={{ duration: 180 }}>Убрать вниз</div>
+      {/if}
+      {#each phoneMore as tab, i (tab.id)}
+        <div class="m-dock__tile" style:--i={i}>{@render navItem(tab, $mobilePhoneBarSize === PHONE_BAR_MIN ? tab.label : undefined)}</div>
+      {/each}
+    {/snippet}
+  </MobileDock>
 
   {#if profileOpen && profileUserId != null}
-    <div class="m-fullscreen m-fullscreen--profile">
+    <div class="m-fullscreen m-fullscreen--profile" onscrollcapture={onContentScroll}>
       <header class="m-topbar">
         {@render searchEntry()}
         <button type="button" class="m-icon-btn" onclick={() => settingsModalOpen.set(true)} aria-label="Настройки">
@@ -460,7 +500,9 @@
         {#if $notificationUnreadCount > 0}<span class="m-badge-count">{unreadLabel}</span>{/if}
         </button>
       </header>
-      <SidebarProfilePanel userId={profileUserId} onClose={closeProfile} />
+      {#key profileRefreshKey}
+        <SidebarProfilePanel userId={profileUserId} onClose={closeProfile} />
+      {/key}
     </div>
   {/if}
 
@@ -480,7 +522,8 @@
     background: var(--m-bg);
     color: var(--m-text);
     padding-top: env(safe-area-inset-top);
-    padding-left: var(--m-rail-w);
+    padding-left: var(--m-rail-left);
+    padding-right: var(--m-rail-right);
   }
 
   .m-app__scroll {
@@ -503,8 +546,8 @@
     position: absolute;
     z-index: 15;
     top: calc(env(safe-area-inset-top) + 8px);
-    left: calc(var(--m-rail-w) + var(--m-space-4));
-    right: var(--m-space-4);
+    left: calc(var(--m-rail-left) + var(--m-space-4));
+    right: calc(var(--m-rail-right) + var(--m-space-4));
     min-height: 0;
     padding: 0;
     justify-content: space-between;
@@ -542,7 +585,8 @@
   }
 
   .m-fullscreen--profile {
-    left: var(--m-rail-w);
+    left: var(--m-rail-left);
+    right: var(--m-rail-right);
     z-index: 20; /* ниже таб-бара (30): профиль — вкладка, а не модалка */
     /* Высота фиксирована окном: панель профиля (и редактор внутри неё) скроллит свой .page__scroll, как на desktop.
        Иначе цепочка height:100% у слайдов не определена и прокрутка не работает. */
@@ -590,54 +634,12 @@
     box-shadow: 0 0 0 2px var(--m-surface-sheet);
   }
 
-  /* Телефон: нижний таб-бар. Планшет (≥600px, см. --m-rail-w): левая панель со всеми разделами. */
-  .m-rail { display: none; }
-
-  @media (min-width: 600px) {
-    :global(html.mobile-mode) .m-navbar { display: none; }
-
-    .m-rail {
-      position: fixed;
-      top: 0;
-      bottom: 0;
-      left: 0;
-      z-index: 30;
-      width: var(--m-rail-w);
-      display: flex;
-      flex-direction: column;
-      padding: 0 0 calc(env(safe-area-inset-bottom) + var(--m-space-3));
-      background: var(--m-surface-sheet);
-
-      /* flex-basis: в таб-баре .m-nav-item растягивается на ширину, здесь — стопкой по высоте */
-      :global(.m-nav-item) { flex: none; width: 100%; padding: 8px 0; font-size: 12px; }
-      :global(.m-nav-item__pill) { width: 56px; }
-      :global(.m-nav-item__label) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    }
-
-    /* Разделы не влезли по высоте: у края, за которым они продолжаются, — затухание и линия */
-    .m-rail__list {
-      --edge-top: 0px;
-      --edge-bottom: 0px;
-      flex: 1;
-      min-height: 0;
-      /* Отступ внутри списка: при прокрутке разделы доходят до самого верха, а не обрываются раньше */
-      padding-top: calc(env(safe-area-inset-top) + var(--m-space-3));
-      overflow-y: auto;
-      scrollbar-width: none;
-      mask-image: linear-gradient(
-        to bottom,
-        transparent 0,
-        #000 var(--edge-top),
-        #000 calc(100% - var(--edge-bottom)),
-        transparent 100%
-      );
-    }
-    :global(.m-rail__list[data-more-above]) { --edge-top: calc(env(safe-area-inset-top) + 24px); }
-    :global(.m-rail__list[data-more-below]) { --edge-bottom: 24px; }
-
-    .m-rail__footer { flex: none; padding-top: var(--m-space-2); }
-    :global(.m-rail__list[data-more-below] + .m-rail__footer) { box-shadow: 0 -1px 0 var(--m-outline-variant); }
-
+  .m-rail__sep {
+    width: 40px;
+    height: 1px;
+    margin: var(--m-space-1) auto;
+    border: 0;
+    background: var(--m-divider);
   }
 
   .m-nav-avatar {
@@ -648,5 +650,4 @@
     object-fit: cover;
   }
 
-  .m-search-slot { flex: 1; min-width: 0; height: 48px; margin-right: var(--m-space-2); }
 </style>

@@ -83,7 +83,9 @@ html.mobile-mode {
   --m-poster-w: 104px;             // постер списка — замер Anixart 104×156dp
   --m-poster-h: 156px;
   --m-nav-h: 80px;                 // нижний таб-бар телефона (на планшете его нет, см. ниже)
-  --m-rail-w: 0px;                 // левая панель планшета
+  --m-rail-w: 0px;                 // боковая панель планшета
+  --m-rail-left: var(--m-rail-w);  // сколько она занимает слева и справа: сторону выбирает пользователь
+  --m-rail-right: 0px;
   --m-nav-pill-w: 64px;
   --m-nav-pill-h: 32px;
   --m-field-h: 50px;
@@ -150,4 +152,9 @@ html.mobile-mode {
     --m-nav-h: 0px;
     --m-rail-w: 88px;
   }
+}
+
+html.mobile-mode.m-rail-right {
+  --m-rail-left: 0px;
+  --m-rail-right: var(--m-rail-w);
 }

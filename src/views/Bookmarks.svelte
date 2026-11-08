@@ -29,7 +29,8 @@
   import type { ReleaseCardData } from '../types/release';
   import { mapReleaseRawToCard } from '../utils/release-card';
   import { mapHistoryRawToReleaseCard } from '../utils/historyCard';
-  import { iconHome, iconSearch, iconX } from '../components/icons';
+  import { iconHome } from '../components/icons';
+  import { bookmarksSearchLabel, bookmarksSearchQuery, closeBookmarksSearch } from '../stores/mobile-bookmarks-search';
   import {
     getDefaultBookmarksTab,
     resolveBookmarksTab,
@@ -405,6 +406,19 @@
       ? listUserId!
       : (cachedProfileId ?? selfProfileId ?? 0),
   );
+
+  // Мобильная версия: поле в верхней панели (MobileLayout), здесь подпись для него и применение запроса
+  $effect(() => {
+    if (!desktopLayout) bookmarksSearchLabel.set(searchPlaceholder);
+  });
+  $effect(() => {
+    if (desktopLayout) return;
+    const query = $bookmarksSearchQuery;
+    untrack(() => {
+      searchInput = query;
+      applySearchQuery(query);
+    });
+  });
 
   function clearSearchTimer() {
     if (searchTimer) {
@@ -826,13 +840,14 @@
     if (tabChanged) resetScrollTop();
     syncTabToUrl(tabId);
 
-    if (!force) {
+    // На телефоне запрос остаётся при смене вкладки: ищем в каждой, куда перешли
+    if (!force && desktopLayout) {
       clearSearchTimer();
       searchInput = '';
       searchQuery = '';
     }
 
-    const seed = !resetSort && !force && isMobileMode() ? tabPrefetch.get(tabId) : undefined;
+    const seed = !resetSort && !force && isMobileMode() && !searchQuery ? tabPrefetch.get(tabId) : undefined;
     if (seed && (seed.items.length > 0 || seed.collectionItems.length > 0)) {
       if (tabUsesSort(tabId)) {
         selectedSort = getBookmarksSort();
@@ -1149,6 +1164,7 @@
   });
 
   onDestroy(() => {
+    closeBookmarksSearch();
     window.removeEventListener('anix:beforeNavigate', onBeforeNavigate);
     window.removeEventListener('anix:bookmarksChanged', onBookmarksChanged);
     window.removeEventListener('anix:navigate', onExternalNavigate);
@@ -1175,33 +1191,6 @@
       onExport={() => (exportOpen = true)}
       onImport={() => (importOpen = true)}
     />
-
-  {#if !desktopLayout}
-    <label class="bookmarks__search">
-      <span class="bookmarks__search-icon" aria-hidden="true">{@html iconSearch(18)}</span>
-      <input
-        class="bookmarks__search-input"
-        type="search"
-        enterkeyhint="search"
-        autocomplete="off"
-        spellcheck="false"
-        placeholder={searchPlaceholder}
-        value={searchInput}
-        oninput={onSearchInput}
-        aria-label={searchPlaceholder}
-      />
-      {#if searchInput}
-        <button
-          type="button"
-          class="bookmarks__search-clear"
-          aria-label="Очистить поиск"
-          onclick={clearSearch}
-        >
-          {@html iconX(14)}
-        </button>
-      {/if}
-    </label>
-  {/if}
 
   <Tabs
     tabs={TABS.map((t) => ({

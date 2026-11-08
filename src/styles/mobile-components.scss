@@ -294,15 +294,8 @@ html.mobile-mode {
 
   // ── Нижний таб-бар ───────────────────────────────────────────────────────────────────────
   .m-navbar {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 30;
     display: flex;
-    height: calc(var(--m-nav-h) + env(safe-area-inset-bottom));
-    padding-bottom: env(safe-area-inset-bottom);
-    background: var(--m-surface-sheet);
+    height: var(--m-nav-h);
   }
 
   .m-nav-item {
@@ -317,6 +310,8 @@ html.mobile-mode {
     color: var(--m-nav-idle);
     font-size: 13px;
     font-weight: 500;
+    user-select: none;
+    -webkit-touch-callout: none;
     &__pill {
       position: relative;
       display: flex;
@@ -337,6 +332,77 @@ html.mobile-mode {
       &:is([data-tab='home'], [data-tab='bookmarks']) .m-nav-item__pill svg path:last-of-type { fill: currentColor; }
       &[data-tab='home'] .m-nav-item__pill svg path:first-of-type { fill: var(--m-secondary-container); stroke: var(--m-secondary-container); }
       &:active .m-nav-item__pill { background: var(--m-secondary-container); filter: brightness(1.15); }
+    }
+  }
+
+  // Свободное место, куда можно положить поднятый раздел
+  .m-nav-free {
+    flex: 1;
+    margin: var(--m-space-3) var(--m-space-1);
+    border: 1.5px dashed var(--m-outline-variant);
+    border-radius: var(--m-radius-lg);
+  }
+
+  // Слот между разделами: при наведении раскрывается, левый край стоит на месте, палец остаётся внутри
+  .m-nav-free--gap {
+    flex: none;
+    width: 20px;
+    margin-inline: 2px;
+    transition: width 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+    &[data-over] { width: 44px; }
+  }
+
+  .m-nav-dropzone {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 48px;
+    overflow: hidden;
+    border: 1.5px dashed var(--m-outline-variant);
+    border-radius: var(--m-radius-lg);
+    color: var(--m-text-2);
+    font-size: 14px;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .m-nav-free[data-over],
+  .m-nav-dropzone[data-over] {
+    border-color: var(--m-text-2);
+    background: var(--m-surface-chip);
+    color: var(--m-text);
+  }
+
+  // Раздел подняли для перестановки: за пальцем идёт его копия, а на месте остаётся пустое гнездо
+  .m-nav-item--lifted {
+    position: relative;
+    > * { visibility: hidden; }
+    &::after {
+      content: '';
+      position: absolute;
+      inset: var(--m-space-3) var(--m-space-1);
+      border: 1.5px dashed var(--m-outline-variant);
+      border-radius: var(--m-radius-lg);
+    }
+  }
+  .m-nav-ghost {
+    position: fixed;
+    z-index: 60;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    border-radius: var(--m-radius-lg);
+    background: var(--m-surface-chip);
+    box-shadow: 0 8px 28px rgb(0 0 0 / 45%);
+    pointer-events: none;
+
+    .m-nav-item__pill { width: 56px; }
+    .m-nav-item__label {
+      max-width: 100%;
+      overflow: hidden;
+      font-size: 12px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
   }
 

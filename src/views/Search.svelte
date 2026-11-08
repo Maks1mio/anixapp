@@ -197,7 +197,7 @@
         profiles = [...profiles, ...next];
       }
 
-      if (first) addSearchHistory(query);
+      if (first) addSearchHistory(query, activeTab);
       page += 1;
       hasMore = content.length > 0;
       loadState = itemCount > 0 || franchise ? 'ready' : 'empty';

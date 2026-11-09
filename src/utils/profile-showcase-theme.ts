@@ -12,7 +12,37 @@ export type ProfileThemeFields = {
   theme_background_url?: string | null;
   theme_background_mode?: string | null;
   theme_background_alpha?: number | null;
+  theme_icon_res_name?: string | null;
+  theme_icon_url?: string | null;
+  theme_icon_color?: string | null;
+  theme_icon_alpha?: number | null;
+  theme_icon_density?: string | null;
+  theme_icon_size?: string | null;
+  theme_animation_enabled?: boolean | null;
+  theme_animation_speed?: string | null;
 };
+
+/** Ответ смены темы → поля профиля. */
+export function themeToProfilePatch(theme: Record<string, unknown> | null | undefined): Record<string, unknown> {
+  if (!theme) return { theme_enabled: false };
+  return {
+    theme_enabled: theme.theme_enabled ?? false,
+    theme_gradient_start_color: theme.theme_gradient_start_color ?? null,
+    theme_gradient_end_color: theme.theme_gradient_end_color ?? null,
+    theme_gradient_angle: theme.theme_gradient_angle ?? null,
+    theme_background_url: theme.theme_background_url ?? null,
+    theme_background_mode: theme.theme_background_mode ?? null,
+    theme_background_alpha: theme.theme_background_alpha ?? null,
+    theme_icon_res_name: theme.theme_icon_res_name ?? null,
+    theme_icon_url: theme.theme_icon_url ?? null,
+    theme_icon_color: theme.theme_icon_color ?? null,
+    theme_icon_alpha: theme.theme_icon_alpha ?? null,
+    theme_icon_density: theme.theme_icon_density ?? theme.theme_icon_destiny ?? null,
+    theme_icon_size: theme.theme_icon_size ?? null,
+    theme_animation_enabled: theme.theme_animation_enabled ?? false,
+    theme_animation_speed: theme.theme_animation_speed ?? null,
+  };
+}
 
 /** Android Color.parseColor: #AARRGGBB или #RRGGBB → css rgba/hex */
 export function parseAnixColor(raw: string | null | undefined): string | null {
@@ -89,4 +119,24 @@ export function profileShowcaseBackground(
   }
 
   return layers.length ? layers.join(', ') : null;
+}
+
+/**
+ * Поля темы после смены: ответ сервера содержит не все, поэтому берём их из профиля.
+ * Не получилось — остаётся то, что пришло в ответе.
+ */
+export async function fetchThemePatch(
+  profileId: number,
+  theme: Record<string, unknown> | null | undefined,
+): Promise<Record<string, unknown>> {
+  try {
+    const info = (await window.anixApi?.profile?.info(profileId)) as { profile?: Record<string, unknown> } | undefined;
+    const profile = info?.profile;
+    if (profile && 'theme_enabled' in profile) {
+      return Object.fromEntries(Object.entries(profile).filter(([key]) => key.startsWith('theme_')));
+    }
+  } catch {
+    /* ниже — данные из ответа */
+  }
+  return themeToProfilePatch(theme);
 }

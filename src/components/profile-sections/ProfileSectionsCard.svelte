@@ -1,33 +1,35 @@
 <script lang="ts">
   /**
-   * Разделы профиля как в Android 10.5 (item_profile_header_middle): «Статистика · Оценки релизов ·
+   * Разделы профиля как в Android 11 (item_profile_header_middle): «Статистика · Оценки релизов ·
    * Коллекции · Комментарии · Видео · Значки», закреплённый раздел первым, превью и «Показать все».
    * Всё собрано из uikit-v2: UiV2Tabs, UiV2ReleaseCarousel, ReleaseCardUiV2, CollectionCard, UiV2CommentThread.
    */
   import { navigate } from '../../stores/navigation';
-  import { swipeTabs } from '../../actions/swipeTabs';
+  import { flip } from 'svelte/animate';
+  import { tick } from 'svelte';
+  import { prepareTabFade, swipeTabs } from '../../actions/swipeTabs';
+  import { fetchThemePatch, type ProfileThemeFields } from '../../utils/profile-showcase-theme';
+  import ShowcaseThemeLayer from './ShowcaseThemeLayer.svelte';
+  import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../uikit-v2/UiV2PopupMenu.svelte';
   import { isMobileMode } from '../../platform/mobile';
   import TabPeek from '../TabPeek.svelte';
   import { showToast } from '../../stores/toast';
   import { resolveCdnAssetUrl } from '../../utils/posterUrl';
-  import { mapReleaseRawToCard } from '../../utils/release-card';
+  import { toPosterDisplayUrl } from '../../utils/posterUrl';
+  import { fmtDate } from '../../views/Profile/_utils';
   import { mapCollectionCard } from '../../utils/collection';
   import { mapOverviewCommentWeek, type OverviewCommentWeekItem } from '../../utils/overview';
   import { resolveJacksonEntity } from '../../utils/jackson-refs';
   import ProfileStatsSection from '../../views/Profile/v2/components/ProfileStatsSection.svelte';
-  import UiV2Tabs from '../uikit-v2/UiV2Tabs.svelte';
   import UiV2Button from '../uikit-v2/UiV2Button.svelte';
-  import UiV2RoundButton from '../uikit-v2/UiV2RoundButton.svelte';
   import UiV2ChoiceSheet from '../uikit-v2/UiV2ChoiceSheet.svelte';
   import UiV2ReleaseCarousel from '../uikit-v2/UiV2ReleaseCarousel.svelte';
-  import ReleaseCardUiV2 from '../ReleaseCardUiV2.svelte';
   import CollectionCard from '../CollectionCard.svelte';
   import OverviewCommentsWeek from '../overview/OverviewCommentsWeek.svelte';
   import BadgeTile from '../profile-badges/BadgeTile.svelte';
   import BadgeDetailSheet from '../profile-badges/BadgeDetailSheet.svelte';
-  import { iconPin } from '../icons';
+  import { iconArrowRight, iconGripVertical, iconPalette, iconPin, iconSettings, iconStar } from '../icons';
   import type { ApiBadge } from '../../types/api';
-  import type { ReleaseCardData } from '../../types/release';
 
   type SectionId = 0 | 1 | 2 | 3 | 4 | 5;
 
@@ -37,9 +39,11 @@
     isMyProfile: boolean;
     /** Все значки: свой профиль — экран «Установка значка», чужой — коллекция для просмотра */
     onOpenBadges?: () => void;
+    /** Сервер прислал новую тему витрины */
+    onProfilePatched?: (patch: Record<string, unknown>) => void;
   }
 
-  let { profile, profileId, isMyProfile, onOpenBadges }: Props = $props();
+  let { profile, profileId, isMyProfile, onOpenBadges, onProfilePatched }: Props = $props();
 
   const LABELS: Record<SectionId, string> = {
     0: 'Статистика',
@@ -48,6 +52,16 @@
     3: 'Комментарии',
     4: 'Видео',
     5: 'Значки',
+  };
+
+  /** Значки разделов как у чипов в Android */
+  const CHIP_ICONS: Record<SectionId, string> = {
+    0: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 20v-6"/><path d="M12 20V6"/><path d="M18 20v-10"/></svg>',
+    1: iconStar(18, false),
+    2: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M4 16V5a2 2 0 0 1 2-2h11"/></svg>',
+    3: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+    4: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4z"/></svg>',
+    5: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="9" r="6"/><path d="m8.5 14-1.5 8 5-3 5 3-1.5-8"/></svg>',
   };
 
   const num = (v: unknown) => Number(v ?? 0) || 0;
@@ -76,11 +90,7 @@
   const statsHidden = $derived(!!profile.is_stats_hidden && !isMyProfile);
   const countsHidden = $derived(!!profile.is_counts_hidden && !isMyProfile);
 
-  const votes = $derived(
-    objects(profile.votes).map(
-      (v): ReleaseCardData => ({ ...mapReleaseRawToCard(v), myVote: num(v.my_vote) || undefined }),
-    ),
-  );
+  const votes = $derived(objects(profile.votes));
   const collections = $derived(objects(profile.collections_preview).map(mapCollectionCard));
   const comments = $derived(
     objects(profile.comments_preview)
@@ -88,7 +98,18 @@
       .filter((c): c is OverviewCommentWeekItem => !!c),
   );
   const videos = $derived(objects(profile.release_video_preview));
-  const badges = $derived(objects(profile.badges_preview) as unknown as ApiBadge[]);
+  const previewBadges = $derived(objects(profile.badges_preview) as unknown as ApiBadge[]);
+  /** Порядок витрины после перетаскивания; остальные значки идут следом как пришли */
+  let badgeOrder = $state<number[] | null>(null);
+  const badges = $derived.by(() => {
+    const order = badgeOrder;
+    if (!order) return previewBadges;
+    const rank = (b: ApiBadge) => {
+      const i = order.indexOf(b.id);
+      return i < 0 ? order.length : i;
+    };
+    return [...previewBadges].sort((a, b) => rank(a) - rank(b));
+  });
 
   /** В профиле нет общего числа оценок — как ProfileStatsSection, берём total_count первой страницы */
   let votesTotal = $state(0);
@@ -138,7 +159,6 @@
   const current = $derived<SectionId | null>(
     active != null && sections.includes(active) ? active : (sections[0] ?? null),
   );
-  const tabs = $derived(sections.map((id) => ({ id: String(id), label: LABELS[id] })));
   const peekSections = $derived.by(() => {
     const i = current == null ? -1 : sections.indexOf(current);
     return { prev: i < 0 ? undefined : sections[i - 1], next: i < 0 ? undefined : sections[i + 1] };
@@ -150,6 +170,220 @@
     active = next;
     return true;
   }
+
+  let chipsEl = $state<HTMLElement | null>(null);
+  let statsHelpOpen = $state(false);
+  const STATS_HELP = "Здесь собираются данные о количестве релизов в ваших списках, времени просмотра и ваших жанровых предпочтениях.\n\nПросмотренные серии, время и жанры рассчитывается ежедневно на основе релизов из вашего списка «Просмотрено».\n\nВаши жанровые предпочтения рассчитываются, если в списке «Просмотрено» есть не менее 10 релизов. Система анализирует все жанры этих аниме, вычисляет их процентное соотношение и показывает до 3-х самых популярных основных жанров, а также по одному для аудитории и тематики.\n\nНапример, вы посмотрели аниме «Самурай чамплу» (26 серий по 24 мин.) и добавили его в «Просмотрено». Только на следующий день к вашей статистике прибавится 10,4 часа и 26 серий, а жанры этого аниме будут учтены в общем подсчете предпочтений.\n\nОбратите внимание, что ваши списки просмотра доступны в нижнем меню «Закладки».";
+
+  function selectSection(id: SectionId) {
+    if (reordering || id === current || current == null) return;
+    prepareTabFade(sections.indexOf(id) > sections.indexOf(current) ? 1 : -1);
+    active = id;
+  }
+
+  // Выбранный чип не остаётся за краем ленты
+  $effect(() => {
+    const row = chipsEl;
+    const id = current;
+    if (!row || id == null) return;
+    const chip = row.querySelector<HTMLElement>(`[data-section="${id}"]`);
+    if (chip) row.scrollTo({ left: chip.offsetLeft - (row.clientWidth - chip.offsetWidth) / 2, behavior: 'smooth' });
+  });
+
+  // ── Шестерёнка: тема, закреплённая секция, порядок значков ──
+  let menuOpen = $state(false);
+  let menuX = $state(0);
+  let menuY = $state(0);
+  let themeSheetOpen = $state(false);
+  let themeBusy = $state(false);
+  let themes = $state<{ value: number; label: string }[]>([]);
+  let selectedTheme = $state(1);
+
+  const menuItems: UiV2PopupMenuItem[] = [
+    { id: 'theme', label: 'Тема витрины', icon: iconPalette(20) },
+    { id: 'pin', label: 'Закрепить секцию', icon: iconPin(20) },
+    { id: 'reorder', label: 'Изменить порядок', icon: iconGripVertical(20) },
+  ];
+
+  function openMenu(e: MouseEvent) {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    menuX = rect.right;
+    menuY = rect.bottom;
+    menuOpen = true;
+  }
+
+  function onMenuSelect(id: string) {
+    menuOpen = false;
+    if (id === 'theme') void openThemeSheet();
+    else if (id === 'pin') pinSheetOpen = true;
+    else if (id === 'reorder') void startReorder();
+  }
+
+  async function openThemeSheet() {
+    const api = window.anixApi?.settings;
+    if (!api?.getProfileSettings) return;
+    try {
+      const settings = await api.getProfileSettings();
+      const raw = Array.isArray(settings.available_themes) ? settings.available_themes : [];
+      themes = (raw as { id?: number; name?: string }[])
+        .map((t) => ({ value: num(t.id), label: String(t.name ?? `Тема ${t.id ?? ''}`) }))
+        .filter((t) => t.value > 0);
+      selectedTheme = num(settings.selected_theme_id) || 1;
+      if (!themes.length) {
+        showToast('Темы пока недоступны', 'err');
+        return;
+      }
+      themeSheetOpen = true;
+    } catch {
+      showToast('Не удалось загрузить темы', 'err');
+    }
+  }
+
+  async function selectTheme(id: number) {
+    const api = window.anixApi?.settings;
+    if (themeBusy || !api?.selectTheme) return;
+    if (id === selectedTheme) {
+      themeSheetOpen = false;
+      return;
+    }
+    themeBusy = true;
+    try {
+      const res = await api.selectTheme(id);
+      if (res?.code === 3) throw new Error('Тема недоступна');
+      if (res?.code != null && res.code !== 0) throw new Error('Не удалось сменить витрину');
+      selectedTheme = id;
+      onProfilePatched?.(await fetchThemePatch(profileId, res?.theme as Record<string, unknown> | null | undefined));
+      themeSheetOpen = false;
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Не удалось сменить витрину', 'err');
+    } finally {
+      themeBusy = false;
+    }
+  }
+
+  // ── Порядок значков на витрине ──
+  let reordering = $state(false);
+  let reorderBusy = $state(false);
+  let dragId = $state<number | null>(null);
+  let dragEl: HTMLElement | null = null;
+  let grabX = 0;
+  let grabY = 0;
+  let dragX = 0;
+  let dragY = 0;
+  let lastSwap = 0;
+
+  // ── Сетка значков: как в ProfileUiController, не меньше трёх колонок по 92dp ──
+  const BADGE_MIN_WIDTH = 92;
+  let badgeColumns = $state(4);
+  const hasMoreBadges = $derived(counts[5] > badges.length || isMyProfile);
+  /** Стрелка занимает последнюю ячейку: если ряды заполнены, вместо неё уходит последний незакреплённый значок */
+  const gridBadges = $derived.by(() => {
+    const last = badges[badges.length - 1];
+    const full = badges.length > 0 && badges.length % badgeColumns === 0;
+    return !reordering && hasMoreBadges && full && !last?.is_showcased ? badges.slice(0, -1) : badges;
+  });
+
+  function measureBadgeColumns(node: HTMLElement) {
+    const observer = new ResizeObserver(([entry]) => {
+      const width = entry.contentRect.width;
+      if (width > 0) badgeColumns = Math.max(3, Math.floor(width / BADGE_MIN_WIDTH));
+    });
+    observer.observe(node);
+    return { destroy: () => observer.disconnect() };
+  }
+
+  const showcasedIds = $derived(badges.filter((b) => b.is_showcased).map((b) => b.id));
+
+  async function startReorder() {
+    if (showcasedIds.length < 2) {
+      showToast('Закрепите хотя бы 2 значка, чтобы изменить порядок', 'info');
+      return;
+    }
+    if (current !== 5 && current != null) {
+      prepareTabFade(sections.indexOf(5) > sections.indexOf(current) ? 1 : -1);
+      active = 5;
+    }
+    reordering = true;
+    await tick();
+  }
+
+  async function finishReorder() {
+    const api = window.anixApi?.settings;
+    if (reorderBusy) return;
+    if (!api?.reorderBadgeShowcase) {
+      reordering = false;
+      return;
+    }
+    reorderBusy = true;
+    try {
+      const res = await api.reorderBadgeShowcase(showcasedIds);
+      if (res?.code !== 0) throw new Error();
+      reordering = false;
+    } catch {
+      showToast('Не удалось обновить витрину. Попробуйте ещё раз.', 'err');
+    } finally {
+      reorderBusy = false;
+    }
+  }
+
+  function placeDragged(x: number, y: number) {
+    if (!dragEl) return;
+    const rect = dragEl.getBoundingClientRect();
+    dragX = x - grabX - (rect.left - dragX);
+    dragY = y - grabY - (rect.top - dragY);
+    dragEl.style.translate = `${dragX}px ${dragY}px`;
+  }
+
+  function onBadgeDown(e: PointerEvent, badge: ApiBadge) {
+    if (!reordering || !badge.is_showcased || reorderBusy) return;
+    const el = e.currentTarget as HTMLElement;
+    const rect = el.getBoundingClientRect();
+    el.setPointerCapture(e.pointerId);
+    el.style.transition = 'none';
+    dragEl = el;
+    dragId = badge.id;
+    grabX = e.clientX - rect.left;
+    grabY = e.clientY - rect.top;
+    dragX = 0;
+    dragY = 0;
+  }
+
+  async function onBadgeMove(e: PointerEvent) {
+    if (!dragEl || dragId == null) return;
+    placeDragged(e.clientX, e.clientY);
+    if (e.timeStamp - lastSwap < 160) return;
+    const over = [...(dragEl.parentElement?.querySelectorAll<HTMLElement>('[data-badge-id]') ?? [])].find((el) => {
+      if (el === dragEl) return false;
+      const r = el.getBoundingClientRect();
+      return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    });
+    if (!over) return;
+    const ids = [...showcasedIds];
+    const to = ids.indexOf(Number(over.dataset.badgeId));
+    const from = ids.indexOf(dragId);
+    if (to < 0 || from < 0) return;
+    ids.splice(to, 0, ids.splice(from, 1)[0]);
+    badgeOrder = ids;
+    lastSwap = e.timeStamp;
+    const { clientX, clientY } = e;
+    await tick();
+    placeDragged(clientX, clientY);
+  }
+
+  function onBadgeUp() {
+    const el = dragEl;
+    dragEl = null;
+    dragId = null;
+    if (!el) return;
+    el.style.transition = 'translate 0.2s cubic-bezier(0.22, 0.8, 0.3, 1)';
+    el.style.translate = '0 0';
+    window.setTimeout(() => {
+      el.style.removeProperty('transition');
+      el.style.removeProperty('translate');
+    }, 220);
+  }
+
+  const themed = $derived(!!(profile as ProfileThemeFields).theme_enabled);
 
   let pinSheetOpen = $state(false);
   let pinBusy = $state(false);
@@ -163,7 +397,6 @@
       const res = await api.pinProfileSection(id);
       if (res?.code != null && res.code !== 0) throw new Error();
       pinned = id;
-      active = id as SectionId;
       pinSheetOpen = false;
       showToast(`Раздел «${LABELS[id as SectionId]}» закреплён`);
     } catch {
@@ -192,9 +425,49 @@
   }
 
   const pinOptions = $derived(sections.map((id) => ({ value: id, label: LABELS[id] })));
-  const allLabel = $derived(
-    current != null && counts[current] > 0 ? `Показать все · ${counts[current]}` : 'Показать все',
-  );
+
+  // ── Кнопка под разделом: появляется и исчезает вслед за свайпом ──
+  let swipeTarget = $state<SectionId | null>(null);
+  let swipeProgress = $state(0);
+  let swipeMs = $state(0);
+  let footHeight = $state(0);
+
+  const hasAction = (id: SectionId) => id === 0 || (id !== 5 && counts[id] > 0);
+  const actionLabel = (id: SectionId) => {
+    if (id === 0) return 'Показать списки';
+    return counts[id] > 0 ? `Показать все · ${counts[id]}` : 'Показать все';
+  };
+  const currentHasAction = $derived(current != null && hasAction(current));
+  const footVisible = $derived.by(() => {
+    const from = currentHasAction ? 1 : 0;
+    if (swipeTarget == null) return from;
+    return from + ((hasAction(swipeTarget) ? 1 : 0) - from) * swipeProgress;
+  });
+  /** Подпись меняется на середине свайпа; если кнопки не было, сразу показывает будущую */
+  const footSection = $derived.by((): SectionId | null => {
+    if (swipeTarget != null && hasAction(swipeTarget) && (swipeProgress >= 0.5 || !currentHasAction)) return swipeTarget;
+    return current;
+  });
+  const footStyle = $derived.by(() => {
+    const size = footHeight ? `height:${footVisible * footHeight}px;` : '';
+    const motion = swipeTarget == null ? '' : `transition:${swipeMs ? `height ${swipeMs}ms ease, opacity ${swipeMs}ms ease, margin-top ${swipeMs}ms ease` : 'none'};`;
+    return `${size}opacity:${footVisible};margin-top:${(footVisible - 1) * 0.75}rem;${motion}`;
+  });
+
+  function onSwipeProgress(dir: 1 | -1 | null, progress: number, ms: number) {
+    if (dir == null || current == null) {
+      swipeTarget = null;
+      return;
+    }
+    swipeTarget = sections[sections.indexOf(current) + dir] ?? null;
+    swipeProgress = progress;
+    swipeMs = ms;
+  }
+
+  function runAction(id: SectionId) {
+    if (id === 0) openLists();
+    else showAll(id);
+  }
 </script>
 
 {#snippet sectionBody(id: SectionId)}
@@ -202,15 +475,25 @@
         <div class="profile-panel__stats">
           <ProfileStatsSection {profile} {profileId} {isMyProfile} plain />
         </div>
+        {#if isMyProfile}
+          <button type="button" class="pp-sections__details" onclick={() => (statsHelpOpen = true)}>Узнать подробнее</button>
+        {/if}
       {:else if id === 1}
         {#if votes.length}
-          <UiV2ReleaseCarousel measureKey={votes.length}>
+          <ul class="profile-v2__recent-list">
             {#each votes as item (item.id)}
-              <div class="uiv2-carousel__item">
-                <ReleaseCardUiV2 data={item} variant="vertical" />
-              </div>
+              {@const thumb = item.image ? toPosterDisplayUrl(String(item.image), 'profileRecent') : ''}
+              <li>
+                <button type="button" class="profile-v2__recent-row" onclick={() => navigate(`/release/${item.id}`)}>
+                  <span class="profile-v2__recent-poster">{#if thumb}<img src={thumb} alt="" loading="lazy" decoding="async" />{/if}</span>
+                  <span class="profile-v2__recent-body">
+                    <span class="profile-v2__recent-title">{item.title_ru || item.title_original || 'Без названия'}</span>
+                    <span class="profile-v2__recent-meta">★ {num(item.my_vote)}{#if num(item.voted_at)} · {fmtDate(num(item.voted_at))}{/if}</span>
+                  </span>
+                </button>
+              </li>
             {/each}
-          </UiV2ReleaseCarousel>
+          </ul>
         {:else}
           <p class="pp-sections__empty">Оценок пока нет</p>
         {/if}
@@ -250,10 +533,33 @@
         {/if}
       {:else if id === 5}
         {#if badges.length}
-          <div class="pp-sections__badges">
-            {#each badges as b (b.id)}
-              <BadgeTile badge={b} compact onclick={(x) => (openBadge = x)} />
+          <div
+            class="pp-sections__badges"
+            class:pp-sections__badges--reorder={reordering}
+            style={`grid-template-columns:repeat(${badgeColumns}, minmax(0, 1fr))`}
+            use:measureBadgeColumns
+          >
+            {#each gridBadges as b, i (b.id)}
+              <div
+                class="pp-sections__badge"
+                class:pp-sections__badge--wiggle={reordering && b.is_showcased && dragId !== b.id}
+                class:pp-sections__badge--dragging={dragId === b.id}
+                data-badge-id={b.is_showcased ? b.id : undefined}
+                style={`--wiggle-delay:${-i * 90}ms`}
+                animate:flip={{ duration: dragId === b.id ? 0 : 200 }}
+                onpointerdown={(e) => onBadgeDown(e, b)}
+                onpointermove={onBadgeMove}
+                onpointerup={onBadgeUp}
+                onpointercancel={onBadgeUp}
+              >
+                <BadgeTile badge={b} compact onclick={(x) => { if (!reordering) openBadge = x; }} />
+              </div>
             {/each}
+            {#if !reordering && hasMoreBadges}
+              <button type="button" class="pp-sections__badges-more" aria-label="Все значки" onclick={() => showAll(5)}>
+                {@html iconArrowRight(20)}
+              </button>
+            {/if}
           </div>
         {:else}
           <p class="pp-sections__empty">
@@ -264,44 +570,55 @@
 {/snippet}
 
 {#if sections.length && current != null}
-  <section class="pp-sections uiv2-card" aria-label="Разделы профиля">
-    <UiV2Tabs
-      class="uiv2-tabs--static pp-sections__tabs"
-      {tabs}
-      activeId={String(current)}
-      onChange={(id) => (active = Number(id) as SectionId)}
-    >
-      {#snippet rightActions()}
-        {#if isMyProfile}
-          <UiV2RoundButton
-            label="Закреплённый раздел"
-            title="Закреплённый раздел"
-            size="sm"
-            onclick={() => (pinSheetOpen = true)}
+  <section class="pp-sections uiv2-card" class:pp-sections--themed={themed} aria-label="Разделы профиля">
+    <ShowcaseThemeLayer profile={profile as ProfileThemeFields} />
+    <div class="pp-sections__head">
+      <div class="pp-sections__chips" role="tablist" bind:this={chipsEl}>
+        {#each sections as id (id)}
+          <button
+            type="button"
+            class="pp-sections__chip"
+            class:pp-sections__chip--on={id === current}
+            role="tab"
+            aria-selected={id === current}
+            data-section={id}
+            onclick={() => selectSection(id)}
           >
-            {@html iconPin(16)}
-          </UiV2RoundButton>
-        {/if}
-      {/snippet}
-    </UiV2Tabs>
-
-    <div class="pp-sections__body" role="tabpanel" use:swipeTabs={{ onSwipe: swipeToSection, enabled: isMobileMode(), activeId: String(current) }}>
-      {@render sectionBody(current)}
-      {#if peekSections.prev != null}<TabPeek dir={-1}>{@render sectionBody(peekSections.prev)}</TabPeek>{/if}
-      {#if peekSections.next != null}<TabPeek dir={1}>{@render sectionBody(peekSections.next)}</TabPeek>{/if}
+            <span class="pp-sections__chip-icon" aria-hidden="true">{@html CHIP_ICONS[id]}</span>
+            {LABELS[id]}
+          </button>
+        {/each}
+      </div>
+      {#if reordering}
+        <button type="button" class="pp-sections__done" disabled={reorderBusy} onclick={() => void finishReorder()}>Готово</button>
+      {/if}
+      {#if isMyProfile}
+        <button type="button" class="pp-sections__gear" aria-label="Настройки витрины" aria-haspopup="menu" onclick={openMenu}>
+          {@html iconSettings(22)}
+        </button>
+      {/if}
     </div>
 
-    {#if current === 0}
-      <UiV2Button label="Показать списки" variant="chrome" block onclick={openLists} />
-    {:else if counts[current] > 0 || (current === 5 && isMyProfile)}
-      <UiV2Button label={allLabel} variant="chrome" block onclick={() => showAll(current)} />
-    {/if}
+    <div class="pp-sections__body" role="tabpanel" use:swipeTabs={{ onSwipe: swipeToSection, enabled: isMobileMode() && !reordering, activeId: String(current), followHeight: true, onSwipeProgress }}>
+      {@render sectionBody(current)}
+      {#if peekSections.prev != null && !reordering}<TabPeek dir={-1}>{@render sectionBody(peekSections.prev)}</TabPeek>{/if}
+      {#if peekSections.next != null && !reordering}<TabPeek dir={1}>{@render sectionBody(peekSections.next)}</TabPeek>{/if}
+    </div>
+
+    <div class="pp-sections__foot" style={footStyle} inert={footVisible === 0 ? true : undefined}>
+      <div bind:clientHeight={footHeight}>
+        {#if footSection != null}
+          {@const section = footSection}
+          <UiV2Button label={actionLabel(section)} variant="chrome" block onclick={() => runAction(section)} />
+        {/if}
+      </div>
+    </div>
   </section>
 {/if}
 
 {#if pinSheetOpen}
   <UiV2ChoiceSheet
-    title="Закреплённый раздел"
+    title="Закрепить секцию"
     options={pinOptions}
     value={pinned}
     disabled={pinBusy}
@@ -310,12 +627,47 @@
   />
 {/if}
 
+{#if statsHelpOpen}
+  <UiV2ChoiceSheet
+    title="Как работает статистика"
+    summary={STATS_HELP}
+    options={[]}
+    value=""
+    cancelLabel="Понятно"
+    onClose={() => (statsHelpOpen = false)}
+  />
+{/if}
+
+{#if themeSheetOpen}
+  <UiV2ChoiceSheet
+    title="Тема витрины"
+    summary="Доступные темы зависят от предпочитаемых вами жанров, аудитории и тематик в статистике профиля. Для формирования этой статистики необходимо иметь не менее 10 релизов в списке «Просмотрено». Данные обновляются раз в сутки."
+    options={themes}
+    value={selectedTheme}
+    disabled={themeBusy}
+    onClose={() => (themeSheetOpen = false)}
+    onSelect={(v) => void selectTheme(Number(v))}
+  />
+{/if}
+
+<UiV2PopupMenu
+  open={menuOpen}
+  x={menuX}
+  y={menuY}
+  placement="anchor"
+  items={menuItems}
+  onClose={() => (menuOpen = false)}
+  onSelect={onMenuSelect}
+/>
+
 {#if openBadge}
   <BadgeDetailSheet badge={openBadge} onClose={() => (openBadge = null)} />
 {/if}
 
 <style lang="scss">
   .pp-sections {
+    position: relative;
+    overflow: clip;
     container: pp-sections / inline-size;
     display: flex;
     flex-direction: column;
@@ -325,17 +677,114 @@
     --carousel-fade-color: color-mix(in srgb, var(--uikit-v2-text) 4%, var(--color-bg));
   }
 
-  /* Вкладки внутри карточки: без sticky/фона, fade-градиенты под цвет карточки */
-  .pp-sections :global(.uiv2-tabs.pp-sections__tabs) {
-    --uikit-v2-bg: color-mix(in srgb, var(--uikit-v2-text) 4%, var(--color-bg));
-    /* Подпись вкладки на равном расстоянии от края карточки и от линии под вкладками */
-    margin: -0.375rem -0.15rem 0;
-    padding: 0 0 0.375rem;
+  .pp-sections--themed {
+    --carousel-fade-color: transparent;
+  }
+
+  .pp-sections > :global(:not(.showcase-layer)) {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Чипы разделов, как в Android */
+  .pp-sections__head {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  .pp-sections__chips {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 0.75rem;
+    min-width: 0;
+    overflow-x: auto;
+    padding-right: 1.5rem;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to left, transparent, #000 1.5rem);
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .pp-sections__chip {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 0.4rem;
+    height: 2.25rem;
+    padding: 0 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--uikit-v2-text) 28%, transparent);
+    border-radius: 0.625rem;
     background: transparent;
+    color: var(--uiv2-fg-muted);
+    font: inherit;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .pp-sections__chip--on {
+    border-color: color-mix(in srgb, var(--uikit-v2-text) 55%, transparent);
+    background: color-mix(in srgb, var(--uikit-v2-text) 8%, transparent);
+    color: var(--uikit-v2-text);
+    font-weight: 600;
+  }
+
+  .pp-sections__chip-icon {
+    display: inline-flex;
+
+    :global(svg) {
+      width: 18px;
+      height: 18px;
+    }
+  }
+
+  .pp-sections__gear,
+  .pp-sections__done {
+    flex: none;
+    border: 0;
+    background: none;
+    color: var(--uikit-v2-text);
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .pp-sections__gear {
+    display: inline-flex;
+    padding: 0.4rem;
+    border-radius: 50%;
+    color: var(--uiv2-fg-muted);
+  }
+
+  .pp-sections__done {
+    padding: 0.4rem 0.5rem;
   }
 
   .pp-sections__body {
     min-width: 0;
+  }
+
+  .pp-sections__foot {
+    overflow: clip;
+    transition: height 0.22s ease, opacity 0.22s ease, margin-top 0.22s ease;
+  }
+
+  .pp-sections__details {
+    display: block;
+    margin: 0.25rem auto 0;
+    padding: 0.5rem 1rem;
+    border: 0;
+    background: none;
+    color: var(--uikit-v2-text);
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
   }
 
   .pp-sections__empty {
@@ -389,14 +838,60 @@
     -webkit-box-orient: vertical;
   }
 
+  .pp-sections__badge {
+    touch-action: auto;
+  }
+
+  .pp-sections__badges--reorder .pp-sections__badge[data-badge-id] {
+    touch-action: none;
+    cursor: grab;
+
+    :global(.badge-tile) {
+      pointer-events: none;
+    }
+  }
+
+  .pp-sections__badge--wiggle {
+    /* Значения из res/anim/shaking.xml */
+    animation: pp-badge-wiggle 0.15s var(--wiggle-delay, 0ms) ease-in-out infinite alternate;
+  }
+
+  .pp-sections__badge--dragging {
+    position: relative;
+    z-index: 2;
+    scale: 1.08;
+    cursor: grabbing;
+  }
+
+  @keyframes pp-badge-wiggle {
+    from { rotate: -2deg; }
+    to { rotate: 2deg; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pp-sections__badge--wiggle {
+      animation: none;
+    }
+  }
+
+  .pp-sections__badges-more {
+    align-self: center;
+    justify-self: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    border: 0;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--uikit-v2-text) 12%, transparent);
+    color: var(--uikit-v2-text);
+    cursor: pointer;
+  }
+
   /* Витрина значков */
   .pp-sections__badges {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0.5rem;
-
-    @container pp-sections (min-width: 520px) {
-      grid-template-columns: repeat(auto-fill, minmax(4.4rem, 1fr));
-    }
   }
 </style>

@@ -65,7 +65,7 @@
 
   /** Страница, которую можно потянуть: у её прокрутки и вложенных в неё блоков под пальцем нет сдвига. */
   function pullableScroller(target: Element, host: HTMLElement): HTMLElement | null {
-    if (target.closest('.m-search-history, .m-fullscreen--page, input[type="range"]')) return null;
+    if (target.closest('.m-search-history, .m-fullscreen--page, .agent-page, input[type="range"]')) return null;
     const scroller = target.closest<HTMLElement>('.page__scroll');
     if (!scroller || !host.contains(scroller)) return null;
     for (let el: Element | null = target; el && el !== scroller; el = el.parentElement) {

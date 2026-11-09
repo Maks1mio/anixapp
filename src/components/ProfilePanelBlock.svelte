@@ -8,6 +8,7 @@
     iconMessageSquareX,
     iconBan,
     iconPlus,
+    iconChevronDown,
   } from './icons';
   import { get } from 'svelte/store';
   import {
@@ -38,29 +39,20 @@
     PROFILE_BLOCKED_BY_USER_NOTICE,
     PROFILE_PRIVACY_NOTICE,
   } from '../views/Profile/v2/profile-privacy';
-  import ProfileDynamicsSection from '../views/Profile/v2/components/ProfileDynamicsSection.svelte';
-  import ProfileHistorySection from '../views/Profile/v2/components/ProfileHistorySection.svelte';
   import ProfilePanelFriendsView from './ProfilePanelFriendsView.svelte';
   import ProfilePanelEditView from './ProfilePanelEditView.svelte';
   import ProfilePanelLoginHistoryView from './ProfilePanelLoginHistoryView.svelte';
   import ProfilePanelBadgesView from './ProfilePanelBadgesView.svelte';
   import ProfileSectionsCard from './profile-sections/ProfileSectionsCard.svelte';
+  import ProfileBlogFeed from './profile-sections/ProfileBlogFeed.svelte';
+  import ProfileWatchActivity from './profile-sections/ProfileWatchActivity.svelte';
   import ProfileSocialSheet from './ProfileSocialSheet.svelte';
   import ProfilePanelMoreSheet, { type ProfileMoreAction } from './ProfilePanelMoreSheet.svelte';
   import { openFeedMediaLightbox } from '../utils/feed-media-lightbox';
-  import {
-    captureFlip,
-    playFlip,
-    lockHeightAndMeasure,
-    playHeightTo,
-    unlockHeight,
-    clearAllFlips,
-    PROFILE_LAYOUT_MS,
-  } from '../utils/flip-move';
   import UiV2Button from './uikit-v2/UiV2Button.svelte';
   import UiV2RoundButton from './uikit-v2/UiV2RoundButton.svelte';
-  import UiV2Card from './uikit-v2/UiV2Card.svelte';
   import { showToast } from '../stores/toast';
+  import type { FeedChannel } from '../types/feed';
   import { requireAuth } from '../stores/auth';
   import { fetchMyBadges, fetchUsersBadges, getCachedBadges, cacheBadges, visibleAppBadges, type AppBadge } from '../services/badges-api';
   import { resolveAnixbackUploadUrl } from '../services/anixback-endpoint';
@@ -89,6 +81,9 @@
   let panelView = $state<ProfilePanelInnerView>('overview');
   let friendBusy = $state(false);
   let coverUrl = $state<string | null>(null);
+  let coverAnimation = $state('');
+  let blogChannel = $state<FeedChannel | null>(null);
+  let registerShown = $state(false);
 
   let friends = $state<Record<string, unknown>[]>([]);
   let socialSheetOpen = $state(false);
@@ -102,73 +97,6 @@
 
   let badgeLottieEl = $state<HTMLElement | undefined>();
   let badgeAnim: { destroy?: () => void } | null = null;
-
-  /** Широкий UI шапки профиля (FLIP + плавная высота, с реверсом на лету). */
-  const PROFILE_WIDE_ENTER = 480;
-  const PROFILE_WIDE_EXIT = 450;
-  let isWide = $state(false);
-  let topEl = $state<HTMLElement | null>(null);
-  let layoutAnimGen = 0;
-  /** Актуальная ширина для hysteresis без stale-closure. */
-  let wideRef = false;
-
-  function prefersReducedMotion(): boolean {
-    return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  }
-
-  function isPanelResizing(): boolean {
-    return typeof document !== 'undefined' && document.body.classList.contains('is-sidebar-panel-resizing');
-  }
-
-  function wideFromWidth(w: number, currentlyWide: boolean): boolean {
-    return currentlyWide ? w >= PROFILE_WIDE_EXIT : w >= PROFILE_WIDE_ENTER;
-  }
-
-  function applyWideInstant(el: HTMLElement, next: boolean) {
-    layoutAnimGen += 1;
-    clearAllFlips(el);
-    unlockHeight(el);
-    // сброс inline transition:none после clear
-    requestAnimationFrame(() => {
-      clearAllFlips(el);
-      for (const node of el.querySelectorAll<HTMLElement>('[data-pp-flip]')) {
-        node.style.transition = '';
-      }
-    });
-    isWide = next;
-    wideRef = next;
-  }
-
-  async function setProfileWide(next: boolean, animate: boolean) {
-    if (next === isWide) return;
-    const el = topEl;
-    if (!el) {
-      isWide = next;
-      wideRef = next;
-      return;
-    }
-
-    // Во время drag ширины панели морф даёт артефакты — только мгновенный layout
-    if (!animate || prefersReducedMotion() || isPanelResizing()) {
-      applyWideInstant(el, next);
-      return;
-    }
-
-    const gen = ++layoutAnimGen;
-    const token = `h-${gen}`;
-
-    const heightFrom = el.getBoundingClientRect().height;
-    const snapshot = captureFlip(el);
-
-    isWide = next;
-    wideRef = next;
-    await tick();
-    if (gen !== layoutAnimGen) return;
-
-    const heightTo = lockHeightAndMeasure(el, heightFrom);
-    playFlip(snapshot, { duration: PROFILE_LAYOUT_MS });
-    playHeightTo(el, heightTo, { duration: PROFILE_LAYOUT_MS, token });
-  }
 
   const login = $derived(String(profile?.login ?? 'Профиль'));
   const avatarUrl = $derived(profile?.avatar ? posterUrl(String(profile.avatar)) : '');
@@ -197,6 +125,18 @@
     return ts ? fmtLastSeen(ts) : '';
   });
   const metaSecondary = $derived(registerLabel || activityLabel);
+  /** Как в приложении: рядом с рейтингом «был(а) в сети», а дата регистрации раскрывается стрелкой. В сети — сразу дата. */
+  const lastOnlineLabel = $derived.by(() => {
+    const ts = Number(profile?.last_activity_time ?? 0);
+    return profile && !profile.is_online && ts ? fmtLastSeen(ts) : '';
+  });
+  const metaLine = $derived(lastOnlineLabel || registerLabel);
+  const incognitoHint = $derived(isMyProfile && !!profile?.is_incognito);
+  const deletionLabel = $derived.by(() => {
+    if (!isMyProfile || !profile?.is_deletion_requested) return '';
+    const ts = Number(profile.deletion_delete_at ?? 0);
+    return ts ? `Ваш аккаунт будет удалён ${fmtDate(ts)}` : 'Ваш аккаунт будет удалён';
+  });
   const roles = $derived(
     Array.isArray(profile?.roles)
       ? (profile!.roles as { name?: string; color?: string }[]).filter((r) => r?.name)
@@ -288,22 +228,6 @@
   const watchDynamics = $derived(
     Array.isArray(profile?.watch_dynamics) ? (profile!.watch_dynamics as unknown[]) : [],
   );
-  const dynamicsSummary = $derived.by(() => {
-    const points = watchDynamics
-      .map((d) => {
-        const row = d as { count?: number; timestamp?: number };
-        return { count: Number(row.count ?? 0), timestamp: Number(row.timestamp ?? 0) };
-      })
-      .filter((d) => Number.isFinite(d.count) && Number.isFinite(d.timestamp) && d.timestamp > 0);
-    if (!points.length) return null;
-    const total = points.reduce((s, d) => s + d.count, 0);
-    const peak = points.reduce((best, d) => (d.count > best.count ? d : best), points[0]);
-    const activeDays = points.filter((d) => d.count > 0).length;
-    const peakMs = peak.timestamp < 1e12 ? peak.timestamp * 1000 : peak.timestamp;
-    const peakDate = new Date(peakMs);
-    const peakLabel = `${peakDate.getDate()}.${String(peakDate.getMonth() + 1).padStart(2, '0')}`;
-    return { total, peakCount: peak.count, peakLabel, activeDays };
-  });
   const recentHistory = $derived(
     Array.isArray(profile?.history) ? (profile!.history as Record<string, unknown>[]) : [],
   );
@@ -371,11 +295,15 @@
         ?? null;
       const cover = channel?.cover ? String(channel.cover) : null;
       coverUrl = cover;
+      coverAnimation = typeof channel?.cover_animation === 'string' ? channel.cover_animation : '';
+      blogChannel = Number(channel?.id ?? 0) > 0 ? (channel as unknown as FeedChannel) : null;
       const channelId = Number(channel?.id ?? 0);
       blogChannelId = channelId > 0 ? channelId : null;
       blogMuted = !!channel?.is_muted;
     } catch {
       coverUrl = null;
+      coverAnimation = '';
+      blogChannel = null;
       blogChannelId = null;
       blogMuted = false;
     }
@@ -646,9 +574,8 @@
     if (id === 'loginHistory') openLoginHistoryView();
     else if (id === 'share') void shareProfile();
     else if (id === 'copyLink') void copyProfileLink();
-    else if (id === 'block') void blockProfile();
+    else if (id === 'block') void toggleBlockProfile();
     else if (id === 'muteBlog') void toggleMuteBlog();
-    else showToast('Скоро', 'err');
   }
 
   async function toggleMuteBlog() {
@@ -685,21 +612,24 @@
     }
   }
 
-  async function blockProfile() {
+  async function toggleBlockProfile() {
     const id = Number(profile?.id ?? 0);
     if (!(id > 0) || isMyProfile) return;
-    const api = window.anixApi?.profile?.blockAdd;
+    const blocked = !!profile?.is_blocked;
+    const api = blocked ? window.anixApi?.profile?.blockRemove : window.anixApi?.profile?.blockAdd;
     if (!api) {
       showToast('API недоступно', 'err');
       return;
     }
-    const loginName = String(profile?.login ?? 'пользователя');
-    const ok = window.confirm(`Заблокировать ${loginName}?\n\nОн не сможет просматривать вашу страницу.`);
-    if (!ok) return;
+    if (!blocked) {
+      const loginName = String(profile?.login ?? 'пользователя');
+      const ok = window.confirm(`Заблокировать ${loginName}?\n\nЭтот пользователь не сможет просматривать вашу страницу.`);
+      if (!ok) return;
+    }
     try {
       await api(id);
-      if (profile) profile = { ...profile, is_blocked: true };
-      showToast('Пользователь заблокирован', 'ok');
+      if (profile) profile = { ...profile, is_blocked: !blocked };
+      showToast(blocked ? 'Пользователь разблокирован' : 'Пользователь заблокирован', 'ok');
     } catch (err) {
       showToast(err instanceof Error ? err.message : String(err), 'err');
     }
@@ -775,23 +705,6 @@
     void loadProfile();
   });
 
-  $effect(() => {
-    const el = topEl;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const initial = wideFromWidth(el.getBoundingClientRect().width, false);
-    isWide = initial;
-    wideRef = initial;
-    const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width ?? 0;
-      void setProfileWide(wideFromWidth(w, wideRef), true);
-    });
-    ro.observe(el);
-    return () => {
-      ro.disconnect();
-      unlockHeight(el);
-    };
-  });
-
   onDestroy(() => destroyBadgeAnim());
 </script>
 
@@ -828,18 +741,7 @@
           <Page scrollId={`profile-panel-${userId}`} extraClass="profile-panel__page">
             <section
               class="profile-panel__top"
-              class:profile-panel__top--wide={isWide}
-              bind:this={topEl}
             >
-              {#if banNotice}
-                <div class="profile-panel__ban-alert" role="status">
-                  <span class="profile-panel__ban-alert-icon" aria-hidden="true">
-                    {@html iconMessageSquareX(18)}
-                  </span>
-                  <p class="profile-panel__ban-alert-text">{banNotice}</p>
-                </div>
-              {/if}
-
               {#if coverUrl}
                 <button
                   type="button"
@@ -847,7 +749,7 @@
                   style={bannerStyle}
                   aria-label="Смотреть обложку"
                   onclick={previewCover}
-                ></button>
+                ><AnimatedMediaOverlay src={coverAnimation} /></button>
               {:else}
                 <div
                   class="profile-panel__banner"
@@ -858,7 +760,7 @@
 
               <div class="profile-panel__head">
                 <div class="profile-panel__identity">
-                  <div class="profile-panel__avatar-wrap" data-pp-flip>
+                  <div class="profile-panel__avatar-wrap">
                     {#if avatarUrl}
                       <button
                         type="button"
@@ -881,7 +783,7 @@
                     ></span>
                   </div>
 
-                  <div class="profile-panel__identity-main" data-pp-flip>
+                  <div class="profile-panel__identity-main">
                     <h2 class="profile-panel__name">
                       <span class="profile-panel__name-text">{login}</span>
                       {#if badge?.image_url}
@@ -953,22 +855,46 @@
                       {/if}
                     </h2>
 
-                    {#if statusText}
+                    {#if isMyProfile}
+                      <button
+                        type="button"
+                        class="profile-panel__bio profile-panel__bio--own"
+                        class:profile-panel__bio--empty={!statusText}
+                        onclick={() => openEditView('status')}
+                      >{statusText || 'Статус не установлен'}</button>
+                    {:else if statusText}
                       <p class="profile-panel__bio">{statusText}</p>
                     {/if}
 
-                    {#if level != null || metaSecondary}
+                    {#if level != null || metaLine}
                       <div class="profile-panel__meta">
                         {#if level != null}
-                          <span class="profile-panel__level">{level}</span>
+                          <span
+                            class="profile-panel__level"
+                            class:profile-panel__level--zero={level === 0}
+                            class:profile-panel__level--negative={level < 0}
+                          >{String(level).replace('-', '–')}</span>
                         {/if}
-                        {#if level != null && metaSecondary}
+                        {#if level != null && metaLine}
                           <span class="profile-panel__meta-dot" aria-hidden="true">·</span>
                         {/if}
-                        {#if metaSecondary}
-                          <span class="profile-panel__meta-text">{metaSecondary}</span>
+                        {#if metaLine}
+                          <span class="profile-panel__meta-text">{metaLine}</span>
+                        {/if}
+                        {#if lastOnlineLabel && registerLabel}
+                          <button
+                            type="button"
+                            class="profile-panel__meta-more"
+                            class:profile-panel__meta-more--open={registerShown}
+                            aria-label="Дата регистрации"
+                            aria-expanded={registerShown}
+                            onclick={() => (registerShown = !registerShown)}
+                          >{@html iconChevronDown(16)}</button>
                         {/if}
                       </div>
+                      {#if registerShown && lastOnlineLabel && registerLabel}
+                        <p class="profile-panel__meta-register">{registerLabel}</p>
+                      {/if}
                     {/if}
 
                     {#if roles.length}
@@ -984,7 +910,7 @@
                   </div>
                 </div>
 
-                <div class="profile-panel__cta" data-pp-flip>
+                <div class="profile-panel__cta">
                   {#if isMyProfile || friendButton.action !== 'none'}
                     <span class="profile-panel__cta-primary">
                       <UiV2Button
@@ -1033,6 +959,23 @@
                 </div>
               </div>
 
+              {#if friendButton.label === 'Принять заявку' && !isMyProfile}
+                <p class="profile-panel__friend-hint">Отправил(а) Вам заявку в друзья</p>
+              {/if}
+
+              {#if banNotice}
+                <div class="profile-panel__ban-alert" role="status">
+                  <span class="profile-panel__ban-alert-icon" aria-hidden="true">
+                    {@html iconMessageSquareX(18)}
+                  </span>
+                  <p class="profile-panel__ban-alert-text">{banNotice}</p>
+                </div>
+              {/if}
+
+              {#if deletionLabel}
+                <div class="profile-panel__deletion" role="status">{deletionLabel}</div>
+              {/if}
+
               {#if isMyProfile}
                 <div class="profile-panel__social-row" aria-label="Социальные сети">
                   <UiV2RoundButton
@@ -1055,10 +998,14 @@
                 </div>
               {/if}
 
-              {#if !blockedByUser && !profile.is_counts_hidden && (friendCount > 0 || isMyProfile)}
+              {#if incognitoHint}
+                <p class="profile-panel__privacy">У вас включен режим инкогнито. Ваш онлайн-статус и время последнего визита скрыты от других пользователей.</p>
+              {/if}
+
+              {#if !blockedByUser && !profile.is_counts_hidden}
                 <button type="button" class="profile-panel__friends-row" onclick={openFriendsView}>
                   <div class="profile-panel__friends-copy">
-                    <span class="profile-panel__friends-count">{friendCount} {friendWord(friendCount)}</span>
+                    <span class="profile-panel__friends-count">{friendCount > 0 ? `${friendCount} ${friendWord(friendCount)}` : 'Друзей пока нет'}</span>
                     {#if friendNamesPreview}
                       <span class="profile-panel__friends-names">{friendNamesPreview}</span>
                     {/if}
@@ -1097,32 +1044,18 @@
                   profileId={userId}
                   {isMyProfile}
                   onOpenBadges={openBadgesView}
+                  {onProfilePatched}
                 />
               {/if}
               {#if !blockedByUser && (!profile.is_stats_hidden || isMyProfile)}
-                <div class="profile-panel__cards">
-                {#if watchDynamics.length && dynamicsSummary}
-                  <UiV2Card
-                    title="Динамика просмотра"
-                    spaced
-                    pill={`${dynamicsSummary.total} всего · ${dynamicsSummary.peakCount} пик · ${dynamicsSummary.peakLabel} · ${dynamicsSummary.activeDays} дн.`}
-                  >
-                    <div class="profile-panel__dynamics">
-                      <ProfileDynamicsSection {watchDynamics} hideSummary hideYLabels />
-                    </div>
-                  </UiV2Card>
-                {/if}
-
-                {#if recentHistory.length}
-                  <UiV2Card title="Просмотрено недавно" spaced>
-                    <div class="profile-panel__recent">
-                      <ProfileHistorySection items={recentHistory} />
-                    </div>
-                  </UiV2Card>
-                {/if}
-                </div>
+                <ProfileWatchActivity {watchDynamics} history={recentHistory} />
               {:else if !blockedByUser && !isMyProfile}
                 <p class="profile-panel__hint">Статистика скрыта настройками приватности.</p>
+              {/if}
+              {#if !blockedByUser && blogChannel}
+                {#key blogChannel.id}
+                  <ProfileBlogFeed channel={blogChannel} {isMyProfile} {avatarUrl} />
+                {/key}
               {/if}
             </div>
           </Page>
@@ -1197,6 +1130,7 @@
     <ProfilePanelMoreSheet
       {isMyProfile}
       {blogMuted}
+      blocked={!!profile?.is_blocked}
       onClose={closeMoreSheet}
       onAction={onMoreAction}
     />

@@ -11,7 +11,10 @@
   import { requireAuth, syncAuthStatus } from '../stores/auth';
   import { ensureProfileId } from '../utils/profile';
   import { resolveJacksonRefs } from '../utils/jackson-refs';
-  import { fmtLastSeen, fmtWatchedTime } from './Profile/_utils';
+  import { fmtDate, fmtLastSeen, fmtWatchedTime, getProfileBanNotice } from './Profile/_utils';
+  import { hasProfilePrivacyRestrictions, isBlockedByProfile, PROFILE_BLOCKED_BY_USER_NOTICE, PROFILE_PRIVACY_NOTICE } from './Profile/v2/profile-privacy';
+  import { toCdnProxyUrl } from '../utils/posterUrl';
+  import { mapReleaseRawToCard } from '../utils/release-card';
   import { tvPosterThumbUrl } from '../platform/tv';
   import { attachTvHomeCarouselScroll } from '../tv/carouselScroll';
   import { mapWithConcurrency } from '../tv/homeRows';
@@ -55,6 +58,7 @@
   let rows = $state<ListRow[]>([]);
   let friends = $state<Friend[]>([]);
   let friendsStatus = $state<RowStatus>('loading');
+  let coverUrl = $state('');
 
   const login = $derived(String(profile?.login ?? ''));
   const avatar = $derived(typeof profile?.avatar === 'string' ? tvPosterThumbUrl(profile.avatar) ?? profile.avatar : null);
@@ -64,6 +68,26 @@
     if (profile.is_online) return 'в сети';
     const ts = Number(profile.last_activity_time ?? 0);
     return ts ? fmtLastSeen(ts) : '';
+  });
+  const rating = $derived(profile?.rating_score == null ? null : Number(profile.rating_score));
+  const registered = $derived.by(() => {
+    const ts = Number(profile?.register_date ?? 0);
+    return ts ? `на проекте с ${fmtDate(ts)}` : '';
+  });
+  const roles = $derived(
+    Array.isArray(profile?.roles) ? (profile.roles as { name?: string; color?: string }[]).filter((r) => r?.name) : [],
+  );
+  const blockedByUser = $derived(isBlockedByProfile(profile));
+  const notice = $derived.by(() => {
+    if (!profile) return '';
+    if (blockedByUser) return PROFILE_BLOCKED_BY_USER_NOTICE;
+    return getProfileBanNotice(profile) || (hasProfilePrivacyRestrictions(profile, isMine) ? PROFILE_PRIVACY_NOTICE : '');
+  });
+  const history = $derived.by((): ReleaseCardData[] => {
+    if (!profile || statsHidden || !Array.isArray(profile.history)) return [];
+    return (profile.history as Record<string, unknown>[])
+      .filter((r) => r && typeof r === 'object' && Number(r.id) > 0)
+      .map((r) => mapReleaseRawToCard(r));
   });
   const statsHidden = $derived(!!profile?.is_stats_hidden && !isMine);
   const stats = $derived.by(() => {
@@ -119,11 +143,23 @@
       const selfId = Number((self?.profile as { id?: number } | undefined)?.id ?? 0);
       isMine = !!info.is_my_profile || (selfId > 0 && selfId === Number(p.id));
       loadState = 'ready';
+      void loadCover(id);
+      if (isBlockedByProfile(p)) return;
       void loadRows(id);
       void loadFriends(id);
     } catch (err) {
       errorMsg = headlineFromLoadError(err);
       loadState = 'error';
+    }
+  }
+
+  async function loadCover(id: number) {
+    coverUrl = '';
+    try {
+      const res = (await window.anixApi?.channel?.getBlog?.(id)) as { channel?: { cover?: string } } | undefined;
+      coverUrl = res?.channel?.cover ? toCdnProxyUrl(res.channel.cover) : '';
+    } catch {
+      coverUrl = '';
     }
   }
 
@@ -203,6 +239,7 @@
         {:else}
           <div class="tv-home__rows">
             <section class="tv-home-row tv-profile__hero" aria-label="Профиль" data-tv-home-row data-tv-home-row-id="profile-hero">
+              {#if coverUrl}<div class="tv-profile__cover" style={`background-image:url('${coverUrl}')`} aria-hidden="true"></div>{/if}
               <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
               <div
                 class="tv-profile__head"
@@ -215,9 +252,19 @@
                 <div class="tv-profile__info">
                   <h1 class="tv-profile__login">{login || ' '}</h1>
                   {#if status}<p class="tv-profile__status">{status}</p>{/if}
-                  {#if activity || watchFacts}
-                    <p class="tv-profile__facts">{[activity, watchFacts].filter(Boolean).join(' · ')}</p>
+                  {#if rating != null || activity || registered}
+                    <p class="tv-profile__facts">
+                      {#if rating != null}<span class="tv-profile__rating" class:tv-profile__rating--zero={rating === 0} class:tv-profile__rating--negative={rating < 0}>{String(rating).replace('-', '–')}</span>{/if}
+                      {[activity, registered].filter(Boolean).join(' · ')}
+                    </p>
                   {/if}
+                  {#if watchFacts}<p class="tv-profile__facts">{watchFacts}</p>{/if}
+                  {#if roles.length}
+                    <div class="tv-profile__roles">
+                      {#each roles as role}<span class="tv-profile__role" style={`color:${role.color || '#888'}`}>{role.name}</span>{/each}
+                    </div>
+                  {/if}
+                  {#if notice}<p class="tv-profile__notice">{notice}</p>{/if}
                 </div>
               </div>
 
@@ -253,6 +300,9 @@
             </section>
 
             {#if loadState === 'ready'}
+              {#if history.length}
+                <TvHomeRow label="Просмотрено недавно" tabId={`profile-${profileId}-history`} items={history} status="ready" />
+              {/if}
               {#each rows.filter((row) => row.status !== 'empty') as row (row.id)}
                 <TvHomeRow
                   label={row.label}
@@ -266,7 +316,7 @@
                 />
               {/each}
 
-              {#if friendsStatus !== 'empty'}
+              {#if friendsStatus !== 'empty' && !blockedByUser}
                 <TvRow
                   id={`profile-${profileId}-friends`}
                   label="Друзья"

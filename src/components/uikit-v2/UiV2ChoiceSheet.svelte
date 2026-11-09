@@ -15,6 +15,8 @@
 
   type Props = {
     title: string;
+    /** Пояснение под заголовком. */
+    summary?: string;
     options: UiV2ChoiceOption[];
     value: string | number;
     cancelLabel?: string;
@@ -27,6 +29,7 @@
 
   let {
     title,
+    summary = '',
     options,
     value,
     cancelLabel = 'Отмена',
@@ -65,9 +68,11 @@
 
   <div
     class="uiv2-choice-sheet__panel"
+    class:uiv2-choice-sheet__panel--text={summary.length > 200}
     transition:scale={{ duration: 220, start: 0.94, easing: cubicOut }}
   >
     <h3 id={titleId} class="uiv2-choice-sheet__title">{title}</h3>
+    {#if summary}<p class="uiv2-choice-sheet__summary">{summary}</p>{/if}
 
     <ul class="uiv2-choice-sheet__list" role="listbox" aria-label={title}>
       {#each options as opt (opt.value)}

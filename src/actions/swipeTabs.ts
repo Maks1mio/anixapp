@@ -12,6 +12,10 @@ interface SwipeTabsParams {
   enabled?: boolean;
   /** Текущая вкладка: при смене нажатием на вкладку список встаёт к началу, под панели. */
   activeId?: string;
+  /** Блок меняет высоту вслед за свайпом и при смене вкладки (карточка, а не страница). */
+  followHeight?: boolean;
+  /** Ход свайпа для того, что лежит вне блока: dir = null — жест закончен. */
+  onSwipeProgress?: (dir: 1 | -1 | null, progress: number, ms: number) => void;
 }
 
 const LOCK_PX = 10;
@@ -75,10 +79,22 @@ export function swipeTabs(node: HTMLElement, params: SwipeTabsParams) {
   /** Верх видимой области на момент жеста и был ли список прокручен за неё. */
   let visibleTop = 0;
   let listScrolled = false;
-  let snapshot: { overlay: HTMLElement; contentTop: number; visibleTop: number; scrolled: boolean; dir: 1 | -1; timer: number } | null = null;
+  let snapshot: { overlay: HTMLElement; contentTop: number; height: number; visibleTop: number; scrolled: boolean; dir: 1 | -1; timer: number } | null = null;
   let pageGlide: Animation | null = null;
   let fadeOverlay: HTMLElement | null = null;
   let fadeAnimations: Animation[] = [];
+  /** Высота блока в начале свайпа и высоты соседних вкладок; 0 — высота не отслеживается. */
+  let baseHeight = 0;
+  let peekHeights: Partial<Record<1 | -1, number>> = {};
+
+  function peekHeight(dir: 1 | -1): number {
+    const known = peekHeights[dir];
+    if (known != null) return known;
+    const peek = node.querySelector<HTMLElement>(`:scope > [data-tab-peek="${dir}"]`);
+    const height = peek ? peek.scrollHeight : baseHeight;
+    peekHeights[dir] = height;
+    return height;
+  }
 
   const hasPeek = (dir: 1 | -1) => !!node.querySelector(`:scope > [data-tab-peek="${dir}"]`);
   const scroller = () => node.closest<HTMLElement>('.page__scroll');
@@ -127,6 +143,11 @@ export function swipeTabs(node: HTMLElement, params: SwipeTabsParams) {
     style.setProperty('--tab-swipe-x', `${dx * (hasPeek(dir) ? DRIFT_RATIO : 1)}px`);
     style.setProperty('--tab-swipe-in-x', `${dir * (1 - progress) * INCOMING_DRIFT_PX}px`);
     style.setProperty('--tab-swipe-transition', ms ? `opacity ${ms}ms ${EASING}, transform ${ms}ms ${EASING}` : 'none');
+    if (baseHeight) {
+      style.height = `${baseHeight + (peekHeight(dir) - baseHeight) * progress}px`;
+      style.transition = ms ? `height ${ms}ms ${EASING}` : 'none';
+    }
+    current.onSwipeProgress?.(dir, progress, ms);
   }
 
   function animateTo(target: number, dir: 1 | -1, done: () => void) {
@@ -145,6 +166,13 @@ export function swipeTabs(node: HTMLElement, params: SwipeTabsParams) {
       node.style.removeProperty(name);
     }
     delete node.dataset.tabSwiping;
+    current.onSwipeProgress?.(null, 0, 0);
+    if (baseHeight) {
+      baseHeight = 0;
+      node.style.removeProperty('height');
+      node.style.removeProperty('transition');
+      node.style.removeProperty('overflow');
+    }
     progress = 0;
     animating = false;
   }
@@ -161,6 +189,7 @@ export function swipeTabs(node: HTMLElement, params: SwipeTabsParams) {
     dropSnapshot();
     if (animating || !node.getClientRects().length) return;
     // Копия самого node: те же классы и раскладка, что у настоящего содержимого
+    const heightBefore = node.offsetHeight;
     const overlay = node.cloneNode(false) as HTMLElement;
     let contentTop = node.getBoundingClientRect().top;
     for (const child of node.children) {
@@ -176,6 +205,7 @@ export function swipeTabs(node: HTMLElement, params: SwipeTabsParams) {
     snapshot = {
       overlay,
       contentTop,
+      height: heightBefore,
       visibleTop: visible,
       scrolled: current.enabled !== false && node.getBoundingClientRect().top < visible,
       dir,
@@ -188,6 +218,7 @@ export function swipeTabs(node: HTMLElement, params: SwipeTabsParams) {
     fadeAnimations = [];
     fadeOverlay?.remove();
     fadeOverlay = null;
+    if (current.followHeight && !baseHeight) node.style.removeProperty('overflow');
   }
 
   /** Список ушёл выше видимой области — ставим его под вкладки (на ПК положение оставляет экран). */
@@ -214,13 +245,20 @@ export function swipeTabs(node: HTMLElement, params: SwipeTabsParams) {
     overlay.style.top = `${offset}px`;
     overlay.style.maxHeight = `calc(100dvh + ${Math.abs(offset)}px)`;
     const timing = { duration: TAP_FADE_MS, easing: EASING };
+    let fadeHeight: Animation | null = null;
     const shifted = (px: number) => `translate3d(${px}px, 0, 0)`;
     const out = overlay.animate(
       [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: shifted(-dir * INCOMING_DRIFT_PX) }],
       timing,
     );
     out.onfinish = clearFade;
+    const heightNow = node.offsetHeight;
+    if (current.followHeight && heightNow !== snap.height) {
+      node.style.overflow = 'clip';
+      fadeHeight = node.animate({ height: [`${snap.height}px`, `${heightNow}px`] }, timing);
+    }
     fadeAnimations = [
+      ...(fadeHeight ? [fadeHeight] : []),
       out,
       ...incoming.map((el) => el.animate(
         [{ opacity: 0, transform: shifted(dir * INCOMING_DRIFT_PX) }, { opacity: 1, transform: 'none' }],
@@ -255,6 +293,14 @@ export function swipeTabs(node: HTMLElement, params: SwipeTabsParams) {
       const top = node.getBoundingClientRect().top;
       listScrolled = top < visibleTop;
       node.style.setProperty('--tab-peek-top', `${Math.max(0, visibleTop - top)}px`);
+      if (current.followHeight) {
+        // Карточка растёт сама, поэтому вкладка начинается с её верха
+        listScrolled = false;
+        node.style.setProperty('--tab-peek-top', '0px');
+        baseHeight = node.offsetHeight;
+        peekHeights = {};
+        node.style.overflow = 'clip';
+      }
     }
     const dt = e.timeStamp - lastT;
     if (dt > 0) velocity = (pointX - lastX) / dt;

@@ -139,7 +139,31 @@
   const floatBack = $derived(/^\/release\/\d+$/.test(path));
   const canShuffle = $derived(floatBack && $randomReleaseId === Number(path.split('/').pop()));
   /** Разделы со своей шапкой (DiscoverHero): заголовок уже в ней, назад ведёт системная кнопка. */
-  const ownHeader = $derived(['/overview/popular', '/fluo'].includes(path));
+  const ownHeader = $derived(['/overview/popular', '/fluo', '/agent'].includes(path));
+  /** Чат занимает ровно экран: прокручивает сообщения сам, поле ввода внизу. */
+  const fitPage = $derived(path === '/agent');
+  /** Пока пишут в чате, панель разделов уходит, а высота учитывает клавиатуру, если WebView сам не сжался. */
+  let typing = $state(false);
+  let keyboardInset = $state(0);
+
+  function onFitFocus(e: FocusEvent) {
+    if (fitPage && e.target instanceof HTMLTextAreaElement) typing = e.type === 'focusin';
+  }
+
+  $effect(() => {
+    if (!fitPage) typing = false;
+  });
+
+  $effect(() => {
+    const viewport = window.visualViewport;
+    if (!typing || !viewport) return;
+    const sync = () => {
+      keyboardInset = Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop));
+    };
+    sync();
+    viewport.addEventListener('resize', sync);
+    return () => viewport.removeEventListener('resize', sync);
+  });
 
   const rootTab = $derived.by((): MobileNavTab | null => {
     if (path === '/' || path === '/catalog') return 'home';
@@ -426,8 +450,12 @@
     class="m-app__scroll page__scroll"
     class:m-app__scroll--bars-hidden={barsHidden}
     class:m-app__scroll--no-bar={floatBack || ownHeader}
+    class:m-app__scroll--fit={fitPage}
+    style:--m-fit-bottom={typing ? `${keyboardInset}px` : undefined}
     data-page-scroll
     onscroll={onContentScroll}
+    onfocusin={onFitFocus}
+    onfocusout={onFitFocus}
   >
   {#if isRoot && !bookmarksSearching}
     <header class="m-topbar">
@@ -477,7 +505,7 @@
 
   <MobileDock
     bind:open={moreOpen}
-    hidden={barsHidden}
+    hidden={barsHidden || typing}
     alert={aiHiddenNews}
     columns={$mobilePhoneBarSize}
     reorder={navReorderParams}
@@ -552,6 +580,12 @@
     padding-bottom: calc(var(--m-nav-h) + env(safe-area-inset-bottom));
   }
 
+  /* Запас под панель разделов уже учтён в высоте чата */
+  .m-app__scroll--fit > .m-app__content {
+    min-height: 0;
+    padding-bottom: 0;
+  }
+
   .m-topbar--inner {
     min-height: 48px;
     padding-bottom: 0;
@@ -618,10 +652,14 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    padding-bottom: 0;
 
     > :global(.m-topbar) { flex: none; }
     > :global(.profile-panel) { flex: 1 1 0; min-height: 0; }
-    :global(.page__scroll) { overscroll-behavior: contain; }
+    :global(.page__scroll) {
+      overscroll-behavior: contain;
+      padding-bottom: calc(var(--m-nav-h) + env(safe-area-inset-bottom) + var(--m-space-3));
+    }
 
     /* вкладку закрывает таб-бар и системное «назад» — desktop-крестик не нужен */
     :global(.profile-panel__close) { display: none !important; }

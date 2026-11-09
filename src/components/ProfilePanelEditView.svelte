@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fetchThemePatch } from '../utils/profile-showcase-theme';
   import { onMount } from 'svelte';
   import { iconPencil, iconShare } from './icons';
   import OAuthBrandIcon from './OAuthBrandIcon.svelte';
@@ -533,29 +534,6 @@
     }
   }
 
-  function themeToProfilePatch(theme: Record<string, unknown> | null | undefined): Record<string, unknown> {
-    if (!theme) {
-      return { theme_enabled: false };
-    }
-    return {
-      theme_enabled: theme.theme_enabled ?? false,
-      theme_gradient_start_color: theme.theme_gradient_start_color ?? null,
-      theme_gradient_end_color: theme.theme_gradient_end_color ?? null,
-      theme_gradient_angle: theme.theme_gradient_angle ?? null,
-      theme_background_url: theme.theme_background_url ?? null,
-      theme_background_mode: theme.theme_background_mode ?? null,
-      theme_background_alpha: theme.theme_background_alpha ?? null,
-      theme_icon_res_name: theme.theme_icon_res_name ?? null,
-      theme_icon_url: theme.theme_icon_url ?? null,
-      theme_icon_color: theme.theme_icon_color ?? null,
-      theme_icon_alpha: theme.theme_icon_alpha ?? null,
-      theme_icon_density: theme.theme_icon_density ?? theme.theme_icon_destiny ?? null,
-      theme_icon_size: theme.theme_icon_size ?? null,
-      theme_animation_enabled: theme.theme_animation_enabled ?? false,
-      theme_animation_speed: theme.theme_animation_speed ?? null,
-    };
-  }
-
   async function loadSettings() {
     const api = window.anixApi?.settings;
     if (!api?.getProfileSettings) {
@@ -667,7 +645,7 @@
         return;
       }
       selectedThemeId = id;
-      onProfilePatched?.(themeToProfilePatch(res?.theme as Record<string, unknown> | null | undefined));
+      onProfilePatched?.(await fetchThemePatch(profileId, res?.theme as Record<string, unknown> | null | undefined));
       showToast('Витрина обновлена');
       closeShowcasePicker();
     } catch {

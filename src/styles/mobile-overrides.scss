@@ -55,6 +55,22 @@ html.mobile-mode {
 
   .release-cards-grid-root, .release-cards-grid-root--wide { gap: 33px !important; padding: var(--m-space-4) 0 var(--m-space-5); }
 
+  // ── Вид карточками: у списка поля задаёт сама строка, сетке нужны свои ──
+  .release-cards-grid-root.release-cards-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--m-space-5) var(--m-space-3) !important;
+    padding: var(--m-space-4) var(--m-gutter) var(--m-space-5);
+
+    @media (min-width: 600px) {
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+
+    .uiv2-anime-card__poster { border-radius: var(--m-radius-md); }
+    .uiv2-anime-card__title { font: 600 14px/1.25 var(--m-font); letter-spacing: 0; color: var(--m-text); }
+    // Строка с оценкой и без неё одной высоты
+    .uiv2-anime-card__meta { min-height: 16px; color: var(--m-text-2); font-size: 12px; }
+  }
+
   // ── Карточка релиза в списке (UiV2AnimeCard, horizontal) ─────────────────────────────────
   .uiv2-anime-card--horizontal {
     display: flex !important;
@@ -590,7 +606,10 @@ html.mobile-mode {
 //    «Редактировать» — контурная кнопка, соцсети — контурные плитки в цвете сервиса ──
 html.mobile-mode {
   .m-fullscreen--profile {
-    .profile-panel__banner { height: 150px !important; border-radius: 0 !important; }
+    .profile-panel__banner {
+      height: 174px !important; border-radius: 0 !important;
+      @media (min-width: 600px) { height: auto !important; margin-top: var(--m-space-3); border-radius: 24px 24px 0 0 !important; }
+    }
     .profile-panel__head {
       position: relative; z-index: 1;
       margin-top: -32px !important; padding-top: 0 !important;

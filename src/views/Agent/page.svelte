@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isMobileMode } from '../../platform/mobile';
   import { onDestroy, onMount, tick } from 'svelte';
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
@@ -758,7 +759,8 @@
   }
 
   function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    // На телефоне Enter переносит строку, отправляет кнопка
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !isMobileMode()) {
       e.preventDefault();
       void send();
     } else if (e.key === 'Escape' && sending) {
@@ -980,7 +982,7 @@
                 onmouseenter={() => (heroHover = true)}
                 onmouseleave={() => (heroHover = false)}
               >
-                <AgentFace {persona} mood={locked ? 'sleep' : heroHover ? 'happy' : 'wave'} size={136} />
+                <AgentFace {persona} mood={locked ? 'sleep' : heroHover ? 'happy' : 'wave'} size={isMobileMode() ? 96 : 136} />
               </span>
               <h1 class="agent-hero__title">
                 Привет{me?.login ? `, ${me.login}` : ''}! Я <span class="agent-hero__name">{agentName}</span>
@@ -1128,7 +1130,7 @@
           </div>
         </div>
         <p class="agent-composer__hint">
-          Enter — отправить, Shift+Enter — новая строка · {agentName} может ошибаться
+          {#if !isMobileMode()}Enter — отправить, Shift+Enter — новая строка · {/if}{agentName} может ошибаться
         </p>
       </footer>
     {/if}
@@ -2060,6 +2062,45 @@
     .agent-profile-chip__text {
       display: none;
     }
+  }
+
+  /* ── Android: высота экрана за вычетом панели разделов или клавиатуры (--m-fit-bottom задаёт MobileLayout) ── */
+  :global(html.mobile-mode) .agent-page {
+    flex: none;
+    height: calc(100dvh - env(safe-area-inset-top) - var(--m-fit-bottom, calc(var(--m-nav-h) + env(safe-area-inset-bottom))));
+  }
+
+  :global(html.mobile-mode) .agent-chat__head .agent-icon-btn,
+  :global(html.mobile-mode) .agent-side__close {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  /* Наведения на телефоне нет */
+  :global(html.mobile-mode) .agent-conv__tools {
+    display: inline-flex;
+  }
+
+  :global(html.mobile-mode) .agent-hero {
+    gap: 0.5rem;
+    padding: 0.5rem 0 1rem;
+  }
+
+  :global(html.mobile-mode) .agent-hero__title {
+    font-size: 1.5rem;
+  }
+
+  :global(html.mobile-mode) .agent-hero__text {
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  :global(html.mobile-mode) .agent-starters {
+    margin-top: 0.5rem;
+  }
+
+  :global(html.mobile-mode) .agent-composer-wrap {
+    padding-bottom: 0.5rem;
   }
 
   @media (prefers-reduced-motion: reduce) {

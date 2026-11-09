@@ -5,7 +5,6 @@
     iconCopy,
     iconEye,
     iconEyeOff,
-    iconInfo,
     iconLoginHistory,
     iconShare,
   } from './icons';
@@ -15,18 +14,19 @@
     | 'share'
     | 'copyLink'
     | 'muteBlog'
-    | 'report'
     | 'block';
 
   interface Props {
     isMyProfile: boolean;
     /** Блог профиля уже скрыт из ленты. */
     blogMuted?: boolean;
+    /** Пользователь уже в чёрном списке. */
+    blocked?: boolean;
     onClose: () => void;
     onAction: (id: ProfileMoreAction) => void;
   }
 
-  let { isMyProfile, blogMuted = false, onClose, onAction }: Props = $props();
+  let { isMyProfile, blogMuted = false, blocked = false, onClose, onAction }: Props = $props();
 
   type Item = {
     id: ProfileMoreAction;
@@ -49,8 +49,7 @@
         label: blogMuted ? 'Отменить скрытие блога' : 'Скрыть блог из ленты',
         icon: blogMuted ? iconEye(22) : iconEyeOff(22),
       },
-      { id: 'report', label: 'Пожаловаться', icon: iconInfo(22), danger: true },
-      { id: 'block', label: 'Заблокировать', icon: iconBan(22), danger: true },
+      { id: 'block', label: blocked ? 'Разблокировать' : 'Заблокировать', icon: iconBan(22), danger: true },
     ];
   });
 </script>

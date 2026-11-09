@@ -149,6 +149,7 @@
 <div
   bind:this={root}
   class="m-ptr"
+  class:m-ptr--idle={offset <= 0}
   class:m-ptr--ready={stage !== 'pull'}
   class:m-ptr--refreshing={stage === 'refreshing'}
   aria-live="polite"
@@ -183,11 +184,17 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    height: calc(var(--ptr-offset) + env(safe-area-inset-top));
-    padding-top: env(safe-area-inset-top);
+    height: calc(var(--ptr-offset) + var(--safe-top));
+    padding-top: var(--safe-top);
     overflow: hidden;
     background: var(--m-bg);
     pointer-events: none;
+  }
+
+  /* В покое полоса не должна закрывать контент под строкой состояния */
+  .m-ptr--idle {
+    height: 0;
+    padding-top: 0;
   }
 
   .m-ptr__pill {

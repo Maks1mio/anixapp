@@ -1105,7 +1105,7 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left));
+    padding: max(10px, var(--safe-top)) max(12px, var(--safe-right)) 0 max(8px, var(--safe-left));
   }
   .mw__titles {
     flex: 1;
@@ -1164,7 +1164,7 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    padding: 0 max(16px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    padding: 0 max(16px, var(--safe-right)) max(8px, var(--safe-bottom)) max(16px, var(--safe-left));
   }
 
   .mw__skip {
@@ -1287,7 +1287,7 @@
     font-size: 15px;
     font-weight: 600;
     pointer-events: none;
-    &--top { top: max(16px, env(safe-area-inset-top)); }
+    &--top { top: max(16px, var(--safe-top)); }
     &--center { top: 50%; transform: translate(-50%, -50%); flex-direction: column; gap: 2px; padding: 12px 22px; b { font-size: 26px; } span { font-size: 14px; color: rgba(255, 255, 255, 0.75); } }
   }
   .mw__hud {
@@ -1352,7 +1352,7 @@
     position: absolute;
     z-index: 5;
     left: 50%;
-    bottom: max(24px, env(safe-area-inset-bottom));
+    bottom: max(24px, var(--safe-bottom));
     transform: translateX(-50%);
     display: inline-flex;
     align-items: center;
@@ -1376,7 +1376,7 @@
     width: min(380px, 62vw);
     display: flex;
     flex-direction: column;
-    padding-right: env(safe-area-inset-right);
+    padding-right: var(--safe-right);
     background: rgba(24, 24, 24, 0.97);
     animation: mw-slide 0.2s ease;
   }
@@ -1386,7 +1386,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: max(8px, env(safe-area-inset-top)) 8px 4px 20px;
+    padding: max(8px, var(--safe-top)) 8px 4px 20px;
     h2 { margin: 0; font-size: 18px; font-weight: 600; }
   }
   .mw__sheet-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 0 16px; touch-action: pan-y; }

@@ -33,11 +33,22 @@ html.mobile-mode {
     -webkit-font-smoothing: antialiased;
   }
 
+  // Значки строки состояния лежат поверх контента: лёгкая тень цвета фона не даёт им потеряться на постерах
+  &.mobile-native body::after {
+    content: '';
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 20000;
+    height: var(--safe-top);
+    background: linear-gradient(to bottom, color-mix(in srgb, var(--m-bg) 72%, transparent), transparent);
+    pointer-events: none;
+  }
+
   .m-screen {
     min-height: 100dvh;
     background: var(--m-bg);
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: calc(var(--m-nav-h) + env(safe-area-inset-bottom));
+    padding-top: var(--safe-top);
+    padding-bottom: calc(var(--m-nav-h) + var(--safe-bottom));
   }
 
   .m-btn-reset {
@@ -96,7 +107,7 @@ html.mobile-mode {
     display: flex;
     align-items: center;
     gap: 0;
-    padding: var(--m-space-3) var(--m-space-1) 9px var(--m-gutter);
+    padding: calc(var(--m-space-3) + var(--safe-top)) var(--m-space-1) 9px var(--m-gutter);
     min-height: 56px;
     > .m-icon-btn { width: 48px; height: 48px; color: color-mix(in srgb, var(--m-text) 85%, var(--m-bg)); }
   }

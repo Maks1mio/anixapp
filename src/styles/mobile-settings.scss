@@ -61,7 +61,7 @@ html.mobile-mode {
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding-bottom: calc(var(--m-space-5) + env(safe-area-inset-bottom));
+    padding-bottom: calc(var(--m-space-5) + var(--safe-bottom));
   }
 
   .m-pref-space { height: var(--m-space-4); }

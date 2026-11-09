@@ -162,10 +162,10 @@
   /* Под верхней панелью (12 + 48 + 9) и над таб-баром, поверх результатов */
   .m-search-history {
     position: fixed;
-    top: calc(env(safe-area-inset-top) + 69px);
+    top: calc(var(--safe-top) + 69px);
     left: var(--m-rail-left);
     right: var(--m-rail-right);
-    bottom: calc(var(--m-nav-h) + env(safe-area-inset-bottom));
+    bottom: calc(var(--m-nav-h) + var(--safe-bottom));
     z-index: 15;
     overflow-y: auto;
     overscroll-behavior: contain;

@@ -2067,7 +2067,7 @@
   /* ── Android: высота экрана за вычетом панели разделов или клавиатуры (--m-fit-bottom задаёт MobileLayout) ── */
   :global(html.mobile-mode) .agent-page {
     flex: none;
-    height: calc(100dvh - env(safe-area-inset-top) - var(--m-fit-bottom, calc(var(--m-nav-h) + env(safe-area-inset-bottom))));
+    height: calc(100dvh - var(--safe-top) - var(--m-fit-bottom, calc(var(--m-nav-h) + var(--safe-bottom))));
   }
 
   :global(html.mobile-mode) .agent-chat__head .agent-icon-btn,

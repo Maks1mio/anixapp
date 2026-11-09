@@ -4,6 +4,7 @@
  * TV-навигация (D-pad, spatial-фокус) и масштабирование под холст 1920×1080 в этом режиме НЕ подключаются.
  */
 import { isTvMode } from './tv';
+import { bindSystemBarsToTheme } from '../native/anix-system-bars';
 
 export function isMobileMode(): boolean {
   const v = import.meta.env.VITE_MOBILE_MODE;
@@ -17,6 +18,7 @@ export function applyMobileDefaults(): void {
   root.classList.add('mobile-mode');
   if ((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()) {
     root.classList.add('mobile-native');
+    bindSystemBarsToTheme();
   }
   // Долгое нажатие в WebView — это contextmenu: без него не появляются выделение текста
   // и системное меню ссылок/картинок. В полях ввода оставляем (вставить, выделить всё).

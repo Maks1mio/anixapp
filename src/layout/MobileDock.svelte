@@ -260,7 +260,7 @@
 
 <style lang="scss">
   $sheet-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  $safe-bottom: env(safe-area-inset-bottom);
+  $safe-bottom: var(--safe-bottom);
   $float-gap: 12px;
 
   .m-dock {

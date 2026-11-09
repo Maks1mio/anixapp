@@ -167,7 +167,7 @@ html.mobile-mode {
   // Просмотр: «Назад» — маленькая кнопка поверх видео, остальное место отдаём плееру
   .web-player-shell { position: relative; }
   .web-player-shell__bar {
-    position: absolute; top: calc(8px + env(safe-area-inset-top)); left: calc(8px + env(safe-area-inset-left)); z-index: 40;
+    position: absolute; top: calc(8px + var(--safe-top)); left: calc(8px + var(--safe-left)); z-index: 40;
     padding: 0 !important; border: 0 !important; background: rgba(0, 0, 0, 0.45) !important; border-radius: 999px;
   }
   .web-player-shell__back {
@@ -191,7 +191,7 @@ html.mobile-mode {
       height: 100% !important; max-height: none !important; margin: 0 !important; transform: none !important;
       border: 0 !important; border-radius: 0 !important; box-shadow: none !important; background: var(--m-bg) !important;
       display: flex !important; flex-direction: column;
-      padding-top: env(safe-area-inset-top);
+      padding-top: var(--safe-top);
       &::before, &::after { display: none !important; } // «ручка» шторки
     }
     &__head::before { display: none !important; }
@@ -308,7 +308,7 @@ html.mobile-mode {
   .release-page__head-top { padding: 0 !important; align-items: stretch !important; gap: 0 !important; }
   .release-page__actions { width: 100%; }
 
-  .release-page__head--narrow .release-page__head-hero, .release-page__head-hero { display: flex !important; justify-content: center; width: 100% !important; max-width: none !important; margin: 0 !important; padding-top: calc(34px + env(safe-area-inset-top)); }
+  .release-page__head--narrow .release-page__head-hero, .release-page__head-hero { display: flex !important; justify-content: center; width: 100% !important; max-width: none !important; margin: 0 !important; padding-top: calc(34px + var(--safe-top)); }
   .release-page__poster {
     width: min(54vw, 240px) !important; max-width: none !important; aspect-ratio: 2 / 3; height: auto !important;
     border-radius: 28px !important; overflow: hidden; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -387,7 +387,7 @@ html.mobile-mode {
   html.mobile-mode {
     .view-release { max-width: 56rem !important; }
     // Сверху остаётся полоса под кнопки «назад» и «добавить в коллекцию»
-    .release-page__head { padding-top: calc(88px + env(safe-area-inset-top)) !important; margin-bottom: var(--m-space-4) !important; }
+    .release-page__head { padding-top: calc(88px + var(--safe-top)) !important; margin-bottom: var(--m-space-4) !important; }
     .release-page__head-aside-play { position: sticky !important; }
     .release-page__head-aside-play .release-page__poster { width: 100% !important; border-radius: var(--m-radius-lg) !important; }
     .release-page__head-brief { padding-top: 0 !important; }
@@ -496,7 +496,7 @@ html.mobile-mode {
   .support-promo {
     left: calc(var(--m-rail-left) + var(--m-gutter)) !important;
     right: calc(var(--m-rail-right) + var(--m-gutter)) !important;
-    bottom: calc(var(--m-nav-h) + env(safe-area-inset-bottom) + var(--m-space-3)) !important;
+    bottom: calc(var(--m-nav-h) + var(--safe-bottom) + var(--m-space-3)) !important;
     width: auto !important;
     max-width: none !important;
     border-radius: 20px !important;
@@ -606,9 +606,19 @@ html.mobile-mode {
 //    «Редактировать» — контурная кнопка, соцсети — контурные плитки в цвете сервиса ──
 html.mobile-mode {
   .m-fullscreen--profile {
+    // Телефон: баннер уходит под строку состояния, панель поиска лежит поверх него и прячется при прокрутке.
+    // На планшете баннер — карточка по ширине страницы, панель остаётся над ним
     .profile-panel__banner {
-      height: 174px !important; border-radius: 0 !important;
+      height: calc(174px + var(--safe-top)) !important; border-radius: 0 !important;
       @media (min-width: 600px) { height: auto !important; margin-top: var(--m-space-3); border-radius: 24px 24px 0 0 !important; }
+    }
+    @media (max-width: 599px) {
+      > .m-topbar {
+        position: absolute;
+        inset: 0 0 auto;
+        z-index: 2;
+        .m-icon-btn { margin-left: var(--m-space-1); background: color-mix(in srgb, var(--m-bg) 55%, transparent); }
+      }
     }
     .profile-panel__head {
       position: relative; z-index: 1;
@@ -749,7 +759,7 @@ html.mobile-mode {
 html.mobile-mode {
   .notifications-page {
     // 69 — внутренняя верхняя панель (12 + 48 + 9)
-    height: calc(100dvh - 69px - var(--m-nav-h) - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    height: calc(100dvh - 69px - var(--m-nav-h) - var(--safe-top) - var(--safe-bottom));
     .notifications-modal__header { margin: -57px 0 9px 48px; min-height: 48px; padding: 0 var(--m-space-2); border-bottom: 0; }
     .notifications-modal__heading { font: 600 20px/1.2 var(--m-font); }
   }
@@ -834,9 +844,9 @@ html.mobile-mode {
 // ── Верхняя панель и вкладки закреплены: при прокрутке вниз уходят, при прокрутке вверх возвращаются ──
 html.mobile-mode {
   .m-app__scroll {
-    --m-bars-h: 69px;                 // верхняя панель: 12 + 48 + 9
+    --m-bars-h: calc(69px + var(--safe-top)); // верхняя панель: строка состояния + 12 + 48 + 9
     --m-sticky-top: var(--m-bars-h);  // куда прилипают вкладки внутри страниц
-    &--no-bar, &--bars-hidden { --m-sticky-top: 0px; }
+    &--no-bar, &--bars-hidden { --m-sticky-top: var(--safe-top); }
 
     > .m-topbar {
       position: sticky;
@@ -894,7 +904,7 @@ html.mobile-mode {
   .discover-hero__actions { flex: none; margin-left: 0; }
 
   // Под верхней панелью, если она есть на странице
-  .discover-hero-dock { top: 0; margin: 0 calc(-1 * var(--m-gutter)); transition: transform 0.2s ease; }
+  .discover-hero-dock { top: var(--safe-top); margin: 0 calc(-1 * var(--m-gutter)); transition: transform 0.2s ease; }
   // Отступ постоянный, а уезжает она тем же сдвигом, что и панель: иначе они расходятся и между ними видна щель
   .m-app__scroll:not(.m-app__scroll--no-bar) .discover-hero-dock { top: var(--m-bars-h); }
   .m-app__scroll--bars-hidden:not(.m-app__scroll--no-bar) .discover-hero-dock { transform: translateY(calc(-1 * var(--m-bars-h))); }

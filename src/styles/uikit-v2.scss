@@ -5013,7 +5013,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: var(--safe-bottom);
   border-radius: 28px 28px 0 0;
   background: var(--sheet-bg);
   box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.32);
@@ -5023,7 +5023,7 @@
   @media (min-width: 600px) {
     width: min(480px, calc(100% - 32px));
     margin: 0 auto;
-    bottom: calc(16px + env(safe-area-inset-bottom));
+    bottom: calc(16px + var(--safe-bottom));
     padding-bottom: 0;
     border-radius: 28px;
   }

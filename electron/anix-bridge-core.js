@@ -323,6 +323,14 @@ function createAnixBridgeCore(options = {}) {
       if (res?.code !== DefaultResult.Ok) qrLoginSession = null;
       return { success: false, code: res?.code, status: res?.status ?? null, pin: res?.pin ?? null, device: res?.device ?? null };
     },
+    'anix:qrOpen': h((c, key) => c.getClient().endpoints.auth.qrOpen(key)),
+    'anix:qrConfirm': h((c, data) => c.getClient().endpoints.auth.qrConfirm(data)),
+    'anix:qrDecline': h((c, key) => c.getClient().endpoints.auth.qrDecline(key)),
+    'anix:firebaseTopic': async (c) => {
+      const res = await c.getClient().endpoints.auth.firebase();
+      const raw = res;
+      return { topicName: raw?.topicName || raw?.topic_name || null };
+    },
     'anix:qrLoginCancel': async () => {
       qrLoginSession = null;
       return { success: true };

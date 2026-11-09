@@ -126,7 +126,7 @@
 
   :global(html.mobile-mode) .support-promo:not(.support-promo--anchored) {
     right: 1rem;
-    bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+    bottom: calc(4.5rem + var(--safe-bottom));
   }
 
   /* Стрелка к алмазу в боковой панели */

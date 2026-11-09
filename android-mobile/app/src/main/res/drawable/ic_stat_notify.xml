@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Раскрытая книга, как на значке приложения -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M4,5.5C4,4.67 4.67,4 5.5,4H9c1.2,0 2.27,0.53 3,1.37C12.73,4.53 13.8,4 15,4h3.5C19.33,4 20,4.67 20,5.5v12c0,0.83 -0.67,1.5 -1.5,1.5H15c-1.1,0 -2,0.45 -2.5,1h-1C11,19.45 10.1,19 9,19H5.5C4.67,19 4,18.33 4,17.5V5.5zM7,8v7h1.8V8H7zM11.1,8v7h1.8V8h-1.8zM15.2,8v7H17V8h-1.8z" />
+</vector>

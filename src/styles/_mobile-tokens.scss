@@ -16,6 +16,14 @@
   font-display: swap;
 }
 
+// Системные панели. Мобильная сборка задаёт эти значения из MainActivity: env() на WebView младше 140 всегда 0
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
 html.mobile-mode {
   // ── Палитра ──────────────────────────────────────────────────────────────────────────────
   // Базовые цвета приходят из выбранной темы (--mt-*, themes.ts → applyMobileTheme); по умолчанию — тёмная тема

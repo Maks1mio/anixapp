@@ -1,5 +1,6 @@
 import { get, writable } from 'svelte/store';
 import { hasNativeNotify, nativeNotify } from '../native/anix-notify';
+import { isNativePushActive } from '../native/anix-push';
 import { isAuthenticated } from './auth';
 import { fetchAllNotifications, refreshNotificationUnreadCount } from './notifications';
 import {
@@ -685,6 +686,7 @@ function notificationTitle(kind: string): string {
 
 /** FCM topic активен — девайс-тосты идут пушем; poll только для baseline/колокольчика. */
 async function isFcmPushActive(): Promise<boolean> {
+  if (isNativePushActive()) return true;
   try {
     const st = await bridge()?.fcmStatus?.();
     return !!(st?.connected && st?.topicSubscribed);

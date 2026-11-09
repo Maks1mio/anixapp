@@ -6,7 +6,6 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
-import android.net.Uri
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
@@ -25,11 +24,19 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.ComponentActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.webkit.UserAgentMetadata
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 
 /**
  * Окно входа через сервис (аналог Custom Tab в Anixart и BrowserWindow на desktop):
  * открывает страницу авторизации и возвращает первый адрес, начинающийся с одного из redirect-префиксов.
- * Сам обмен кода на токен делает веб-слой.
+ * Ссылки в приложения (tg://, intent://) открывает как есть; ответ приходит либо здесь же (страница Telegram
+ * сама опрашивает сервер), либо через OAuthRedirectActivity. Сам обмен кода на токен делает веб-слой.
+ *
+ * Именно WebView, а не Custom Tab: redirect Google и Telegram — обычные https-адреса, а перехватить их из
+ * Custom Tab может только приложение с подтверждённым доменом и подписью Anixart.
+ * WebView на паузу не ставим: пока пользователь в Telegram, страница должна продолжать опрос.
  */
 class OAuthActivity : ComponentActivity() {
     private lateinit var web: WebView
@@ -96,23 +103,29 @@ class OAuthActivity : ComponentActivity() {
         web.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
-            javaScriptCanOpenWindowsAutomatically = false
+            javaScriptCanOpenWindowsAutomatically = true
             setSupportMultipleWindows(false)
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             // Google не пускает встроенные WebView («disallowed_useragent») — представляемся обычным Chrome
             userAgentString = browserUserAgent(userAgentString)
         }
+        hideWebViewMarks(web.settings)
         CookieManager.getInstance().apply {
             setAcceptCookie(true)
             setAcceptThirdPartyCookies(web, true)
         }
         web.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-                intercept(request.url.toString())
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                val target = request.url.toString()
+                if (captureRedirect(target)) return true
+                if (isWebScheme(target)) return false
+                openAppLink(target) { web.loadUrl(it) }
+                return true
+            }
 
             override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
                 progress.visibility = View.VISIBLE
-                intercept(url)
+                captureRedirect(url)
             }
 
             override fun onPageFinished(view: WebView, url: String) {
@@ -120,7 +133,7 @@ class OAuthActivity : ComponentActivity() {
             }
 
             override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
-                intercept(url)
+                captureRedirect(url)
             }
         }
 
@@ -130,18 +143,44 @@ class OAuthActivity : ComponentActivity() {
             }
         })
 
+        isWaiting = true
         web.loadUrl(url)
     }
 
-    /** true — навигацию не продолжаем (поймали redirect или это чужая схема вроде tg:// / intent://). */
-    private fun intercept(url: String): Boolean {
+    /** Приложение сервиса вернуло результат через OAuthRedirectActivity. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.dataString?.let { captureRedirect(it) }
+    }
+
+    /** true — это наш redirect, окно закрывается с результатом. */
+    private fun captureRedirect(url: String): Boolean {
         if (finished) return true
-        if (prefixes.any { url.startsWith(it, ignoreCase = true) }) {
-            finishWith(url)
-            return true
+        if (prefixes.none { url.startsWith(it, ignoreCase = true) }) return false
+        finishWith(url)
+        return true
+    }
+
+    /** Заголовок X-Requested-With и бренд «Android WebView» в Client Hints выдают WebView даже при подмене UA. */
+    private fun hideWebViewMarks(settings: WebSettings) {
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
+            WebSettingsCompat.setRequestedWithHeaderOriginAllowList(settings, emptySet())
         }
-        val scheme = Uri.parse(url).scheme?.lowercase()
-        return scheme != "http" && scheme != "https" && scheme != "about" && scheme != "data" && scheme != "javascript"
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA)) {
+            val full = Regex("Chrome/([\\d.]+)").find(settings.userAgentString)?.groupValues?.get(1) ?: return
+            val major = full.substringBefore('.')
+            val brand = { name: String, major: String, version: String ->
+                UserAgentMetadata.BrandVersion.Builder().setBrand(name).setMajorVersion(major).setFullVersion(version).build()
+            }
+            WebSettingsCompat.setUserAgentMetadata(
+                settings,
+                UserAgentMetadata.Builder(WebSettingsCompat.getUserAgentMetadata(settings))
+                    .setBrandVersionList(
+                        listOf(brand("Not(A:Brand", "99", "99.0.0.0"), brand("Google Chrome", major, full), brand("Chromium", major, full)),
+                    )
+                    .build(),
+            )
+        }
     }
 
     private fun finishWith(url: String?) {
@@ -154,6 +193,7 @@ class OAuthActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        if (!isChangingConfigurations) isWaiting = false
         if (::web.isInitialized) web.destroy()
         super.onDestroy()
     }
@@ -165,6 +205,11 @@ class OAuthActivity : ComponentActivity() {
         const val EXTRA_TITLE = "oauth_title"
         const val EXTRA_PREFIXES = "oauth_prefixes"
         const val EXTRA_RESULT_URL = "oauth_result_url"
+
+        /** Окно входа открыто и ждёт ответа от приложения сервиса. */
+        @JvmStatic
+        var isWaiting = false
+            private set
 
         private val BG = Color.parseColor("#141218")
         private val FG = Color.parseColor("#E6E0E9")

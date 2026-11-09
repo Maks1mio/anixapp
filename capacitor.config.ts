@@ -35,6 +35,8 @@ const config: CapacitorConfig = {
     CapacitorHttp: {
       enabled: true,
     },
+    // Мобильная сборка рисует под системными панелями сама (MainActivity), Capacitor отступы не трогает
+    ...(isMobile ? { SystemBars: { insetsHandling: 'disable' } } : {}),
   },
 };
 

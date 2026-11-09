@@ -8,6 +8,8 @@
   import { get } from 'svelte/store';
   import { settingsModalInitialTab } from '../stores/modals';
   import { navigate } from '../stores/navigation';
+  import { isAuthenticated } from '../stores/auth';
+  import { hasQrScanner } from '../native/anix-qr';
   import { pushBackHandler } from '../platform/mobile-back';
   import { getMobilePlayerPrefs, setMobilePlayerPrefs, type MobilePlayerKind } from '../utils/mobile-player';
   import {
@@ -32,11 +34,13 @@
     iconLink,
     iconMessageCircle,
     iconMoon,
+    iconQrCode,
   } from '../components/icons';
   import NotificationPreferencesPanel from '../components/NotificationPreferencesPanel.svelte';
   import PlaybackPage from '../views/Settings/pages/PlaybackPage.svelte';
   import ConnectionPage from '../views/Settings/pages/ConnectionPage.svelte';
   import MobileSupport from './MobileSupport.svelte';
+  import MobileQrSignIn from './MobileQrSignIn.svelte';
   import AboutPage from '../views/Settings/pages/AboutPage.svelte';
 
   interface Props {
@@ -44,7 +48,7 @@
   }
   let { onClose }: Props = $props();
 
-  type Screen = 'menu' | 'notifications' | 'playback' | 'appearance' | 'connection' | 'support' | 'about';
+  type Screen = 'menu' | 'notifications' | 'playback' | 'appearance' | 'connection' | 'qr' | 'support' | 'about';
 
   const TITLES: Record<Screen, string> = {
     menu: 'Настройки',
@@ -52,6 +56,7 @@
     playback: 'Воспроизведение',
     appearance: 'Внешний вид',
     connection: 'Соединение',
+    qr: 'Вход по QR',
     support: 'Anix+',
     about: 'О приложении',
   };
@@ -64,6 +69,8 @@
       { screen: 'appearance', title: 'Внешний вид', icon: iconPalette },
       { screen: 'connection', title: 'Соединение', icon: iconGlobe },
       { title: 'Загрузки', icon: iconDownload, action: () => { onClose(); navigate('/downloads'); } },
+      // Разрешить вход можно только из своего аккаунта и только там, где есть камера
+      ...(hasQrScanner() && get(isAuthenticated) ? [{ screen: 'qr' as const, title: 'Вход по QR', icon: iconQrCode }] : []),
     ],
     [
       { screen: 'support', title: 'Поддержать AnixApp', icon: iconGift },
@@ -274,6 +281,8 @@
       <div class="m-settings__desktop"><NotificationPreferencesPanel embedded /></div>
     {:else if screen === 'connection'}
       <div class="m-settings__desktop"><ConnectionPage /></div>
+    {:else if screen === 'qr'}
+      <MobileQrSignIn />
     {:else if screen === 'support'}
       <MobileSupport />
     {:else}

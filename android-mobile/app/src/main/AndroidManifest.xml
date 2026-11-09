@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.CAMERA" />
 
     <!-- Видимость пакетов (Android 11+): наш AnixApp Player и любые видеоплееры для «Сторонний плеер» -->
     <queries>
@@ -21,8 +22,11 @@
 
     <!-- Мобильная сборка: тачскрин не обязателен по ТЗ, leanback отсутствует -->
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <!-- Камера нужна только сканеру входа по QR -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
+        android:name=".AnixApplication"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -60,11 +64,57 @@
         <!-- Вход через сервисы: страница авторизации с перехватом redirect -->
         <activity
             android:name=".ui.OAuthActivity"
+            android:launchMode="singleTop"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
+
+        <!-- Сканер входа по QR -->
+        <activity
+            android:name=".ui.QrScanActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:exported="false" />
+
+        <!-- Браузер приложения для внешних ссылок -->
+        <activity
+            android:name=".ui.BrowserActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:exported="false" />
+
+        <!-- Возврат из приложений VK и Яндекс: те же адреса, что у Anixart -->
+        <activity
+            android:name=".ui.OAuthRedirectActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="vk54701760" android:host="vk.ru" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="yxa980f00536554180b4826f7daa76f060" />
+            </intent-filter>
+        </activity>
+
+        <!-- Пуши Anixart: приходят и при закрытом приложении -->
+        <service
+            android:name=".push.AnixPushService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
 
         <service
             android:name=".playback.PlaybackService"

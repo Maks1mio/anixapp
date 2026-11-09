@@ -20,10 +20,11 @@
   import { isScrollRestorePending } from '../stores/view-state';
   import { notificationsModalOpen, settingsModalOpen, watchModalOpen, openSettingsModal, closeSettingsModal } from '../stores/modals';
   import { notificationUnreadCount, refreshNotificationUnreadCount } from '../stores/notifications';
-  import { loadDeviceNotificationSettings, resetDeviceNotificationBaseline, startDeviceNotificationPolling } from '../stores/device-notifications';
+  import { deviceNotificationSettings, loadDeviceNotificationSettings, resetDeviceNotificationBaseline, startDeviceNotificationPolling } from '../stores/device-notifications';
   import { supportModalOpen } from '../stores/support-promo';
   import { supportInbox, supportInboxLabel, watchSupportInbox } from '../stores/support-inbox';
   import { bindNotificationTaps, requestNativeNotifyPermission } from '../native/anix-notify';
+  import { syncNativePush } from '../native/anix-push';
   import { isAuthenticated, requireAuth } from '../stores/auth';
   import { ensureProfileId, loadSelfProfileGlobal } from '../utils/profile';
   import { iconDownload, iconPlus, iconShuffle, iconCircleUser, iconSearch, iconSettings, iconBell } from '../components/icons';
@@ -317,6 +318,18 @@
         void requestNativeNotifyPermission();
       }
     });
+    // Пуши: вход, выход и настройки уведомлений (при смене аккаунта страница перезагружается и попадает сюда же).
+    // Пока статус входа не определён, подписку не трогаем: на старте он сначала false
+    let wasSignedIn = false;
+    const syncPush = () => {
+      const signedIn = get(isAuthenticated);
+      if (!signedIn && !wasSignedIn) return;
+      wasSignedIn = signedIn;
+      const s = get(deviceNotificationSettings);
+      void syncNativePush({ signedIn, enabled: s.desktopEnabled && !s.muted, showPreview: s.showPreview });
+    };
+    const unsubPushAuth = isAuthenticated.subscribe(syncPush);
+    const unsubPushSettings = deviceNotificationSettings.subscribe(syncPush);
     const poll = window.setInterval(() => void refreshNotificationUnreadCount(), 60_000);
     const onVisible = () => { if (document.visibilityState === 'visible') void refreshNotificationUnreadCount(); };
     document.addEventListener('visibilitychange', onVisible);
@@ -328,6 +341,8 @@
     });
     return () => {
       unsubAuth();
+      unsubPushAuth();
+      unsubPushSettings();
       window.clearInterval(poll);
       document.removeEventListener('visibilitychange', onVisible);
       stopDevice();
@@ -450,6 +465,7 @@
     class="m-app__scroll page__scroll"
     class:m-app__scroll--bars-hidden={barsHidden}
     class:m-app__scroll--no-bar={floatBack || ownHeader}
+    class:m-app__scroll--own-header={ownHeader}
     class:m-app__scroll--fit={fitPage}
     style:--m-fit-bottom={typing ? `${keyboardInset}px` : undefined}
     data-page-scroll
@@ -532,7 +548,7 @@
 
   {#if profileOpen && profileUserId != null}
     <div class="m-fullscreen m-fullscreen--profile" onscrollcapture={onContentScroll}>
-      <header class="m-topbar">
+      <header class="m-topbar" class:m-topbar--float-hidden={barsHidden}>
         {@render searchEntry()}
         <button type="button" class="m-icon-btn" onclick={() => settingsModalOpen.set(true)} aria-label="Настройки">
           {@html iconSettings(24)}
@@ -563,7 +579,6 @@
     overflow: hidden;
     background: var(--m-bg);
     color: var(--m-text);
-    padding-top: env(safe-area-inset-top);
   }
 
   /* Отступ под панель разделов внутри прокрутки: фон страницы заходит под неё и виден в скруглённых углах */
@@ -575,9 +590,14 @@
     overscroll-behavior: contain;
   }
 
+  /* Шапка страницы — часть её контента: только она должна начинаться ниже строки состояния */
+  .m-app__scroll--own-header {
+    padding-top: var(--safe-top);
+  }
+
   .m-app__content {
     min-width: 0;
-    padding-bottom: calc(var(--m-nav-h) + env(safe-area-inset-bottom));
+    padding-bottom: calc(var(--m-nav-h) + var(--safe-bottom));
   }
 
   /* Запас под панель разделов уже учтён в высоте чата */
@@ -594,7 +614,7 @@
   .m-topbar--float {
     position: absolute;
     z-index: 15;
-    top: calc(env(safe-area-inset-top) + 34px); /* вровень с верхом обложки */
+    top: calc(var(--safe-top) + 34px); /* вровень с верхом обложки */
     /* По краям страницы (56rem, как у остальных), на узком экране — обычные поля */
     --m-float-inset: max(var(--m-space-4), calc((100% - var(--m-rail-w) - 56rem) / 2 + var(--m-gutter)));
     left: calc(var(--m-rail-left) + var(--m-float-inset));
@@ -609,13 +629,13 @@
   }
 
   @media (min-width: 600px) {
-    .m-topbar--float { top: calc(env(safe-area-inset-top) + 20px); }
+    .m-topbar--float { top: calc(var(--safe-top) + 20px); }
   }
 
   .m-float-actions { display: flex; flex-direction: column; gap: var(--m-space-2); }
 
   /* За верхний край целиком: кнопки стоят ниже него на высоту отступа */
-  .m-topbar--float-hidden { transform: translateY(calc(-100% - env(safe-area-inset-top) - 48px)); }
+  .m-topbar--float-hidden { transform: translateY(calc(-100% - var(--safe-top) - 48px)); }
 
   .m-app { position: relative; }
 
@@ -632,8 +652,8 @@
     z-index: 50;
     background: var(--m-bg);
     overflow-y: auto;
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: calc(var(--m-nav-h) + env(safe-area-inset-bottom));
+    padding-top: var(--safe-top);
+    padding-bottom: calc(var(--m-nav-h) + var(--safe-bottom));
   }
 
   /* Отдельный экран поверх таб-бара: свой скролл внутри, без нижнего отступа под навбар */
@@ -652,13 +672,14 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    padding-top: 0;
     padding-bottom: 0;
 
-    > :global(.m-topbar) { flex: none; }
+    > :global(.m-topbar) { flex: none; transition: transform 0.2s ease; }
     > :global(.profile-panel) { flex: 1 1 0; min-height: 0; }
     :global(.page__scroll) {
       overscroll-behavior: contain;
-      padding-bottom: calc(var(--m-nav-h) + env(safe-area-inset-bottom) + var(--m-space-3));
+      padding-bottom: calc(var(--m-nav-h) + var(--safe-bottom) + var(--m-space-3));
     }
 
     /* вкладку закрывает таб-бар и системное «назад» — desktop-крестик не нужен */

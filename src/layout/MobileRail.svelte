@@ -218,7 +218,7 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      padding: 0 0 calc(env(safe-area-inset-bottom) + var(--m-space-3));
+      padding: 0 0 calc(var(--safe-bottom) + var(--m-space-3));
       border-radius: 0 20px 20px 0;
       background: var(--m-surface-sheet);
       transform: translate(calc(var(--rail-base) + var(--rail-dx)), var(--rail-dy));
@@ -279,7 +279,7 @@
       flex: 1;
       min-height: 0;
       /* Отступ внутри списка: при прокрутке разделы доходят до самого верха, а не обрываются раньше */
-      padding-top: calc(env(safe-area-inset-top) + var(--m-space-3));
+      padding-top: calc(var(--safe-top) + var(--m-space-3));
       overflow-y: auto;
       scrollbar-width: none;
       /* Запрет с панели не действует внутри прокручиваемого блока: браузер забирал палец и отменял жест */
@@ -292,7 +292,7 @@
         transparent 100%
       );
     }
-    :global(.m-rail__list[data-more-above]) { --edge-top: calc(env(safe-area-inset-top) + 24px); }
+    :global(.m-rail__list[data-more-above]) { --edge-top: calc(var(--safe-top) + 24px); }
     :global(.m-rail__list[data-more-below]) { --edge-bottom: 24px; }
 
     .m-rail__footer { flex: none; padding-top: var(--m-space-2); }

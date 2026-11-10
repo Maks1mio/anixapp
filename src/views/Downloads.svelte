@@ -21,6 +21,7 @@
   import { navigate } from '../stores/navigation';
   import { mapCardData } from './Release/_utils';
   import { toPosterDisplayUrl } from '../utils/posterUrl';
+  import PosterImage from '../components/PosterImage.svelte';
   import { getCurrentRoomId } from '../services/lobby-state';
   import {
     buildViewStateKey,
@@ -44,6 +45,7 @@
     iconX,
     iconTrash2,
     iconFilm,
+    iconImage,
     iconGripVertical,
     iconSearch,
     iconMic,
@@ -148,6 +150,11 @@
   let pendingPrimary = $state<{ path: string; titles: number; files: number; bytes: number } | null>(null);
   let stopMoveProgress: (() => void) | null = null;
   let seasonBusy = $state<string | null>(null);
+  let posterBusy = $state<string | null>(null);
+  let posterChoice = $state<{
+    group: DownloadLibraryGroup;
+    options: { value: number; label: string; description?: string }[];
+  } | null>(null);
   let playBlockedMsg = $state('');
   let playBlockedTimer: ReturnType<typeof setTimeout> | null = null;
   let unregisterScrollKey: (() => void) | null = null;
@@ -231,6 +238,7 @@
     $downloads.filter((x) => x.status === 'error' || x.status === 'cancelled').length,
   );
   const libraryGroups = $derived($downloadLibrary);
+  const showLibraryPosters = $derived($downloadSettings.organizeByTitle && $downloadSettings.downloadPosters);
   const libraryFileCount = $derived(libraryGroups.reduce((n, g) => n + g.files.length, 0));
 
   const librarySourceOptions = $derived.by((): UiV2SelectOption[] => {
@@ -716,9 +724,51 @@
     if (!confirm(`Удалить весь тайтл «${group.name}» и все серии (${group.files.length})?`)) return;
     deleteBusy = group.id;
     try {
-      await downloads.deleteLibraryGroup(group.name);
+      const result = await downloads.deleteLibraryGroup(group.id);
+      if (!result?.ok) {
+        showToast('Не удалось удалить тайтл. Проверьте доступ к папке и закройте открытые видео.', 'err');
+      }
+    } catch {
+      showToast('Не удалось удалить тайтл', 'err');
     } finally {
       deleteBusy = null;
+    }
+  }
+
+  async function saveLibraryPoster(group: DownloadLibraryGroup, releaseId?: number) {
+    if (!group.hasOwnFolder || posterBusy || deleteBusy === group.id) return;
+    posterBusy = group.id;
+    try {
+      const id = group.releaseId || releaseId;
+      if (!id) {
+        const response = await window.anixApi?.search?.releases(group.releaseTitle || group.name, 0, 0);
+        const data = response as { content?: Record<string, unknown>[]; releases?: Record<string, unknown>[] } | undefined;
+        const options = (data?.content ?? data?.releases ?? [])
+          .map((raw) => {
+            const card = mapCardData(raw);
+            return { value: Number(card.id), label: card.titleRu || card.titleEn || group.name, description: card.year };
+          })
+          .filter((item) => Number.isSafeInteger(item.value) && item.value > 0);
+        if (!options.length) {
+          showToast('Не удалось найти тайтл для постера. Попробуйте ещё раз позднее.', 'err');
+          return;
+        }
+        posterChoice = { group, options };
+        return;
+      }
+      const result = await window.electron?.saveDownloadPoster?.({ groupId: group.id, releaseId: id });
+      if (!result?.ok) {
+        showToast(result?.error === 'no-folder'
+          ? 'У тайтла нет отдельной папки для постера'
+          : 'Не удалось скачать постер. Попробуйте ещё раз позднее.', 'err');
+        return;
+      }
+      await downloads.loadLibrary();
+      showToast('Постер сохранён');
+    } catch {
+      showToast('Не удалось скачать постер', 'err');
+    } finally {
+      posterBusy = null;
     }
   }
 
@@ -1245,7 +1295,7 @@
             <p class="dl-v2-empty__sub">Измените фильтры источника или озвучки</p>
           </div>
         {:else}
-          <div class="dl-v2-list" role="list">
+          <div class="dl-v2-list" class:dl-v2-list--posters={showLibraryPosters} role="list">
             {#each filteredLibraryGroups as group (group.id)}
               {@const dubbers = nestLibraryGroup(group, group.fileHits)}
               {@const flat = isFlatLibraryNest(dubbers)}
@@ -1257,6 +1307,17 @@
                 role="listitem"
                 animate:libraryFlip
               >
+                {#if showLibraryPosters}
+                  <button
+                    type="button"
+                    class="dl-v2-group__poster"
+                    aria-label={`Серии: ${group.releaseTitle || group.name}`}
+                    aria-expanded={isLibraryGroupExpanded(group.id)}
+                    onclick={() => toggleGroup(group.id)}
+                  >
+                    <PosterImage src={group.posterUrl} />
+                  </button>
+                {/if}
                 <div class="dl-v2-group__head">
                   <button
                     type="button"
@@ -1282,6 +1343,17 @@
                     </span>
                   </button>
                   <div class="dl-v2-group__actions">
+                    {#if showLibraryPosters && !group.posterUrl && group.hasOwnFolder}
+                      <UiV2RoundButton
+                        label={posterBusy === group.id ? 'Скачивание постера…' : 'Скачать постер'}
+                        title={posterBusy === group.id ? 'Скачивание постера…' : 'Скачать постер'}
+                        size="sm"
+                        disabled={posterBusy !== null || deleteBusy === group.id}
+                        onclick={() => void saveLibraryPoster(group)}
+                      >
+                        {@html iconImage(14)}
+                      </UiV2RoundButton>
+                    {/if}
                     {#if group.releaseId}
                       <UiV2RoundButton
                         label="Страница тайтла"
@@ -1316,7 +1388,7 @@
                       label="Удалить тайтл"
                       size="sm"
                       title="Удалить тайтл"
-                      disabled={deleteBusy === group.id}
+                      disabled={deleteBusy === group.id || posterBusy === group.id}
                       onclick={() => void confirmDeleteGroup(group)}
                     >
                       {@html iconTrash2(14)}
@@ -1865,6 +1937,26 @@
 
         <div class="dl-v2-pref">
           <div class="dl-v2-pref__info">
+            <div class="dl-v2-pref__label">Скачивать с постером</div>
+            <div class="dl-v2-pref__desc">Сохранять постер тайтла и показывать карточку в библиотеке</div>
+          </div>
+          <label class="dl-v2-switch" aria-label="Скачивать с постером">
+            <input
+              type="checkbox"
+              disabled={!$downloadSettings.organizeByTitle}
+              checked={showLibraryPosters}
+              onchange={(e) => void downloads.saveSettings({
+                downloadPosters: (e.currentTarget as HTMLInputElement).checked,
+              })}
+            />
+            <span class="dl-v2-switch__track" aria-hidden="true">
+              <span class="dl-v2-switch__thumb"></span>
+            </span>
+          </label>
+        </div>
+
+        <div class="dl-v2-pref">
+          <div class="dl-v2-pref__info">
             <div class="dl-v2-pref__label">Скачивать всё сразу</div>
             <div class="dl-v2-pref__desc">
               Выкл — по очереди (1 файл, быстрее). Вкл — все файлы параллельно
@@ -2020,6 +2112,19 @@
         </div>
       </UiV2Card>
     </div>
+  {/if}
+  {#if posterChoice}
+    {@const choice = posterChoice}
+    <UiV2ChoiceSheet
+      title={`Выберите тайтл для постера «${choice.group.name}»`}
+      value=""
+      options={choice.options}
+      onSelect={(value) => {
+        posterChoice = null;
+        void saveLibraryPoster(choice.group, Number(value));
+      }}
+      onClose={() => (posterChoice = null)}
+    />
   {/if}
   {#if pendingPrimary}
     {@const pp = pendingPrimary}

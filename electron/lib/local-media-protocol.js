@@ -41,7 +41,7 @@ function setupLocalMediaProtocol(getDownloadRoot, logger) {
       const encoded = reqUrl.searchParams.get('p');
       if (!encoded) return new Response('Bad Request', { status: 400 });
 
-      let filePath = decodeURIComponent(encoded);
+      let filePath = encoded;
       if (process.platform === 'win32') {
         filePath = filePath.replace(/\//g, '\\');
       }
@@ -60,7 +60,13 @@ function setupLocalMediaProtocol(getDownloadRoot, logger) {
       const stat = fs.statSync(resolved);
       if (!stat.isFile()) return new Response('Forbidden', { status: 403 });
 
-      const mime = guessVideoMime(resolved);
+      const isPoster = path.basename(resolved) === '.anixapp-poster.jpg';
+      if (isPoster && !roots.some((root) => {
+        try { return isPathInside(fs.realpathSync(root), fs.realpathSync(resolved)); } catch { return false; }
+      })) {
+        return new Response('Forbidden', { status: 403 });
+      }
+      const mime = isPoster ? 'image/jpeg' : guessVideoMime(resolved);
       const size = stat.size;
       const rangeHeader = request.headers.get('Range');
 

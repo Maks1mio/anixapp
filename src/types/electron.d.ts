@@ -200,6 +200,7 @@ declare global {
         directory: string;
         defaultDirectory: string;
         organizeByTitle: boolean;
+        downloadPosters: boolean;
         allAtOnce: boolean;
         autoClearFinished: boolean;
         speedLimitMBps?: number;
@@ -209,11 +210,13 @@ declare global {
         allAtOnce?: boolean;
         autoClearFinished?: boolean;
         speedLimitMBps?: number;
+        downloadPosters?: boolean;
       }) => Promise<{
         ok: boolean;
         directory?: string;
         defaultDirectory?: string;
         organizeByTitle?: boolean;
+        downloadPosters?: boolean;
         allAtOnce?: boolean;
         autoClearFinished?: boolean;
         speedLimitMBps?: number;
@@ -258,6 +261,8 @@ declare global {
         sourceId?: number | null;
         dubberId?: number | null;
         releaseTitle?: string;
+        posterUrl?: string;
+        hasOwnFolder?: boolean;
         dubberName?: string;
         sourceName?: string;
         files: Array<{
@@ -296,6 +301,7 @@ declare global {
       }) => Promise<{ ok: boolean }>;
       deleteDownloadFile?: (filePath: string) => Promise<{ ok: boolean; error?: string }>;
       deleteDownloadGroup?: (groupName: string) => Promise<{ ok: boolean; error?: string }>;
+      saveDownloadPoster?: (payload: { groupId: string; releaseId?: number }) => Promise<{ ok: boolean; error?: string }>;
       pauseDownload?: (id: string) => Promise<{ ok: boolean }>;
       pauseAllDownloads?: () => Promise<{ ok: boolean; paused?: number }>;
       resumeDownload?: (id: string) => Promise<{ ok: boolean; error?: string }>;

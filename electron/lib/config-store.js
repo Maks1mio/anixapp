@@ -314,6 +314,11 @@ function getDownloadOrganizeByTitle() {
   return raw.downloadOrganizeByTitle !== false;
 }
 
+function getDownloadPosters() {
+  const raw = _configCache ?? _readConfigFromDisk();
+  return raw.downloadPosters === true;
+}
+
 function getDownloadAutoClearFinished() {
   const raw = _configCache ?? _readConfigFromDisk();
   return raw.downloadAutoClearFinished !== false;
@@ -323,6 +328,7 @@ function buildDownloadSettingsPayload(data) {
   const src = data && typeof data === 'object' ? data : (_configCache ?? _readConfigFromDisk());
   return {
     organizeByTitle: src.downloadOrganizeByTitle !== false,
+    downloadPosters: src.downloadPosters === true,
     allAtOnce: src.downloadAllAtOnce === true,
     autoClearFinished: src.downloadAutoClearFinished !== false,
     speedLimitMBps: getDownloadSpeedLimitMBps(src),
@@ -497,6 +503,7 @@ module.exports = {
   getDownloadSpeedLimitMBps,
   getDownloadParallelFiles,
   getDownloadOrganizeByTitle,
+  getDownloadPosters,
   getDownloadAutoClearFinished,
   buildDownloadSettingsPayload,
   normalizeNotificationSettings,

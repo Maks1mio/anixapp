@@ -219,6 +219,60 @@
   }
 }
 
+.dl-v2-list--posters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+  align-items: start;
+  gap: 0.75rem;
+}
+
+.dl-v2-list--posters .dl-v2-group {
+  display: grid;
+  grid-template-columns: clamp(4.25rem, 24%, 8rem) minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  gap: 0.25rem 0.5rem;
+  padding: 0.5rem;
+}
+
+.dl-v2-list--posters .dl-v2-group__head {
+  flex-wrap: wrap;
+}
+
+.dl-v2-list--posters .dl-v2-group__toggle {
+  flex-basis: 100%;
+  flex-wrap: wrap;
+}
+
+.dl-v2-list--posters .dl-v2-group__name {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.dl-v2-group__poster {
+  grid-row: 1 / span 2;
+  align-self: start;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--uiv2-surface-raised);
+  cursor: pointer;
+}
+
+.dl-v2-group__poster img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dl-v2-switch input:disabled + .dl-v2-switch__track {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .dl-v2-group {
     transition: opacity 0.15s ease, filter 0.15s ease;

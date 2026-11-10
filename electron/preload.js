@@ -273,6 +273,7 @@ contextBridge.exposeInMainWorld('electron', {
   showDownloadFile: (filePath) => ipcRenderer.invoke('downloads:showFile', filePath),
   openDownloadFile: (filePath) => ipcRenderer.invoke('downloads:openFile', filePath),
   listDownloadLibrary: () => ipcRenderer.invoke('downloads:listLibrary'),
+  saveDownloadPoster: (payload) => ipcRenderer.invoke('downloads:savePoster', payload),
   listDownloadsByRelease: (releaseId) => ipcRenderer.invoke('downloads:listByRelease', releaseId),
   readDownloadSkipMarks: (filePath) => ipcRenderer.invoke('downloads:readSkipMarks', filePath),
   saveDownloadSkipMarks: (payload) => ipcRenderer.invoke('downloads:saveSkipMarks', payload),
@@ -410,6 +411,9 @@ contextBridge.exposeInMainWorld('electron', {
 // Download progress events: main → renderer
 ipcRenderer.on('episode-download:progress', (_, data) => {
   window.dispatchEvent(new CustomEvent('episode-download:progress', { detail: data }));
+});
+ipcRenderer.on('downloads:poster-saved', () => {
+  window.dispatchEvent(new Event('downloads:poster-saved'));
 });
 
 ipcRenderer.on('downloads:streaming-hold', (_, data) => {

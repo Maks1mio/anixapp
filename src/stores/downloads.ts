@@ -46,6 +46,8 @@ export interface DownloadLibraryGroup {
   sourceId?: number | null;
   dubberId?: number | null;
   releaseTitle?: string;
+  posterUrl?: string;
+  hasOwnFolder?: boolean;
   dubberName?: string;
   sourceName?: string;
 }
@@ -54,6 +56,7 @@ export interface DownloadSettings {
   directory: string;
   defaultDirectory: string;
   organizeByTitle: boolean;
+  downloadPosters: boolean;
   /** false = по очереди (1 файл), true = все сразу */
   allAtOnce: boolean;
   autoClearFinished: boolean;
@@ -75,6 +78,7 @@ const settingsStore = writable<DownloadSettings>({
   directory: '',
   defaultDirectory: '',
   organizeByTitle: true,
+  downloadPosters: false,
   allAtOnce: false,
   autoClearFinished: true,
   speedLimitMBps: 0,
@@ -201,6 +205,7 @@ function applySettingsPayload(data: Partial<DownloadSettings> & { directory?: st
     directory: data.directory ?? s.directory,
     defaultDirectory: data.defaultDirectory ?? s.defaultDirectory,
     organizeByTitle: typeof data.organizeByTitle === 'boolean' ? data.organizeByTitle : s.organizeByTitle,
+    downloadPosters: typeof data.downloadPosters === 'boolean' ? data.downloadPosters : s.downloadPosters,
     allAtOnce: typeof data.allAtOnce === 'boolean' ? data.allAtOnce : s.allAtOnce,
     autoClearFinished: typeof data.autoClearFinished === 'boolean' ? data.autoClearFinished : s.autoClearFinished,
     speedLimitMBps: typeof data.speedLimitMBps === 'number' ? data.speedLimitMBps : s.speedLimitMBps,
@@ -219,6 +224,7 @@ function createDownloadsStore() {
 
   async function saveSettings(patch: {
     organizeByTitle?: boolean;
+    downloadPosters?: boolean;
     allAtOnce?: boolean;
     autoClearFinished?: boolean;
     speedLimitMBps?: number;
@@ -455,10 +461,13 @@ function createDownloadsStore() {
   }
 
   async function deleteLibraryGroup(groupName: string) {
+    let result;
     try {
-      await window.electron?.deleteDownloadGroup?.(groupName);
-    } catch {}
-    await loadLibrary();
+      result = await window.electron?.deleteDownloadGroup?.(groupName);
+    } finally {
+      await loadLibrary();
+    }
+    return result;
   }
 
   async function cancelAllActive() {
@@ -520,11 +529,13 @@ function createDownloadsStore() {
       if (blocked) void hydrateQueue();
     };
     window.addEventListener('episode-download:progress', handleProgress as EventListener);
+    window.addEventListener('downloads:poster-saved', loadLibrary);
     window.addEventListener('downloads:streaming-hold', onStreamingHold as EventListener);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
       window.removeEventListener('episode-download:progress', handleProgress as EventListener);
+      window.removeEventListener('downloads:poster-saved', loadLibrary);
       window.removeEventListener('downloads:streaming-hold', onStreamingHold as EventListener);
       for (const t of doneTimers.values()) clearTimeout(t);
       doneTimers.clear();

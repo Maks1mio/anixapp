@@ -387,6 +387,12 @@ html.mobile-mode {
     color: var(--m-text);
   }
 
+  // Раздел виден, но пока не открывается (ИИ в приложении для Android)
+  .m-nav-item--disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
   // Раздел подняли для перестановки: за пальцем идёт его копия, а на месте остаётся пустое гнездо
   .m-nav-item--lifted {
     position: relative;

@@ -17,13 +17,16 @@ const SIDE_KEY = 'anix:mobileRailSide';
 const BAR_SIZE_KEY = 'anix:mobilePhoneBarSize';
 const MAIN_TABS: MobileNavTab[] = ['home', 'overview', 'bookmarks', 'popular', 'profile'];
 
-/** Разделы, скрытые в приложении для Android (ИИ-помощницы пока не готовы для телефона). */
-const HIDDEN_NATIVE_TABS: MobileNavTab[] = ['agent'];
+/** Разделы, которые в приложении для Android видны, но не открываются (ИИ-помощницы пока не готовы для телефона). */
+const DISABLED_NATIVE_TABS: MobileNavTab[] = ['agent'];
+
+export function isMobileNavTabDisabled(id: MobileNavTab): boolean {
+  return isCapacitorNative() && DISABLED_NATIVE_TABS.includes(id);
+}
 
 function defaultOrder(): MobileNavTab[] {
-  const hidden = isCapacitorNative() ? HIDDEN_NATIVE_TABS : [];
   const rest = SIDEBAR_NAV_ITEMS.map((item) => item.id as MobileNavTab)
-    .filter((id) => !MAIN_TABS.includes(id) && !hidden.includes(id));
+    .filter((id) => !MAIN_TABS.includes(id));
   return [...MAIN_TABS, ...rest];
 }
 

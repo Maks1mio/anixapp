@@ -17,7 +17,7 @@
   import { randomReleaseId, shuffleRandomRelease } from '../stores/random-release';
   import { bookmarksForeign, bookmarksSearchLabel, bookmarksSearchOpen, bookmarksSearchQuery, closeBookmarksSearch } from '../stores/mobile-bookmarks-search';
   import { closeLocalSearch, localSearchLabel, localSearchOpen, localSearchQuery } from '../stores/mobile-local-search';
-  import { mobileNavOrder, mobilePhoneBarSize, moveMobileNavTabAcross, swapMobileNavTabs, PHONE_BAR_MAX, PHONE_BAR_MIN, type MobileNavTab } from '../stores/mobile-nav';
+  import { mobileNavOrder, mobilePhoneBarSize, moveMobileNavTabAcross, swapMobileNavTabs, isMobileNavTabDisabled, PHONE_BAR_MAX, PHONE_BAR_MIN, type MobileNavTab } from '../stores/mobile-nav';
   import { isScrollRestorePending } from '../stores/view-state';
   import { notificationsModalOpen, settingsModalOpen, watchModalOpen, openSettingsModal, closeSettingsModal } from '../stores/modals';
   import { notificationUnreadCount, refreshNotificationUnreadCount } from '../stores/notifications';
@@ -211,6 +211,7 @@
   }
 
   function goTab(tab: NavEntry) {
+    if (isMobileNavTabDisabled(tab.id)) return;
     moreOpen = false;
     if (tab.id === 'profile') {
       void openProfile();
@@ -471,6 +472,8 @@
     class="m-nav-item"
     class:m-nav-item--active={activeTab === tab.id}
     class:m-nav-item--lifted={liftedTab === tab.id}
+    class:m-nav-item--disabled={isMobileNavTabDisabled(tab.id)}
+    aria-disabled={isMobileNavTabDisabled(tab.id) || undefined}
     data-tab={tab.id}
     aria-current={activeTab === tab.id ? 'page' : undefined}
     aria-label={navAriaLabel(tab)}

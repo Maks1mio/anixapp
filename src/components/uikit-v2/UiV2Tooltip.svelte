@@ -242,6 +242,17 @@
     scheduleHide();
   }
 
+  /**
+   * Клик по триггеру, который обработал вложенный элемент (preventDefault — например,
+   * значок Anix+ открывает страницу поддержки), прячет подсказку. На тач-экранах
+   * тап эмулирует mouseenter, а mouseleave не приходит — иначе tip «зависает» поверх.
+   */
+  function onTriggerClickCapture(e: MouseEvent) {
+    setTimeout(() => {
+      if (e.defaultPrevented) hideNow();
+    }, 0);
+  }
+
   function onScrollOrResize() {
     if (!visible) return;
     updatePosition();
@@ -275,6 +286,7 @@
   onmouseenter={onTriggerEnter}
   onmouseleave={onTriggerLeave}
   onmousemove={onTriggerMove}
+  onclickcapture={onTriggerClickCapture}
   onfocusin={onTriggerEnter}
   onfocusout={onTriggerLeave}
 >

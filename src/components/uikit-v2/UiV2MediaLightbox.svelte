@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isMobileMode } from '../../platform/mobile';
   import { onMount } from 'svelte';
   import {
     closeFeedMediaLightbox,
@@ -7,6 +8,7 @@
   } from '../../utils/feed-media-lightbox';
   import { toCdnProxyUrl, unwrapCdnUrl } from '../../utils/posterUrl';
   import { showToast } from '../../stores/toast';
+  import { forceDarkSystemBars } from '../../native/anix-system-bars';
   import {
     iconChevronLeft,
     iconChevronRight,
@@ -38,7 +40,7 @@
   const item = $derived(lightbox?.items[lightbox.index] ?? null);
   const total = $derived(lightbox?.items.length ?? 0);
   const canNav = $derived(total > 1);
-  const canUpscale = $derived(!!item && item.kind !== 'video');
+  const canUpscale = $derived(!!item && item.kind !== 'video' && !isMobileMode());
   const gpuOk = $derived(isGpuAvailable());
 
   let overlayEl = $state<HTMLDivElement | null>(null);
@@ -60,6 +62,321 @@
   let upscaleToken = 0;
 
   const a4kTypes = ANIME4K_TYPES.filter((t) => t.id !== 'off');
+
+  // ── Мобильный просмотр: на весь экран, жесты пальцами ──
+  const mobile = isMobileMode();
+  const MAX_ZOOM = 5;
+  const DOUBLE_TAP_ZOOM = 2.5;
+  const PEEK_GAP = 16;
+  let zoom = $state(1);
+  let panX = $state(0);
+  let panY = $state(0);
+  let swipeX = $state(0);
+  let dragY = $state(0);
+  let gesturing = $state(false);
+  let chromeHidden = $state(false);
+  const pointers = new Map<number, { x: number; y: number }>();
+  type GestureMode = 'none' | 'pending' | 'pan' | 'pinch' | 'swipe' | 'dismiss';
+  let gesture = {
+    mode: 'none' as GestureMode,
+    startX: 0,
+    startY: 0,
+    startPanX: 0,
+    startPanY: 0,
+    startZoom: 1,
+    startDist: 1,
+    startMidX: 0,
+    startMidY: 0,
+    lastX: 0,
+    lastT: 0,
+    vx: 0,
+    moved: false,
+  };
+  let lastTapAt = 0;
+  let tapTimer = 0;
+
+  const imgTransform = $derived(
+    zoom !== 1 || panX || panY || swipeX
+      ? `translate3d(${panX + swipeX}px, ${panY}px, 0) scale(${zoom})`
+      : undefined,
+  );
+  const dragProgress = $derived(Math.min(1, Math.abs(dragY) / 320));
+
+  // gesturing не трогаем: при перелистывании он держит transition выключенным, пока новый кадр встаёт на место
+  function resetMobileView() {
+    zoom = 1;
+    panX = 0;
+    panY = 0;
+    swipeX = 0;
+    dragY = 0;
+    pointers.clear();
+    gesture.mode = 'none';
+  }
+
+  function viewCenter(): { cx: number; cy: number } {
+    const el = overlayEl;
+    return { cx: (el?.clientWidth ?? window.innerWidth) / 2, cy: (el?.clientHeight ?? window.innerHeight) / 2 };
+  }
+
+  /**
+   * Сдвиг не даёт увести увеличенную картинку дальше её краёв.
+   * img растянут на весь экран с object-fit: contain — считаем по видимой части, а не по рамке
+   */
+  function clampPan(x: number, y: number, z: number): { x: number; y: number } {
+    const img = stageEl?.querySelector('img');
+    if (!img || z <= 1) return { x: 0, y: 0 };
+    const vw = overlayEl?.clientWidth ?? window.innerWidth;
+    const vh = overlayEl?.clientHeight ?? window.innerHeight;
+    let w = img.offsetWidth;
+    let h = img.offsetHeight;
+    if (img.naturalWidth && img.naturalHeight) {
+      const fit = Math.min(w / img.naturalWidth, h / img.naturalHeight);
+      w = img.naturalWidth * fit;
+      h = img.naturalHeight * fit;
+    }
+    const maxX = Math.max(0, (w * z - vw) / 2);
+    const maxY = Math.max(0, (h * z - vh) / 2);
+    return { x: Math.max(-maxX, Math.min(maxX, x)), y: Math.max(-maxY, Math.min(maxY, y)) };
+  }
+
+  function canZoom(): boolean {
+    return !!item && item.kind !== 'video';
+  }
+
+  /** Масштаб вокруг точки экрана: точка картинки под пальцем или курсором остаётся на месте */
+  function zoomAround(x: number, y: number, z: number) {
+    const next = Math.max(1, Math.min(MAX_ZOOM, z));
+    const { cx, cy } = viewCenter();
+    const qx = (x - cx - panX) / zoom;
+    const qy = (y - cy - panY) / zoom;
+    const p = clampPan(x - cx - qx * next, y - cy - qy * next, next);
+    zoom = next;
+    panX = p.x;
+    panY = p.y;
+  }
+
+  function toggleZoomAt(x: number, y: number) {
+    if (!canZoom()) return;
+    if (zoom > 1) {
+      zoom = 1;
+      panX = 0;
+      panY = 0;
+      return;
+    }
+    zoomAround(x, y, DOUBLE_TAP_ZOOM);
+  }
+
+  function onMobileWheel(e: WheelEvent) {
+    if (!canZoom() || closing) return;
+    e.preventDefault();
+    zoomAround(e.clientX, e.clientY, zoom * Math.exp(-e.deltaY * 0.0025));
+  }
+
+  $effect(() => {
+    const el = overlayEl;
+    if (!mobile || !el) return;
+    el.addEventListener('wheel', onMobileWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onMobileWheel);
+  });
+
+  /** Перелистывание: текущий кадр уезжает, соседний въезжает на его место, без отката назад */
+  let sliding = false;
+  function slideTo(dir: 1 | -1) {
+    const width = overlayEl?.clientWidth ?? window.innerWidth;
+    sliding = true;
+    swipeX = -dir * (width + PEEK_GAP);
+    window.setTimeout(() => {
+      gesturing = true; // без transition: новый кадр сразу на месте
+      stepFeedMediaLightbox(dir);
+      swipeX = 0;
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          gesturing = false;
+          sliding = false;
+        }),
+      );
+    }, prefersReducedMotion() ? 0 : 220);
+  }
+
+  function handleTap(x: number, y: number) {
+    const now = performance.now();
+    if (now - lastTapAt < 280) {
+      window.clearTimeout(tapTimer);
+      lastTapAt = 0;
+      toggleZoomAt(x, y);
+      return;
+    }
+    lastTapAt = now;
+    tapTimer = window.setTimeout(() => {
+      chromeHidden = !chromeHidden;
+    }, 280);
+  }
+
+  function startPinch() {
+    const [a, b] = [...pointers.values()];
+    gesture.mode = 'pinch';
+    gesture.startDist = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+    gesture.startZoom = zoom;
+    gesture.startPanX = panX;
+    gesture.startPanY = panY;
+    gesture.startMidX = (a.x + b.x) / 2;
+    gesture.startMidY = (a.y + b.y) / 2;
+    swipeX = 0;
+    dragY = 0;
+  }
+
+  function startSingle(x: number, y: number) {
+    gesture.mode = zoom > 1 ? 'pan' : 'pending';
+    gesture.startX = x;
+    gesture.startY = y;
+    gesture.lastX = x;
+    gesture.lastT = performance.now();
+    gesture.vx = 0;
+    gesture.moved = false;
+    gesture.startPanX = panX;
+    gesture.startPanY = panY;
+  }
+
+  function onMobilePointerDown(e: PointerEvent) {
+    if (closing || sliding) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const target = e.target as Element | null;
+    if (target?.closest('button, video')) return;
+    try {
+      overlayEl?.setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    gesturing = true;
+    if (pointers.size === 2 && canZoom()) startPinch();
+    else if (pointers.size === 1) startSingle(e.clientX, e.clientY);
+  }
+
+  function onMobilePointerMove(e: PointerEvent) {
+    const p = pointers.get(e.pointerId);
+    if (!p) return;
+    p.x = e.clientX;
+    p.y = e.clientY;
+    const g = gesture;
+
+    if (g.mode === 'pinch' && pointers.size >= 2) {
+      const [a, b] = [...pointers.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const z = Math.max(1, Math.min(MAX_ZOOM, (g.startZoom * dist) / g.startDist));
+      // Точка картинки под пальцами остаётся под пальцами
+      const { cx, cy } = viewCenter();
+      const midX = (a.x + b.x) / 2;
+      const midY = (a.y + b.y) / 2;
+      const qx = (g.startMidX - cx - g.startPanX) / g.startZoom;
+      const qy = (g.startMidY - cy - g.startPanY) / g.startZoom;
+      const next = clampPan(midX - cx - qx * z, midY - cy - qy * z, z);
+      zoom = z;
+      panX = next.x;
+      panY = next.y;
+      return;
+    }
+
+    const dx = e.clientX - g.startX;
+    const dy = e.clientY - g.startY;
+    if (g.mode === 'pending') {
+      if (Math.hypot(dx, dy) < 10) return;
+      if (Math.abs(dx) > Math.abs(dy)) g.mode = canNav ? 'swipe' : 'none';
+      else g.mode = 'dismiss';
+    }
+    if (g.mode === 'swipe') {
+      const now = performance.now();
+      const dt = now - g.lastT;
+      if (dt > 0) g.vx = 0.7 * ((e.clientX - g.lastX) / dt) + 0.3 * g.vx;
+      g.lastX = e.clientX;
+      g.lastT = now;
+      swipeX = dx;
+    } else if (g.mode === 'dismiss') dragY = dy;
+    else if (g.mode === 'pan') {
+      if (Math.hypot(dx, dy) >= 10) g.moved = true; // уже не тап
+      const next = clampPan(g.startPanX + dx, g.startPanY + dy, zoom);
+      panX = next.x;
+      panY = next.y;
+    }
+  }
+
+  function onMobilePointerUp(e: PointerEvent) {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.delete(e.pointerId);
+    const g = gesture;
+
+    if (g.mode === 'pinch') {
+      if (pointers.size === 1) {
+        const [rest] = [...pointers.values()];
+        startSingle(rest.x, rest.y);
+        g.moved = true;
+        return;
+      }
+      if (pointers.size === 0 && zoom < 1.05) {
+        zoom = 1;
+        panX = 0;
+        panY = 0;
+      }
+    }
+    if (pointers.size > 0) return;
+
+    gesturing = false;
+    const width = overlayEl?.clientWidth ?? window.innerWidth;
+    if (g.mode === 'pending') handleTap(e.clientX, e.clientY);
+    else if (g.mode === 'pan' && !g.moved) handleTap(e.clientX, e.clientY);
+    else if (g.mode === 'swipe') {
+      const dx = swipeX;
+      // Дотянул до трети экрана или резко смахнул в ту же сторону — листаем
+      const flick = Math.abs(g.vx) > 0.45 && Math.sign(g.vx) === Math.sign(dx) && Math.abs(dx) > 24;
+      if (Math.abs(dx) > width * 0.33 || flick) slideTo(dx > 0 ? -1 : 1);
+      else swipeX = 0;
+    } else if (g.mode === 'dismiss') {
+      if (Math.abs(dragY) > 110) void dismissBySwipe();
+      else dragY = 0;
+    }
+    g.mode = 'none';
+  }
+
+  function onMobilePointerCancel() {
+    pointers.clear();
+    gesturing = false;
+    gesture.mode = 'none';
+    swipeX = 0;
+    dragY = 0;
+    if (zoom < 1.05) {
+      zoom = 1;
+      panX = 0;
+      panY = 0;
+    }
+  }
+
+  /** Смахивание вверх или вниз: картинка уезжает за край, фон гаснет */
+  async function dismissBySwipe() {
+    if (closing || !lightbox) return;
+    closing = true;
+    const el = stageEl;
+    const from = dragY;
+    const dir = from < 0 ? -1 : 1;
+    if (el && !prefersReducedMotion()) {
+      try {
+        await el.animate(
+          [
+            { transform: `translate3d(0, ${from}px, 0)`, opacity: 1 },
+            { transform: `translate3d(0, ${dir * window.innerHeight * 0.6}px, 0)`, opacity: 0 },
+          ],
+          { duration: 200, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' },
+        ).finished;
+      } catch {
+        /* ignore cancelled animation */
+      }
+    }
+    closeFeedMediaLightbox();
+    resetMobileView();
+    gesturing = false;
+    chromeHidden = false;
+    closing = false;
+    openedKey = '';
+  }
 
   function currentKey(next: typeof lightbox): string {
     if (!next) return '';
@@ -282,6 +599,9 @@
       }
     }
     closeFeedMediaLightbox();
+    resetMobileView();
+    gesturing = false;
+    chromeHidden = false;
     closing = false;
     openedKey = '';
   }
@@ -372,6 +692,7 @@
   }
 
   function onPointerDown(e: PointerEvent) {
+    if (mobile) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     pointerStartX = e.clientX;
   }
@@ -405,6 +726,7 @@
     const key = currentKey(next);
     if (openedKey === key) return;
     openedKey = key;
+    resetMobileView();
     stopUpscale();
     upscalePanelOpen = false;
     const origin = next.origin;
@@ -414,10 +736,16 @@
     });
   });
 
+  $effect(() => {
+    if (mobile) forceDarkSystemBars(!!lightbox);
+  });
+
   onMount(() => {
     void probeWebGpuAvailable();
     void loadUpscaleDefaults();
     return () => {
+      window.clearTimeout(tapTimer);
+      if (mobile) forceDarkSystemBars(false);
       stopUpscale();
       document.body.style.overflow = '';
     };
@@ -432,10 +760,18 @@
     class="uiv2-media-lightbox"
     class:uiv2-media-lightbox--closing={closing}
     class:uiv2-media-lightbox--upscaled={upscaleActive}
+    class:uiv2-media-lightbox--mobile={mobile}
+    class:uiv2-media-lightbox--bare={mobile && chromeHidden}
+    class:uiv2-media-lightbox--settle={mobile && !gesturing}
+    style:--lightbox-drag={mobile ? dragProgress : undefined}
     role="dialog"
     aria-modal="true"
     aria-label="Просмотр изображения"
     tabindex="-1"
+    onpointerdown={mobile ? onMobilePointerDown : undefined}
+    onpointermove={mobile ? onMobilePointerMove : undefined}
+    onpointerup={mobile ? onMobilePointerUp : undefined}
+    onpointercancel={mobile ? onMobilePointerCancel : undefined}
   >
     <button
       type="button"
@@ -586,7 +922,7 @@
       </div>
     {/if}
 
-    {#if canNav}
+    {#if canNav && !mobile}
       <button
         type="button"
         class="uiv2-media-lightbox__nav uiv2-media-lightbox__nav--prev"
@@ -605,9 +941,26 @@
       </button>
     {/if}
 
+    {#if mobile && canNav}
+      <!-- Соседние кадры стоят по бокам и едут вместе с пальцем -->
+      {#each [-1, 1] as dir (dir)}
+        {@const peek = lightbox.items[(lightbox.index + dir + total) % total]}
+        <div
+          class="uiv2-media-lightbox__peek"
+          style:transform={`translate3d(calc(${dir * 100}% + ${dir * PEEK_GAP + swipeX}px), 0, 0)`}
+          aria-hidden="true"
+        >
+          {#if peek.kind !== 'video'}
+            <img src={toCdnProxyUrl(peek.url) || peek.url} alt="" decoding="async" draggable="false" />
+          {/if}
+        </div>
+      {/each}
+    {/if}
+
     <div
       bind:this={stageEl}
       class="uiv2-media-lightbox__stage"
+      style:transform={mobile && dragY ? `translate3d(0, ${dragY}px, 0)` : undefined}
       role="group"
       aria-label="Изображение"
       onpointerdown={onPointerDown}
@@ -625,6 +978,7 @@
           alt=""
           decoding="async"
           draggable="false"
+          style:transform={mobile ? imgTransform : undefined}
           class:uiv2-media-lightbox__source--hidden={upscaleActive}
         />
         <canvas

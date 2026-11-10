@@ -11,6 +11,7 @@
   import UiV2Tooltip from '../components/uikit-v2/UiV2Tooltip.svelte';
   import AnixappTermsModal, { isAnixappAboutHidden } from '../components/AnixappTermsModal.svelte';
   import { isTvMode } from '../platform/tv';
+  import { isMobileMode } from '../platform/mobile';
   import { tvLoginQrSvg } from '../utils/tv-login-qr';
   import { anixartQrLoginSvg } from '../utils/anixart-qr-login';
   import { startTvLanLogin, stopTvLanLogin, subscribeTvLanCredentials } from '../services/tv-lan-login';
@@ -52,6 +53,7 @@
   let { onSuccess, onDismiss, allowGuest = false, overlay = false, onConnectionRetry }: Props = $props();
 
   const tv = isTvMode();
+  const mobile = isMobileMode();
 
   type OAuthProvider = 'vk' | 'google' | 'telegram' | 'yandex';
   type AuthPanel =
@@ -299,7 +301,7 @@
     if (result.error === 'timeout') return 'Время ожидания авторизации истекло.';
     if (result.error) return `Ошибка: ${result.error}`;
     const code = result.code;
-    if (code === 2) return 'VK отклонил токен. Попробуйте ещё раз или войдите через другой сервис.';
+    if (code === 2) return `${providerLabel[provider]} отклонил вход. Попробуйте ещё раз или выберите другой сервис.`;
     if (code === -1) return `Ошибка входа через ${providerLabel[provider]} (нет ответа API).`;
     if (code != null) return `Ошибка входа через ${providerLabel[provider]} (код ${code}).`;
     return `Ошибка входа через ${providerLabel[provider]}.`;
@@ -971,7 +973,7 @@
       {/if}
     </div>
 
-    {#if hasWindowApi}
+    {#if hasWindowApi && !mobile}
       <div class="titlebar__controls">
         <button
           type="button"
@@ -1029,6 +1031,9 @@
       {/if}
 
       <div class="auth__stack">
+      {#if !tv}
+        <img class="auth__logo" src="logo/512x512.png" alt="" />
+      {/if}
       <h1 class="auth__title">AnixApp</h1>
 
       <div class="auth__morph" bind:this={morphEl}>

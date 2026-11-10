@@ -13,7 +13,8 @@ html.mobile-mode {
     margin: 0 !important;
     color: var(--m-text-tab);
 
-    &__row { display: flex; align-items: center; height: 48px; gap: 0; background: transparent !important; }
+    // Линия под полосой на всех экранах; индикатор вкладки лежит поверх неё
+    &__row { display: flex; align-items: center; height: 48px; gap: 0; background: transparent !important; box-shadow: inset 0 -1px 0 var(--m-divider); }
     &__side { flex: none; display: flex; align-items: center; background: transparent !important; }
     &__nav { flex: 1; min-width: 0; height: 48px !important; position: relative; background: transparent !important; backdrop-filter: none !important; box-shadow: none !important; padding: 0 !important; border-radius: 0 !important; }
     &__scroll {
@@ -26,14 +27,24 @@ html.mobile-mode {
       background: transparent !important; border: 0 !important; border-radius: 0 !important;
       color: var(--m-text-tab) !important; font: 500 15px/1 var(--m-font) !important;
       -webkit-tap-highlight-color: transparent;
-      // Индикатор Anixart — по ширине текста, 3dp, скруглённый, у нижнего края полосы
       .uiv2-tabs__tab-label { position: relative; display: inline-flex; align-items: center; height: 48px; }
-      &--active {
-        color: var(--m-text) !important; font-weight: 600 !important;
-        .uiv2-tabs__tab-label::after {
-          content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
-          border-radius: 3px 3px 0 0; background: var(--m-text);
-        }
+      &--active { color: var(--m-text) !important; font-weight: 600 !important; }
+      // Свайп содержимого: старая подпись гаснет, новая загорается — в долю пройденного пути (UiV2Tabs)
+      &[data-swipe-mix] {
+        color: color-mix(in srgb, var(--m-text) calc(var(--tab-mix) * 100%), var(--m-text-tab)) !important;
+        transition: color var(--tab-mix-ms, 0ms) cubic-bezier(0.22, 0.8, 0.3, 1);
+      }
+    }
+    // Индикатор Anixart — по ширине текста (ширина вкладки минус её отступы), 3dp, скруглённый, у нижнего края.
+    // Одна планка на полосу: едет от вкладки к вкладке, как капсула на ПК
+    &__indicator {
+      top: 0; bottom: 0; background: none !important; box-shadow: none !important; border-radius: 0 !important;
+      &::after {
+        content: ''; position: absolute; left: 14px; right: 14px; bottom: 0; height: 3px;
+        border-radius: 3px 3px 0 0; background: var(--m-text);
+      }
+      &--animated:not(.uiv2-tabs__indicator--stretch) {
+        transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), width 0.24s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.18s ease;
       }
     }
     &__tool-btn {
@@ -41,15 +52,30 @@ html.mobile-mode {
       background: transparent !important; color: var(--m-text-2) !important; border: 0 !important;
       box-shadow: none !important; margin: 0;
     }
-    &__track, &__indicator { display: none !important; }
+    &__track { display: none !important; }
     &::after { display: none !important; }
     &__divider { display: none !important; }
   }
 
-  // «Случайный релиз» на Главной есть в «Обзоре»; в Anixart справа у вкладок ничего нет
-  .releases-type .uiv2-tabs__side--right { display: none !important; }
 
   .release-cards-grid-root, .release-cards-grid-root--wide { gap: 33px !important; padding: var(--m-space-4) 0 var(--m-space-5); }
+
+  // ── Вид карточками: у списка поля задаёт сама строка, сетке нужны свои ──
+  .release-cards-grid-root.release-cards-grid {
+    // По умолчанию три колонки, как в Anixart; на планшете — сколько влезет
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--m-space-4) var(--m-space-2) !important;
+    padding: var(--m-space-4) var(--m-gutter) var(--m-space-5);
+
+    @media (min-width: 600px) {
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+
+    .uiv2-anime-card__poster { border-radius: var(--m-radius-md); }
+    .uiv2-anime-card__title { font: 600 13px/1.25 var(--m-font); letter-spacing: 0; color: var(--m-text); }
+    // Строка с оценкой и без неё одной высоты
+    .uiv2-anime-card__meta { min-height: 15px; color: var(--m-text-2); font-size: 11.5px; }
+  }
 
   // ── Карточка релиза в списке (UiV2AnimeCard, horizontal) ─────────────────────────────────
   .uiv2-anime-card--horizontal {
@@ -71,6 +97,11 @@ html.mobile-mode {
       img { width: 100%; height: 100%; object-fit: cover; }
     }
     .uiv2-anime-card__poster-veil { display: none !important; }
+    // Постер узкий: плашка на всю ширину, чтобы подпись не обрезалась
+    .uiv2-anime-card__poster-note {
+      top: 0; left: 0; right: 0; max-width: none; padding: 3px 4px; border: 0; border-radius: 0;
+      font: 500 11px/14px var(--m-font); text-align: center;
+    }
 
     .uiv2-anime-card__content { flex: 1; min-width: 0; padding: 0 !important; background: transparent !important; }
     .uiv2-anime-card__title-row { display: flex; align-items: flex-start; gap: var(--m-space-2); }
@@ -119,8 +150,8 @@ html.mobile-mode {
 }
 
 html.mobile-mode {
-  // desktop-каркас фиксирует высоту окна и скроллит внутренние области; на телефоне скроллится документ
-  &, body, #app { height: auto !important; min-height: 100dvh; overflow: visible !important; }
+  // Документ на всю высоту окна; страницы прокручивает .m-app__scroll (.page__scroll) в MobileLayout
+  &, body, #app { height: auto !important; min-height: calc(100dvh * var(--m-vh-fix, 1)); overflow: visible !important; }
   body { overflow-x: hidden; }
 
   .release-page__title { color: var(--m-text) !important; }
@@ -133,7 +164,7 @@ html.mobile-mode {
 
 html.mobile-mode {
   // Страница просмотра: каркас на всю высоту окна, чтобы height:100% у .watch-page считался от него
-  .web-player-shell { height: 100dvh !important; min-height: 0 !important; overflow: hidden; }
+  .web-player-shell { height: calc(100dvh * var(--m-vh-fix, 1)) !important; min-height: 0 !important; overflow: hidden; }
   .web-player-shell__content { flex: 1 1 0; min-height: 0; height: auto; }
   .web-player-shell .watch-page { height: 100% !important; min-height: 0; }
 }
@@ -142,7 +173,7 @@ html.mobile-mode {
   // Просмотр: «Назад» — маленькая кнопка поверх видео, остальное место отдаём плееру
   .web-player-shell { position: relative; }
   .web-player-shell__bar {
-    position: absolute; top: calc(8px + env(safe-area-inset-top)); left: calc(8px + env(safe-area-inset-left)); z-index: 40;
+    position: absolute; top: calc(8px + var(--safe-top)); left: calc(8px + var(--safe-left)); z-index: 40;
     padding: 0 !important; border: 0 !important; background: rgba(0, 0, 0, 0.45) !important; border-radius: 999px;
   }
   .web-player-shell__back {
@@ -157,13 +188,16 @@ html.mobile-mode {
   .watch-modal {
     position: fixed !important; inset: 0 !important; z-index: 60 !important; display: block !important; padding: 0 !important;
     background: var(--m-bg) !important;
+    // Окно непрозрачное: размытие за ним и карточки с анимацией только нагружали прокрутку
+    backdrop-filter: none !important;
+    * { backdrop-filter: none !important; }
     &__backdrop { display: none !important; }
     &__panel {
       position: absolute !important; inset: 0 !important; width: 100% !important; max-width: none !important;
       height: 100% !important; max-height: none !important; margin: 0 !important; transform: none !important;
       border: 0 !important; border-radius: 0 !important; box-shadow: none !important; background: var(--m-bg) !important;
       display: flex !important; flex-direction: column;
-      padding-top: env(safe-area-inset-top);
+      padding-top: var(--safe-top);
       &::before, &::after { display: none !important; } // «ручка» шторки
     }
     &__head::before { display: none !important; }
@@ -178,8 +212,8 @@ html.mobile-mode {
       svg { width: 26px; height: 26px; }
     }
     &__head-text { flex: 1; min-width: 0; margin-left: var(--m-space-2); }
-    &__title { margin: 0 !important; font: 600 24px/1.2 var(--m-font) !important; color: var(--m-text) !important; }
-    &__subtitle { margin: 2px 0 0 !important; font: 400 17px/1.2 var(--m-font) !important; color: var(--m-text-2) !important; }
+    &__title { margin: 0 !important; font: 700 20px/1.25 var(--m-font) !important; color: var(--m-text) !important; }
+    &__subtitle { margin: 2px 0 0 !important; font: 400 14px/1.3 var(--m-font) !important; color: var(--m-text-2) !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     &__head-actions { gap: 0 !important; }
     &__head-icon {
       width: var(--m-touch) !important; height: var(--m-touch) !important; border-radius: 50% !important;
@@ -190,87 +224,97 @@ html.mobile-mode {
     &__body { flex: 1; min-height: 0; background: transparent !important; }
     &__page, &__variants, &__episodes-view { background: transparent !important; }
 
-    // фильтры «Все / Озвучки / Субтитры»
-    &__filters { display: flex; gap: var(--m-space-3); padding: var(--m-space-4) var(--m-gutter) var(--m-space-2) !important; background: transparent !important; border: 0 !important; }
+
+    // Раскладка карточек — как на ПК (watch-modal.scss), здесь только поля экрана и подгонка под палец
+    // Вкладки — как на остальных экранах: подчёркивание на линии
+    &__filters { flex-wrap: wrap; gap: 0 !important; padding: 0 var(--m-gutter) var(--m-space-3) !important; }
     &__filter {
-      flex: none; height: 40px; padding: 0 var(--m-space-4) !important; border-radius: 12px !important; box-shadow: none !important;
-      border: 1.5px solid var(--m-outline) !important; background: transparent !important; color: var(--m-text) !important;
-      font: 500 17px/1 var(--m-font) !important; &::after { display: none !important; }
-      &--active { background: var(--m-secondary-container) !important; border-color: transparent !important; color: var(--m-on-secondary-container) !important; &::before { content: '✓'; margin-right: 8px; font-size: 16px; } }
+      position: relative; flex: 1 1 0; justify-content: center; min-height: 48px !important; padding: 0 !important;
+      border-radius: 0 !important; background: none !important; box-shadow: inset 0 -1px 0 var(--m-divider);
+      color: var(--m-text-2) !important; font: 500 15px/1 var(--m-font) !important;
+      &--active {
+        color: var(--m-text) !important; font-weight: 600 !important;
+        &::after { content: ''; display: block !important; position: absolute; left: 20%; right: 20%; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--m-text); }
+      }
     }
-
-    // подсказка с крестиком
-    &__hint {
-      display: flex; align-items: flex-start; gap: var(--m-space-3);
-      margin: var(--m-space-4) var(--m-gutter); padding: var(--m-space-4) var(--m-space-5);
-      border: 1.5px solid var(--m-outline-variant); border-radius: 24px;
-      p { flex: 1; margin: 0; font: 400 17px/1.3 var(--m-font); color: var(--m-text-2); }
-      button { flex: none; border: 0; background: none; color: var(--m-text-2); padding: 2px; svg { width: 24px; height: 24px; } }
+    &__variant-list { gap: var(--m-space-2) !important; padding: 0 var(--m-gutter) var(--m-space-5) !important; }
+    &__variant-row { min-height: 72px !important; padding: var(--m-space-3) !important; gap: var(--m-space-3) !important; border-radius: var(--m-radius-lg) !important; background: var(--m-surface-block) !important; &:active { background: var(--m-surface-chip) !important; } }
+    &__variant-avatar { width: 48px !important; height: 48px !important; flex: 0 0 48px !important; border-radius: var(--m-radius-md) !important; }
+    &__variant-name { font: 500 16px/1.25 var(--m-font) !important; }
+    &__variant-ep { font: 400 13px/1.3 var(--m-font) !important; color: var(--m-text-2) !important; }
+    &__variant-views-badge { align-self: center !important; color: var(--m-text-2) !important; font: 400 13px/1 var(--m-font) !important; }
+    &__variant-row, &__episode-card, &__episode-main { user-select: none; -webkit-touch-callout: none; transition: none !important; contain: layout paint; }
+    &__variant-pinmark { position: absolute; top: var(--m-space-2); right: var(--m-space-2); color: var(--m-primary); }
+    &__desk-hint { margin: var(--m-space-3) 0 0 !important; flex-basis: 100%; color: var(--m-text-3); font: 400 13px/1.3 var(--m-font) !important; }
+    &__desk-progress { flex: none; margin-left: auto !important; color: var(--m-text-2); font: 500 14px/1 var(--m-font); }
+    &__episodes-view { padding: 0 var(--m-gutter) var(--m-space-5) !important; }
+    // Верх экрана серий: источник и счётчик, запуск, поиск с «ещё». Полоса не закрепляется: заняла бы половину телефона
+    &__episodes-bar { position: static !important; gap: var(--m-space-3) !important; margin: 0 !important; padding: var(--m-space-3) 0 var(--m-space-1) !important; background: none !important; &::before, &::after { display: none !important; } }
+    &__source-pills { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; }
+    &__source-pill { flex: none; min-height: 36px !important; padding: 0 var(--m-space-3) !important; border-radius: 18px !important; font: 600 13px/1 var(--m-font) !important; }
+    &__m-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--m-space-2); align-items: center; }
+    &__m-primary { grid-column: 1 / -1; .uiv2-btn { width: 100%; height: 48px; border-radius: 24px; justify-content: center; font: 600 15px/1 var(--m-font); } }
+    &__desk-search { flex: none !important; min-width: 0 !important; height: 44px !important; border-radius: 22px !important; background: var(--m-surface-sheet) !important; }
+    &__m-more {
+      display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0;
+      border: 0; border-radius: 50%; background: var(--m-surface-sheet); color: var(--m-text);
+      &:active { background: var(--m-surface-chip); }
     }
-
-    // варианты озвучки
-    &__variant-list { padding: var(--m-space-2) 0 !important; background: transparent !important; }
-    &__variant-row {
-      display: flex; align-items: center; gap: var(--m-space-4);
-      padding: var(--m-space-4) var(--m-gutter) !important; border: 0 !important; border-bottom: 1px solid var(--m-divider) !important;
-      border-radius: 0 !important; background: transparent !important; box-shadow: none !important;
+    // Серии: кадры плитками, без кадров — компактный список
+    &__episodes { gap: var(--m-space-2) !important; padding: var(--m-space-2) 0 0 !important; }
+    &__episode-card { border-radius: var(--m-radius-lg) !important; background: var(--m-surface-block) !important; }
+    &__episode-card--next { box-shadow: inset 0 0 0 1.5px var(--m-outline-variant) !important; }
+    &__episode-name { font: 500 14px/1.25 var(--m-font) !important; color: var(--m-text) !important; }
+    &__episode-card--watched:not(.watch-modal__episode-card--cover) .watch-modal__episode-name { color: var(--m-text-3) !important; }
+    &__episodes:not(.watch-modal__episodes--covers) {
+      grid-template-columns: minmax(0, 1fr) !important;
+      .watch-modal__episode-card { min-height: 52px !important; }
+      .watch-modal__episode-main { justify-content: center !important; padding: 0 56px 0 var(--m-space-4) !important; }
+      .watch-modal__episode-actions { top: 8px; left: auto; right: 8px; }
+      .watch-modal__episode-mini { background: none; color: var(--m-text-2); }
+      .watch-modal__episode-watch { top: 12px !important; right: 56px !important; width: 28px !important; height: 28px !important; }
     }
-    &__variant-pin { display: none !important; }
-    &__variant-avatar {
-      flex: none; width: 52px !important; height: 52px !important; border-radius: 12px !important;
-      background-size: cover; background-position: center; background-color: var(--m-surface-raised);
-      display: flex; align-items: center; justify-content: center; color: var(--m-text-3);
-    }
-    &__variant-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-    &__variant-name { font: 500 20px/1.2 var(--m-font) !important; color: var(--m-text) !important; }
-    &__variant-ep { font: 400 18px/1.2 var(--m-font) !important; color: var(--m-text-2) !important; }
-    &__variant-views-badge {
-      flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 0 !important; border: 0 !important;
-      background: transparent !important; color: var(--m-text-2) !important; font: 400 17px var(--m-font) !important;
-      flex-direction: row-reverse;
-      svg { width: 24px; height: 24px; }
-    }
-
-    // серии
-    &__group-title { margin: var(--m-space-4) var(--m-gutter) 0; font: 700 32px/1.2 var(--m-font); color: var(--m-text); }
-    &__episodes { padding: 0 !important; gap: 0 !important; display: flex; flex-direction: column; background: transparent !important; }
-    &__episode-card {
-      display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; grid-template-columns: none !important;
-      align-items: center !important; min-height: 60px; padding: 0 var(--m-gutter) !important;
-      border: 0 !important; border-bottom: 1px solid var(--m-divider) !important; border-radius: 0 !important;
-      background: transparent !important; box-shadow: none !important;
-      &--watched .watch-modal__episode-name { color: var(--m-text-3) !important; }
-    }
-    &__episode-main { flex: 1 1 auto !important; width: auto !important; min-width: 0; display: flex !important; align-items: center; background: transparent !important; border: 0 !important; padding: var(--m-space-4) 0 !important; text-align: left; }
-    &__episode-name { font: 500 20px/1.2 var(--m-font) !important; color: var(--m-text) !important; }
-    &__episode-actions { display: flex !important; flex: none; flex-direction: row !important; gap: 0; margin: 0 !important; padding: 0 !important; width: auto !important; }
+    &__episode-actions { position: absolute; top: var(--m-space-2); left: var(--m-space-2); z-index: 2; }
     &__episode-mini {
-      width: var(--m-touch); height: var(--m-touch); border-radius: 50%; border: 0 !important; background: transparent !important;
-      color: var(--m-text-2) !important; svg { width: 24px; height: 24px; }
+      display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0;
+      border: 0; border-radius: 50%; background: rgb(0 0 0 / 45%); color: #fff;
+      svg { width: 18px; height: 18px; }
     }
-    &__source-pills { padding: var(--m-space-3) var(--m-gutter); display: flex; gap: var(--m-space-3); overflow-x: auto; }
-    &__episodes-toolbar { margin: var(--m-space-3) var(--m-gutter); }
   }
 }
+
+// Планшет: запуск, поиск и «ещё» в один ряд
+@media (min-width: 600px) {
+  html.mobile-mode .watch-modal__m-actions { grid-template-columns: auto minmax(0, 1fr) auto; }
+  html.mobile-mode .watch-modal__m-primary { grid-column: auto; .uiv2-btn { width: auto; padding-inline: var(--m-space-5); } }
+}
+
+// Страница под окном закрыта целиком: не рисуем её, иначе анимированный фон тайтла идёт на каждом кадре прокрутки
+html.mobile-mode:has(.watch-modal) .m-app { visibility: hidden; }
+
+// Телефон: серии в две колонки, с кадрами тоже
+@media (max-width: 599.98px) {
+  html.mobile-mode .watch-modal__episodes--covers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 
 // ── Страница релиза (референс: размытая обложка, заголовок слева, ряд действий, светлая «Воспроизвести») ──
 // Размеры сняты со скрина референса (918 px ≈ 412 dp) с поправкой на Onest (шире оригинального шрифта).
 html.mobile-mode {
-  .view-release { padding: 0 !important; max-width: none !important; }
-  .release-page__head { position: relative; padding: 0 var(--m-gutter) !important; margin-bottom: 0 !important; }
+  // Без карточки ПК-версии: её заливка давала светлую полосу под размытой обложкой
+  .view-release { padding: 0 !important; max-width: none !important; border-radius: 0 !important; background: none !important; backdrop-filter: none; transform: none; }
+  .release-page__head { position: relative; padding: 0 var(--m-gutter) !important; margin-bottom: var(--m-space-2) !important; }
   .m-release-bg {
-    position: absolute; left: 50%; width: 100vw; margin-left: -50vw; top: -120px; height: 700px; z-index: 0; pointer-events: none; overflow: hidden;
-    &::before {
-      content: ''; position: absolute; inset: -40px; background: inherit; background-size: cover; background-position: center top;
-      filter: blur(30px) brightness(0.32) saturate(0.9);
-    }
-    &::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 45%, var(--m-bg) 100%); }
+    position: absolute; left: 50%; width: 100vw; margin-left: calc(-50vw + (var(--m-rail-right) - var(--m-rail-left)) / 2); top: -120px; height: 700px; z-index: 0; pointer-events: none; overflow: hidden;
+    &::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to bottom, rgb(18 18 18 / 45%) 0%, rgb(18 18 18 / 75%) 50%, var(--m-bg) 92%); }
   }
-  .release-page__head > *:not(.m-release-bg):not(.m-sheet-scrim):not(.m-flow-scrim) { position: relative; z-index: 1; }
-  .release-page__head-top { padding: 0 !important; align-items: stretch !important; }
+  .release-page__head > *:not(.m-release-bg):not(.m-flow-scrim) { position: relative; z-index: 1; }
+  // Группы шапки: заголовок с подписью, кнопки вместе с «Воспроизвести», затем сведения. Внутри групп ближе, между ними дальше
+  .release-page__head--narrow { gap: 0 !important; }
+  .release-page__head-top { padding: 0 !important; align-items: stretch !important; gap: 0 !important; }
   .release-page__actions { width: 100%; }
 
-  .release-page__head--narrow .release-page__head-hero, .release-page__head-hero { display: flex !important; justify-content: center; width: 100% !important; max-width: none !important; margin: 0 !important; padding-top: calc(34px + env(safe-area-inset-top)); }
+  .release-page__head--narrow .release-page__head-hero, .release-page__head-hero { display: flex !important; justify-content: center; width: 100% !important; max-width: none !important; margin: 0 !important; padding-top: calc(34px + var(--safe-top)); }
   .release-page__poster {
     width: min(54vw, 240px) !important; max-width: none !important; aspect-ratio: 2 / 3; height: auto !important;
     border-radius: 28px !important; overflow: hidden; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -278,7 +322,7 @@ html.mobile-mode {
   }
 
   .release-page__head--narrow .release-page__head-brief, .release-page__head-brief {
-    display: flex !important; flex-direction: column; align-items: stretch !important; padding: var(--m-space-3) 0 var(--m-space-2); text-align: left !important;
+    display: flex !important; flex-direction: column; align-items: stretch !important; padding: var(--m-space-4) 0 var(--m-space-3); text-align: left !important;
   }
   .release-page__title-row { width: 100% !important; display: flex !important; align-items: flex-start; gap: var(--m-space-3); justify-content: flex-start !important; }
   .release-page__head--narrow .release-page__title, .release-page__title {
@@ -288,7 +332,7 @@ html.mobile-mode {
   }
   .release-page__head--narrow .release-page__title-en, .release-page__title-en {
     display: flex !important; align-items: center; justify-content: space-between; gap: var(--m-space-3);
-    margin: 2px 0 0 calc(18px + var(--m-space-3)) !important; text-align: left !important;
+    margin: 2px 0 0 !important; text-align: left !important;
     color: var(--m-text-3) !important; font: 400 14px/1.3 var(--m-font) !important;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
@@ -297,42 +341,34 @@ html.mobile-mode {
     background: var(--m-fill-button) !important; color: var(--m-on-fill-button) !important; font: 700 13px/1.3 var(--m-font) !important;
   }
 
-  // действия: статус · закладки · комментарии
-  .release-page__actions { display: flex !important; justify-content: flex-start !important; flex-wrap: nowrap; gap: var(--m-space-3); align-items: center; margin: var(--m-space-2) 0 var(--m-space-3); }
-  .release-page__actions-status { flex: 0 0 auto; min-width: 0; }
-  .release-page__actions .uiv2-select { width: auto; }
+  .release-page__age--restricted { background: #d04040 !important; color: #fff !important; }
+
+  // действия как на ПК: залитые кнопки, статус занимает остаток ряда
+  .release-page__actions { display: flex !important; justify-content: flex-start !important; flex-wrap: nowrap; gap: var(--m-space-2); align-items: center; margin: 0 0 var(--m-space-2); }
+  .release-page__actions-status { flex: 1 1 auto; min-width: 0; }
+  .release-page__actions > :not(.release-page__actions-status) { flex: none; }
+  .release-page__actions .uiv2-select { width: 100%; }
   .release-page__actions .uiv2-select__field, .release-page__actions .uiv2-select__control { border: 0 !important; background: transparent !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; }
   .release-page__actions .uiv2-select__trigger, .release-page__actions-chip {
-    height: 40px !important; min-height: 0 !important; border-radius: 20px !important; border: 1.5px solid var(--m-outline) !important;
-    background: transparent !important; color: var(--m-text) !important; font: 500 15px/1 var(--m-font) !important; box-shadow: none !important;
+    height: 44px !important; min-height: 0 !important; border-radius: 22px !important; border: 0 !important;
+    background: var(--m-surface-sheet) !important; color: var(--m-text) !important; font: 600 14px/1 var(--m-font) !important; box-shadow: none !important;
   }
-  .release-page__actions .release-page__actions-status--watching .uiv2-select__trigger { border-color: #6fa873 !important; }
-  .release-page__actions .release-page__actions-status--planned .uiv2-select__trigger { border-color: #a76fac !important; }
-  .release-page__actions .release-page__actions-status--completed .uiv2-select__trigger { border-color: #6974ac !important; }
-  .release-page__actions .release-page__actions-status--on_hold .uiv2-select__trigger { border-color: #d29742 !important; }
-  .release-page__actions .release-page__actions-status--dropped .uiv2-select__trigger { border-color: #c24e4d !important; }
-  .release-page__actions .release-page__actions-status--watching .uiv2-select__chevron { color: #6fa873 !important; }
-  .release-page__actions .release-page__actions-status--planned .uiv2-select__chevron { color: #a76fac !important; }
-  .release-page__actions .release-page__actions-status--completed .uiv2-select__chevron { color: #6974ac !important; }
-  .release-page__actions .release-page__actions-status--on_hold .uiv2-select__chevron { color: #d29742 !important; }
-  .release-page__actions .release-page__actions-status--dropped .uiv2-select__chevron { color: #c24e4d !important; }
-  // «Не смотрю»: шеврон слева без плашки, как в референсе
-  .release-page__actions .uiv2-select__trigger { flex-direction: row-reverse !important; justify-content: flex-start; gap: var(--m-space-3); padding: 0 var(--m-space-5) 0 var(--m-space-4) !important; }
+  .release-page__actions .uiv2-select__trigger { width: 100%; justify-content: space-between; gap: var(--m-space-1); padding: 0 var(--m-space-3) !important; }
   .release-page__actions .uiv2-select__chevron { background: transparent !important; border: 0 !important; width: auto !important; height: auto !important; color: var(--m-text) !important; svg { width: 18px; height: 18px; } }
   .release-page__actions-chip { padding: 0 var(--m-space-4) !important; display: inline-flex; align-items: center; gap: var(--m-space-2); svg { width: 18px; height: 18px; } }
   .release-page__actions-chip--comments { padding: 0 var(--m-space-3) !important; }
 
-  // «Воспроизвести»: светлая широкая кнопка
-  .release-page__play-slot { margin: var(--m-space-2) 0 var(--m-space-3); }
+  // «Воспроизвести»: акцентная кнопка, как на ПК
+  .release-page__play-slot { margin: 0 0 20px; }
   .release-page__btn--play {
-    height: 42px !important; min-height: 0 !important; width: 100%; border-radius: 21px !important; border: 0 !important; box-shadow: none !important;
-    background: var(--m-fill-button) !important; color: var(--m-on-fill-button) !important; font: 500 16px/1 var(--m-font) !important;
+    height: 48px !important; min-height: 0 !important; width: 100%; border-radius: 24px !important; border: 0 !important; box-shadow: none !important;
+    background: var(--m-primary) !important; color: var(--m-on-primary) !important; font: 600 15px/1 var(--m-font) !important;
     display: flex; align-items: center; justify-content: center; gap: var(--m-space-3);
     svg { width: 20px; height: 20px; }
   }
+  .release-page__btn--disabled { background: var(--m-surface-sheet) !important; color: var(--m-text-2) !important; }
   .release-page__play-row { display: flex; align-items: center; gap: var(--m-space-2); }
   .release-page__play-row .release-page__btn--play { flex: 1; width: auto; }
-  .release-page__more { flex: none; width: 36px; height: 40px; border: 0; background: none; color: var(--m-text); display: inline-flex; align-items: center; justify-content: center; svg { width: 22px; height: 22px; } }
   .release-page__episode-added { text-align: center; color: var(--m-text-3) !important; font-size: 12px; margin: var(--m-space-1) 0 0; }
 
   // предупреждение (лицензия): оливковая плашка
@@ -342,30 +378,152 @@ html.mobile-mode {
   }
 
   // строки «Япония, лето 2026 г. …»
-  .release-page__meta-info { gap: 0 !important; }
-  .release-page__meta-info-row { align-items: center; gap: var(--m-space-3); padding: 1px 0 !important; min-height: 0 !important; margin: 0 !important; }
+  .release-page__meta-info { gap: var(--m-space-1) !important; }
+  .release-page__meta-info--flat { margin-bottom: var(--m-space-3) !important; }
+  .release-page__note { margin-bottom: var(--m-space-3) !important; }
+  .release-page__desc { margin-bottom: var(--m-space-2) !important; }
+  .release-page__meta-info-row { align-items: center; gap: var(--m-space-3); padding: 0 !important; min-height: 0 !important; margin: 0 !important; }
   .release-page__meta-info-row svg { width: 20px; height: 20px; }
   .release-page__meta-info-text { display: block; text-align: left !important; font: 400 15px/1.35 var(--m-font) !important; color: var(--m-text) !important; }
   .release-page__meta-info-text a, .release-page__meta-info-link { display: inline !important; text-align: left; }
 }
 
+// Планшет: раскладка ПК (постер с кнопкой слева, описание справа) в ширину остальных страниц
+@media (min-width: 600px) {
+  html.mobile-mode {
+    .view-release { max-width: 56rem !important; }
+    // Сверху остаётся полоса под кнопки «назад» и «добавить в коллекцию»
+    .release-page__head { padding-top: calc(88px + var(--safe-top)) !important; margin-bottom: var(--m-space-4) !important; }
+    .release-page__head-aside-play { position: sticky !important; }
+    .release-page__head-aside-play .release-page__poster { width: 100% !important; border-radius: var(--m-radius-lg) !important; }
+    .release-page__head-brief { padding-top: 0 !important; }
+    .release-page__title { font: 700 26px/1.25 var(--m-font) !important; }
+    .release-page__title-en { justify-content: flex-start !important; }
+    .release-page__play-slot { margin: 0 !important; }
+    .release-page__actions { margin: 0 0 20px; }
+    // Кнопка повтора случайного релиза стоит правее заголовка
+    .m-app:has(.m-float-actions > :nth-child(2)) .release-page__title-row { padding-right: 56px; }
+  }
+}
+
+// Страница уже окна, и блок рекомендаций не достаёт до краёв: 56rem + панель разделов.
+// Скругляется сама подложка: она начинается ниже родителя, и родитель обрезал бы её не по углам
+@media (min-width: 984px) {
+  html.mobile-mode .release-page__recommended .release-page__section-bg { border-radius: var(--m-radius-lg); }
+}
+
+// ── Просмотр картинок: на весь экран, как в галерее телефона ──
+// Чёрный фон под строкой состояния и панелью навигации, картинка по краям экрана,
+// сверху панель «закрыть · счётчик · скачать · ссылка». Жесты обрабатывает сам компонент
+// Подложка строки состояния цвета темы поверх чёрного фона не нужна
+html.mobile-mode.mobile-native body:has(.uiv2-media-lightbox--mobile)::after { display: none; }
+
+html.mobile-mode .uiv2-media-lightbox--mobile {
+  z-index: 1300;
+  padding: 0;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+
+  .uiv2-media-lightbox__backdrop {
+    pointer-events: none;
+    background: #000;
+    opacity: calc(1 - var(--lightbox-drag, 0) * 0.85);
+  }
+
+  // Кадр — весь экран: маленькие картинки растягиваются до краёв, масштаб считается от видимой части
+  .uiv2-media-lightbox__stage {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    border-radius: 0;
+
+    img {
+      width: 100cqw !important;
+      height: 100cqh !important;
+      max-width: none;
+      max-height: none;
+      background: none;
+      transform-origin: center center;
+    }
+
+    video {
+      max-width: 100cqw;
+      max-height: calc(100cqh - var(--safe-top) - var(--safe-bottom) - 128px);
+    }
+  }
+
+  .uiv2-media-lightbox__peek {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+
+    img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+  }
+
+  &.uiv2-media-lightbox--settle {
+    .uiv2-media-lightbox__stage,
+    .uiv2-media-lightbox__stage img,
+    .uiv2-media-lightbox__peek {
+      transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+  }
+
+  .uiv2-media-lightbox__toolbar {
+    inset: 0 0 auto;
+    gap: var(--m-space-1);
+    padding: calc(var(--safe-top) + var(--m-space-2)) calc(var(--safe-right) + var(--m-space-2)) var(--m-space-6) calc(var(--safe-left) + var(--m-space-2));
+    background: linear-gradient(to bottom, color-mix(in srgb, #000 60%, transparent), transparent);
+    pointer-events: none;
+  }
+
+  .uiv2-media-lightbox__tool {
+    width: 48px;
+    height: 48px;
+    background: none;
+    pointer-events: auto;
+
+    &:hover:not(:disabled),
+    &:focus-visible { background: color-mix(in srgb, #fff 12%, transparent); outline: none; }
+
+    svg { width: 22px; height: 22px; }
+
+    // «Закрыть» — слева, как «назад» в галерее
+    &:last-child { order: -1; margin-right: auto; }
+  }
+
+  .uiv2-media-lightbox__count {
+    top: calc(var(--safe-top) + var(--m-space-2) + 24px);
+    bottom: auto;
+    transform: translate(-50%, -50%);
+    padding: 0;
+    background: none;
+    font: 500 16px/1 var(--m-font);
+    pointer-events: none;
+  }
+
+  .uiv2-media-lightbox__toolbar,
+  .uiv2-media-lightbox__count {
+    opacity: calc(1 - var(--lightbox-drag, 0) * 2);
+    transition: opacity 0.18s ease;
+  }
+
+  // Тап по картинке прячет панель, повторный — возвращает
+  &.uiv2-media-lightbox--bare {
+    .uiv2-media-lightbox__toolbar,
+    .uiv2-media-lightbox__count { opacity: 0; }
+    .uiv2-media-lightbox__tool { pointer-events: none; }
+  }
+}
+
 // ── Загрузки в окне «Выберите серию» ──
 html.mobile-mode {
   .watch-modal {
-    &__dl-bar { display: flex; gap: var(--m-space-2); margin: var(--m-space-3) var(--m-gutter) var(--m-space-2); }
-    &__dl-all {
-      flex: 1; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: var(--m-space-2);
-      height: 44px; padding: 0 var(--m-space-4); border: 0; border-radius: 22px; background: var(--m-secondary-container);
-      color: var(--m-on-secondary-container); font: 500 15px/1 var(--m-font);
-      svg { width: 20px; height: 20px; flex: none; }
-      span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      &:disabled { opacity: 0.55; }
-    }
-    &__dl-open {
-      position: relative; flex: none; height: 44px; padding: 0 var(--m-space-4); border: 1.5px solid var(--m-outline);
-      border-radius: 22px; background: transparent; color: var(--m-text); font: 500 15px/1 var(--m-font);
-    }
-    &__dl-dot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--m-primary); }
     &__dl-ring {
       display: inline-block; width: 22px; height: 22px; border-radius: 50%;
       background: conic-gradient(var(--m-primary) calc(var(--p, 0) * 1%), var(--m-outline-variant) 0);
@@ -439,102 +597,84 @@ html.mobile-mode {
     &__danger { color: var(--m-danger) !important; } }
 }
 
-// ── Меню «⋮» на странице релиза; плашка выбора плеера в окне серий ──
-html.mobile-mode {
-  .m-sheet-scrim { position: fixed; inset: 0; z-index: 70; display: flex; align-items: flex-end; background: rgba(0, 0, 0, 0.5); }
-  .m-sheet-scrim__bg { position: absolute; inset: 0; border: 0; background: none; padding: 0; }
-  .m-sheet-menu {
-    position: relative; width: 100%; padding: var(--m-space-3) var(--m-space-2) calc(var(--m-space-3) + env(safe-area-inset-bottom));
-    border-radius: 28px 28px 0 0; background: var(--m-surface-sheet);
-    button { display: flex; align-items: center; gap: var(--m-space-4); width: 100%; height: 56px; padding: 0 var(--m-space-4); border: 0; background: none; color: var(--m-text); font: 400 17px var(--m-font); text-align: left; svg { width: 22px; height: 22px; color: var(--m-text-2); } }
-  }
-  .watch-modal__player-pick {
-    display: flex; align-items: center; justify-content: space-between; width: calc(100% - 2 * var(--m-gutter)); margin: 0 var(--m-gutter) var(--m-space-2);
-    padding: 10px var(--m-space-4); border: 1.5px solid var(--m-outline-variant); border-radius: 16px; background: transparent; color: var(--m-text-2); font: 400 14px var(--m-font);
-    b { color: var(--m-text); font-weight: 500; }
-    &-act { color: var(--m-primary); font-weight: 500; }
-  }
-}
-
 // Под открытой шторкой/диалогом страница не прокручивается
 html.mobile-mode.m-scroll-lock { &, body { overflow: hidden !important; touch-action: none; } }
 html.mobile-mode {
-  .m-flow__body, .m-sheet-menu, .m-flow__dubs { overscroll-behavior: contain; touch-action: pan-y; }
+  .m-flow__body, .uiv2-menu-sheet__viewport, .m-flow__dubs { overscroll-behavior: contain; touch-action: pan-y; }
 }
 
 // ── Промо Anix+: карточка над таб-баром на всю ширину, а не desktop-тост в углу ──
 html.mobile-mode {
   .support-promo {
-    left: var(--m-gutter) !important;
-    right: var(--m-gutter) !important;
-    bottom: calc(var(--m-nav-h) + env(safe-area-inset-bottom) + var(--m-space-3)) !important;
+    left: calc(var(--m-rail-left) + var(--m-gutter)) !important;
+    right: calc(var(--m-rail-right) + var(--m-gutter)) !important;
+    bottom: calc(var(--m-nav-h) + var(--safe-bottom) + var(--m-space-3)) !important;
     width: auto !important;
     max-width: none !important;
     border-radius: 20px !important;
     background: var(--m-surface-sheet) !important;
     border: 0 !important;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+    transition: bottom 0.2s ease;
+    // Под нижней панелью (.m-dock, 30): раскрытые плитки разделов перекрывают карточку, а не наоборот
+    z-index: 29 !important;
+  }
+
+  // Панель уехала вниз при прокрутке: карточка опускается на её место и не висит в воздухе
+  &:has(.m-dock--hidden) .support-promo {
+    bottom: calc(var(--safe-bottom) + var(--m-space-3)) !important;
   }
 }
 
-// ── Закладки, как в Anixart: поиск по вкладке стоит в верхней панели (MobileLayout оставляет под него место),
-//    под вкладками — строка «N всего · сортировка · рандом»; аватар/ник и кнопка «по умолчанию» не нужны ──
+// ── Все комментарии и видео профиля — страница, как в приложении: «назад» — стрелка верхней панели,
+//    вкладки сверху (общее правило закладок ниже уводит .bookmarks__tabs в конец), «N всего» и сортировка с полями ──
+html.mobile-mode {
+  // Список видео — с полями экрана и отступом от шапки
+  .view-profile-videos .video-list { padding: var(--m-space-3) var(--m-gutter) 0; }
+  :is(.view-profile-comments, .view-profile-videos) .profile-subpage__head { position: sticky; top: 0; z-index: 12; margin: 0 0 var(--m-space-2); }
+  .view-profile-comments {
+    // Шапка, вкладки и список вплотную: без desktop-зазоров .search-page
+    .search-page { gap: 0; }
+    .profile-comments__sticky--page { top: 0; background: var(--m-bg); }
+    // Липкий здесь весь блок: у шапки своё sticky и черта не нужны — черта есть под вкладками
+    .profile-comments__sticky--page .profile-subpage__head { position: static; margin-bottom: 0; box-shadow: none; animation: none; }
+    .profile-comments__tabs { margin: 0 !important; padding-top: 0 !important; }
+    .profile-comments__thread { padding-inline: var(--m-gutter); }
+  }
+}
+
+// ── Закладки, как в Anixart: поиск по вкладке открывается из верхней панели (MobileLayout),
+//    остальное как на ПК: шапка с меню, вкладки, сортировка, фильтр анонсов и случайный тайтл ──
 html.mobile-mode {
   .view-bookmarks { display: flex !important; flex-direction: column; padding: 0 !important; }
-  .bookmarks__search {
-    order: 0;
-    position: relative; z-index: 6;
-    // высота верхней панели: 12 + 48 + 9 (mobile-components .m-topbar); справа — две иконки по 48 + отступ
-    margin: -57px 104px 9px var(--m-gutter) !important;
-    width: auto !important;
-    height: 48px !important;
-    border: 0 !important;
-    border-radius: var(--m-radius-pill) !important;
-    background: var(--m-surface-sheet) !important;
-    box-shadow: none !important;
-    padding: 0 var(--m-space-4) !important;
-    gap: 13px;
-    svg { width: 24px; height: 24px; color: var(--m-text-2); }
+  .bookmarks__tabs { order: 2; }
+  // Шапка и инструменты — те же компоненты, что на ПК (BookmarksDesktopHead, BookmarksDesktopTools)
+  .bm-head {
+    order: 1;
+    margin: 0 !important;
+    padding: var(--m-space-1) var(--m-gutter) var(--m-space-2) !important;
   }
-  .bookmarks__search-input { font: 400 16px var(--m-font) !important; color: var(--m-text) !important; &::placeholder { color: var(--m-text-2); } }
-  .bookmarks__tabs { order: 1; }
-  .bookmarks__user-header {
-    order: 2;
-    display: flex !important; align-items: center; height: auto !important; min-height: 0 !important;
-    margin: 0 !important; padding: var(--m-space-3) var(--m-gutter) 0 !important;
-    &:not(:has(.bookmarks-toolbar, .bookmarks-toolbar__count)) { display: none !important; }
+  .bm-head__profile { min-width: 0; padding: 0 !important; background: none !important; }
+  .bm-head__avatar { width: 44px !important; height: 44px !important; }
+  .bm-head__title { font: 600 18px/1.2 var(--m-font) !important; color: var(--m-text) !important; }
+  .bm-head__meta { font: 400 13px/1.3 var(--m-font) !important; color: var(--m-text-2) !important; }
+  .bm-tools {
+    order: 3;
+    flex-wrap: nowrap !important;
+    gap: var(--m-space-2) !important;
+    margin: 0 !important;
+    padding: var(--m-space-3) var(--m-gutter) 0 !important;
+    // Строка есть на всех вкладках, даже без кнопок: при перелистывании список не прыгает
+    box-sizing: border-box;
+    min-height: 52px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+    > * { flex: none; }
   }
-  .bookmarks__user, .bookmarks__user-actions > .bookmarks-toolbar__icon-btn,
-  .bookmarks-toolbar__actions > .bookmarks-toolbar__icon-btn:first-child { display: none !important; }
-  .bookmarks__user-actions { flex: 1; display: flex; align-items: center; width: 100%; }
-  .bookmarks-toolbar { flex: 1; display: flex !important; align-items: center; justify-content: space-between; gap: var(--m-space-3); }
-  .bookmarks-toolbar__count {
-    display: inline !important; // desktop-контейнерный запрос прячет счётчик на узкой ширине
-    padding: 0 !important; border: 0 !important; background: none !important;
-    font: 400 16px var(--m-font) !important; color: var(--m-text-2) !important;
-    &::after { content: ' всего'; }
-  }
-  .bookmarks-toolbar__actions { display: flex; align-items: center; gap: var(--m-space-3); margin-left: auto; }
-  .bookmarks-toolbar__sort .uiv2-select__field, .bookmarks-toolbar__actions > .bookmarks-toolbar__icon-btn {
-    height: 44px !important; min-height: 0 !important; border: 0 !important; border-radius: var(--m-radius-pill) !important;
-    background: var(--m-surface-sheet) !important; box-shadow: none !important; color: var(--m-text) !important;
-  }
-  .bookmarks-toolbar__sort .uiv2-select__field { padding: 0 var(--m-space-4) !important; font: 500 15px var(--m-font) !important; }
-  // «≡ По добавлению ▾» — одна строка, направление сортировки видно в открытом списке
-  .bookmarks-toolbar__sort .uiv2-select__trigger {
-    height: 44px !important; min-height: 0 !important; padding: 0 var(--m-space-3) 0 var(--m-space-4) !important;
-    border: 0 !important; background: transparent !important; box-shadow: none !important; gap: var(--m-space-2) !important;
-    color: var(--m-text) !important; font: 500 15px var(--m-font) !important;
-    &::before {
-      content: ''; flex: none; width: 20px; height: 20px; margin-right: 6px; background: currentColor;
-      -webkit-mask: linear-gradient(currentColor 0 0) 0 4px / 20px 2px no-repeat, linear-gradient(currentColor 0 0) 0 9px / 14px 2px no-repeat, linear-gradient(currentColor 0 0) 0 14px / 8px 2px no-repeat;
-      mask: linear-gradient(#000 0 0) 0 4px / 20px 2px no-repeat, linear-gradient(#000 0 0) 0 9px / 14px 2px no-repeat, linear-gradient(#000 0 0) 0 14px / 8px 2px no-repeat;
-    }
-  }
-  .bookmarks-toolbar__sort .uiv2-select__value-desc { display: none !important; }
-  .bookmarks-toolbar__sort .uiv2-select__chevron { background: transparent !important; border: 0 !important; width: auto !important; height: auto !important; color: var(--m-text) !important; }
-  .bookmarks-toolbar__actions > .bookmarks-toolbar__icon-btn { width: 56px !important; svg { width: 22px; height: 22px; } }
-  .bookmarks__content { order: 3; }
+  .bm-tools__note { color: var(--m-text-2); font: 400 14px/20px var(--m-font); }
+  .uiv2-card.bookmarks__unvoted { margin: var(--m-space-3) var(--m-gutter) 0 !important; }
+  .bookmarks__content { order: 5; }
   .bookmarks__collections { padding: var(--m-space-3) var(--m-gutter) var(--m-space-5) !important; gap: var(--m-space-4) var(--m-space-3) !important; }
 }
 
@@ -581,7 +721,8 @@ html.mobile-mode {
     padding-left: var(--m-gutter) !important;
     padding-right: var(--m-gutter) !important;
   }
-  .release-page__section, .release-page__recommended-panel { margin-top: var(--m-space-2); border-top: 0 !important; }
+  .release-page__section, .release-page__recommended { margin-top: var(--m-space-5); }
+  .release-page__section, .release-page__recommended-panel { border-top: 0 !important; }
   .release-page__recommended { padding: 0 !important; border: 0 !important; }
   .release-page__recommended-panel { border: 0 !important; background: transparent !important; border-radius: 0 !important; }
   .release-page__section > .release-page__carousel-nav, .release-page__recommended-panel > .uiv2-carousel {
@@ -598,22 +739,52 @@ html.mobile-mode {
   .release-page__screenshot-btn { width: auto !important; border-radius: var(--m-radius-md) !important; overflow: hidden; }
 }
 
+@keyframes m-head-divider {
+  from { box-shadow: inset 0 -1px 0 transparent; }
+  to { box-shadow: inset 0 -1px 0 var(--m-outline-variant); }
+}
+
 // ── Профиль, как в Anixart: баннер на всю ширину, контент — «шторка» со скруглением 28dp поверх баннера;
-//    «Редактировать» — контурная кнопка, соцсети — контурные плитки в цвете сервиса ──
+//    кнопки действий — как на ПК, соцсети — контурные плитки в цвете сервиса ──
 html.mobile-mode {
   .m-fullscreen--profile {
-    .profile-panel__banner { height: 150px !important; border-radius: 0 !important; }
+    // Баннер — скруглённая карточка под панелью поиска (и на телефоне, и на планшете).
+    // Панель лежит поверх содержимого с фоном страницы, как на других вкладках, и прячется при прокрутке:
+    // в потоке она при скрытии оставляла бы пустую полосу 69px
+    .profile-panel__banner {
+      margin-top: 0;
+      border-radius: 24px 24px 0 0 !important;
+      // На всю ширину — вровень с шапкой профиля под ним
+      @media (max-width: 599px) { height: 168px !important; }
+      @media (min-width: 600px) { height: auto !important; }
+    }
+    // Панель без подложки: поиск, настройки и уведомления — отдельные полупрозрачные островки
+    > .m-topbar {
+      position: absolute;
+      inset: 0 0 auto;
+      z-index: 2;
+      background: none !important;
+      .m-search, .m-icon-btn {
+        background: color-mix(in srgb, var(--m-bg) 55%, transparent);
+        backdrop-filter: blur(12px);
+      }
+      .m-icon-btn { margin-left: var(--m-space-1); }
+      .m-icon-btn--lead { margin-left: 0; margin-right: var(--m-space-1); flex: none; }
+    }
+
+    .profile-panel__inner-slide:first-child .profile-panel__top { padding-top: calc(var(--safe-top) + 69px); }
+
+    // Внутренний экран (друзья, редактор …): шапки поиска нет, своя шапка начинается под строкой состояния
+    &.m-fullscreen--profile-sub > .m-topbar { display: none; }
+    &.m-fullscreen--profile-sub .profile-panel__inner-slide + .profile-panel__inner-slide {
+      padding-top: var(--safe-top);
+    }
     .profile-panel__head {
       position: relative; z-index: 1;
       margin-top: -32px !important; padding-top: 0 !important;
       border-radius: 28px 28px 0 0; background: var(--m-bg);
     }
     .profile-panel__identity { margin-top: -60px; }
-    .profile-panel__cta .uiv2-btn--chrome {
-      height: 48px !important; border: 1.5px solid var(--m-outline) !important; background: transparent !important;
-      box-shadow: none !important; color: var(--m-text) !important; font: 500 16px var(--m-font) !important;
-    }
-    .profile-panel__cta .uiv2-round-btn { width: 48px !important; height: 48px !important; background: var(--m-surface-sheet) !important; box-shadow: none !important; svg { transform: rotate(90deg); } }
     .profile-panel__social-row { gap: var(--m-space-5) !important; }
     .profile-panel__social-row .uiv2-round-btn {
       width: 64px !important; height: 42px !important; border-radius: 12px !important; box-shadow: none !important;
@@ -639,6 +810,57 @@ html.mobile-mode {
     }
     .profile-panel__edit-divider { margin: var(--m-space-3) var(--m-gutter); background: var(--m-outline-variant); }
   }
+}
+
+
+// «Назад» слева от поиска в верхней панели (чужие списки и т.п.)
+html.mobile-mode .m-topbar > .m-icon-btn--lead { flex: none; margin-left: 0 !important; margin-right: var(--m-space-1); }
+
+// ── Шапка подэкранов профиля (друзья, значки, редактор, все комментарии / видео): стрелка, аватар, заголовок ──
+html.mobile-mode :is(.m-fullscreen--profile, .view-profile-comments, .view-profile-videos) {
+    // Внутренние экраны (друзья, значки, редактор …): вместо desktop-пилюли «Экран | ник» —
+    // верхняя панель Android: стрелка «назад» без подложки, заголовок экрана и под ним контекст мелким
+    :is(.profile-panel__friends-head, .profile-subpage__head) {
+      padding: var(--m-space-2) var(--m-gutter) var(--m-space-2) var(--m-space-1) !important;
+      background: var(--m-bg);
+      // Черта под шапкой, когда содержимое уходит под неё (без поддержки scroll-timeline — всегда)
+      box-shadow: inset 0 -1px 0 var(--m-outline-variant);
+      @supports (animation-timeline: scroll()) {
+        animation: m-head-divider linear both;
+        animation-timeline: scroll(nearest block);
+        animation-range: 0 12px;
+      }
+    }
+    .uiv2-back-bar { display: flex; width: 100%; gap: var(--m-space-1); }
+    .uiv2-back-bar > .uiv2-round-btn {
+      flex: none; width: 48px !important; height: 48px !important; border-radius: 50% !important;
+      background: transparent !important; box-shadow: none !important; backdrop-filter: none !important;
+      color: var(--m-text) !important;
+      svg { width: 24px; height: 24px; }
+      &:active { background: var(--m-surface-block) !important; }
+    }
+    .uiv2-back-bar { align-items: center; }
+    .uiv2-back-bar__avatar {
+      display: block; flex: none; width: 40px; height: 40px; margin-right: var(--m-space-2);
+      border-radius: 50%; background: var(--m-surface-block) center / cover no-repeat;
+    }
+    .uiv2-back-bar__pill {
+      flex: 1 1 auto; max-width: none; height: auto; overflow: hidden;
+      border-radius: 0; background: none; box-shadow: none; backdrop-filter: none;
+    }
+    .uiv2-back-bar__track {
+      flex-wrap: wrap; align-items: baseline; column-gap: 6px; row-gap: 0;
+      width: auto; min-width: 0; padding: 0;
+    }
+    .uiv2-back-bar__sep { display: none; }
+    .uiv2-back-bar__seg {
+      max-width: 100%; padding: 0; border-radius: 0; background: none;
+      font: 400 13px/1.3 var(--m-font); color: var(--m-text-2);
+      &--active { order: -1; flex: 0 0 100%; font: 500 20px/1.25 var(--m-font); color: var(--m-text); }
+    }
+    .uiv2-back-bar__seg:not(.uiv2-back-bar__seg--active) ~ .uiv2-back-bar__seg:not(.uiv2-back-bar__seg--active)::before {
+      content: '·'; margin-right: 6px;
+    }
 }
 
 // ── Связанные релизы, как в Anixart: компактные строки (постер 48×71, название, «год • оценка ★ тип»),
@@ -735,5 +957,458 @@ html.mobile-mode {
       margin-top: 2px; font: 400 14px/19px var(--m-font); color: var(--m-text-3);
       display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
     }
+  }
+}
+
+// ── Уведомления — страница со своей шапкой: «назад», заголовок и действия в одной строке, ниже вкладки и список ──
+html.mobile-mode {
+  .notifications-page {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh * var(--m-vh-fix, 1) - var(--safe-top) - var(--m-nav-h) - var(--safe-bottom));
+
+    .notifications-modal__header {
+      flex: none;
+      gap: var(--m-space-1);
+      min-height: 64px;
+      margin: 0;
+      padding: var(--m-space-2) var(--m-space-2) var(--m-space-2) var(--m-space-1);
+      border-bottom: 0;
+    }
+    .notifications-modal__back {
+      display: grid; place-items: center; flex: none;
+      width: 48px; height: 48px; padding: 0; border: 0; border-radius: 50%;
+      background: none; color: var(--m-text);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .notifications-modal__heading { flex: 1; min-width: 0; font: 600 20px/1.2 var(--m-font); color: var(--m-text); }
+    .notifications-modal__header-actions { gap: var(--m-space-1); }
+    .notifications-modal__header-actions .uiv2-round-btn {
+      width: 44px !important; height: 44px !important;
+      background: var(--m-surface-chip) !important; color: var(--m-text) !important;
+      svg { width: 20px; height: 20px; }
+    }
+
+    .notifications-modal__page { flex: 1; min-height: 0; }
+
+    // Строки как в списках Anixart: аватар 48, текст 15, время мелко под ним
+    .notifications-modal__item {
+      gap: var(--m-space-3);
+      padding: var(--m-space-3) var(--m-gutter);
+      border-radius: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .notifications-modal__item--new { background: color-mix(in srgb, var(--m-text) 4%, transparent); }
+    .notifications-modal__thumb { width: 48px; height: 48px; }
+    .notifications-modal__text { color: var(--m-text); font: 400 15px/1.4 var(--m-font); }
+    .notifications-modal__time { margin-top: var(--m-space-1); color: var(--m-text-2); font-size: 13px; }
+    .notifications-modal__state { color: var(--m-text-2); font-size: 15px; }
+  }
+}
+
+// ── Плашки над списком на главной ──
+// «Продолжить просмотр»: обложка, полоса прогресса с таймкодом во всю ширину текста, кнопка цвета акцента.
+// «Доступно обновление» (HomeMobileUpdate.svelte): на телефоне строка над ней, на планшете колонка справа.
+html.mobile-mode {
+  .home-mobile-cards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--m-space-2);
+    // Сверху и снизу по 16: снизу их даёт верхнее поле списка (.release-cards-grid-root), сверху — этот отступ,
+    // а свой нижний отступ вкладок, пока есть плашки, убран
+    padding: var(--m-space-4) var(--m-gutter) 0;
+    &:not(:has(> *)) { display: none; }
+  }
+  .view-home:has(.home-mobile-cards > *) .releases-type { margin-bottom: 0 !important; }
+  // У списка сверху отрицательный отступ (-0.6rem) — под плашками он съедал половину зазора
+  .view-home:has(.home-mobile-cards > *) .release-cards-grid-root { margin-top: 0 !important; }
+
+  .home-continue {
+    position: relative;
+    margin: 0;
+    padding: var(--m-space-3);
+    border-radius: 16px;
+    background: var(--m-surface-block);
+    box-shadow: none;
+  }
+  .home-continue__row {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    gap: var(--m-space-3);
+    align-items: center;
+  }
+  // Обложка — постер 2:3, скругление меньше, чем у карточки
+  .home-continue__poster { width: 64px; border-radius: 8px; }
+  .home-continue__meta { gap: 4px; padding: 0; }
+  .home-continue__kicker { display: none; } // заголовок карточки и кнопка «играть» говорят то же самое
+  .home-continue__title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    color: var(--m-text);
+    font: 500 16px/20px var(--m-font);
+    white-space: normal;
+  }
+  .home-continue__sub { font: 400 13px/16px var(--m-font); color: var(--m-text-2); }
+  .home-continue__track { width: 100%; gap: var(--m-space-2); margin-top: var(--m-space-2); }
+  .home-continue__bar {
+    height: 4px;
+    background: color-mix(in srgb, var(--m-text) 12%, transparent);
+    > span { background: var(--m-primary); }
+  }
+  .home-continue__time { font: 500 12px/16px var(--m-font); color: var(--m-text-2); }
+
+  // Плашки на телефоне не закрываются: справа только «играть», по центру высоты
+  .home-continue__actions { align-self: center; }
+  .home-continue__actions .uiv2-btn {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--m-primary) !important;
+    color: var(--m-on-primary, #fff) !important;
+    box-shadow: none;
+    transition: transform 0.12s ease, filter 0.12s ease;
+    &:active:not(:disabled) { transform: scale(0.94); filter: brightness(0.92); }
+    .uiv2-btn__label { display: none; }
+  }
+  .home-continue__play-icon {
+    display: inline-flex;
+    margin-left: 2px; // треугольник визуально по центру круга
+    svg { width: 20px; height: 20px; }
+  }
+  .home-continue__dismiss { display: none; }
+}
+
+// Планшет: плашки рядом
+@media (min-width: 600px) {
+  html.mobile-mode {
+    // Плашки в ряд: «Продолжить» широкая, обновление — колонка справа; одна плашка — во всю ширину
+    .home-mobile-cards {
+      flex-direction: row;
+      align-items: stretch;
+      gap: var(--m-space-3);
+
+      > .home-continue { flex: 1 1 0; min-width: 0; order: 1; }
+      > .m-home-update { flex: 0 0 min(300px, 36%); order: 2; }
+      > :only-child { flex: 1 1 100% !important; }
+    }
+    .home-continue { padding: var(--m-space-3) var(--m-space-4) var(--m-space-3) var(--m-space-3); }
+    .home-continue__row { grid-template-columns: 72px minmax(0, 1fr) auto; gap: var(--m-space-4); }
+    .home-continue__poster { width: 72px; }
+    .home-continue__title { font-size: 17px; line-height: 22px; }
+    // Рядом колонка обновления — «играть» остаётся круглой под ✕, тексту хватает места
+    .home-continue__actions .uiv2-btn { width: 48px; height: 48px; }
+    .home-continue__play-icon svg { width: 22px; height: 22px; }
+
+    // Обновление без «Продолжить просмотр» — одной строкой во всю ширину
+    .home-mobile-cards > .m-home-update:only-child {
+      flex-wrap: nowrap;
+      align-items: center;
+      padding: var(--m-space-3) var(--m-space-4) var(--m-space-3) var(--m-space-3);
+      .m-home-update__text { flex-basis: auto; padding-top: 0; }
+      .m-home-update__btn { flex: none; order: 3; }
+    }
+  }
+}
+
+// ── Результаты поиска: без баннера ПК, вкладки как на главной, отступы как у списков ──
+html.mobile-mode {
+  .view-search-v2 { padding: 0 0 var(--m-space-4) !important; }
+  .search-v2__actions { padding: var(--m-space-3) var(--m-gutter) 0; }
+  .search-v2__filter {
+    height: 36px; background: var(--m-secondary-container); color: var(--m-on-secondary-container);
+    font: 500 14px var(--m-font);
+  }
+  // width: 100% вместе с боковыми отступами выводил карточку за правый край экрана
+  .search-v2__franchise {
+    width: calc(100% - 2 * var(--m-gutter)); margin: var(--m-space-4) var(--m-gutter) 0; gap: var(--m-space-3); padding: var(--m-space-3);
+    background: var(--m-surface-block); box-shadow: none;
+    &:active:not(:disabled) { background: var(--m-surface-chip); }
+    .uiv2-franchise__deck { width: 72px; height: 62px; }
+    .uiv2-franchise__poster { width: 44px; height: 62px; border-radius: 8px; box-shadow: none; }
+    .uiv2-franchise__poster:nth-child(2) { left: 14px; }
+    .uiv2-franchise__poster:nth-child(3) { left: 28px; }
+    .uiv2-franchise__title {
+      font: 500 15px/20px var(--m-font); white-space: normal;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    }
+    .uiv2-franchise__meta { color: var(--m-text-2); font: 400 13px/18px var(--m-font); }
+    // Вся карточка нажимается: вместо кнопки «Перейти» только стрелка, текст получает всю ширину
+    .uiv2-franchise__action { padding: 0; background: none !important; color: var(--m-text-2) !important; }
+    .uiv2-franchise__action-label { display: none; }
+  }
+  .search-v2__people { padding: var(--m-space-4) var(--m-gutter) 0; }
+  .search-v2__skeleton-grid { padding: var(--m-space-4) var(--m-gutter) 0; }
+  .view-search-v2 .collections-feed { padding: var(--m-space-4) var(--m-gutter) 0; }
+}
+
+// ── Верхняя панель и вкладки закреплены: при прокрутке вниз уходят, при прокрутке вверх возвращаются ──
+html.mobile-mode {
+  .m-app__scroll {
+    --m-bars-h: calc(69px + var(--safe-top)); // верхняя панель: строка состояния + 12 + 48 + 9
+    --m-sticky-top: var(--m-bars-h);  // куда прилипают вкладки внутри страниц
+    &--no-bar, &--bars-hidden { --m-sticky-top: var(--safe-top); }
+
+    > .m-topbar {
+      position: sticky;
+      top: 0;
+      z-index: 14;
+      background-color: var(--m-bg);
+      transition: transform 0.2s ease, background-color 0.2s ease;
+    }
+    // Уходит только под строку состояния, а вкладки страниц едут на то же расстояние — без щели во время
+    // анимации. Остаток панели под значками прозрачный: страница видна, её затемняет градиент body::after
+    &--bars-hidden > .m-topbar {
+      transform: translateY(calc(var(--safe-top) - 100%));
+      background-color: transparent;
+    }
+    // Содержимое панели гаснет вместе с ней
+    > .m-topbar > * { transition: opacity 0.2s ease; }
+    &--bars-hidden > .m-topbar > * { opacity: 0; pointer-events: none; }
+  }
+
+  // sticky не работает внутри контейнера с overflow
+  .view-home, .view-bookmarks, .view-search-v2 { overflow: visible !important; }
+
+  // Статичные вкладки (в баннерах страниц) не прилипают: top сдвинул бы их относительно своего места
+  .m-app__content .uiv2-tabs:not(.uiv2-tabs--static) { top: var(--m-sticky-top) !important; }
+
+  // Вкладки разделов у самого верха страницы уезжают вместе с панелью
+  .m-app__content .releases-type, .m-app__content .bookmarks__tabs, .m-app__content .search-v2__tabs {
+    position: sticky !important;
+    top: var(--m-bars-h) !important;
+    z-index: 10; // у вкладок поиска (--static) z-index: auto, и карточки перекрывали их при прокрутке
+    transition: transform 0.2s ease;
+  }
+  .m-app__scroll--bars-hidden .releases-type, .m-app__scroll--bars-hidden .bookmarks__tabs, .m-app__scroll--bars-hidden .search-v2__tabs {
+    transform: translateY(calc(-1 * var(--m-bars-h) - 48px));
+  }
+}
+
+// Планшет: содержимое верхней панели по ширине страницы (56rem, как у .view), фон остаётся во всю ширину
+@media (min-width: 600px) {
+  html.mobile-mode :is(.m-app__scroll, .m-fullscreen--profile) > .m-topbar {
+    --m-page-inset: calc((100% - 56rem) / 2);
+    padding-left: max(var(--m-gutter), var(--m-page-inset));
+    padding-right: max(var(--m-space-1), var(--m-page-inset));
+  }
+}
+
+// ── Шапка разделов (DiscoverHero): Популярное, Коллекции, Fluo ──────────────────────────────────
+// Та же шапка, что на ПК, с отступами и размерами телефона. Вкладки на всю ширину, как на Главной.
+html.mobile-mode {
+  .view-popular, .view-collections-list, .view-fluo, .view-filtered {
+    overflow: visible !important; // иначе закреплённые вкладки не прилипают
+    padding: 0 var(--m-gutter) var(--m-space-4) !important;
+  }
+
+  .discover-hero {
+    margin: 0 calc(-1 * var(--m-gutter)) var(--m-space-4);
+    padding-top: var(--m-space-4);
+  }
+  .discover-hero__head { flex-wrap: nowrap; align-items: center; padding: 0 var(--m-gutter); }
+  .discover-hero__lead { flex: 1 1 0; }
+  // «Назад» слева от аватара (коллекции пользователя): стрелка без подложки, как в шапках подэкранов
+  .discover-hero__back.uiv2-round-btn {
+    flex: none; width: 40px !important; height: 40px !important; margin-left: -8px;
+    background: transparent !important; box-shadow: none !important; backdrop-filter: none !important;
+    color: var(--m-text) !important;
+    svg { width: 24px; height: 24px; }
+    &:active { background: var(--m-surface-block) !important; }
+  }
+  .discover-hero__avatar { width: 44px; height: 44px; }
+  .discover-hero__profile { gap: var(--m-space-3); }
+  .discover-hero__title { font: 600 24px/32px var(--m-font); letter-spacing: 0; color: var(--m-text); }
+  .discover-hero__subtitle { margin-top: 2px; font: 400 14px/20px var(--m-font); color: var(--m-text-2); }
+  .discover-hero__actions { flex: none; margin-left: 0; }
+
+  // Под верхней панелью, если она есть на странице
+  // Под верхней панелью; когда она уходит, вкладки едут вместе с ней (тот же transition) и встают
+  // под строку состояния — сдвиг на высоту панели без строки состояния, иначе уезжали под шторку
+  .discover-hero-dock { top: var(--safe-top); margin: 0 calc(-1 * var(--m-gutter)); transition: transform 0.2s ease; }
+  .m-app__scroll:not(.m-app__scroll--no-bar) .discover-hero-dock { top: var(--m-bars-h); }
+  .m-app__scroll--bars-hidden:not(.m-app__scroll--no-bar) .discover-hero-dock {
+    transform: translateY(calc(var(--safe-top) - var(--m-bars-h)));
+  }
+  .discover-hero-dock__bar { padding: 0; background: var(--m-bg); transition: none; &::after { display: none; } }
+  // Вкладки прилипли под строку состояния: полоса над ними — сплошной фон вкладок, страница под ней не видна
+  .m-app__scroll:is(.m-app__scroll--bars-hidden, .m-app__scroll--no-bar) .discover-hero-dock__bar--visible::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: var(--safe-top);
+    background: var(--m-bg);
+    pointer-events: none;
+  }
+
+  // Популярное: чья статистика — переключатель из двух сегментов, видно, что это кнопки
+  .popular-source__tabs.uiv2-tabs {
+    background: transparent !important;
+    .uiv2-tabs__row, .uiv2-tabs__nav, .uiv2-tabs__scroll { height: 36px !important; min-height: 0; }
+    .uiv2-tabs__row { box-shadow: none; }
+    .uiv2-tabs__nav { border-radius: var(--m-radius-pill) !important; background: var(--m-surface-sheet) !important; }
+    .uiv2-tabs__scroll { overflow: hidden; border-radius: var(--m-radius-pill) !important; }
+    .uiv2-tabs__tab { height: 36px; padding: 0 var(--m-space-3); border-radius: var(--m-radius-pill) !important; font-size: 13px !important; }
+    .uiv2-tabs__tab-label { height: 36px; }
+    // Здесь индикатор — заливка сегмента, она переезжает к выбранному
+    .uiv2-tabs__indicator { background: var(--m-surface-raised) !important; border-radius: var(--m-radius-pill) !important; }
+    .uiv2-tabs__indicator::after { display: none; }
+  }
+
+  // Кнопка фильтров слева от вкладок, как настройки вкладок на Главной
+  .popular-filters-slot { --slot-width: 52px; --slot-gap: 0px; }
+  .popular-filters-btn--on { color: var(--m-text) !important; }
+  .popular-filters-btn__count { top: 6px; right: 8px; background: var(--m-primary); color: var(--m-on-primary); }
+
+  // Коллекции: «Мои» и «Создать» рядом с заголовком
+  .collections-header-actions { gap: var(--m-space-2); min-height: 0; padding: 0; background: none; box-shadow: none; }
+  .collections-header-actions__btn {
+    justify-content: center;
+    height: 36px;
+    padding: 0 var(--m-space-3);
+    border-radius: var(--m-radius-pill);
+    background: var(--m-surface-sheet);
+    color: var(--m-text-2);
+    font: 500 14px/1 var(--m-font);
+    &--active { background: var(--m-surface-raised); color: var(--m-text); }
+    &--create {
+      width: 36px;
+      padding: 0;
+      color: var(--m-text);
+      span { display: none; }
+      svg { width: 24px; height: 24px; }
+    }
+  }
+
+  .view-filtered .bookmarks__grid { margin: 0 calc(-1 * var(--m-gutter)); }
+
+  // Fluo: поле кода во всю ширину, кнопки под ним поровну
+  .view-fluo .discover-hero__foot { padding: 0 var(--m-gutter) var(--m-space-3); }
+  .view-fluo .fluo-page__toolbar { gap: var(--m-space-2); }
+  .view-fluo .fluo-page__code { flex: 1 0 100%; max-width: none; }
+  .view-fluo .fluo-page__toolbar .uiv2-btn { flex: 1 1 0; margin-left: 0; }
+
+  // Топ-3: постеры с номером на обложке вместо ступеней, подписи на одной линии
+  .popular-podium {
+    grid-template-columns: 1fr 1.14fr 1fr;
+    align-items: start;
+    gap: var(--m-space-2);
+    margin: 0 auto var(--m-space-5);
+  }
+  // Боковые ниже лидера ровно настолько, чтобы низ обложек и подписи совпали (2:3 от разницы ширины)
+  .popular-podium__place--2, .popular-podium__place--3 { margin-top: 21%; }
+  .popular-podium__place { gap: 0; }
+  .popular-podium__place .uiv2-anime-card__poster { border-radius: var(--m-radius-md); box-shadow: none; }
+  .popular-podium__step {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    z-index: 2;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--podium-tone);
+    pointer-events: none;
+  }
+  .popular-podium--skeleton .popular-podium__step { display: none; }
+  .popular-podium__rank,
+  .popular-podium__place--1 .popular-podium__rank {
+    font: 700 14px/1 var(--m-font);
+    letter-spacing: 0;
+    color: #141414;
+  }
+  .popular-podium .uiv2-anime-card__title {
+    display: -webkit-box;
+    overflow: hidden;
+    min-height: 2.5em;
+    margin: var(--m-space-2) 0 0;
+    color: var(--m-text);
+    font: 500 13px/1.25 var(--m-font);
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .popular-podium .uiv2-anime-card__meta { margin-top: var(--m-space-1); color: var(--m-text-2); font-size: 12px; }
+  // В узкой колонке хватает места на серии и рейтинг, год лишний
+  .popular-podium .uiv2-anime-card__meta-sep,
+  .popular-podium .uiv2-anime-card__meta-sep ~ .uiv2-anime-card__meta-text { display: none; }
+
+  // С четвёртого места — обычный список, как на Главной, номер на обложке
+  .view-popular .popular-list { gap: var(--m-space-5); margin: 0 calc(-1 * var(--m-gutter)); }
+  .popular-row {
+    position: relative;
+    display: block;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    &:hover { background: transparent; }
+    &--skeleton { padding: 0 var(--m-gutter); }
+  }
+  .popular-row .uiv2-anime-card--compact { align-items: flex-start; }
+  .popular-row .uiv2-anime-card__chips { display: none; }
+  .popular-row__rank {
+    position: absolute;
+    top: 6px;
+    left: calc(var(--m-gutter) + 6px);
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 var(--m-space-1);
+    box-sizing: border-box;
+    border-radius: var(--m-radius-pill);
+    background: rgba(0, 0, 0, 0.72);
+    color: #fff;
+    font: 700 13px/1 var(--m-font);
+    letter-spacing: 0;
+    pointer-events: none;
+    -webkit-text-stroke: 0;
+  }
+}
+
+// ── Перелистывание вкладок: соседняя вкладка (TabPeek) проявляется на месте текущей, та гаснет ──
+html.mobile-mode {
+  // clip, а не hidden: не создаёт области прокрутки, закреплённые вкладки внутри продолжают прилипать.
+  // Запас 69px — высота верхней панели: поле поиска «Закладок» стоит в ней, выше начала контента
+  .m-app__content { overflow: clip; overflow-clip-margin: 69px; min-height: calc(100% - 69px); }
+  .pp-sections { overflow: clip; }
+
+  .tab-peek {
+    position: absolute;
+    top: var(--tab-peek-top, 0px);
+    left: 0;
+    width: 100%;
+    // В покое панель заранее отрисована, но скрыта и не удлиняет короткую страницу
+    max-height: calc(100dvh * var(--m-vh-fix, 1) - 140px);
+    overflow: hidden;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  // Значения задаёт actions/swipeTabs; показывается только соседняя вкладка со стороны свайпа
+  [data-tab-swiping] > :not(.tab-peek) {
+    opacity: calc(1 - var(--tab-swipe-p, 0));
+    transform: translate3d(var(--tab-swipe-x, 0), 0, 0);
+    transition: var(--tab-swipe-transition, none);
+    will-change: opacity, transform;
+  }
+
+  [data-tab-swiping='1'] > [data-tab-peek='1'],
+  [data-tab-swiping='-1'] > [data-tab-peek='-1'] {
+    max-height: calc(100dvh * var(--m-vh-fix, 1));
+    visibility: visible;
+    opacity: var(--tab-swipe-p, 0);
+    transform: translate3d(var(--tab-swipe-in-x, 0), 0, 0);
+    transition: var(--tab-swipe-transition, none);
+    will-change: opacity, transform;
   }
 }

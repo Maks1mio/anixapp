@@ -221,7 +221,7 @@
   .m-flow-scrim__bg { position: absolute; inset: 0; border: 0; background: none; padding: 0; }
   .m-flow {
     position: relative; width: 100%; max-width: 520px; max-height: 92dvh; display: flex; flex-direction: column;
-    padding: var(--m-space-5) var(--m-space-4) calc(var(--m-space-4) + env(safe-area-inset-bottom));
+    padding: var(--m-space-5) var(--m-space-4) calc(var(--m-space-4) + var(--safe-bottom));
     border-radius: 28px 28px 0 0; background: var(--m-surface-sheet); color: var(--m-text);
   }
   .m-flow__title { margin: 0; padding: 0 var(--m-space-2); font: 400 22px/1.2 var(--m-font); }

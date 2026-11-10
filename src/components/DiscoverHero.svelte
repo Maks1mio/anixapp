@@ -1,86 +1,84 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { onMount } from 'svelte';
-  import { fade } from 'svelte/transition';
   import { iconChevronLeft } from './icons';
   import UiV2RoundButton from './uikit-v2/UiV2RoundButton.svelte';
+  import { isMobileMode } from '../platform/mobile';
 
   interface Props {
     title: string;
     subtitle?: string;
-    /** Картинка для размытого фона баннера (обложка первого элемента) */
-    backdrop?: string | null;
     backLabel?: string;
     onBack?: () => void;
     actions?: Snippet;
-    /** Нижняя полоса баннера (вкладки, фильтры) — дублируется в компактной панели */
+    /** Аватар слева от заголовка (страница чужого профиля: «Коллекции» пользователя) */
+    avatarUrl?: string;
+    /** Клик по аватару / заголовку — открыть профиль */
+    onTitleClick?: () => void;
+    /** Ник в строке под заголовком (жирным, как в шапке закладок): «ник · subtitle» */
+    login?: string;
+    /** Полоса под заголовком (вкладки) — при прокрутке закрепляется у верхнего края */
     children?: Snippet;
-    /** Под нижней полосой, только в полном баннере (строка фильтров) — в компактную панель не попадает */
-    below?: Snippet;
   }
 
-  let { title, subtitle, backdrop, backLabel = 'Назад', onBack, actions, children, below }: Props = $props();
+  let { title, subtitle, backLabel = 'Назад', onBack, actions, avatarUrl, onTitleClick, login, children }: Props = $props();
 
-  /** Последний известный фон: пока список перезагружается, старый цвет держится до прихода нового */
-  let shownBackdrop = $state<string | null>(null);
-  /** Баннер ушёл под верхний край — показываем компактную панель поверх контента */
+  /** Шапка ушла под верхний край — показываем её полосу поверх контента */
   let docked = $state(false);
   let heroEl: HTMLElement | undefined = $state();
-
-  $effect(() => {
-    if (backdrop) shownBackdrop = backdrop;
-  });
+  let dockEl: HTMLElement | undefined = $state();
+  let barEl: HTMLElement | undefined = $state();
 
   onMount(() => {
-    if (!heroEl) return;
-    const root = (heroEl.closest('.page__scroll') as HTMLElement | null)
+    if (!heroEl || !dockEl || !barEl) return;
+    const hero = heroEl;
+    const dock = dockEl;
+    const bar = barEl;
+    const root = (hero.closest('.page__scroll') as HTMLElement | null)
       ?? document.getElementById('content');
-    // Панель не меняет раскладку (лежит поверх), поэтому прокрутка не дёргается
-    const io = new IntersectionObserver(
-      ([entry]) => { docked = !entry.isIntersecting; },
-      { root, rootMargin: '-72px 0px 0px 0px', threshold: 0 },
-    );
-    io.observe(heroEl);
-    return () => io.disconnect();
+    // Панель не меняет раскладку (лежит поверх), поэтому прокрутка не дёргается.
+    // Она появляется, когда низ настоящих вкладок дошёл до её низа. Место панели берётся по факту:
+    // на телефоне верхняя панель уезжает и закреплённые вкладки поднимаются под строку состояния,
+    // а порог, замеренный один раз, давал две полосы вкладок или пустоту до «стыковки».
+    const fallbackH = isMobileMode() ? 48 : 52;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const barBottom = bar.getBoundingClientRect().top + (bar.offsetHeight || fallbackH);
+      docked = hero.getBoundingClientRect().bottom <= barBottom;
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
+    update();
+    root?.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    // Верхняя панель уехала/вернулась — вкладки доехали до нового места уже без прокрутки
+    dock.addEventListener('transitionend', schedule);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      root?.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      dock.removeEventListener('transitionend', schedule);
+    };
   });
 </script>
 
-{#snippet background()}
-  <div class="discover-hero__bg" aria-hidden="true">
-    {#if shownBackdrop}
-      {#key shownBackdrop}
-        <img
-          class="discover-hero__backdrop"
-          src={shownBackdrop}
-          alt=""
-          decoding="async"
-          transition:fade={{ duration: 900 }}
-        />
-      {/key}
-    {/if}
-  </div>
-{/snippet}
-
-<div class="discover-hero-dock">
+<div class="discover-hero-dock" bind:this={dockEl}>
   <div
+    bind:this={barEl}
     class="discover-hero-dock__bar"
     class:discover-hero-dock__bar--visible={docked}
     aria-hidden={!docked}
     inert={!docked}
   >
-    {@render background()}
-    <span class="discover-hero__title discover-hero-dock__title">{title}</span>
     {#if children}
-      <div class="discover-hero__foot discover-hero-dock__foot">
+      <div class="discover-hero__foot">
         {@render children()}
       </div>
     {/if}
   </div>
 </div>
 
-<header class="discover-hero" class:discover-hero--with-foot={!!children} bind:this={heroEl}>
-  {@render background()}
-
+<header class="discover-hero" bind:this={heroEl}>
   <div class="discover-hero__head">
     <div class="discover-hero__lead">
       {#if onBack}
@@ -88,12 +86,31 @@
           {@html iconChevronLeft(20)}
         </UiV2RoundButton>
       {/if}
-      <div class="discover-hero__text">
-        <h1 class="discover-hero__title">{title}</h1>
-        {#if subtitle}
-          <p class="discover-hero__subtitle">{subtitle}</p>
-        {/if}
-      </div>
+      {#if avatarUrl !== undefined}
+        <!-- Тот же вид, что у шапки закладок (bm-head): аватар, заголовок, «ник · подпись», подсветка при наведении -->
+        <button type="button" class="bm-head__profile discover-hero__profile" onclick={() => onTitleClick?.()}>
+          <span
+            class="bm-head__avatar"
+            style={avatarUrl ? `background-image:url('${avatarUrl}')` : undefined}
+            aria-hidden="true"
+          ></span>
+          <span class="bm-head__text">
+            <span class="bm-head__title">{title}</span>
+            <span class="bm-head__meta">
+              {#if login}<span class="bm-head__login">{login}</span>{/if}
+              {#if login && subtitle}<span class="bm-head__dot" aria-hidden="true">·</span>{/if}
+              {#if subtitle}<span>{subtitle}</span>{/if}
+            </span>
+          </span>
+        </button>
+      {:else}
+        <div class="discover-hero__text">
+          <h1 class="discover-hero__title">{title}</h1>
+          {#if subtitle}
+            <p class="discover-hero__subtitle">{subtitle}</p>
+          {/if}
+        </div>
+      {/if}
     </div>
     {#if actions}
       <div class="discover-hero__actions">
@@ -105,12 +122,6 @@
   {#if children}
     <div class="discover-hero__foot">
       {@render children()}
-    </div>
-  {/if}
-
-  {#if below}
-    <div class="discover-hero__below">
-      {@render below()}
     </div>
   {/if}
 </header>

@@ -187,6 +187,12 @@ export interface AnixApi {
       device?: string | null;
     }>;
     qrLoginCancel?: () => Promise<{ success: boolean }>;
+    /** Топик пушей пользователя (POST auth/firebase) */
+    firebaseTopic?: () => Promise<{ topicName: string | null }>;
+    /** Вход на другом устройстве: телефон открыл QR с его экрана */
+    qrOpen?: (key: string) => Promise<{ code?: number; device?: string | null; attempts_left?: number | null }>;
+    qrConfirm?: (data: { key: string; pin: string }) => Promise<{ code?: number; device?: string | null; attempts_left?: number | null }>;
+    qrDecline?: (key: string) => Promise<{ code?: number; device?: string | null; attempts_left?: number | null }>;
     signUp: (payload: { login: string; email: string; password: string }) => Promise<AuthCodeResult>;
     signUpVerify: (payload: {
       login: string;
@@ -277,6 +283,10 @@ export interface AnixApi {
     getCollectionComments: (profileId: number, page?: number, sort?: number) => Promise<{ content?: Record<string, unknown>[] }>;
     getArticleComments: (profileId: number, page?: number, sort?: number) => Promise<{ content?: Record<string, unknown>[] }>;
     getFavoriteVideos: (profileId: number, page?: number) => Promise<{ content?: Record<string, unknown>[] }>;
+    /** releaseVideoFavorite/add — видео «к себе» */
+    addFavoriteVideo?: (videoId: number) => Promise<{ code?: number } | null>;
+    /** releaseVideoFavorite/delete */
+    removeFavoriteVideo?: (videoId: number) => Promise<{ code?: number } | null>;
     blockList: (page?: number) => Promise<{
       content?: Array<{
         id?: number;

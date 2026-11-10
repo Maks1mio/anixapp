@@ -7,7 +7,7 @@ const logger = require('../logger');
 const { flushPendingDeepLink } = require('../lib/deep-link');
 const { getDevServerOrigin } = require('../lib/dev-server');
 const { macTitleBarOptions, setupMacWindow } = require('../lib/mac-window');
-const { devWindowOptions } = require('../lib/dev-window-layout');
+const { devWindowOptions, isDevHandheldWindow, enableDevTouchEmulation } = require('../lib/dev-window-layout');
 
 function createMainWindow(deps) {
   const { isDev, getIconPath, applyUiZoom, config, electronDir } = deps;
@@ -38,6 +38,13 @@ function createMainWindow(deps) {
   state.mainWindow = new BrowserWindow(winOpts);
   setupMacWindow(state.mainWindow);
   logger.info('main', 'window created');
+
+  const isHandheld = isDevHandheldWindow();
+  if (isHandheld) {
+    enableDevTouchEmulation(state.mainWindow.webContents).catch((e) => {
+      logger.warn('main', `touch emulation failed: ${e.message}`);
+    });
+  }
 
   if (isDev) {
     state.mainWindow.loadURL(getDevServerOrigin());
@@ -82,7 +89,6 @@ function createMainWindow(deps) {
   state.mainWindow.once('ready-to-show', () => {
     logger.info('main', 'window ready-to-show');
     // Телефону и планшету в dev:all масштаб ПК-версии исказил бы ширину экрана.
-    const isHandheld = ['mobile', 'tablet'].includes(process.env.ANIXAPP_DEV_WINDOW);
     applyUiZoom(isTv || isHandheld ? 100 : config.getUiZoom());
     state.mainWindow.show();
     flushPendingDeepLink();

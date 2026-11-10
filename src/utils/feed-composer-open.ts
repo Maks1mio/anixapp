@@ -1,4 +1,6 @@
 import type { FeedArticle, FeedChannel, FeedProfile } from '../types/feed';
+import { isMobileMode } from '../platform/mobile';
+import { navigate } from '../stores/navigation';
 
 export type FeedComposerOpenChannel = {
   id: number;
@@ -108,9 +110,30 @@ function sanitizeChannels(
   return out;
 }
 
+/** Маршрут мобильной страницы редактора (на телефоне запись пишется отдельным экраном, а не окном). */
+export const MOBILE_COMPOSER_PATH = '/feed/write';
+
+let mobilePayload: FeedComposerOpenPayload | null = null;
+
+/** Что открывать на мобильной странице редактора (остаётся до следующего открытия — на случай повторного монтирования). */
+export function getMobileComposerPayload(): FeedComposerOpenPayload | null {
+  return mobilePayload;
+}
+
 export async function openFeedComposerWindow(
   payload: FeedComposerOpenPayload = {},
 ): Promise<boolean> {
+  if (isMobileMode()) {
+    mobilePayload = {
+      ...payload,
+      repostArticle: sanitizeComposerArticle(payload.repostArticle ?? null),
+      editArticle: sanitizeComposerArticle(payload.editArticle ?? null),
+      channels: sanitizeChannels(payload.channels),
+    };
+    navigate(MOBILE_COMPOSER_PATH);
+    return true;
+  }
+
   const open = window.electron?.openComposerWindow;
   if (!open) return false;
 

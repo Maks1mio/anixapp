@@ -1,19 +1,26 @@
 <script lang="ts">
+  import UiV2BackBar from '../components/uikit-v2/UiV2BackBar.svelte';
   import { onMount, onDestroy } from 'svelte';
-  import { navigate } from '../stores/navigation';
-  import { posterUrl } from './Profile/_utils';
+  import { navigate, goBack } from '../stores/navigation';
+  import { normalizeVideo, type ReleaseVideoItem } from './Release/_videoUtils';
+  import VideoList from '../components/video/VideoList.svelte';
+  import { resolveJacksonRefsByKey } from '../utils/jackson-refs';
   import { buildPosterUrl } from '../utils/posterUrl';
   import { setDiscordContext, refreshDiscordPresence } from '../services/discord-presence';
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import { headlineFromLoadError } from '../utils/content-load-error';
 
-  interface Props { id?: number; }
-  let { id }: Props = $props();
+  interface Props {
+    id?: number;
+    /** Внутри модалки профиля на ПК: без своей шапки */
+    embedded?: boolean;
+  }
+  let { id, embedded = false }: Props = $props();
 
   let profileLogin = $state('Загрузка…');
   let profileAvatar = $state('');
   let profileId = $state(0);
-  let items = $state<Record<string, unknown>[]>([]);
+  let items = $state<ReleaseVideoItem[]>([]);
   let page = $state(0);
   let hasMore = $state(true);
   let isLoading = $state(false);
@@ -49,17 +56,22 @@
     }
     const pageToLoad = page;
     try {
-      const data = await window.anixApi.profile.getFavoriteVideos(profileId, pageToLoad) as {
-        content?: Record<string, unknown>[];
-        last?: boolean;
-      };
+      // Повторный релиз / автор / хостинг приходят ссылкой @id (у каждого класса своя нумерация)
+      const data = resolveJacksonRefsByKey(
+        await window.anixApi.profile.getFavoriteVideos(profileId, pageToLoad) as {
+          content?: Record<string, unknown>[];
+          last?: boolean;
+        },
+        ['release', 'profile', 'category', 'hosting'],
+      );
       const content = data?.content ?? [];
       if (!content.length) {
         if (!append) loadState = 'empty';
         hasMore = false;
         return;
       }
-      items = append ? [...items, ...content] : content;
+      const mapped = content.map(normalizeVideo);
+      items = append ? [...items, ...mapped] : mapped;
       page = pageToLoad + 1;
       if (data.last === true || content.length < 25) hasMore = false;
       loadState = 'ready';
@@ -103,17 +115,15 @@
 
 <div class="view view-profile view-profile--v2 view-profile-videos" bind:this={wrapEl}>
   <div class="profile-v2">
-    <div class="view-header">
-      <button type="button" class="view-header__back" onclick={() => navigate(id ? `/profile/${profileId}` : '/profile')}>
-        ← Назад
-      </button>
-      <div class="profile-more__user">
-        <div class="profile-more__avatar" style={profileAvatar ? `background-image:url('${buildPosterUrl(profileAvatar)}')` : ''}></div>
-        <h1 class="view-header__title">{profileLogin}</h1>
-      </div>
-    </div>
-
-    <h2 class="profile-v2__section-title">Видео</h2>
+    {#if !embedded}
+      <header class="profile-subpage__head">
+        <UiV2BackBar
+          segments={[{ label: 'Видео', active: true }, { label: profileLogin }]}
+          avatarUrl={profileAvatar ? buildPosterUrl(profileAvatar) : ''}
+          onBack={goBack}
+        />
+      </header>
+    {/if}
 
     {#if loadState === 'loading'}
       <div class="search-page__loading">Загрузка…</div>
@@ -122,26 +132,7 @@
     {:else if loadState === 'empty'}
       <p class="profile-v2__empty">Видео нет</p>
     {:else}
-      <div class="profile-v2__videos profile-v2__videos--grid">
-        {#each items as item}
-          {@const releaseId = item.release_id ?? (item.release as { id?: number } | undefined)?.id}
-          <button
-            type="button"
-            class="profile-v2__video-card"
-            onclick={() => releaseId && navigate(`/release/${releaseId}`)}
-          >
-            {#if item.image || item.preview}
-              <div
-                class="profile-v2__video-thumb"
-                style="background-image:url('{posterUrl(String(item.image ?? item.preview))}')"
-              ></div>
-            {:else}
-              <div class="profile-v2__video-thumb"></div>
-            {/if}
-            <span class="profile-v2__video-title">{item.title ?? item.name ?? 'Видео'}</span>
-          </button>
-        {/each}
-      </div>
+      <VideoList videos={items} />
     {/if}
     {#if isLoading && loadState === 'ready'}
       <div class="search-page__loading">Загрузка…</div>

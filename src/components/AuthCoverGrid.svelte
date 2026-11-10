@@ -1,9 +1,13 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { buildPosterUrl, toCdnProxyUrl } from '../utils/posterUrl';
+  import { isMobileMode } from '../platform/mobile';
 
-  const COLS = 9;
-  const ROWS = 7;
+  // На телефоне постеры — только шапка экрана, на планшете стена, но плитки того же размера, что и на ПК.
+  // Лишние там не видны и зря грузят устройство
+  const screenWidth = window.innerWidth;
+  const COLS = !isMobileMode() ? 9 : screenWidth < 600 ? 5 : screenWidth < 1000 ? 7 : 9;
+  const ROWS = !isMobileMode() ? 7 : screenWidth < 600 ? 4 : 6;
   const TILE_COUNT = COLS * ROWS;
   const SWAP_MS = 2600;
   const SCROLL_S = 90;

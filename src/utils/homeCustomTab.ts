@@ -1,3 +1,9 @@
+/** FilterRequest.GENRES_MODE_* в Anixart 11: все выбранные, хотя бы один, исключить. */
+export const GENRES_MODE_ALL = 0;
+export const GENRES_MODE_ANY = 1;
+export const GENRES_MODE_EXCLUDE = 2;
+export type GenresMode = typeof GENRES_MODE_ALL | typeof GENRES_MODE_ANY | typeof GENRES_MODE_EXCLUDE;
+
 /** Mirrors Android `CustomFilter` entity (local SQLite on phone). */
 export interface CustomFilterStorage {
   selected_category_id: number | null;
@@ -16,6 +22,7 @@ export interface CustomFilterStorage {
   selected_types: string[];
   selected_age_ratings: string[];
   is_genres_exclude_mode_enabled: boolean;
+  selected_genres_mode: GenresMode;
 }
 
 export interface HomeCustomTabData {
@@ -41,6 +48,7 @@ export const DEFAULT_CUSTOM_FILTER: CustomFilterStorage = {
   selected_types: [],
   selected_age_ratings: [],
   is_genres_exclude_mode_enabled: false,
+  selected_genres_mode: GENRES_MODE_ALL,
 };
 
 const EMPTY_TAB: HomeCustomTabData = {
@@ -96,9 +104,15 @@ export async function renameHomeCustomTab(name: string): Promise<void> {
   await saveHomeCustomTab({ ...current, tabName: name.trim() });
 }
 
-function normalizeFilter(raw: unknown): CustomFilterStorage | null {
+export function normalizeFilter(raw: unknown): CustomFilterStorage | null {
   if (!raw || typeof raw !== 'object') return null;
   const f = raw as Partial<CustomFilterStorage>;
+  // Сохранённое до появления режимов знает только про исключение
+  const genresMode: GenresMode = f.selected_genres_mode === GENRES_MODE_ANY || f.selected_genres_mode === GENRES_MODE_EXCLUDE
+    ? f.selected_genres_mode
+    : f.selected_genres_mode == null && f.is_genres_exclude_mode_enabled
+      ? GENRES_MODE_EXCLUDE
+      : GENRES_MODE_ALL;
   return {
     ...DEFAULT_CUSTOM_FILTER,
     ...f,
@@ -112,7 +126,8 @@ function normalizeFilter(raw: unknown): CustomFilterStorage | null {
     selected_types: Array.isArray(f.selected_types) ? f.selected_types.map(String) : [],
     selected_age_ratings: Array.isArray(f.selected_age_ratings) ? f.selected_age_ratings.map(String) : [],
     selected_sort: typeof f.selected_sort === 'number' ? f.selected_sort : 0,
-    is_genres_exclude_mode_enabled: !!f.is_genres_exclude_mode_enabled,
+    is_genres_exclude_mode_enabled: genresMode === GENRES_MODE_EXCLUDE,
+    selected_genres_mode: genresMode,
   };
 }
 
@@ -164,7 +179,10 @@ export function toFilterRequest(filter: CustomFilterStorage): Record<string, unk
     body.episode_duration_from = 31;
   }
 
-  if (filter.selected_genres.length) body.genres = [...filter.selected_genres];
+  if (filter.selected_genres.length) {
+    body.genres = [...filter.selected_genres];
+    body.genres_mode = filter.selected_genres_mode;
+  }
 
   const exclusions = filter.selected_profile_list_exclusions
     .map((v) => parseInt(v, 10))

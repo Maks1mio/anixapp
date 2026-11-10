@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
+  import { isMobileMode } from '../../../platform/mobile';
   import UiV2Toggle from '../../../components/uikit-v2/UiV2Toggle.svelte';
   import UiV2SettingsRow from '../../../components/uikit-v2/UiV2SettingsRow.svelte';
   import UiV2Button from '../../../components/uikit-v2/UiV2Button.svelte';
@@ -132,6 +133,9 @@
   const previewCorner = $derived(hoverPosition ?? settings.position);
   const previewCount = $derived(settings.bannerCount);
 
+  /** Телефон: уведомления всегда системные (шторка Android) — карточки, мелодии и панель задач есть только у ПК. */
+  const touchOnly = isMobileMode();
+
   function save(patch: Parameters<typeof saveDeviceNotificationSettings>[0]) {
     return saveDeviceNotificationSettings(patch);
   }
@@ -192,11 +196,15 @@
   {:else}
     <section class="uiv2-settings__block">
       <h3 class="uiv2-settings__title">Главное</h3>
-      <p class="uiv2-settings__desc">Включение, звук и проверка на этом устройстве</p>
+      <p class="uiv2-settings__desc">
+        {touchOnly ? 'Уведомления в шторке Android и проверка' : 'Включение, звук и проверка на этом устройстве'}
+      </p>
       <div class="uiv2-settings__group">
         <UiV2SettingsRow
           title="Уведомления на устройстве"
-          desc="Показывать уведомления вне приложения — на любом экране, где вы работаете"
+          desc={touchOnly
+            ? 'Показывать новые серии, ответы и значки в шторке уведомлений'
+            : 'Показывать уведомления вне приложения — на любом экране, где вы работаете'}
         >
           <UiV2Toggle
             label="Уведомления на устройстве"
@@ -205,6 +213,7 @@
           />
         </UiV2SettingsRow>
 
+        {#if !touchOnly}
         <UiV2SettingsRow
           title="Системные уведомления"
           desc="Уведомления операционной системы (Windows, macOS, Linux, Android)"
@@ -221,11 +230,12 @@
             }
           />
         </UiV2SettingsRow>
+        {/if}
 
         <UiV2SettingsRow
           title="Проверить"
           desc={canDeliver
-            ? 'Тест серии или значка (как «Новое достижение» на Android)'
+            ? 'Прислать тестовое уведомление о серии или значке'
             : 'Включите системные уведомления или карточки приложения'}
         >
           <div class="notif-test-actions">
@@ -247,6 +257,7 @@
         </UiV2SettingsRow>
       </div>
 
+      {#if !touchOnly}
       <div
         class="uiv2-settings__group"
         class:notif-app-banners--inactive={appNotifsInactive || !deviceOn}
@@ -304,6 +315,7 @@
           </div>
         </UiV2SettingsRow>
       </div>
+      {/if}
     </section>
 
     <section class="uiv2-settings__block">
@@ -314,6 +326,7 @@
       </div>
     </section>
 
+    {#if !touchOnly}
     <section
       class="uiv2-settings__block"
       class:notif-app-banners--inactive={appNotifsInactive || !deviceOn}
@@ -482,6 +495,7 @@
         {/if}
       </div>
     </section>
+    {/if}
 
     <section
       class="uiv2-settings__block"
@@ -490,7 +504,7 @@
       <details class="notif-advanced">
         <summary class="notif-advanced__summary">
           <span class="notif-advanced__title">Дополнительно</span>
-          <span class="notif-advanced__hint">Каналы доставки и поведение</span>
+          <span class="notif-advanced__hint">{touchOnly ? 'Текст и показ при открытом приложении' : 'Каналы доставки и поведение'}</span>
         </summary>
 
         <div class="notif-advanced__body">
@@ -519,6 +533,7 @@
               />
             </UiV2SettingsRow>
 
+            {#if !touchOnly}
             <UiV2SettingsRow
               title="Мигание в панели задач"
               desc="Подсвечивать иконку, если окно не в фокусе"
@@ -530,8 +545,9 @@
                 onChange={(v) => save({ flashTaskbar: v })}
               />
             </UiV2SettingsRow>
+            {/if}
 
-            {#if hasBannerShell}
+            {#if hasBannerShell && !touchOnly}
               <div
                 class="notif-app-banners-opts"
                 class:notif-app-banners--inactive={appNotifsInactive && deviceOn}

@@ -28,6 +28,7 @@ export function tvKeepAliveKey(path: string): string | null {
   const bmList = p.match(/^\/bookmarks\/([a-z_]+)$/);
   if (bmList) return `${BOOKMARK_LIST_PREFIX}${bmList[1]}`;
   if (p === '/search') return 'search';
+  if (p === '/notifications') return 'notifications';
   const page = tvPageKeyFromPath(p);
   if (page) return `${PAGE_PREFIX}${page}`;
   return null;

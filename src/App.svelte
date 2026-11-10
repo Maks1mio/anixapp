@@ -55,11 +55,16 @@
   import { isMobileMode } from './platform/mobile';
   import MobileWatch from './views/Watch.mobile/page.svelte';
 
-  /** Телефон: свой плеер под пальцы; лобби и локальные файлы — в полном desktop-плеере. */
+  /**
+   * Телефон: свой плеер под пальцы; лобби и локальные файлы — в полном desktop-плеере.
+   * Комната открывает плеер без lobby в адресе (lobbyIdle или обычные releaseId/ep), поэтому смотрим и на состояние комнаты:
+   * иначе пустая комната попадала в мобильный плеер с «Неверные параметры просмотра» и без кнопки выхода
+   */
   function useMobileWatch(): boolean {
     if (!isMobileMode()) return false;
+    if (getCurrentRoomId()) return false;
     const q = new URLSearchParams(window.location.search);
-    return !q.get('localFile') && !q.get('lobby') && !q.get('lobbyCode') && !q.get('playbackMode');
+    return !q.get('localFile') && !q.get('lobby') && !q.get('lobbyCode') && !q.get('lobbyIdle') && !q.get('playbackMode');
   }
   import MobileLayout from './layout/MobileLayout.svelte';
   import MobileDownloads from './views/MobileDownloads.svelte';
@@ -71,6 +76,7 @@
   import Feed from './views/Feed.svelte';
   import FeedComposerWindow from './views/FeedComposerWindow.svelte';
   import Popular from './views/Popular.svelte';
+  import FilteredReleases from './views/FilteredReleases.svelte';
   import CollectionsList from './views/CollectionsList.svelte';
   import CollectionEditor from './views/CollectionEditor.svelte';
   import Catalog from './views/Catalog.svelte';
@@ -81,7 +87,6 @@
   import ReleaseCollections from './views/ReleaseCollections.svelte';
   import Bookmarks from './views/Bookmarks.svelte';
   import ProfileFriends from './views/ProfileFriends.svelte';
-  import ProfileCollections from './views/ProfileCollections.svelte';
   import ProfileComments from './views/ProfileComments.svelte';
   import ProfileVideos from './views/ProfileVideos.svelte';
   import Collection from './views/Collection.svelte';
@@ -118,7 +123,7 @@
   } from './tv/keepAlive';
   import { isTvUnsupportedPath } from './tv/nav';
   import WebPlayerShell from './components/WebPlayerShell.svelte';
-  import { isEmbeddedWebPlayer } from './utils/watch-nav';
+  import { isEmbeddedWebPlayer, playerWindowOpener } from './utils/watch-nav';
   import { startAppPresence } from './services/app-presence';
   import SupportModal from './components/SupportModal.svelte';
   import SupportPromo from './components/SupportPromo.svelte';
@@ -143,7 +148,6 @@
   let searchQ = $state('');
   let searchTab = $state<SearchTab>('releases');
   let searchBy = $state(0);
-  let searchHiddenOnly = $state(false);
 
   let tvKept = $state<string[]>(rememberTvKeepAlive([], getPath()));
   const tvKeptCats = $derived(tvKeptCategoryIds(tvKept));
@@ -184,7 +188,6 @@
     const tab = p.get('tab');
     searchTab = isSearchTab(tab) ? tab : 'releases';
     searchBy = Number.parseInt(p.get('by') || '0', 10) || 0;
-    searchHiddenOnly = p.get('hidden') === '1';
     if (fromRoute) {
       bookmarksUserId = bookmarksUserFromRoute(route);
     } else {
@@ -521,7 +524,7 @@
           ...(action ? { action } : {}),
         };
         lobbyCurrentPlayback.set(pb);
-        if (window.electron?.syncPlayerState) {
+        if (playerWindowOpener() && window.electron?.syncPlayerState) {
           window.electron.syncPlayerState(pb);
           window.electron?.sendParticipantsToPlayer?.(getCurrentParticipants());
         } else if (isEmbeddedWebPlayer()) {
@@ -968,6 +971,13 @@
       </TvKeepAlive>
     {/each}
 
+    <!-- Не держим в keep-alive: при каждом входе список должен быть свежим -->
+    {#if path === '/notifications'}
+      <TvKeepAlive keepKey="notifications" active>
+        <NotificationsModal page />
+      </TvKeepAlive>
+    {/if}
+
     {#if isWatchRoute}
       <TvKeepAlive keepKey="watch" active>
         <TvPlayerShell />
@@ -1044,7 +1054,8 @@
       {/key}
     {:else if profileCollectionsId != null}
       {#key profileCollectionsId}
-        <ProfileCollections id={profileCollectionsId} />
+        <!-- Коллекции пользователя — та же страница, что «Мои коллекции» -->
+        <CollectionsList mine userId={profileCollectionsId} />
       {/key}
     {:else if collectionEditMatch}
       {#key collectionEditMatch[1]}
@@ -1070,6 +1081,9 @@
       <FluoPage />
     {:else if path === '/agent'}
       <AgentPage />
+    {:else if path === '/feed/write'}
+      <!-- Телефон: экран редактора рисует MobileLayout поверх панелей; на ПК запись пишется в отдельном окне -->
+      {#if !isMobileMode()}<Feed />{/if}
     {:else if path === '/feed' || articleMatch || channelMatch}
       <Feed />
     {:else if path === '/overview/popular'}
@@ -1088,10 +1102,14 @@
       <Bookmarks initialTab="votes" />
     {:else if path === '/profile/lists'}
       <Bookmarks listsOnly />
+    {:else if path === '/filtered'}
+      <FilteredReleases />
     {:else if path === '/search'}
-      {#key `${searchQ}|${searchBy}|${searchHiddenOnly}`}
-        <Search q={searchQ} tab={searchTab} {searchBy} hiddenOnly={searchHiddenOnly} />
+      {#key `${searchQ}|${searchBy}`}
+        <Search q={searchQ} tab={searchTab} {searchBy} />
       {/key}
+    {:else if path === '/notifications'}
+      <NotificationsModal page />
     {:else if path === '/downloads'}
       {#if isMobileMode()}<MobileDownloads />{:else}<Downloads />{/if}
     {:else if path === '/uikit'}
@@ -1134,15 +1152,12 @@
   {/if}
 
 {:else if isMobileMode()}
-  <MobileLayout currentPath={path}>
+  <MobileLayout currentPath={path} search={{ q: searchQ, tab: searchTab, by: searchBy }}>
     {#key pageRefreshKey}
       {@render appRoutes()}
     {/key}
   </MobileLayout>
 
-  {#if $notificationsModalOpen}
-    <NotificationsModal onClose={() => notificationsModalOpen.set(false)} />
-  {/if}
   {#if $watchModalOpen}
     <WatchModal
       releaseId={$watchModalReleaseId}
@@ -1174,7 +1189,7 @@
     </Layout>
   {/if}
 
-  {#if $notificationsModalOpen}
+  {#if $notificationsModalOpen && !isTvMode()}
     <NotificationsModal onClose={() => notificationsModalOpen.set(false)} />
   {/if}
   {#if $watchModalOpen}

@@ -2,6 +2,7 @@
 import { navigate } from '../stores/navigation';
 import { isPlayerWindowOpen } from '../stores/modals';
 import { isTvMode } from '../platform/tv';
+import { isMobileMode } from '../platform/mobile';
 
 export interface WatchLaunchParams {
   releaseId: string | number;
@@ -93,12 +94,21 @@ export function openInAppPlayer(params: WatchLaunchParams): Promise<void> {
 }
 
 /**
+ * Отдельное окно плеера есть только у ПК-версии. Мобильная сборка в `dev:all` тоже запущена
+ * в Electron, но плеер у неё внутри приложения, как на Android.
+ */
+export function playerWindowOpener() {
+  return isMobileMode() ? undefined : window.electron?.openPlayerWindow;
+}
+
+/**
  * Desktop Electron → отдельное окно плеера.
- * TV / web без openPlayerWindow → встроенный /watch.
+ * TV / телефон / планшет / web без openPlayerWindow → встроенный /watch.
  */
 export async function launchPlayer(params: WatchLaunchParams): Promise<void> {
-  if (!isTvMode() && window.electron?.openPlayerWindow) {
-    await window.electron.openPlayerWindow(toPlayerPayload(params));
+  const openWindow = isTvMode() ? undefined : playerWindowOpener();
+  if (openWindow) {
+    await openWindow(toPlayerPayload(params));
     isPlayerWindowOpen.set(true);
     return;
   }

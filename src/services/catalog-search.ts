@@ -14,8 +14,6 @@ export interface CatalogHit {
 export interface CatalogSearchOptions {
   /** Anixart searchBy: 0 titles, 1 studio, 2 director, 3 author, 4 genre, 5 source. */
   by?: number;
-  /** Only releases Anixart hides from its own search. */
-  hiddenOnly?: boolean;
   offset?: number;
   limit?: number;
 }
@@ -27,14 +25,13 @@ export interface CatalogSearchOptions {
  */
 export async function searchCatalog(
   query: string,
-  { by = 0, hiddenOnly = false, offset = 0, limit = 30 }: CatalogSearchOptions = {},
+  { by = 0, offset = 0, limit = 30 }: CatalogSearchOptions = {},
 ): Promise<{ total: number; hits: CatalogHit[] } | null> {
   const q = query.trim();
   if (!q) return null;
   try {
     const params = new URLSearchParams({ q, limit: String(limit), offset: String(offset) });
     if (by > 0) params.set('by', String(by));
-    if (hiddenOnly) params.set('hidden', '1');
     const res = await fetch(`${getApiBase()}/releases/search?${params}`, {
       signal: AbortSignal.timeout(6000),
     });

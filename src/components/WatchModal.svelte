@@ -44,12 +44,14 @@
     iconDownload,
     iconCircleCheck,
     iconCheck,
-    iconMoreHorizontal,
     iconRefreshCw,
     iconChevronLeft,
     iconEye,
     iconX,
     iconPin,
+    iconMoreHorizontal,
+    iconPlay,
+    iconEyeOff,
   } from './icons';
   import {
     episodeDisplayNumber,
@@ -66,7 +68,10 @@
   import { fmtTime } from '../views/Watch/_utils';
   import { restoreTvFocus, scheduleFocusTvOverlayContent } from '../services/tv-navigation';
   import { tvLongPress } from '../actions/tvLongPress';
+  import { touchLongPress } from '../actions/touchLongPress';
+  import { pushBackHandler } from '../platform/mobile-back';
   import UiV2Button from './uikit-v2/UiV2Button.svelte';
+  import UiV2PopupMenu, { type UiV2PopupMenuItem } from './uikit-v2/UiV2PopupMenu.svelte';
   import DesktopDownloadModal from './DesktopDownloadModal.svelte';
 
   interface Props {
@@ -134,7 +139,7 @@
   type VariantFilter = 'all' | 'voice' | 'sub';
 
   let modalView = $state<ModalView>('variants');
-  let variantFilter = $state<VariantFilter>(isMobileMode() ? 'all' : 'voice');
+  let variantFilter = $state<VariantFilter>('voice');
   let sourcesLoading = $state(true);
   let sourcesError = $state('');
   let dubbers = $state<Dubber[]>([]);
@@ -154,7 +159,6 @@
   let episodesError = $state('');
   let searchInput = $state('');
   let selectedEpisodePos = $state<number | null>(null);
-  let optionsOpen = $state(false);
   let actionBusy = $state('');
   let lastEpisodeTypeUpdateId = $state<number | null>(null);
 
@@ -174,7 +178,6 @@
   const downloadIconSvg = iconDownload(15);
   const downloadedIconSvg = iconCircleCheck(15);
   const checkIconSvg = iconCheck(14);
-  const dotsIconSvg = iconMoreHorizontal(16);
   const refreshIconSvg = iconRefreshCw(18);
   const backIconSvg = iconChevronLeft(20);
   const eyeIconSvg = iconEye(15);
@@ -198,8 +201,8 @@
   const isTv = isTvMode();
   /** ПК: ТВ-подобные крупные карточки, но под мышь (ховеры, пин и отметка кнопками). */
   const isDesktop = !isTv && !isMobileMode();
-  /** Covers on PC and TV. The modal asks for them itself: it also opens from the home page. */
-  const coversEnabled = isDesktop || isTv;
+  /** The modal asks for covers itself: it also opens from the home page. */
+  const coversEnabled = true;
   $effect(() => {
     if (!coversEnabled || !Number.isFinite(releaseId) || releaseId <= 0) return;
     return watchReleaseMedia(releaseId);
@@ -468,7 +471,7 @@
   // ── Телефон: «Выберите вариант» → «Выберите серию» → «Выберите плеер» ──────────────────────────
   const isMobile = isMobileMode();
   function playerKindLabel(k: MobilePlayerKind): string {
-    return k === 'web' ? 'Веб-плеер' : k === 'anix' ? 'АниксПлеер' : k === 'external' ? 'Сторонний' : 'Встроенный';
+    return k === 'web' ? 'Веб-плеер' : k === 'external' ? 'Сторонний' : 'Встроенный';
   }
   let stopDlWatch: (() => void) | null = null;
   let chooserEp = $state<number | null>(null);
@@ -483,17 +486,6 @@
   /** Окно «Выберите плеер» открыто только для смены плеера по умолчанию (без запуска серии). */
   let chooserSettings = $state(false);
   let playerLabel = $state(playerKindLabel(getMobilePlayerPrefs().kind));
-  const HINT_KEYS = { variants: 'anix:hint:watch-variants', episodes: 'anix:hint:watch-episodes' } as const;
-  function hintHidden(key: string): boolean {
-    try { return localStorage.getItem(key) === '1'; } catch { return false; }
-  }
-  let hintVariantsHidden = $state(isMobile && hintHidden(HINT_KEYS.variants));
-  let hintEpisodesHidden = $state(isMobile && hintHidden(HINT_KEYS.episodes));
-  function hideHint(which: 'variants' | 'episodes') {
-    try { localStorage.setItem(HINT_KEYS[which], '1'); } catch { /* ignore */ }
-    if (which === 'variants') hintVariantsHidden = true; else hintEpisodesHidden = true;
-  }
-
   function cancelExternalPlaylistPrep() {
     externalAbort?.abort();
     externalAbort = null;
@@ -554,15 +546,7 @@
 
   async function startWithKind(kind: MobilePlayerKind, epPosition: number) {
     if (!selectedSource) return;
-    if (kind === 'external') {
-      pendingExternalPlayerId = getPreferredExternalPlayerId();
-      if (needsExternalPlaylistRange(episodes.length) && await externalPlayerUsesPlaylist(pendingExternalPlayerId)) {
-        externalRangeEp = epPosition;
-        return;
-      }
-      await runExternalWithWindow(epPosition, 'all');
-      return;
-    }
+    // На телефоне сторонний плеер выбирается системным окном со всеми приложениями устройства
     try {
       const r = await launchWithKind(kind, watchLaunchParams(epPosition));
       if (r.started) {
@@ -633,11 +617,65 @@
     if (ep != null) void startWithKind(kind, ep);
   }
 
+  // Системная кнопка «назад»: сначала окно выбора плеера, затем на шаг назад, с озвучек — закрыть
+  $effect(() => {
+    if (!isMobile) return;
+    return pushBackHandler(() => {
+      if (chooserEp !== null || chooserSettings) {
+        chooserEp = null;
+        chooserSettings = false;
+      } else {
+        backFromNestedView();
+      }
+      return true;
+    });
+  });
+
+  /** Телефон и планшет: редкие действия с сериями лежат в шторке, на экране остаются запуск и поиск. */
+  let episodesMenuOpen = $state(false);
+  const episodesMenuItems = $derived.by((): UiV2PopupMenuItem[] => {
+    const items: UiV2PopupMenuItem[] = [
+      { id: 'player', label: 'Плеер', icon: iconPlay(20), valueText: playerLabel },
+    ];
+    if (hasCovers || coversWaiting) {
+      items.push({ id: 'blur', label: 'Скрывать кадры серий', icon: iconEyeOff(20), type: 'toggle', checked: coverBlur });
+    }
+    items.push(
+      { id: 'mark', label: 'Отметить все', icon: checkIconSvg, dividerBefore: true, disabled: actionBusy !== '' || remainingCount === 0 },
+      { id: 'unmark', label: 'Снять отметки', icon: closeIconSvg, disabled: actionBusy !== '' || watchedCount === 0 },
+    );
+    if (downloadsAvailable()) {
+      const allDone = mobileDoneCount === episodes.length && episodes.length > 0;
+      items.push(
+        {
+          id: 'download',
+          label: dlBusy || (allDone ? 'Все серии скачаны' : mobileDoneCount > 0 ? `Скачать остальные (${mobileMissing})` : 'Скачать все серии'),
+          icon: downloadIconSvg,
+          dividerBefore: true,
+          disabled: !!dlBusy || episodes.length === 0 || allDone,
+        },
+        { id: 'downloads', label: $hasActiveDownloads ? 'Загрузки (идут)' : 'Загрузки' },
+      );
+    }
+    return items;
+  });
+
+  function onEpisodesMenu(id: string) {
+    if (id === 'player') chooserSettings = true;
+    else if (id === 'blur') toggleCoverBlur();
+    else if (id === 'mark') confirmSetAllWatched(true);
+    else if (id === 'unmark') confirmSetAllWatched(false);
+    else if (id === 'download') void downloadAllEpisodes();
+    else if (id === 'downloads') {
+      close();
+      navigate('/downloads');
+    }
+  }
+
   function backFromNestedView() {
     if (modalView === 'variants') { close(); return; }
     if (modalView === 'episodes') {
       modalView = 'variants';
-      optionsOpen = false;
       focusTvModalContent();
       return;
     }
@@ -669,10 +707,6 @@
     if (Number.isFinite(num) && num > 0) scrollToEpisode(num);
   }
 
-  function handleLastWatched() {
-    if (lastWatchedEpisode) scrollToEpisode(lastWatchedEpisode.position);
-  }
-
   async function openDubber(dubber: Dubber, preferredSourceId?: number, focusEpisode?: number) {
     modalView = 'episodes';
     selectedDubber = dubber;
@@ -681,7 +715,6 @@
     selectedEpisodePos = null;
     episodes = [];
     searchInput = '';
-    optionsOpen = false;
     episodesError = '';
     episodesLoading = true;
 
@@ -726,7 +759,6 @@
     if (resetSearch) searchInput = '';
     episodesLoading = true;
     episodesError = '';
-    optionsOpen = false;
 
     try {
       const res = await window.anixApi?.release?.getEpisodes(releaseId, selectedDubber.id, source.id);
@@ -770,7 +802,7 @@
       if (isTv) { void startDesktopEpisode('builtin', epPosition); return; }
       const prefs = getMobilePlayerPrefs();
       if (prefs.ask) desktopChooserEp = epPosition;
-      else void startDesktopEpisode(prefs.kind === 'anix' ? 'builtin' : prefs.kind, epPosition);
+      else void startDesktopEpisode(prefs.kind, epPosition);
     };
 
     if (isInLobbyWithOthers()) {
@@ -859,7 +891,6 @@
     if (!selectedSource || episodes.length === 0 || actionBusy) return;
     const previous = episodes;
     actionBusy = watched ? 'mark-all' : 'unmark-all';
-    optionsOpen = false;
     episodes = episodes.map((ep) => ({ ...ep, is_watched: watched, isWatched: watched }));
 
     try {
@@ -1070,7 +1101,7 @@
 
 </script>
 
-<div class="watch-modal" class:watch-modal--tv={isTv} class:watch-modal--desktop={isDesktop} role="dialog" aria-modal="true">
+<div class="watch-modal" class:watch-modal--tv={isTv} class:watch-modal--desktop={!isTv} role="dialog" aria-modal="true">
   <button type="button" class="watch-modal__backdrop" aria-label="Закрыть" onclick={close}></button>
 
   <div class="watch-modal__panel">
@@ -1084,20 +1115,14 @@
         <h2 class="watch-modal__title">
           {#if modalView === 'updates'}
             Статистика добавления
-          {:else if isMobile && modalView === 'episodes'}
-            Выберите серию
           {:else if modalView === 'episodes' && selectedDubber}
             {selectedDubber.name}
-          {:else if isMobile}
-            Выберите вариант
           {:else}
             Смотреть
           {/if}
         </h2>
         {#if modalView === 'variants'}
-          {#if !isMobile}<p class="watch-modal__subtitle">{releaseTitle}</p>{/if}
-        {:else if isMobile && modalView === 'episodes'}
-          {#if selectedSource}<p class="watch-modal__subtitle">Источник {selectedSource.name}</p>{/if}
+          <p class="watch-modal__subtitle">{releaseTitle}</p>
         {:else if modalView === 'episodes' && selectedDubber}
           {@const viewCountRaw = selectedDubber.view_count ?? selectedDubber.viewCount ?? 0}
           {@const viewCount = typeof viewCountRaw === 'number' ? viewCountRaw : parseInt(String(viewCountRaw), 10) || 0}
@@ -1180,31 +1205,6 @@
         {:else}
           <Page noPadding extraClass="watch-modal__page page--scroll-area">
             <div class="watch-modal__episodes-view">
-              {#if isMobile && selectedDubber}
-                <h3 class="watch-modal__group-title">{selectedDubber.name}</h3>
-              {/if}
-              {#if isMobile && downloadsAvailable()}
-                <div class="watch-modal__dl-bar">
-                  <button type="button" class="watch-modal__dl-all" disabled={!!dlBusy || episodes.length === 0} onclick={downloadAllEpisodes}>
-                    {@html downloadIconSvg}
-                    <span>{dlBusy || (mobileDoneCount === episodes.length && episodes.length > 0 ? 'Все серии скачаны' : mobileDoneCount > 0 ? `Скачать остальные (${mobileMissing})` : `Скачать все серии (${liveEpisodeTotal || episodes.length})`)}</span>
-                  </button>
-                  <button type="button" class="watch-modal__dl-open" onclick={() => { close(); navigate('/downloads'); }}>
-                    Загрузки{#if $hasActiveDownloads}<i class="watch-modal__dl-dot"></i>{/if}
-                  </button>
-                </div>
-              {/if}
-              {#if isMobile}
-                <button type="button" class="watch-modal__player-pick" onclick={() => (chooserSettings = true)}>
-                  <span>Плеер: <b>{playerLabel}</b></span><span class="watch-modal__player-pick-act">Изменить</span>
-                </button>
-              {/if}
-              {#if isMobile && !hintEpisodesHidden}
-                <div class="watch-modal__hint">
-                  <p>Если серия не запускается ни через какой видеоплеер, попробуйте сменить источник, если это доступно. Любая реклама в видео к приложению отношения не имеет.</p>
-                  <button type="button" aria-label="Скрыть подсказку" onclick={() => hideHint('episodes')}>{@html closeIconSvg}</button>
-                </div>
-              {/if}
               <div class="watch-modal__episodes-bar">
               {#if sources.length > 0}
                 <div class="watch-modal__source-pills" aria-label="Источники">
@@ -1218,8 +1218,8 @@
                       {sourceLabel(source)}
                     </button>
                   {/each}
-                  {#if isDesktop}
-                    <span class="watch-modal__desk-progress">Просмотрено {watchedCount} из {episodes.length}</span>
+                  {#if !isTv}
+                    <span class="watch-modal__desk-progress">{#if isMobile}{watchedCount} / {episodes.length}{:else}Просмотрено {watchedCount} из {episodes.length}{/if}</span>
                   {/if}
                 </div>
               {/if}
@@ -1257,7 +1257,41 @@
                     <span class="watch-modal__tv-hint">Удерживайте OK на серии — отметить</span>
                   </span>
                 </div>
-              {:else if isDesktop}
+              {:else if isMobile}
+                <div class="watch-modal__m-actions">
+                  {#if nextEpisode}
+                    {@const nextNum = episodeDisplayNumber(nextEpisode, episodes)}
+                    <div class="watch-modal__m-primary">
+                      <UiV2Button
+                        variant="primary"
+                        label="{lastWatchedEpisode || resumeEpisode ? 'Продолжить' : 'Начать'} · {nextNum != null ? `${nextNum} серия` : (nextEpisode.name || 'серия')}{resumeEpisode ? ` · ${fmtTime(resumeEpisode.position_sec)}` : ''}"
+                        onclick={() => handleEpisodePlay(nextEpisode.position)}
+                      />
+                    </div>
+                  {/if}
+                  <label class="watch-modal__desk-search">
+                    <span class="watch-modal__episodes-search-icon" aria-hidden="true">{@html searchIconSvg}</span>
+                    <input
+                      type="search"
+                      class="watch-modal__episodes-search-input"
+                      placeholder="Найти серию"
+                      bind:value={searchInput}
+                      onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearchEpisode(); } }}
+                    />
+                  </label>
+                  <button type="button" class="watch-modal__m-more" aria-label="Ещё" onclick={() => (episodesMenuOpen = true)}>
+                    {@html iconMoreHorizontal(20)}
+                  </button>
+                </div>
+                <UiV2PopupMenu
+                  open={episodesMenuOpen}
+                  x={0}
+                  y={0}
+                  items={episodesMenuItems}
+                  onClose={() => { episodesMenuOpen = false; }}
+                  onSelect={onEpisodesMenu}
+                />
+              {:else}
                 <div class="watch-modal__desk-actions">
                   {#if nextEpisode}
                     {@const nextNum = episodeDisplayNumber(nextEpisode, episodes)}
@@ -1269,9 +1303,11 @@
                   {/if}
                   <UiV2Button label="Отметить все" onclick={() => confirmSetAllWatched(true)} disabled={actionBusy !== '' || remainingCount === 0} />
                   <UiV2Button label="Снять отметки" onclick={() => confirmSetAllWatched(false)} disabled={actionBusy !== '' || watchedCount === 0} />
-                  <UiV2Button label="Скачать" ariaHaspopup="dialog" onclick={() => (desktopDlOpen = true)} disabled={!selectedSource || episodes.length === 0}>
-                    {#snippet icon()}{@html downloadIconSvg}{/snippet}
-                  </UiV2Button>
+                  {#if isDesktop}
+                    <UiV2Button label="Скачать" ariaHaspopup="dialog" onclick={() => (desktopDlOpen = true)} disabled={!selectedSource || episodes.length === 0}>
+                      {#snippet icon()}{@html downloadIconSvg}{/snippet}
+                    </UiV2Button>
+                  {/if}
                   <div class="watch-modal__desk-end">
                   {#if hasCovers || coversWaiting}
                     <UiV2Button
@@ -1293,39 +1329,6 @@
                   </label>
                   </div>
                 </div>
-              {:else}
-              <div class="watch-modal__episodes-toolbar" role="search">
-                <label class="watch-modal__episodes-search">
-                  <span class="watch-modal__episodes-search-icon" aria-hidden="true">{@html searchIconSvg}</span>
-                  <input
-                    type="search"
-                    class="watch-modal__episodes-search-input"
-                    placeholder="Найти серию"
-                    bind:value={searchInput}
-                    onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearchEpisode(); } }}
-                  />
-                </label>
-
-                <div class="watch-modal__toolbar-divider" aria-hidden="true"></div>
-
-                <div class="watch-modal__toolbar-actions">
-                  <button type="button" class="watch-modal__toolbar-btn" title="Скачать все серии" onclick={downloadAllEpisodes} disabled={actionBusy !== '' || episodes.length === 0}>
-                    {@html downloadIconSvg}
-                  </button>
-                  <div class="watch-modal__options">
-                    <button type="button" class="watch-modal__toolbar-btn" title="Опции" aria-expanded={optionsOpen} onclick={() => optionsOpen = !optionsOpen}>
-                      {@html dotsIconSvg}
-                    </button>
-                    {#if optionsOpen}
-                      <div class="watch-modal__options-menu">
-                        <button type="button" onclick={handleLastWatched}>К последней отмеченной</button>
-                        <button type="button" onclick={() => setAllWatched(true)} disabled={actionBusy !== ''}>Пометить всё</button>
-                        <button type="button" onclick={() => setAllWatched(false)} disabled={actionBusy !== ''}>Удалить все отметки</button>
-                      </div>
-                    {/if}
-                  </div>
-                </div>
-              </div>
               {/if}
               </div>
 
@@ -1360,7 +1363,7 @@
                     class:watch-modal__episode-card--watched={watched}
                     class:watch-modal__episode-card--active={selectedEpisodePos === ep.position}
                     class:watch-modal__episode-card--unnumbered={unnumbered}
-                    class:watch-modal__episode-card--next={(isTv || isDesktop) && nextEpisodePos === ep.position}
+                    class:watch-modal__episode-card--next={nextEpisodePos === ep.position}
                     class:watch-modal__episode-card--cover={!!cover}
                     class:watch-modal__episode-card--spoiler={coverBlur && !watched && !!cover}
                     class:watch-modal__episode-card--cover-pending={coverPending}
@@ -1389,6 +1392,7 @@
                       type="button"
                       class="watch-modal__episode-main"
                       use:tvLongPress={isTv ? () => void toggleEpisodeWatched(ep) : null}
+                      use:touchLongPress={isMobile ? () => void toggleEpisodeWatched(ep) : null}
                       data-tv-longpress-hint="Отметить серию"
                       onclick={() => handleEpisodePlay(ep.position)}
                     >
@@ -1416,7 +1420,7 @@
                         <span style:width="{(progress.position_sec / progress.duration_sec) * 100}%"></span>
                       </span>
                     {/if}
-                    {#if isDesktop}
+                    {#if !isTv}
                       <button
                         type="button"
                         class="watch-modal__episode-watch"
@@ -1427,16 +1431,9 @@
                       >
                         {@html checkIconSvg}
                       </button>
-                    {:else if !isTv}
+                    {/if}
+                    {#if isMobile && downloadsAvailable()}
                     <span class="watch-modal__episode-actions">
-                      <button
-                        type="button"
-                        class="watch-modal__episode-mini"
-                        title={watched ? 'Снять отметку' : 'Пометить просмотренной'}
-                        onclick={(e) => toggleEpisodeWatched(ep, e)}
-                      >
-                        {@html checkIconSvg}
-                      </button>
                       <button
                         type="button"
                         class="watch-modal__episode-mini"
@@ -1496,17 +1493,10 @@
               >Субтитры</button>
               {#if isTv}
                 <span class="watch-modal__tv-hint watch-modal__tv-hint--end">Удерживайте OK — закрепить озвучку</span>
-              {:else if isDesktop}
-                <span class="watch-modal__desk-hint">Наведите на озвучку, чтобы закрепить</span>
+              {:else}
+                <span class="watch-modal__desk-hint">{isMobile ? 'Удерживайте, чтобы закрепить' : 'Наведите на озвучку, чтобы закрепить'}</span>
               {/if}
             </div>
-
-            {#if isMobile && !hintVariantsHidden}
-              <div class="watch-modal__hint">
-                <p>Напротив каждого варианта озвучки указано общее количество доступных серий. Статистика просмотров обновляется ежедневно.</p>
-                <button type="button" aria-label="Скрыть подсказку" onclick={() => hideHint('variants')}>{@html closeIconSvg}</button>
-              </div>
-            {/if}
 
             <div class="watch-modal__variant-list">
               {#if filteredDubbers.length === 0}
@@ -1528,6 +1518,7 @@
                     tabindex="0"
                     data-dubber-id={d.id}
                     use:tvLongPress={isTv ? () => void togglePinDubber(d) : null}
+                    use:touchLongPress={isMobile ? () => void togglePinDubber(d) : null}
                     data-tv-longpress-hint={pinned ? 'Открепить озвучку' : 'Закрепить озвучку'}
                     onclick={() => openDubber(d)}
                     onkeydown={(e) => {
@@ -1537,7 +1528,7 @@
                       }
                     }}
                   >
-                    {#if isTv}
+                    {#if isTv || isMobile}
                       {#if pinned}
                         <span class="watch-modal__variant-pinmark" aria-label="Закреплено">{@html iconPin(15)}</span>
                       {/if}

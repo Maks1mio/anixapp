@@ -708,6 +708,14 @@ export function focusTvWatchPlay(): boolean {
   return true;
 }
 
+/** Вопрос про сохранённый таймкод: фокус сразу на «Продолжить». */
+export function focusTvWatchResume(): boolean {
+  const go = document.querySelector<HTMLElement>('.tv-watch .tv-watch__resume-go');
+  if (!go) return false;
+  focusElement(go);
+  return true;
+}
+
 export function focusTvReleasePage(): void {
   scheduleFocusTvPageContent(30);
 }

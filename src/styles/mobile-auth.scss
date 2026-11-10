@@ -1,0 +1,383 @@
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Вход и регистрация на телефоне и планшете: страница во весь экран вместо карточки на стене постеров.
+// Постеры остаются шапкой, которая уезжает вместе с формой. ПК и ТВ не затрагивает.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+html.mobile-mode {
+  .view-auth {
+    // Шапка с постерами зависит от высоты экрана; логотип всегда заходит на её край, а текст начинается ниже
+    --auth-hero: clamp(120px, 22dvh, 232px);
+
+    height: calc(100dvh * var(--m-vh-fix, 1));
+    min-height: 0;
+    overflow: hidden auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    background: var(--m-bg);
+    color: var(--m-text);
+    font-family: var(--m-font);
+
+    // В шапке остаётся только статус соединения: имя приложения теперь в самой форме
+    .titlebar--auth {
+      top: var(--safe-top);
+      height: auto;
+      padding: 0 var(--m-gutter);
+    }
+
+    .titlebar--auth .titlebar__drag {
+      display: none;
+    }
+  }
+
+  .view-auth__body {
+    display: block;
+    flex: 1 0 auto;
+    min-height: auto;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .view-auth__covers {
+    bottom: auto;
+    height: calc(var(--safe-top) + var(--auth-hero) + 64px);
+    mask-image: linear-gradient(to bottom, #000 40%, transparent 100%);
+    opacity: 1;
+  }
+
+  // Тени и отдельный слой на каждой плитке дорого обходятся телефону
+  .auth-cover-tile__face {
+    box-shadow: none;
+    will-change: auto;
+  }
+
+  .auth-cover-stage__fade {
+    display: none;
+  }
+
+  .view-auth__panel {
+    display: block;
+    max-width: none;
+  }
+
+  .auth--v2 {
+    --uikit-v2-surface: var(--m-bg);
+    --uikit-v2-text: var(--m-text);
+    --uikit-v2-muted: var(--m-text-2);
+
+    max-width: 26rem;
+    margin: 0 auto;
+    padding: calc(var(--safe-top) + var(--auth-hero)) var(--m-gutter) var(--m-space-4);
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    color: var(--m-text);
+    animation: none;
+  }
+
+  .auth__logo {
+    display: block;
+    width: 64px;
+    height: 64px;
+    margin-bottom: var(--m-space-3);
+    border-radius: var(--m-radius-lg);
+  }
+
+  .auth__title {
+    margin: 0 0 var(--m-space-1);
+    color: var(--m-text);
+    font: 700 28px/1.2 var(--m-font);
+    letter-spacing: 0;
+    text-align: left;
+    animation: none;
+  }
+
+  .auth__subtitle {
+    margin: 0 0 var(--m-space-5);
+    color: var(--m-text-2);
+    font-size: 15px;
+    line-height: 1.4;
+    text-align: left;
+  }
+
+  .auth-form .uiv2-outlined-field {
+    margin-bottom: var(--m-space-4);
+  }
+
+  .auth-form .uiv2-outlined-field__input {
+    min-height: 56px;
+    font-size: 16px;
+  }
+
+  .auth-form__forgot {
+    margin: calc(var(--m-space-2) * -1) 0 var(--m-space-2);
+  }
+
+  .auth-form__submit,
+  .auth-form__guest-wrap .uiv2-btn {
+    min-height: 52px;
+    border-radius: var(--m-radius-pill);
+    font-size: 16px;
+  }
+
+  .auth-form__guest-wrap {
+    margin-top: var(--m-space-3);
+
+    .uiv2-btn--chrome {
+      background: var(--m-surface-sheet);
+      color: var(--m-text);
+    }
+  }
+
+  .auth-form__info,
+  .auth-form__error {
+    margin-bottom: var(--m-space-3);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  // Ссылки: узкий текст, но палец должен попадать
+  .auth-link {
+    min-height: var(--m-touch);
+    font-size: 14px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .auth-switch {
+    margin-top: var(--m-space-2);
+    color: var(--m-text-2);
+    font-size: 14px;
+  }
+
+  .auth-oauth {
+    margin-top: var(--m-space-5);
+  }
+
+  .auth-oauth__divider {
+    margin-bottom: var(--m-space-3);
+    color: var(--m-text-2);
+    font-size: 13px;
+    letter-spacing: 0;
+    text-transform: none;
+
+    &::before,
+    &::after {
+      background: var(--m-divider);
+    }
+  }
+
+  // Сервисы — плашки на всю ширину: круги по 44px на телефоне мелкие
+  .auth-oauth__icons {
+    gap: var(--m-space-2);
+  }
+
+  .auth-oauth__icon-btn {
+    flex: 1 1 0;
+    width: auto;
+    height: 56px;
+    border-radius: var(--m-radius-lg);
+    background: var(--m-surface-block);
+    animation: none;
+    -webkit-tap-highlight-color: transparent;
+
+    &:hover:not(:disabled) {
+      transform: none;
+      filter: none;
+    }
+
+    &:active:not(:disabled) {
+      background: var(--m-surface-sheet);
+      transform: scale(0.97);
+    }
+
+    &--busy {
+      transform: none;
+    }
+  }
+
+  .auth-oauth__icon-face {
+    width: 32px;
+    height: 32px;
+  }
+
+  .auth-oauth__spinner {
+    inset: 0;
+    border-radius: var(--m-radius-lg);
+    border-top-color: var(--m-text);
+  }
+
+  .auth-oauth__chip {
+    min-height: 32px;
+    padding: 0 var(--m-space-3);
+    background: var(--m-surface-chip);
+    color: var(--m-text);
+    font-size: 14px;
+  }
+
+  .auth-oauth__suggestions {
+    margin: calc(var(--m-space-2) * -1) 0 var(--m-space-4);
+  }
+
+  // Юридический текст — обычный абзац под формой, а не плашка поверх неё
+  .auth-legal--screen {
+    position: static;
+    flex: none;
+    padding: var(--m-space-2) var(--m-gutter) calc(var(--m-space-4) + var(--safe-bottom));
+    background: none;
+  }
+
+  .auth-legal__text {
+    max-width: 26rem;
+    color: var(--m-text-2);
+    font-size: 12px;
+    line-height: 1.4;
+    text-shadow: none;
+  }
+
+  .auth-legal__link {
+    min-height: 0;
+    color: var(--m-text);
+    font-size: inherit;
+    font-weight: 500;
+    text-shadow: none;
+    text-decoration-color: color-mix(in srgb, var(--m-text) 40%, transparent);
+
+    &:hover:not(:disabled) {
+      color: var(--m-text);
+    }
+  }
+
+  // «О проекте» и условия — шторка снизу, как остальные диалоги на телефоне
+  .auth-terms-modal {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .auth-terms-modal__stage {
+    width: min(100%, 34rem);
+    max-height: 88dvh;
+  }
+
+  .auth-terms-modal__panel {
+    max-height: 88dvh;
+    border: 0;
+    border-radius: var(--m-radius-xl) var(--m-radius-xl) 0 0;
+    background: var(--m-surface-sheet);
+    box-shadow: none;
+    color: var(--m-text);
+
+    &--compact {
+      max-height: 88dvh;
+    }
+  }
+
+  .auth-terms-modal__head {
+    align-items: center;
+    padding: var(--m-space-5) var(--m-space-5) var(--m-space-3);
+    border-bottom: 0;
+  }
+
+  .auth-terms-modal__title {
+    font: 700 20px/1.25 var(--m-font);
+  }
+
+  .auth-terms-modal__close {
+    width: var(--m-touch);
+    height: var(--m-touch);
+    margin: calc(var(--m-space-2) * -1) calc(var(--m-space-2) * -1) calc(var(--m-space-2) * -1) 0;
+    color: var(--m-text-2);
+  }
+
+  .auth-terms-modal__body {
+    padding: 0 var(--m-space-5) var(--m-space-4);
+    color: var(--m-text);
+    font-size: 15px;
+    line-height: 1.5;
+    text-wrap: pretty;
+
+    h3 {
+      font-size: 15px;
+    }
+  }
+
+  .auth-terms-modal__note,
+  .auth-terms-modal__footer-note {
+    color: var(--m-text-2);
+    font-size: 14px;
+  }
+
+  .auth-terms-modal__foot {
+    padding: var(--m-space-3) var(--m-space-5) calc(var(--m-space-4) + var(--safe-bottom));
+    border-top: 0;
+  }
+
+  .auth-terms-modal__dont {
+    color: var(--m-text-2);
+    font-size: 14px;
+  }
+
+  // Планшет и широкие окна: шапка растянулась бы в полосу с огромными постерами, а форма повисла бы
+  // у верхнего края. Здесь постеры — стена во весь экран, форма — карточка по центру
+  @media (min-width: 600px) {
+    .view-auth__covers {
+      position: fixed;
+      inset: 0;
+      height: auto;
+      mask-image: none;
+
+      &::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        z-index: 3;
+        background: color-mix(in srgb, var(--m-bg) 72%, transparent);
+      }
+    }
+
+    .view-auth__body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: calc(var(--safe-top) + var(--m-space-5)) var(--m-space-5) var(--m-space-3);
+    }
+
+    .view-auth__panel {
+      max-width: 26rem;
+    }
+
+    .auth--v2 {
+      padding: var(--m-space-6) 32px 32px;
+      border: 1px solid var(--m-divider);
+      border-radius: var(--m-radius-xl);
+      background: var(--m-bg);
+    }
+
+    .auth__logo {
+      width: 56px;
+      height: 56px;
+    }
+
+    .auth-legal--screen {
+      position: relative;
+      z-index: 1;
+    }
+
+    .auth-legal__text {
+      max-width: 38rem;
+      color: var(--m-text);
+    }
+
+    .auth-terms-modal {
+      align-items: center;
+      padding: var(--m-space-5);
+    }
+
+    .auth-terms-modal__panel {
+      border-radius: var(--m-radius-xl);
+    }
+
+    .auth-terms-modal__foot {
+      padding-bottom: var(--m-space-5);
+    }
+  }
+}

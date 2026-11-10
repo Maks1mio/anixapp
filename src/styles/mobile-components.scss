@@ -33,11 +33,23 @@ html.mobile-mode {
     -webkit-font-smoothing: antialiased;
   }
 
+  // Значки строки состояния лежат поверх контента (и когда верхняя панель ушла при прокрутке):
+  // градиент цвета фона затемняет страницу под ними, но её прокрутку видно
+  &.mobile-native body::after {
+    content: '';
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 20000;
+    height: calc(var(--safe-top) + 12px);
+    background: linear-gradient(to bottom, color-mix(in srgb, var(--m-bg) 82%, transparent), color-mix(in srgb, var(--m-bg) 45%, transparent) 70%, transparent);
+    pointer-events: none;
+  }
+
   .m-screen {
-    min-height: 100dvh;
+    min-height: calc(100dvh * var(--m-vh-fix, 1));
     background: var(--m-bg);
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: calc(var(--m-nav-h) + env(safe-area-inset-bottom));
+    padding-top: var(--safe-top);
+    padding-bottom: calc(var(--m-nav-h) + var(--safe-bottom));
   }
 
   .m-btn-reset {
@@ -96,7 +108,7 @@ html.mobile-mode {
     display: flex;
     align-items: center;
     gap: 0;
-    padding: var(--m-space-3) var(--m-space-1) 9px var(--m-gutter);
+    padding: calc(var(--m-space-3) + var(--safe-top)) var(--m-space-1) 9px var(--m-gutter);
     min-height: 56px;
     > .m-icon-btn { width: 48px; height: 48px; color: color-mix(in srgb, var(--m-text) 85%, var(--m-bg)); }
   }
@@ -294,15 +306,8 @@ html.mobile-mode {
 
   // ── Нижний таб-бар ───────────────────────────────────────────────────────────────────────
   .m-navbar {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 30;
     display: flex;
-    height: calc(var(--m-nav-h) + env(safe-area-inset-bottom));
-    padding-bottom: env(safe-area-inset-bottom);
-    background: var(--m-surface-sheet);
+    height: var(--m-nav-h);
   }
 
   .m-nav-item {
@@ -317,7 +322,10 @@ html.mobile-mode {
     color: var(--m-nav-idle);
     font-size: 13px;
     font-weight: 500;
+    user-select: none;
+    -webkit-touch-callout: none;
     &__pill {
+      position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -333,9 +341,88 @@ html.mobile-mode {
       font-weight: 700;
       .m-nav-item__pill { background: var(--m-secondary-container); color: var(--m-on-secondary-container); }
       // активная иконка залита, как в Anixart (у «Главной» и «Закладок» контур замкнутый)
-      &:is(:first-child, :nth-child(3)) .m-nav-item__pill svg path:last-of-type { fill: currentColor; }
-      &:first-child .m-nav-item__pill svg path:first-of-type { fill: var(--m-secondary-container); stroke: var(--m-secondary-container); }
+      &[data-tab='bookmarks'] .m-nav-item__pill svg path:last-of-type { fill: currentColor; }
+      // «Главная» (iconHomeNav): сначала дом — заливаем, поверх дверь цветом плашки
+      &[data-tab='home'] .m-nav-item__pill svg path:first-of-type { fill: currentColor; }
+      &[data-tab='home'] .m-nav-item__pill svg path:last-of-type { fill: var(--m-secondary-container); stroke: var(--m-secondary-container); }
       &:active .m-nav-item__pill { background: var(--m-secondary-container); filter: brightness(1.15); }
+    }
+  }
+
+  // Свободное место, куда можно положить поднятый раздел
+  .m-nav-free {
+    flex: 1;
+    margin: var(--m-space-3) var(--m-space-1);
+    border: 1.5px dashed var(--m-outline-variant);
+    border-radius: var(--m-radius-lg);
+  }
+
+  // Слот между разделами: при наведении раскрывается, левый край стоит на месте, палец остаётся внутри
+  .m-nav-free--gap {
+    flex: none;
+    width: 20px;
+    margin-inline: 2px;
+    transition: width 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+    &[data-over] { width: 44px; }
+  }
+
+  .m-nav-dropzone {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 48px;
+    overflow: hidden;
+    border: 1.5px dashed var(--m-outline-variant);
+    border-radius: var(--m-radius-lg);
+    color: var(--m-text-2);
+    font-size: 14px;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .m-nav-free[data-over],
+  .m-nav-dropzone[data-over] {
+    border-color: var(--m-text-2);
+    background: var(--m-surface-chip);
+    color: var(--m-text);
+  }
+
+  // Раздел виден, но пока не открывается (ИИ в приложении для Android)
+  .m-nav-item--disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  // Раздел подняли для перестановки: за пальцем идёт его копия, а на месте остаётся пустое гнездо
+  .m-nav-item--lifted {
+    position: relative;
+    > * { visibility: hidden; }
+    &::after {
+      content: '';
+      position: absolute;
+      inset: var(--m-space-3) var(--m-space-1);
+      border: 1.5px dashed var(--m-outline-variant);
+      border-radius: var(--m-radius-lg);
+    }
+  }
+  .m-nav-ghost {
+    position: fixed;
+    z-index: 60;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    border-radius: var(--m-radius-lg);
+    background: var(--m-surface-chip);
+    box-shadow: 0 8px 28px rgb(0 0 0 / 45%);
+    pointer-events: none;
+
+    .m-nav-item__pill { width: 56px; }
+    .m-nav-item__label {
+      max-width: 100%;
+      overflow: hidden;
+      font-size: 12px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
   }
 
@@ -386,29 +473,6 @@ html.mobile-mode {
     background: var(--m-bg);
   }
 
-  // ── Шторка (bottom sheet) ────────────────────────────────────────────────────────────────
-  .m-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 40; }
-  .m-sheet {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 41;
-    max-height: 88dvh;
-    overflow: auto;
-    border-radius: var(--m-radius-xl) var(--m-radius-xl) 0 0;
-    background: var(--m-surface-sheet);
-    padding: var(--m-space-3) var(--m-gutter) calc(var(--m-space-4) + env(safe-area-inset-bottom));
-    &__handle {
-      width: 32px;
-      height: 4px;
-      margin: 0 auto var(--m-space-3);
-      border-radius: var(--m-radius-pill);
-      background: var(--m-text-3);
-      opacity: 0.6;
-    }
-    &__title { margin: 0 0 var(--m-space-2); font-size: 22px; font-weight: 500; }
-  }
   .m-choice {
     @extend .m-btn-reset;
     display: flex;

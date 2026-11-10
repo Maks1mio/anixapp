@@ -4,7 +4,6 @@
   import { navigate } from '../../stores/navigation';
   import { requireAuth, isAuthenticated } from '../../stores/auth';
   import { openWatchModal } from '../../stores/modals';
-  import { isMobileMode } from '../../platform/mobile';
   import { buildPosterUrl, buildScreenshotUrl, toPosterDisplayUrl } from '../../utils/posterUrl';
   import { setDiscordContext, refreshDiscordPresence } from '../../services/discord-presence';
   import { isTvMode } from '../../platform/tv';
@@ -287,12 +286,15 @@
   });
 
   // ── Derived: lists / related / screenshots ────────────────────────────────
-  // Episode covers and screenshots from anixmedia — on PC only, asked for when the release opens.
-  const mediaEnabled = !isTvMode() && !isMobileMode();
+  // Screenshots from anixmedia, asked for when the release opens.
+  const mediaEnabled = !isTvMode();
   $effect(() => {
     if (!mediaEnabled || !id) return;
     return watchReleaseMedia(id);
   });
+
+  /** Фон шапки на телефоне и планшете: только наши кадры, у Anixart они слишком мелкие для всего экрана. */
+  const backdropImages = $derived(mediaEnabled ? ($releaseMedia[id]?.screenshots ?? []) : []);
 
   const screenshots   = $derived.by(() => {
     // Our 8 frames from the first episode are sharper than Anixart's; theirs until ours are ready.
@@ -319,7 +321,7 @@
 
   // ── Select options ────────────────────────────────────────────────────────
   const selectOptions = $derived([
-    { value: '', label: isMobileMode() ? 'Не смотрю' : 'Не в списке' },
+    { value: '', label: 'Не в списке' },
     ...LIST_STATUSES.map(s => ({ value: s.id, label: s.label })),
   ] as SelectOption[]);
 
@@ -569,6 +571,7 @@
         {isViewBlocked} {noteHtml} {descHtml} {descClean} {descNeedsTruncate} {descCollapsed}
         {metaInfoRows} {playBtnText} {playBtnDisabled} {episodeAddedText}
         {currentStatus} {selectOptions}
+        {backdropImages}
         {notifyEnabled}
         showNotify={showNotifyBell}
         onToggleFavorite={toggleFavorite}
@@ -626,10 +629,8 @@
       <!-- Recommendations -->
       <ReleaseRecommendations items={recommendedCards} />
 
-      <!-- Comments -->
-      {#if commentCount > 0 || comments.length > 0}
-        <ReleaseComments releaseId={id} {comments} totalCount={commentCount} commentsRoot={release} />
-      {/if}
+      <!-- Comments: блок с полем ввода есть всегда — у нового тайтла можно оставить первый комментарий -->
+      <ReleaseComments releaseId={id} {comments} totalCount={commentCount} commentsRoot={release} />
 
     </section>
   {/if}

@@ -368,12 +368,17 @@
     {/if}
 
     {#if hasWindowApi}
-      <UiV2Tooltip text="Режим большого экрана">
+      <!-- TV-интерфейс в разработке: предупреждаем, чтобы о его багах не сообщали -->
+      <UiV2Tooltip
+        title="Режим большого экрана"
+        meta="Beta"
+        description="Очень сырая сборка: идёт активная разработка. Сообщать о багах в этом режиме пока не нужно."
+      >
         <button
           type="button"
           class="titlebar__menu-item"
           id="titlebar-big-picture"
-          aria-label="Режим большого экрана"
+          aria-label="Режим большого экрана (бета)"
           onclick={enterBigPicture}
         >
           {@html iconTv(18)}

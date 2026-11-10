@@ -1,4 +1,4 @@
-import { buildCollectionUrl, buildPosterUrl, resolveCdnAssetUrl, toPosterDisplayUrl } from './posterUrl';
+import { buildCollectionUrl, buildPosterUrl, resolveCdnAssetUrl } from './posterUrl';
 import type { CollectionCardData } from '../components/CollectionCard.svelte';
 
 export const COLLECTION_SORT_OPTIONS = [
@@ -90,12 +90,6 @@ export function mapCollectionCard(raw: Record<string, unknown>): CollectionCardD
     isFavorite: !!(raw.is_favorite ?? raw.isFavorite),
     isPrivate: !!(raw.is_private ?? raw.isPrivate),
   };
-}
-
-/** Фон для шапки страницы: первая коллекция с настоящей обложкой (заглушку no_image пропускаем) */
-export function collectionsBackdropUrl(items: CollectionCardData[]): string | null {
-  const image = items.find((item) => item.image && !/no_image/i.test(item.image))?.image;
-  return image ? toPosterDisplayUrl(image, 'collectionCover') : null;
 }
 
 /** @deprecated use defaultCollectionListSort */

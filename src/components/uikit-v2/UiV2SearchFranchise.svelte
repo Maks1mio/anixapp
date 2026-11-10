@@ -20,6 +20,14 @@
 
   let { data, actionLabel = 'Перейти', onclick, class: className = '' }: Props = $props();
 
+  function releaseWord(count: number): string {
+    const tens = count % 100;
+    const ones = count % 10;
+    if (tens >= 11 && tens <= 14) return 'релизов';
+    if (ones === 1) return 'релиз';
+    return ones >= 2 && ones <= 4 ? 'релиза' : 'релизов';
+  }
+
   const targetId = $derived(
     typeof data.relatedId === 'number' ? data.relatedId : data.firstReleaseId,
   );
@@ -29,7 +37,7 @@
   const metaLabel = $derived.by(() => {
     const count = data.releaseCount;
     if (typeof count === 'number' && count > 0) {
-      return `${count} релизов во франшизе`;
+      return `${count} ${releaseWord(count)} во франшизе`;
     }
     return 'Релизы во франшизе';
   });

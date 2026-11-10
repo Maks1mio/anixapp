@@ -207,6 +207,13 @@ export function isDefaultPopularFilters(f: PopularFilters): boolean {
   );
 }
 
+/** Сколько фильтров отличается от значений по умолчанию. */
+export function countPopularFilters(f: PopularFilters): number {
+  return (Object.keys(DEFAULT_POPULAR_FILTERS) as (keyof PopularFilters)[]).filter(
+    (k) => k !== 'source' && f[k] !== DEFAULT_POPULAR_FILTERS[k],
+  ).length;
+}
+
 /** Ключ для кеша списка: источник + вкладка + все фильтры. */
 export function popularFiltersKey(f: PopularFilters): string {
   return [f.source, f.sort, f.year, f.season, f.genre, f.status, f.hideWatched ? 1 : 0].join('|');

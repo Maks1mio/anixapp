@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { navigate } from '../stores/navigation';
+  import { goBack, navigate } from '../stores/navigation';
   import { openFeedArticle, openFeedChannel } from '../stores/feed-focus';
   import { handleUserProfileClick } from '../stores/user-profile';
   import { fetchAllNotifications, markNotificationsRead } from '../stores/notifications';
@@ -12,6 +12,11 @@
   } from '../stores/badge-events';
   import type { BadgeEvent } from '../services/badges-api';
   import { openSettingsModal } from '../stores/modals';
+  import { isTvMode } from '../platform/tv';
+  import { isMobileMode } from '../platform/mobile';
+  import { swipeTabs, type TabSwipeState } from '../actions/swipeTabs';
+  import TabPeek from './TabPeek.svelte';
+  import { tabNeighbors } from '../utils/tab-prefetch.svelte';
   import {
     iconPlay,
     iconBookmark,
@@ -38,10 +43,12 @@
   } from '../utils/notification-format';
 
   interface Props {
-    onClose: () => void;
+    onClose?: () => void;
+    /** Отдельная страница (телефон, планшет, TV) вместо всплывающей панели. */
+    page?: boolean;
   }
 
-  const { onClose }: Props = $props();
+  const { onClose, page = false }: Props = $props();
 
   type LoadState = 'loading' | 'no-api' | 'empty' | 'error' | 'loaded';
 
@@ -81,10 +88,30 @@
     return counts;
   });
 
-  const filteredNotifications = $derived.by(() => {
-    if (filter === 'all') return notifications;
-    return notifications.filter((raw) => notificationFilterId(raw) === filter);
-  });
+  function notificationsFor(id: string): unknown[] {
+    if (id === 'all') return notifications;
+    return notifications.filter((raw) => notificationFilterId(raw) === id);
+  }
+
+  const filteredNotifications = $derived(notificationsFor(filter));
+  const peekFilters = $derived(tabNeighbors(FILTERS.map((f) => f.id), filter));
+
+  /** Ход свайпа содержимого — для планки и подписей вкладок */
+  let tabSwipe = $state<TabSwipeState>(null);
+
+  function swipeToFilter(dir: 1 | -1): boolean {
+    const next = FILTERS[FILTERS.findIndex((f) => f.id === filter) + dir];
+    if (!next) return false;
+    selectFilter(next.id);
+    return true;
+  }
+
+  /** Другая вкладка всегда открывается с начала списка. */
+  function selectFilter(id: NotificationFilterId) {
+    filter = id;
+    const scroller = document.querySelector('.notifications-modal__tabs')?.closest('[data-page-scroll]');
+    if (scroller) scroller.scrollTop = 0;
+  }
 
   const filterTabs = $derived.by((): UiV2TabItem[] =>
     FILTERS.map((f) => ({
@@ -143,7 +170,9 @@
   }
 
   function handleItemClick(n: ParsedNotification, event: MouseEvent) {
-    if (n.articleId) {
+    // На TV нет ленты: записи и каналы открыть негде, остаётся релиз или профиль, если они есть
+    const hasFeed = !isTvMode();
+    if (n.articleId && hasFeed) {
       close();
       openFeedArticle(n.articleId);
       return;
@@ -153,7 +182,7 @@
       navigate(`/release/${n.releaseId}`);
       return;
     }
-    if (n.channelId) {
+    if (n.channelId && hasFeed) {
       close();
       openFeedChannel(n.channelId);
       return;
@@ -179,7 +208,7 @@
   }
 
   function close() {
-    onClose();
+    onClose?.();
   }
 
   function openNotificationSettings() {
@@ -198,7 +227,7 @@
   }
 
   onMount(() => {
-    document.addEventListener('keydown', handleKeydown);
+    if (!page) document.addEventListener('keydown', handleKeydown);
     window.addEventListener('app-update-progress', onUpdateProgress);
 
     if (!window.anixApi) {
@@ -252,16 +281,87 @@
   });
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-<div
-  class="notifications-modal-overlay notifications-modal-overlay--open"
-  role="dialog"
-  aria-label="Уведомления"
-  tabindex="-1"
-  onclick={handleOverlayClick}
->
-  <div class="notifications-modal-panel uikit-v2">
+{#snippet notificationRows(rows: unknown[])}
+          {#if rows.length === 0}
+            <div class="notifications-modal__state">В этой категории пусто</div>
+          {:else}
+            <div class="notifications-modal__list">
+              {#each rows as raw, i (itemKey(raw, i))}
+                {@const n = parseNotification(raw)}
+                {@const key = itemKey(raw, i)}
+                {@const spoilerOpen = !!revealedSpoilers[key]}
+                <button
+                  type="button"
+                  class="notifications-modal__item"
+                  class:notifications-modal__item--new={n.isNew}
+                  onclick={(event) => handleItemClick(n, event)}
+                >
+                  <div class="notifications-modal__avatar-wrap">
+                    {#if n.image}
+                      <div
+                        class="notifications-modal__thumb"
+                        style="background-image:url('{n.image}');"
+                      ></div>
+                    {:else}
+                      <div class="notifications-modal__thumb notifications-modal__thumb--placeholder"></div>
+                    {/if}
+                    {@html markerHtml(n.markerKind)}
+                  </div>
+
+                  <div class="notifications-modal__main">
+                    <div class="notifications-modal__content">
+                      {#if n.spoilerText && !spoilerOpen}
+                        <div class="notifications-modal__text notifications-modal__text--muted">
+                          {@html n.bodyLeadHtml || n.bodyHtml}
+                        </div>
+                        <div
+                          class="notifications-modal__spoiler"
+                          role="button"
+                          tabindex="0"
+                          onclick={(e) => toggleSpoiler(key, e)}
+                          onkeydown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') toggleSpoiler(key, e as unknown as MouseEvent);
+                          }}
+                        >
+                          <span class="notifications-modal__spoiler-hint">Скрытый комментарий</span>
+                          <span class="notifications-modal__spoiler-action">Показать</span>
+                        </div>
+                      {:else}
+                        <div class="notifications-modal__text">{@html n.bodyHtml}</div>
+                        {#if n.spoilerText && spoilerOpen}
+                          <div class="notifications-modal__spoiler-body">{n.spoilerText}</div>
+                          <span
+                            class="notifications-modal__spoiler-hide"
+                            role="button"
+                            tabindex="0"
+                            onclick={(e) => toggleSpoiler(key, e)}
+                            onkeydown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') toggleSpoiler(key, e as unknown as MouseEvent);
+                            }}
+                          >Скрыть</span>
+                        {/if}
+                      {/if}
+                      {#if n.timeStr}
+                        <div class="notifications-modal__time">{n.timeStr}</div>
+                      {/if}
+                    </div>
+                    {#if n.isNew}
+                      <span class="notifications-modal__dot" aria-label="Новое"></span>
+                    {/if}
+                  </div>
+                </button>
+              {/each}
+            </div>
+          {/if}
+{/snippet}
+
+{#snippet content()}
     <header class="notifications-modal__header">
+      {#if page && isMobileMode()}
+        <button type="button" class="notifications-modal__back" aria-label="Назад" onclick={goBack}>
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5" /><path d="m12 19-7-7 7-7" /></svg>
+        </button>
+      {/if}
       <h2 class="notifications-modal__heading">Уведомления</h2>
       <div class="notifications-modal__header-actions">
         <UiV2RoundButton
@@ -275,9 +375,11 @@
         <UiV2RoundButton label="Настройки уведомлений" size="sm" onclick={openNotificationSettings}>
           {@html iconSettings(16)}
         </UiV2RoundButton>
-        <UiV2RoundButton label="Закрыть" size="sm" onclick={close}>
-          {@html iconX(16)}
-        </UiV2RoundButton>
+        {#if !page}
+          <UiV2RoundButton label="Закрыть" size="sm" onclick={close}>
+            {@html iconX(16)}
+          </UiV2RoundButton>
+        {/if}
       </div>
     </header>
 
@@ -403,83 +505,37 @@
           <UiV2Tabs
             class="uiv2-tabs--static notifications-modal__tabs"
             tabs={filterTabs}
-            activeId={filter}
-            onChange={(id) => { filter = id as NotificationFilterId; }}
+            activeId={filter} swipe={tabSwipe}
+            onChange={(id) => selectFilter(id as NotificationFilterId)}
           />
 
-          {#if filteredNotifications.length === 0}
-            <div class="notifications-modal__state">В этой категории пусто</div>
-          {:else}
-            <div class="notifications-modal__list">
-              {#each filteredNotifications as raw, i (itemKey(raw, i))}
-                {@const n = parseNotification(raw)}
-                {@const key = itemKey(raw, i)}
-                {@const spoilerOpen = !!revealedSpoilers[key]}
-                <button
-                  type="button"
-                  class="notifications-modal__item"
-                  class:notifications-modal__item--new={n.isNew}
-                  onclick={(event) => handleItemClick(n, event)}
-                >
-                  <div class="notifications-modal__avatar-wrap">
-                    {#if n.image}
-                      <div
-                        class="notifications-modal__thumb"
-                        style="background-image:url('{n.image}');"
-                      ></div>
-                    {:else}
-                      <div class="notifications-modal__thumb notifications-modal__thumb--placeholder"></div>
-                    {/if}
-                    {@html markerHtml(n.markerKind)}
-                  </div>
-
-                  <div class="notifications-modal__main">
-                    <div class="notifications-modal__content">
-                      {#if n.spoilerText && !spoilerOpen}
-                        <div class="notifications-modal__text notifications-modal__text--muted">
-                          {@html n.bodyLeadHtml || n.bodyHtml}
-                        </div>
-                        <div
-                          class="notifications-modal__spoiler"
-                          role="button"
-                          tabindex="0"
-                          onclick={(e) => toggleSpoiler(key, e)}
-                          onkeydown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') toggleSpoiler(key, e as unknown as MouseEvent);
-                          }}
-                        >
-                          <span class="notifications-modal__spoiler-hint">Скрытый комментарий</span>
-                          <span class="notifications-modal__spoiler-action">Показать</span>
-                        </div>
-                      {:else}
-                        <div class="notifications-modal__text">{@html n.bodyHtml}</div>
-                        {#if n.spoilerText && spoilerOpen}
-                          <div class="notifications-modal__spoiler-body">{n.spoilerText}</div>
-                          <span
-                            class="notifications-modal__spoiler-hide"
-                            role="button"
-                            tabindex="0"
-                            onclick={(e) => toggleSpoiler(key, e)}
-                            onkeydown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') toggleSpoiler(key, e as unknown as MouseEvent);
-                            }}
-                          >Скрыть</span>
-                        {/if}
-                      {/if}
-                      {#if n.timeStr}
-                        <div class="notifications-modal__time">{n.timeStr}</div>
-                      {/if}
-                    </div>
-                    {#if n.isNew}
-                      <span class="notifications-modal__dot" aria-label="Новое"></span>
-                    {/if}
-                  </div>
-                </button>
-              {/each}
-            </div>
-          {/if}
+          <div use:swipeTabs={{ onSwipe: swipeToFilter, enabled: page && isMobileMode(), activeId: filter, onSwipeProgress: (dir, progress, ms) => (tabSwipe = dir ? { dir, progress, ms } : null) }}>
+            {@render notificationRows(filteredNotifications)}
+            {#if page}
+              {#if peekFilters.prev}<TabPeek dir={-1}>{@render notificationRows(notificationsFor(peekFilters.prev))}</TabPeek>{/if}
+              {#if peekFilters.next}<TabPeek dir={1}>{@render notificationRows(notificationsFor(peekFilters.next))}</TabPeek>{/if}
+            {/if}
+          </div>
         {/if}
       </div>
     </Page>
+{/snippet}
+
+{#if page}
+  <section class="notifications-page uikit-v2" aria-label="Уведомления">
+    {@render content()}
+  </section>
+{:else}
+  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+  <div
+    class="notifications-modal-overlay notifications-modal-overlay--open"
+    role="dialog"
+    aria-label="Уведомления"
+    tabindex="-1"
+    onclick={handleOverlayClick}
+  >
+    <div class="notifications-modal-panel uikit-v2">
+      {@render content()}
+    </div>
   </div>
-</div>
+{/if}

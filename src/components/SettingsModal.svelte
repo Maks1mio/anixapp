@@ -17,7 +17,26 @@
   import UiV2BackBar from './uikit-v2/UiV2BackBar.svelte';
   import UiV2RoundButton from './uikit-v2/UiV2RoundButton.svelte';
   import SidebarPanelResizeHandle from './SidebarPanelResizeHandle.svelte';
-  import { iconX } from './icons';
+  import {
+    iconX,
+    iconPalette,
+    iconBell,
+    iconPlay,
+    iconGlobe,
+    iconDownload,
+    iconSlidersHorizontal,
+    iconSignal,
+    iconRefreshCw,
+    iconClipboardList,
+    iconCodeXml,
+    iconGift,
+    iconMessageCircle,
+    iconLink,
+    iconInfo,
+    iconChevronRight,
+  } from './icons';
+  import { navigate } from '../stores/navigation';
+  import { openSupportModal } from '../stores/support-promo';
   import { getProfilePanelWidthPx, setProfilePanelWidthPx } from '../prefs';
   import { requestOpenExternal } from '../utils/external-link';
 
@@ -58,15 +77,46 @@
     about: 'О программе',
   };
 
-  const MENU_ROWS: { tab: SettingsTab; title: string; sub: string; section?: string }[] = [
-    { tab: 'appearance', title: 'Внешний вид', sub: 'Темы, масштабирование, навигация', section: 'Настройки приложения' },
-    { tab: 'connection', title: 'Соединение', sub: 'API-эндпоинт' },
-    { tab: 'behavior', title: 'Поведение', sub: 'Трей и ускорение' },
-    { tab: 'notifications', title: 'Уведомления', sub: 'Всплывающие уведомления, баннеры и звук' },
-    { tab: 'playback', title: 'Воспроизведение', sub: 'Anime4K, звук и горячие клавиши' },
-    { tab: 'discord', title: 'Discord Rich Presence', sub: 'Статус в Discord' },
-    { tab: 'update', title: 'Обновление', sub: 'Проверка обновлений и история версий' },
-    { tab: 'debug', title: 'Отладка', sub: 'Логи приложения и сети' },
+  /** Пункт меню: открывает вкладку настроек или выполняет действие (ссылка, другой экран). */
+  type MenuRow = {
+    tab?: SettingsTab;
+    title: string;
+    sub?: string;
+    icon: (size?: number) => string;
+    action?: () => void;
+    external?: boolean;
+  };
+
+  /** Группы — как на экране настроек Android: приложение · система · о проекте. */
+  const MENU_GROUPS: { title: string; rows: MenuRow[] }[] = [
+    {
+      title: 'Приложение',
+      rows: [
+        { tab: 'appearance', title: 'Внешний вид', sub: 'Тема, масштаб, вид списков и навигация', icon: iconPalette },
+        { tab: 'notifications', title: 'Уведомления', sub: 'Баннеры, звук и типы уведомлений', icon: iconBell },
+        { tab: 'playback', title: 'Воспроизведение', sub: 'Anime4K, звук и горячие клавиши', icon: iconPlay },
+        { tab: 'connection', title: 'Соединение', sub: 'Сервер API', icon: iconGlobe },
+        { title: 'Загрузки', sub: 'Скачанные серии для просмотра без сети', icon: iconDownload, action: () => { close(); navigate('/downloads'); } },
+      ],
+    },
+    {
+      title: 'Система',
+      rows: [
+        { tab: 'behavior', title: 'Поведение', sub: 'Трей, ускорение и сведения о GPU', icon: iconSlidersHorizontal },
+        { tab: 'discord', title: 'Discord Rich Presence', sub: 'Что вы смотрите — в статусе Discord', icon: iconSignal },
+        { tab: 'update', title: 'Обновление', sub: 'Проверка обновлений и история версий', icon: iconRefreshCw },
+        { tab: 'debug', title: 'Отладка', sub: 'Логи приложения и сети', icon: iconClipboardList },
+      ],
+    },
+    {
+      title: 'AnixApp',
+      rows: [
+        { title: 'Поддержать AnixApp', icon: iconGift, action: () => openSupportModal() },
+        { title: 'Канал в Telegram', icon: iconMessageCircle, external: true, action: () => requestOpenExternal('https://t.me/anixapp') },
+        { title: 'Исходный код на GitHub', icon: iconLink, external: true, action: () => requestOpenExternal('https://github.com/Maks1mio/anixapp') },
+        { tab: 'about', title: 'О программе', icon: iconInfo },
+      ],
+    },
   ];
 
   const isDev = import.meta.env.DEV;
@@ -143,11 +193,6 @@
     }
   }
 
-  function handleGithubLink(e: Event) {
-    e.preventDefault();
-    requestOpenExternal('https://github.com/Maks1mio/anixapp');
-  }
-
   onMount(() => {
     if (standalone) {
       document.addEventListener('keydown', handleKeydown);
@@ -208,38 +253,49 @@
         </header>
 
         {#if screen === 'menu'}
-          <div class="profile-panel__edit-menu">
-            {#each MENU_ROWS as row (row.tab)}
-              {#if row.section}
-                <h3 class="profile-panel__edit-section">{row.section}</h3>
-              {/if}
-              <button type="button" class="profile-panel__edit-row" onclick={() => openTab(row.tab)}>
-                <span class="profile-panel__edit-row-title">{row.title}</span>
-                <span class="profile-panel__edit-row-sub">{row.sub}</span>
-              </button>
+          <div class="profile-panel__edit-menu settings-menu">
+            {#each MENU_GROUPS as group, gi (group.title)}
+              {#if gi > 0}<div class="profile-panel__edit-divider" aria-hidden="true"></div>{/if}
+              <h3 class="settings-menu__group">{group.title}</h3>
+              {#each group.rows as row (row.title)}
+                <button
+                  type="button"
+                  class="settings-menu__row"
+                  onclick={() => (row.tab ? openTab(row.tab) : row.action?.())}
+                >
+                  <span class="settings-menu__icon" aria-hidden="true">{@html row.icon(20)}</span>
+                  <span class="settings-menu__text">
+                    <span class="settings-menu__title">{row.title}</span>
+                    {#if row.tab === 'about'}
+                      <span class="settings-menu__sub">{appVersion}</span>
+                    {:else if row.sub}
+                      <span class="settings-menu__sub">{row.sub}</span>
+                    {/if}
+                  </span>
+                  {#if !row.external}
+                    <span class="settings-menu__chevron" aria-hidden="true">{@html iconChevronRight(16)}</span>
+                  {/if}
+                </button>
+              {/each}
             {/each}
 
             {#if isDev}
               <div class="profile-panel__edit-divider" aria-hidden="true"></div>
-              <h3 class="profile-panel__edit-section">Разработчик</h3>
-              <button type="button" class="profile-panel__edit-row" onclick={() => openTab('developer')}>
-                <span class="profile-panel__edit-row-title">Разработчик</span>
-                <span class="profile-panel__edit-row-sub">Мосты и UI Kit</span>
+              <h3 class="settings-menu__group">Разработчик</h3>
+              <button type="button" class="settings-menu__row" onclick={() => openTab('developer')}>
+                <span class="settings-menu__icon" aria-hidden="true">{@html iconCodeXml(20)}</span>
+                <span class="settings-menu__text">
+                  <span class="settings-menu__title">Разработчик</span>
+                  <span class="settings-menu__sub">Мосты и UI Kit</span>
+                </span>
+                <span class="settings-menu__chevron" aria-hidden="true">{@html iconChevronRight(16)}</span>
               </button>
             {/if}
 
             <div class="profile-panel__edit-divider" aria-hidden="true"></div>
-            <button type="button" class="profile-panel__edit-row" onclick={() => openTab('about')}>
-              <span class="profile-panel__edit-row-title">О программе</span>
-              <span class="profile-panel__edit-row-sub">{appVersion}</span>
-            </button>
-
-            <div class="profile-panel__edit-divider" aria-hidden="true"></div>
+            <!-- Как внизу настроек Android: только версия, ссылки — пунктами выше -->
             <div class="settings-panel__meta">
               <span>{appVersion}</span>
-              <button type="button" class="settings-panel__meta-link" onclick={handleGithubLink}>
-                GitHub
-              </button>
               {#if componentsLine}
                 <p class="settings-panel__meta-components">{componentsLine}</p>
               {/if}

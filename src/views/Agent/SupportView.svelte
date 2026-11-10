@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isMobileMode } from '../../platform/mobile';
   import { onDestroy, tick, untrack } from 'svelte';
   import { fly, slide } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
@@ -391,7 +392,8 @@
   }
 
   function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    // На телефоне Enter переносит строку, отправляет кнопка
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !isMobileMode()) {
       e.preventDefault();
       void send();
     }

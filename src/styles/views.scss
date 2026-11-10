@@ -1515,7 +1515,7 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   z-index: 1201;
   display: flex;
   gap: 0.75rem;
-  padding: 0.85rem 1rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
+  padding: 0.85rem 1rem calc(0.85rem + var(--safe-bottom));
   border-top: 1px solid $color-border;
   background: $color-surface;
 }
@@ -2230,87 +2230,6 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   .bookmarks-toolbar {
     margin: 0;
-  }
-}
-
-.bookmarks__search {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  min-height: 2.5rem;
-  margin: 0 0 0.65rem;
-  padding: 0 0.85rem;
-  border-radius: 12px;
-  background: color-mix(in srgb, $color-surface 88%, transparent);
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, $color-text 10%, transparent),
-    0 1px 0 color-mix(in srgb, #fff 4%, transparent) inset;
-  transition:
-    box-shadow 0.18s ease,
-    background 0.18s ease;
-
-  &:focus-within {
-    background: color-mix(in srgb, $color-surface 96%, transparent);
-    box-shadow:
-      0 0 0 1px color-mix(in srgb, $color-accent 42%, transparent),
-      0 0 0 3px color-mix(in srgb, $color-accent 14%, transparent);
-  }
-}
-
-.bookmarks__search-icon {
-  display: inline-flex;
-  flex-shrink: 0;
-  color: $color-text-muted;
-  opacity: 0.85;
-  line-height: 0;
-
-  svg {
-    display: block;
-  }
-}
-
-.bookmarks__search-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 2.5rem;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: $color-text;
-  font: inherit;
-  font-size: 0.9rem;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  outline: none;
-
-  &::placeholder {
-    color: color-mix(in srgb, $color-text-muted 88%, transparent);
-    font-weight: 500;
-  }
-}
-
-.bookmarks__search-clear {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.65rem;
-  height: 1.65rem;
-  padding: 0;
-  flex-shrink: 0;
-  border: 0;
-  border-radius: 999px;
-  background: color-mix(in srgb, $color-text 10%, transparent);
-  color: $color-text-muted;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-
-  &:hover {
-    background: color-mix(in srgb, $color-text 16%, transparent);
-    color: $color-text;
-  }
-
-  svg {
-    display: block;
   }
 }
 
@@ -5134,10 +5053,6 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   .bookmarks-toolbar__count {
     display: none;
   }
-
-  .bookmarks__search {
-    padding: 0 0.7rem;
-  }
 }
 
 // (legacy release-page comment styles removed — see comments.scss)
@@ -5835,4 +5750,18 @@ $auth-ease: cubic-bezier(0.22, 1, 0.36, 1);
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+// Шапка релиза на ПК: заголовок с подписью, кнопки, сведения — внутри групп ближе, между группами дальше
+html:not(.tv-mode):not(.mobile-mode) {
+  .release-page__head:not(.release-page__head--narrow) {
+    .release-page__head-top { gap: 0; }
+    .release-page__head-intro { margin-bottom: 0.25rem; }
+    .release-page__actions { margin-bottom: 1.25rem; }
+  }
+
+  .release-page__meta-info--flat {
+    gap: 0.25rem;
+    margin-bottom: 0.75rem;
+  }
 }

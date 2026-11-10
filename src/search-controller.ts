@@ -12,6 +12,13 @@ export const SEARCH_TABS: { id: SearchTab; label: string }[] = [
   { id: 'profiles', label: 'Пользователи' },
 ];
 
+/** Подпись поля: по чему идёт поиск. */
+export const SEARCH_PLACEHOLDERS: Record<SearchTab, string> = {
+  releases: 'Поиск тайтлов',
+  collections: 'Поиск коллекций',
+  profiles: 'Поиск пользователей',
+};
+
 /** Поле поиска тайтлов (search_by в API). */
 export const RELEASE_SEARCH_BY_OPTIONS: { value: string; label: string }[] = [
   { value: String(RELEASE_SEARCH_BY.title), label: 'Название' },
@@ -30,12 +37,10 @@ export function buildSearchRoute(
   query: string,
   tab: SearchTab = 'releases',
   searchBy = 0,
-  hiddenOnly = false,
 ): string {
   const params = new URLSearchParams({ q: query.trim() });
   if (tab !== 'releases') params.set('tab', tab);
   if (tab === 'releases' && searchBy > 0) params.set('by', String(searchBy));
-  if (tab === 'releases' && hiddenOnly) params.set('hidden', '1');
   return `/search?${params.toString()}`;
 }
 
@@ -43,7 +48,7 @@ export function buildSearchRoute(
 export function openSearchPage(query: string, tab: SearchTab = 'releases', searchBy = 0): void {
   const q = query.trim();
   if (!q) return;
-  addSearchHistory(q);
+  addSearchHistory(q, tab);
   const route = buildSearchRoute(q, tab, searchBy);
   // Тот же запрос — уже на странице (navigate прислал бы маршрут без query)
   if (isCurrentAppRoute(route)) return;

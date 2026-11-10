@@ -371,10 +371,64 @@ html.tv-mode .tv-profile__hero {
   display: flex;
   flex-direction: column;
   gap: 1.6rem;
+  position: relative;
   padding: 1rem var(--tv-home-gutter) 1.5rem var(--tv-home-content-left);
 }
 
+.tv-profile__cover {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 22rem;
+  background: center / cover no-repeat;
+  opacity: 0.45;
+  mask-image: linear-gradient(to bottom, #000 30%, transparent);
+  pointer-events: none;
+}
+
+.tv-profile__rating {
+  display: inline-block;
+  margin-right: 0.6rem;
+  padding: 0.05rem 0.5rem;
+  border: 2px solid #3ba55d;
+  border-radius: 0.4rem;
+  color: #3ba55d;
+  font-weight: 700;
+
+  &--zero {
+    border-color: currentcolor;
+    color: inherit;
+  }
+
+  &--negative {
+    border-color: #e5484d;
+    color: #e5484d;
+  }
+}
+
+.tv-profile__roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.tv-profile__role {
+  padding: 0.15rem 0.8rem;
+  border: 2px solid currentcolor;
+  border-radius: 999px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.tv-profile__notice {
+  max-width: 48rem;
+  margin: 0.6rem 0 0;
+  font-size: 1.1rem;
+  opacity: 0.7;
+}
+
 .tv-profile__head {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 1.8rem;
@@ -440,6 +494,7 @@ html.tv-mode .tv-profile__hero {
 }
 
 .tv-profile__bar {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: stretch;

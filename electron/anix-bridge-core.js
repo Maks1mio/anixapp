@@ -323,6 +323,14 @@ function createAnixBridgeCore(options = {}) {
       if (res?.code !== DefaultResult.Ok) qrLoginSession = null;
       return { success: false, code: res?.code, status: res?.status ?? null, pin: res?.pin ?? null, device: res?.device ?? null };
     },
+    'anix:qrOpen': h((c, key) => c.getClient().endpoints.auth.qrOpen(key)),
+    'anix:qrConfirm': h((c, data) => c.getClient().endpoints.auth.qrConfirm(data)),
+    'anix:qrDecline': h((c, key) => c.getClient().endpoints.auth.qrDecline(key)),
+    'anix:firebaseTopic': async (c) => {
+      const res = await c.getClient().endpoints.auth.firebase();
+      const raw = res;
+      return { topicName: raw?.topicName || raw?.topic_name || null };
+    },
     'anix:qrLoginCancel': async () => {
       qrLoginSession = null;
       return { success: true };
@@ -1108,6 +1116,8 @@ function createAnixBridgeCore(options = {}) {
       c.getClient().endpoints.profile.getArticleComments(profileId, page, sort)),
     'anix:profileFavoriteVideos': h((c, profileId, page = 0) =>
       c.getClient().endpoints.profile.getFavoriteVideos(profileId, page)),
+    'anix:videoFavoriteAdd': h((c, videoId) => c.getClient().endpoints.releaseVideoFavorite.add(videoId)),
+    'anix:videoFavoriteDelete': h((c, videoId) => c.getClient().endpoints.releaseVideoFavorite.delete(videoId)),
     'anix:getProfileSettings': h((c) => c.getClient().endpoints.settings.getCurrentProfileSettings()),
     'anix:profileHealthStatus': h((c) => c.getClient().endpoints.profileHealth.status()),
     'anix:profileHealthAccount': h((c, page = 0) => c.getClient().endpoints.profileHealth.account(page)),

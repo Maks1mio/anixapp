@@ -9,24 +9,21 @@
     iconChevronDown,
     iconBellPlus,
     iconBellRing,
-    iconMoreVertical,
     iconInfo,
     iconTriangleAlert,
   } from '../../../components/icons';
-  import { showToast } from '../../../stores/toast';
-  import { portal } from '../../../actions/portal';
   import MobileDownloadFlow from '../../../components/MobileDownloadFlow.svelte';
   import { downloadsAvailable } from '../../../native/anix-downloads';
-  import { iconDownload, iconShare } from '../../../components/icons';
   import TitleInfoTrigger from '../../../components/TitleInfoTrigger.svelte';
   import ReleaseMetaInfoIcon from './ReleaseMetaInfoIcon.svelte';
   import type { ReleaseMetaInfoRow } from '../_metaInfo';
   import type { ListStatusId } from '../_types';
-  import { openImageLightbox, formatVoteCount } from '../_utils';
+  import { openImageLightbox, openImageLightboxGallery, formatVoteCount } from '../_utils';
 import { requestOpenExternal } from '../../../utils/external-link';
   import { toPosterDisplayUrl } from '../../../utils/posterUrl';
   import AnimatedMediaOverlay from '../../../components/AnimatedMediaOverlay.svelte';
   import { isMobileMode } from '../../../platform/mobile';
+  import MobileReleaseBackdrop from './MobileReleaseBackdrop.svelte';
   import { openSearchPage } from '../../../search-controller';
 
   interface Props {
@@ -64,6 +61,8 @@ import { requestOpenExternal } from '../../../utils/external-link';
     airDate?:          Snippet;
     /** TV: широкая шапка и кнопка статуса вместо Select */
     tvMode?:           boolean;
+    /** Кадры для фона шапки на телефоне и планшете. */
+    backdropImages?: string[];
     statusButtonLabel?: string;
     onOpenStatusPicker?: () => void;
   }
@@ -83,13 +82,17 @@ import { requestOpenExternal } from '../../../utils/external-link';
     airDate,
     tvMode = false,
     statusButtonLabel = 'В список',
+    backdropImages = [],
     onOpenStatusPicker,
   }: Props = $props();
 
   const displayPosterUrl = $derived(toPosterDisplayUrl(posterUrl, 'releaseHero'));
 
+  /** Постер слева и описание справа: на планшете с той же ширины, что и его левая панель. */
+  const WIDE_QUERY = isMobileMode() ? '(min-width: 600px)' : '(min-width: 961px)';
+
   let mqWide = $state(
-    typeof window !== 'undefined' ? window.matchMedia('(min-width: 961px)').matches : true,
+    typeof window !== 'undefined' ? window.matchMedia(WIDE_QUERY).matches : true,
   );
   const isWide = $derived(tvMode || mqWide);
 
@@ -99,7 +102,7 @@ import { requestOpenExternal } from '../../../utils/external-link';
 
   $effect(() => {
     if (tvMode) return;
-    const mq = window.matchMedia('(min-width: 961px)');
+    const mq = window.matchMedia(WIDE_QUERY);
     const update = () => {
       mqWide = mq.matches;
     };
@@ -161,25 +164,16 @@ import { requestOpenExternal } from '../../../utils/external-link';
     return () => ro.disconnect();
   });
 
-  let moreOpen = $state(false);
   let downloadOpen = $state(false);
   function currentReleaseId(): number {
     return parseInt(/release\/(\d+)/.exec(window.location.pathname)?.[1] ?? '0', 10);
   }
 
-  /** Телефон: «⋮» рядом с «Воспроизвести» — поделиться ссылкой на релиз. */
-  async function shareRelease() {
-    const id = /release\/(\d+)/.exec(window.location.pathname)?.[1];
-    if (!id) return;
-    const url = `https://anixart.app/release/${id}`;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: titleRu || title, url });
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      showToast('Ссылка скопирована');
-    } catch { /* пользователь закрыл диалог */ }
+  /** На телефоне и планшете от обложки можно листать дальше, по кадрам из фона. */
+  function openPoster(origin: HTMLElement) {
+    const poster = displayPosterUrl || posterUrl;
+    if (isMobileMode() && backdropImages.length) openImageLightboxGallery([poster, ...backdropImages], 0, origin);
+    else openImageLightbox(poster, origin);
   }
 
   function scrollToComments() {
@@ -210,11 +204,11 @@ import { requestOpenExternal } from '../../../utils/external-link';
     data-tv-release-poster
     role={posterUrl ? 'button' : undefined}
     tabindex={posterUrl ? 0 : undefined}
-    onclick={(e) => posterUrl && openImageLightbox(displayPosterUrl || posterUrl, e.currentTarget as HTMLElement)}
+    onclick={(e) => posterUrl && openPoster(e.currentTarget as HTMLElement)}
     onkeydown={(e) => {
       if (e.key === 'Enter' && posterUrl) {
         e.preventDefault();
-        openImageLightbox(displayPosterUrl || posterUrl, e.currentTarget as HTMLElement);
+        openPoster(e.currentTarget as HTMLElement);
       }
     }}
   >
@@ -283,7 +277,7 @@ import { requestOpenExternal } from '../../../utils/external-link';
           options={statusOptions}
           panelClass="release-status-panel"
           value={currentStatus ?? ''}
-          placeholder={isMobileMode() ? 'Не смотрю' : 'Не в списке'}
+          placeholder="Не в списке"
           onChange={onSetStatus}
         />
       {/if}
@@ -329,6 +323,7 @@ import { requestOpenExternal } from '../../../utils/external-link';
       titleEn={titleOriginal}
       {titleAlt}
       {releaseId}
+      onDownload={isMobileMode() && downloadsAvailable() ? () => { downloadOpen = true; } : undefined}
     />
   </div>
 {/snippet}
@@ -349,11 +344,6 @@ import { requestOpenExternal } from '../../../utils/external-link';
           {/if}
           <span class="release-page__btn-label">{playBtnText}</span>
         </button>
-        {#if isMobileMode()}
-          <button type="button" class="release-page__more" aria-label="Ещё" onclick={() => (moreOpen = true)}>
-            {@html iconMoreVertical(22)}
-          </button>
-        {/if}
       </div>
     </div>
 
@@ -424,8 +414,7 @@ import { requestOpenExternal } from '../../../utils/external-link';
 
 <div class="release-page__head" class:release-page__head--narrow={!isWide}>
   {#if isMobileMode() && displayPosterUrl}
-    <!-- Телефон: размытая обложка за шапкой, как в референсе -->
-    <div class="m-release-bg" aria-hidden="true" style="background-image:url({displayPosterUrl})"></div>
+    <MobileReleaseBackdrop images={backdropImages} fallback={displayPosterUrl} />
   {/if}
   <div class="release-page__head-top">
     <div class="release-page__head-intro">
@@ -459,22 +448,6 @@ import { requestOpenExternal } from '../../../utils/external-link';
     {@render bodyBlock()}
   {/if}
 </div>
-
-{#if moreOpen}
-  <div class="m-sheet-scrim" role="presentation" use:portal>
-    <button type="button" class="m-sheet-scrim__bg" aria-label="Закрыть" onclick={() => (moreOpen = false)}></button>
-    <div class="m-sheet-menu" role="menu">
-      {#if downloadsAvailable()}
-        <button type="button" role="menuitem" onclick={() => { moreOpen = false; downloadOpen = true; }}>
-          {@html iconDownload(22)}<span>Скачать серии…</span>
-        </button>
-      {/if}
-      <button type="button" role="menuitem" onclick={() => { moreOpen = false; void shareRelease(); }}>
-        {@html iconShare(22)}<span>Поделиться</span>
-      </button>
-    </div>
-  </div>
-{/if}
 
 {#if downloadOpen}
   <MobileDownloadFlow

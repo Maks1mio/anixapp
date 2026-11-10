@@ -1,6 +1,10 @@
 <script lang="ts">
   import { onMount, onDestroy, untrack } from 'svelte';
   import { iconMessageCircle, iconSearch, iconX } from './icons';
+  import { swipeTabs, type TabSwipeState } from '../actions/swipeTabs';
+  import { isMobileMode } from '../platform/mobile';
+  import TabPeek from './TabPeek.svelte';
+  import { tabNeighbors } from '../utils/tab-prefetch.svelte';
   import UiV2PillField from './uikit-v2/UiV2PillField.svelte';
   import UserBadge from './UserBadge.svelte';
   import AppBadges from './AppBadges.svelte';
@@ -65,6 +69,18 @@
     { id: 'in', label: 'Заявки в друзья', badge: requestsIn.length || undefined },
     { id: 'out', label: 'Исходящие', badge: requestsOut.length || undefined },
   ]);
+
+  const peekTabs = $derived(tabNeighbors(tabs.map((t) => t.id), activeTab));
+
+  /** Ход свайпа содержимого — для планки и подписей вкладок */
+  let tabSwipe = $state<TabSwipeState>(null);
+
+  function swipeToTab(dir: 1 | -1): boolean {
+    const next = tabs[tabs.findIndex((t) => t.id === activeTab) + dir];
+    if (!next) return false;
+    setTab(next.id);
+    return true;
+  }
 
   function setTab(id: string) {
     activeTab = id;
@@ -360,12 +376,12 @@
         </div>
       {/if}
       {#if isMyProfile}
-        <UiV2Tabs {tabs} activeId={activeTab} onChange={setTab} />
+        <UiV2Tabs {tabs} activeId={activeTab} swipe={tabSwipe} onChange={setTab} />
       {/if}
     </div>
   </div>
 
-  {#if isMyProfile && activeTab === 'in'}
+  {#snippet requestsInTab()}
     <section class="profile-panel__requests" aria-label="Заявки в друзья">
       {#if requestsReady && !requestsIn.length}
         <p class="profile-panel__state">Заявок нет</p>
@@ -409,9 +425,9 @@
         {/each}
       </ul>
     </section>
-  {/if}
+  {/snippet}
 
-  {#if isMyProfile && activeTab === 'out'}
+  {#snippet requestsOutTab()}
     <section class="profile-panel__requests" aria-label="Исходящие заявки">
       {#if requestsReady && !requestsOut.length}
         <p class="profile-panel__state">Исходящих заявок нет</p>
@@ -449,9 +465,9 @@
         {/each}
       </ul>
     </section>
-  {/if}
+  {/snippet}
 
-  {#if !isMyProfile || activeTab === 'friends'}
+  {#snippet friendsTab()}
   <section class="profile-panel__friends-list-wrap" aria-label={isMyProfile ? 'Мои друзья' : 'Друзья'}>
     <div class="profile-panel__friends-section-head">
       {#if !isMyProfile || showBannedOnly}
@@ -543,5 +559,25 @@
       {/if}
     {/if}
   </section>
+  {/snippet}
+
+  {#snippet friendsTabBody(id: string)}
+    {#if id === 'in'}
+      {@render requestsInTab()}
+    {:else if id === 'out'}
+      {@render requestsOutTab()}
+    {:else}
+      {@render friendsTab()}
+    {/if}
+  {/snippet}
+
+  {#if isMyProfile}
+    <div use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab, onSwipeProgress: (dir, progress, ms) => (tabSwipe = dir ? { dir, progress, ms } : null) }}>
+      {@render friendsTabBody(activeTab)}
+      {#if peekTabs.prev}<TabPeek dir={-1}>{@render friendsTabBody(peekTabs.prev)}</TabPeek>{/if}
+      {#if peekTabs.next}<TabPeek dir={1}>{@render friendsTabBody(peekTabs.next)}</TabPeek>{/if}
+    </div>
+  {:else}
+    {@render friendsTabBody(isMyProfile ? activeTab : 'friends')}
   {/if}
 </div>

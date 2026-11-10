@@ -1,6 +1,27 @@
 <script lang="ts">
+  import { fetchThemePatch } from '../utils/profile-showcase-theme';
   import { onMount } from 'svelte';
-  import { iconPencil, iconShare } from './icons';
+  import {
+    iconPencil,
+    iconShare,
+    iconAtSign,
+    iconAward,
+    iconBan,
+    iconChevronRight,
+    iconCircleUser,
+    iconEyeOff,
+    iconImage,
+    iconKeyRound,
+    iconLayoutGrid,
+    iconLink,
+    iconLock,
+    iconLogOut,
+    iconMail,
+    iconShieldCheck,
+    iconSmile,
+    iconUserX,
+    iconUsers,
+  } from './icons';
   import OAuthBrandIcon from './OAuthBrandIcon.svelte';
   import { showToast } from '../stores/toast';
   import { formatHistoryViewTime } from '../utils/historyFormat';
@@ -533,29 +554,6 @@
     }
   }
 
-  function themeToProfilePatch(theme: Record<string, unknown> | null | undefined): Record<string, unknown> {
-    if (!theme) {
-      return { theme_enabled: false };
-    }
-    return {
-      theme_enabled: theme.theme_enabled ?? false,
-      theme_gradient_start_color: theme.theme_gradient_start_color ?? null,
-      theme_gradient_end_color: theme.theme_gradient_end_color ?? null,
-      theme_gradient_angle: theme.theme_gradient_angle ?? null,
-      theme_background_url: theme.theme_background_url ?? null,
-      theme_background_mode: theme.theme_background_mode ?? null,
-      theme_background_alpha: theme.theme_background_alpha ?? null,
-      theme_icon_res_name: theme.theme_icon_res_name ?? null,
-      theme_icon_url: theme.theme_icon_url ?? null,
-      theme_icon_color: theme.theme_icon_color ?? null,
-      theme_icon_alpha: theme.theme_icon_alpha ?? null,
-      theme_icon_density: theme.theme_icon_density ?? theme.theme_icon_destiny ?? null,
-      theme_icon_size: theme.theme_icon_size ?? null,
-      theme_animation_enabled: theme.theme_animation_enabled ?? false,
-      theme_animation_speed: theme.theme_animation_speed ?? null,
-    };
-  }
-
   async function loadSettings() {
     const api = window.anixApi?.settings;
     if (!api?.getProfileSettings) {
@@ -667,7 +665,7 @@
         return;
       }
       selectedThemeId = id;
-      onProfilePatched?.(themeToProfilePatch(res?.theme as Record<string, unknown> | null | undefined));
+      onProfilePatched?.(await fetchThemePatch(profileId, res?.theme as Record<string, unknown> | null | undefined));
       showToast('Витрина обновлена');
       closeShowcasePicker();
     } catch {
@@ -1115,12 +1113,17 @@
   {:else if screen === 'menu'}
     <div class="profile-panel__edit-menu">
       <button type="button" class="profile-panel__edit-row" onclick={() => void logout()} disabled={logoutBusy}>
+        <span class="profile-panel__edit-row-icon" aria-hidden="true">{@html iconLogOut(20)}</span>
+        <span class="profile-panel__edit-row-text">
         <span class="profile-panel__edit-row-title">Выйти из учетной записи</span>
         {#if otherAccountsCount > 0}
           <span class="profile-panel__edit-row-sub">Вы перейдёте на другой сохранённый аккаунт</span>
         {/if}
+        </span>
       </button>
       <button type="button" class="profile-panel__edit-row" onclick={() => void openAccountsPicker()} disabled={accountsBusy}>
+        <span class="profile-panel__edit-row-icon" aria-hidden="true">{@html iconUsers(20)}</span>
+        <span class="profile-panel__edit-row-text">
         <span class="profile-panel__edit-row-title">Переключиться на другой аккаунт</span>
         <span class="profile-panel__edit-row-sub">
           {#if accountsBusy}
@@ -1131,6 +1134,7 @@
             Добавить аккаунт для быстрой смены
           {/if}
         </span>
+        </span>
       </button>
 
       <div class="profile-panel__edit-divider" aria-hidden="true"></div>
@@ -1138,6 +1142,8 @@
       <h3 class="profile-panel__edit-section">Персонализация</h3>
 
       <button type="button" class="profile-panel__edit-row" onclick={openAvatarPicker} disabled={mediaBusy}>
+        <span class="profile-panel__edit-row-icon" aria-hidden="true">{@html iconCircleUser(20)}</span>
+        <span class="profile-panel__edit-row-text">
         <span class="profile-panel__edit-row-title">Изменить фото профиля</span>
         <span class="profile-panel__edit-row-sub">
           {#if mediaBusy}
@@ -1148,49 +1154,77 @@
             Загрузить и обрезать
           {/if}
         </span>
-      </button>
-      <button type="button" class="profile-panel__edit-row" onclick={() => void openCoverPicker()} disabled={mediaBusy}>
-        <span class="profile-panel__edit-row-title">Изменить обложку</span>
-        <span class="profile-panel__edit-row-sub">{mediaBusy ? 'Загрузка…' : 'Загрузить и обрезать'}</span>
-      </button>
-      <button type="button" class="profile-panel__edit-row" onclick={() => { screen = 'status'; }}>
-        <span class="profile-panel__edit-row-title">Изменить статус</span>
-        <span class="profile-panel__edit-row-sub">{statusPreview}</span>
-      </button>
-      <button type="button" class="profile-panel__edit-row" onclick={() => { screen = 'nickname'; }}>
-        <span class="profile-panel__edit-row-title">Изменить никнейм</span>
-        <span class="profile-panel__edit-row-sub">{loginValue || login}</span>
-      </button>
-      <button type="button" class="profile-panel__edit-row" onclick={openBadgeScreen}>
-        <span class="profile-panel__edit-row-title">Изменить значок</span>
-        <span class="profile-panel__edit-row-sub profile-panel__edit-row-sub--badge">
-          {#if currentBadgeUrl}
-            <UserBadge
-              url={currentBadgeUrl}
-              name={currentBadgeName}
-              size="sm"
-              class="profile-panel__edit-badge"
-            />
-          {/if}
-          {badgePreview}
         </span>
       </button>
+      <button type="button" class="profile-panel__edit-row" onclick={() => void openCoverPicker()} disabled={mediaBusy}>
+        <span class="profile-panel__edit-row-icon" aria-hidden="true">{@html iconImage(20)}</span>
+        <span class="profile-panel__edit-row-text">
+        <span class="profile-panel__edit-row-title">Изменить обложку</span>
+        <span class="profile-panel__edit-row-sub">{mediaBusy ? 'Загрузка…' : 'Загрузить и обрезать'}</span>
+        </span>
+      </button>
+      <button type="button" class="profile-panel__edit-row" onclick={() => { screen = 'status'; }}>
+        <span class="profile-panel__edit-row-icon" aria-hidden="true">{@html iconSmile(20)}</span>
+        <span class="profile-panel__edit-row-text">
+        <span class="profile-panel__edit-row-title">Изменить статус</span>
+        <span class="profile-panel__edit-row-sub">{statusPreview}</span>
+        </span>
+        <span class="profile-panel__edit-row-chevron" aria-hidden="true">{@html iconChevronRight(16)}</span>
+      </button>
+      <button type="button" class="profile-panel__edit-row" onclick={() => { screen = 'nickname'; }}>
+        <span class="profile-panel__edit-row-icon" aria-hidden="true">{@html iconAtSign(20)}</span>
+        <span class="profile-panel__edit-row-text">
+        <span class="profile-panel__edit-row-title">Изменить никнейм</span>
+        <span class="profile-panel__edit-row-sub">{loginValue || login}</span>
+        </span>
+        <span class="profile-panel__edit-row-chevron" aria-hidden="true">{@html iconChevronRight(16)}</span>
+      </button>
+      <button type="button" class="profile-panel__edit-row" onclick={openBadgeScreen}>
+        <span class="profile-panel__edit-row-icon" class:profile-panel__edit-row-icon--badge={!!currentBadgeUrl} aria-hidden="true">
+          {#if currentBadgeUrl}
+            <UserBadge url={currentBadgeUrl} name={currentBadgeName} size="sm" class="profile-panel__edit-badge" />
+          {:else}
+            {@html iconAward(20)}
+          {/if}
+        </span>
+        <span class="profile-panel__edit-row-text">
+        <span class="profile-panel__edit-row-title">Изменить значок</span>
+        <span class="profile-panel__edit-row-sub profile-panel__edit-row-sub--badge">
+          {#if currentBadgeUrl}<span class="profile-panel__edit-badge-inline">
+            <UserBadge url={currentBadgeUrl} name={currentBadgeName} size="sm" class="profile-panel__edit-badge" />
+          </span>{/if}
+          {badgePreview}
+        </span>
+        </span>
+        <span class="profile-panel__edit-row-chevron" aria-hidden="true">{@html iconChevronRight(16)}</span>
+      </button>
       <button type="button" class="profile-panel__edit-row" onclick={openShowcasePicker}>
+        <span class="profile-panel__edit-row-icon" aria-hidden="true">{@html iconLayoutGrid(20)}</span>
+        <span class="profile-panel__edit-row-text">
         <span class="profile-panel__edit-row-title">Изменить витрину</span>
         <span class="profile-panel__edit-row-sub">{showcasePreview}</span>
+        </span>
       </button>
 
       <button type="button" class="profile-panel__edit-row" onclick={() => { screen = 'social'; }}>
+        <span class="profile-panel__edit-row-icon" aria-hidden="true">{@html iconLink(20)}</span>
+        <span class="profile-panel__edit-row-text">
         <span class="profile-panel__edit-row-title">Мои социальные сети</span>
         <span class="profile-panel__edit-row-sub">Укажите ссылки на свои страницы в соц. сетях</span>
+        </span>
+        <span class="profile-panel__edit-row-chevron" aria-hidden="true">{@html iconChevronRight(16)}</span>
       </button>
 
       <div class="profile-panel__edit-divider" aria-hidden="true"></div>
 
       <h3 class="profile-panel__edit-section">Лента</h3>
       <button type="button" class="profile-panel__edit-row" onclick={() => { screen = 'hiddenChannels'; }}>
+        <span class="profile-panel__edit-row-icon" aria-hidden="true">{@html iconEyeOff(20)}</span>
+        <span class="profile-panel__edit-row-text">
         <span class="profile-panel__edit-row-title">Скрытые каналы</span>
         <span class="profile-panel__edit-row-sub">Каналы и блоги, скрытые из ленты</span>
+        </span>
+        <span class="profile-panel__edit-row-chevron" aria-hidden="true">{@html iconChevronRight(16)}</span>
       </button>
 
       <div class="profile-panel__edit-divider" aria-hidden="true"></div>
@@ -1203,29 +1237,48 @@
           disabled={privacySaving}
           onclick={() => openPrivacyPicker(row.kind, row.title)}
         >
+          <span class="profile-panel__edit-row-icon" aria-hidden="true">{@html iconLock(20)}</span>
+          <span class="profile-panel__edit-row-text">
           <span class="profile-panel__edit-row-title">{row.title}</span>
           <span class="profile-panel__edit-row-sub">{privacyValueLabel(row.kind)}</span>
+          </span>
         </button>
       {/each}
       <button type="button" class="profile-panel__edit-row" onclick={() => { screen = 'blocklist'; }}>
+        <span class="profile-panel__edit-row-icon" aria-hidden="true">{@html iconBan(20)}</span>
+        <span class="profile-panel__edit-row-text">
         <span class="profile-panel__edit-row-title">Блоклист</span>
         <span class="profile-panel__edit-row-sub">Список пользователей, которым запрещён доступ к Вашей странице</span>
+        </span>
+        <span class="profile-panel__edit-row-chevron" aria-hidden="true">{@html iconChevronRight(16)}</span>
       </button>
 
       <div class="profile-panel__edit-divider" aria-hidden="true"></div>
 
       <h3 class="profile-panel__edit-section">Безопасность</h3>
       <button type="button" class="profile-panel__edit-row" onclick={() => (screen = 'health')}>
+        <span class="profile-panel__edit-row-icon" aria-hidden="true">{@html iconShieldCheck(20)}</span>
+        <span class="profile-panel__edit-row-text">
         <span class="profile-panel__edit-row-title">Здоровье аккаунта</span>
         <span class="profile-panel__edit-row-sub">История нарушений и ограничений</span>
+        </span>
+        <span class="profile-panel__edit-row-chevron" aria-hidden="true">{@html iconChevronRight(16)}</span>
       </button>
       <button type="button" class="profile-panel__edit-row" onclick={() => (screen = 'email')}>
+        <span class="profile-panel__edit-row-icon" aria-hidden="true">{@html iconMail(20)}</span>
+        <span class="profile-panel__edit-row-text">
         <span class="profile-panel__edit-row-title">Изменить Email</span>
         <span class="profile-panel__edit-row-sub">Изменить Email учетной записи</span>
+        </span>
+        <span class="profile-panel__edit-row-chevron" aria-hidden="true">{@html iconChevronRight(16)}</span>
       </button>
       <button type="button" class="profile-panel__edit-row" onclick={() => (screen = 'password')}>
+        <span class="profile-panel__edit-row-icon" aria-hidden="true">{@html iconKeyRound(20)}</span>
+        <span class="profile-panel__edit-row-text">
         <span class="profile-panel__edit-row-title">Изменить пароль</span>
         <span class="profile-panel__edit-row-sub">Изменить пароль учетной записи</span>
+        </span>
+        <span class="profile-panel__edit-row-chevron" aria-hidden="true">{@html iconChevronRight(16)}</span>
       </button>
 
       <div class="profile-panel__edit-divider" aria-hidden="true"></div>
@@ -1267,8 +1320,11 @@
 
       <h3 class="profile-panel__edit-section">Аккаунт</h3>
       <button type="button" class="profile-panel__edit-row" onclick={soon}>
+        <span class="profile-panel__edit-row-icon" aria-hidden="true">{@html iconUserX(20)}</span>
+        <span class="profile-panel__edit-row-text">
         <span class="profile-panel__edit-row-title">Удаление аккаунта</span>
         <span class="profile-panel__edit-row-sub">Запросить удаление аккаунта или отменить ранее созданный запрос</span>
+        </span>
       </button>
     </div>
   {:else if screen === 'health'}

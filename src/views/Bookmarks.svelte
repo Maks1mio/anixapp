@@ -3,17 +3,17 @@
   import ReleaseCardsGridSkeleton from '../components/ReleaseCardsGridSkeleton.svelte';
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import { headlineFromLoadError } from '../utils/content-load-error';
-  import { swipeTabs } from '../actions/swipeTabs';
+  import { swipeTabs, type TabSwipeState } from '../actions/swipeTabs';
+  import TabPeek from '../components/TabPeek.svelte';
+  import { createTabPrefetch, tabNeighbors, TAB_PEEK_ITEMS } from '../utils/tab-prefetch.svelte';
   import { isMobileMode } from '../platform/mobile';
   import UiV2CollectionCardSkeleton from '../components/uikit-v2/UiV2CollectionCardSkeleton.svelte';
   import CollectionCard from '../components/CollectionCard.svelte';
-  import BookmarksToolbar from '../components/BookmarksToolbar.svelte';
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
   import Tabs, { type TabItem } from '../components/Tabs.svelte';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../components/uikit-v2/UiV2PopupMenu.svelte';
   import UiV2Card from '../components/uikit-v2/UiV2Card.svelte';
   import UiV2Button from '../components/uikit-v2/UiV2Button.svelte';
-  import { navigate } from '../stores/navigation';
   import { requireAuth } from '../stores/auth';
   import { notifyVotesChanged } from '../utils/favorites-events';
   import { handleUserProfileClick } from '../stores/user-profile';
@@ -28,7 +28,9 @@
   import type { ReleaseCardData } from '../types/release';
   import { mapReleaseRawToCard } from '../utils/release-card';
   import { mapHistoryRawToReleaseCard } from '../utils/historyCard';
-  import { iconHome, iconSearch, iconX } from '../components/icons';
+  import { iconHome } from '../components/icons';
+  import { openRandomRelease } from '../stores/random-release';
+  import { bookmarksForeign, bookmarksSearchLabel, bookmarksSearchQuery, closeBookmarksSearch } from '../stores/mobile-bookmarks-search';
   import {
     getDefaultBookmarksTab,
     resolveBookmarksTab,
@@ -41,6 +43,7 @@
     getViewState,
     saveViewStateWithScroll,
     restoreScrollTop,
+    resetScrollTop,
     invalidateViewStatePrefix,
     registerActiveScrollKey,
     flushActiveViewState,
@@ -353,7 +356,7 @@
   let tabMenuX = $state(0);
   let tabMenuY = $state(0);
   let tabMenuPlacement = $state<'point' | 'anchor'>('point');
-  let tabMenuKind = $state<'context' | 'default-picker' | null>(null);
+  let tabMenuKind = $state<'context' | null>(null);
   let tabMenuTabId = $state<TabId | null>(null);
   let profileLogin = $state('');
   let profileAvatar = $state('');
@@ -362,16 +365,6 @@
   let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
   const tabMenuItems = $derived.by((): UiV2PopupMenuItem[] => {
-    if (tabMenuKind === 'default-picker') {
-      return SELF_TABS.map((tab) => ({
-        id: `bookmark-default-${tab.id}`,
-        label: tab.label,
-        type: 'radio' as const,
-        checked: defaultBookmarksTab === tab.id,
-        keepOpen: true,
-      }));
-    }
-
     if (tabMenuKind === 'context' && tabMenuTabId) {
       return [{ id: 'set-default', label: 'Назначить по умолчанию', icon: iconHome(18) }];
     }
@@ -406,13 +399,32 @@
   const isFavoritesTab = $derived(activeTab === 'favorites');
   const isReleaseListTab = $derived(!isCollectionsTab && !isHistoryTab && !isVotesTab);
   const activeTabMeta = $derived(TABS.find((t) => t.id === activeTab) ?? TABS[0]);
-  const searchPlaceholder = $derived(`Поиск в «${activeTabMeta?.label ?? 'списке'}»`);
+  const searchPlaceholderBase = $derived(`Поиск в «${activeTabMeta?.label ?? 'списке'}»`);
+  /** Чужие списки: «Поиск в «Смотрю» у strannow» */
+  const searchPlaceholder = $derived(isOtherProfile && profileLogin ? `${searchPlaceholderBase} у ${profileLogin}` : searchPlaceholderBase);
   const headerAvatarUrl = $derived(profileAvatar ? resolveCdnAssetUrl(profileAvatar) : '');
   const profileIdForPanel = $derived(
     isOtherProfile
       ? listUserId!
       : (cachedProfileId ?? selfProfileId ?? 0),
   );
+
+  // Мобильная версия: поле в верхней панели (MobileLayout), здесь подпись для него и применение запроса
+  $effect(() => {
+    if (!desktopLayout) bookmarksSearchLabel.set(searchPlaceholder);
+  });
+  $effect(() => {
+    bookmarksForeign.set(isOtherProfile);
+    return () => bookmarksForeign.set(false);
+  });
+  $effect(() => {
+    if (desktopLayout) return;
+    const query = $bookmarksSearchQuery;
+    untrack(() => {
+      searchInput = query;
+      applySearchQuery(query);
+    });
+  });
 
   function clearSearchTimer() {
     if (searchTimer) {
@@ -526,13 +538,15 @@
     }
   }
 
-  async function fetchPage(page: number): Promise<FetchPageResult> {
+  async function fetchPage(page: number, tabId: TabId = activeTab): Promise<FetchPageResult> {
+    const listSort = tabId === activeTab ? selectedSort : getBookmarksSort();
+    const listAnnounce = tabId === activeTab ? announceFilter : getBookmarksAnnounceFilter();
     if (!window.anixApi) return { content: [], total: 0, exhaustive: true };
 
     const q = searchQuery.trim();
     const api = window.anixApi;
 
-    if (activeTab === 'collections') {
+    if (tabId === 'collections') {
       if (q) {
         if (page > 0) return { content: [], total: 0, exhaustive: true };
         return scanAllPagesForQuery(q, async (p) => {
@@ -546,7 +560,7 @@
       return { content, total: extractTotalCount(data, content.length) };
     }
 
-    if (activeTab === 'history') {
+    if (tabId === 'history') {
       if (q) {
         if (page > 0) return { content: [], total: 0, exhaustive: true };
         return scanAllPagesForQuery(q, async (p) => {
@@ -560,7 +574,7 @@
       return { content, total: extractTotalCount(data, content.length) };
     }
 
-    if (activeTab === 'votes' && votesMode === 'unvoted') {
+    if (tabId === 'votes' && votesMode === 'unvoted') {
       const fetchUnvoted = async (p: number) => {
         const data = await api.profile.getUnvotedReleases?.(p) as Record<string, unknown> | null;
         const content = (data?.content ?? []) as Record<string, unknown>[];
@@ -573,7 +587,7 @@
       return fetchUnvoted(page);
     }
 
-    if (activeTab === 'votes') {
+    if (tabId === 'votes') {
       const profileId = await ensureProfileId();
       if (typeof profileId !== 'number') return { content: [], total: 0, exhaustive: true };
       if (q) {
@@ -593,21 +607,21 @@
       return { content, total: extractTotalCount(data, content.length) };
     }
 
-    if (activeTab === 'favorites') {
+    if (tabId === 'favorites') {
       if (q) {
         if (page > 0) return { content: [], total: 0, exhaustive: true };
         return scanAllPagesForQuery(q, async (p) => {
-          const data = await api.favorites.all(p, selectedSort, announceFilter, 0) as Record<string, unknown>;
+          const data = await api.favorites.all(p, listSort, listAnnounce, 0) as Record<string, unknown>;
           const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
           return { content, total: extractTotalCount(data, content.length) };
         });
       }
-      const data = await api.favorites.all(page, selectedSort, announceFilter, 0) as Record<string, unknown>;
+      const data = await api.favorites.all(page, listSort, listAnnounce, 0) as Record<string, unknown>;
       const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
       return { content, total: extractTotalCount(data, content.length) };
     }
 
-    const tab = TABS.find((t) => t.id === activeTab)!;
+    const tab = TABS.find((t) => t.id === tabId)!;
     const profileId = await ensureProfileId();
     if (typeof profileId !== 'number' || tab.type == null) {
       return { content: [], total: 0, exhaustive: true };
@@ -632,8 +646,8 @@
           profileId,
           tab.type!,
           p,
-          selectedSort,
-          announceFilter,
+          listSort,
+          listAnnounce,
           0,
         ) as Record<string, unknown>;
         const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
@@ -645,8 +659,8 @@
       profileId,
       tab.type,
       page,
-      selectedSort,
-      announceFilter,
+      listSort,
+      listAnnounce,
       0,
     ) as Record<string, unknown>;
     const content = (data?.content ?? data?.releases ?? []) as Record<string, unknown>[];
@@ -773,6 +787,40 @@
     }
   }
 
+  type TabSeed = {
+    items: ReleaseCardData[];
+    collectionItems: CollectionCardData[];
+    total: number;
+    hasMore: boolean;
+    nextPage: number;
+  };
+
+  /** Первая страница соседних вкладок: при свайпе рядом едет уже настоящий список. */
+  const tabPrefetch = createTabPrefetch<TabSeed>(async (id) => {
+    const tabId = id as TabId;
+    const { content, total, exhaustive } = await fetchPage(0, tabId);
+    return {
+      items: tabId === 'collections' ? [] : content.map(tabId === 'history' ? mapHistoryToReleaseCard : mapReleaseToCardData),
+      collectionItems: tabId === 'collections' ? content.map(mapCollectionToCardData) : [],
+      total,
+      hasMore: !exhaustive && (tabId === 'votes' ? content.length >= 25 && !(total > 0 && 25 >= total) : content.length > 0),
+      nextPage: 1,
+    };
+  });
+  const peekTabs = $derived(tabNeighbors(TABS.map((t) => t.id), activeTab));
+
+  $effect(() => {
+    if (!isMobileMode() || loadState === 'loading' || searchQuery) return;
+    const { prev, next } = peekTabs;
+    untrack(() => {
+      if (prev) tabPrefetch.ensure(prev);
+      if (next) tabPrefetch.ensure(next);
+    });
+  });
+
+  /** Ход свайпа содержимого — для планки и подписей вкладок */
+  let tabSwipe = $state<TabSwipeState>(null);
+
   function swipeToTab(dir: 1 | -1): boolean {
     const i = TABS.findIndex((t) => t.id === activeTab);
     const next = TABS[i + dir];
@@ -794,14 +842,36 @@
     }
 
     const keepErrorOverlay = tabId === activeTab && loadState === 'error';
-    if (tabId !== activeTab) votesMode = 'voted';
+    const tabChanged = tabId !== activeTab;
+    if (tabChanged) votesMode = 'voted';
     activeTab = tabId;
+    // Другая вкладка всегда открывается с начала страницы
+    if (tabChanged) resetScrollTop();
     syncTabToUrl(tabId);
 
-    if (!force) {
+    // На телефоне запрос остаётся при смене вкладки: ищем в каждой, куда перешли
+    if (!force && desktopLayout) {
       clearSearchTimer();
       searchInput = '';
       searchQuery = '';
+    }
+
+    const seed = !resetSort && !force && isMobileMode() && !searchQuery ? tabPrefetch.get(tabId) : undefined;
+    if (seed && (seed.items.length > 0 || seed.collectionItems.length > 0)) {
+      if (tabUsesSort(tabId)) {
+        selectedSort = getBookmarksSort();
+        announceFilter = getBookmarksAnnounceFilter();
+      }
+      items = seed.items;
+      collectionItems = seed.collectionItems;
+      totalCount = seed.total;
+      hasMore = seed.hasMore;
+      nextPage = seed.nextPage;
+      showEnd = !seed.hasMore;
+      errorMsg = '';
+      loadState = 'ready';
+      tryLoadMoreIfNeeded();
+      return;
     }
 
     if (!resetSort && !force) {
@@ -813,12 +883,15 @@
         && snapshotMatchesCurrentSort(cached.data)
       ) {
         applyBookmarksSnapshot(cached.data);
-        restoreBookmarksScroll(cached.scrollTop);
+        restoreBookmarksScroll(tabChanged ? 0 : cached.scrollTop);
         return;
       }
     }
 
-    if (force) invalidateViewStatePrefix(listsBasePath());
+    if (force) {
+      invalidateViewStatePrefix(listsBasePath());
+      tabPrefetch.clear();
+    }
     if (tabUsesSort(tabId)) {
       selectedSort = getBookmarksSort();
       announceFilter = getBookmarksAnnounceFilter();
@@ -874,6 +947,7 @@
   }
 
   function applyListChangeToCurrentTab(releaseId: number, statusId: string | null) {
+    tabPrefetch.clear();
     const belongsHere = isReleaseListTab && statusId === activeTab;
     if (belongsHere) {
       items = items.map((item) => (
@@ -987,30 +1061,41 @@
   }
 
   /** «Смотрю · 3 тайтла» — сколько в открытой вкладке */
-  const headSummary = $derived.by(() => {
+  const listControlsShown = $derived(isReleaseListTab || (isVotesTab && votesMode === 'voted'));
+  const countLabel = $derived.by(() => {
     if (loadState !== 'ready' || totalCount <= 0) return '';
     const noun = isCollectionsTab
       ? pluralRu(totalCount, 'коллекция', 'коллекции', 'коллекций')
       : pluralRu(totalCount, 'тайтл', 'тайтла', 'тайтлов');
-    return `${activeTabMeta?.label ?? 'Список'} · ${totalCount} ${noun}`;
+    return `${totalCount} ${noun}`;
+  });
+  const headSummary = $derived.by(() => {
+    if (!countLabel) return '';
+    const tab = activeTabMeta?.label ?? 'Список';
+    // На телефоне у вкладок без кнопок число стоит в строке инструментов
+    return !desktopLayout && !listControlsShown ? tab : `${tab} · ${countLabel}`;
   });
 
   async function onRandom() {
     if (!window.anixApi || randomLoading || totalCount === 0 || isVotesTab) return;
     randomLoading = true;
     try {
-      let res: Record<string, unknown> | undefined;
-      if (activeTab === 'favorites') {
-        res = await window.anixApi.release.randomFavorite(true) as Record<string, unknown>;
-      } else {
-        const tab = TABS.find((t) => t.id === activeTab);
-        const profileId = await ensureProfileId();
-        if (!tab?.type || typeof profileId !== 'number') return;
-        res = await window.anixApi.release.randomProfileList(profileId, tab.type, true) as Record<string, unknown>;
-      }
-      const release = (res?.release ?? res) as Record<string, unknown> | undefined;
-      const rid = release?.id ?? release?.['@id'];
-      if (typeof rid === 'number') navigate(`/release/${rid}`);
+      // Вкладка запоминается: кнопка повтора на странице тайтла выбирает из того же списка
+      const tabId = activeTab;
+      await openRandomRelease(async () => {
+        let res: Record<string, unknown> | undefined;
+        if (tabId === 'favorites') {
+          res = await window.anixApi!.release.randomFavorite(true) as Record<string, unknown>;
+        } else {
+          const tab = TABS.find((t) => t.id === tabId);
+          const profileId = await ensureProfileId();
+          if (!tab?.type || typeof profileId !== 'number') return null;
+          res = await window.anixApi!.release.randomProfileList(profileId, tab.type, true) as Record<string, unknown>;
+        }
+        const release = (res?.release ?? res) as Record<string, unknown> | undefined;
+        const rid = release?.id ?? release?.['@id'];
+        return typeof rid === 'number' ? rid : null;
+      });
     } catch {
       /* ignore */
     } finally {
@@ -1034,19 +1119,6 @@
   function onLayoutChanged() {
     if (!wrapEl) return;
     tryLoadMoreIfNeeded();
-  }
-
-  function handleTabsSettingsClick(e: MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    const btn = e.currentTarget as HTMLElement;
-    const rect = btn.getBoundingClientRect();
-    tabMenuKind = 'default-picker';
-    tabMenuTabId = null;
-    tabMenuX = (rect.left + rect.right) / 2;
-    tabMenuY = (rect.top + rect.bottom) / 2;
-    tabMenuPlacement = 'anchor';
-    tabMenuOpen = true;
   }
 
   function handleTabContextMenu(tab: TabItem, e: MouseEvent) {
@@ -1105,6 +1177,7 @@
   });
 
   onDestroy(() => {
+    closeBookmarksSearch();
     window.removeEventListener('anix:beforeNavigate', onBeforeNavigate);
     window.removeEventListener('anix:bookmarksChanged', onBookmarksChanged);
     window.removeEventListener('anix:navigate', onExternalNavigate);
@@ -1118,7 +1191,6 @@
 </script>
 
 <div class="view view-bookmarks" bind:this={wrapEl}>
-  {#if desktopLayout}
     <BookmarksDesktopHead
       title={isOtherProfile ? 'Списки' : listsOnly ? 'Мои списки' : 'Закладки'}
       login={profileLogin}
@@ -1132,91 +1204,6 @@
       onExport={() => (exportOpen = true)}
       onImport={() => (importOpen = true)}
     />
-  {:else}
-    <div class="bookmarks__user-header">
-      <button
-        type="button"
-        class="bookmarks__user"
-        onclick={(e) => handleUserProfileClick(profileIdForPanel, e)}
-        title="Открыть профиль"
-      >
-        <span
-          class="bookmarks__user-avatar"
-          style={headerAvatarUrl ? `background-image:url('${headerAvatarUrl}')` : undefined}
-          aria-hidden="true"
-        ></span>
-        <span class="bookmarks__user-name">{profileLogin || (isOtherProfile ? 'Профиль' : 'Мои списки')}</span>
-      </button>
-
-      <div class="bookmarks__user-actions">
-        {#if (isReleaseListTab || (isVotesTab && votesMode === 'voted')) && loadState !== 'loading'}
-          <BookmarksToolbar
-            {totalCount}
-            sort={isVotesTab ? voteSort : selectedSort}
-            onSortChange={isVotesTab ? onVoteSortChange : onSortChange}
-            sortOptions={isVotesTab ? VOTE_SORT_OPTIONS : undefined}
-            showRandom={isReleaseListTab}
-            onRandom={onRandom}
-            {randomLoading}
-          >
-            {#snippet leadingActions()}
-              {#if !isListsPage}
-                <button
-                  type="button"
-                  class="bookmarks-toolbar__icon-btn"
-                  title="Изменить вкладку по умолчанию"
-                  aria-label="Изменить вкладку по умолчанию"
-                  onclick={handleTabsSettingsClick}
-                >
-                  {@html iconHome(18)}
-                </button>
-              {/if}
-            {/snippet}
-          </BookmarksToolbar>
-        {:else}
-          {#if (isVotesTab || isFavoritesTab || isHistoryTab || isCollectionsTab) && loadState === 'ready' && totalCount > 0}
-            <span class="bookmarks-toolbar__count" title="Всего в списке">{totalCount}</span>
-          {/if}
-          {#if !isListsPage}
-            <button
-              type="button"
-              class="bookmarks-toolbar__icon-btn"
-              title="Изменить вкладку по умолчанию"
-              aria-label="Изменить вкладку по умолчанию"
-              onclick={handleTabsSettingsClick}
-            >
-              {@html iconHome(18)}
-            </button>
-          {/if}
-        {/if}
-      </div>
-    </div>
-
-    <label class="bookmarks__search">
-      <span class="bookmarks__search-icon" aria-hidden="true">{@html iconSearch(18)}</span>
-      <input
-        class="bookmarks__search-input"
-        type="search"
-        enterkeyhint="search"
-        autocomplete="off"
-        spellcheck="false"
-        placeholder={searchPlaceholder}
-        value={searchInput}
-        oninput={onSearchInput}
-        aria-label={searchPlaceholder}
-      />
-      {#if searchInput}
-        <button
-          type="button"
-          class="bookmarks__search-clear"
-          aria-label="Очистить поиск"
-          onclick={clearSearch}
-        >
-          {@html iconX(14)}
-        </button>
-      {/if}
-    </label>
-  {/if}
 
   <Tabs
     tabs={TABS.map((t) => ({
@@ -1224,18 +1211,19 @@
       label: t.label,
       dividerBefore: isListsPage ? t.id === 'votes' : t.id === 'collections',
     }))}
-    activeId={activeTab}
+    activeId={activeTab} swipe={tabSwipe}
     onChange={(tabId) => loadTab(tabId as TabId)}
     onTabContextMenu={isListsPage ? undefined : handleTabContextMenu}
   />
 
-  {#if desktopLayout}
     <BookmarksDesktopTools
+      hideSearch={!desktopLayout}
       {searchPlaceholder}
       searchValue={searchInput}
       {onSearchInput}
       onSearchClear={clearSearch}
-      showListControls={isReleaseListTab || (isVotesTab && votesMode === 'voted')}
+      showListControls={listControlsShown}
+      note={countLabel}
       showFilter={isReleaseListTab}
       showRandom={isReleaseListTab}
       sortOptions={isVotesTab ? VOTE_SORT_OPTIONS : undefined}
@@ -1246,23 +1234,22 @@
       {onFilterChange}
       {onRandom}
     />
-  {/if}
 
-  {#if isVotesTab && !isOtherProfile}
-    {#if votesMode === 'unvoted'}
-      <UiV2Card class="bookmarks__unvoted" label="Оцените релизы">
-        <p class="bookmarks__unvoted-text">Оцените просмотренные релизы — оценка сохраняется сразу</p>
-        <UiV2Button label="К оценкам" onclick={() => setVotesMode('voted')} />
-      </UiV2Card>
-    {:else if hasUnvoted && !searchQuery}
-      <UiV2Card class="bookmarks__unvoted" label="Неоценённые релизы">
-        <p class="bookmarks__unvoted-text">У вас есть просмотренные, но ещё не оценённые релизы</p>
-        <UiV2Button label="Оценить" variant="light" onclick={() => setVotesMode('unvoted')} />
-      </UiV2Card>
+  <div class="bookmarks__content" use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab, onSwipeProgress: (dir, progress, ms) => (tabSwipe = dir ? { dir, progress, ms } : null) }}>
+    <!-- Подсказка про оценки — часть вкладки: меняется вместе со списком и не сдвигает его скачком -->
+    {#if isVotesTab && !isOtherProfile}
+      {#if votesMode === 'unvoted'}
+        <UiV2Card class="bookmarks__unvoted" label="Оцените релизы">
+          <p class="bookmarks__unvoted-text">Оцените просмотренные релизы — оценка сохраняется сразу</p>
+          <UiV2Button label="К оценкам" onclick={() => setVotesMode('voted')} />
+        </UiV2Card>
+      {:else if hasUnvoted && !searchQuery}
+        <UiV2Card class="bookmarks__unvoted" label="Неоценённые релизы">
+          <p class="bookmarks__unvoted-text">У вас есть просмотренные, но ещё не оценённые релизы</p>
+          <UiV2Button label="Оценить" variant="light" onclick={() => setVotesMode('unvoted')} />
+        </UiV2Card>
+      {/if}
     {/if}
-  {/if}
-
-  <div class="bookmarks__content" use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode() }}>
     <div class="bookmarks__grid">
       {#if loadState === 'loading'}
         {#if isCollectionsTab}
@@ -1311,8 +1298,33 @@
         <ReleaseCardsGridSkeleton count={4} />
       {/if}
     {/if}
+    {#if peekTabs.prev}<TabPeek dir={-1}>{@render bookmarksPeek(peekTabs.prev)}</TabPeek>{/if}
+    {#if peekTabs.next}<TabPeek dir={1}>{@render bookmarksPeek(peekTabs.next)}</TabPeek>{/if}
   </div>
 </div>
+
+{#snippet bookmarksPeek(id: string)}
+  {@const seed = tabPrefetch.get(id)}
+  <div class="bookmarks__grid">
+    {#if !seed}
+      {#if id === 'collections'}
+        <div class="bookmarks__collections"><UiV2CollectionCardSkeleton count={6} /></div>
+      {:else}
+        <ReleaseCardsGridSkeleton />
+      {/if}
+    {:else if id === 'collections'}
+      <div class="bookmarks__collections">
+        {#each seed.collectionItems.slice(0, TAB_PEEK_ITEMS) as c (c.id)}
+          <CollectionCard data={c} />
+        {/each}
+      </div>
+    {:else if seed.items.length}
+      <ReleaseCardsGrid items={seed.items.slice(0, TAB_PEEK_ITEMS)} variant={id === 'history' ? 'history' : undefined} />
+    {:else}
+      <p class="bookmarks__empty">Здесь пока ничего нет.</p>
+    {/if}
+  </div>
+{/snippet}
 
 <UiV2PopupMenu
   open={tabMenuOpen}

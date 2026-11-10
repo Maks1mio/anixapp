@@ -1,0 +1,194 @@
+@use 'variables' as *;
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Вход на ПК: тот же вид, что на планшете (mobile-auth.scss) — приглушённая стена постеров и карточка.
+// Окно может быть низким, поэтому страница прокручивается, а постеры и шапка окна стоят на месте.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+html:not(.tv-mode, .mobile-mode) {
+  .view-auth {
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden auto;
+
+    .titlebar--auth {
+      position: fixed;
+    }
+  }
+
+  .view-auth__body {
+    flex: 1 0 auto;
+    min-height: auto;
+    padding: 4rem 1.5rem 1rem;
+    overflow: visible;
+  }
+
+  .view-auth__covers {
+    position: fixed;
+    opacity: 1;
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      background: color-mix(in srgb, #{$color-bg} 72%, transparent);
+    }
+  }
+
+  .auth-cover-stage__fade {
+    display: none;
+  }
+
+  .view-auth__panel {
+    max-width: 26rem;
+  }
+
+  .auth--v2 {
+    --uikit-v2-surface: #{$color-bg};
+
+    max-width: none;
+    padding: 2.125rem 2rem 2rem;
+    border-radius: 1.75rem;
+    background: $color-bg;
+    box-shadow: none;
+  }
+
+  .auth__logo {
+    display: block;
+    width: 3.5rem;
+    height: 3.5rem;
+    margin-bottom: 0.75rem;
+    border-radius: 1rem;
+  }
+
+  .auth__title {
+    margin-bottom: 0.25rem;
+    font-size: 1.75rem;
+    letter-spacing: 0;
+    text-align: left;
+  }
+
+  .auth__subtitle {
+    margin-bottom: 1.5rem;
+    font-size: 0.9375rem;
+    line-height: 1.4;
+    text-align: left;
+  }
+
+  .auth-form .uiv2-outlined-field {
+    margin-bottom: 1rem;
+  }
+
+  .auth-form .uiv2-outlined-field__input {
+    min-height: 3.5rem;
+  }
+
+  .auth-form__forgot {
+    margin: -0.5rem 0 0.75rem;
+  }
+
+  .auth-link {
+    font-size: 0.875rem;
+  }
+
+  .auth-form__submit,
+  .auth-form__guest-wrap .uiv2-btn {
+    min-height: 3.25rem;
+    border-radius: 999px;
+    font-size: 1rem;
+  }
+
+  .auth-form__guest-wrap {
+    margin-top: 0.75rem;
+
+    .uiv2-btn--chrome {
+      background: $color-surface;
+
+      &:hover:not(:disabled) {
+        background: $color-surface-hover;
+      }
+    }
+  }
+
+  .auth-switch {
+    margin-top: 1rem;
+    font-size: 0.875rem;
+  }
+
+  .auth-oauth {
+    margin-top: 1.5rem;
+  }
+
+  .auth-oauth__divider {
+    margin-bottom: 0.75rem;
+    font-size: 0.8125rem;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .auth-oauth__icons {
+    gap: 0.5rem;
+  }
+
+  .auth-oauth__icon-btn {
+    flex: 1 1 0;
+    width: auto;
+    height: 3.5rem;
+    border-radius: 1rem;
+    background: $color-surface;
+
+    &:hover:not(:disabled) {
+      background: $color-surface-hover;
+      transform: none;
+      filter: none;
+    }
+
+    &:active:not(:disabled) {
+      transform: scale(0.97);
+    }
+
+    &--busy {
+      transform: none;
+    }
+  }
+
+  .auth-oauth__icon-face {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .auth-oauth__spinner {
+    inset: 0;
+    border-radius: 1rem;
+  }
+
+  // Абзац под карточкой: поверх неё он наезжал бы на форму в низком окне
+  .auth-legal--screen {
+    position: relative;
+    flex: none;
+    padding: 0.5rem 1.25rem 1rem;
+    background: none;
+  }
+
+  .auth-legal__text {
+    max-width: 38rem;
+    color: $color-text;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    text-shadow: none;
+  }
+
+  .auth-legal__link {
+    color: $color-text;
+    font-size: inherit;
+    font-weight: 500;
+    text-shadow: none;
+    text-decoration-color: color-mix(in srgb, #{$color-text} 40%, transparent);
+
+    &:hover:not(:disabled) {
+      color: $color-text;
+      text-decoration-color: $color-text;
+    }
+  }
+}

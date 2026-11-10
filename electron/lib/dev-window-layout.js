@@ -62,4 +62,20 @@ function devWindowOptions() {
   return { ...bounds, minWidth: 320, minHeight: 240, ...frame };
 }
 
-module.exports = { devWindowOptions };
+/** Окна `dev:all` с версией под пальцы. */
+function isDevHandheldWindow() {
+  return ['mobile', 'tablet'].includes(process.env.ANIXAPP_DEV_WINDOW);
+}
+
+/**
+ * Курсор работает как палец: нажатие и перетаскивание становятся касанием и свайпом,
+ * а страница видит тач-устройство (`pointer: coarse`, `hover: none`, `maxTouchPoints`).
+ * @param {import('electron').WebContents} wc
+ */
+async function enableDevTouchEmulation(wc) {
+  wc.debugger.attach('1.3');
+  await wc.debugger.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+  await wc.debugger.sendCommand('Emulation.setEmitTouchEventsForMouse', { enabled: true, configuration: 'mobile' });
+}
+
+module.exports = { devWindowOptions, isDevHandheldWindow, enableDevTouchEmulation };

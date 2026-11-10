@@ -87,7 +87,8 @@ async function postForm(url: string, body: Record<string, string>): Promise<Reco
     body: new URLSearchParams(body).toString(),
   });
   const data = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!res.ok) throw new Error(String(data?.error_description || data?.error || data?.error_msg || `http_${res.status}`));
+  // VK и Telegram сообщают об ошибке с кодом 200
+  if (!res.ok || data?.error) throw new Error(String(data?.error_description || data?.error || data?.error_msg || `http_${res.status}`));
   return data;
 }
 
@@ -184,7 +185,8 @@ export async function getTelegramIdToken(): Promise<string> {
   const authUrl = 'https://oauth.telegram.org/auth?' + new URLSearchParams({
     client_id: TELEGRAM_CLIENT_ID,
     response_type: 'code',
-    scope: 'profile',
+    // Как в Anixart: без openid Telegram может не выдать id_token
+    scope: 'openid profile',
     redirect_uri: TELEGRAM_REDIRECT,
     code_challenge: challenge,
     code_challenge_method: 'S256',

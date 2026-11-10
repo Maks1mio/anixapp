@@ -28,6 +28,8 @@ export interface OverviewCommentWeekItem {
   message: string;
   timestamp: number;
   voteCount: number;
+  /** Свой голос: 0 — нет, 1 — минус, 2 — плюс (как vote у комментариев релиза) */
+  userVote: 0 | 1 | 2;
   isSpoiler: boolean;
   profileId: number;
   profileLogin: string;
@@ -95,6 +97,10 @@ export function mapOverviewCommentWeek(
     message: String(raw.message ?? ''),
     timestamp: Number(raw.timestamp ?? 0),
     voteCount: Number(raw.vote_count ?? raw.voteCount ?? 0),
+    userVote: (() => {
+      const v = Number(raw.vote ?? raw.user_vote ?? 0);
+      return v === 1 || v === 2 ? v : 0;
+    })(),
     isSpoiler: !!(raw.is_spoiler ?? raw.isSpoiler),
     profileId: Number(profile.id ?? 0),
     profileLogin: String(profile.login ?? profile.nickname ?? 'Пользователь'),

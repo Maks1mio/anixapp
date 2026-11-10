@@ -184,7 +184,12 @@ export function captureScrollForKey(key: string, data?: unknown): void {
   }
 }
 
+/** Номер последнего восстановления: новая вкладка отменяет то, что ещё тянет список к старой позиции. */
+let restoreGen = 0;
+
 export function resetScrollTop(): void {
+  restoreGen += 1;
+  scrollRestorePending = false;
   const el = getScrollContainer();
   if (el) el.scrollTop = 0;
 }
@@ -239,6 +244,7 @@ export async function restoreScrollTop(
     return;
   }
   scrollRestorePending = true;
+  const gen = ++restoreGen;
   const maxWaitMs = options.maxWaitMs ?? 8000;
   logViewState('restore-scroll-start', getPath(), { target: scrollTop, maxWaitMs });
 
@@ -272,12 +278,16 @@ export async function restoreScrollTop(
       };
 
       const apply = () => {
+        if (gen !== restoreGen) {
+          finish();
+          return;
+        }
         const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
         const target = Math.min(scrollTop, maxScroll);
         el.scrollTop = target;
         if (maxScroll >= scrollTop - 48 || Date.now() >= deadline) {
           requestAnimationFrame(() => {
-            el.scrollTop = target;
+            if (gen === restoreGen) el.scrollTop = target;
             finish();
           });
         }

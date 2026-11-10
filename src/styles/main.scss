@@ -38,6 +38,8 @@
 @use 'mobile-tokens';
 @use 'mobile-components';
 @use 'mobile-overrides';
+@use 'mobile-auth';
+@use 'auth-desktop';
 @use 'mobile-settings';
 
 *,

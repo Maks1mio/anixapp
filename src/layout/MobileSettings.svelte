@@ -8,18 +8,11 @@
   import { get } from 'svelte/store';
   import { settingsModalInitialTab } from '../stores/modals';
   import { navigate } from '../stores/navigation';
+  import { isAuthenticated } from '../stores/auth';
+  import { hasQrScanner } from '../native/anix-qr';
   import { pushBackHandler } from '../platform/mobile-back';
   import { getMobilePlayerPrefs, setMobilePlayerPrefs, type MobilePlayerKind } from '../utils/mobile-player';
-  import {
-    getCardLayout,
-    setCardLayout,
-    getDefaultBookmarksTab,
-    setDefaultBookmarksTab,
-    type BookmarksTabId,
-    type CardLayout,
-  } from '../prefs';
   import { requestOpenExternal } from '../utils/external-link';
-  import { getAllThemes, getActiveThemeId, applyThemeById } from '../services/themes';
   import {
     iconArrowLeft,
     iconBell,
@@ -31,20 +24,39 @@
     iconInfo,
     iconLink,
     iconMessageCircle,
-    iconMoon,
+    iconQrCode,
+    iconRefreshCw,
+    iconCodeXml,
+    iconChevronRight,
   } from '../components/icons';
-  import NotificationPreferencesPanel from '../components/NotificationPreferencesPanel.svelte';
+  import NotificationsDevicePage from '../views/Settings/pages/NotificationsDevicePage.svelte';
   import PlaybackPage from '../views/Settings/pages/PlaybackPage.svelte';
   import ConnectionPage from '../views/Settings/pages/ConnectionPage.svelte';
   import MobileSupport from './MobileSupport.svelte';
+  import MobileQrSignIn from './MobileQrSignIn.svelte';
   import AboutPage from '../views/Settings/pages/AboutPage.svelte';
+  import AppearancePage from '../views/Settings/pages/AppearancePage.svelte';
+  import BehaviorPage from '../views/Settings/pages/BehaviorPage.svelte';
+  import DeveloperPage from '../views/Settings/pages/DeveloperPage.svelte';
+  import MobileUpdatePage from './MobileUpdatePage.svelte';
+  import { checkMobileUpdate, mobileUpdate } from '../stores/mobile-update';
 
   interface Props {
     onClose: () => void;
   }
   let { onClose }: Props = $props();
 
-  type Screen = 'menu' | 'notifications' | 'playback' | 'appearance' | 'connection' | 'support' | 'about';
+  type Screen =
+    | 'menu'
+    | 'notifications'
+    | 'playback'
+    | 'appearance'
+    | 'connection'
+    | 'qr'
+    | 'update'
+    | 'developer'
+    | 'support'
+    | 'about';
 
   const TITLES: Record<Screen, string> = {
     menu: 'Настройки',
@@ -52,25 +64,60 @@
     playback: 'Воспроизведение',
     appearance: 'Внешний вид',
     connection: 'Соединение',
+    qr: 'Вход по QR',
+    update: 'Обновление',
+    developer: 'Разработчик',
     support: 'Anix+',
-    about: 'О приложении',
+    about: 'О программе',
   };
 
-  type MenuItem = { screen?: Screen; title: string; icon: (s: number) => string; action?: () => void };
-  const MENU: MenuItem[][] = [
-    [
-      { screen: 'notifications', title: 'Уведомления', icon: iconBell },
-      { screen: 'playback', title: 'Воспроизведение', icon: iconPlay },
-      { screen: 'appearance', title: 'Внешний вид', icon: iconPalette },
-      { screen: 'connection', title: 'Соединение', icon: iconGlobe },
-      { title: 'Загрузки', icon: iconDownload, action: () => { onClose(); navigate('/downloads'); } },
-    ],
-    [
-      { screen: 'support', title: 'Поддержать AnixApp', icon: iconGift },
-      { title: 'Канал в Telegram', icon: iconMessageCircle, action: () => requestOpenExternal('https://t.me/anixapp') },
-      { title: 'Исходный код на GitHub', icon: iconLink, action: () => requestOpenExternal('https://github.com/Maks1mio/anixapp') },
-      { screen: 'about', title: 'О приложении', icon: iconInfo },
-    ],
+  /** Те же группы, пункты и подписи, что в настройках ПК (SettingsModal) — плюс вход по QR, которого на ПК нет. */
+  type MenuItem = {
+    screen?: Screen;
+    title: string;
+    sub?: string;
+    icon: (s: number) => string;
+    action?: () => void;
+    /** Внешняя ссылка — без стрелки перехода */
+    external?: boolean;
+    /** Точка «есть обновление» */
+    badge?: boolean;
+  };
+  const appVersionLabel = `AnixApp ${__ANIXAPP_VERSION__ ? `v${__ANIXAPP_VERSION__}` : ''}`.trim();
+  const MENU: { title: string; items: MenuItem[] }[] = [
+    {
+      title: 'Приложение',
+      items: [
+        { screen: 'appearance', title: 'Внешний вид', sub: 'Тема, вид списков и вкладка закладок', icon: iconPalette },
+        { screen: 'notifications', title: 'Уведомления', sub: 'Баннеры, звук и типы уведомлений', icon: iconBell },
+        { screen: 'playback', title: 'Воспроизведение', sub: 'Плеер, Anime4K и перемотка', icon: iconPlay },
+        { screen: 'connection', title: 'Соединение', sub: 'Сервер API', icon: iconGlobe },
+        { title: 'Загрузки', sub: 'Скачанные серии для просмотра без сети', icon: iconDownload, action: () => { onClose(); navigate('/downloads'); } },
+        // Разрешить вход можно только из своего аккаунта и только там, где есть камера
+        ...(hasQrScanner() && get(isAuthenticated)
+          ? [{ screen: 'qr' as const, title: 'Вход по QR', sub: 'Войти на ПК или TV по коду с экрана', icon: iconQrCode }]
+          : []),
+      ],
+    },
+    {
+      title: 'Система',
+      items: [
+        // Discord и журнал отладки на телефоне не работают — их здесь нет
+        { screen: 'update', title: 'Обновление', sub: 'Версия приложения и новые выпуски', icon: iconRefreshCw, badge: true },
+      ],
+    },
+    {
+      title: 'AnixApp',
+      items: [
+        { screen: 'support', title: 'Поддержать AnixApp', icon: iconGift },
+        { title: 'Канал в Telegram', icon: iconMessageCircle, external: true, action: () => requestOpenExternal('https://t.me/anixapp') },
+        { title: 'Исходный код на GitHub', icon: iconLink, external: true, action: () => requestOpenExternal('https://github.com/Anixapp-Community/anixapp') },
+        { screen: 'about', title: 'О программе', sub: appVersionLabel, icon: iconInfo },
+      ],
+    },
+    ...(import.meta.env.DEV
+      ? [{ title: 'Разработчик', items: [{ screen: 'developer' as const, title: 'Разработчик', sub: 'Мосты и UI Kit', icon: iconCodeXml }] }]
+      : []),
   ];
 
   /** Вкладки desktop-настроек, у которых есть мобильный аналог. */
@@ -79,6 +126,10 @@
     playback: 'playback',
     appearance: 'appearance',
     connection: 'connection',
+    // На телефоне сведения о видеокарте живут в «Воспроизведении»
+    behavior: 'playback',
+    update: 'update',
+    developer: 'developer',
     support: 'support',
     about: 'about',
   };
@@ -104,50 +155,11 @@
 
   const PLAYER_OPTIONS: ChoiceOption[] = [
     { value: 'builtin', label: 'Встроенный плеер', hint: 'Простой и удобный, не требует отдельного скачивания' },
-    { value: 'anix', label: 'АниксПлеер', hint: 'Наш самый продвинутый плеер с наилучшим качеством' },
     { value: 'web', label: 'Веб-плеер', hint: 'Просмотр в плеере источника' },
     { value: 'external', label: 'Сторонний плеер', hint: 'Любой плеер, установленный на устройстве' },
   ];
-  const LAYOUT_OPTIONS: ChoiceOption[] = [
-    { value: 'wide', label: 'Списком' },
-    { value: 'mini', label: 'Карточками' },
-  ];
-  const BOOKMARKS_OPTIONS: ChoiceOption[] = [
-    { value: 'watching', label: 'Смотрю' },
-    { value: 'planned', label: 'В планах' },
-    { value: 'completed', label: 'Просмотрено' },
-    { value: 'on_hold', label: 'Отложено' },
-    { value: 'dropped', label: 'Брошено' },
-    { value: 'collections', label: 'Коллекции' },
-    { value: 'history', label: 'История' },
-    { value: 'votes', label: 'Оценки' },
-    { value: 'favorites', label: 'Избранное' },
-  ];
-
-  let themeId = $state(getActiveThemeId());
-  /** Те же темы, что и на ПК: встроенные + пользовательские (на телефоне — в палитре Anixart, см. themes.ts). */
-  const themeOptions = (): ChoiceOption[] =>
-    getAllThemes().map((t) => ({
-      value: t.id,
-      label: t.name,
-      hint: t.id === 'auto' ? 'Как в системе' : t.builtIn ? undefined : 'Пользовательская',
-    }));
-
-  function pickTheme() {
-    choice = {
-      title: 'Тема',
-      options: themeOptions(),
-      value: themeId,
-      onPick: (v) => {
-        applyThemeById(v);
-        themeId = v;
-      },
-    };
-  }
 
   let playerPrefs = $state(getMobilePlayerPrefs());
-  let cardLayout = $state<CardLayout>(getCardLayout());
-  let bookmarksTab = $state<BookmarksTabId>(getDefaultBookmarksTab());
 
   const labelOf = (opts: ChoiceOption[], v: string) => opts.find((o) => o.value === v)?.label ?? '';
 
@@ -168,31 +180,14 @@
     setMobilePlayerPrefs(playerPrefs);
   }
 
-  function pickLayout() {
-    choice = {
-      title: 'Вид списков релизов',
-      options: LAYOUT_OPTIONS,
-      value: cardLayout,
-      onPick: (v) => {
-        cardLayout = v as CardLayout;
-        setCardLayout(cardLayout);
-      },
-    };
-  }
 
-  function pickBookmarksTab() {
-    choice = {
-      title: 'Вкладка закладок по умолчанию',
-      options: BOOKMARKS_OPTIONS,
-      value: bookmarksTab,
-      onPick: (v) => { bookmarksTab = setDefaultBookmarksTab(v); },
-    };
-  }
 
   function choose(v: string) {
     choice?.onPick(v);
     choice = null;
   }
+
+  onMount(() => void checkMobileUpdate());
 
   onMount(() =>
     pushBackHandler(() => {
@@ -211,24 +206,24 @@
 
   <div class="m-settings__body" bind:this={bodyEl}>
     {#if screen === 'menu'}
-      <div class="m-pref-space"></div>
-      <button type="button" class="m-pref m-pref--icon" onclick={pickTheme}>
-        <span class="m-pref__icon">{@html iconMoon(24)}</span>
-        <span class="m-pref__text">
-          <span class="m-pref__title">Тема</span>
-          <span class="m-pref__summary">{labelOf(themeOptions(), themeId)}</span>
-        </span>
-      </button>
-      {#each MENU as group (group[0].title)}
-        <div class="m-pref-sep" role="separator"></div>
-        {#each group as item (item.title)}
+      {#each MENU as group, gi (group.title)}
+        {#if gi > 0}<div class="m-pref-sep" role="separator"></div>{/if}
+        <h2 class="m-pref-group">{group.title}</h2>
+        {#each group.items as item (item.title)}
           <button
             type="button"
             class="m-pref m-pref--icon"
             onclick={() => (item.screen ? open(item.screen) : item.action?.())}
           >
             <span class="m-pref__icon">{@html item.icon(24)}</span>
-            <span class="m-pref__text"><span class="m-pref__title">{item.title}</span></span>
+            <span class="m-pref__text">
+              <span class="m-pref__title">{item.title}</span>
+              {#if item.sub}<span class="m-pref__summary">{item.sub}</span>{/if}
+            </span>
+            {#if item.badge && $mobileUpdate.available}<span class="m-pref__dot" aria-label="Есть обновление"></span>{/if}
+            {#if !item.external}
+              <span class="m-pref__chevron" aria-hidden="true">{@html iconChevronRight(18)}</span>
+            {/if}
           </button>
         {/each}
       {/each}
@@ -248,33 +243,24 @@
         </span>
         <span class="m-switch" class:m-switch--on={playerPrefs.ask} aria-hidden="true"></span>
       </button>
+      <!-- Адаптивное ускорение и видеокарта (на ПК — в «Поведении»): от них зависит Anime4K -->
+      <div class="m-settings__desktop"><BehaviorPage embedded /></div>
       <h2 class="m-pref-cat">Встроенный плеер</h2>
       <div class="m-settings__desktop"><PlaybackPage /></div>
 
     {:else if screen === 'appearance'}
-      <button type="button" class="m-pref" onclick={pickTheme}>
-        <span class="m-pref__text">
-          <span class="m-pref__title">Тема</span>
-          <span class="m-pref__summary">{labelOf(themeOptions(), themeId)}</span>
-        </span>
-      </button>
-      <button type="button" class="m-pref" onclick={pickLayout}>
-        <span class="m-pref__text">
-          <span class="m-pref__title">Вид списков релизов</span>
-          <span class="m-pref__summary">{labelOf(LAYOUT_OPTIONS, cardLayout)}</span>
-        </span>
-      </button>
-      <button type="button" class="m-pref" onclick={pickBookmarksTab}>
-        <span class="m-pref__text">
-          <span class="m-pref__title">Вкладка закладок по умолчанию</span>
-          <span class="m-pref__summary">{labelOf(BOOKMARKS_OPTIONS, bookmarksTab)}</span>
-        </span>
-      </button>
+      <div class="m-settings__desktop"><AppearancePage /></div>
 
     {:else if screen === 'notifications'}
-      <div class="m-settings__desktop"><NotificationPreferencesPanel embedded /></div>
+      <div class="m-settings__desktop"><NotificationsDevicePage /></div>
     {:else if screen === 'connection'}
       <div class="m-settings__desktop"><ConnectionPage /></div>
+    {:else if screen === 'update'}
+      <MobileUpdatePage />
+    {:else if screen === 'developer'}
+      <div class="m-settings__desktop"><DeveloperPage /></div>
+    {:else if screen === 'qr'}
+      <MobileQrSignIn />
     {:else if screen === 'support'}
       <MobileSupport />
     {:else}

@@ -1,12 +1,13 @@
 <script lang="ts">
+  import { openRandomRelease } from '../stores/random-release';
   import ReleaseCardsGrid from '../components/ReleaseCardsGrid.svelte';
   import ReleaseCardsGridSkeleton from '../components/ReleaseCardsGridSkeleton.svelte';
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
-  import HomeCustomFilterView from '../components/HomeCustomFilterView.svelte';
+  import ReleaseFilterPanel from '../components/ReleaseFilterPanel.svelte';
+  import { FILTER_HINT } from '../data/filterOptions';
   import HomeTabRenameModal from '../components/HomeTabRenameModal.svelte';
   import { headlineFromLoadError } from '../utils/content-load-error';
-  import { onMount, onDestroy } from 'svelte';
-  import { navigate } from '../stores/navigation';
+  import { onMount, onDestroy, untrack } from 'svelte';
   import { requireAuth } from '../stores/auth';
   import Tabs, { type TabItem } from '../components/Tabs.svelte';
   import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../components/uikit-v2/UiV2PopupMenu.svelte';
@@ -17,7 +18,11 @@
   import { fetchAnnouncements, type Announcement } from '../services/announcements';
   import AnnouncementBanner from '../components/AnnouncementBanner.svelte';
   import HomeContinueWatching from '../components/HomeContinueWatching.svelte';
-  import { swipeTabs } from '../actions/swipeTabs';
+  import HomeMobileUpdate from '../components/HomeMobileUpdate.svelte';
+  import { swipeTabs, type TabSwipeState } from '../actions/swipeTabs';
+  import { isAuthenticated } from '../stores/auth';
+  import TabPeek from '../components/TabPeek.svelte';
+  import { createTabPrefetch, tabNeighbors, TAB_PEEK_ITEMS } from '../utils/tab-prefetch.svelte';
   import { isMobileMode } from '../platform/mobile';
   import {
     isHomeCustomTabConfigured,
@@ -28,6 +33,7 @@
     serializeHomeCustomTabData,
     setDefaultHomeTab,
     toFilterRequest,
+    DEFAULT_CUSTOM_FILTER,
     type HomeCustomTabData,
   } from '../utils/homeCustomTab';
 
@@ -44,6 +50,7 @@
     getViewState,
     saveViewStateWithScroll,
     restoreScrollTop,
+    resetScrollTop,
     registerActiveScrollKey,
     flushActiveViewState,
     saveViewStateData,
@@ -253,7 +260,10 @@
     if (nextPage === 0 && loadState !== 'error') loadState = 'loading';
 
     try {
+      const requestedTab = activeTab;
       const data = await window.anixApi.release.filter(nextPage, toIpcArgs(getFilterArgs(activeTab)), true) as any;
+      // Пока шёл запрос, перелистнули на другую вкладку
+      if (requestedTab !== activeTab) return;
       const content = (data?.content ?? []) as Record<string, unknown>[];
       if (!content.length) {
         hasMore = false;
@@ -307,6 +317,26 @@
     items = [];
   }
 
+  /** Первая страница соседних вкладок: при свайпе рядом едет уже настоящий список. */
+  const tabPrefetch = createTabPrefetch<ReleaseCardData[]>(async (id) => {
+    if (id === 'my' && (!customTabConfigured || !$isAuthenticated)) return [];
+    const data = await window.anixApi?.release.filter(0, toIpcArgs(getFilterArgs(id as HomeTabId)), true) as { content?: Record<string, unknown>[] };
+    return (data?.content ?? []).map((raw) => mapReleaseRawToCard(raw));
+  });
+  const peekTabs = $derived(tabNeighbors(homeTabs.map((t) => t.id), activeTab));
+
+  $effect(() => {
+    if (!isMobileMode() || loadState === 'loading') return;
+    const { prev, next } = peekTabs;
+    untrack(() => {
+      if (prev) tabPrefetch.ensure(prev);
+      if (next) tabPrefetch.ensure(next);
+    });
+  });
+
+  /** Ход свайпа содержимого — для планки и подписей вкладок */
+  let tabSwipe = $state<TabSwipeState>(null);
+
   /** Свайп по списку (телефон): соседняя вкладка; «Моя вкладка» без входа пропускается как обычно. */
   function swipeToTab(dir: 1 | -1): boolean {
     const i = homeTabs.findIndex((t) => t.id === activeTab);
@@ -321,11 +351,24 @@
     if (tabId === 'my' && !requireAuth()) return;
     saveViewStateWithScroll(HOME_VIEW_KEY(activeTab), homeSnapshot());
     activeTab = tabId;
+    // Другая вкладка всегда открывается с начала страницы
+    resetScrollTop();
+
+    const prefetched = isMobileMode() ? tabPrefetch.get(tabId) : undefined;
+    if (prefetched?.length) {
+      isLoading = false;
+      items = prefetched;
+      page = 1;
+      hasMore = true;
+      loadState = 'ready';
+      requestAnimationFrame(checkIfNeedsMore);
+      return;
+    }
 
     const cached = getViewState<HomeViewState>(HOME_VIEW_KEY(tabId));
     if (cached?.data && cached.data.items.length > 0) {
       applyHomeSnapshot(cached.data);
-      void restoreHomeScroll(cached.scrollTop);
+      void restoreHomeScroll(0);
       return;
     }
 
@@ -422,9 +465,10 @@
     if (!window.anixApi || randomLoading) return;
     randomLoading = true;
     try {
-      const data = await window.anixApi.release.random(true) as any;
-      const release = data?.release as { id?: number } | undefined;
-      if (release?.id) navigate(`/release/${release.id}`);
+      await openRandomRelease(async () => {
+        const data = await window.anixApi!.release.random(true) as any;
+        return (data?.release as { id?: number } | undefined)?.id;
+      });
     } catch { /* ignore */ }
     finally {
       randomLoading = false;
@@ -432,6 +476,7 @@
   }
 
   function forceRefreshHome() {
+    tabPrefetch.clear();
     for (const tabId of HOME_TAB_IDS) {
       removeViewState(HOME_VIEW_KEY(tabId));
     }
@@ -512,7 +557,7 @@
   {/if}
   <Tabs
     tabs={homeTabs}
-    activeId={activeTab}
+    activeId={activeTab} swipe={tabSwipe}
     onChange={(id) => setActiveTab(id as HomeTabId)}
     onTabContextMenu={handleTabContextMenu}
     rootClassName="bookmarks__tabs releases-type"
@@ -546,8 +591,10 @@
     {/snippet}
   </Tabs>
 
-  <div class="home-content" use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode() }}>
-    <HomeContinueWatching />
+  <!-- На телефоне карточка над перелистываемым списком: она общая для всех вкладок -->
+  {#if isMobileMode()}<div class="home-mobile-cards"><HomeMobileUpdate /><HomeContinueWatching /></div>{/if}
+  <div class="home-content" use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab, onSwipeProgress: (dir, progress, ms) => (tabSwipe = dir ? { dir, progress, ms } : null) }}>
+    {#if !isMobileMode()}<HomeContinueWatching />{/if}
     <div class="home-list">
       {#if loadState === 'unconfigured' || showMyTabEmpty}
         <div class="home-my-tab-empty">
@@ -574,13 +621,26 @@
         </div>
       {/if}
     </div>
+    {#if peekTabs.prev}<TabPeek dir={-1}>{@render homePeek(peekTabs.prev)}</TabPeek>{/if}
+    {#if peekTabs.next}<TabPeek dir={1}>{@render homePeek(peekTabs.next)}</TabPeek>{/if}
   </div>
 </div>
 
+{#snippet homePeek(id: string)}
+  {@const cards = tabPrefetch.get(id)}
+  {#if cards?.length}
+    <div class="bookmarks__grid"><ReleaseCardsGrid items={cards.slice(0, TAB_PEEK_ITEMS)} /></div>
+  {:else if !cards}
+    <div class="bookmarks__grid"><ReleaseCardsGridSkeleton /></div>
+  {/if}
+{/snippet}
+
 {#if filterModalOpen}
-  <HomeCustomFilterView
-    initial={customTabData}
-    onSave={onFilterSave}
+  <ReleaseFilterPanel
+    title="Настройки вкладки"
+    notice={FILTER_HINT}
+    initial={customTabData.filter ?? DEFAULT_CUSTOM_FILTER}
+    onApply={(filter) => void onFilterSave({ ...customTabData, filter })}
     onClose={() => { filterModalOpen = false; }}
   />
 {/if}

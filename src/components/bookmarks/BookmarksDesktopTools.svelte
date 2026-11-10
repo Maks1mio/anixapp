@@ -15,6 +15,8 @@
   import { BOOKMARK_ANNOUNCE_FILTERS, bookmarkAnnounceFilterLabel } from '../../constants/bookmarkFilter';
 
   type Props = {
+    /** Телефон и планшет: поле поиска стоит в верхней панели приложения. */
+    hideSearch?: boolean;
     searchPlaceholder: string;
     searchValue: string;
     onSearchInput: (e: Event) => void;
@@ -29,12 +31,15 @@
     /** Свой набор сортировок (например, для «Оценок»); подпись кнопки — desc пункта */
     sortOptions?: readonly BookmarkSortOption[];
     showRandom?: boolean;
+    /** Вместо кнопок на вкладках без них (телефон): строка остаётся, список не прыгает */
+    note?: string;
     onSortChange: (sort: number) => void;
     onFilterChange: (filter: number) => void;
     onRandom: () => void;
   };
 
   let {
+    hideSearch = false,
     searchPlaceholder,
     searchValue,
     onSearchInput,
@@ -46,6 +51,7 @@
     randomDisabled,
     sortOptions,
     showRandom = true,
+    note = '',
     onSortChange,
     onFilterChange,
     onRandom,
@@ -120,6 +126,7 @@
 </script>
 
 <div class="bm-tools" role="toolbar" aria-label="Действия списка">
+  {#if !hideSearch}
   <div class="bm-tools__search">
     <UiV2PillField
       size="md"
@@ -139,6 +146,11 @@
       </button>
     {/if}
   </div>
+  {/if}
+
+  {#if hideSearch && !showListControls && note}
+    <span class="bm-tools__note">{note}</span>
+  {/if}
 
   {#if showListControls}
     <UiV2Button

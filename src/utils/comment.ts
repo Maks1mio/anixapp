@@ -225,7 +225,10 @@ export interface ProfileCommentPreviewItem {
   message: string;
   timestamp: number;
   voteCount: number;
+  userVote: CommentVoteValue;
+  replyCount: number;
   isSpoiler: boolean;
+  profileId: number;
   profileLogin: string;
   profileAvatar: string;
   profileBadgeUrl?: string;
@@ -233,6 +236,8 @@ export interface ProfileCommentPreviewItem {
   contextLabel: string;
   targetTitle: string;
   targetPath: string | null;
+  /** id релиза / коллекции / записи — для ответов в ветке */
+  targetId: number;
 }
 
 function profileCommentContext(typeRaw: unknown): string {
@@ -278,13 +283,16 @@ export function mapProfileCommentPreview(
 
   let targetPath: string | null = null;
   let targetTitle = '';
+  let targetId = 0;
 
   if (commentType === 'collection' || commentType.includes('collection')) {
     const collectionId = entityNumericId(collection);
+    targetId = collectionId;
     if (collectionId) targetPath = `/collection/${collectionId}`;
     targetTitle = collection ? collectionTitleFrom(collection) : '';
   } else if (commentType === 'article' || commentType.includes('article')) {
     const articleId = entityNumericId(article);
+    targetId = articleId;
     const channelId = Number(
       (article?.channel as { id?: number } | undefined)?.id
       ?? article?.channel_id
@@ -292,9 +300,16 @@ export function mapProfileCommentPreview(
       ?? 0,
     );
     if (articleId && channelId) targetPath = `/article/${articleId}`;
-    targetTitle = String(article?.title ?? article?.embeddable_title ?? article?.embeddableTitle ?? '').trim();
+    // Как в приложении (ArticleComment.getEmbeddableTitle): подпись — название канала записи
+    const channel = (article?.channel && typeof article.channel === 'object'
+      ? article.channel
+      : resolveJacksonEntity(article?.channel, profileRoot)) as Record<string, unknown> | undefined;
+    targetTitle = String(
+      channel?.title ?? article?.title ?? article?.embeddable_title ?? article?.embeddableTitle ?? '',
+    ).trim();
   } else {
     const releaseId = entityNumericId(release);
+    targetId = releaseId;
     if (releaseId) targetPath = `/release/${releaseId}`;
     targetTitle = release ? releaseTitleFrom(release) : '';
   }
@@ -304,7 +319,10 @@ export function mapProfileCommentPreview(
     message: String(raw.message ?? ''),
     timestamp: Number(raw.timestamp ?? 0),
     voteCount: Number(raw.vote_count ?? raw.voteCount ?? 0),
+    userVote: ([1, 2].includes(Number(raw.vote ?? raw.user_vote ?? 0)) ? Number(raw.vote ?? raw.user_vote) : 0) as CommentVoteValue,
+    replyCount: Number(raw.reply_count ?? raw.replyCount ?? 0) || 0,
     isSpoiler: !!(raw.is_spoiler ?? raw.isSpoiler),
+    profileId: profile.id,
     profileLogin: profile.login,
     profileAvatar: profile.avatar,
     profileBadgeUrl: profile.badgeUrl,
@@ -312,6 +330,7 @@ export function mapProfileCommentPreview(
     contextLabel: profileCommentContext(commentType),
     targetTitle: targetTitle || 'Без названия',
     targetPath,
+    targetId,
   };
 }
 

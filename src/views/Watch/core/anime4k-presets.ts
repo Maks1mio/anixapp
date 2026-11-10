@@ -143,4 +143,26 @@ export function normalizeAnime4kPreset(
   return presetFromLegacy(raw.upscaleEnabled === true, typeof raw.upscaleMode === 'number' ? raw.upscaleMode : 15);
 }
 
+// ── Телефон и планшет: только лёгкие режимы, разрешение обработки всегда 1080p ──────────────
+// «+»-режимы, «Максимум» и 2K/4K на мобильном GPU греют устройство и роняют кадры.
+export const MOBILE_ANIME4K_TYPES: Anime4kTypeOption[] = ANIME4K_TYPES.filter((t) =>
+  t.id === 'off' || t.id === 'sharp' || t.id === 'balance' || t.id === 'clean',
+);
+export const MOBILE_ANIME4K_INTENSITIES: Anime4kIntensityOption[] = ANIME4K_INTENSITIES.filter((i) => i.id !== 'max');
+export const MOBILE_ANIME4K_TARGET_RES: Anime4kTargetRes = '1080';
+
+const MOBILE_TYPE_FALLBACK: Partial<Record<Anime4kType, Anime4kType>> = {
+  sharpPlus: 'sharp',
+  balancePlus: 'balance',
+  cleanPlus: 'clean',
+};
+
+/** Сохранённый (например, с ПК) пресет → ближайший из доступных на телефоне. */
+export function clampAnime4kPresetForMobile(preset: Anime4kPreset): Anime4kPreset {
+  return {
+    type: MOBILE_TYPE_FALLBACK[preset.type] ?? preset.type,
+    intensity: preset.intensity === 'max' ? 'optimal' : preset.intensity,
+  };
+}
+
 export { isAnixPlayerMode, decodeAnixPlayerMode };

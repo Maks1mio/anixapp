@@ -73,6 +73,9 @@ export function openProfilePanel(userId?: number, opts?: { login?: string }): vo
 
   if (open && currentId === id) {
     if (login) updateProfilePanelLogin(id, login);
+    // Стор уже «открыт», а слой профиля мог закрыться мимо него (мобильная страница, перезапуск разметки) —
+    // напоминаем, иначе нажатие на того же человека ничего не показывает
+    emitOpen(id);
     return;
   }
 

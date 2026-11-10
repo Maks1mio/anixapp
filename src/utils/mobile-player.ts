@@ -1,11 +1,12 @@
+import { isMobileMode } from '../platform/mobile';
 /**
  * Выбор плеера на телефоне («Выберите плеер»): веб-плеер источника, АниксПлеер (наш AnixApp Player по Intent API),
  * встроенный плеер (/watch на hls.js) и сторонний (системный выбор). Настройка хранится локально.
  */
-import { launchPlayer, type WatchLaunchParams } from './watch-nav';
+import { launchPlayer, playerWindowOpener, type WatchLaunchParams } from './watch-nav';
 import { externalPlayerUsesPlaylist } from './player-integration';
 
-export type MobilePlayerKind = 'web' | 'anix' | 'builtin' | 'external';
+export type MobilePlayerKind = 'web' | 'builtin' | 'external';
 
 export interface MobilePlayerPrefs {
   kind: MobilePlayerKind;
@@ -37,9 +38,11 @@ export function getMobilePlayerPrefs(): MobilePlayerPrefs {
     const raw = localStorage.getItem(PREFS_KEY);
     if (!raw) return { ...DEFAULTS };
     const p = JSON.parse(raw) as Partial<MobilePlayerPrefs>;
-    const kinds: MobilePlayerKind[] = ['web', 'anix', 'builtin', 'external'];
+    const kinds: MobilePlayerKind[] = ['web', 'builtin', 'external'];
+    // АниксПлеер убран из списка: у кого он был, откроют его через сторонний плеер
+    const saved = (p.kind as string) === 'anix' ? 'external' : p.kind;
     return {
-      kind: kinds.includes(p.kind as MobilePlayerKind) ? (p.kind as MobilePlayerKind) : DEFAULTS.kind,
+      kind: kinds.includes(saved as MobilePlayerKind) ? (saved as MobilePlayerKind) : DEFAULTS.kind,
       ask: p.ask !== false,
     };
   } catch {
@@ -404,7 +407,7 @@ async function launchExternalDesktop(
   }
 }
 
-/** Запуск серии выбранным плеером. Для web/builtin — маршрут /watch; для anix/external — нативный Intent / системная ссылка. */
+/** Запуск серии выбранным плеером. Для web/builtin — маршрут /watch; для external — нативный Intent / системная ссылка. */
 export async function launchWithKind(
   kind: MobilePlayerKind,
   params: WatchLaunchParams,
@@ -416,8 +419,9 @@ export async function launchWithKind(
   }
   if (kind === 'web') {
     // Desktop: Kodik в iframe из 127.0.0.1 не играет — открываем URL источника top-level.
-    if (window.electron?.openPlayerWindow) {
-      await window.electron.openPlayerWindow({
+    const openWindow = playerWindowOpener();
+    if (openWindow) {
+      await openWindow({
         releaseId: String(params.releaseId),
         sourceId: String(params.sourceId),
         ep: String(params.ep),
@@ -435,23 +439,20 @@ export async function launchWithKind(
 
   const plugin = nativePlugin();
   if (!plugin?.openExternalPlayer) {
-    if (kind === 'external') return launchExternalDesktop(params, opts);
-    return { started: false, message: 'Внешние плееры доступны только в приложении' };
+    if (isMobileMode()) return { started: false, message: 'Выбор стороннего плеера доступен в приложении на Android' };
+    return launchExternalDesktop(params, opts);
   }
   const stream = await resolveEpisodeStream(params.releaseId, params.sourceId, params.ep, {
     releaseTitle: params.title,
     signal: opts.signal,
   });
-  const out = await plugin.openExternalPlayer({
-    mode: kind === 'anix' ? 'anix' : 'chooser',
+  await plugin.openExternalPlayer({
+    mode: 'chooser',
     url: stream.url,
     title: stream.title || params.title,
     label: `${params.ep} серия`,
     headers: stream.headers,
     startMs: params.currentTime ? Math.round(params.currentTime * 1000) : 0,
   });
-  if (kind === 'anix' && out?.installed === false) {
-    return { started: false, message: 'АниксПлеер не установлен. Установите AnixApp Player или выберите другой плеер.' };
-  }
   return { started: true };
 }

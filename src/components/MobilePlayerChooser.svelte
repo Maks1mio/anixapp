@@ -1,5 +1,5 @@
 <script lang="ts">
-  /** Диалог «Выберите плеер» (телефон): веб-плеер, АниксПлеер, встроенный, сторонний + «Спрашивать всегда». */
+  /** Диалог «Выберите плеер» (телефон): веб-плеер, встроенный, сторонний + «Спрашивать всегда». */
   import { getMobilePlayerPrefs, type MobilePlayerKind } from '../utils/mobile-player';
 
   interface Props {
@@ -12,9 +12,8 @@
   let kind = $state<MobilePlayerKind>(initial.kind);
   let ask = $state(initial.ask);
 
-  const OPTIONS: { id: MobilePlayerKind; title: string; text: string; beta?: boolean; warning?: string }[] = [
+  const OPTIONS: { id: MobilePlayerKind; title: string; text: string; warning?: string }[] = [
     { id: 'web', title: 'Веб-плеер', text: 'Просмотр в плеере источника. Стандартный вариант.' },
-    { id: 'anix', title: 'АниксПлеер', text: 'Наш самый продвинутый плеер с наилучшим качеством.', beta: true },
     { id: 'builtin', title: 'Встроенный плеер', text: 'Простой и удобный, не требует отдельного скачивания.' },
     {
       id: 'external',
@@ -39,10 +38,7 @@
           class:m-option--selected={kind === o.id}
           onclick={() => (kind = o.id)}
         >
-          <span class="m-option__title">
-            {o.title}
-            {#if o.beta}<span class="m-option__beta">BETA</span>{/if}
-          </span>
+          <span class="m-option__title">{o.title}</span>
           <span class="m-option__text">{o.text}</span>
           {#if o.warning}<span class="m-option__warning">{o.warning}</span>{/if}
         </button>
@@ -90,10 +86,6 @@
     border: 2px solid var(--m-outline-variant); background: transparent; color: inherit; font: inherit;
     &--selected { border-color: var(--m-text); }
     &__title { display: flex; align-items: center; gap: var(--m-space-2); font-size: 20px; font-weight: 500; }
-    &__beta {
-      padding: 1px 8px; border-radius: 6px; background: var(--m-text); color: var(--m-bg);
-      font-size: 13px; font-weight: 500; letter-spacing: 0.02em;
-    }
     &__text { font-size: 17px; line-height: 1.3; color: var(--m-text-2); }
     &__warning {
       margin-top: 6px; padding: var(--m-space-2) var(--m-space-3); border-radius: 12px;

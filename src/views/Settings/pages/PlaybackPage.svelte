@@ -21,6 +21,10 @@
     ANIME4K_INTENSITIES,
     ANIME4K_TARGET_RES,
     ANIME4K_TYPES,
+    MOBILE_ANIME4K_INTENSITIES,
+    MOBILE_ANIME4K_TARGET_RES,
+    MOBILE_ANIME4K_TYPES,
+    clampAnime4kPresetForMobile,
     mapAnime4kPreset,
     normalizeAnime4kPreset,
     normalizeAnime4kTargetRes,
@@ -35,7 +39,7 @@
     surroundModeMeta,
     type SurroundMode,
   } from '../../Watch/core/surround-audio';
-  import { initWebGpuAvailability } from '../../../utils/webgpu-availability.svelte';
+  import { initWebGpuAvailability, getWebGpuUnavailableReason } from '../../../utils/webgpu-availability.svelte';
   import { isMac } from '../../../utils/platform';
   import { hasAppSettingsStore, loadAppSettings, saveAppSettings } from '../../../utils/app-settings';
   import { isMobileMode } from '../../../platform/mobile';
@@ -58,6 +62,7 @@
   ];
 
   let gpuAvailable = $state(false);
+  let gpuReason = $state<string | null>(null);
   let upscaleType = $state<Anime4kType>('off');
   let upscaleIntensity = $state<Anime4kIntensity>('optimal');
   let upscaleTargetRes = $state<Anime4kTargetRes>('1080');
@@ -68,16 +73,22 @@
   let capturing = $state<BindField | null>(null);
   let playbackLoaded = $state(false);
 
+  // Телефон и планшет: только лёгкие режимы, без «Максимум», разрешение обработки всегда 1080p
+  const touchUi = isMobileMode();
+  const typeOptions = touchUi ? MOBILE_ANIME4K_TYPES : ANIME4K_TYPES;
+  const intensityOptions = touchUi ? MOBILE_ANIME4K_INTENSITIES : ANIME4K_INTENSITIES;
   const mappedUpscale = $derived(mapAnime4kPreset({ type: upscaleType, intensity: upscaleIntensity }));
 
   async function loadPlayback() {
     if (!hasAppSettingsStore()) return;
     gpuAvailable = await initWebGpuAvailability();
+    gpuReason = gpuAvailable ? null : getWebGpuUnavailableReason();
     const settings = await loadAppSettings();
-    const preset = normalizeAnime4kPreset(settings);
+    const raw = normalizeAnime4kPreset(settings);
+    const preset = touchUi ? clampAnime4kPresetForMobile(raw) : raw;
     upscaleType = preset.type;
     upscaleIntensity = preset.intensity;
-    upscaleTargetRes = normalizeAnime4kTargetRes(settings.upscaleTargetRes);
+    upscaleTargetRes = touchUi ? MOBILE_ANIME4K_TARGET_RES : normalizeAnime4kTargetRes(settings.upscaleTargetRes);
     audioSurround = normalizeSurroundMode(settings.audioSurround);
     playerDebugOverlay = settings.playerDebugOverlay === true;
     adaptiveQualityByWindow = settings.adaptiveQualityByWindow === true;
@@ -172,46 +183,101 @@
   });
 </script>
 
-<div class="uiv2-settings">
+<div class="uiv2-settings uiv2-settings--playback">
   {#if !hasAppSettingsStore()}
     <p class="uiv2-settings__status">Настройки воспроизведения недоступны: хранилище настроек отключено.</p>
   {:else if !playbackLoaded}
     <p class="uiv2-settings__status">Загрузка…</p>
   {:else}
-    {#if !gpuAvailable}
-      <div class="uiv2-settings__notice uiv2-settings__notice--warn">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
-          <circle cx="10" cy="10" r="8" />
-          <line x1="10" y1="6" x2="10" y2="10.5" />
-          <circle cx="10" cy="13.5" r=".7" fill="currentColor" stroke="none" />
-        </svg>
-        <span>Ваш GPU не поддерживает WebGPU — улучшение качества недоступно.</span>
-      </div>
-    {/if}
-
+    <!-- Anime4K — главное отличие плеера, поэтому первым -->
     <section class="uiv2-settings__block">
-      <h3 class="uiv2-settings__title">{touchOnly ? 'Перемотка' : 'Горячие клавиши'}</h3>
-      <div class="uiv2-settings__group">
-        {#each touchOnly ? [] : HOTKEY_ROWS as row (row.field)}
-          <UiV2SettingsRow title={row.title} desc={row.desc}>
+      <h3 class="uiv2-settings__title">Anime4K</h3>
+      <p class="uiv2-settings__desc">
+        Улучшает картинку в реальном времени через WebGPU: повышает резкость и убирает шум. Новых деталей не добавляет — проявляет имеющиеся.
+      </p>
+      {#if !gpuAvailable}
+        <div class="uiv2-settings__notice uiv2-settings__notice--warn">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+            <circle cx="10" cy="10" r="8" />
+            <line x1="10" y1="6" x2="10" y2="10.5" />
+            <circle cx="10" cy="13.5" r=".7" fill="currentColor" stroke="none" />
+          </svg>
+          <span>
+            На этом устройстве WebGPU недоступен — Anime4K не включится.
+            {#if gpuReason}<br />{gpuReason}{/if}
+          </span>
+        </div>
+      {/if}
+      <div class="uiv2-settings__group uiv2-settings__group--pad" class:uiv2-settings__group--disabled={!gpuAvailable}>
+        <p class="uiv2-settings__subhead">Режим</p>
+        <div class="uiv2-settings__chips" role="radiogroup" aria-label="Режим Anime4K">
+          {#each typeOptions as opt (opt.id)}
             <button
               type="button"
-              class="uiv2-settings__keybind"
-              class:uiv2-settings__keybind--listen={capturing === row.field}
-              aria-label={row.title}
-              onclick={() => startCapture(row.field)}
+              role="radio"
+              aria-checked={upscaleType === opt.id}
+              class="uiv2-settings__chip"
+              class:uiv2-settings__chip--on={upscaleType === opt.id}
+              disabled={!gpuAvailable}
+              onclick={() => { upscaleType = opt.id; saveUpscale(); }}
             >
-              {capturing === row.field ? '…' : formatHotkeyCode(hotkeys[row.field])}
+              {opt.label}
+              {#if opt.recommended}<span class="uiv2-settings__chip-star" aria-label="рекомендуется">★</span>{/if}
             </button>
-          </UiV2SettingsRow>
-        {/each}
+          {/each}
+        </div>
+        {#if mappedUpscale.enabled}
+          <p class="uiv2-settings__hint">{ANIME4K_TYPES.find((t) => t.id === upscaleType)?.hint}</p>
+        {/if}
 
+        <p class="uiv2-settings__subhead">Нагрузка на GPU</p>
+        <div class="uiv2-settings__chips" role="radiogroup" aria-label="Нагрузка на GPU">
+          {#each intensityOptions as opt (opt.id)}
+            <button
+              type="button"
+              role="radio"
+              aria-checked={upscaleIntensity === opt.id}
+              class="uiv2-settings__chip"
+              class:uiv2-settings__chip--on={upscaleIntensity === opt.id}
+              disabled={!gpuAvailable || upscaleType === 'off'}
+              onclick={() => { upscaleIntensity = opt.id; saveUpscale(); }}
+            >{opt.label}</button>
+          {/each}
+        </div>
+
+        {#if !touchUi}
+        <p class="uiv2-settings__subhead">Разрешение обработки</p>
+        <div class="uiv2-settings__chips" role="radiogroup" aria-label="Разрешение обработки">
+          {#each ANIME4K_TARGET_RES as opt (opt.id)}
+            <button
+              type="button"
+              role="radio"
+              aria-checked={upscaleTargetRes === opt.id}
+              class="uiv2-settings__chip"
+              class:uiv2-settings__chip--on={upscaleTargetRes === opt.id}
+              disabled={!gpuAvailable || upscaleType === 'off'}
+              onclick={() => { upscaleTargetRes = opt.id; saveUpscale(); }}
+            >{opt.id === 'auto' ? 'Авто · под окно' : opt.label}</button>
+          {/each}
+        </div>
+        {#if upscaleTargetRes === 'auto' && upscaleType !== 'off'}
+          <p class="uiv2-settings__hint">«Авто» подстраивается под размер окна и может моргать при его изменении.</p>
+        {/if}
+        {/if}
+      </div>
+    </section>
+
+    <section class="uiv2-settings__block">
+      <h3 class="uiv2-settings__title">Перемотка</h3>
+      <div class="uiv2-settings__group">
         <UiV2SettingsRow
           stack
-          title="Время перемотки"
-          desc={touchOnly ? 'На сколько секунд перематывать видео кнопками плеера. По умолчанию — 10 с.' : `На сколько секунд перематывать видео кнопками и горячими клавишами плеера (${formatHotkeyCode(hotkeys.seekBackCode)} / ${formatHotkeyCode(hotkeys.seekForwardCode)}). По умолчанию — 10 с.`}
+          title="Шаг перемотки"
+          desc={touchOnly
+            ? 'Кнопки перемотки в плеере. По умолчанию — 10 с.'
+            : `Кнопки плеера и клавиши ${formatHotkeyCode(hotkeys.seekBackCode)} / ${formatHotkeyCode(hotkeys.seekForwardCode)}. По умолчанию — 10 с.`}
         >
-          <div class="uiv2-settings__chips" role="group" aria-label="Время перемотки">
+          <div class="uiv2-settings__chips" role="group" aria-label="Шаг перемотки">
             {#each SEEK_SECONDS_OPTIONS as sec (sec)}
               <button
                 type="button"
@@ -227,7 +293,9 @@
         <UiV2SettingsRow
           stack
           title="Время пропуска"
-          desc={touchOnly ? 'Прыжок вперёд кнопкой пропуска. По умолчанию — 1:25.' : `Прыжок вперёд кнопкой пропуска и горячей клавишей ${formatHotkeyCode(hotkeys.rewindCode)}. По умолчанию — 1:25.`}
+          desc={touchOnly
+            ? 'Прыжок вперёд кнопкой пропуска. По умолчанию — 1:25.'
+            : `Кнопка пропуска и клавиша ${formatHotkeyCode(hotkeys.rewindCode)}. По умолчанию — 1:25.`}
         >
           <div class="uiv2-settings__chips" role="group" aria-label="Время пропуска">
             {#each REWIND_SECONDS_OPTIONS as sec (sec)}
@@ -254,115 +322,16 @@
             <span>сек</span>
           </label>
         </UiV2SettingsRow>
-
-        {#if !touchOnly}
-        <UiV2SettingsRow
-          title="{modKey} + колёсико — скорость"
-          desc="Плавно ускорять и замедлять видео. Текущая скорость показывается на экране плеера."
-        >
-          <UiV2Toggle
-            label="{modKey} + колёсико — скорость"
-            checked={hotkeys.ctrlWheelSpeed}
-            onChange={(checked) => saveHotkeys({ ...hotkeys, ctrlWheelSpeed: checked })}
-          />
-        </UiV2SettingsRow>
-
-        <UiV2SettingsRow
-          title="Сбросить горячие клавиши"
-          desc="Вернуть ← / → / ↑ / ↓, пробел, F, P, X, 10 с, 1:25 и {modKey} + колёсико."
-        >
-          <UiV2Button
-            label="Сбросить"
-            variant="chrome"
-            size="sm"
-            onclick={() => saveHotkeys({ ...DEFAULT_PLAYER_HOTKEYS })}
-          />
-        </UiV2SettingsRow>
-        {/if}
-      </div>
-    </section>
-
-    <div class="uiv2-settings__notice">
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
-        <circle cx="10" cy="10" r="8" />
-        <line x1="10" y1="9" x2="10" y2="14" />
-        <circle cx="10" cy="6.5" r=".7" fill="currentColor" stroke="none" />
-      </svg>
-      <span>Технология Anime4K улучшает видео в реальном времени, используя WebGPU. Она повышает резкость, убирает шум и улучшает общую чёткость изображения. Не добавляет новых деталей — улучшает уже имеющиеся.</span>
-    </div>
-
-    <section class="uiv2-settings__block">
-      <h3 class="uiv2-settings__title">Anime4K</h3>
-      <p class="uiv2-settings__desc">Тип обработки и нагрузка — как в AnixPlayer. Без WebGPU пресеты недоступны.</p>
-      <div class="uiv2-settings__group uiv2-settings__group--pad" class:uiv2-settings__group--disabled={!gpuAvailable}>
-        <div class="uiv2-settings__chips" role="radiogroup" aria-label="Целевое разрешение">
-          {#each ANIME4K_TARGET_RES as opt (opt.id)}
-            <button
-              type="button"
-              role="radio"
-              aria-checked={upscaleTargetRes === opt.id}
-              class="uiv2-settings__chip"
-              class:uiv2-settings__chip--on={upscaleTargetRes === opt.id}
-              disabled={!gpuAvailable || upscaleType === 'off'}
-              title={opt.id === 'auto' ? 'Под размер окна · может вызывать моргание' : `Рендер ${opt.label}`}
-              onclick={() => { upscaleTargetRes = opt.id; saveUpscale(); }}
-            >{opt.id === 'auto' ? 'Авто · под окно' : opt.label}</button>
-          {/each}
-        </div>
-        <div class="uiv2-settings__chips" role="radiogroup" aria-label="Тип улучшения">
-          {#each ANIME4K_TYPES as opt (opt.id)}
-            <button
-              type="button"
-              role="radio"
-              aria-checked={upscaleType === opt.id}
-              class="uiv2-settings__chip"
-              class:uiv2-settings__chip--on={upscaleType === opt.id}
-              disabled={!gpuAvailable}
-              title={opt.recommended ? `${opt.hint} (рекомендуется)` : opt.hint}
-              onclick={() => { upscaleType = opt.id; saveUpscale(); }}
-            >
-              {opt.label}
-              {#if opt.recommended}<span class="uiv2-settings__chip-star">★</span>{/if}
-            </button>
-          {/each}
-        </div>
-        <div class="uiv2-settings__chips" role="radiogroup" aria-label="Нагрузка">
-          {#each ANIME4K_INTENSITIES as opt (opt.id)}
-            <button
-              type="button"
-              role="radio"
-              aria-checked={upscaleIntensity === opt.id}
-              class="uiv2-settings__chip"
-              class:uiv2-settings__chip--on={upscaleIntensity === opt.id}
-              disabled={!gpuAvailable || upscaleType === 'off'}
-              onclick={() => { upscaleIntensity = opt.id; saveUpscale(); }}
-            >{opt.label}</button>
-          {/each}
-        </div>
-        {#if mappedUpscale.enabled}
-          <p class="uiv2-settings__hint">{ANIME4K_TYPES.find((t) => t.id === upscaleType)?.hint}</p>
-        {/if}
       </div>
     </section>
 
     <section class="uiv2-settings__block">
       <h3 class="uiv2-settings__title">Объёмный звук</h3>
       <p class="uiv2-settings__desc">
-        Кино HRTF, Imaging, Spatial, IRCAM и графический эквалайзер (±12 дБ). Тонкая настройка EQ — в плеере.
+        Кино HRTF, Imaging, Spatial, IRCAM и эквалайзер ±12 дБ. Тонкая настройка эквалайзера — в самом плеере.
       </p>
       <div class="uiv2-settings__group uiv2-settings__group--pad">
-        <div class="uiv2-settings__chips" role="radiogroup" aria-label="Эквалайзер">
-          <button
-            type="button"
-            role="radio"
-            aria-checked={audioSurround === 'equalizer'}
-            class="uiv2-settings__chip"
-            class:uiv2-settings__chip--on={audioSurround === 'equalizer'}
-            title="10 полос, ручная настройка ±12 дБ · в плеере"
-            onclick={() => { audioSurround = 'equalizer'; saveSurround(); }}
-          >{surroundModeDisplayLabel('equalizer', true)}</button>
-        </div>
-        <div class="uiv2-settings__chips" role="radiogroup" aria-label="Объёмный звук выкл">
+        <div class="uiv2-settings__chips" role="radiogroup" aria-label="Основные режимы">
           <button
             type="button"
             role="radio"
@@ -371,6 +340,14 @@
             class:uiv2-settings__chip--on={audioSurround === 'off'}
             onclick={() => { audioSurround = 'off'; saveSurround(); }}
           >{surroundModeDisplayLabel('off')}</button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={audioSurround === 'equalizer'}
+            class="uiv2-settings__chip"
+            class:uiv2-settings__chip--on={audioSurround === 'equalizer'}
+            onclick={() => { audioSurround = 'equalizer'; saveSurround(); }}
+          >{surroundModeDisplayLabel('equalizer', true)}</button>
         </div>
         {#each SURROUND_GROUPS as group (group.label)}
           <p class="uiv2-settings__subhead">{group.label}</p>
@@ -384,7 +361,6 @@
                   aria-checked={audioSurround === opt.id}
                   class="uiv2-settings__chip"
                   class:uiv2-settings__chip--on={audioSurround === opt.id}
-                  title={(opt.hint ?? opt.label) + (opt.lib ? ` · ${opt.lib}` : '')}
                   onclick={() => { audioSurround = opt.id; saveSurround(); }}
                 >
                   {surroundModeDisplayLabel(opt.id, true)}
@@ -393,8 +369,59 @@
             {/each}
           </div>
         {/each}
+        {#if audioSurround !== 'off'}
+          {@const active = surroundModeMeta(audioSurround)}
+          {#if active?.hint}
+            <p class="uiv2-settings__hint">{active.hint}{active.lib ? ` · ${active.lib}` : ''}</p>
+          {/if}
+        {/if}
       </div>
     </section>
+
+    {#if !touchOnly}
+      <section class="uiv2-settings__block">
+        <h3 class="uiv2-settings__title">Горячие клавиши</h3>
+        <p class="uiv2-settings__desc">Нажмите на клавишу справа и затем новую комбинацию.</p>
+        <div class="uiv2-settings__group">
+          {#each HOTKEY_ROWS as row (row.field)}
+            <UiV2SettingsRow title={row.title} desc={row.desc}>
+              <button
+                type="button"
+                class="uiv2-settings__keybind"
+                class:uiv2-settings__keybind--listen={capturing === row.field}
+                aria-label={row.title}
+                onclick={() => startCapture(row.field)}
+              >
+                {capturing === row.field ? '…' : formatHotkeyCode(hotkeys[row.field])}
+              </button>
+            </UiV2SettingsRow>
+          {/each}
+
+          <UiV2SettingsRow
+            title="{modKey} + колёсико — скорость"
+            desc="Плавно ускорять и замедлять видео. Текущая скорость показывается на экране плеера."
+          >
+            <UiV2Toggle
+              label="{modKey} + колёсико — скорость"
+              checked={hotkeys.ctrlWheelSpeed}
+              onChange={(checked) => saveHotkeys({ ...hotkeys, ctrlWheelSpeed: checked })}
+            />
+          </UiV2SettingsRow>
+
+          <UiV2SettingsRow
+            title="Сбросить горячие клавиши"
+            desc="Вернуть клавиши, шаг перемотки 10 с, пропуск 1:25 и {modKey} + колёсико."
+          >
+            <UiV2Button
+              label="Сбросить"
+              variant="chrome"
+              size="sm"
+              onclick={() => saveHotkeys({ ...DEFAULT_PLAYER_HOTKEYS })}
+            />
+          </UiV2SettingsRow>
+        </div>
+      </section>
+    {/if}
 
     {#if !touchOnly}
     <section class="uiv2-settings__block">

@@ -480,30 +480,6 @@
 .profile-ui__main-panel {
   padding: 16px;
 
-  .overview-comment-week__bubble {
-    display: contents;
-  }
-
-  .overview-comment-week__main {
-    min-width: 0;
-  }
-
-  .overview-comment-week__head {
-    margin-bottom: 0.15rem;
-  }
-
-  .overview-comment-week__release {
-    margin-top: 0.15rem;
-  }
-
-  .overview-comment-week__message {
-    margin-top: 0.35rem;
-  }
-
-  .overview-comment-week__foot {
-    margin-top: 0.35rem;
-  }
-
   .profile__friends-grid {
     gap: 8px;
     grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));

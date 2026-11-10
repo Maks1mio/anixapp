@@ -22,7 +22,7 @@ import {
   type LobbyPlayback,
 } from '../services/lobby-state';
 import { isPlayerWindowOpen } from '../stores/modals';
-import { openInAppPlayer, isEmbeddedWebPlayer } from './watch-nav';
+import { openInAppPlayer, isEmbeddedWebPlayer, playerWindowOpener } from './watch-nav';
 import { resolveCdnAssetUrl } from './posterUrl';
 
 export { FluoJoinError };
@@ -129,8 +129,9 @@ export async function openLobbyPlayerWindow(opts?: { applyRoomPlayback?: boolean
         lobbyIdle: true,
       };
 
-  if (window.electron?.openPlayerWindow) {
-    await window.electron.openPlayerWindow(payload);
+  const openWindow = playerWindowOpener();
+  if (openWindow) {
+    await openWindow(payload);
     isPlayerWindowOpen.set(true);
     pushLobbySessionToPlayer();
     window.setTimeout(() => pushLobbySessionToPlayer(), 400);

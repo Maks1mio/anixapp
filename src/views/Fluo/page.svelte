@@ -35,7 +35,6 @@
   import UiV2ContentRetryOverlay from '../../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
 
   let rooms = $state<FluoRoomListItem[]>([]);
-  const heroBackdrop = $derived(rooms.length ? frameOf(rooms[0]) : null);
   let loadState = $state<'loading' | 'ready' | 'error'>('loading');
   let errorMsg = $state('');
   let joinCode = $state('');
@@ -292,7 +291,7 @@
 </script>
 
 <div class="view view-fluo fluo-page">
-  <DiscoverHero title="Fluo" subtitle="Комнаты совместного просмотра" backdrop={heroBackdrop}>
+  <DiscoverHero title="Fluo" subtitle="Комнаты совместного просмотра">
     <div class="fluo-page__toolbar" role="group" aria-label="Вход по коду комнаты">
       <UiV2PillField
         label="Код комнаты"

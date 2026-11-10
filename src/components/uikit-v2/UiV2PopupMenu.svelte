@@ -3,9 +3,12 @@
   import { scale, fly, fade } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { portal } from '../../actions/portal';
+  import { sheetDrag, sheetPage } from '../../actions/sheet';
   import { uiv2CustomScroll } from '../../actions/uiv2CustomScroll';
   import { tick } from 'svelte';
-  import { iconCheck, iconChevronRight, iconSearch, iconX } from '../icons';
+  import { iconArrowLeft, iconCheck, iconChevronRight, iconSearch, iconX } from '../icons';
+  import { isMobileMode } from '../../platform/mobile';
+  import { pushBackHandler } from '../../platform/mobile-back';
   import UiV2Tooltip from './UiV2Tooltip.svelte';
   import UiV2Skeleton from './UiV2Skeleton.svelte';
 
@@ -38,7 +41,7 @@
     min?: number;
     max?: number;
     step?: number;
-    /** Подпись значения (например «1.00×») */
+    /** Подпись значения: у слайдера «1.00×», у обычного пункта — текущий выбор справа («Любой год») */
     valueText?: string;
     minLabel?: string;
     maxLabel?: string;
@@ -86,6 +89,12 @@
     anchor?: HTMLElement | null;
     /** Клик по trailingIcon */
     onTrailingClick?: (id: string, item: UiV2PopupMenuItem) => void;
+    /** Шторкой снизу и на ПК (на телефоне и планшете меню всегда шторка) */
+    sheet?: boolean;
+    /** На ПК шторка остаётся внутри ближайшего позиционированного окна (панель профиля), а не на всё окно приложения */
+    sheetInPlace?: boolean;
+    /** Строки под заголовком (мета объекта: «автор • дата», релиз…) — с чертой до пунктов */
+    description?: string[];
     /** Скелетон вместо пунктов списка */
     loading?: boolean;
     /** Число строк скелетона */
@@ -112,6 +121,9 @@
     wide = false,
     anchor = null,
     onTrailingClick,
+    sheet = false,
+    sheetInPlace = false,
+    description = [],
     loading = false,
     loadingRows = 7,
   }: Props = $props();
@@ -210,6 +222,46 @@
     searchOpen = false;
     searchQuery = '';
   }
+
+  // ── Телефон и планшет: то же меню шторкой снизу, подменю открываются внутри неё ──────────────
+  const sheetMode = $derived(sheet || isMobileMode());
+  const sheetStaysInPlace = $derived(sheetInPlace && !isMobileMode());
+
+  function sheetHost(node: HTMLElement) {
+    return sheetStaysInPlace ? undefined : portal(node);
+  }
+  let sheetEl = $state<HTMLDivElement | null>(null);
+  let sheetBodyHeight = $state<number | null>(null);
+  /** Куда листается уровень: 1 — вглубь, -1 — назад. */
+  let sheetDir = $state<1 | -1>(1);
+
+  const sheetLevel = $derived(openNestedSubId ?? openSubId ?? '');
+  const sheetLevelItem = $derived(activeNestedItem ?? activeSubItem);
+
+  function pushSheetLevel(item: UiV2PopupMenuItem) {
+    sheetDir = 1;
+    if (openSubId) openNestedSubId = item.id;
+    else openSubId = item.id;
+  }
+
+  function popSheetLevel() {
+    sheetDir = -1;
+    if (openNestedSubId) openNestedSubId = null;
+    else openSubId = null;
+  }
+
+  function onSheetBack() {
+    if (openSubId) popSheetLevel();
+    else onClose?.();
+  }
+
+  $effect(() => {
+    if (!open || !sheetMode) return;
+    return pushBackHandler(() => {
+      onSheetBack();
+      return true;
+    });
+  });
 
   async function toggleSearch() {
     searchOpen = !searchOpen;
@@ -652,7 +704,7 @@
   }
 
   function onWindowPointerDown(e: PointerEvent) {
-    if (!open) return;
+    if (!open || sheetMode) return;
     lastPointerX = e.clientX;
     lastPointerY = e.clientY;
     const t = e.target;
@@ -673,7 +725,7 @@
   }
 
   function onWindowPointerMove(e: PointerEvent) {
-    if (!open) return;
+    if (!open || sheetMode) return;
     lastPointerX = e.clientX;
     lastPointerY = e.clientY;
     if (popupContainsPoint(e.clientX, e.clientY)) {
@@ -689,7 +741,7 @@
     pointerDownInside = false;
     lastPointerX = e.clientX;
     lastPointerY = e.clientY;
-    if (!open || !pointerEnteredPopup) return;
+    if (!open || sheetMode || !pointerEnteredPopup) return;
     if (popupContainsPoint(e.clientX, e.clientY)) {
       clearLeavePopupTimer();
       return;
@@ -707,7 +759,9 @@
     const row = e.currentTarget as HTMLElement;
     if (itemHasSubmenu(item)) {
       // Пункты внутри уже открытого подменю → третья панель; иначе корневое подменю.
-      if (subPanelEl?.contains(row)) {
+      if (sheetMode) {
+        pushSheetLevel(item);
+      } else if (subPanelEl?.contains(row)) {
         openNestedSubmenu(item, row);
       } else {
         openSubmenu(item, row);
@@ -737,6 +791,8 @@
       onCheckedChange?.(item.id, true, item);
       onSelect?.(item.id, item);
       if (!shouldKeepOpen(item)) onClose?.();
+      // В шторке нет соседней панели с выбором: после ответа возвращаемся на уровень выше
+      else if (sheetMode && openSubId && item.keepOpen == null) popSheetLevel();
       return;
     }
 
@@ -961,6 +1017,7 @@
         }
         disabled={item.disabled}
         onmouseenter={(e) => {
+          if (sheetMode) return;
           if (opts?.root) {
             if (itemHasSubmenu(item)) openSubmenu(item, e.currentTarget as HTMLElement);
             else closeSubmenu();
@@ -988,6 +1045,9 @@
           <span class="uiv2-popup-menu__icon uiv2-popup-menu__icon--empty" aria-hidden="true"></span>
         {/if}
         <span class="uiv2-popup-menu__label">{item.label}</span>
+        {#if item.valueText}
+          <span class="uiv2-popup-menu__value">{item.valueText}</span>
+        {/if}
         {#if item.type === 'toggle'}
           <span
             class="uiv2-popup-menu__switch"
@@ -1024,7 +1084,154 @@
   {/if}
 {/snippet}
 
-{#if open}
+{#snippet menuDescription()}
+  {#if description.length && !sheetLevelItem}
+    <div class="uiv2-popup-menu__desc">
+      {#each description as line, i (i)}
+        <span class="uiv2-popup-menu__desc-line">{line}</span>
+      {/each}
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet menuHeader()}
+  <div class="uiv2-popup-menu__header-slot">
+    {#if searchOpen}
+      <!-- svelte-ignore a11y_autofocus -->
+      <input
+        bind:this={searchInputEl}
+        class="uiv2-popup-menu__search-input"
+        type="search"
+        inputmode={searchInputMode}
+        placeholder={searchPlaceholder}
+        autocomplete="off"
+        spellcheck="false"
+        bind:value={searchQuery}
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => e.stopPropagation()}
+        in:fly={{ x: 20, duration: 180, easing: cubicOut, opacity: 0 }}
+        out:fade={{ duration: 100 }}
+      />
+    {:else if title}
+      <span
+        class="uiv2-popup-menu__header-title"
+        in:fade={{ duration: 140 }}
+        out:fly={{ x: -8, duration: 120, easing: cubicOut }}
+      >{title}</span>
+    {/if}
+  </div>
+  {#if searchable}
+    <button
+      type="button"
+      class="uiv2-popup-menu__header-btn"
+      class:uiv2-popup-menu__header-btn--active={searchOpen}
+      aria-label={searchOpen ? 'Закрыть поиск' : 'Поиск'}
+      aria-pressed={searchOpen}
+      onclick={(e) => {
+        e.stopPropagation();
+        void toggleSearch();
+      }}
+    >{@html searchOpen ? iconX(16) : iconSearch(16)}</button>
+  {/if}
+{/snippet}
+
+{#snippet rootRows()}
+  {#if loading}
+    {#each Array.from({ length: skeletonCount }, (_, i) => i) as i (i)}
+      <li class="uiv2-popup-menu__skeleton-row" role="presentation">
+        <UiV2Skeleton tag="div" class="uiv2-popup-menu__skeleton-icon" rounded="md" />
+        <div
+          class="uiv2-popup-menu__skeleton-label-wrap"
+          style={`width:${skeletonWidths[i % skeletonWidths.length]}`}
+        >
+          <UiV2Skeleton tag="div" class="uiv2-popup-menu__skeleton-label" rounded="sm" />
+        </div>
+      </li>
+    {/each}
+  {:else}
+    {#each visibleItems as item (item.id)}
+      {@render menuRow(item, { root: true })}
+    {:else}
+      <li class="uiv2-popup-menu__empty" role="presentation">{emptyLabel}</li>
+    {/each}
+  {/if}
+{/snippet}
+
+<!-- |global: многие экраны создают меню вместе с открытием, иначе шторка появлялась бы без анимации -->
+{#if open && sheetMode}
+  <div class="uiv2-menu-sheet" class:uiv2-menu-sheet--in-place={sheetStaysInPlace} use:sheetHost>
+    <button
+      type="button"
+      class="uiv2-menu-sheet__scrim"
+      aria-label="Закрыть"
+      onclick={() => onClose?.()}
+      transition:fade|global={{ duration: 200 }}
+    ></button>
+    <div
+      bind:this={sheetEl}
+      class="uiv2-menu-sheet__panel"
+      role="menu"
+      aria-label={sheetLevelItem?.label || title || 'Меню'}
+      tabindex="-1"
+      transition:fly|global={{ y: '100%', duration: 280, easing: cubicOut, opacity: 1 }}
+    >
+      <div
+        class="uiv2-menu-sheet__head"
+        use:sheetDrag={{ panel: () => sheetEl, onClose: () => onClose?.() }}
+      >
+        <span class="uiv2-menu-sheet__handle" aria-hidden="true"></span>
+        {#if sheetLevelItem}
+          <div class="uiv2-menu-sheet__bar">
+            <button type="button" class="uiv2-menu-sheet__back" aria-label="Назад" onclick={onSheetBack}>
+              {@html iconArrowLeft(22)}
+            </button>
+            <span class="uiv2-menu-sheet__title">{sheetLevelItem.label}</span>
+          </div>
+        {:else if title || searchable}
+          <div class="uiv2-popup-menu__header uiv2-menu-sheet__bar">
+            {@render menuHeader()}
+          </div>
+          {@render menuDescription()}
+        {/if}
+      </div>
+      <div class="uiv2-menu-sheet__body" style:height={sheetBodyHeight == null ? undefined : `${sheetBodyHeight}px`}>
+        {#key sheetLevel}
+          <div
+            class="uiv2-menu-sheet__page uiv2-scroll-area uiv2-scroll-area--y"
+            use:uiv2CustomScroll={{ axis: 'y', viewportSelector: '.uiv2-menu-sheet__viewport', showOnScroll: true }}
+            in:fly={{ x: sheetDir * 40, duration: 240, easing: cubicOut }}
+            out:fly={{ x: sheetDir * -40, duration: 160, easing: cubicOut }}
+          >
+            <div class="uiv2-menu-sheet__viewport uiv2-scroll-area__viewport" use:sheetPage={(height) => { sheetBodyHeight = height; }}>
+              <div class="uiv2-menu-sheet__inner">
+                {#if sheetLevelItem?.customSubmenu && submenuContent}
+                  {@render submenuContent(sheetLevelItem)}
+                {:else}
+                  <ul class="uiv2-menu-sheet__list">
+                    {#if activeNestedItem}
+                      {#each nestedItems as item (item.id)}
+                        {@render menuRow(item)}
+                      {/each}
+                    {:else if activeSubItem}
+                      {#each subItems as item (item.id)}
+                        {@render menuRow(item)}
+                      {/each}
+                    {:else}
+                      {@render rootRows()}
+                    {/if}
+                  </ul>
+                {/if}
+              </div>
+            </div>
+            <div class="uiv2-scroll-area__v-track" aria-hidden="true">
+              <div class="uiv2-scroll-area__v-thumb"></div>
+            </div>
+          </div>
+        {/key}
+      </div>
+    </div>
+  </div>
+{:else if open}
   <div class="uiv2-popup-menu" use:portal aria-hidden="false">
     <div
       bind:this={panelEl}
@@ -1047,45 +1254,9 @@
       <span id={labelId} class="uiv2-popup-menu__sr">{title || 'Меню'}</span>
       {#if title || searchable}
         <div class="uiv2-popup-menu__header">
-          <div class="uiv2-popup-menu__header-slot">
-            {#if searchOpen}
-              <!-- svelte-ignore a11y_autofocus -->
-              <input
-                bind:this={searchInputEl}
-                class="uiv2-popup-menu__search-input"
-                type="search"
-                inputmode={searchInputMode}
-                placeholder={searchPlaceholder}
-                autocomplete="off"
-                spellcheck="false"
-                bind:value={searchQuery}
-                onclick={(e) => e.stopPropagation()}
-                onkeydown={(e) => e.stopPropagation()}
-                in:fly={{ x: 20, duration: 180, easing: cubicOut, opacity: 0 }}
-                out:fade={{ duration: 100 }}
-              />
-            {:else if title}
-              <span
-                class="uiv2-popup-menu__header-title"
-                in:fade={{ duration: 140 }}
-                out:fly={{ x: -8, duration: 120, easing: cubicOut }}
-              >{title}</span>
-            {/if}
-          </div>
-          {#if searchable}
-            <button
-              type="button"
-              class="uiv2-popup-menu__header-btn"
-              class:uiv2-popup-menu__header-btn--active={searchOpen}
-              aria-label={searchOpen ? 'Закрыть поиск' : 'Поиск'}
-              aria-pressed={searchOpen}
-              onclick={(e) => {
-                e.stopPropagation();
-                void toggleSearch();
-              }}
-            >{@html searchOpen ? iconX(16) : iconSearch(16)}</button>
-          {/if}
+          {@render menuHeader()}
         </div>
+        {@render menuDescription()}
       {/if}
       <div
         class="uiv2-popup-menu__scroll uiv2-scroll-area uiv2-scroll-area--y"
@@ -1098,25 +1269,7 @@
           aria-busy={loading || undefined}
           aria-label={loading ? 'Загрузка…' : undefined}
         >
-          {#if loading}
-            {#each Array.from({ length: skeletonCount }, (_, i) => i) as i (i)}
-              <li class="uiv2-popup-menu__skeleton-row" role="presentation">
-                <UiV2Skeleton tag="div" class="uiv2-popup-menu__skeleton-icon" rounded="md" />
-                <div
-                  class="uiv2-popup-menu__skeleton-label-wrap"
-                  style={`width:${skeletonWidths[i % skeletonWidths.length]}`}
-                >
-                  <UiV2Skeleton tag="div" class="uiv2-popup-menu__skeleton-label" rounded="sm" />
-                </div>
-              </li>
-            {/each}
-          {:else}
-            {#each visibleItems as item (item.id)}
-              {@render menuRow(item, { root: true })}
-            {:else}
-              <li class="uiv2-popup-menu__empty" role="presentation">{emptyLabel}</li>
-            {/each}
-          {/if}
+          {@render rootRows()}
         </ul>
         <div class="uiv2-scroll-area__v-track" aria-hidden="true">
           <div class="uiv2-scroll-area__v-thumb"></div>

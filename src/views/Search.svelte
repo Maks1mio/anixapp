@@ -10,13 +10,16 @@
   import UiV2Tabs from '../components/uikit-v2/UiV2Tabs.svelte';
   import DiscoverHero from '../components/DiscoverHero.svelte';
   import { replacePath } from '../stores/navigation';
-  import { iconEyeOff, iconX } from '../components/icons';
+  import { isMobileMode } from '../platform/mobile';
+  import { swipeTabs, type TabSwipeState } from '../actions/swipeTabs';
+  import TabPeek from '../components/TabPeek.svelte';
+  import { createTabPrefetch, tabNeighbors, TAB_PEEK_ITEMS } from '../utils/tab-prefetch.svelte';
+  import { iconX } from '../components/icons';
   import { handleUserProfileClick } from '../stores/user-profile';
   import { resolveBadgeName, resolveProfileBadgeUrl } from '../utils/badge';
   import { addSearchHistory } from '../utils/search-history';
   import { mapReleaseRawToCard } from '../utils/release-card';
-  import { collectionsBackdropUrl, mapCollectionCard } from '../utils/collection';
-  import { toCdnProxyUrl, toPosterDisplayUrl } from '../utils/posterUrl';
+  import { mapCollectionCard } from '../utils/collection';
   import { headlineFromLoadError } from '../utils/content-load-error';
   import { searchCatalog, type CatalogHit } from '../services/catalog-search';
   import {
@@ -31,6 +34,7 @@
     getViewState,
     saveViewStateData,
     restoreScrollTop,
+    resetScrollTop,
     registerActiveScrollKey,
     flushActiveViewState,
     beginScrollRestore,
@@ -61,17 +65,15 @@
     q?: string;
     tab?: SearchTab;
     searchBy?: number;
-    /** Только тайтлы, скрытые из поиска Anixart (каталог anixback) */
-    hiddenOnly?: boolean;
   }
 
-  let { q = '', tab = 'releases', searchBy = 0, hiddenOnly = false }: Props = $props();
+  let { q = '', tab = 'releases', searchBy = 0 }: Props = $props();
 
   const query = $derived(q.trim());
   // Вкладка меняется без перемонтирования страницы — иначе у вкладок не играет анимация
   // svelte-ignore state_referenced_locally
   let activeTab = $state<SearchTab>(tab);
-  const viewKey = () => buildViewStateKey('/search', { q: query, tab: activeTab, by: searchBy, hidden: hiddenOnly ? 1 : 0 });
+  const viewKey = () => buildViewStateKey('/search', { q: query, tab: activeTab, by: searchBy });
   /** Уже загруженные вкладки этого запроса. */
   const tabCache = new Map<SearchTab, SearchViewState>();
 
@@ -84,13 +86,6 @@
   let collections = $state<CollectionCardData[]>([]);
   let profiles = $state<ProfileHit[]>([]);
   let franchise = $state<UiV2SearchFranchiseData | null>(null);
-  /** Фон баннера — обложка первого результата активной вкладки */
-  const heroBackdrop = $derived.by(() => {
-    if (activeTab === 'collections') return collectionsBackdropUrl(collections);
-    const poster = releases[0]?.poster;
-    return poster ? toPosterDisplayUrl(toCdnProxyUrl(poster), 'cardVertical') : null;
-  });
-
   let wrapEl = $state<HTMLElement | undefined>();
   let scrollEl: HTMLElement | null = null;
   let scrollListener: (() => void) | null = null;
@@ -100,6 +95,7 @@
   const byLabel = $derived(
     RELEASE_SEARCH_BY_OPTIONS.find((o) => Number(o.value) === searchBy)?.label ?? '',
   );
+  const showByFilter = $derived(activeTab === 'releases' && searchBy > 0);
   const itemCount = $derived(
     activeTab === 'releases' ? releases.length : activeTab === 'collections' ? collections.length : profiles.length,
   );
@@ -142,17 +138,7 @@
     return value.images.length || value.name ? value : null;
   }
 
-  /** done — выдача кончилась (Anixart об этом сообщает только пустой страницей). */
-  async function fetchPage(p: number): Promise<{ data: unknown; content: unknown[]; done?: boolean }> {
-    if (hiddenMode) {
-      const res = await searchCatalog(query, { by: searchBy, hiddenOnly: true, offset: releases.length });
-      if (!res) throw new Error('Каталог AnixApp недоступен');
-      return {
-        data: null,
-        content: res.hits.map((h) => ({ ...h.card, hiddenInAnixart: true })),
-        done: releases.length + res.hits.length >= res.total,
-      };
-    }
+  async function fetchPage(p: number): Promise<{ data: unknown; content: unknown[] }> {
     const api = window.anixApi?.search;
     if (!api) throw new Error('API поиска недоступно');
     const data = activeTab === 'releases'
@@ -175,30 +161,26 @@
       : fresh;
   }
 
-  const hiddenMode = $derived(hiddenOnly && activeTab === 'releases');
-
   async function loadPage() {
     if (!query || isLoading || !hasMore) return;
     const seq = ++requestSeq;
     const first = page === 0;
     isLoading = true;
     if (first) loadState = 'loading';
-    const catalog = first && activeTab === 'releases' && !hiddenMode
+    const catalog = first && activeTab === 'releases'
       ? searchCatalog(query, { by: searchBy }).then((res) => res?.hits ?? [])
       : null;
     try {
-      const { data, content, done } = await fetchPage(page);
+      const { data, content } = await fetchPage(page);
       const hits = catalog ? await catalog : null;
       if (seq !== requestSeq) return;
 
       if (activeTab === 'releases') {
-        if (first && searchBy === 0 && !hiddenMode) franchise = mapFranchise(data, content);
+        if (first && searchBy === 0) franchise = mapFranchise(data, content);
         const seen = new Set(releases.map((r) => r.id));
-        const next = hiddenMode
-          ? (content as ReleaseCardData[]).filter((r) => !seen.has(r.id))
-          : content
-            .map((row) => mapReleaseRawToCard(row as Record<string, unknown>))
-            .filter((r) => !seen.has(r.id));
+        const next = content
+          .map((row) => mapReleaseRawToCard(row as Record<string, unknown>))
+          .filter((r) => !seen.has(r.id));
         releases = [...releases, ...next];
         if (hits) mergeCatalog(hits);
       } else if (activeTab === 'collections') {
@@ -215,9 +197,9 @@
         profiles = [...profiles, ...next];
       }
 
-      if (first) addSearchHistory(query);
+      if (first) addSearchHistory(query, activeTab);
       page += 1;
-      hasMore = content.length > 0 && !done;
+      hasMore = content.length > 0;
       loadState = itemCount > 0 || franchise ? 'ready' : 'empty';
       requestAnimationFrame(checkIfNeedsMore);
     } catch (err) {
@@ -292,6 +274,7 @@
     isLoading = false;
     errorMsg = '';
     activeTab = next;
+    resetScrollTop();
     const cached = tabCache.get(next) ?? getViewState<SearchViewState>(viewKey())?.data;
     if (cached && cached.loadState === 'ready') {
       applySnapshot(cached);
@@ -309,10 +292,69 @@
     if (query) void loadPage();
   }
 
+  /** Первая страница соседних вкладок: при свайпе рядом едут уже настоящие результаты. */
+  const tabPrefetch = createTabPrefetch<SearchViewState>(async (id) => {
+    const tabId = id as SearchTab;
+    const cached = tabCache.get(tabId);
+    if (cached) return cached;
+    const api = window.anixApi?.search;
+    if (!api) throw new Error('API поиска недоступно');
+    const seed: SearchViewState = { page: 1, hasMore: true, loadState: 'ready', releases: [], collections: [], profiles: [], franchise: null };
+    if (tabId === 'releases') {
+      const [data, catalog] = await Promise.all([
+        api.releases(query, 0, searchBy),
+        searchCatalog(query, { by: searchBy }).then((res) => res?.hits ?? []).catch(() => [] as CatalogHit[]),
+      ]);
+      const content = extractContent(data);
+      const found = content.map((row) => mapReleaseRawToCard(row as Record<string, unknown>));
+      const shown = new Set(found.map((r) => r.id));
+      const fresh = catalog.map((h) => h.card).filter((card) => !shown.has(card.id));
+      seed.releases = found.length ? [...fresh.filter((card) => card.hiddenInAnixart), ...found] : fresh;
+      if (searchBy === 0) seed.franchise = mapFranchise(data, content);
+      seed.hasMore = content.length > 0;
+      seed.loadState = seed.releases.length || seed.franchise ? 'ready' : 'empty';
+    } else if (tabId === 'collections') {
+      const content = extractContent(await api.collections(query, 0));
+      seed.collections = content.map((row) => mapCollectionCard(row as Record<string, unknown>)).filter((card) => card.id > 0);
+      seed.hasMore = content.length > 0;
+      seed.loadState = seed.collections.length ? 'ready' : 'empty';
+    } else {
+      const data = await api.profiles(query, 0);
+      const content = extractContent(data);
+      seed.profiles = content
+        .map((row) => mapProfile(row as Record<string, unknown>, data))
+        .filter((p): p is ProfileHit => !!p);
+      seed.hasMore = content.length > 0;
+      seed.loadState = seed.profiles.length ? 'ready' : 'empty';
+    }
+    if (seed.loadState === 'ready' && !tabCache.has(tabId)) tabCache.set(tabId, seed);
+    return seed;
+  });
+  const peekTabs = $derived(tabNeighbors(SEARCH_TABS.map((t) => t.id), activeTab));
+
+  $effect(() => {
+    if (!isMobileMode() || !query || loadState === 'loading') return;
+    const { prev, next } = peekTabs;
+    untrack(() => {
+      if (prev) tabPrefetch.ensure(prev);
+      if (next) tabPrefetch.ensure(next);
+    });
+  });
+
+  /** Ход свайпа содержимого — для планки и подписей вкладок */
+  let tabSwipe = $state<TabSwipeState>(null);
+
+  function swipeToTab(dir: 1 | -1): boolean {
+    const nextTab = SEARCH_TABS[SEARCH_TABS.findIndex((t) => t.id === activeTab) + dir];
+    if (!nextTab) return false;
+    switchTab(nextTab.id);
+    return true;
+  }
+
   function switchTab(id: string) {
     if (id === activeTab) return;
     // Сначала URL (beforeNavigate сохранит текущую вкладку под её ключом), потом смена вкладки
-    replacePath(buildSearchRoute(query, id as SearchTab, id === 'releases' ? searchBy : 0, hiddenOnly));
+    replacePath(buildSearchRoute(query, id as SearchTab, id === 'releases' ? searchBy : 0));
     showTab(id as SearchTab);
   }
 
@@ -325,11 +367,7 @@
   function switchSearchBy(value: string) {
     const by = Number(value) || 0;
     if (by === searchBy) return;
-    replacePath(buildSearchRoute(query, 'releases', by, hiddenOnly));
-  }
-
-  function toggleHiddenOnly() {
-    replacePath(buildSearchRoute(query, 'releases', searchBy, !hiddenOnly));
+    replacePath(buildSearchRoute(query, 'releases', by));
   }
 
   onMount(() => {
@@ -363,48 +401,60 @@
 
 {#snippet releaseActions()}
   <div class="search-v2__actions">
-    {#if searchBy > 0}
-      <button
-        type="button"
-        class="search-v2__filter"
-        aria-label="Сбросить поиск по полю"
-        onclick={() => switchSearchBy('0')}
-      >
-        по полю «{byLabel.toLowerCase()}»
-        <span aria-hidden="true">{@html iconX(12)}</span>
-      </button>
-    {/if}
     <button
       type="button"
-      class="search-v2__filter search-v2__filter--toggle"
-      class:is-active={hiddenOnly}
-      aria-pressed={hiddenOnly}
-      onclick={toggleHiddenOnly}
+      class="search-v2__filter"
+      aria-label="Сбросить поиск по полю"
+      onclick={() => switchSearchBy('0')}
     >
-      <span aria-hidden="true">{@html iconEyeOff(14)}</span>
-      только скрытые
+      по полю «{byLabel.toLowerCase()}»
+      <span aria-hidden="true">{@html iconX(12)}</span>
     </button>
   </div>
 {/snippet}
 
 <div class="view view-search-v2 discover-page" bind:this={wrapEl}>
-  <DiscoverHero
-    title={query || 'Что ищем?'}
-    subtitle={query ? 'Результаты поиска' : 'Введите запрос в строке поиска сверху'}
-    backdrop={heroBackdrop}
-  >
+  {#if isMobileMode()}
+    <!-- Телефон: запрос и фильтры — в верхней панели (MobileSearch), здесь только вкладки -->
     {#if query}
-      <!-- Пустой слот справа съедал бы ширину капсулы — передаём его только для тайтлов -->
       <UiV2Tabs
         class="uiv2-tabs--static search-v2__tabs"
         tabs={SEARCH_TABS}
-        activeId={activeTab}
+        activeId={activeTab} swipe={tabSwipe}
         onChange={switchTab}
-        rightActions={activeTab === 'releases' ? releaseActions : undefined}
       />
+      {#if showByFilter}{@render releaseActions()}{/if}
     {/if}
-  </DiscoverHero>
+  {:else}
+    <DiscoverHero
+      title={query || 'Что ищем?'}
+      subtitle={query ? 'Результаты поиска' : 'Введите запрос в строке поиска сверху'}
+    >
+      {#if query}
+        <!-- Пустой слот справа съедал бы ширину капсулы — передаём его только для тайтлов -->
+        <UiV2Tabs
+          class="uiv2-tabs--static search-v2__tabs"
+          tabs={SEARCH_TABS}
+          activeId={activeTab} swipe={tabSwipe}
+          onChange={switchTab}
+          rightActions={showByFilter ? releaseActions : undefined}
+        />
+      {/if}
+    </DiscoverHero>
+  {/if}
 
+  {#if query}
+    <div use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab, onSwipeProgress: (dir, progress, ms) => (tabSwipe = dir ? { dir, progress, ms } : null) }}>
+      {@render searchResults()}
+      {#if peekTabs.prev}<TabPeek dir={-1}>{@render searchPeek(peekTabs.prev as SearchTab)}</TabPeek>{/if}
+      {#if peekTabs.next}<TabPeek dir={1}>{@render searchPeek(peekTabs.next as SearchTab)}</TabPeek>{/if}
+    </div>
+  {:else}
+    {@render searchResults()}
+  {/if}
+</div>
+
+{#snippet searchResults()}
   {#if query}
 
     {#if loadState === 'loading'}
@@ -429,9 +479,7 @@
       <UiV2ContentRetryOverlay message={errorMsg} onRetry={retry} />
     {:else if loadState === 'empty'}
       <div class="discover-page__empty">
-        {hiddenMode
-          ? 'Скрытых в Anixart тайтлов по этому запросу нет'
-          : 'Ничего не найдено — попробуйте другой запрос или вкладку'}
+        Ничего не найдено — попробуйте другой запрос или вкладку
       </div>
     {:else if activeTab === 'releases'}
       {#if franchise}
@@ -467,4 +515,38 @@
       <div class="discover-page__loading discover-page__loading--inline">Загрузка…</div>
     {/if}
   {/if}
-</div>
+{/snippet}
+
+{#snippet searchPeek(id: SearchTab)}
+  {@const seed = tabPrefetch.get(id)}
+  {#if !seed}
+    {#if id === 'collections'}
+      <div class="collections-feed"><UiV2CollectionCardSkeleton count={6} /></div>
+    {:else if id === 'profiles'}
+      <div class="search-v2__people">
+        {#each Array.from({ length: 12 }) as _, i (i)}<div class="search-v2__person-skeleton"></div>{/each}
+      </div>
+    {:else}
+      <div class="search-v2__skeleton-grid">
+        {#each Array.from({ length: 6 }) as _, i (i)}<UiV2AnimeCardSkeleton />{/each}
+      </div>
+    {/if}
+  {:else if seed.loadState === 'empty'}
+    <div class="discover-page__empty">Ничего не найдено — попробуйте другой запрос или вкладку</div>
+  {:else if id === 'releases'}
+    {#if seed.franchise}<UiV2SearchFranchise class="search-v2__franchise" data={seed.franchise} />{/if}
+    <ReleaseCardsGrid items={seed.releases.slice(0, TAB_PEEK_ITEMS)} />
+  {:else if id === 'collections'}
+    <div class="collections-feed">
+      {#each seed.collections.slice(0, TAB_PEEK_ITEMS) as item (item.id)}
+        <CollectionCard data={item} variant="grid" />
+      {/each}
+    </div>
+  {:else}
+    <div class="search-v2__people">
+      {#each seed.profiles as p (p.id)}
+        <UiV2FeedPersonTile class="search-v2__person" title={p.login} avatar={p.avatar} showDot={p.isOnline} badgeUrl={p.badgeUrl} badgeName={p.badgeName} profileId={p.id} />
+      {/each}
+    </div>
+  {/if}
+{/snippet}

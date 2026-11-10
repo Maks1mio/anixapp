@@ -118,4 +118,45 @@ describe('quicktime.buildLaunchArgs', () => {
   });
 });
 
+describe('REGISTRY по платформам', () => {
+  const realPlatform = process.platform;
+  const indexPath = require.resolve('../player-integration');
+
+  function idsFor(platform) {
+    Object.defineProperty(process, 'platform', { value: platform });
+    delete require.cache[indexPath];
+    try {
+      return require('../player-integration').listKnownPlayers().map((p) => p.id);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: realPlatform });
+      delete require.cache[indexPath];
+    }
+  }
+
+  it('macOS: VLC, mpv, IINA, QuickTime', () => {
+    assert.deepEqual(idsFor('darwin'), ['vlc', 'mpv', 'iina', 'quicktime']);
+  });
+
+  it('Windows: VLC, mpv, PotPlayer', () => {
+    assert.deepEqual(idsFor('win32'), ['vlc', 'mpv', 'potplayer']);
+  });
+
+  it('Linux: VLC, mpv', () => {
+    assert.deepEqual(idsFor('linux'), ['vlc', 'mpv']);
+  });
+
+  it('у каждого плеера есть ссылка на скачивание или пометка', () => {
+    for (const platform of ['darwin', 'win32', 'linux']) {
+      Object.defineProperty(process, 'platform', { value: platform });
+      delete require.cache[indexPath];
+      for (const p of require('../player-integration').listKnownPlayers()) {
+        assert.equal(typeof p.playlist, 'boolean', p.id);
+        assert.ok(p.downloadUrl || p.note, p.id);
+      }
+    }
+    Object.defineProperty(process, 'platform', { value: realPlatform });
+    delete require.cache[indexPath];
+  });
+});
+
 after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));

@@ -129,6 +129,11 @@ declare global {
           description: string;
           installed: boolean;
           path?: string | null;
+          /** Плейлист серий (false — только текущая серия). */
+          playlist?: boolean;
+          downloadUrl?: string | null;
+          /** Пометка вместо «Установлен», например «Встроен в macOS». */
+          note?: string | null;
         }>;
         installedCount: number;
       }>;

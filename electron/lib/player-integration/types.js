@@ -7,14 +7,13 @@
  *   id: ExternalPlayerId,
  *   label: string,
  *   description: string,
+ *   platforms: NodeJS.Platform[],
+ *   playlist: boolean,
+ *   downloadUrl: string | null,
+ *   note?: string,
  * }} ExternalPlayerInfo
  *
- * @typedef {{
- *   id: ExternalPlayerId,
- *   label: string,
- *   description: string,
- *   path: string,
- * }} InstalledExternalPlayer
+ * @typedef {ExternalPlayerInfo & { path: string }} InstalledExternalPlayer
  *
  * @typedef {{
  *   title: string,

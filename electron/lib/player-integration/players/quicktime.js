@@ -7,6 +7,10 @@ const info = {
   id: 'quicktime',
   label: 'QuickTime Player',
   description: 'QuickTime (macOS) — только текущая серия, без плейлиста.',
+  platforms: ['darwin'],
+  playlist: false,
+  downloadUrl: null,
+  note: 'Встроен в macOS',
 };
 
 const BUNDLE_ID = 'com.apple.QuickTimePlayerX';

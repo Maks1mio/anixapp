@@ -9,6 +9,9 @@ const info = {
   id: 'iina',
   label: 'IINA',
   description: 'IINA (macOS) — плейлист .m3u с подписями серий.',
+  platforms: ['darwin'],
+  playlist: true,
+  downloadUrl: 'https://iina.io/',
 };
 
 function detect() {

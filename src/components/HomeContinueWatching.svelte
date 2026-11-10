@@ -5,7 +5,7 @@
    * Иначе «Смотреть» берёт свежий релиз через release/{id}/continue и открывает окно серий,
    * «Скрыть» прячет карточку до следующего просмотра.
    */
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, untrack } from 'svelte';
   import UiV2Card from './uikit-v2/UiV2Card.svelte';
   import { isMobileMode } from '../platform/mobile';
   import { iconPlay, iconX } from './icons';
@@ -147,8 +147,12 @@
     return () => clearInterval(timer);
   });
 
+  // При холодном старте главная появляется раньше, чем подтверждён вход, — грузим, как только он есть
+  $effect(() => {
+    if ($isAuthenticated) untrack(() => void load());
+  });
+
   onMount(() => {
-    if ($isAuthenticated) void load();
     window.addEventListener('player:windowClosed', reloadAfterPlayer);
   });
 

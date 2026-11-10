@@ -33,14 +33,15 @@ html.mobile-mode {
     -webkit-font-smoothing: antialiased;
   }
 
-  // Значки строки состояния лежат поверх контента: лёгкая тень цвета фона не даёт им потеряться на постерах
+  // Значки строки состояния лежат поверх контента (и когда верхняя панель ушла при прокрутке):
+  // градиент цвета фона затемняет страницу под ними, но её прокрутку видно
   &.mobile-native body::after {
     content: '';
     position: fixed;
     inset: 0 0 auto;
     z-index: 20000;
-    height: var(--safe-top);
-    background: linear-gradient(to bottom, color-mix(in srgb, var(--m-bg) 72%, transparent), transparent);
+    height: calc(var(--safe-top) + 12px);
+    background: linear-gradient(to bottom, color-mix(in srgb, var(--m-bg) 82%, transparent), color-mix(in srgb, var(--m-bg) 45%, transparent) 70%, transparent);
     pointer-events: none;
   }
 
@@ -340,8 +341,10 @@ html.mobile-mode {
       font-weight: 700;
       .m-nav-item__pill { background: var(--m-secondary-container); color: var(--m-on-secondary-container); }
       // активная иконка залита, как в Anixart (у «Главной» и «Закладок» контур замкнутый)
-      &:is([data-tab='home'], [data-tab='bookmarks']) .m-nav-item__pill svg path:last-of-type { fill: currentColor; }
-      &[data-tab='home'] .m-nav-item__pill svg path:first-of-type { fill: var(--m-secondary-container); stroke: var(--m-secondary-container); }
+      &[data-tab='bookmarks'] .m-nav-item__pill svg path:last-of-type { fill: currentColor; }
+      // «Главная» (iconHomeNav): сначала дом — заливаем, поверх дверь цветом плашки
+      &[data-tab='home'] .m-nav-item__pill svg path:first-of-type { fill: currentColor; }
+      &[data-tab='home'] .m-nav-item__pill svg path:last-of-type { fill: var(--m-secondary-container); stroke: var(--m-secondary-container); }
       &:active .m-nav-item__pill { background: var(--m-secondary-container); filter: brightness(1.15); }
     }
   }

@@ -26,25 +26,45 @@
   /** Шапка ушла под верхний край — показываем её полосу поверх контента */
   let docked = $state(false);
   let heroEl: HTMLElement | undefined = $state();
+  let dockEl: HTMLElement | undefined = $state();
+  let barEl: HTMLElement | undefined = $state();
 
   onMount(() => {
-    if (!heroEl) return;
-    const root = (heroEl.closest('.page__scroll') as HTMLElement | null)
+    if (!heroEl || !dockEl || !barEl) return;
+    const hero = heroEl;
+    const dock = dockEl;
+    const bar = barEl;
+    const root = (hero.closest('.page__scroll') as HTMLElement | null)
       ?? document.getElementById('content');
     // Панель не меняет раскладку (лежит поверх), поэтому прокрутка не дёргается.
-    // Отступ — низ вкладок в закреплённой панели: она появляется, когда настоящие встали на её место.
-    const barAbove = root?.querySelector<HTMLElement>(':scope > .m-topbar')?.offsetHeight ?? 0;
-    const io = new IntersectionObserver(
-      ([entry]) => { docked = !entry.isIntersecting; },
-      { root, rootMargin: `-${(isMobileMode() ? 48 : 52) + barAbove}px 0px 0px 0px`, threshold: 0 },
-    );
-    io.observe(heroEl);
-    return () => io.disconnect();
+    // Она появляется, когда низ настоящих вкладок дошёл до её низа. Место панели берётся по факту:
+    // на телефоне верхняя панель уезжает и закреплённые вкладки поднимаются под строку состояния,
+    // а порог, замеренный один раз, давал две полосы вкладок или пустоту до «стыковки».
+    const fallbackH = isMobileMode() ? 48 : 52;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const barBottom = bar.getBoundingClientRect().top + (bar.offsetHeight || fallbackH);
+      docked = hero.getBoundingClientRect().bottom <= barBottom;
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
+    update();
+    root?.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    // Верхняя панель уехала/вернулась — вкладки доехали до нового места уже без прокрутки
+    dock.addEventListener('transitionend', schedule);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      root?.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      dock.removeEventListener('transitionend', schedule);
+    };
   });
 </script>
 
-<div class="discover-hero-dock">
+<div class="discover-hero-dock" bind:this={dockEl}>
   <div
+    bind:this={barEl}
     class="discover-hero-dock__bar"
     class:discover-hero-dock__bar--visible={docked}
     aria-hidden={!docked}

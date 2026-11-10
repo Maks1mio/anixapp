@@ -122,7 +122,7 @@ class AnixPlayerPlugin : Plugin() {
 
     /**
      * Ориентация и системные панели для экрана просмотра: {mode: "landscape"} — альбомная + immersive,
-     * {mode: "portrait"} — обычный портрет с панелями.
+     * {mode: "portrait"} — обычный режим с панелями: поворот снова свободный (как задан в системе).
      */
     @PluginMethod
     fun setOrientation(call: PluginCall) {
@@ -133,7 +133,7 @@ class AnixPlayerPlugin : Plugin() {
             act.requestedOrientation = if (landscape) {
                 ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             } else {
-                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                ActivityInfo.SCREEN_ORIENTATION_FULL_USER
             }
             val controller = WindowCompat.getInsetsController(act.window, act.window.decorView)
             if (landscape) {

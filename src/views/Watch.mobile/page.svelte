@@ -27,13 +27,13 @@
   import { isCapacitorNative } from '../../native/anix-api-native';
   import { loadAppSettings, saveAppSettings } from '../../utils/app-settings';
   import {
-    ANIME4K_INTENSITIES,
-    ANIME4K_TARGET_RES,
-    ANIME4K_TYPES,
+    MOBILE_ANIME4K_INTENSITIES,
+    MOBILE_ANIME4K_TARGET_RES,
+    MOBILE_ANIME4K_TYPES,
     anime4kTargetHeight,
+    clampAnime4kPresetForMobile,
     mapAnime4kPreset,
     normalizeAnime4kPreset,
-    normalizeAnime4kTargetRes,
     type Anime4kIntensity,
     type Anime4kTargetRes,
     type Anime4kType,
@@ -337,17 +337,17 @@
   let gpuReason = $state<string | null>(null);
   let upscaleType = $state<Anime4kType>('off');
   let upscaleIntensity = $state<Anime4kIntensity>('optimal');
-  let upscaleTargetRes = $state<Anime4kTargetRes>('1080');
+  /** На телефоне разрешение обработки не выбирается — всегда 1080p */
+  const upscaleTargetRes: Anime4kTargetRes = MOBILE_ANIME4K_TARGET_RES;
   /** Canvas с картинкой Anime4K показан (видео под ним скрыто) */
   let upscaleOn = $state(false);
   let upscaleGen = 0;
   const upscaleMapped = $derived(mapAnime4kPreset({ type: upscaleType, intensity: upscaleIntensity }));
 
   function applyUpscalePrefs(src: Record<string, unknown>) {
-    const preset = normalizeAnime4kPreset(src);
+    const preset = clampAnime4kPresetForMobile(normalizeAnime4kPreset(src));
     upscaleType = preset.type;
     upscaleIntensity = preset.intensity;
-    upscaleTargetRes = normalizeAnime4kTargetRes(src.upscaleTargetRes);
   }
 
   function stopUpscale() {
@@ -400,11 +400,6 @@
 
   function setUpscaleIntensity(i: Anime4kIntensity) {
     upscaleIntensity = i;
-    saveUpscale();
-  }
-
-  function setUpscaleTargetRes(r: Anime4kTargetRes) {
-    upscaleTargetRes = r;
     saveUpscale();
   }
 
@@ -1223,7 +1218,7 @@
               <p class="mw__note">{gpuReason || 'Видеокарта этого устройства не поддерживает WebGPU — Anime4K недоступен'}</p>
             {:else}
               <div class="mw__chips">
-                {#each ANIME4K_TYPES as t (t.id)}
+                {#each MOBILE_ANIME4K_TYPES as t (t.id)}
                   <button type="button" class="mw__opt" class:mw__opt--on={upscaleType === t.id} onclick={() => setUpscaleType(t.id)}>
                     {t.label}
                   </button>
@@ -1231,7 +1226,7 @@
               </div>
               <h4 class="mw__sheet-sublabel">Нагрузка на GPU</h4>
               <div class="mw__chips">
-                {#each ANIME4K_INTENSITIES as i (i.id)}
+                {#each MOBILE_ANIME4K_INTENSITIES as i (i.id)}
                   <button
                     type="button"
                     class="mw__opt"
@@ -1243,22 +1238,8 @@
                   </button>
                 {/each}
               </div>
-              <h4 class="mw__sheet-sublabel">Разрешение обработки</h4>
-              <div class="mw__chips">
-                {#each ANIME4K_TARGET_RES as r (r.id)}
-                  <button
-                    type="button"
-                    class="mw__opt"
-                    class:mw__opt--on={upscaleTargetRes === r.id}
-                    disabled={upscaleType === 'off'}
-                    onclick={() => setUpscaleTargetRes(r.id)}
-                  >
-                    {r.id === 'auto' ? 'Под экран' : r.label}
-                  </button>
-                {/each}
-              </div>
               {#if upscaleType !== 'off'}
-                <p class="mw__note">Чем выше нагрузка и разрешение, тем сильнее греется устройство и быстрее садится батарея</p>
+                <p class="mw__note">Обработка в 1080p. «Оптимально» заметнее, но сильнее греет устройство и быстрее садит батарею</p>
               {/if}
             {/if}
           {/if}

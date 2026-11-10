@@ -92,8 +92,10 @@ html.mobile-mode {
   --m-poster-h: 156px;
   --m-nav-h: 80px;                 // нижний таб-бар телефона (на планшете его нет, см. ниже)
   --m-rail-w: 0px;                 // боковая панель планшета
-  --m-rail-left: var(--m-rail-w);  // сколько она занимает слева и справа: сторону выбирает пользователь
-  --m-rail-right: 0px;
+  // Сколько она занимает слева и справа (сторону выбирает пользователь). В альбомной ориентации у края
+  // бывает вырез камеры: панель расширяется на него, а её разделы стоят правее/левее выреза
+  --m-rail-left: calc(var(--m-rail-w) + var(--safe-left));
+  --m-rail-right: var(--safe-right);
   --m-nav-pill-w: 64px;
   --m-nav-pill-h: 32px;
   --m-field-h: 50px;
@@ -163,6 +165,6 @@ html.mobile-mode {
 }
 
 html.mobile-mode.m-rail-right {
-  --m-rail-left: 0px;
-  --m-rail-right: var(--m-rail-w);
+  --m-rail-left: var(--safe-left);
+  --m-rail-right: calc(var(--m-rail-w) + var(--safe-right));
 }

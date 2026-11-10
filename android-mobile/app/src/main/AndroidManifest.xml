@@ -37,14 +37,15 @@
         android:hardwareAccelerated="true"
         android:theme="@style/AppTheme">
 
-        <!-- Основное приложение: портрет по умолчанию -->
+        <!-- Основное приложение: поворот по датчику с учётом системной блокировки поворота;
+             на время просмотра плеер сам фиксирует альбомную (AnixPlayer.setOrientation) -->
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
-            android:screenOrientation="portrait"
+            android:screenOrientation="fullUser"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -28,7 +28,7 @@
   import { syncNativePush } from '../native/anix-push';
   import { isAuthenticated, requireAuth } from '../stores/auth';
   import { ensureProfileId, loadSelfProfileGlobal } from '../utils/profile';
-  import { iconDownload, iconPlus, iconShuffle, iconCircleUser, iconSearch, iconSettings, iconBell } from '../components/icons';
+  import { iconHomeNav, iconDownload, iconPlus, iconShuffle, iconCircleUser, iconSearch, iconSettings, iconBell } from '../components/icons';
   import { SIDEBAR_NAV_ITEMS, type SidebarNavId } from '../constants/sidebar-nav';
   import MobileSettings from './MobileSettings.svelte';
   import MobileFeedCompose from '../views/MobileFeedCompose.svelte';
@@ -69,7 +69,7 @@
     label: item.id === 'agent' ? 'ИИ-помощницы' : item.label,
     short: SHORT_LABELS[item.id] ?? item.label,
     href: item.href,
-    icon: item.icon,
+    icon: item.id === 'home' ? iconHomeNav(24) : item.icon,
     beta: item.beta,
   }));
   const PROFILE: NavEntry = { id: 'profile', label: 'Профиль', short: 'Профиль', href: null, icon: iconCircleUser(24) };

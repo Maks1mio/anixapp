@@ -21,6 +21,10 @@
     ANIME4K_INTENSITIES,
     ANIME4K_TARGET_RES,
     ANIME4K_TYPES,
+    MOBILE_ANIME4K_INTENSITIES,
+    MOBILE_ANIME4K_TARGET_RES,
+    MOBILE_ANIME4K_TYPES,
+    clampAnime4kPresetForMobile,
     mapAnime4kPreset,
     normalizeAnime4kPreset,
     normalizeAnime4kTargetRes,
@@ -69,6 +73,10 @@
   let capturing = $state<BindField | null>(null);
   let playbackLoaded = $state(false);
 
+  // Телефон и планшет: только лёгкие режимы, без «Максимум», разрешение обработки всегда 1080p
+  const touchUi = isMobileMode();
+  const typeOptions = touchUi ? MOBILE_ANIME4K_TYPES : ANIME4K_TYPES;
+  const intensityOptions = touchUi ? MOBILE_ANIME4K_INTENSITIES : ANIME4K_INTENSITIES;
   const mappedUpscale = $derived(mapAnime4kPreset({ type: upscaleType, intensity: upscaleIntensity }));
 
   async function loadPlayback() {
@@ -76,10 +84,11 @@
     gpuAvailable = await initWebGpuAvailability();
     gpuReason = gpuAvailable ? null : getWebGpuUnavailableReason();
     const settings = await loadAppSettings();
-    const preset = normalizeAnime4kPreset(settings);
+    const raw = normalizeAnime4kPreset(settings);
+    const preset = touchUi ? clampAnime4kPresetForMobile(raw) : raw;
     upscaleType = preset.type;
     upscaleIntensity = preset.intensity;
-    upscaleTargetRes = normalizeAnime4kTargetRes(settings.upscaleTargetRes);
+    upscaleTargetRes = touchUi ? MOBILE_ANIME4K_TARGET_RES : normalizeAnime4kTargetRes(settings.upscaleTargetRes);
     audioSurround = normalizeSurroundMode(settings.audioSurround);
     playerDebugOverlay = settings.playerDebugOverlay === true;
     adaptiveQualityByWindow = settings.adaptiveQualityByWindow === true;
@@ -202,7 +211,7 @@
       <div class="uiv2-settings__group uiv2-settings__group--pad" class:uiv2-settings__group--disabled={!gpuAvailable}>
         <p class="uiv2-settings__subhead">Режим</p>
         <div class="uiv2-settings__chips" role="radiogroup" aria-label="Режим Anime4K">
-          {#each ANIME4K_TYPES as opt (opt.id)}
+          {#each typeOptions as opt (opt.id)}
             <button
               type="button"
               role="radio"
@@ -223,7 +232,7 @@
 
         <p class="uiv2-settings__subhead">Нагрузка на GPU</p>
         <div class="uiv2-settings__chips" role="radiogroup" aria-label="Нагрузка на GPU">
-          {#each ANIME4K_INTENSITIES as opt (opt.id)}
+          {#each intensityOptions as opt (opt.id)}
             <button
               type="button"
               role="radio"
@@ -236,6 +245,7 @@
           {/each}
         </div>
 
+        {#if !touchUi}
         <p class="uiv2-settings__subhead">Разрешение обработки</p>
         <div class="uiv2-settings__chips" role="radiogroup" aria-label="Разрешение обработки">
           {#each ANIME4K_TARGET_RES as opt (opt.id)}
@@ -252,6 +262,7 @@
         </div>
         {#if upscaleTargetRes === 'auto' && upscaleType !== 'off'}
           <p class="uiv2-settings__hint">«Авто» подстраивается под размер окна и может моргать при его изменении.</p>
+        {/if}
         {/if}
       </div>
     </section>

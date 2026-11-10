@@ -29,6 +29,11 @@ html.mobile-mode {
       -webkit-tap-highlight-color: transparent;
       .uiv2-tabs__tab-label { position: relative; display: inline-flex; align-items: center; height: 48px; }
       &--active { color: var(--m-text) !important; font-weight: 600 !important; }
+      // Свайп содержимого: старая подпись гаснет, новая загорается — в долю пройденного пути (UiV2Tabs)
+      &[data-swipe-mix] {
+        color: color-mix(in srgb, var(--m-text) calc(var(--tab-mix) * 100%), var(--m-text-tab)) !important;
+        transition: color var(--tab-mix-ms, 0ms) cubic-bezier(0.22, 0.8, 0.3, 1);
+      }
     }
     // Индикатор Anixart — по ширине текста (ширина вкладки минус её отступы), 3dp, скруглённый, у нижнего края.
     // Одна планка на полосу: едет от вкладки к вкладке, как капсула на ПК
@@ -1151,13 +1156,16 @@ html.mobile-mode {
       position: sticky;
       top: 0;
       z-index: 14;
-      background: var(--m-bg);
-      transition: transform 0.2s ease;
+      background-color: var(--m-bg);
+      transition: transform 0.2s ease, background-color 0.2s ease;
     }
-    // Уходит только под строку состояния: её полоса остаётся закрашенной фоном панели,
-    // а вкладки страниц едут на то же расстояние — между ними нет щели во время анимации
-    &--bars-hidden > .m-topbar { transform: translateY(calc(var(--safe-top) - 100%)); }
-    // Под строкой состояния остаётся низ панели — её содержимое гаснет, видна только полоса фона
+    // Уходит только под строку состояния, а вкладки страниц едут на то же расстояние — без щели во время
+    // анимации. Остаток панели под значками прозрачный: страница видна, её затемняет градиент body::after
+    &--bars-hidden > .m-topbar {
+      transform: translateY(calc(var(--safe-top) - 100%));
+      background-color: transparent;
+    }
+    // Содержимое панели гаснет вместе с ней
     > .m-topbar > * { transition: opacity 0.2s ease; }
     &--bars-hidden > .m-topbar > * { opacity: 0; pointer-events: none; }
   }
@@ -1226,8 +1234,8 @@ html.mobile-mode {
     transform: translateY(calc(var(--safe-top) - var(--m-bars-h)));
   }
   .discover-hero-dock__bar { padding: 0; background: var(--m-bg); transition: none; &::after { display: none; } }
-  // Страница без панели: полоса строки состояния над вкладками закрашена фоном, контент под значками не виден
-  .m-app__scroll--no-bar .discover-hero-dock__bar--visible::before {
+  // Вкладки прилипли под строку состояния: полоса над ними — сплошной фон вкладок, страница под ней не видна
+  .m-app__scroll:is(.m-app__scroll--bars-hidden, .m-app__scroll--no-bar) .discover-hero-dock__bar--visible::before {
     content: '';
     position: absolute;
     left: 0;
@@ -1235,6 +1243,7 @@ html.mobile-mode {
     bottom: 100%;
     height: var(--safe-top);
     background: var(--m-bg);
+    pointer-events: none;
   }
 
   // Популярное: чья статистика — переключатель из двух сегментов, видно, что это кнопки

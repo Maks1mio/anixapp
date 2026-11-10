@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte';
   import { tick, untrack } from 'svelte';
   import { iconChevronLeft, iconChevronRight } from '../icons';
-  import { prepareTabFade } from '../../actions/swipeTabs';
+  import { prepareTabFade, type TabSwipeState } from '../../actions/swipeTabs';
 
   export interface UiV2TabItem {
     id: string;
@@ -20,6 +20,8 @@
     rightActions?: Snippet;
     onTabContextMenu?: (tab: UiV2TabItem, event: MouseEvent) => void;
     class?: string;
+    /** Ход свайпа содержимого (swipeTabs → onSwipeProgress): планка едет к соседней вкладке за пальцем */
+    swipe?: TabSwipeState;
   };
 
   let {
@@ -30,6 +32,7 @@
     rightActions,
     onTabContextMenu,
     class: className = '',
+    swipe = null,
   }: Props = $props();
 
   let rootEl = $state<HTMLDivElement | undefined>();
@@ -132,7 +135,10 @@
     if (!root || !scroller || className.includes('uiv2-tabs--static')) return;
     const update = () => {
       const stickyTop = Number.parseFloat(getComputedStyle(root).top) || 0;
-      const edge = scroller.getBoundingClientRect().top + stickyTop;
+      // sticky отсчитывается от края паддинга прокрутки: на ПК у страницы паддинг сверху (top: -паддинг),
+      // без его учёта полоса никогда не считалась закреплённой и фейд под ней не появлялся
+      const padTop = Number.parseFloat(getComputedStyle(scroller).paddingTop) || 0;
+      const edge = scroller.getBoundingClientRect().top + padTop + stickyTop;
       stuck = scroller.scrollTop > 0 && root.getBoundingClientRect().top <= edge + 1;
     };
     update();
@@ -188,6 +194,56 @@
     indicatorW = w;
     indicatorVisible = w > 0;
   }
+
+  // ── Свайп содержимого: планка и подписи идут за пальцем ─────────────────────────────────────
+  const SWIPE_EASING = 'cubic-bezier(0.22, 0.8, 0.3, 1)';
+  /** Вкладка, к которой тянут, и сколько пройдено (0…1) */
+  let swipeTargetId = $state<string | null>(null);
+  let swipeP = $state(0);
+  let swipeMs = $state(0);
+
+  $effect(() => {
+    const s = swipe;
+    untrack(() => {
+      if (!s) {
+        if (swipeTargetId == null) return;
+        swipeTargetId = null;
+        swipeP = 0;
+        swipeMs = 0;
+        // вкладка к этому моменту уже сменилась (или свайп отменён) — планка просто встаёт на активную
+        void tick().then(() => updateIndicator());
+        return;
+      }
+      const from = tabs.findIndex((t) => t.id === activeId);
+      const target = from >= 0 ? tabs[from + s.dir] : undefined;
+      const a = activeTabEl();
+      const b = target ? scrollEl?.querySelector<HTMLElement>(`[data-tab="${target.id}"]`) : null;
+      if (!a || !b) return;
+      swipeTargetId = target!.id;
+      swipeP = Math.max(0, Math.min(1, s.progress));
+      swipeMs = s.ms;
+      if (stretchTimer) {
+        clearTimeout(stretchTimer);
+        stretchTimer = null;
+      }
+      indicatorStretch = false;
+      indicatorX = a.offsetLeft + (b.offsetLeft - a.offsetLeft) * swipeP;
+      indicatorW = a.offsetWidth + (b.offsetWidth - a.offsetWidth) * swipeP;
+      indicatorVisible = true;
+    });
+  });
+
+  /** Насколько подпись «включена»: 1 — белая (активная), 0 — как у остальных */
+  function tabMix(id: string): number | null {
+    if (swipeTargetId == null) return null;
+    if (id === activeId) return 1 - swipeP;
+    if (id === swipeTargetId) return swipeP;
+    return null;
+  }
+
+  const indicatorTransition = $derived(
+    swipeTargetId == null ? '' : swipeMs ? `transition: transform ${swipeMs}ms ${SWIPE_EASING}, width ${swipeMs}ms ${SWIPE_EASING};` : 'transition: none;',
+  );
 
   function updateScrollState() {
     const el = scrollEl;
@@ -307,7 +363,7 @@
           class:uiv2-tabs__indicator--visible={indicatorVisible}
           class:uiv2-tabs__indicator--animated={indicatorAnimated}
           class:uiv2-tabs__indicator--stretch={indicatorStretch}
-          style={`transform: translateX(${indicatorX}px); width: ${indicatorW}px;`}
+          style={`transform: translateX(${indicatorX}px); width: ${indicatorW}px; ${indicatorTransition}`}
           aria-hidden="true"
         ></span>
         {#each tabs as tab (tab.id)}
@@ -321,6 +377,8 @@
             class:uiv2-tabs__tab--active={tab.id === activeId}
             aria-selected={tab.id === activeId}
             data-tab={tab.id}
+            data-swipe-mix={tabMix(tab.id) != null ? '' : undefined}
+            style={tabMix(tab.id) != null ? `--tab-mix: ${tabMix(tab.id)}; --tab-mix-ms: ${swipeMs}ms;` : undefined}
             onclick={() => handleTabClick(tab)}
             oncontextmenu={(e) => handleTabContextMenu(tab, e)}
           >

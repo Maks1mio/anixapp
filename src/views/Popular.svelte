@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, untrack } from 'svelte';
-  import { prepareTabFade, swipeTabs } from '../actions/swipeTabs';
+  import { prepareTabFade, swipeTabs, type TabSwipeState } from '../actions/swipeTabs';
   import { isMobileMode } from '../platform/mobile';
   import TabPeek from '../components/TabPeek.svelte';
   import { createTabPrefetch, tabNeighbors, TAB_PEEK_ITEMS } from '../utils/tab-prefetch.svelte';
@@ -166,6 +166,9 @@
       if (next) tabPrefetch.ensure(next);
     });
   });
+
+  /** Ход свайпа содержимого — для планки и подписей вкладок */
+  let tabSwipe = $state<TabSwipeState>(null);
 
   function swipeToTab(dir: 1 | -1): boolean {
     const nextTab = tabs[tabs.findIndex((t) => t.id === activeTab) + dir];
@@ -385,7 +388,7 @@
 
     <UiV2Tabs
       {tabs}
-      activeId={activeTab}
+      activeId={activeTab} swipe={tabSwipe}
       onChange={onTabChange}
       class="uiv2-tabs--static popular-main-tabs"
       leftActions={filtersButton}
@@ -394,7 +397,7 @@
 
   <!-- activeId — вкладка и все фильтры: любая смена списка, в том числе Anixart / AnixApp, идёт плавно.
        Скелетон и пустое состояние внутри блока, иначе он пересоздаётся и переходу не на чем играть -->
-  <div use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: `${activeTab}|${popularFiltersKey(applied)}` }}>
+  <div use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: `${activeTab}|${popularFiltersKey(applied)}`, onSwipeProgress: (dir, progress, ms) => (tabSwipe = dir ? { dir, progress, ms } : null) }}>
     {#if loadState === 'loading' && items.length === 0}
       <div class="popular-podium popular-podium--skeleton" aria-busy="true">
         {#each [2, 1, 3] as place (place)}

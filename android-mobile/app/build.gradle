@@ -2,6 +2,17 @@ apply plugin: 'com.android.application'
 apply plugin: 'org.jetbrains.kotlin.android'
 apply plugin: 'org.jetbrains.kotlin.plugin.compose'
 
+// Версия APK = версия package.json: её показывает установщик Android и «О приложении».
+// versionCode растёт вместе с x.y.z (0.1.63 → 10063), чтобы обновления ставились поверх.
+def anixPackageVersion = new groovy.json.JsonSlurper().parse(rootProject.file('../package.json')).version.toString()
+def anixVersionParts = (anixPackageVersion =~ /^(\d+)\.(\d+)\.(\d+)/)
+def anixVersionCode = 1
+if (anixVersionParts.find()) {
+    anixVersionCode = anixVersionParts.group(1).toInteger() * 1000000 +
+        anixVersionParts.group(2).toInteger() * 10000 +
+        anixVersionParts.group(3).toInteger()
+}
+
 android {
     namespace = "com.mobileapp.anix"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -9,8 +20,8 @@ android {
         applicationId "com.mobileapp.anix"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode anixVersionCode
+        versionName anixPackageVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

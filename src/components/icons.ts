@@ -345,6 +345,14 @@ export function iconHome(size = 20): string {
   return toSvg(Home, size);
 }
 
+/**
+ * Дом для мобильной навигации: дверь идёт после контура, чтобы у активного раздела
+ * залитый дом не перекрывал её (в lucide дверь нарисована первой).
+ */
+export function iconHomeNav(size = 24): string {
+  return toSvg([...Home].reverse(), size);
+}
+
 /** Сетка/обзор */
 export function iconLayoutGrid(size = 20): string {
   return toSvg(LayoutGrid, size);

@@ -19,7 +19,7 @@
   import AnnouncementBanner from '../components/AnnouncementBanner.svelte';
   import HomeContinueWatching from '../components/HomeContinueWatching.svelte';
   import HomeMobileUpdate from '../components/HomeMobileUpdate.svelte';
-  import { swipeTabs } from '../actions/swipeTabs';
+  import { swipeTabs, type TabSwipeState } from '../actions/swipeTabs';
   import { isAuthenticated } from '../stores/auth';
   import TabPeek from '../components/TabPeek.svelte';
   import { createTabPrefetch, tabNeighbors, TAB_PEEK_ITEMS } from '../utils/tab-prefetch.svelte';
@@ -334,6 +334,9 @@
     });
   });
 
+  /** Ход свайпа содержимого — для планки и подписей вкладок */
+  let tabSwipe = $state<TabSwipeState>(null);
+
   /** Свайп по списку (телефон): соседняя вкладка; «Моя вкладка» без входа пропускается как обычно. */
   function swipeToTab(dir: 1 | -1): boolean {
     const i = homeTabs.findIndex((t) => t.id === activeTab);
@@ -554,7 +557,7 @@
   {/if}
   <Tabs
     tabs={homeTabs}
-    activeId={activeTab}
+    activeId={activeTab} swipe={tabSwipe}
     onChange={(id) => setActiveTab(id as HomeTabId)}
     onTabContextMenu={handleTabContextMenu}
     rootClassName="bookmarks__tabs releases-type"
@@ -590,7 +593,7 @@
 
   <!-- На телефоне карточка над перелистываемым списком: она общая для всех вкладок -->
   {#if isMobileMode()}<div class="home-mobile-cards"><HomeMobileUpdate /><HomeContinueWatching /></div>{/if}
-  <div class="home-content" use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab }}>
+  <div class="home-content" use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab, onSwipeProgress: (dir, progress, ms) => (tabSwipe = dir ? { dir, progress, ms } : null) }}>
     {#if !isMobileMode()}<HomeContinueWatching />{/if}
     <div class="home-list">
       {#if loadState === 'unconfigured' || showMyTabEmpty}

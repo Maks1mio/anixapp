@@ -1,7 +1,7 @@
 <script lang="ts">
   import UiV2BackBar from '../components/uikit-v2/UiV2BackBar.svelte';
   import { onMount, onDestroy, untrack } from 'svelte';
-  import { swipeTabs } from '../actions/swipeTabs';
+  import { swipeTabs, type TabSwipeState } from '../actions/swipeTabs';
   import { isMobileMode } from '../platform/mobile';
   import TabPeek from '../components/TabPeek.svelte';
   import { createTabPrefetch, tabNeighbors, TAB_PEEK_ITEMS } from '../utils/tab-prefetch.svelte';
@@ -295,6 +295,9 @@
     });
   });
 
+  /** Ход свайпа содержимого — для планки и подписей вкладок */
+  let tabSwipe = $state<TabSwipeState>(null);
+
   function swipeToTab(dir: 1 | -1): boolean {
     const nextTab = COMMENT_TABS[COMMENT_TABS.findIndex((t) => t.id === activeTab) + dir];
     if (!nextTab) return false;
@@ -380,7 +383,7 @@
       {/if}
 
       <!-- Сортировка — круглой кнопкой в строке вкладок, «N всего» — счётчиком на активной вкладке -->
-      <UiV2Tabs tabs={commentTabs} activeId={activeTab} onChange={onTabChange} class={embedded ? 'profile-comments__tabs' : 'profile-comments__tabs uiv2-tabs--static'}>
+      <UiV2Tabs tabs={commentTabs} activeId={activeTab} swipe={tabSwipe} onChange={onTabChange} class={embedded ? 'profile-comments__tabs' : 'profile-comments__tabs uiv2-tabs--static'}>
         {#snippet leftActions()}
           <CommentsSortButton sort={sortByTab[activeTab]} onSortChange={onSortChange} />
         {/snippet}
@@ -388,7 +391,7 @@
     </div>
 
     <div class="search-page__results">
-      <div use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab }}>
+      <div use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab, onSwipeProgress: (dir, progress, ms) => (tabSwipe = dir ? { dir, progress, ms } : null) }}>
         {#if loadState === 'loading'}
           <div class="search-page__loading">Загрузка…</div>
         {:else if loadState === 'error'}

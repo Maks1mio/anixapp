@@ -5,6 +5,9 @@
  */
 import { tick } from 'svelte';
 
+/** Ход свайпа для полосы вкладок (UiV2Tabs `swipe`): null — жест закончен. */
+export type TabSwipeState = { dir: 1 | -1; progress: number; ms: number } | null;
+
 interface SwipeTabsParams {
   /** dir = 1 — к следующей вкладке (свайп влево), -1 — к предыдущей. Вернуть false, если перейти нельзя. */
   onSwipe: (dir: 1 | -1) => boolean;

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, untrack } from 'svelte';
   import { iconMessageCircle, iconSearch, iconX } from './icons';
-  import { swipeTabs } from '../actions/swipeTabs';
+  import { swipeTabs, type TabSwipeState } from '../actions/swipeTabs';
   import { isMobileMode } from '../platform/mobile';
   import TabPeek from './TabPeek.svelte';
   import { tabNeighbors } from '../utils/tab-prefetch.svelte';
@@ -71,6 +71,9 @@
   ]);
 
   const peekTabs = $derived(tabNeighbors(tabs.map((t) => t.id), activeTab));
+
+  /** Ход свайпа содержимого — для планки и подписей вкладок */
+  let tabSwipe = $state<TabSwipeState>(null);
 
   function swipeToTab(dir: 1 | -1): boolean {
     const next = tabs[tabs.findIndex((t) => t.id === activeTab) + dir];
@@ -373,7 +376,7 @@
         </div>
       {/if}
       {#if isMyProfile}
-        <UiV2Tabs {tabs} activeId={activeTab} onChange={setTab} />
+        <UiV2Tabs {tabs} activeId={activeTab} swipe={tabSwipe} onChange={setTab} />
       {/if}
     </div>
   </div>
@@ -569,7 +572,7 @@
   {/snippet}
 
   {#if isMyProfile}
-    <div use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab }}>
+    <div use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab, onSwipeProgress: (dir, progress, ms) => (tabSwipe = dir ? { dir, progress, ms } : null) }}>
       {@render friendsTabBody(activeTab)}
       {#if peekTabs.prev}<TabPeek dir={-1}>{@render friendsTabBody(peekTabs.prev)}</TabPeek>{/if}
       {#if peekTabs.next}<TabPeek dir={1}>{@render friendsTabBody(peekTabs.next)}</TabPeek>{/if}

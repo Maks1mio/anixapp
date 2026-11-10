@@ -4,6 +4,7 @@
  */
 import { get, writable } from 'svelte/store';
 import { SIDEBAR_NAV_ITEMS, type SidebarNavId } from '../constants/sidebar-nav';
+import { isCapacitorNative } from '../native/anix-api-native';
 
 export type MobileNavTab = SidebarNavId | 'profile';
 export type MobileRailSide = 'left' | 'right';
@@ -16,8 +17,13 @@ const SIDE_KEY = 'anix:mobileRailSide';
 const BAR_SIZE_KEY = 'anix:mobilePhoneBarSize';
 const MAIN_TABS: MobileNavTab[] = ['home', 'overview', 'bookmarks', 'popular', 'profile'];
 
+/** Разделы, скрытые в приложении для Android (ИИ-помощницы пока не готовы для телефона). */
+const HIDDEN_NATIVE_TABS: MobileNavTab[] = ['agent'];
+
 function defaultOrder(): MobileNavTab[] {
-  const rest = SIDEBAR_NAV_ITEMS.map((item) => item.id as MobileNavTab).filter((id) => !MAIN_TABS.includes(id));
+  const hidden = isCapacitorNative() ? HIDDEN_NATIVE_TABS : [];
+  const rest = SIDEBAR_NAV_ITEMS.map((item) => item.id as MobileNavTab)
+    .filter((id) => !MAIN_TABS.includes(id) && !hidden.includes(id));
   return [...MAIN_TABS, ...rest];
 }
 

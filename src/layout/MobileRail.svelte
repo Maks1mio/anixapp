@@ -29,12 +29,14 @@
 
   let pull = $state(0);
   let capsule = $state<{ x: number; y: number } | null>(null);
+  /** Высота капсулы: телефон боком ниже 380px — капсула не должна упираться в строку состояния */
+  let capsuleH = $state(CAPSULE_H);
   let listEl = $state<HTMLElement | null>(null);
 
   const side = $derived($mobileRailSide);
   const targetSide = $derived<MobileRailSide>(capsule ? nearestSide(capsule.x) : side);
   const offsetX = $derived(capsule ? capsule.x - CAPSULE_W / 2 : side === 'left' ? pull : -pull);
-  const offsetY = $derived(capsule ? capsule.y - CAPSULE_H / 2 : 0);
+  const offsetY = $derived(capsule ? capsule.y - capsuleH / 2 : 0);
 
   const reorderInRail = $derived<NavReorderParams>({
     ...reorder,
@@ -45,14 +47,24 @@
     return x < window.innerWidth / 2 ? 'left' : 'right';
   }
 
-  function clamp(value: number, half: number, size: number): number {
-    return Math.min(Math.max(value, half + SCREEN_MARGIN), size - half - SCREEN_MARGIN);
+  /** Системные отступы (строка состояния, вырез камеры, жестовая полоса) — их задаёт MainActivity */
+  function safeInsets() {
+    const cs = getComputedStyle(document.documentElement);
+    const read = (name: string) => Number.parseFloat(cs.getPropertyValue(name)) || 0;
+    return { top: read('--safe-top'), right: read('--safe-right'), bottom: read('--safe-bottom'), left: read('--safe-left') };
+  }
+
+  /** Центр капсулы внутри безопасной области: не заезжает под строку состояния и вырез камеры */
+  function clamp(value: number, half: number, from: number, to: number): number {
+    return Math.min(Math.max(value, from + half + SCREEN_MARGIN), to - half - SCREEN_MARGIN);
   }
 
   function capsulePoint(e: PointerEvent) {
+    const safe = safeInsets();
+    capsuleH = Math.min(CAPSULE_H, window.innerHeight - safe.top - safe.bottom - SCREEN_MARGIN * 2);
     return {
-      x: clamp(e.clientX, CAPSULE_W / 2, window.innerWidth),
-      y: clamp(e.clientY, CAPSULE_H / 2, window.innerHeight),
+      x: clamp(e.clientX, CAPSULE_W / 2, safe.left, window.innerWidth - safe.right),
+      y: clamp(e.clientY, capsuleH / 2, safe.top, window.innerHeight - safe.bottom),
     };
   }
 
@@ -187,7 +199,7 @@
   style:--rail-dx={`${offsetX}px`}
   style:--rail-dy={`${offsetY}px`}
   style:--capsule-w={`${CAPSULE_W}px`}
-  style:--capsule-h={`${CAPSULE_H}px`}
+  style:--capsule-h={`${capsuleH}px`}
   use:pullGesture
 >
   <div class="m-rail__list" bind:this={listEl} use:scrollEdges use:navReorder={reorderInRail}>
@@ -213,13 +225,19 @@
       top: 0;
       left: 0;
       z-index: 30;
-      width: var(--m-rail-w);
+      /* Под вырезом камеры (альбомная) — тот же фон панели, разделы правее выреза */
+      width: calc(var(--m-rail-w) + var(--safe-left));
       height: calc(100dvh * var(--m-vh-fix, 1));
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      /* Отступ под вырез — у списка и подвала, а не у панели: фон и линия над профилем идут до самого края */
+      --rail-inset-l: var(--safe-left);
+      --rail-inset-r: 0px;
       padding: 0 0 calc(var(--safe-bottom) + var(--m-space-3));
-      border-radius: 0 20px 20px 0;
+      /* Во всю высоту экрана, под строкой состояния: скругляется только нижний внутренний угол,
+         верхний скруглённый угол рядом со значками строки состояния выглядел обрубком */
+      border-radius: 0 0 20px 0;
       background: var(--m-surface-sheet);
       transform: translate(calc(var(--rail-base) + var(--rail-dx)), var(--rail-dy));
       /* Все жесты панели свои, включая прокрутку списка: браузер не должен забирать палец себе */
@@ -248,8 +266,11 @@
     }
 
     :global(html.m-rail-right) .m-rail {
-      --rail-base: calc(100vw - var(--m-rail-w));
-      border-radius: 20px 0 0 20px;
+      --rail-base: calc(100vw - var(--m-rail-w) - var(--safe-right));
+      --rail-inset-l: 0px;
+      --rail-inset-r: var(--safe-right);
+      width: calc(var(--m-rail-w) + var(--safe-right));
+      border-radius: 0 0 0 20px;
     }
 
     /* Пока тянут, панель идёт за пальцем без запаздывания */
@@ -259,8 +280,13 @@
       width: var(--capsule-w);
       height: var(--capsule-h);
       padding-bottom: var(--m-space-2);
+      /* Капсула плавает по экрану — отступ под вырез ей не нужен, иначе разделы съезжают к краю */
+      --rail-inset-l: 0px;
+      --rail-inset-r: 0px;
       border-radius: 36px;
       box-shadow: 0 12px 40px rgb(0 0 0 / 45%);
+      /* В капсуле нет строки состояния сверху — разделы начинаются у её края */
+      .m-rail__list { padding-top: var(--m-space-3); }
       transition:
         width 0.3s $sheet-ease,
         height 0.3s $sheet-ease,
@@ -279,7 +305,10 @@
       flex: 1;
       min-height: 0;
       /* Отступ внутри списка: при прокрутке разделы доходят до самого верха, а не обрываются раньше */
-      padding-top: calc(var(--safe-top) + var(--m-space-3));
+      /* Центр первого раздела — на уровне центра поиска в верхней панели (safe-top + 12 + 48/2):
+         12 сверху + 8 отступ пункта + 16 половина плашки */
+      padding: calc(var(--safe-top) + var(--m-space-3)) var(--rail-inset-r) 0 var(--rail-inset-l);
+      transition: padding 0.3s $sheet-ease;
       overflow-y: auto;
       scrollbar-width: none;
       /* Запрет с панели не действует внутри прокручиваемого блока: браузер забирал палец и отменял жест */
@@ -295,7 +324,20 @@
     :global(.m-rail__list[data-more-above]) { --edge-top: calc(var(--safe-top) + 24px); }
     :global(.m-rail__list[data-more-below]) { --edge-bottom: 24px; }
 
-    .m-rail__footer { flex: none; padding-top: var(--m-space-2); }
+    .m-rail__footer {
+      flex: none;
+      padding: var(--m-space-2) var(--rail-inset-r) 0 var(--rail-inset-l);
+      transition: padding 0.3s $sheet-ease;
+    }
+
+    /* Телефон боком (≈400px по высоте): плотнее, чтобы все разделы влезали без обрезанной подписи */
+    @media (max-height: 480px) {
+      .m-rail { padding-bottom: calc(var(--safe-bottom) + var(--m-space-1)); }
+      .m-rail :global(.m-nav-item) { padding: 3px 0; }
+      /* по-прежнему вровень с поиском: 17 + 3 отступ пункта + 16 половина плашки = 36 */
+      .m-rail__list { padding-top: calc(var(--safe-top) + 17px); }
+      .m-rail__footer { padding-top: var(--m-space-1); }
+    }
     :global(.m-rail__list[data-more-below] + .m-rail__footer) { box-shadow: 0 -1px 0 var(--m-outline-variant); }
   }
 

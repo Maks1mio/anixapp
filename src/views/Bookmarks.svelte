@@ -3,7 +3,7 @@
   import ReleaseCardsGridSkeleton from '../components/ReleaseCardsGridSkeleton.svelte';
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import { headlineFromLoadError } from '../utils/content-load-error';
-  import { swipeTabs } from '../actions/swipeTabs';
+  import { swipeTabs, type TabSwipeState } from '../actions/swipeTabs';
   import TabPeek from '../components/TabPeek.svelte';
   import { createTabPrefetch, tabNeighbors, TAB_PEEK_ITEMS } from '../utils/tab-prefetch.svelte';
   import { isMobileMode } from '../platform/mobile';
@@ -818,6 +818,9 @@
     });
   });
 
+  /** Ход свайпа содержимого — для планки и подписей вкладок */
+  let tabSwipe = $state<TabSwipeState>(null);
+
   function swipeToTab(dir: 1 | -1): boolean {
     const i = TABS.findIndex((t) => t.id === activeTab);
     const next = TABS[i + dir];
@@ -1208,7 +1211,7 @@
       label: t.label,
       dividerBefore: isListsPage ? t.id === 'votes' : t.id === 'collections',
     }))}
-    activeId={activeTab}
+    activeId={activeTab} swipe={tabSwipe}
     onChange={(tabId) => loadTab(tabId as TabId)}
     onTabContextMenu={isListsPage ? undefined : handleTabContextMenu}
   />
@@ -1232,7 +1235,7 @@
       {onRandom}
     />
 
-  <div class="bookmarks__content" use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab }}>
+  <div class="bookmarks__content" use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab, onSwipeProgress: (dir, progress, ms) => (tabSwipe = dir ? { dir, progress, ms } : null) }}>
     <!-- Подсказка про оценки — часть вкладки: меняется вместе со списком и не сдвигает его скачком -->
     {#if isVotesTab && !isOtherProfile}
       {#if votesMode === 'unvoted'}

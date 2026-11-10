@@ -14,7 +14,7 @@
   import { openSettingsModal } from '../stores/modals';
   import { isTvMode } from '../platform/tv';
   import { isMobileMode } from '../platform/mobile';
-  import { swipeTabs } from '../actions/swipeTabs';
+  import { swipeTabs, type TabSwipeState } from '../actions/swipeTabs';
   import TabPeek from './TabPeek.svelte';
   import { tabNeighbors } from '../utils/tab-prefetch.svelte';
   import {
@@ -95,6 +95,9 @@
 
   const filteredNotifications = $derived(notificationsFor(filter));
   const peekFilters = $derived(tabNeighbors(FILTERS.map((f) => f.id), filter));
+
+  /** Ход свайпа содержимого — для планки и подписей вкладок */
+  let tabSwipe = $state<TabSwipeState>(null);
 
   function swipeToFilter(dir: 1 | -1): boolean {
     const next = FILTERS[FILTERS.findIndex((f) => f.id === filter) + dir];
@@ -502,11 +505,11 @@
           <UiV2Tabs
             class="uiv2-tabs--static notifications-modal__tabs"
             tabs={filterTabs}
-            activeId={filter}
+            activeId={filter} swipe={tabSwipe}
             onChange={(id) => selectFilter(id as NotificationFilterId)}
           />
 
-          <div use:swipeTabs={{ onSwipe: swipeToFilter, enabled: page && isMobileMode(), activeId: filter }}>
+          <div use:swipeTabs={{ onSwipe: swipeToFilter, enabled: page && isMobileMode(), activeId: filter, onSwipeProgress: (dir, progress, ms) => (tabSwipe = dir ? { dir, progress, ms } : null) }}>
             {@render notificationRows(filteredNotifications)}
             {#if page}
               {#if peekFilters.prev}<TabPeek dir={-1}>{@render notificationRows(notificationsFor(peekFilters.prev))}</TabPeek>{/if}

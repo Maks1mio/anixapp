@@ -11,7 +11,7 @@
   import DiscoverHero from '../components/DiscoverHero.svelte';
   import { replacePath } from '../stores/navigation';
   import { isMobileMode } from '../platform/mobile';
-  import { swipeTabs } from '../actions/swipeTabs';
+  import { swipeTabs, type TabSwipeState } from '../actions/swipeTabs';
   import TabPeek from '../components/TabPeek.svelte';
   import { createTabPrefetch, tabNeighbors, TAB_PEEK_ITEMS } from '../utils/tab-prefetch.svelte';
   import { iconX } from '../components/icons';
@@ -341,6 +341,9 @@
     });
   });
 
+  /** Ход свайпа содержимого — для планки и подписей вкладок */
+  let tabSwipe = $state<TabSwipeState>(null);
+
   function swipeToTab(dir: 1 | -1): boolean {
     const nextTab = SEARCH_TABS[SEARCH_TABS.findIndex((t) => t.id === activeTab) + dir];
     if (!nextTab) return false;
@@ -417,7 +420,7 @@
       <UiV2Tabs
         class="uiv2-tabs--static search-v2__tabs"
         tabs={SEARCH_TABS}
-        activeId={activeTab}
+        activeId={activeTab} swipe={tabSwipe}
         onChange={switchTab}
       />
       {#if showByFilter}{@render releaseActions()}{/if}
@@ -432,7 +435,7 @@
         <UiV2Tabs
           class="uiv2-tabs--static search-v2__tabs"
           tabs={SEARCH_TABS}
-          activeId={activeTab}
+          activeId={activeTab} swipe={tabSwipe}
           onChange={switchTab}
           rightActions={showByFilter ? releaseActions : undefined}
         />
@@ -441,7 +444,7 @@
   {/if}
 
   {#if query}
-    <div use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab }}>
+    <div use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab, onSwipeProgress: (dir, progress, ms) => (tabSwipe = dir ? { dir, progress, ms } : null) }}>
       {@render searchResults()}
       {#if peekTabs.prev}<TabPeek dir={-1}>{@render searchPeek(peekTabs.prev as SearchTab)}</TabPeek>{/if}
       {#if peekTabs.next}<TabPeek dir={1}>{@render searchPeek(peekTabs.next as SearchTab)}</TabPeek>{/if}

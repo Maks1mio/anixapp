@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, untrack } from 'svelte';
   import CollectionCard from '../components/CollectionCard.svelte';
-  import { swipeTabs } from '../actions/swipeTabs';
+  import { swipeTabs, type TabSwipeState } from '../actions/swipeTabs';
   import { isMobileMode } from '../platform/mobile';
   import TabPeek from '../components/TabPeek.svelte';
   import { createTabPrefetch, tabNeighbors, TAB_PEEK_ITEMS } from '../utils/tab-prefetch.svelte';
@@ -227,6 +227,9 @@
       if (next) tabPrefetch.ensure(next);
     });
   });
+
+  /** Ход свайпа содержимого — для планки и подписей вкладок */
+  let tabSwipe = $state<TabSwipeState>(null);
 
   function swipeToTab(dir: 1 | -1): boolean {
     const nextTab = sortTabs[sortTabs.findIndex((t) => t.id === String(selectedSort)) + dir];
@@ -494,7 +497,7 @@
     {#if !week && !foreign}
       <UiV2Tabs
         tabs={sortTabs}
-        activeId={mine ? '' : String(selectedSort)}
+        activeId={mine ? '' : String(selectedSort)} swipe={tabSwipe}
         onChange={(id) => onSortChange(Number(id))}
         class="uiv2-tabs--static collections-page__tabs"
         rightActions={isMobileMode() ? undefined : headerActions}
@@ -506,7 +509,7 @@
   </DiscoverHero>
 
   <!-- Скелетон и пустое состояние внутри блока: смена вкладки плавная, даже пока список грузится -->
-  <div use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode() && !mine && !week, activeId: String(selectedSort) }}>
+  <div use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode() && !mine && !week, activeId: String(selectedSort), onSwipeProgress: (dir, progress, ms) => (tabSwipe = dir ? { dir, progress, ms } : null) }}>
     {#if loadState === 'loading' && items.length === 0}
       <div class="collections-feed" aria-busy="true">
         <UiV2CollectionCardSkeleton count={6} />

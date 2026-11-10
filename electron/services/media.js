@@ -3,8 +3,8 @@
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
-const { session, net, dialog, shell, app, ipcMain } = require('electron');
-const { BROWSER_UA } = require('../cdn-proxy');
+const { session, net, dialog, shell, app, ipcMain, nativeImage } = require('electron');
+const { BROWSER_UA, fetchRemoteImage, isAnixartCdnUrl } = require('../cdn-proxy');
 const { ANIXART_UA } = require('../lib/constants');
 const { getDirectVideoLink, isHtmlPlayerPage } = require('../lib/direct-video-link');
 const { resolveViaAnixback } = require('../lib/stream-resolve-remote');
@@ -24,6 +24,8 @@ const ffmpegInstall = require('../lib/ffmpeg-install');
 
 const DOWNLOAD_VIDEO_EXT = new Set(['.mp4', '.mkv', '.webm', '.avi', '.mov', '.m4v']);
 const MIN_DOWNLOAD_VIDEO_BYTES = 256 * 1024;
+const POSTER_FILE = '.anixapp-poster.jpg';
+const pendingPosters = new Set();
 const ffmpegCacheRef = { value: undefined, source: undefined };
 
 const media = {
@@ -37,6 +39,45 @@ function register(deps) {
   try {
     downloadThrottle.setLimit(config.getDownloadSpeedLimitMBps() * 1024 * 1024);
   } catch (_) { /* без лимита */ }
+
+async function saveDownloadPoster(baseDir, titleKey, releaseId) {
+  if (!Number.isSafeInteger(releaseId) || releaseId <= 0) return { ok: false, error: 'missing-release' };
+  const titleDir = existingTitleDirectory(baseDir, titleKey);
+  if (!titleDir) return { ok: false, error: 'no-folder' };
+  const file = path.join(titleDir, POSTER_FILE);
+  if (pendingPosters.has(file)) return { ok: false, error: 'busy' };
+  if (hasDownloadPoster(titleDir)) return { ok: true };
+  pendingPosters.add(file);
+  try {
+    const response = await getAnixart().endpoints.release.info(releaseId, false);
+    const release = response?.release ?? response;
+    const poster = release?.poster;
+    const raw = typeof poster === 'string' ? poster
+      : poster?.medium?.url || poster?.original?.url || poster?.small?.url || release?.image;
+    if (typeof raw !== 'string' || !raw.trim()) return { ok: false, error: 'no-poster' };
+    const value = raw.trim();
+    const url = value.startsWith('//') ? `https:${value}`
+      : /^[\w.-]+$/.test(value)
+        ? `https://s.anixmirai.com/posters/${value}${/\.(jpe?g|png|webp|avif)$/i.test(value) ? '' : '.jpg'}`
+        : value;
+    if (!url.startsWith('https://') || !isAnixartCdnUrl(url)) return { ok: false, error: 'no-poster' };
+    const { data } = await fetchRemoteImage(url);
+    const image = nativeImage.createFromBuffer(Buffer.from(data));
+    if (image.isEmpty()) return { ok: false, error: 'invalid-image' };
+    const { width } = image.getSize();
+    const jpeg = (width > 480 ? image.resize({ width: 480 }) : image).toJPEG(85);
+    if (!jpeg.length || existingTitleDirectory(baseDir, titleKey) !== titleDir) return { ok: false, error: 'no-folder' };
+    if (fs.existsSync(file) && fs.lstatSync(file).isSymbolicLink()) return { ok: false, error: 'unsafe-path' };
+    fs.writeFileSync(file, jpeg);
+    state.mainWindow?.webContents?.send('downloads:poster-saved');
+    return { ok: true };
+  } catch {
+    // Постер необязателен: ошибка API, CDN или диска не влияет на очередь серий.
+    return { ok: false, error: 'poster-failed' };
+  } finally {
+    pendingPosters.delete(file);
+  }
+}
 
 async function refreshDownloadUrl(job) {
   const releaseId = Number(job?.releaseId);
@@ -576,6 +617,31 @@ function guessTitleFromFilename(name) {
   return name.replace(/\.[^.]+$/, '');
 }
 
+/** Только существующая папка тайтла, а не имя группы плоских файлов. */
+function existingTitleDirectory(rootDir, name) {
+  if (typeof name !== 'string' || !name || /[/\\]/.test(name) || isTraversalSegment(name)) return null;
+  const root = path.resolve(rootDir);
+  const target = path.resolve(root, name);
+  try {
+    const stat = fs.lstatSync(target);
+    if (target === root || !isPathInside(root, target) || !stat.isDirectory() || stat.isSymbolicLink()) return null;
+    if (!isPathInside(fs.realpathSync(root), fs.realpathSync(target))) return null;
+    return target;
+  } catch {
+    return null;
+  }
+}
+
+function hasDownloadPoster(titleDir) {
+  try {
+    const file = path.join(titleDir, POSTER_FILE);
+    const stat = fs.lstatSync(file);
+    return stat.isFile() && !stat.isSymbolicLink() && stat.size > 0 && !nativeImage.createFromPath(file).isEmpty();
+  } catch {
+    return false;
+  }
+}
+
 function isTempOrIncompleteName(name) {
   const n = String(name || '');
   if (/\.(part|tmp|temp|download)$/i.test(n)) return true;
@@ -609,6 +675,7 @@ function scanDownloadLibrary(rootDir) {
         releaseTitle: meta?.releaseTitle ?? key,
         dubberName: meta?.dubberName ?? '',
         sourceName: meta?.sourceName ?? '',
+        hasOwnFolder: false,
         files: [],
       });
     }
@@ -647,6 +714,13 @@ function scanDownloadLibrary(rootDir) {
     if (!sourceName && nestedMeta?.sourceName) sourceName = nestedMeta.sourceName;
 
     const group = ensureGroup(title);
+    if (parts.length && !group.hasOwnFolder) {
+      const titleDir = existingTitleDirectory(rootDir, title);
+      group.hasOwnFolder = !!titleDir;
+      if (titleDir && hasDownloadPoster(titleDir)) {
+        group.posterUrl = `anix-local://media/?p=${encodeURIComponent(path.join(titleDir, POSTER_FILE))}`;
+      }
+    }
     if (titleMeta?.releaseId && !group.releaseId) {
       group.releaseId = titleMeta.releaseId;
       group.releaseTitle = titleMeta.releaseTitle || title;
@@ -733,6 +807,8 @@ function scanAllLibraryRoots() {
       for (const k of ['releaseId', 'dubberId', 'sourceId', 'dubberName', 'sourceName']) {
         if (prev[k] == null || prev[k] === '') prev[k] = g[k];
       }
+      if (!prev.posterUrl) prev.posterUrl = g.posterUrl || '';
+      prev.hasOwnFolder ||= g.hasOwnFolder;
     }
   }
   const list = [...merged.values()];
@@ -829,6 +905,9 @@ ipcMain.handle('downloads:saveSettings', (_, payload) => {
   const updates = {};
   if (typeof payload.organizeByTitle === 'boolean') {
     updates.downloadOrganizeByTitle = payload.organizeByTitle;
+  }
+  if (typeof payload.downloadPosters === 'boolean') {
+    updates.downloadPosters = payload.downloadPosters;
   }
   if (typeof payload.autoClearFinished === 'boolean') {
     updates.downloadAutoClearFinished = payload.autoClearFinished;
@@ -1096,6 +1175,27 @@ ipcMain.handle('downloads:listLibrary', () => {
   return scanAllLibraryRoots();
 });
 
+ipcMain.handle('downloads:savePoster', async (_, payload) => {
+  if (typeof payload?.groupId !== 'string' || !payload.groupId) return { ok: false, error: 'bad-name' };
+  let saved = false;
+  let error = 'no-folder';
+  for (const root of [...new Set(getLibraryRoots())]) {
+    const group = scanDownloadLibrary(root).find((g) => g.id === payload.groupId && g.hasOwnFolder);
+    if (!group) continue;
+    const releaseId = Number(group.releaseId || payload.releaseId);
+    const result = await saveDownloadPoster(root, group.name, releaseId);
+    if (result.ok) {
+      saved = true;
+      if (!group.releaseId) {
+        saveFolderMeta(root, group.name, { ...group, releaseId });
+      }
+    } else {
+      error = result.error;
+    }
+  }
+  return saved ? { ok: true } : { ok: false, error };
+});
+
 ipcMain.handle('downloads:deleteFile', (_, filePath) => {
   if (typeof filePath !== 'string' || !filePath) return { ok: false, error: 'bad-path' };
   const resolved = path.resolve(filePath);
@@ -1127,12 +1227,16 @@ ipcMain.handle('downloads:deleteFile', (_, filePath) => {
 
 ipcMain.handle('downloads:deleteGroup', (_, groupName) => {
   if (typeof groupName !== 'string' || !groupName) return { ok: false, error: 'bad-name' };
-  let result = { ok: false, error: 'not-found' };
-  for (const root of getLibraryRoots()) {
-    const r = deleteGroupInRoot(root, groupName);
-    if (r.ok || result.error === 'not-found') result = r;
+  let found = false;
+  let error = '';
+  for (const root of [...new Set(getLibraryRoots())]) {
+    const group = scanDownloadLibrary(root).find((g) => g.id === groupName);
+    if (!group) continue;
+    found = true;
+    const result = deleteGroupInRoot(root, group);
+    if (!result.ok) error = result.error;
   }
-  return result;
+  return { ok: found && !error, error: error || (found ? undefined : 'not-found') };
 });
 
 function pathKey(p) {
@@ -1161,16 +1265,26 @@ function removeTreeExcept(dir, keep) {
   return kept;
 }
 
-function deleteGroupInRoot(root, groupName) {
-  const target = path.join(root, sanitizeDownloadDirName(groupName));
-  const resolved = path.resolve(target);
+function deleteGroupInRoot(root, group) {
+  const groupName = group.name;
+  const resolved = group.hasOwnFolder ? existingTitleDirectory(root, groupName) : null;
   const rootRes = path.resolve(root);
-  if (resolved === rootRes || !isPathInside(rootRes, resolved)) return { ok: false, error: 'outside-root' };
-  if (!fs.existsSync(resolved)) return { ok: false, error: 'not-found' };
   try {
     const active = downloadQueue.getActiveDownloadArtifacts?.() || new Set();
     const keep = new Set([...active].map(pathKey));
-    removeTreeExcept(resolved, keep);
+    if (group.hasOwnFolder && !resolved) return { ok: false, error: 'outside-root' };
+    if (resolved) removeTreeExcept(resolved, keep);
+    // Группа может содержать серии прямо в корне: отдельной папки у них нет.
+    for (const file of group.files) {
+      const filePath = path.resolve(file.path);
+      if (resolved && isPathInside(resolved, filePath)) continue;
+      if (pathKey(path.dirname(filePath)) !== pathKey(rootRes)) return { ok: false, error: 'outside-root' };
+      if (keep.has(pathKey(filePath))) continue;
+      fs.rmSync(filePath, { force: true });
+      for (const suffix of ['.anixskip', '.anixdl']) {
+        fs.rmSync(filePath + suffix, { force: true });
+      }
+    }
     // meta key (папки, где ещё идёт загрузка, сохраняют название/постер)
     try {
       const metaPath = path.join(root, '.anixapp-library.json');
@@ -1312,7 +1426,13 @@ ipcMain.handle('episode-download:queue', async (_, payload) => {
       sourceName: item?.sourceName,
     }, deps);
 
-    if (job) queued.push({ id: job.id, filename: job.filename });
+    if (job) {
+      queued.push({ id: job.id, filename: job.filename });
+      const titleFolder = titleKeyFromFolder(subFolder);
+      if (titleFolder && config.getDownloadPosters()) {
+        void saveDownloadPoster(baseDir, titleFolder, Number(item.releaseId));
+      }
+    }
   }
 
   return { ok: queued.length > 0, items: queued };

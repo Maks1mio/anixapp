@@ -32,6 +32,7 @@
   function proxiedSrc(raw: string, preferMirror: boolean): string {
     const trimmed = raw.trim();
     if (!trimmed) return '';
+    if (trimmed.startsWith('anix-local:')) return trimmed;
     const https = fromCdnProxyUrl(trimmed);
     const target = preferMirror ? (buildCdnMirrorHttps(https) || https) : https;
     if (thumb) return toPosterDisplayUrl(target, thumb);

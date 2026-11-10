@@ -3,6 +3,7 @@
  * встроенный плеер (/watch на hls.js) и сторонний (системный выбор). Настройка хранится локально.
  */
 import { launchPlayer, type WatchLaunchParams } from './watch-nav';
+import { externalPlayerUsesPlaylist } from './player-integration';
 
 export type MobilePlayerKind = 'web' | 'anix' | 'builtin' | 'external';
 
@@ -299,6 +300,10 @@ async function buildExternalPlaylist(
   }
 
   meta = sliceMetaWindow(meta, currentEp, playlistWindow);
+  if (!externalPlayerUsesPlaylist(opts.playerId)) {
+    const current = meta.find((m) => m.position === currentEp);
+    meta = [current ?? { position: currentEp, name: '', url: '' }];
+  }
   const total = meta.length;
   opts.onProgress?.({ done: 0, total });
 

@@ -24,6 +24,7 @@
     type MobilePlayerKind,
   } from '../utils/mobile-player';
   import {
+    externalPlayerUsesPlaylist,
     getPreferredExternalPlayerId,
     setPreferredExternalPlayerId,
     type ExternalPlayerId,
@@ -555,7 +556,7 @@
     if (!selectedSource) return;
     if (kind === 'external') {
       pendingExternalPlayerId = getPreferredExternalPlayerId();
-      if (needsExternalPlaylistRange(episodes.length)) {
+      if (externalPlayerUsesPlaylist(pendingExternalPlayerId) && needsExternalPlaylistRange(episodes.length)) {
         externalRangeEp = epPosition;
         return;
       }
@@ -586,7 +587,7 @@
     if (!selectedSource) return;
     if (kind === 'external') {
       pendingExternalPlayerId = playerId || getPreferredExternalPlayerId();
-      if (needsExternalPlaylistRange(episodes.length)) {
+      if (externalPlayerUsesPlaylist(pendingExternalPlayerId) && needsExternalPlaylistRange(episodes.length)) {
         externalRangeEp = epPosition;
         return;
       }

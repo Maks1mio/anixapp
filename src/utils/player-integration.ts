@@ -3,7 +3,7 @@
  * список установленных плееров (VLC, mpv, PotPlayer, …) и предпочтение пользователя.
  */
 
-export type ExternalPlayerId = 'vlc' | 'mpv' | 'potplayer';
+export type ExternalPlayerId = 'vlc' | 'mpv' | 'potplayer' | 'iina' | 'quicktime';
 
 export interface ExternalPlayerOption {
   id: ExternalPlayerId;
@@ -13,8 +13,13 @@ export interface ExternalPlayerOption {
   path?: string | null;
 }
 
+/** QuickTime открывает только одну серию — плейлист для него не собираем. */
+export function externalPlayerUsesPlaylist(id: string | null | undefined): boolean {
+  return id !== 'quicktime';
+}
+
 const PREF_KEY = 'anix:externalPlayerId';
-const KNOWN_IDS: ExternalPlayerId[] = ['vlc', 'mpv', 'potplayer'];
+const KNOWN_IDS: ExternalPlayerId[] = ['vlc', 'mpv', 'potplayer', 'iina', 'quicktime'];
 
 export function getPreferredExternalPlayerId(): ExternalPlayerId | null {
   try {

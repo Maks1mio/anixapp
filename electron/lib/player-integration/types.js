@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * @typedef {'vlc' | 'mpv' | 'potplayer'} ExternalPlayerId
+ * @typedef {'vlc' | 'mpv' | 'potplayer' | 'iina' | 'quicktime'} ExternalPlayerId
  *
  * @typedef {{
  *   id: ExternalPlayerId,

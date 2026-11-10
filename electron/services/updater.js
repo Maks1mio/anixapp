@@ -138,7 +138,7 @@ function writeGithubCache(key, data) {
   githubJsonCache.set(key, { at: Date.now(), data });
 }
 
-function githubGetJsonRaw(urlPath) {
+function githubGetJsonRaw(urlPath, redirectsLeft = 3) {
   const https = require('https');
   const url = urlPath.startsWith('http')
     ? urlPath
@@ -158,6 +158,13 @@ function githubGetJsonRaw(urlPath) {
         timeout: 20000,
       },
       (res) => {
+        // Репозиторий переименовали или перенесли — API отвечает 301/307 на новый адрес
+        const location = res.headers.location;
+        if ([301, 302, 307, 308].includes(res.statusCode) && location && redirectsLeft > 0) {
+          res.resume();
+          resolve(githubGetJsonRaw(new URL(location, url).href, redirectsLeft - 1));
+          return;
+        }
         if (res.statusCode !== 200) {
           const err = new Error(`GitHub status ${res.statusCode}`);
           err.statusCode = res.statusCode;
@@ -234,7 +241,7 @@ async function githubGetJson(urlPath, { force = false } = {}) {
 }
 
 async function fetchLatestGitHubRelease({ force = false } = {}) {
-  return githubGetJson('/repos/Maks1mio/anixapp/releases/latest', { force });
+  return githubGetJson('/repos/Anixapp-Community/anixapp/releases/latest', { force });
 }
 
 async function fetchGitHubReleaseByTag(tag, { force = false } = {}) {
@@ -242,10 +249,10 @@ async function fetchGitHubReleaseByTag(tag, { force = false } = {}) {
   if (!clean) throw new Error('Empty release tag');
   // Try with and without leading v — GitHub tags are usually "v1.2.3"
   try {
-    return await githubGetJson(`/repos/Maks1mio/anixapp/releases/tags/v${clean}`, { force });
+    return await githubGetJson(`/repos/Anixapp-Community/anixapp/releases/tags/v${clean}`, { force });
   } catch (first) {
     try {
-      return await githubGetJson(`/repos/Maks1mio/anixapp/releases/tags/${clean}`, { force });
+      return await githubGetJson(`/repos/Anixapp-Community/anixapp/releases/tags/${clean}`, { force });
     } catch {
       throw first;
     }
@@ -254,7 +261,7 @@ async function fetchGitHubReleaseByTag(tag, { force = false } = {}) {
 
 async function fetchGitHubReleasesPage(page = 1, perPage = 30, { force = false } = {}) {
   const data = await githubGetJson(
-    `/repos/Maks1mio/anixapp/releases?per_page=${perPage}&page=${page}`,
+    `/repos/Anixapp-Community/anixapp/releases?per_page=${perPage}&page=${page}`,
     { force },
   );
   return Array.isArray(data) ? data : [];
@@ -290,7 +297,7 @@ ipcMain.handle('app:checkForUpdate', async (_, currentVersion, force) => {
     }
     return {
       version: latest,
-      url: data.html_url ?? 'https://github.com/Maks1mio/anixapp/releases',
+      url: data.html_url ?? 'https://github.com/Anixapp-Community/anixapp/releases',
       body: typeof data.body === 'string' ? data.body : null,
     };
   } catch (err) {
@@ -321,7 +328,7 @@ ipcMain.handle('app:listAppReleases', async (_, currentVersion, channel, force) 
           publishedAt: typeof data.published_at === 'string' ? data.published_at : null,
           prerelease,
           draft: !!data.draft,
-          url: data.html_url ?? 'https://github.com/Maks1mio/anixapp/releases',
+          url: data.html_url ?? 'https://github.com/Anixapp-Community/anixapp/releases',
           hasAsset,
           platformLabel,
           assetLabel: getUpdateAssetLabel(),

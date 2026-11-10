@@ -113,7 +113,7 @@
       rows: [
         { title: 'Поддержать AnixApp', icon: iconGift, action: () => openSupportModal() },
         { title: 'Канал в Telegram', icon: iconMessageCircle, external: true, action: () => requestOpenExternal('https://t.me/anixapp') },
-        { title: 'Исходный код на GitHub', icon: iconLink, external: true, action: () => requestOpenExternal('https://github.com/Maks1mio/anixapp') },
+        { title: 'Исходный код на GitHub', icon: iconLink, external: true, action: () => requestOpenExternal('https://github.com/Anixapp-Community/anixapp') },
         { tab: 'about', title: 'О программе', icon: iconInfo },
       ],
     },

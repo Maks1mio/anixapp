@@ -2,8 +2,7 @@
   /** Единый блок активности, как в Android 11: столбцы по дням и недавно просмотренное. */
   import UiV2ChoiceSheet from '../uikit-v2/UiV2ChoiceSheet.svelte';
   import ProfileHistorySection from '../../views/Profile/v2/components/ProfileHistorySection.svelte';
-  import { iconCalendar, iconChevronLeft, iconChevronRight } from '../icons';
-  import { isMobileMode } from '../../platform/mobile';
+  import { iconCalendar } from '../icons';
 
   interface Props {
     watchDynamics: unknown[];
@@ -62,35 +61,58 @@
     }
   }
 
-  // ── Столбцы: на ПК листаются стрелками ──
-  const arrows = !isMobileMode();
-  let chartEl: HTMLElement | null = null;
-  let canLeft = $state(false);
-  let canRight = $state(false);
-
+  // ── Полосы графиков: листаются пальцем, колёсиком или перетаскиванием мышью ──
   /** Как в приложении, сначала видны последние дни */
   function trackChart(node: HTMLElement) {
-    chartEl = node;
-    const sync = () => {
-      canLeft = node.scrollLeft > 1;
-      canRight = node.scrollLeft + node.clientWidth < node.scrollWidth - 1;
-    };
-    const observer = new ResizeObserver(sync);
-    observer.observe(node);
     node.scrollLeft = node.scrollWidth;
-    sync();
-    node.addEventListener('scroll', sync, { passive: true });
+
+    // Мышью полосу тащат «рукой», как карту; пальцы и так листают нативно
+    let dragFrom: { x: number; left: number; id: number } | null = null;
+    let dragged = false;
+    const onDown = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse' || e.button !== 0) return;
+      dragFrom = { x: e.clientX, left: node.scrollLeft, id: e.pointerId };
+      dragged = false;
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!dragFrom || e.pointerId !== dragFrom.id) return;
+      const dx = e.clientX - dragFrom.x;
+      if (!dragged) {
+        if (Math.abs(dx) < 4) return;
+        dragged = true;
+        node.setPointerCapture(e.pointerId);
+        node.classList.add('watch-activity--dragging');
+      }
+      node.scrollLeft = dragFrom.left - dx;
+    };
+    const onUp = (e: PointerEvent) => {
+      if (!dragFrom || e.pointerId !== dragFrom.id) return;
+      dragFrom = null;
+      node.classList.remove('watch-activity--dragging');
+      if (node.hasPointerCapture(e.pointerId)) node.releasePointerCapture(e.pointerId);
+    };
+    // Отпускание после перетаскивания — не клик по дню
+    const onClick = (e: MouseEvent) => {
+      if (!dragged) return;
+      dragged = false;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    node.addEventListener('pointerdown', onDown);
+    node.addEventListener('pointermove', onMove);
+    node.addEventListener('pointerup', onUp);
+    node.addEventListener('pointercancel', onUp);
+    node.addEventListener('click', onClick, true);
+
     return {
       destroy() {
-        observer.disconnect();
-        node.removeEventListener('scroll', sync);
-        chartEl = null;
+        node.removeEventListener('pointerdown', onDown);
+        node.removeEventListener('pointermove', onMove);
+        node.removeEventListener('pointerup', onUp);
+        node.removeEventListener('pointercancel', onUp);
+        node.removeEventListener('click', onClick, true);
       },
     };
-  }
-
-  function pageChart(dir: 1 | -1) {
-    chartEl?.scrollBy({ left: dir * chartEl.clientWidth * 0.8, behavior: 'smooth' });
   }
 
   // ── Сетка: колонка — неделя, строка — день недели ──
@@ -154,19 +176,6 @@
   }
 </script>
 
-{#snippet chartArrows()}
-  {#if arrows && canLeft}
-    <button type="button" class="watch-activity__arrow watch-activity__arrow--left" aria-label="Раньше" onclick={() => pageChart(-1)}>
-      {@html iconChevronLeft(18)}
-    </button>
-  {/if}
-  {#if arrows && canRight}
-    <button type="button" class="watch-activity__arrow watch-activity__arrow--right" aria-label="Позже" onclick={() => pageChart(1)}>
-      {@html iconChevronRight(18)}
-    </button>
-  {/if}
-{/snippet}
-
 {#if days.length || history.length}
   <section class="watch-activity uiv2-card" aria-label="Активность">
     {#if days.length}
@@ -205,7 +214,6 @@
               </div>
             {/each}
           </div>
-          {@render chartArrows()}
         </div>
       {:else}
         <div class="watch-activity__bars">
@@ -237,7 +245,6 @@
               {/each}
             </div>
           </div>
-          {@render chartArrows()}
         </div>
         <div class="watch-activity__heat-foot">
           <span class="watch-activity__picked">
@@ -355,26 +362,22 @@
     position: relative;
   }
 
-  .watch-activity__arrow {
-    position: absolute;
-    top: 40%;
-    display: grid;
-    place-items: center;
-    width: 2rem;
-    height: 2rem;
-    border: 1px solid color-mix(in srgb, var(--uikit-v2-text) 10%, transparent);
-    border-radius: 50%;
-    background: var(--uiv2-panel-bg);
-    color: var(--uikit-v2-text);
-    cursor: pointer;
-  }
+  /* Курсор-рука: полосу можно тащить мышью */
+  @media (pointer: fine) {
+    .watch-activity__chart,
+    .watch-activity__year {
+      cursor: grab;
+      user-select: none;
 
-  .watch-activity__arrow--left {
-    left: 0;
-  }
+      /* И над клетками дней: наведение и так показывает день внизу, а рука говорит, что полосу можно тащить */
+      :global(*) {
+        cursor: inherit !important;
+      }
+    }
 
-  .watch-activity__arrow--right {
-    right: 0;
+    :global(.watch-activity--dragging) {
+      cursor: grabbing;
+    }
   }
 
   .watch-activity__year {

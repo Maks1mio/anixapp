@@ -36,6 +36,16 @@ export function fmtWatchedTime(minutes: number): string {
   return `${mins} ${ruPlural(mins, 'минута', 'минуты', 'минут')}`;
 }
 
+/**
+ * То же время целиком в часах («1 172 часа») — рядом с «48 дней 20 часов».
+ * Пусто, пока не набралось суток: тогда основная подпись уже в часах.
+ */
+export function fmtWatchedHours(minutes: number): string {
+  const h = Math.floor(Math.max(0, Number(minutes) || 0) / 60);
+  if (h < 24) return '';
+  return `${h.toLocaleString('ru-RU')} ${ruPlural(h, 'час', 'часа', 'часов')}`;
+}
+
 /** Короткий формат; `watched_time` — минуты. */
 export function fmtTime(minutes: number): string {
   const h = Math.floor(minutes / 60);

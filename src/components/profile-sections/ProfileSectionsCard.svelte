@@ -28,6 +28,11 @@
   import OverviewCommentsWeek from '../overview/OverviewCommentsWeek.svelte';
   import BadgeTile from '../profile-badges/BadgeTile.svelte';
   import BadgeDetailSheet from '../profile-badges/BadgeDetailSheet.svelte';
+  import ProfileListModal from './ProfileListModal.svelte';
+  import ProfileComments from '../../views/ProfileComments.svelte';
+  import ProfileVideos from '../../views/ProfileVideos.svelte';
+  import { normalizeVideo } from '../../views/Release/_videoUtils';
+  import VideoList from '../video/VideoList.svelte';
   import { iconArrowRight, iconGripVertical, iconPalette, iconPin, iconSettings, iconStar } from '../icons';
   import type { ApiBadge } from '../../types/api';
 
@@ -97,7 +102,8 @@
       .map((c) => mapOverviewCommentWeek(c, profile))
       .filter((c): c is OverviewCommentWeekItem => !!c),
   );
-  const videos = $derived(objects(profile.release_video_preview));
+  // Поле API — release_videos_preview (во множественном числе); старое имя оставлено на всякий случай
+  const videos = $derived(objects(profile.release_videos_preview ?? profile.release_video_preview).map(normalizeVideo));
   const previewBadges = $derived(objects(profile.badges_preview) as unknown as ApiBadge[]);
   /** Порядок витрины после перетаскивания; остальные значки идут следом как пришли */
   let badgeOrder = $state<number[] | null>(null);
@@ -420,9 +426,18 @@
       navigate(isMyProfile ? '/bookmarks?tab=votes' : `/bookmarks?tab=votes&user=${profileId}`);
       return;
     }
-    const tail = id === 2 ? 'collections' : id === 3 ? 'comments' : 'videos';
-    navigate(isMyProfile ? `/profile/${tail}` : `/profile/${profileId}/${tail}`);
+    // Свои коллекции — вкладка «Мои» в разделе коллекций, чужие — список коллекций этого профиля
+    if (id === 2) {
+      navigate(isMyProfile ? '/collections/my' : `/profile/${profileId}/collections`);
+      return;
+    }
+    // Комментарии и видео: на ПК окном поверх профиля, на телефоне — отдельной страницей, как в приложении
+    const tail = id === 3 ? 'comments' : 'videos';
+    if (isMobileMode()) navigate(`/profile/${profileId}/${tail}`);
+    else listModal = tail;
   }
+
+  let listModal = $state<'comments' | 'videos' | null>(null);
 
   const pinOptions = $derived(sections.map((id) => ({ value: id, label: LABELS[id] })));
 
@@ -488,7 +503,19 @@
                   <span class="profile-v2__recent-poster">{#if thumb}<img src={thumb} alt="" loading="lazy" decoding="async" />{/if}</span>
                   <span class="profile-v2__recent-body">
                     <span class="profile-v2__recent-title">{item.title_ru || item.title_original || 'Без названия'}</span>
-                    <span class="profile-v2__recent-meta">★ {num(item.my_vote)}{#if num(item.voted_at)} · {fmtDate(num(item.voted_at))}{/if}</span>
+                    <!-- Оценка звёздами, как в закладках -->
+                    <span class="profile-v2__recent-meta pp-sections__vote">
+                      <span class="uiv2-anime-card__my-vote-stars" role="img" aria-label="Оценка {num(item.my_vote)} из 5">
+                        {#each [1, 2, 3, 4, 5] as n (n)}
+                          <span
+                            class="uiv2-anime-card__my-vote-star"
+                            class:uiv2-anime-card__my-vote-star--on={n <= num(item.my_vote)}
+                            aria-hidden="true"
+                          >{@html iconStar(13)}</span>
+                        {/each}
+                      </span>
+                      {#if num(item.voted_at)}<span>{fmtDate(num(item.voted_at))}</span>{/if}
+                    </span>
                   </span>
                 </button>
               </li>
@@ -499,7 +526,7 @@
         {/if}
       {:else if id === 2}
         {#if collections.length}
-          <UiV2ReleaseCarousel measureKey={collections.length} class="pp-sections__carousel--wide">
+          <UiV2ReleaseCarousel measureKey={collections.length} class="pp-sections__carousel--wide" scrollbar={false}>
             {#each collections as c (c.id)}
               <div class="uiv2-carousel__item">
                 <CollectionCard data={c} />
@@ -517,17 +544,8 @@
         {/if}
       {:else if id === 4}
         {#if videos.length}
-          <UiV2ReleaseCarousel measureKey={videos.length} class="pp-sections__carousel--wide">
-            {#each videos as v (v.id)}
-              {@const img = v.image ? resolveCdnAssetUrl(String(v.image)) : ''}
-              <div class="uiv2-carousel__item">
-                <button type="button" class="pp-sections__video" onclick={() => showAll(4)}>
-                  <span class="pp-sections__video-img">{#if img}<img src={img} alt="" loading="lazy" />{/if}</span>
-                  <span class="pp-sections__video-title">{String(v.title ?? '')}</span>
-                </button>
-              </div>
-            {/each}
-          </UiV2ReleaseCarousel>
+          <!-- Как в приложении: видео строками (превью, название, автор • дата, релиз, категория, «⋮») -->
+          <VideoList {videos} />
         {:else}
           <p class="pp-sections__empty">Видео пока нет</p>
         {/if}
@@ -660,6 +678,16 @@
   onSelect={onMenuSelect}
 />
 
+{#if listModal === 'comments'}
+  <ProfileListModal title="Комментарии" onClose={() => (listModal = null)}>
+    <ProfileComments id={profileId} embedded />
+  </ProfileListModal>
+{:else if listModal === 'videos'}
+  <ProfileListModal title={isMyProfile ? 'Мои видео' : 'Видео'} onClose={() => (listModal = null)}>
+    <ProfileVideos id={profileId} embedded />
+  </ProfileListModal>
+{/if}
+
 {#if openBadge}
   <BadgeDetailSheet badge={openBadge} onClose={() => (openBadge = null)} />
 {/if}
@@ -673,6 +701,10 @@
     flex-direction: column;
     /* = padding-top карточки: отступ над и под строкой вкладок одинаковый */
     gap: 0.75rem;
+    /* Боковое поле карточки — на него лента разделов выходит к краям */
+    --pp-pad-x: 0.85rem;
+    padding-left: var(--pp-pad-x);
+    padding-right: var(--pp-pad-x);
     /* Fade карусели под цвет карточки (по умолчанию — фон страницы) */
     --carousel-fade-color: color-mix(in srgb, var(--uikit-v2-text) 4%, var(--color-bg));
   }
@@ -700,6 +732,10 @@
     gap: 0.75rem;
     min-width: 0;
     overflow-x: auto;
+    /* Слева строка выходит к краю карточки (поле — внутри прокрутки), иначе вкладки обрывались по полю */
+    margin-left: calc(-1 * var(--pp-pad-x));
+    padding-left: var(--pp-pad-x);
+    scroll-padding-left: var(--pp-pad-x);
     padding-right: 1.5rem;
     scrollbar-width: none;
     mask-image: linear-gradient(to left, transparent, #000 1.5rem);
@@ -774,6 +810,24 @@
     transition: height 0.22s ease, opacity 0.22s ease, margin-top 0.22s ease;
   }
 
+  /* «Показать все» — контурная, как вкладки раздела, а не тёмная плашка поверх темы витрины */
+  .pp-sections__foot :global(.uiv2-btn) {
+    height: 2.5rem;
+    border: 1px solid color-mix(in srgb, var(--uikit-v2-text) 28%, transparent) !important;
+    border-radius: 0.625rem !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--uikit-v2-text) !important;
+    font-weight: 600;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .pp-sections__foot :global(.uiv2-btn:hover),
+  .pp-sections__foot :global(.uiv2-btn:focus-visible) {
+    border-color: color-mix(in srgb, var(--uikit-v2-text) 55%, transparent) !important;
+    background: color-mix(in srgb, var(--uikit-v2-text) 8%, transparent) !important;
+  }
+
   .pp-sections__details {
     display: block;
     margin: 0.25rem auto 0;
@@ -795,48 +849,30 @@
     text-align: center;
   }
 
+  /* Лента раздела — до краёв карточки: карточки уезжают под край, а не обрываются по внутреннему полю.
+     Первая карточка при этом стоит вровень с содержимым (поле переехало внутрь прокрутки) */
+  .pp-sections__body :global(.uiv2-carousel) {
+    width: auto;
+    margin-inline: calc(-1 * var(--pp-pad-x));
+  }
+
+  .pp-sections__body :global(.uiv2-carousel__scroll) {
+    padding-inline: var(--pp-pad-x);
+    scroll-padding-inline: var(--pp-pad-x);
+  }
+
+  .pp-sections__vote {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
   /* Коллекции и видео шире постеров */
   .pp-sections :global(.pp-sections__carousel--wide .uiv2-carousel__item) {
     flex-basis: 15rem;
     width: 15rem;
   }
 
-  .pp-sections__video {
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
-    width: 100%;
-    padding: 0;
-    border: none;
-    background: none;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .pp-sections__video-img {
-    overflow: hidden;
-    aspect-ratio: 16 / 9;
-    border-radius: 12px;
-    background: var(--uiv2-surface-raised);
-
-    img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-  }
-
-  .pp-sections__video-title {
-    display: -webkit-box;
-    overflow: hidden;
-    font-size: 0.8rem;
-    font-weight: 600;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
 
   .pp-sections__badge {
     touch-action: auto;

@@ -371,10 +371,21 @@ $pp-btn-bg-hover: var(--pp-btn-bg-hover);
   margin-bottom: 0.35rem;
 }
 
+// ПК: баннер — скруглённая карточка ниже строки «ники · закрыть» (52px), как на телефоне,
+// иначе эти кнопки лежали прямо на картинке
+html:not(.mobile-mode):not(.tv-mode) .profile-panel__inner-slide:first-child .profile-panel__top {
+  padding-top: 3.25rem;
+
+  // На всю ширину — вровень с шапкой профиля под ним
+  .profile-panel__banner {
+    border-radius: 1.5rem 1.5rem 0 0;
+  }
+}
+
 .profile-panel__banner {
   position: relative;
   overflow: hidden;
-  border-radius: 1.5rem 1.5rem 0 0;
+  border-radius: 0;
   width: 100%;
   aspect-ratio: 3.47 / 1;
   height: auto;

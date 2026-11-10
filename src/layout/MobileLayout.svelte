@@ -39,6 +39,10 @@
     profilePanelCanBack,
     profilePanelInnerView,
     profilePanelBack,
+    profilePanelGoTo,
+    profilePanelHistory,
+    profilePanelHistoryIndex,
+    openProfilePanel,
     resetProfilePanelHistory,
     setProfilePanelInnerView,
   } from '../stores/profile-panel';
@@ -140,7 +144,11 @@
   const floatBack = $derived(/^\/release\/\d+$/.test(path));
   const canShuffle = $derived(floatBack && $randomReleaseId === Number(path.split('/').pop()));
   /** Разделы со своей шапкой (DiscoverHero): заголовок уже в ней, назад ведёт системная кнопка. */
-  const ownHeader = $derived(['/overview/popular', '/fluo', '/agent'].includes(path));
+  const ownHeader = $derived(
+    ['/fluo', '/agent', '/notifications'].includes(path)
+    // Все комментарии / видео профиля: своя шапка «стрелка · аватар · экран / ник»
+    || /^\/profile\/\d+\/(comments|videos)$/.test(path),
+  );
   /** Чат занимает ровно экран: прокручивает сообщения сам, поле ввода внизу. */
   const fitPage = $derived(path === '/agent');
   /** Пока пишут в чате, панель разделов уходит, а высота учитывает клавиатуру, если WebView сам не сжался. */
@@ -179,7 +187,7 @@
     return null;
   });
   /** Корневые экраны разделов получают верхнюю панель с поиском; остальные — панель с «назад». */
-  const isRoot = $derived(['/', '/catalog', '/overview', '/bookmarks', '/feed'].includes(path) || inCollections);
+  const isRoot = $derived(['/', '/catalog', '/overview', '/overview/popular', '/bookmarks', '/feed'].includes(path) || inCollections);
   /** В закладках поле открывается в верхней панели, а результаты остаются на странице, в текущей вкладке. */
   const bookmarksSearching = $derived(path === '/bookmarks' && $bookmarksSearchOpen);
   const activeTab = $derived<MobileNavTab | null>(profileOpen ? 'profile' : rootTab);
@@ -210,6 +218,13 @@
     void path;
     showBars();
     moreOpen = false;
+  });
+
+  // Другой пользователь или возврат из «Друзей»/редактора — страница снова сверху, панель видна
+  $effect(() => {
+    void profileUserId;
+    void $profilePanelInnerView;
+    showBars();
   });
 
   /** Из профиля поиск идёт по пользователям, из коллекций — по коллекциям. */
@@ -255,6 +270,50 @@
     profilePanelOpen.set(true);
     profileOpen = true;
     showBars();
+  }
+
+  // ── Профиль — страница: открытые профили переживают перезагрузку ──
+  // Стопка профилей лежит в состоянии текущей записи истории (history.state сохраняется при перезагрузке страницы)
+  const PROFILE_STATE_KEY = 'anixMobileProfile';
+  type SavedProfiles = { ids: number[]; index: number };
+  // Читаем сразу: эффект ниже перезапишет состояние раньше, чем профили успеют открыться
+  const pendingProfiles = ((): SavedProfiles | undefined => {
+    try {
+      return (history.state as Record<string, unknown> | null)?.[PROFILE_STATE_KEY] as SavedProfiles | undefined;
+    } catch {
+      return undefined;
+    }
+  })();
+
+  $effect(() => {
+    const ids = $profilePanelHistory.map((e) => e.id);
+    const saved: SavedProfiles | null = !profileOpen || profileUserId == null
+      ? null
+      : ids.length
+        ? { ids, index: $profilePanelHistoryIndex }
+        : { ids: [profileUserId], index: 0 }; // свой профиль из вкладки открывается без стопки
+    try {
+      const state = { ...((history.state as Record<string, unknown> | null) ?? {}) };
+      if (saved) state[PROFILE_STATE_KEY] = saved;
+      else delete state[PROFILE_STATE_KEY];
+      history.replaceState(state, '');
+    } catch {
+      /* ignore */
+    }
+  });
+
+  function restoreProfiles(saved: SavedProfiles | undefined = pendingProfiles) {
+    const ids = (saved?.ids ?? []).filter((id) => Number.isFinite(id) && id > 0);
+    if (!ids.length) return;
+    for (const id of ids) openProfilePanel(id);
+    profilePanelGoTo(Math.max(0, Math.min(ids.length - 1, saved?.index ?? 0)));
+  }
+
+  // «Назад» со страницы, открытой из профиля (все комментарии, видео…): профиль возвращается, как экран в приложении
+  function onProfileHistoryPop() {
+    if (profileOpen) return;
+    const saved = (history.state as Record<string, unknown> | null)?.[PROFILE_STATE_KEY] as SavedProfiles | undefined;
+    if (saved) restoreProfiles(saved);
   }
 
   function closeProfile() {
@@ -372,11 +431,15 @@
       if (typeof id === 'number') {
         profileUserId = id;
         profileOpen = true;
+        // Новый профиль открывается с самого верха — панель поиска должна быть видна, даже если её спрятала прокрутка ленты
+        showBars();
       }
     };
     const onClose = () => { profileOpen = false; };
     window.addEventListener('anix:profilePanelOpen', onOpen);
     window.addEventListener('anix:profilePanelClose', onClose);
+    window.addEventListener('popstate', onProfileHistoryPop);
+    restoreProfiles();
     syncAvatar();
     window.addEventListener('anix:profileUpdated', syncAvatar);
     return () => {
@@ -388,6 +451,7 @@
       stopDl();
       window.clearTimeout(offlineStart);
       window.removeEventListener('anix:profilePanelOpen', onOpen);
+      window.removeEventListener('popstate', onProfileHistoryPop);
       window.removeEventListener('anix:profilePanelClose', onClose);
     };
   });
@@ -547,8 +611,18 @@
   <UiV2MediaLightbox />
 
   {#if profileOpen && profileUserId != null}
-    <div class="m-fullscreen m-fullscreen--profile" onscrollcapture={onContentScroll}>
-      <header class="m-topbar" class:m-topbar--float-hidden={barsHidden}>
+    <div
+      class="m-fullscreen m-fullscreen--profile"
+      class:m-fullscreen--profile-sub={$profilePanelInnerView !== 'overview'}
+      onscrollcapture={onContentScroll}
+    >
+      <header class="m-topbar" class:m-topbar--float-hidden={barsHidden || $profilePanelInnerView !== 'overview'}>
+        {#if $profilePanelCanBack}
+          <!-- Стопка профилей: вместо desktop-пилюли ников — обычная стрелка «назад» к предыдущему профилю -->
+          <button type="button" class="m-icon-btn m-icon-btn--lead" onclick={backInProfile} aria-label="Назад">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+          </button>
+        {/if}
         {@render searchEntry()}
         <button type="button" class="m-icon-btn" onclick={() => settingsModalOpen.set(true)} aria-label="Настройки">
           {@html iconSettings(24)}
@@ -666,7 +740,7 @@
   .m-fullscreen--profile {
     left: var(--m-rail-left);
     right: var(--m-rail-right);
-    z-index: 20; /* ниже таб-бара (30): профиль — вкладка, а не модалка */
+    z-index: 20; /* под таб-баром (30): нижняя панель видна и в профиле */
     /* Высота фиксирована окном: панель профиля (и редактор внутри неё) скроллит свой .page__scroll, как на desktop.
        Иначе цепочка height:100% у слайдов не определена и прокрутка не работает. */
     display: flex;
@@ -681,9 +755,10 @@
       overscroll-behavior: contain;
       padding-bottom: calc(var(--m-nav-h) + var(--safe-bottom) + var(--m-space-3));
     }
-
     /* вкладку закрывает таб-бар и системное «назад» — desktop-крестик не нужен */
     :global(.profile-panel__close) { display: none !important; }
+    /* desktop-хром (крестик + пилюля стопки профилей) поверх баннера не нужен: «назад» — в шапке и системный */
+    :global(.profile-panel__chrome) { display: none !important; }
   }
 
   .m-badge-count {

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { navigate } from '../../../../stores/navigation';
-  import { fmtWatchedTime } from '../../_utils';
+  import { fmtWatchedHours, fmtWatchedTime } from '../../_utils';
   import { profileShowcaseBackground } from '../../../../utils/profile-showcase-theme';
   import { toCdnProxyUrl } from '../../../../utils/posterUrl';
 
@@ -122,6 +122,7 @@
     if (!min) return '';
     return fmtWatchedTime(min);
   });
+  const watchHoursLabel = $derived(fmtWatchedHours(Number(profile.watched_time ?? 0)));
 
   const episodesLabel = $derived.by(() => {
     const n = Number(profile.watched_episode_count ?? 0);
@@ -185,7 +186,7 @@
         <p><span class="profile-v2__stats-totals-label">Просмотрено серий:</span> <strong>{episodesLabel}</strong></p>
       {/if}
       {#if watchTimeLabel}
-        <p><span class="profile-v2__stats-totals-label">Время просмотра:</span> <strong>~ {watchTimeLabel}</strong></p>
+        <p><span class="profile-v2__stats-totals-label">Время просмотра:</span> <strong class="profile-v2__stats-nowrap">~ {watchTimeLabel}</strong>{#if watchHoursLabel}{' '}<span class="profile-v2__stats-nowrap">или <strong>~ {watchHoursLabel}</strong></span>{/if}</p>
       {/if}
     </div>
   {/if}

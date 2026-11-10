@@ -552,6 +552,9 @@ contextBridge.exposeInMainWorld('anixApi', {
       ipcRenderer.invoke('anix:profileArticleComments', profileId, page, sort),
     getFavoriteVideos: (profileId, page = 0) =>
       ipcRenderer.invoke('anix:profileFavoriteVideos', profileId, page),
+    /** releaseVideoFavorite/add|delete — «Добавить к себе» / «Убрать от себя» у видео */
+    addFavoriteVideo: (videoId) => ipcRenderer.invoke('anix:videoFavoriteAdd', videoId),
+    removeFavoriteVideo: (videoId) => ipcRenderer.invoke('anix:videoFavoriteDelete', videoId),
     blockList: (page = 0) => ipcRenderer.invoke('anix:profileBlockList', page),
     blockAdd: (profileId) => ipcRenderer.invoke('anix:profileBlockListAdd', profileId),
     blockRemove: (profileId) => ipcRenderer.invoke('anix:profileBlockListRemove', profileId),

@@ -55,11 +55,16 @@
   import { isMobileMode } from './platform/mobile';
   import MobileWatch from './views/Watch.mobile/page.svelte';
 
-  /** Телефон: свой плеер под пальцы; лобби и локальные файлы — в полном desktop-плеере. */
+  /**
+   * Телефон: свой плеер под пальцы; лобби и локальные файлы — в полном desktop-плеере.
+   * Комната открывает плеер без lobby в адресе (lobbyIdle или обычные releaseId/ep), поэтому смотрим и на состояние комнаты:
+   * иначе пустая комната попадала в мобильный плеер с «Неверные параметры просмотра» и без кнопки выхода
+   */
   function useMobileWatch(): boolean {
     if (!isMobileMode()) return false;
+    if (getCurrentRoomId()) return false;
     const q = new URLSearchParams(window.location.search);
-    return !q.get('localFile') && !q.get('lobby') && !q.get('lobbyCode') && !q.get('playbackMode');
+    return !q.get('localFile') && !q.get('lobby') && !q.get('lobbyCode') && !q.get('lobbyIdle') && !q.get('playbackMode');
   }
   import MobileLayout from './layout/MobileLayout.svelte';
   import MobileDownloads from './views/MobileDownloads.svelte';

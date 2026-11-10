@@ -137,6 +137,8 @@ function buildWebAnixApi(): AnixApi {
         invoke('anix:profileArticleComments', profileId, page, sort),
       getFavoriteVideos: (profileId, page = 0) =>
         invoke('anix:profileFavoriteVideos', profileId, page),
+      addFavoriteVideo: (videoId) => invoke('anix:videoFavoriteAdd', videoId),
+      removeFavoriteVideo: (videoId) => invoke('anix:videoFavoriteDelete', videoId),
       blockList: (page = 0) => invoke('anix:profileBlockList', page),
       blockAdd: (profileId) => invoke('anix:profileBlockListAdd', profileId),
       blockRemove: (profileId) => invoke('anix:profileBlockListRemove', profileId),

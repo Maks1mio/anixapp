@@ -1382,6 +1382,22 @@ ipcMain.handle('anix:profileArticleComments', async (_, profileId, page = 0, sor
   }
 });
 
+ipcMain.handle('anix:videoFavoriteAdd', async (_, videoId) => {
+  try {
+    return await getAnixart().endpoints.releaseVideoFavorite.add(videoId);
+  } catch (err) {
+    handleAnixError(err, 'videoFavoriteAdd');
+  }
+});
+
+ipcMain.handle('anix:videoFavoriteDelete', async (_, videoId) => {
+  try {
+    return await getAnixart().endpoints.releaseVideoFavorite.delete(videoId);
+  } catch (err) {
+    handleAnixError(err, 'videoFavoriteDelete');
+  }
+});
+
 ipcMain.handle('anix:profileFavoriteVideos', async (_, profileId, page = 0) => {
   try {
     const client = getAnixart();

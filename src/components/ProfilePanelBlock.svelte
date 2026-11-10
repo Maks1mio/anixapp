@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick, untrack } from 'svelte';
+  import { onMount, onDestroy, tick, untrack, setContext } from 'svelte';
+  import { UIV2_BACK_BAR_AVATAR } from './uikit-v2/UiV2BackBar.svelte';
   import Page from './Page.svelte';
   import AnimatedMediaOverlay from './AnimatedMediaOverlay.svelte';
   import {
@@ -100,6 +101,8 @@
 
   const login = $derived(String(profile?.login ?? 'Профиль'));
   const avatarUrl = $derived(profile?.avatar ? posterUrl(String(profile.avatar)) : '');
+  // Шапки внутренних экранов (друзья, значки, редактор …) показывают аватарку профиля рядом со стрелкой
+  setContext(UIV2_BACK_BAR_AVATAR, () => avatarUrl);
   /** Anixart 11+: анимированный аватар (видео) */
   const avatarAnimation = $derived(
     typeof profile?.avatar_animation === 'string' ? String(profile.avatar_animation) : '',
@@ -125,10 +128,12 @@
     return ts ? fmtLastSeen(ts) : '';
   });
   const metaSecondary = $derived(registerLabel || activityLabel);
-  /** Как в приложении: рядом с рейтингом «был(а) в сети», а дата регистрации раскрывается стрелкой. В сети — сразу дата. */
+  /** Как в приложении: рядом с рейтингом «в сети» / «был(а) в сети», а дата регистрации раскрывается стрелкой. */
   const lastOnlineLabel = $derived.by(() => {
-    const ts = Number(profile?.last_activity_time ?? 0);
-    return profile && !profile.is_online && ts ? fmtLastSeen(ts) : '';
+    if (!profile) return '';
+    if (profile.is_online) return 'в сети';
+    const ts = Number(profile.last_activity_time ?? 0);
+    return ts ? fmtLastSeen(ts) : '';
   });
   const metaLine = $derived(lastOnlineLabel || registerLabel);
   const incognitoHint = $derived(isMyProfile && !!profile?.is_incognito);

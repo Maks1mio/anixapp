@@ -2241,6 +2241,11 @@
   max-width: 100%;
 }
 
+// Аватарка у стрелки — только в мобильной шапке (mobile-overrides)
+.uiv2-back-bar__avatar {
+  display: none;
+}
+
 .uiv2-back-bar__pill {
   min-width: 0;
   flex: 0 1 auto;
@@ -4676,6 +4681,38 @@
   min-height: 2.5rem;
 }
 
+// Мета под заголовком меню (видео: «автор • дата», релиз, категория) и черта до пунктов
+.uiv2-popup-menu__desc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin: 0 0.75rem 0.35rem;
+  padding: 0 0 0.55rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--uiv2-popup-fg) 12%, transparent);
+}
+
+.uiv2-popup-menu__desc-line {
+  overflow: hidden;
+  color: var(--uiv2-fg-muted);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.uiv2-menu-sheet .uiv2-popup-menu__desc {
+  margin: 0 12px 4px;
+  padding-bottom: 12px;
+  border-bottom-color: color-mix(in srgb, var(--sheet-text) 12%, transparent);
+}
+
+.uiv2-menu-sheet .uiv2-popup-menu__desc-line {
+  color: var(--sheet-muted);
+  font-family: var(--sheet-font);
+  font-size: 14px;
+  white-space: normal;
+}
+
 .uiv2-popup-menu__header-slot {
   position: relative;
   flex: 1 1 auto;
@@ -5139,6 +5176,38 @@
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+// Заголовок шторки: не мелкая подпись desktop-попапа, а заголовок экрана — на одной линии с иконками строк
+.uiv2-menu-sheet .uiv2-popup-menu__header.uiv2-menu-sheet__bar {
+  min-height: 0;
+  margin: 4px 0 6px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+}
+
+.uiv2-menu-sheet .uiv2-popup-menu__header-slot {
+  min-width: 0;
+  flex: 1;
+  height: 32px;
+}
+
+.uiv2-menu-sheet .uiv2-popup-menu__header-title {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  padding: 0;
+  color: var(--sheet-text);
+  font-family: var(--sheet-font);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: normal;
+  line-height: 1.3;
+  text-transform: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 1;
 }
 
 .uiv2-menu-sheet .uiv2-popup-menu__row {

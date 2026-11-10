@@ -406,8 +406,114 @@ html.mobile-mode {
   html.mobile-mode .release-page__recommended .release-page__section-bg { border-radius: var(--m-radius-lg); }
 }
 
-// Просмотр картинок: перелистывание пальцем не должно уходить в прокрутку браузера
-html.mobile-mode .uiv2-media-lightbox { touch-action: none; }
+// ── Просмотр картинок: на весь экран, как в галерее телефона ──
+// Чёрный фон под строкой состояния и панелью навигации, картинка по краям экрана,
+// сверху панель «закрыть · счётчик · скачать · ссылка». Жесты обрабатывает сам компонент
+// Подложка строки состояния цвета темы поверх чёрного фона не нужна
+html.mobile-mode.mobile-native body:has(.uiv2-media-lightbox--mobile)::after { display: none; }
+
+html.mobile-mode .uiv2-media-lightbox--mobile {
+  z-index: 1300;
+  padding: 0;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+
+  .uiv2-media-lightbox__backdrop {
+    pointer-events: none;
+    background: #000;
+    opacity: calc(1 - var(--lightbox-drag, 0) * 0.85);
+  }
+
+  // Кадр — весь экран: маленькие картинки растягиваются до краёв, масштаб считается от видимой части
+  .uiv2-media-lightbox__stage {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    border-radius: 0;
+
+    img {
+      width: 100cqw !important;
+      height: 100cqh !important;
+      max-width: none;
+      max-height: none;
+      background: none;
+      transform-origin: center center;
+    }
+
+    video {
+      max-width: 100cqw;
+      max-height: calc(100cqh - var(--safe-top) - var(--safe-bottom) - 128px);
+    }
+  }
+
+  .uiv2-media-lightbox__peek {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+
+    img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+  }
+
+  &.uiv2-media-lightbox--settle {
+    .uiv2-media-lightbox__stage,
+    .uiv2-media-lightbox__stage img,
+    .uiv2-media-lightbox__peek {
+      transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+  }
+
+  .uiv2-media-lightbox__toolbar {
+    inset: 0 0 auto;
+    gap: var(--m-space-1);
+    padding: calc(var(--safe-top) + var(--m-space-2)) calc(var(--safe-right) + var(--m-space-2)) var(--m-space-6) calc(var(--safe-left) + var(--m-space-2));
+    background: linear-gradient(to bottom, color-mix(in srgb, #000 60%, transparent), transparent);
+    pointer-events: none;
+  }
+
+  .uiv2-media-lightbox__tool {
+    width: 48px;
+    height: 48px;
+    background: none;
+    pointer-events: auto;
+
+    &:hover:not(:disabled),
+    &:focus-visible { background: color-mix(in srgb, #fff 12%, transparent); outline: none; }
+
+    svg { width: 22px; height: 22px; }
+
+    // «Закрыть» — слева, как «назад» в галерее
+    &:last-child { order: -1; margin-right: auto; }
+  }
+
+  .uiv2-media-lightbox__count {
+    top: calc(var(--safe-top) + var(--m-space-2) + 24px);
+    bottom: auto;
+    transform: translate(-50%, -50%);
+    padding: 0;
+    background: none;
+    font: 500 16px/1 var(--m-font);
+    pointer-events: none;
+  }
+
+  .uiv2-media-lightbox__toolbar,
+  .uiv2-media-lightbox__count {
+    opacity: calc(1 - var(--lightbox-drag, 0) * 2);
+    transition: opacity 0.18s ease;
+  }
+
+  // Тап по картинке прячет панель, повторный — возвращает
+  &.uiv2-media-lightbox--bare {
+    .uiv2-media-lightbox__toolbar,
+    .uiv2-media-lightbox__count { opacity: 0; }
+    .uiv2-media-lightbox__tool { pointer-events: none; }
+  }
+}
 
 // ── Загрузки в окне «Выберите серию» ──
 html.mobile-mode {
@@ -503,6 +609,29 @@ html.mobile-mode {
     background: var(--m-surface-sheet) !important;
     border: 0 !important;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+    transition: bottom 0.2s ease;
+  }
+
+  // Панель уехала вниз при прокрутке: карточка опускается на её место и не висит в воздухе
+  &:has(.m-dock--hidden) .support-promo {
+    bottom: calc(var(--safe-bottom) + var(--m-space-3)) !important;
+  }
+}
+
+// ── Все комментарии и видео профиля — страница, как в приложении: «назад» — стрелка верхней панели,
+//    вкладки сверху (общее правило закладок ниже уводит .bookmarks__tabs в конец), «N всего» и сортировка с полями ──
+html.mobile-mode {
+  // Список видео — с полями экрана и отступом от шапки
+  .view-profile-videos .video-list { padding: var(--m-space-3) var(--m-gutter) 0; }
+  :is(.view-profile-comments, .view-profile-videos) .profile-subpage__head { position: sticky; top: 0; z-index: 12; margin: 0 0 var(--m-space-2); }
+  .view-profile-comments {
+    // Шапка, вкладки и список вплотную: без desktop-зазоров .search-page
+    .search-page { gap: 0; }
+    .profile-comments__sticky--page { top: 0; background: var(--m-bg); }
+    // Липкий здесь весь блок: у шапки своё sticky и черта не нужны — черта есть под вкладками
+    .profile-comments__sticky--page .profile-subpage__head { position: static; margin-bottom: 0; box-shadow: none; animation: none; }
+    .profile-comments__tabs { margin: 0 !important; padding-top: 0 !important; }
+    .profile-comments__thread { padding-inline: var(--m-gutter); }
   }
 }
 
@@ -602,23 +731,45 @@ html.mobile-mode {
   .release-page__screenshot-btn { width: auto !important; border-radius: var(--m-radius-md) !important; overflow: hidden; }
 }
 
+@keyframes m-head-divider {
+  from { box-shadow: inset 0 -1px 0 transparent; }
+  to { box-shadow: inset 0 -1px 0 var(--m-outline-variant); }
+}
+
 // ── Профиль, как в Anixart: баннер на всю ширину, контент — «шторка» со скруглением 28dp поверх баннера;
-//    «Редактировать» — контурная кнопка, соцсети — контурные плитки в цвете сервиса ──
+//    кнопки действий — как на ПК, соцсети — контурные плитки в цвете сервиса ──
 html.mobile-mode {
   .m-fullscreen--profile {
-    // Телефон: баннер уходит под строку состояния, панель поиска лежит поверх него и прячется при прокрутке.
-    // На планшете баннер — карточка по ширине страницы, панель остаётся над ним
+    // Баннер — скруглённая карточка под панелью поиска (и на телефоне, и на планшете).
+    // Панель лежит поверх содержимого с фоном страницы, как на других вкладках, и прячется при прокрутке:
+    // в потоке она при скрытии оставляла бы пустую полосу 69px
     .profile-panel__banner {
-      height: calc(174px + var(--safe-top)) !important; border-radius: 0 !important;
-      @media (min-width: 600px) { height: auto !important; margin-top: var(--m-space-3); border-radius: 24px 24px 0 0 !important; }
+      margin-top: 0;
+      border-radius: 24px 24px 0 0 !important;
+      // На всю ширину — вровень с шапкой профиля под ним
+      @media (max-width: 599px) { height: 168px !important; }
+      @media (min-width: 600px) { height: auto !important; }
     }
-    @media (max-width: 599px) {
-      > .m-topbar {
-        position: absolute;
-        inset: 0 0 auto;
-        z-index: 2;
-        .m-icon-btn { margin-left: var(--m-space-1); background: color-mix(in srgb, var(--m-bg) 55%, transparent); }
+    // Панель без подложки: поиск, настройки и уведомления — отдельные полупрозрачные островки
+    > .m-topbar {
+      position: absolute;
+      inset: 0 0 auto;
+      z-index: 2;
+      background: none !important;
+      .m-search, .m-icon-btn {
+        background: color-mix(in srgb, var(--m-bg) 55%, transparent);
+        backdrop-filter: blur(12px);
       }
+      .m-icon-btn { margin-left: var(--m-space-1); }
+      .m-icon-btn--lead { margin-left: 0; margin-right: var(--m-space-1); flex: none; }
+    }
+
+    .profile-panel__inner-slide:first-child .profile-panel__top { padding-top: calc(var(--safe-top) + 69px); }
+
+    // Внутренний экран (друзья, редактор …): шапки поиска нет, своя шапка начинается под строкой состояния
+    &.m-fullscreen--profile-sub > .m-topbar { display: none; }
+    &.m-fullscreen--profile-sub .profile-panel__inner-slide + .profile-panel__inner-slide {
+      padding-top: var(--safe-top);
     }
     .profile-panel__head {
       position: relative; z-index: 1;
@@ -626,11 +777,6 @@ html.mobile-mode {
       border-radius: 28px 28px 0 0; background: var(--m-bg);
     }
     .profile-panel__identity { margin-top: -60px; }
-    .profile-panel__cta .uiv2-btn--chrome {
-      height: 48px !important; border: 1.5px solid var(--m-outline) !important; background: transparent !important;
-      box-shadow: none !important; color: var(--m-text) !important; font: 500 16px var(--m-font) !important;
-    }
-    .profile-panel__cta .uiv2-round-btn { width: 48px !important; height: 48px !important; background: var(--m-surface-sheet) !important; box-shadow: none !important; svg { transform: rotate(90deg); } }
     .profile-panel__social-row { gap: var(--m-space-5) !important; }
     .profile-panel__social-row .uiv2-round-btn {
       width: 64px !important; height: 42px !important; border-radius: 12px !important; box-shadow: none !important;
@@ -656,6 +802,54 @@ html.mobile-mode {
     }
     .profile-panel__edit-divider { margin: var(--m-space-3) var(--m-gutter); background: var(--m-outline-variant); }
   }
+}
+
+
+// ── Шапка подэкранов профиля (друзья, значки, редактор, все комментарии / видео): стрелка, аватар, заголовок ──
+html.mobile-mode :is(.m-fullscreen--profile, .view-profile-comments, .view-profile-videos) {
+    // Внутренние экраны (друзья, значки, редактор …): вместо desktop-пилюли «Экран | ник» —
+    // верхняя панель Android: стрелка «назад» без подложки, заголовок экрана и под ним контекст мелким
+    :is(.profile-panel__friends-head, .profile-subpage__head) {
+      padding: var(--m-space-2) var(--m-gutter) var(--m-space-2) var(--m-space-1) !important;
+      background: var(--m-bg);
+      // Черта под шапкой, когда содержимое уходит под неё (без поддержки scroll-timeline — всегда)
+      box-shadow: inset 0 -1px 0 var(--m-outline-variant);
+      @supports (animation-timeline: scroll()) {
+        animation: m-head-divider linear both;
+        animation-timeline: scroll(nearest block);
+        animation-range: 0 12px;
+      }
+    }
+    .uiv2-back-bar { display: flex; width: 100%; gap: var(--m-space-1); }
+    .uiv2-back-bar > .uiv2-round-btn {
+      flex: none; width: 48px !important; height: 48px !important; border-radius: 50% !important;
+      background: transparent !important; box-shadow: none !important; backdrop-filter: none !important;
+      color: var(--m-text) !important;
+      svg { width: 24px; height: 24px; }
+      &:active { background: var(--m-surface-block) !important; }
+    }
+    .uiv2-back-bar { align-items: center; }
+    .uiv2-back-bar__avatar {
+      display: block; flex: none; width: 40px; height: 40px; margin-right: var(--m-space-2);
+      border-radius: 50%; background: var(--m-surface-block) center / cover no-repeat;
+    }
+    .uiv2-back-bar__pill {
+      flex: 1 1 auto; max-width: none; height: auto; overflow: hidden;
+      border-radius: 0; background: none; box-shadow: none; backdrop-filter: none;
+    }
+    .uiv2-back-bar__track {
+      flex-wrap: wrap; align-items: baseline; column-gap: 6px; row-gap: 0;
+      width: auto; min-width: 0; padding: 0;
+    }
+    .uiv2-back-bar__sep { display: none; }
+    .uiv2-back-bar__seg {
+      max-width: 100%; padding: 0; border-radius: 0; background: none;
+      font: 400 13px/1.3 var(--m-font); color: var(--m-text-2);
+      &--active { order: -1; flex: 0 0 100%; font: 500 20px/1.25 var(--m-font); color: var(--m-text); }
+    }
+    .uiv2-back-bar__seg:not(.uiv2-back-bar__seg--active) ~ .uiv2-back-bar__seg:not(.uiv2-back-bar__seg--active)::before {
+      content: '·'; margin-right: 6px;
+    }
 }
 
 // ── Связанные релизы, как в Anixart: компактные строки (постер 48×71, название, «год • оценка ★ тип»),
@@ -755,13 +949,49 @@ html.mobile-mode {
   }
 }
 
-// ── Уведомления — страница: заголовок на одной строке с «назад» из верхней панели, скроллится список ──
+// ── Уведомления — страница со своей шапкой: «назад», заголовок и действия в одной строке, ниже вкладки и список ──
 html.mobile-mode {
   .notifications-page {
-    // 69 — внутренняя верхняя панель (12 + 48 + 9)
-    height: calc(100dvh - 69px - var(--m-nav-h) - var(--safe-top) - var(--safe-bottom));
-    .notifications-modal__header { margin: -57px 0 9px 48px; min-height: 48px; padding: 0 var(--m-space-2); border-bottom: 0; }
-    .notifications-modal__heading { font: 600 20px/1.2 var(--m-font); }
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - var(--safe-top) - var(--m-nav-h) - var(--safe-bottom));
+
+    .notifications-modal__header {
+      flex: none;
+      gap: var(--m-space-1);
+      min-height: 64px;
+      margin: 0;
+      padding: var(--m-space-2) var(--m-space-2) var(--m-space-2) var(--m-space-1);
+      border-bottom: 0;
+    }
+    .notifications-modal__back {
+      display: grid; place-items: center; flex: none;
+      width: 48px; height: 48px; padding: 0; border: 0; border-radius: 50%;
+      background: none; color: var(--m-text);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .notifications-modal__heading { flex: 1; min-width: 0; font: 600 20px/1.2 var(--m-font); color: var(--m-text); }
+    .notifications-modal__header-actions { gap: var(--m-space-1); }
+    .notifications-modal__header-actions .uiv2-round-btn {
+      width: 44px !important; height: 44px !important;
+      background: var(--m-surface-chip) !important; color: var(--m-text) !important;
+      svg { width: 20px; height: 20px; }
+    }
+
+    .notifications-modal__page { flex: 1; min-height: 0; }
+
+    // Строки как в списках Anixart: аватар 48, текст 15, время мелко под ним
+    .notifications-modal__item {
+      gap: var(--m-space-3);
+      padding: var(--m-space-3) var(--m-gutter);
+      border-radius: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .notifications-modal__item--new { background: color-mix(in srgb, var(--m-text) 4%, transparent); }
+    .notifications-modal__thumb { width: 48px; height: 48px; }
+    .notifications-modal__text { color: var(--m-text); font: 400 15px/1.4 var(--m-font); }
+    .notifications-modal__time { margin-top: var(--m-space-1); color: var(--m-text-2); font-size: 13px; }
+    .notifications-modal__state { color: var(--m-text-2); font-size: 15px; }
   }
 }
 

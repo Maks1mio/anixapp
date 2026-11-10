@@ -93,6 +93,8 @@
     sheet?: boolean;
     /** На ПК шторка остаётся внутри ближайшего позиционированного окна (панель профиля), а не на всё окно приложения */
     sheetInPlace?: boolean;
+    /** Строки под заголовком (мета объекта: «автор • дата», релиз…) — с чертой до пунктов */
+    description?: string[];
     /** Скелетон вместо пунктов списка */
     loading?: boolean;
     /** Число строк скелетона */
@@ -121,6 +123,7 @@
     onTrailingClick,
     sheet = false,
     sheetInPlace = false,
+    description = [],
     loading = false,
     loadingRows = 7,
   }: Props = $props();
@@ -1081,6 +1084,16 @@
   {/if}
 {/snippet}
 
+{#snippet menuDescription()}
+  {#if description.length && !sheetLevelItem}
+    <div class="uiv2-popup-menu__desc">
+      {#each description as line, i (i)}
+        <span class="uiv2-popup-menu__desc-line">{line}</span>
+      {/each}
+    </div>
+  {/if}
+{/snippet}
+
 {#snippet menuHeader()}
   <div class="uiv2-popup-menu__header-slot">
     {#if searchOpen}
@@ -1178,6 +1191,7 @@
           <div class="uiv2-popup-menu__header uiv2-menu-sheet__bar">
             {@render menuHeader()}
           </div>
+          {@render menuDescription()}
         {/if}
       </div>
       <div class="uiv2-menu-sheet__body" style:height={sheetBodyHeight == null ? undefined : `${sheetBodyHeight}px`}>
@@ -1242,6 +1256,7 @@
         <div class="uiv2-popup-menu__header">
           {@render menuHeader()}
         </div>
+        {@render menuDescription()}
       {/if}
       <div
         class="uiv2-popup-menu__scroll uiv2-scroll-area uiv2-scroll-area--y"

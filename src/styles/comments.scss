@@ -938,3 +938,29 @@ $anix-comment-thread-color: color-mix(in srgb, $color-border 85%, transparent);
     padding-left: 0.35rem;
   }
 }
+
+// ── Все комментарии профиля: список сразу под строкой вкладок ──
+.view-profile-comments {
+  // В окне профиля закреплены только вкладки (обёртка не мешает их sticky)
+  .profile-comments__sticky {
+    display: contents;
+  }
+
+  // Отдельная страница: шапка и вкладки закреплены вместе
+  .profile-comments__sticky--page {
+    position: sticky;
+    top: calc(-1 * var(--page-scroll-padding, 0rem));
+    z-index: 12;
+    display: block;
+    background: var(--uikit-v2-bg);
+
+    // Вкладки внутри — статичные (uiv2-tabs--static): липнет весь блок
+    .profile-comments__tabs {
+      margin-bottom: 0;
+    }
+  }
+
+  .search-page__results {
+    gap: 0;
+  }
+}

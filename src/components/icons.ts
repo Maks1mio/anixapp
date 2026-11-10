@@ -49,6 +49,7 @@ import {
   LayoutGrid,
   LayoutList,
   Link,
+  ExternalLink,
   List,
   ListChecks,
   ListOrdered,
@@ -619,6 +620,10 @@ export function iconItalic(size = 16): string {
 
 export function iconLink(size = 16): string {
   return toSvg(Link, size);
+}
+
+export function iconExternalLink(size = 16): string {
+  return toSvg(ExternalLink, size);
 }
 
 export function iconHeading(size = 16): string {

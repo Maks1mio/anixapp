@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { navigate } from '../stores/navigation';
+  import { goBack, navigate } from '../stores/navigation';
   import { openFeedArticle, openFeedChannel } from '../stores/feed-focus';
   import { handleUserProfileClick } from '../stores/user-profile';
   import { fetchAllNotifications, markNotificationsRead } from '../stores/notifications';
@@ -354,6 +354,11 @@
 
 {#snippet content()}
     <header class="notifications-modal__header">
+      {#if page && isMobileMode()}
+        <button type="button" class="notifications-modal__back" aria-label="Назад" onclick={goBack}>
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5" /><path d="m12 19-7-7 7-7" /></svg>
+        </button>
+      {/if}
       <h2 class="notifications-modal__heading">Уведомления</h2>
       <div class="notifications-modal__header-actions">
         <UiV2RoundButton

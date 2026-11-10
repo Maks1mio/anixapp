@@ -996,6 +996,8 @@ export function createBrowserAnixBridge() {
       c.getClient().endpoints.profile.getArticleComments(profileId, page, sort)),
     'anix:profileFavoriteVideos': h((c, profileId, page = 0) =>
       c.getClient().endpoints.profile.getFavoriteVideos(profileId, page)),
+    'anix:videoFavoriteAdd': h((c, videoId) => c.getClient().endpoints.releaseVideoFavorite.add(videoId)),
+    'anix:videoFavoriteDelete': h((c, videoId) => c.getClient().endpoints.releaseVideoFavorite.delete(videoId)),
     'anix:getProfileSettings': h((c) => c.getClient().endpoints.settings.getCurrentProfileSettings()),
     'anix:profileHealthStatus': h((c) => c.getClient().endpoints.profileHealth.status()),
     'anix:profileHealthAccount': h((c, page = 0) => c.getClient().endpoints.profileHealth.account(page)),

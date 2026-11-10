@@ -283,6 +283,10 @@ export interface AnixApi {
     getCollectionComments: (profileId: number, page?: number, sort?: number) => Promise<{ content?: Record<string, unknown>[] }>;
     getArticleComments: (profileId: number, page?: number, sort?: number) => Promise<{ content?: Record<string, unknown>[] }>;
     getFavoriteVideos: (profileId: number, page?: number) => Promise<{ content?: Record<string, unknown>[] }>;
+    /** releaseVideoFavorite/add — видео «к себе» */
+    addFavoriteVideo?: (videoId: number) => Promise<{ code?: number } | null>;
+    /** releaseVideoFavorite/delete */
+    removeFavoriteVideo?: (videoId: number) => Promise<{ code?: number } | null>;
     blockList: (page?: number) => Promise<{
       content?: Array<{
         id?: number;

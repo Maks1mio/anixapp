@@ -702,6 +702,11 @@
     font-weight: 400;
   }
 
+  // «~ 26 дней 23 часа» и «или ~ 647 часов» не рвутся посередине: на узком экране второе уходит строкой ниже целиком
+  &__stats-nowrap {
+    white-space: nowrap;
+  }
+
   &__stats-more {
     display: block;
     width: 100%;

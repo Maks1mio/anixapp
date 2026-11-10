@@ -629,10 +629,8 @@
       <!-- Recommendations -->
       <ReleaseRecommendations items={recommendedCards} />
 
-      <!-- Comments -->
-      {#if commentCount > 0 || comments.length > 0}
-        <ReleaseComments releaseId={id} {comments} totalCount={commentCount} commentsRoot={release} />
-      {/if}
+      <!-- Comments: блок с полем ввода есть всегда — у нового тайтла можно оставить первый комментарий -->
+      <ReleaseComments releaseId={id} {comments} totalCount={commentCount} commentsRoot={release} />
 
     </section>
   {/if}

@@ -10,6 +10,10 @@ export interface ReleaseVideoItem {
   category?: { id: number; name: string };
   hosting?: { id: number; name: string; icon?: string };
   profile?: { login?: string; nickname?: string };
+  /** Релиз видео (в профиле видео разных релизов) */
+  release?: { id: number; title: string };
+  /** Видео «у себя» (releaseVideoFavorite) */
+  isFavorite?: boolean;
 }
 
 export interface ReleaseVideoBlockData {
@@ -37,6 +41,8 @@ export function normalizeVideo(raw: Record<string, unknown>): ReleaseVideoItem {
   const profile = raw.profile as Record<string, unknown> | undefined;
   const category = raw.category as Record<string, unknown> | undefined;
   const hosting = raw.hosting as Record<string, unknown> | undefined;
+  const release = raw.release && typeof raw.release === 'object' ? raw.release as Record<string, unknown> : undefined;
+  const releaseTitle = String(release?.title_ru ?? release?.titleRu ?? release?.title_original ?? '').trim();
   return {
     id: Number(raw.id ?? 0),
     title: String(raw.title ?? ''),
@@ -57,6 +63,8 @@ export function normalizeVideo(raw: Record<string, unknown>): ReleaseVideoItem {
     profile: profile
       ? { login: profile.login ? String(profile.login) : undefined, nickname: profile.nickname ? String(profile.nickname) : undefined }
       : undefined,
+    release: release && Number(release.id) > 0 ? { id: Number(release.id), title: releaseTitle } : undefined,
+    isFavorite: !!(raw.is_favorite ?? raw.isFavorite),
   };
 }
 

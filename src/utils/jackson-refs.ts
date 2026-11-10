@@ -129,3 +129,56 @@ export function resolveJacksonPreviewList<T extends Record<string, unknown>>(
     })
     .filter((item): item is T => item != null);
 }
+
+/**
+ * Разворот ссылок с учётом типа: у Anixart (@JsonIdentityInfo IntSequenceGenerator) у каждого класса
+ * своя нумерация `@id` — Release #3 и Comment #3 в одном ответе. Общий индекс подставлял в `release`
+ * чужой объект (комментарий) → «Без названия». Здесь индекс по имени поля: `release: 3` ищется только
+ * среди объектов, стоявших в полях `release`.
+ */
+export function resolveJacksonRefsByKey<T>(root: T, keys: readonly string[]): T {
+  const byKey = new Map<string, Map<number, Record<string, unknown>>>(keys.map((k) => [k, new Map()]));
+
+  function index(node: unknown): void {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      node.forEach(index);
+      return;
+    }
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      const bucket = byKey.get(key);
+      if (bucket && value && typeof value === 'object' && !Array.isArray(value)) {
+        const obj = value as Record<string, unknown>;
+        const id = normalizeJacksonId(obj['@id']);
+        if (id != null && !isJacksonRef(obj)) bucket.set(id, obj);
+      }
+      index(value);
+    }
+  }
+
+  const seen = new WeakSet<object>();
+  function resolve(node: unknown): void {
+    if (!node || typeof node !== 'object' || seen.has(node)) return;
+    seen.add(node);
+    if (Array.isArray(node)) {
+      node.forEach(resolve);
+      return;
+    }
+    const obj = node as Record<string, unknown>;
+    for (const [key, value] of Object.entries(obj)) {
+      const bucket = byKey.get(key);
+      if (bucket) {
+        const ref = typeof value === 'object' && value && !Array.isArray(value) && isJacksonRef(value as Record<string, unknown>)
+          ? normalizeJacksonId((value as Record<string, unknown>)['@id'])
+          : typeof value === 'number' || typeof value === 'string' ? normalizeJacksonId(value) : null;
+        const target = ref != null ? bucket.get(ref) : undefined;
+        if (target) obj[key] = target;
+      }
+      resolve(obj[key]);
+    }
+  }
+
+  index(root);
+  resolve(root);
+  return root;
+}

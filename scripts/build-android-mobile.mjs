@@ -78,7 +78,7 @@ if (!existsSync(apk)) {
 const outDir = path.join(root, 'release');
 mkdirSync(outDir, { recursive: true });
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
-const apkDest = path.join(outDir, `AnixApp-Mobile-${pkg.version}-alpha.apk`);
+const apkDest = path.join(outDir, `AnixApp-Mobile-${pkg.version}.apk`);
 cpSync(apk, apkDest);
 console.log('✓ APK (Android телефон):', apkDest);
 

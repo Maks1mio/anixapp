@@ -14,7 +14,7 @@ const remoteUrl = (process.env.ANIXAPP_TV_LIVE_URL || process.env.ANIXAPP_TV_REM
 const config: CapacitorConfig = {
   // Временный placeholder-id мобильной сборки; финальный id и название будут заданы отдельно.
   appId: isMobile ? 'com.mobileapp.anix' : 'com.anixapp.tv',
-  appName: isMobile ? 'Anix Mobile' : 'AnixApp',
+  appName: 'AnixApp',
   webDir: isMobile ? 'dist-mobile' : 'dist-android',
   android: {
     path: isMobile ? 'android-mobile' : 'android',

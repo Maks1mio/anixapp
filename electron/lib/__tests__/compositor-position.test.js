@@ -1,7 +1,12 @@
 'use strict';
 
-const { describe, it, beforeEach, afterEach, after } = require('node:test');
+const { describe, it, beforeEach, afterEach, before, after } = require('node:test');
 const assert = require('node:assert/strict');
+
+// Позиционирование работает только на Linux: тесты притворяются Linux, чтобы проходить и на Windows/macOS
+const realPlatform = process.platform;
+before(() => Object.defineProperty(process, 'platform', { value: 'linux' }));
+after(() => Object.defineProperty(process, 'platform', { value: realPlatform }));
 const {
   BANNER_WINDOW_TITLE,
   resolveOzonePlatform,

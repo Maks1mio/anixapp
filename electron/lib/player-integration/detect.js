@@ -216,8 +216,9 @@ function darwinCandidates(name, home = os.homedir()) {
   if (process.platform !== 'darwin') return [];
   const spec = DARWIN_APPS[name];
   if (!spec) return [];
-  const out = ['/Applications', path.join(home, 'Applications'), '/System/Applications']
-    .map((dir) => path.join(dir, spec.bundle, 'Contents', 'MacOS', spec.bin));
+  // Пути macOS всегда через «/»: path.posix, чтобы результат не зависел от ОС, где запущен код (тесты на Windows)
+  const out = ['/Applications', path.posix.join(home, 'Applications'), '/System/Applications']
+    .map((dir) => path.posix.join(dir, spec.bundle, 'Contents', 'MacOS', spec.bin));
   if (name === 'mpv') out.push('/opt/homebrew/bin/mpv', '/usr/local/bin/mpv');
   return out;
 }

@@ -30,7 +30,7 @@
   import { mapHistoryRawToReleaseCard } from '../utils/historyCard';
   import { iconHome } from '../components/icons';
   import { openRandomRelease } from '../stores/random-release';
-  import { bookmarksSearchLabel, bookmarksSearchQuery, closeBookmarksSearch } from '../stores/mobile-bookmarks-search';
+  import { bookmarksForeign, bookmarksSearchLabel, bookmarksSearchQuery, closeBookmarksSearch } from '../stores/mobile-bookmarks-search';
   import {
     getDefaultBookmarksTab,
     resolveBookmarksTab,
@@ -399,7 +399,9 @@
   const isFavoritesTab = $derived(activeTab === 'favorites');
   const isReleaseListTab = $derived(!isCollectionsTab && !isHistoryTab && !isVotesTab);
   const activeTabMeta = $derived(TABS.find((t) => t.id === activeTab) ?? TABS[0]);
-  const searchPlaceholder = $derived(`Поиск в «${activeTabMeta?.label ?? 'списке'}»`);
+  const searchPlaceholderBase = $derived(`Поиск в «${activeTabMeta?.label ?? 'списке'}»`);
+  /** Чужие списки: «Поиск в «Смотрю» у strannow» */
+  const searchPlaceholder = $derived(isOtherProfile && profileLogin ? `${searchPlaceholderBase} у ${profileLogin}` : searchPlaceholderBase);
   const headerAvatarUrl = $derived(profileAvatar ? resolveCdnAssetUrl(profileAvatar) : '');
   const profileIdForPanel = $derived(
     isOtherProfile
@@ -410,6 +412,10 @@
   // Мобильная версия: поле в верхней панели (MobileLayout), здесь подпись для него и применение запроса
   $effect(() => {
     if (!desktopLayout) bookmarksSearchLabel.set(searchPlaceholder);
+  });
+  $effect(() => {
+    bookmarksForeign.set(isOtherProfile);
+    return () => bookmarksForeign.set(false);
   });
   $effect(() => {
     if (desktopLayout) return;

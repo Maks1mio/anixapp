@@ -87,7 +87,6 @@
   import ReleaseCollections from './views/ReleaseCollections.svelte';
   import Bookmarks from './views/Bookmarks.svelte';
   import ProfileFriends from './views/ProfileFriends.svelte';
-  import ProfileCollections from './views/ProfileCollections.svelte';
   import ProfileComments from './views/ProfileComments.svelte';
   import ProfileVideos from './views/ProfileVideos.svelte';
   import Collection from './views/Collection.svelte';
@@ -1055,7 +1054,8 @@
       {/key}
     {:else if profileCollectionsId != null}
       {#key profileCollectionsId}
-        <ProfileCollections id={profileCollectionsId} />
+        <!-- Коллекции пользователя — та же страница, что «Мои коллекции» -->
+        <CollectionsList mine userId={profileCollectionsId} />
       {/key}
     {:else if collectionEditMatch}
       {#key collectionEditMatch[1]}
@@ -1081,6 +1081,9 @@
       <FluoPage />
     {:else if path === '/agent'}
       <AgentPage />
+    {:else if path === '/feed/write'}
+      <!-- Телефон: экран редактора рисует MobileLayout поверх панелей; на ПК запись пишется в отдельном окне -->
+      {#if !isMobileMode()}<Feed />{/if}
     {:else if path === '/feed' || articleMatch || channelMatch}
       <Feed />
     {:else if path === '/overview/popular'}

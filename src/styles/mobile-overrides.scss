@@ -57,8 +57,9 @@ html.mobile-mode {
 
   // ── Вид карточками: у списка поля задаёт сама строка, сетке нужны свои ──
   .release-cards-grid-root.release-cards-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--m-space-5) var(--m-space-3) !important;
+    // По умолчанию три колонки, как в Anixart; на планшете — сколько влезет
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--m-space-4) var(--m-space-2) !important;
     padding: var(--m-space-4) var(--m-gutter) var(--m-space-5);
 
     @media (min-width: 600px) {
@@ -66,9 +67,9 @@ html.mobile-mode {
     }
 
     .uiv2-anime-card__poster { border-radius: var(--m-radius-md); }
-    .uiv2-anime-card__title { font: 600 14px/1.25 var(--m-font); letter-spacing: 0; color: var(--m-text); }
+    .uiv2-anime-card__title { font: 600 13px/1.25 var(--m-font); letter-spacing: 0; color: var(--m-text); }
     // Строка с оценкой и без неё одной высоты
-    .uiv2-anime-card__meta { min-height: 16px; color: var(--m-text-2); font-size: 12px; }
+    .uiv2-anime-card__meta { min-height: 15px; color: var(--m-text-2); font-size: 11.5px; }
   }
 
   // ── Карточка релиза в списке (UiV2AnimeCard, horizontal) ─────────────────────────────────
@@ -145,7 +146,7 @@ html.mobile-mode {
 
 html.mobile-mode {
   // Документ на всю высоту окна; страницы прокручивает .m-app__scroll (.page__scroll) в MobileLayout
-  &, body, #app { height: auto !important; min-height: 100dvh; overflow: visible !important; }
+  &, body, #app { height: auto !important; min-height: calc(100dvh * var(--m-vh-fix, 1)); overflow: visible !important; }
   body { overflow-x: hidden; }
 
   .release-page__title { color: var(--m-text) !important; }
@@ -158,7 +159,7 @@ html.mobile-mode {
 
 html.mobile-mode {
   // Страница просмотра: каркас на всю высоту окна, чтобы height:100% у .watch-page считался от него
-  .web-player-shell { height: 100dvh !important; min-height: 0 !important; overflow: hidden; }
+  .web-player-shell { height: calc(100dvh * var(--m-vh-fix, 1)) !important; min-height: 0 !important; overflow: hidden; }
   .web-player-shell__content { flex: 1 1 0; min-height: 0; height: auto; }
   .web-player-shell .watch-page { height: 100% !important; min-height: 0; }
 }
@@ -805,6 +806,9 @@ html.mobile-mode {
 }
 
 
+// «Назад» слева от поиска в верхней панели (чужие списки и т.п.)
+html.mobile-mode .m-topbar > .m-icon-btn--lead { flex: none; margin-left: 0 !important; margin-right: var(--m-space-1); }
+
 // ── Шапка подэкранов профиля (друзья, значки, редактор, все комментарии / видео): стрелка, аватар, заголовок ──
 html.mobile-mode :is(.m-fullscreen--profile, .view-profile-comments, .view-profile-videos) {
     // Внутренние экраны (друзья, значки, редактор …): вместо desktop-пилюли «Экран | ник» —
@@ -954,7 +958,7 @@ html.mobile-mode {
   .notifications-page {
     display: flex;
     flex-direction: column;
-    height: calc(100dvh - var(--safe-top) - var(--m-nav-h) - var(--safe-bottom));
+    height: calc(100dvh * var(--m-vh-fix, 1) - var(--safe-top) - var(--m-nav-h) - var(--safe-bottom));
 
     .notifications-modal__header {
       flex: none;
@@ -1129,6 +1133,16 @@ html.mobile-mode {
   }
   .discover-hero__head { flex-wrap: nowrap; align-items: center; padding: 0 var(--m-gutter); }
   .discover-hero__lead { flex: 1 1 0; }
+  // «Назад» слева от аватара (коллекции пользователя): стрелка без подложки, как в шапках подэкранов
+  .discover-hero__back.uiv2-round-btn {
+    flex: none; width: 40px !important; height: 40px !important; margin-left: -8px;
+    background: transparent !important; box-shadow: none !important; backdrop-filter: none !important;
+    color: var(--m-text) !important;
+    svg { width: 24px; height: 24px; }
+    &:active { background: var(--m-surface-block) !important; }
+  }
+  .discover-hero__avatar { width: 44px; height: 44px; }
+  .discover-hero__profile { gap: var(--m-space-3); }
   .discover-hero__title { font: 600 24px/32px var(--m-font); letter-spacing: 0; color: var(--m-text); }
   .discover-hero__subtitle { margin-top: 2px; font: 400 14px/20px var(--m-font); color: var(--m-text-2); }
   .discover-hero__actions { flex: none; margin-left: 0; }
@@ -1282,7 +1296,7 @@ html.mobile-mode {
     left: 0;
     width: 100%;
     // В покое панель заранее отрисована, но скрыта и не удлиняет короткую страницу
-    max-height: calc(100dvh - 140px);
+    max-height: calc(100dvh * var(--m-vh-fix, 1) - 140px);
     overflow: hidden;
     visibility: hidden;
     pointer-events: none;
@@ -1298,7 +1312,7 @@ html.mobile-mode {
 
   [data-tab-swiping='1'] > [data-tab-peek='1'],
   [data-tab-swiping='-1'] > [data-tab-peek='-1'] {
-    max-height: 100dvh;
+    max-height: calc(100dvh * var(--m-vh-fix, 1));
     visibility: visible;
     opacity: var(--tab-swipe-p, 0);
     transform: translate3d(var(--tab-swipe-in-x, 0), 0, 0);

@@ -13,6 +13,7 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.media3.common.util.UnstableApi;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.WebViewListener;
+import com.mobileapp.anix.plugin.AnixAccelerationPlugin;
 import com.mobileapp.anix.plugin.AnixBrowserPlugin;
 import com.mobileapp.anix.plugin.AnixOAuthPlugin;
 import com.mobileapp.anix.plugin.AnixPlayerPlugin;
@@ -23,12 +24,20 @@ import java.util.Locale;
 @UnstableApi
 public class MainActivity extends BridgeActivity {
     @Override
+    protected void attachBaseContext(android.content.Context base) {
+        WebGpuWebViewBootstrap.applyEarly(base);
+        super.attachBaseContext(base);
+    }
+
+    @Override
     public void onCreate(Bundle savedInstanceState) {
+        WebGpuWebViewBootstrap.applyEarly(this);
         registerPlugin(AnixPlayerPlugin.class);
         registerPlugin(AnixOAuthPlugin.class);
         registerPlugin(AnixBrowserPlugin.class);
         registerPlugin(AnixPushPlugin.class);
         registerPlugin(AnixQrPlugin.class);
+        registerPlugin(AnixAccelerationPlugin.class);
         super.onCreate(savedInstanceState);
         drawUnderSystemBars();
     }

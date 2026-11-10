@@ -45,7 +45,7 @@ html.mobile-mode {
   }
 
   .m-screen {
-    min-height: 100dvh;
+    min-height: calc(100dvh * var(--m-vh-fix, 1));
     background: var(--m-bg);
     padding-top: var(--safe-top);
     padding-bottom: calc(var(--m-nav-h) + var(--safe-bottom));

@@ -2,17 +2,30 @@
   import { shortcutLabel } from '../../utils/platform';
   import { tick } from 'svelte';
   import UiV2Button from '../uikit-v2/UiV2Button.svelte';
-  import UiV2Select, { type UiV2SelectOption } from '../uikit-v2/UiV2Select.svelte';
   import UiV2ScrollArea from '../uikit-v2/UiV2ScrollArea.svelte';
   import UiV2FeedPost from '../uikit-v2/UiV2FeedPost.svelte';
   import UiV2FeedPostEmbed from '../uikit-v2/UiV2FeedPostEmbed.svelte';
   import UiV2Tooltip from '../uikit-v2/UiV2Tooltip.svelte';
+  import UiV2Toggle from '../uikit-v2/UiV2Toggle.svelte';
+  import UiV2ChoiceSheet from '../uikit-v2/UiV2ChoiceSheet.svelte';
+  import UiV2PopupMenu, { type UiV2PopupMenuItem } from '../uikit-v2/UiV2PopupMenu.svelte';
+  import { pushBackHandler } from '../../platform/mobile-back';
+  import { mobileUiZoom } from '../../platform/mobile';
   import {
     iconArrowDown,
     iconArrowLeft,
     iconArrowRight,
     iconArrowUp,
     iconBold,
+    iconCheck,
+    iconCircleCheck,
+    iconRefreshCw,
+    iconChevronDown,
+    iconCodeXml,
+    iconGripVertical,
+    iconHeading,
+    iconMoreVertical,
+    iconType,
     iconImage,
     iconItalic,
     iconLink,
@@ -22,6 +35,7 @@
     iconPaperclip,
     iconPlus,
     iconQuote,
+    iconRepost,
     iconRotateCcw,
     iconRotateCw,
     iconTrash2,
@@ -79,7 +93,8 @@
     editArticle?: FeedArticle | null;
     draftId?: string | null;
     initialDraft?: FeedArticleDraft | null;
-    mode?: 'overlay' | 'window';
+    /** overlay — поверх страницы (веб), window — отдельное окно ПК, page — экран телефона. */
+    mode?: 'overlay' | 'window' | 'page';
     /** Режим предложения записи в чужой канал. */
     isSuggestion?: boolean;
     onClose: () => void;
@@ -146,6 +161,47 @@
   let historyTimer: ReturnType<typeof setTimeout> | null = null;
   const liveUploads = new Map<string, { abort: () => void; cancelled: boolean }>();
   const isWindow = $derived(mode === 'window');
+  const isPage = $derived(mode === 'page');
+
+  type BlockKind = 'paragraph' | 'header' | 'list' | 'ordered' | 'quote' | 'delimiter';
+  const BLOCK_KINDS: { id: BlockKind; label: string; icon: (size?: number) => string; shortcut: string }[] = [
+    { id: 'paragraph', label: 'Текст', icon: iconType, shortcut: 'Ctrl+Shift+P' },
+    { id: 'header', label: 'Заголовок', icon: iconHeading, shortcut: 'Ctrl+Shift+H' },
+    { id: 'quote', label: 'Цитата', icon: iconQuote, shortcut: 'Ctrl+Shift+Q' },
+    { id: 'list', label: 'Список', icon: iconList, shortcut: 'Ctrl+Shift+L' },
+    { id: 'ordered', label: 'Нумерованный список', icon: iconListOrdered, shortcut: 'Ctrl+Shift+O' },
+    { id: 'delimiter', label: 'Разделитель', icon: iconMinus, shortcut: 'Ctrl+Shift+D' },
+  ];
+
+  /** Меню: выбор канала, тип блока, вставка блока (телефон), действия с блоком. */
+  type MenuKind = 'channel' | 'kind' | 'insert' | 'tune';
+  let menu = $state<MenuKind | null>(null);
+  let menuAnchor = $state<HTMLElement | null>(null);
+  let menuX = $state(0);
+  let menuY = $state(0);
+  let tuneIndex = $state(-1);
+  let clearOpen = $state(false);
+  let draftSavedAt = $state(0);
+  /** Правка ещё не записана в черновик (идёт отсрочка автосохранения). */
+  let draftSaving = $state(false);
+  /** Показывать значок черновика: только для новой записи/предложения, не для правки опубликованной. */
+  const showDraftState = $derived(!isEditMode && !!activeDraftId && (draftSaving || draftSavedAt > 0));
+
+  function draftTimeLabel(): string {
+    if (!draftSavedAt) return '';
+    return new Date(draftSavedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function showDraftInfo() {
+    if (draftSaving) {
+      showToast('Сохраняем черновик…', 'ok');
+      return;
+    }
+    showToast(
+      `Черновик сохранён в ${draftTimeLabel()} на этом устройстве. Продолжить можно из вкладки «Черновики» в ленте`,
+      'ok',
+    );
+  }
 
   $effect(() => {
     if (!open || channelId != null) return;
@@ -174,24 +230,6 @@
     if (selectedChannel.is_blog) isSigned = false;
   });
 
-  const channelOptions = $derived.by((): UiV2SelectOption[] => {
-    const out: UiV2SelectOption[] = [];
-    for (const ch of blogs) {
-      out.push({
-        value: String(ch.id),
-        label: ch.title || `Блог #${ch.id}`,
-        desc: 'Блог',
-      });
-    }
-    for (const ch of groups) {
-      out.push({
-        value: String(ch.id),
-        label: ch.title || `Канал #${ch.id}`,
-        desc: 'Канал',
-      });
-    }
-    return out;
-  });
   const focusedIndex = $derived(blocks.findIndex((b) => b.id === focusedId));
   const focusedBlock = $derived(focusedIndex >= 0 ? blocks[focusedIndex] : null);
   const blockKind = $derived(
@@ -252,6 +290,214 @@
             ? 'Предпросмотр'
             : 'Новая запись',
   );
+  /** Заголовок экрана телефона — тексты Anixart. */
+  const pageTitle = $derived(
+    step === 'preview'
+      ? 'Публикация'
+      : isSuggestion
+        ? 'Предложение записи'
+        : isEditMode
+          ? 'Редактирование записи'
+          : 'Новая запись',
+  );
+  const canPickChannel = $derived(!isSuggestion && !isEditMode && channels.length > 1);
+  const currentKind = $derived(BLOCK_KINDS.find((k) => k.id === blockKind) ?? null);
+  const hasContent = $derived(editorHasContent(blocks));
+  const statusText = $derived(
+    mediaBusy
+      ? 'Загружаем медиа…'
+      : isEditMode
+        ? 'Правка опубликованной записи'
+        : isSuggestion
+          ? 'Предложение увидят администраторы канала'
+          : draftSavedAt
+            ? 'Черновик сохранён'
+            : 'Черновик сохраняется сам',
+  );
+
+  function avatarIcon(ch: FeedComposerChannel): string {
+    const url = channelAvatarUrl(ch.avatar);
+    const style = url ? ` style="background-image:url('${url.replace(/'/g, '%27')}')"` : '';
+    return `<span class="feed-composer__menu-avatar${ch.is_blog ? '' : ' is-channel'}"${style}></span>`;
+  }
+
+  const menuItems = $derived.by((): UiV2PopupMenuItem[] => {
+    if (menu === 'channel') {
+      const out: UiV2PopupMenuItem[] = [];
+      const push = (list: FeedComposerChannel[], label: string, fallback: string) => {
+        if (!list.length) return;
+        out.push({ id: `label:${label}`, label, type: 'label' });
+        for (const ch of list) {
+          out.push({
+            id: `ch:${ch.id}`,
+            label: ch.title || `${fallback} #${ch.id}`,
+            type: 'radio',
+            checked: ch.id === channelId,
+            keepOpen: false,
+            icon: avatarIcon(ch),
+            valueText: ch.id === channelId ? '✓' : undefined,
+          });
+        }
+      };
+      push(blogs, 'Блоги', 'Блог');
+      push(groups, 'Каналы', 'Канал');
+      return out;
+    }
+    if (menu === 'kind' || menu === 'insert') {
+      const out: UiV2PopupMenuItem[] = BLOCK_KINDS.map((k) => ({
+        id: k.id,
+        label: k.label,
+        icon: k.icon(16),
+        type: menu === 'kind' ? 'radio' : 'action',
+        checked: menu === 'kind' ? blockKind === k.id : undefined,
+        keepOpen: false,
+        valueText: isPage ? undefined : shortcutLabel(k.shortcut),
+      }));
+      if (menu === 'insert') {
+        out.push(
+          { id: 'image', label: 'Изображения', icon: iconImage(16), dividerBefore: true },
+          { id: 'embed', label: 'Карточка ссылки', icon: iconPaperclip(16) },
+        );
+      }
+      return out;
+    }
+    if (menu === 'tune') {
+      const i = tuneIndex;
+      // На узком телефоне пилюля отмены скрыта — те же действия есть здесь.
+      const history: UiV2PopupMenuItem[] = isPage
+        ? [
+            { id: 'undo', label: 'Отменить', icon: iconRotateCcw(16), disabled: !canUndo },
+            { id: 'redo', label: 'Повторить', icon: iconRotateCw(16), disabled: !canRedo },
+          ]
+        : [];
+      return [
+        ...history,
+        { id: 'up', label: 'Переместить выше', icon: iconArrowUp(16), disabled: i <= 0, dividerBefore: isPage },
+        { id: 'down', label: 'Переместить ниже', icon: iconArrowDown(16), disabled: i < 0 || i >= blocks.length - 1 },
+        { id: 'delete', label: 'Удалить блок', icon: iconTrash2(16), danger: true, dividerBefore: true, disabled: i < 0 },
+      ];
+    }
+    return [];
+  });
+
+  const menuTitle = $derived(
+    menu === 'channel'
+      ? 'Куда публиковать'
+      : menu === 'kind'
+        ? 'Тип блока'
+        : menu === 'insert'
+          ? 'Добавить блок'
+          : menu === 'tune'
+            ? 'Блок'
+            : '',
+  );
+
+  function openMenu(kind: MenuKind, e: MouseEvent, blockIndex = focusedIndex) {
+    const el = e.currentTarget as HTMLElement;
+    const rect = el.getBoundingClientRect();
+    menuAnchor = el;
+    menuX = rect.left + rect.width / 2;
+    menuY = rect.top + rect.height / 2;
+    tuneIndex = blockIndex;
+    inlineOpen = false;
+    menu = menu === kind ? null : kind;
+  }
+
+  function closeMenu() {
+    menu = null;
+    menuAnchor = null;
+  }
+
+  function refocusBlock(id: string | null) {
+    if (!id || isPage) return;
+    void tick().then(() => focusBlock(id, focusedItem, 'end'));
+  }
+
+  function makeBlock(kind: BlockKind): ArticleEditorBlock {
+    const id = generateBlockId();
+    switch (kind) {
+      case 'header': return { id, type: 'header', html: '', level: 3 };
+      case 'quote': return { id, type: 'quote', html: '', caption: '', alignment: 'left' };
+      case 'list': return { id, type: 'list', style: 'unordered', items: [''] };
+      case 'ordered': return { id, type: 'list', style: 'ordered', items: [''] };
+      case 'delimiter': return { id, type: 'delimiter' };
+      default: return { id, type: 'paragraph', html: '' };
+    }
+  }
+
+  /** «+» на телефоне, как в Editor.js: пустой абзац превращается в блок, иначе новый блок встаёт ниже. */
+  function insertKind(kind: string) {
+    if (kind === 'image') {
+      pickImages();
+      return;
+    }
+    if (kind === 'embed') {
+      openLinkDialog('embed');
+      return;
+    }
+    const k = kind as BlockKind;
+    const current = focusedIndex >= 0 ? blocks[focusedIndex] : null;
+    if (current?.type === 'paragraph' && !editorPlainText(current.html)) {
+      convertFocused(k);
+      if (k !== 'delimiter') void tick().then(() => focusBlock(current.id, k === 'list' || k === 'ordered' ? 0 : null));
+      return;
+    }
+    const at = focusedIndex >= 0 ? focusedIndex : blocks.length - 1;
+    insertBlock(makeBlock(k), at);
+    if (k === 'delimiter') insertBlock(emptyParagraph(), at + 1);
+  }
+
+  function onMenuSelect(id: string) {
+    const kind = menu;
+    if (kind === 'channel') {
+      if (id.startsWith('ch:')) pickChannel(Number(id.slice(3)));
+      return;
+    }
+    if (kind === 'kind') {
+      const keep = focusedId;
+      convertFocused(id as BlockKind);
+      refocusBlock(keep);
+      return;
+    }
+    if (kind === 'insert') {
+      insertKind(id);
+      return;
+    }
+    if (kind === 'tune') {
+      if (id === 'undo') {
+        undo();
+        return;
+      }
+      if (id === 'redo') {
+        redo();
+        return;
+      }
+      const i = tuneIndex;
+      if (i < 0) return;
+      if (id === 'up') moveBlock(i, -1);
+      else if (id === 'down') moveBlock(i, 1);
+      else if (id === 'delete') removeBlock(i);
+    }
+  }
+
+  /** «Очистить» (новая запись) / «Вернуть назад» (правка) — как кнопка со стрелкой в Anixart. */
+  function clearEditor() {
+    clearOpen = false;
+    for (const upload of liveUploads.values()) {
+      upload.cancelled = true;
+      upload.abort();
+    }
+    const start = isEditMode && editArticle
+      ? editorBlocksFromPayload(editArticle.payload)
+      : [emptyParagraph()];
+    blocks = start;
+    pushHistory();
+    if (editView === 'code') codeText = stringifyEditorPayload(blocks);
+    codeError = '';
+    errorMsg = '';
+    void tick().then(() => focusBlock(blocks[0]?.id ?? ''));
+  }
+
   function wantSigned(): boolean {
     if (selectedChannel?.is_blog) return false;
     return isSigned === true;
@@ -323,6 +569,51 @@
     return () => window.removeEventListener('keydown', onKey);
   });
 
+  /** Телефон: системная «назад» сначала закрывает слои, с «Публикации» возвращает к тексту, потом закрывает экран. */
+  $effect(() => {
+    if (!open || !isPage) return;
+    return pushBackHandler(() => {
+      if (linkOpen) {
+        linkOpen = false;
+        linkRange = null;
+        return true;
+      }
+      if (clearOpen) {
+        clearOpen = false;
+        return true;
+      }
+      if (step === 'preview') {
+        step = 'edit';
+        return true;
+      }
+      requestClose();
+      return true;
+    });
+  });
+
+  /** Телефон: панель инструментов держится над клавиатурой, даже если WebView сам не сжался. */
+  let keyboardInset = $state(0);
+  $effect(() => {
+    const viewport = window.visualViewport;
+    if (!open || !isPage || !viewport) return;
+    const sync = () => {
+      // Окно меряет в пикселях экрана, вёрстка под масштабом интерфейса — в своих
+      keyboardInset = Math.max(0, Math.round((window.innerHeight - viewport.height - viewport.offsetTop) / mobileUiZoom()));
+    };
+    sync();
+    viewport.addEventListener('resize', sync);
+    return () => {
+      viewport.removeEventListener('resize', sync);
+      keyboardInset = 0;
+    };
+  });
+
+  /** Экран могут закрыть и жестом «назад» мимо кнопок — черновик всё равно сохраняем. */
+  $effect(() => {
+    if (!open || !isPage) return;
+    return () => persistDraft();
+  });
+
   $effect(() => {
     if (!open) return;
     const onReq = () => requestClose();
@@ -338,6 +629,7 @@
     isSigned;
     repostArticle;
     if (saveTimer) clearTimeout(saveTimer);
+    if (!isEditMode && activeDraftId) draftSaving = true;
     saveTimer = setTimeout(() => persistDraft(), 500);
     return () => {
       if (saveTimer) {
@@ -378,6 +670,10 @@
     addOpen = false;
     moreOpen = false;
     channelOpen = false;
+    menu = null;
+    clearOpen = false;
+    draftSavedAt = 0;
+    draftSaving = false;
     linkOpen = false;
     linkMode = 'inline';
     linkValue = '';
@@ -500,9 +796,11 @@
     addOpen = false;
     moreOpen = false;
     channelOpen = false;
+    menu = null;
   }
 
   function persistDraft(): void {
+    draftSaving = false;
     if (isEditMode || !activeDraftId || publishBusy) return;
     if (editView === 'code') {
       try {
@@ -520,6 +818,7 @@
       blocks: editorBlocksForDraft(blocks),
       repostArticle,
     });
+    draftSavedAt = Date.now();
     window.electron?.composerDraftsChanged?.();
   }
 
@@ -584,19 +883,6 @@
       /* ignore */
     }
     selfProfile = null;
-  }
-
-  function onChannelChange(value: string) {
-    const n = Number(value);
-    channelId = Number.isFinite(n) && n > 0 ? n : null;
-    mediaToken = '';
-    mediaTokenChannelId = null;
-    const ch = channels.find((c) => c.id === channelId);
-    if (ch?.is_blog) {
-      isSigned = false;
-    } else if (!isSuggestion) {
-      isSigned = !!ch;
-    }
   }
 
   function pickChannel(id: number) {
@@ -1249,6 +1535,11 @@
       return;
     }
     syncInlineFlags();
+    // На телефоне у выделения своё системное меню, а B/I/ссылка — в нижней панели.
+    if (isPage) {
+      inlineOpen = false;
+      return;
+    }
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !sel.rangeCount) {
       inlineOpen = false;
@@ -1574,7 +1865,11 @@
         linkRange = null;
         return;
       }
-      if (addOpen || moreOpen || channelOpen) {
+      if (clearOpen) {
+        clearOpen = false;
+        return;
+      }
+      if (addOpen || moreOpen || channelOpen || menu) {
         closeMenus();
         return;
       }
@@ -1693,725 +1988,913 @@
   }
 </script>
 
+{#snippet avatar(ch: FeedComposerChannel | null, size: 'sm' | 'md' | 'lg')}
+  <span
+    class="feed-composer__avatar feed-composer__avatar--{size}"
+    class:feed-composer__avatar--channel={!!ch && !ch.is_blog}
+    class:feed-composer__avatar--empty={!channelAvatarUrl(ch?.avatar)}
+    style={channelAvatarUrl(ch?.avatar)
+      ? `background-image:url('${channelAvatarUrl(ch?.avatar)}')`
+      : undefined}
+    aria-hidden="true"
+  ></span>
+{/snippet}
+
+{#snippet viewSwitch()}
+  <div class="feed-composer__view" role="radiogroup" aria-label="Вид редактора">
+    <button
+      type="button"
+      class="feed-composer__view-btn"
+      class:is-active={editView === 'block'}
+      role="radio"
+      aria-checked={editView === 'block'}
+      onclick={() => setEditView('block')}
+    >Блоки</button>
+    <button
+      type="button"
+      class="feed-composer__view-btn"
+      class:is-active={editView === 'code'}
+      role="radio"
+      aria-checked={editView === 'code'}
+      onclick={() => setEditView('code')}
+    >{@html iconCodeXml(14)}<span>Код</span></button>
+  </div>
+{/snippet}
+
+{#snippet emptyState()}
+  <div class="feed-composer__empty">
+    <p>
+      {#if isSuggestion}
+        Не удалось открыть предложение для этого канала.
+      {:else}
+        Чтобы писать записи, создайте блог или получите права редактора в канале.
+      {/if}
+    </p>
+    {#if !isSuggestion && onCreateBlog}
+      <UiV2Button
+        variant="primary"
+        label={createBusy ? 'Создание…' : 'Создать блог'}
+        disabled={createBusy}
+        onclick={() => void onCreateBlog()}
+      />
+    {/if}
+  </div>
+{/snippet}
+
+{#snippet codeView()}
+  {#if !isPage}
+    <label class="feed-composer__code-label" for="feed-composer-code">Код записи · JSON</label>
+  {/if}
+  <textarea
+    id="feed-composer-code"
+    class="feed-composer__code"
+    spellcheck="false"
+    autocomplete="off"
+    autocapitalize="off"
+    wrap="off"
+    aria-label="Код записи"
+    aria-invalid={codeError ? 'true' : 'false'}
+    aria-describedby={codeError ? 'feed-composer-code-error' : undefined}
+    bind:value={codeText}
+    onblur={() => { if (editView === 'code') applyCodeView(false); }}
+  ></textarea>
+  {#if codeError}
+    <p id="feed-composer-code-error" class="feed-composer__error" role="alert">{codeError}</p>
+  {/if}
+{/snippet}
+
+{#snippet canvas()}
+  <div class="feed-composer__canvas">
+    {#each blocks as block, index (block.id)}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="feed-composer__block"
+        class:is-focused={focusedId === block.id}
+        class:is-delimiter={block.type === 'delimiter'}
+        data-block-id={block.id}
+        role="group"
+        aria-label="Блок редактора"
+        aria-current={focusedId === block.id ? 'true' : undefined}
+        onpointerdown={() => { focusedId = block.id; }}
+      >
+        {#if !isPage}
+          <button
+            type="button"
+            class="feed-composer__grip"
+            class:is-open={menu === 'tune' && tuneIndex === index}
+            aria-label="Действия с блоком"
+            aria-haspopup="menu"
+            onmousedown={keepSelection}
+            onclick={(e) => { focusedId = block.id; openMenu('tune', e, index); }}
+          >{@html iconGripVertical(16)}</button>
+        {/if}
+        {#if block.type === 'paragraph' || block.type === 'header'}
+          <div
+            class="feed-composer__ce"
+            class:feed-composer__ce--h={block.type === 'header'}
+            contenteditable="true"
+            role="textbox"
+            tabindex="0"
+            data-block-id={block.id}
+            data-field="main"
+            data-placeholder={block.type === 'header'
+              ? 'Заголовок'
+              : index === 0
+                ? (isPage ? 'Начните писать…' : 'Начните писать — Enter создаёт новый блок')
+                : 'Текст'}
+            use:bindHtml={block.html}
+            oninput={(e) => onBlockInput(block.id, e)}
+            onblur={commitHtml}
+            onfocus={() => { focusedId = block.id; focusedItem = null; }}
+            onkeydown={(e) => onBlockKeydown(block, index, e)}
+          ></div>
+        {:else if block.type === 'quote'}
+          <div class="feed-composer__quote">
+            <div
+              class="feed-composer__ce"
+              contenteditable="true"
+              role="textbox"
+              tabindex="0"
+              data-block-id={block.id}
+              data-field="main"
+              data-placeholder="Цитата"
+              use:bindHtml={block.html}
+              oninput={(e) => onBlockInput(block.id, e)}
+              onblur={commitHtml}
+              onfocus={() => { focusedId = block.id; focusedItem = null; }}
+              onkeydown={(e) => onBlockKeydown(block, index, e)}
+            ></div>
+            <div
+              class="feed-composer__ce feed-composer__ce--caption"
+              contenteditable="true"
+              role="textbox"
+              tabindex="0"
+              data-block-id={block.id}
+              data-field="caption"
+              data-placeholder="Автор цитаты"
+              use:bindHtml={block.caption}
+              oninput={(e) => onBlockInput(block.id, e, { field: 'caption' })}
+              onblur={commitHtml}
+              onfocus={() => { focusedId = block.id; focusedItem = null; }}
+              onkeydown={(e) => onBlockKeydown(block, index, e)}
+            ></div>
+          </div>
+        {:else if block.type === 'list'}
+          <div class="feed-composer__list" class:is-ordered={block.style === 'ordered'}>
+            {#each block.items as item, itemIndex (itemIndex)}
+              <div
+                class="feed-composer__ce feed-composer__ce--li"
+                contenteditable="true"
+                role="textbox"
+                tabindex="0"
+                data-block-id={block.id}
+                data-item-index={itemIndex}
+                data-placeholder="Пункт списка"
+                use:bindHtml={item}
+                oninput={(e) => onBlockInput(block.id, e, { itemIndex })}
+                onblur={commitHtml}
+                onfocus={() => { focusedId = block.id; focusedItem = itemIndex; }}
+                onkeydown={(e) => onBlockKeydown(block, index, e, itemIndex)}
+              ></div>
+            {/each}
+          </div>
+        {:else if block.type === 'delimiter'}
+          <div class="feed-composer__delimiter" aria-hidden="true">
+            <span>*</span><span>*</span><span>*</span>
+          </div>
+        {:else if block.type === 'media'}
+          {@const canAdd = block.items.length < ARTICLE_MAX_MEDIA_ITEMS}
+          {@const useGrid = block.items.length > 1}
+          <div
+            class="feed-composer__media"
+            class:feed-composer__media--grid={useGrid}
+            data-block-id={block.id}
+            data-field="main"
+            role="group"
+            aria-label="Изображения"
+            onfocusin={() => { focusedId = block.id; focusedItem = null; }}
+          >
+            {#each block.items as item, itemIndex (item.id)}
+              <div
+                class="feed-composer__media-item"
+                class:is-solo={!useGrid}
+                class:is-uploading={item.uploadProgress != null}
+                aria-busy={item.uploadProgress != null ? 'true' : undefined}
+              >
+                <img
+                  src={mediaPreviewSrc(item, useGrid)}
+                  alt=""
+                  width={item.width || undefined}
+                  height={item.height || undefined}
+                  loading="lazy"
+                  decoding="async"
+                />
+                {#if item.uploadProgress != null}
+                  <div class="feed-composer__upload-status">
+                    <span>Загрузка {item.uploadProgress}%</span>
+                    <div
+                      class="feed-composer__upload-track"
+                      role="progressbar"
+                      aria-label="Загрузка изображения"
+                      aria-valuemin="0"
+                      aria-valuemax="100"
+                      aria-valuenow={item.uploadProgress}
+                    >
+                      <span style={`width:${item.uploadProgress}%`}></span>
+                    </div>
+                  </div>
+                {/if}
+                <div class="feed-composer__media-controls">
+                  {#if useGrid}
+                    <button
+                      type="button"
+                      class="feed-composer__media-fab"
+                      aria-label="Левее"
+                      disabled={itemIndex <= 0 || item.uploadProgress != null}
+                      onclick={() => moveMediaItem(index, itemIndex, -1)}
+                    >{@html iconArrowLeft(14)}</button>
+                    <button
+                      type="button"
+                      class="feed-composer__media-fab"
+                      aria-label="Правее"
+                      disabled={itemIndex >= block.items.length - 1 || item.uploadProgress != null}
+                      onclick={() => moveMediaItem(index, itemIndex, 1)}
+                    >{@html iconArrowRight(14)}</button>
+                    <button
+                      type="button"
+                      class="feed-composer__media-fab"
+                      aria-label="Удалить изображение"
+                      onclick={() => removeMediaItem(index, itemIndex)}
+                    >{@html iconX(14)}</button>
+                  {:else}
+                    {#if canAdd}
+                      <button
+                        type="button"
+                        class="feed-composer__media-pill"
+                        disabled={mediaBusy}
+                        onclick={() => pickImages(block.id)}
+                      >
+                        {@html iconPlus(14)}
+                        <span>Добавить ещё</span>
+                      </button>
+                    {/if}
+                    <button
+                      type="button"
+                      class="feed-composer__media-fab"
+                      aria-label="Удалить изображение"
+                      onclick={() => removeMediaItem(index, itemIndex)}
+                    >{@html iconX(14)}</button>
+                  {/if}
+                </div>
+              </div>
+            {/each}
+            {#if useGrid && canAdd}
+              <button
+                type="button"
+                class="feed-composer__media-add"
+                disabled={mediaBusy}
+                onclick={() => pickImages(block.id)}
+              >
+                {@html iconImage(22)}
+                <span>Добавить ещё</span>
+              </button>
+            {/if}
+          </div>
+        {:else if block.type === 'embed'}
+          <UiV2FeedPostEmbed
+            title={block.data.title ?? ''}
+            description={block.data.description ?? ''}
+            image={toFeedImageUrl(block.data.image ?? '')}
+            url={block.data.url}
+            siteName={block.data.site_name ?? ''}
+          />
+        {/if}
+      </div>
+    {/each}
+  </div>
+{/snippet}
+
+{#snippet editBody()}
+  {#if effectiveRepost && !isSuggestion}
+    <p class="feed-composer__repost-hint">{@html iconRepost(14)}<span>Репост записи #{effectiveRepost.id} — можно добавить свой текст</span></p>
+  {/if}
+  {#if editView === 'code'}
+    {@render codeView()}
+  {:else}
+    {@render canvas()}
+  {/if}
+  {#if errorMsg && !(editView === 'code' && codeError)}
+    <p class="feed-composer__error" role="alert">{errorMsg}</p>
+  {/if}
+{/snippet}
+
+{#snippet previewPostCard()}
+  {#if previewPost}
+    <div class="feed-composer__preview-card">
+      <UiV2FeedPost data={previewPost} staticPreview />
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet deskBar()}
+  <header class="feed-composer__bar">
+    <div class="feed-composer__bar-start">
+      {#if !isWindow}
+        <button
+          type="button"
+          class="feed-composer__icon-btn"
+          aria-label="Закрыть редактор"
+          onclick={requestClose}
+        >{@html iconX(20)}</button>
+      {/if}
+      <button
+        type="button"
+        class="feed-composer__dest"
+        class:is-open={menu === 'channel'}
+        disabled={!canPickChannel}
+        aria-haspopup="menu"
+        aria-expanded={menu === 'channel'}
+        onclick={(e) => openMenu('channel', e)}
+      >
+        {@render avatar(selectedChannel, 'md')}
+        <span class="feed-composer__dest-copy">
+          <span class="feed-composer__dest-kicker">
+            {isSuggestion
+              ? 'Предложение в канал'
+              : isEditMode
+                ? 'Правка записи'
+                : selectedChannel?.is_blog
+                  ? 'Публикация в блог'
+                  : 'Публикация в канал'}
+          </span>
+          <span class="feed-composer__dest-name">{selectedChannel?.title || 'Куда публиковать?'}</span>
+        </span>
+        {#if canPickChannel}
+          <span class="feed-composer__dest-chevron" aria-hidden="true">{@html iconChevronDown(16)}</span>
+        {/if}
+      </button>
+    </div>
+
+    <div class="feed-composer__steps" role="group" aria-label="Шаги">
+      <button
+        type="button"
+        class="feed-composer__step"
+        class:is-active={step === 'edit'}
+        class:is-done={step === 'preview'}
+        aria-current={step === 'edit' ? 'step' : undefined}
+        onclick={() => { if (step === 'preview') step = 'edit'; }}
+      >
+        <span class="feed-composer__step-num" aria-hidden="true">
+          {#if step === 'preview'}{@html iconCheck(12)}{:else}1{/if}
+        </span>
+        {isEditMode ? 'Правка' : 'Текст'}
+      </button>
+      <span class="feed-composer__step-line" aria-hidden="true"></span>
+      <button
+        type="button"
+        class="feed-composer__step"
+        class:is-active={step === 'preview'}
+        aria-current={step === 'preview' ? 'step' : undefined}
+        disabled={step === 'edit' && !canGoPreview}
+        onclick={() => { if (step === 'edit') goPreview(); }}
+      >
+        <span class="feed-composer__step-num" aria-hidden="true">2</span>
+        Публикация
+      </button>
+    </div>
+
+    <div class="feed-composer__bar-actions">
+      {#if step === 'edit'}
+        <UiV2Button
+          variant="primary"
+          size="sm"
+          label="Далее"
+          disabled={!canGoPreview}
+          onclick={goPreview}
+        >
+          {#snippet trailing()}{@html iconArrowRight(16)}{/snippet}
+        </UiV2Button>
+      {:else}
+        <UiV2Button variant="ghost" size="sm" label="Назад" onclick={() => { step = 'edit'; }} />
+        <UiV2Button
+          variant="primary"
+          size="sm"
+          label={publishBusy
+            ? (isSuggestion ? 'Отправка…' : isEditMode ? 'Сохранение…' : 'Публикация…')
+            : (isSuggestion ? 'Предложить' : isEditMode ? 'Сохранить' : 'Опубликовать')}
+          disabled={!canPublish}
+          onclick={() => void publish()}
+        />
+      {/if}
+    </div>
+  </header>
+{/snippet}
+
+{#snippet deskToolbar()}
+  <div class="feed-composer__toolbar" role="toolbar" aria-label="Форматирование записи">
+    {#if editView === 'block'}
+      <div class="feed-composer__tgroup">
+        <UiV2Tooltip text={`Отменить · ${shortcutLabel('Ctrl+Z')}`} placement="bottom">
+          <button
+            type="button"
+            class="feed-composer__tool"
+            aria-label="Отменить"
+            disabled={!canUndo}
+            onmousedown={keepSelection}
+            onclick={undo}
+          >{@html iconRotateCcw(16)}</button>
+        </UiV2Tooltip>
+        <UiV2Tooltip text={`Повторить · ${shortcutLabel('Ctrl+Y')}`} placement="bottom">
+          <button
+            type="button"
+            class="feed-composer__tool"
+            aria-label="Повторить"
+            disabled={!canRedo}
+            onmousedown={keepSelection}
+            onclick={redo}
+          >{@html iconRotateCw(16)}</button>
+        </UiV2Tooltip>
+      </div>
+
+      <span class="feed-composer__tsep" aria-hidden="true"></span>
+
+      <button
+        type="button"
+        class="feed-composer__kind"
+        class:is-open={menu === 'kind'}
+        aria-haspopup="menu"
+        aria-expanded={menu === 'kind'}
+        aria-label="Тип блока"
+        disabled={!currentKind}
+        onmousedown={keepSelection}
+        onclick={(e) => openMenu('kind', e)}
+      >
+        <span class="feed-composer__kind-icon" aria-hidden="true">{@html (currentKind?.icon ?? iconType)(16)}</span>
+        <span class="feed-composer__kind-label">
+          {currentKind?.label
+            ?? (focusedBlock?.type === 'media' ? 'Изображения' : focusedBlock?.type === 'embed' ? 'Ссылка' : 'Текст')}
+        </span>
+        <span class="feed-composer__kind-chevron" aria-hidden="true">{@html iconChevronDown(14)}</span>
+      </button>
+
+      <span class="feed-composer__tsep" aria-hidden="true"></span>
+
+      <div class="feed-composer__tgroup">
+        <UiV2Tooltip text={`Жирный · ${shortcutLabel('Ctrl+B')}`} placement="bottom">
+          <button
+            type="button"
+            class="feed-composer__tool"
+            class:is-active={inlineBold}
+            aria-pressed={inlineBold}
+            aria-label="Жирный"
+            onmousedown={keepSelection}
+            onclick={() => applyInline('bold')}
+          >{@html iconBold(16)}</button>
+        </UiV2Tooltip>
+        <UiV2Tooltip text={`Курсив · ${shortcutLabel('Ctrl+I')}`} placement="bottom">
+          <button
+            type="button"
+            class="feed-composer__tool"
+            class:is-active={inlineItalic}
+            aria-pressed={inlineItalic}
+            aria-label="Курсив"
+            onmousedown={keepSelection}
+            onclick={() => applyInline('italic')}
+          >{@html iconItalic(16)}</button>
+        </UiV2Tooltip>
+        <UiV2Tooltip text={`Ссылка на выделенный текст · ${shortcutLabel('Ctrl+K')}`} placement="bottom">
+          <button
+            type="button"
+            class="feed-composer__tool"
+            aria-label="Ссылка на текст"
+            onmousedown={keepSelection}
+            onclick={() => openLinkDialog('inline')}
+          >{@html iconLink(16)}</button>
+        </UiV2Tooltip>
+      </div>
+
+      <span class="feed-composer__tsep" aria-hidden="true"></span>
+
+      <div class="feed-composer__tgroup">
+        <button
+          type="button"
+          class="feed-composer__tbtn"
+          disabled={mediaBusy}
+          onmousedown={keepSelection}
+          onclick={() => pickImages()}
+        >{@html iconImage(16)}<span>Фото</span></button>
+        <button
+          type="button"
+          class="feed-composer__tbtn"
+          disabled={mediaBusy}
+          onmousedown={keepSelection}
+          onclick={() => openLinkDialog('embed')}
+        >{@html iconPaperclip(16)}<span>Ссылка</span></button>
+      </div>
+    {:else}
+      <p class="feed-composer__toolbar-note">
+        Правьте JSON напрямую — изменения применятся при возврате к блокам
+      </p>
+    {/if}
+
+    <div class="feed-composer__toolbar-end">
+      {@render viewSwitch()}
+    </div>
+  </div>
+{/snippet}
+
+{#snippet deskStatus()}
+  <footer class="feed-composer__status">
+    {#if showDraftState && !mediaBusy}
+      <span
+        class="feed-composer__status-main"
+        class:is-saved={!draftSaving}
+        class:is-saving={draftSaving}
+        aria-live="polite"
+      >
+        <span class="feed-composer__status-icon" aria-hidden="true">
+          {@html draftSaving ? iconRefreshCw(12) : iconCheck(12)}
+        </span>
+        {draftSaving ? 'Сохраняем черновик…' : `Черновик сохранён в ${draftTimeLabel()}`}
+      </span>
+    {:else}
+      <span class="feed-composer__status-main">{statusText}</span>
+    {/if}
+    {#if editView === 'block'}
+      <span class="feed-composer__status-count">Блоков: {blocks.length} из {ARTICLE_MAX_BLOCKS}</span>
+      <span class="feed-composer__status-hint">Enter — новый блок · Shift+Enter — перенос строки · картинку можно вставить из буфера</span>
+    {/if}
+  </footer>
+{/snippet}
+
+{#snippet deskPreview()}
+  <UiV2ScrollArea class="feed-composer__scroll" padding="1.5rem 1.5rem 2rem">
+    <div class="feed-composer__publish">
+      <div class="feed-composer__publish-head">
+        <h2 class="feed-composer__publish-title">
+          {isSuggestion ? 'Предложение почти готово!' : isEditMode ? 'Изменения почти готовы!' : 'Запись почти готова!'}
+        </h2>
+        <p class="feed-composer__publish-text">
+          Ниже можно настроить параметры записи и посмотреть, как она будет выглядеть после публикации.
+          Убедитесь, что запись соответствует правилам сообщества.
+        </p>
+      </div>
+
+      {#if !selectedChannel?.is_blog}
+        <div class="feed-composer__publish-row">
+          <div class="feed-composer__switch-copy">
+            <span class="feed-composer__switch-title">Подпись автора</span>
+            <span class="feed-composer__switch-desc">Читатели увидят пометку с вашим именем</span>
+          </div>
+          <UiV2Toggle label="Подпись автора" checked={isSigned} onChange={(v) => { isSigned = v; }} />
+        </div>
+      {/if}
+
+      {#if isSuggestion}
+        <p class="feed-composer__note">
+          Запись уйдёт администраторам канала «{selectedChannel?.title || 'канал'}» — они решат, публиковать ли её.
+        </p>
+      {:else if effectiveRepost}
+        <p class="feed-composer__note">Запись будет опубликована как репост записи #{effectiveRepost.id}.</p>
+      {/if}
+
+      <p class="feed-composer__section-label">Так запись увидят читатели</p>
+      {@render previewPostCard()}
+      {#if errorMsg}
+        <p class="feed-composer__error" role="alert">{errorMsg}</p>
+      {/if}
+    </div>
+  </UiV2ScrollArea>
+{/snippet}
+
+{#snippet pageBar()}
+  <header class="feed-composer__appbar">
+    <button
+      type="button"
+      class="feed-composer__appbar-btn"
+      aria-label="Назад"
+      onclick={() => (step === 'preview' ? (step = 'edit') : requestClose())}
+    >{@html iconArrowLeft(22)}</button>
+    <button
+      type="button"
+      class="feed-composer__appbar-who"
+      disabled={step === 'preview' || !canPickChannel}
+      aria-haspopup={canPickChannel ? 'menu' : undefined}
+      aria-label={canPickChannel ? `${pageTitle}: выбрать, куда публиковать` : pageTitle}
+      onclick={(e) => openMenu('channel', e)}
+    >
+      <span class="feed-composer__appbar-avatar">
+        {@render avatar(selectedChannel, 'lg')}
+        {#if canPickChannel && step === 'edit'}
+          <span class="feed-composer__appbar-chevron" aria-hidden="true">{@html iconChevronDown(10)}</span>
+        {/if}
+      </span>
+      <span class="feed-composer__appbar-title">{pageTitle}</span>
+    </button>
+    {#if step === 'edit' && showDraftState}
+      <button
+        type="button"
+        class="feed-composer__appbar-btn feed-composer__appbar-btn--narrow feed-composer__draft-state"
+        class:is-saving={draftSaving}
+        aria-label={draftSaving ? 'Черновик сохраняется' : 'Черновик сохранён'}
+        aria-live="polite"
+        onclick={showDraftInfo}
+      >
+        {#key draftSaving}
+          <span class="feed-composer__draft-icon">
+            {@html draftSaving ? iconRefreshCw(22) : iconCircleCheck(22)}
+          </span>
+        {/key}
+      </button>
+    {/if}
+    {#if step === 'edit' && hasContent}
+      <button
+        type="button"
+        class="feed-composer__appbar-btn feed-composer__appbar-btn--narrow"
+        aria-label={isEditMode ? 'Вернуть назад' : 'Очистить'}
+        onclick={() => { clearOpen = true; }}
+      >{@html iconRotateCcw(22)}</button>
+    {/if}
+    {#if step === 'edit'}
+      <button
+        type="button"
+        class="feed-composer__appbar-btn feed-composer__appbar-btn--accent"
+        aria-label="Далее"
+        disabled={!canGoPreview}
+        onclick={goPreview}
+      >{@html iconArrowRight(22)}</button>
+    {:else}
+      <button
+        type="button"
+        class="feed-composer__appbar-btn feed-composer__appbar-btn--accent"
+        aria-label={isSuggestion ? 'Предложить' : isEditMode ? 'Сохранить' : 'Опубликовать'}
+        aria-busy={publishBusy ? 'true' : undefined}
+        disabled={!canPublish}
+        onclick={() => void publish()}
+      >
+        {#if publishBusy}
+          <span class="feed-composer__spinner" aria-hidden="true"></span>
+        {:else}
+          {@html iconCheck(22)}
+        {/if}
+      </button>
+    {/if}
+  </header>
+{/snippet}
+
+{#snippet pageDock()}
+  <div class="feed-composer__dock" role="toolbar" aria-label="Инструменты записи">
+    <div class="feed-composer__dock-row">
+      {#if editView === 'block'}
+        <div class="feed-composer__pill">
+          <button
+            type="button"
+            class="feed-composer__dock-btn"
+            aria-label="Добавить блок"
+            aria-haspopup="menu"
+            onmousedown={keepSelection}
+            onclick={(e) => openMenu('insert', e)}
+          >{@html iconPlus(22)}</button>
+          <button
+            type="button"
+            class="feed-composer__dock-btn"
+            aria-label="Действия с блоком"
+            aria-haspopup="menu"
+            disabled={focusedIndex < 0}
+            onmousedown={keepSelection}
+            onclick={(e) => openMenu('tune', e, focusedIndex)}
+          >{@html iconMoreVertical(22)}</button>
+        </div>
+
+        <div class="feed-composer__pill">
+          <button
+            type="button"
+            class="feed-composer__dock-btn feed-composer__dock-btn--text"
+            aria-label={`Тип блока: ${currentKind?.label ?? 'нет'}`}
+            aria-haspopup="menu"
+            disabled={!currentKind}
+            onmousedown={keepSelection}
+            onclick={(e) => openMenu('kind', e)}
+          >Aa</button>
+          <button
+            type="button"
+            class="feed-composer__dock-btn"
+            class:is-active={inlineBold}
+            aria-pressed={inlineBold}
+            aria-label="Жирный"
+            onmousedown={keepSelection}
+            onclick={() => applyInline('bold')}
+          >{@html iconBold(20)}</button>
+          <button
+            type="button"
+            class="feed-composer__dock-btn"
+            class:is-active={inlineItalic}
+            aria-pressed={inlineItalic}
+            aria-label="Курсив"
+            onmousedown={keepSelection}
+            onclick={() => applyInline('italic')}
+          >{@html iconItalic(20)}</button>
+          <button
+            type="button"
+            class="feed-composer__dock-btn"
+            aria-label="Ссылка на выделенный текст"
+            onmousedown={keepSelection}
+            onclick={() => openLinkDialog('inline')}
+          >{@html iconLink(20)}</button>
+          <button
+            type="button"
+            class="feed-composer__dock-btn"
+            aria-label="Прикрепить изображения"
+            disabled={mediaBusy}
+            onmousedown={keepSelection}
+            onclick={() => pickImages()}
+          >{@html iconPaperclip(20)}</button>
+        </div>
+
+        <div class="feed-composer__pill feed-composer__pill--history">
+          <button
+            type="button"
+            class="feed-composer__dock-btn"
+            aria-label="Отменить"
+            disabled={!canUndo}
+            onmousedown={keepSelection}
+            onclick={undo}
+          >{@html iconRotateCcw(20)}</button>
+          <button
+            type="button"
+            class="feed-composer__dock-btn"
+            aria-label="Повторить"
+            disabled={!canRedo}
+            onmousedown={keepSelection}
+            onclick={redo}
+          >{@html iconRotateCw(20)}</button>
+        </div>
+      {/if}
+
+      <div class="feed-composer__pill">
+        <button
+          type="button"
+          class="feed-composer__dock-btn"
+          class:is-active={editView === 'code'}
+          aria-pressed={editView === 'code'}
+          aria-label={editView === 'code' ? 'Вернуться к блокам' : 'Код записи'}
+          onclick={() => setEditView(editView === 'code' ? 'block' : 'code')}
+        >{@html iconCodeXml(20)}</button>
+      </div>
+    </div>
+  </div>
+{/snippet}
+
+{#snippet pagePreview()}
+  <UiV2ScrollArea class="feed-composer__scroll" padding="0 0 1.5rem">
+    <div class="feed-composer__ready">
+      <h2 class="feed-composer__ready-title">
+        {isSuggestion ? 'Предложение почти готово!' : 'Запись почти готова!'}
+      </h2>
+      <p class="feed-composer__ready-text">
+        Ниже вы можете настроить дополнительные параметры записи, а также ознакомиться с тем, как она будет
+        выглядеть после публикации. Убедитесь, что запись также соответствует правилам нашего сообщества
+      </p>
+    </div>
+    <div class="feed-composer__divider" aria-hidden="true"></div>
+    {#if !selectedChannel?.is_blog}
+      <div class="feed-composer__switch-row">
+        <div class="feed-composer__switch-copy">
+          <span class="feed-composer__switch-title">Подпись автора</span>
+          <span class="feed-composer__switch-desc">Пользователям будет видна пометка с именем автора</span>
+        </div>
+        <UiV2Toggle label="Подпись автора" checked={isSigned} onChange={(v) => { isSigned = v; }} />
+      </div>
+      <div class="feed-composer__divider" aria-hidden="true"></div>
+    {/if}
+    {#if isSuggestion}
+      <p class="feed-composer__note feed-composer__note--pad">
+        Будет отправлено как предложение в «{selectedChannel?.title || 'канал'}»
+      </p>
+    {:else if effectiveRepost}
+      <p class="feed-composer__note feed-composer__note--pad">Будет опубликовано как репост записи #{effectiveRepost.id}</p>
+    {/if}
+    {@render previewPostCard()}
+    {#if errorMsg}
+      <p class="feed-composer__error feed-composer__note--pad" role="alert">{errorMsg}</p>
+    {/if}
+  </UiV2ScrollArea>
+{/snippet}
+
 {#if open}
   <div
     class="feed-composer"
     class:feed-composer--preview={step === 'preview'}
     class:feed-composer--window={isWindow}
+    class:feed-composer--page={isPage}
+    class:feed-composer--code={editView === 'code'}
+    style:padding-bottom={isPage && keyboardInset > 0 ? `${keyboardInset}px` : undefined}
     role="presentation"
   >
     <div
       class="feed-composer__shell"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="feed-composer-title"
+      role={isPage ? 'main' : 'dialog'}
+      aria-modal={isPage ? undefined : 'true'}
+      aria-label={isPage ? pageTitle : headerTitle}
     >
-      <header class="feed-composer__bar">
-        {#if !isWindow || step === 'preview'}
-          <UiV2Tooltip text={step === 'preview' ? 'Назад к редактору' : 'Закрыть'} placement="bottom">
-        <button
-          type="button"
-              class="feed-composer__icon-btn"
-              aria-label={step === 'preview' ? 'Назад к редактору' : 'Закрыть'}
-              onclick={() => (step === 'preview' ? (step = 'edit') : requestClose())}
-            >
-              {@html iconArrowLeft(22)}
-        </button>
-          </UiV2Tooltip>
-        {/if}
-
-        <div class="feed-composer__who">
-          <UiV2Tooltip text={isSuggestion ? 'Канал предложения' : 'Куда публиковать'} placement="bottom">
-            <button
-              type="button"
-              class="feed-composer__avatar-btn"
-              aria-label={isSuggestion ? 'Канал предложения' : 'Выбрать канал или блог'}
-              aria-expanded={channelOpen}
-              disabled={channels.length === 0 || isSuggestion || isEditMode}
-              onclick={() => {
-                if (isSuggestion || isEditMode) return;
-                channelOpen = !channelOpen;
-                addOpen = false;
-                moreOpen = false;
-              }}
-            >
-              <span
-                class="feed-composer__avatar"
-                class:feed-composer__avatar--channel={!selectedChannel?.is_blog}
-                class:feed-composer__avatar--empty={!channelAvatarUrl(selectedChannel?.avatar)}
-                style={channelAvatarUrl(selectedChannel?.avatar)
-                  ? `background-image:url('${channelAvatarUrl(selectedChannel?.avatar)}')`
-                  : undefined}
-              ></span>
-            </button>
-          </UiV2Tooltip>
-          <div class="feed-composer__who-copy">
-            <h2 id="feed-composer-title" class="feed-composer__title">{headerTitle}</h2>
-            {#if selectedChannel}
-              <p class="feed-composer__subtitle">
-                {#if isSuggestion}
-                  Предложение · {selectedChannel.title}
-                {:else}
-                  {selectedChannel.is_blog ? 'Блог' : 'Канал'} · {selectedChannel.title}
-                {/if}
-              </p>
-            {/if}
-          </div>
-        </div>
-
-        <div class="feed-composer__bar-actions">
-          {#if step === 'edit'}
-            <UiV2Tooltip text="Предпросмотр" placement="bottom">
-              <button
-                type="button"
-                class="feed-composer__icon-btn feed-composer__icon-btn--next"
-                aria-label="Предпросмотр"
-                disabled={!canGoPreview}
-                onclick={goPreview}
-              >
-                {@html iconArrowRight(22)}
-              </button>
-            </UiV2Tooltip>
-          {:else}
-            <UiV2Button
-              variant="primary"
-              size="sm"
-              label={publishBusy
-                ? (isSuggestion ? 'Отправка…' : isEditMode ? 'Сохранение…' : 'Публикация…')
-                : (isSuggestion ? 'Предложить' : isEditMode ? 'Сохранить' : 'Опубликовать')}
-              disabled={!canPublish}
-              onclick={() => void publish()}
-            />
-          {/if}
-        </div>
-      </header>
-
-      {#if step === 'edit' && (channels.length > 0 || isEditMode)}
-        <div class="feed-composer__ribbon" role="toolbar" aria-label="Форматирование записи">
-          {#if editView === 'block'}
-          <div class="feed-composer__ribbon-group">
-            <UiV2Tooltip text={`Отменить · ${shortcutLabel('Ctrl+Z')}`} placement="bottom">
-              <button
-                type="button"
-                class="feed-composer__tool"
-                aria-label="Отменить"
-                disabled={!canUndo}
-                onmousedown={keepSelection}
-                onclick={undo}
-              >{@html iconRotateCcw(16)}</button>
-            </UiV2Tooltip>
-            <UiV2Tooltip text={`Повторить · ${shortcutLabel('Ctrl+Y')}`} placement="bottom">
-              <button
-                type="button"
-                class="feed-composer__tool"
-                aria-label="Повторить"
-                disabled={!canRedo}
-                onmousedown={keepSelection}
-                onclick={redo}
-              >{@html iconRotateCw(16)}</button>
-            </UiV2Tooltip>
-          </div>
-
-          <div class="feed-composer__ribbon-group">
-            <UiV2Tooltip text={`Текст · ${shortcutLabel('Ctrl+Shift+P')}`} placement="bottom">
-              <button
-                type="button"
-                class="feed-composer__tool"
-                class:is-active={blockKind === 'paragraph'}
-                aria-pressed={blockKind === 'paragraph'}
-                aria-label="Текст"
-                onmousedown={keepSelection}
-                onclick={() => toggleBlock('paragraph')}
-              >Aa</button>
-            </UiV2Tooltip>
-            <UiV2Tooltip text={`Заголовок · ${shortcutLabel('Ctrl+Shift+H')}`} placement="bottom">
-              <button
-                type="button"
-                class="feed-composer__tool"
-                class:is-active={blockKind === 'header'}
-                aria-pressed={blockKind === 'header'}
-                aria-label="Заголовок"
-                onmousedown={keepSelection}
-                onclick={() => toggleBlock('header')}
-              >H</button>
-            </UiV2Tooltip>
-            <UiV2Tooltip text={`Цитата · ${shortcutLabel('Ctrl+Shift+Q')}`} placement="bottom">
-              <button
-                type="button"
-                class="feed-composer__tool"
-                class:is-active={blockKind === 'quote'}
-                aria-pressed={blockKind === 'quote'}
-                aria-label="Цитата"
-                onmousedown={keepSelection}
-                onclick={() => toggleBlock('quote')}
-              >{@html iconQuote(16)}</button>
-            </UiV2Tooltip>
-            <UiV2Tooltip text={`Список · ${shortcutLabel('Ctrl+Shift+L')}`} placement="bottom">
-              <button
-                type="button"
-                class="feed-composer__tool"
-                class:is-active={blockKind === 'list'}
-                aria-pressed={blockKind === 'list'}
-                aria-label="Маркированный список"
-                onmousedown={keepSelection}
-                onclick={() => toggleBlock('list')}
-              >{@html iconList(16)}</button>
-            </UiV2Tooltip>
-            <UiV2Tooltip text={`Нумерованный список · ${shortcutLabel('Ctrl+Shift+O')}`} placement="bottom">
-              <button
-                type="button"
-                class="feed-composer__tool"
-                class:is-active={blockKind === 'ordered'}
-                aria-pressed={blockKind === 'ordered'}
-                aria-label="Нумерованный список"
-                onmousedown={keepSelection}
-                onclick={() => toggleBlock('ordered')}
-              >{@html iconListOrdered(16)}</button>
-            </UiV2Tooltip>
-            <UiV2Tooltip text={`Разделитель · ${shortcutLabel('Ctrl+Shift+D')}`} placement="bottom">
-              <button
-                type="button"
-                class="feed-composer__tool"
-                class:is-active={blockKind === 'delimiter'}
-                aria-pressed={blockKind === 'delimiter'}
-                aria-label="Разделитель"
-                onmousedown={keepSelection}
-                onclick={() => toggleBlock('delimiter')}
-              >{@html iconMinus(16)}</button>
-            </UiV2Tooltip>
-          </div>
-
-          <div class="feed-composer__ribbon-group">
-            <UiV2Tooltip text={`Жирный · ${shortcutLabel('Ctrl+B')}`} placement="bottom">
-              <button
-                type="button"
-                class="feed-composer__tool"
-                class:is-active={inlineBold}
-                aria-pressed={inlineBold}
-                aria-label="Жирный"
-                onmousedown={keepSelection}
-                onclick={() => applyInline('bold')}
-              >{@html iconBold(16)}</button>
-            </UiV2Tooltip>
-            <UiV2Tooltip text={`Курсив · ${shortcutLabel('Ctrl+I')}`} placement="bottom">
-              <button
-                type="button"
-                class="feed-composer__tool"
-                class:is-active={inlineItalic}
-                aria-pressed={inlineItalic}
-                aria-label="Курсив"
-                onmousedown={keepSelection}
-                onclick={() => applyInline('italic')}
-              >{@html iconItalic(16)}</button>
-            </UiV2Tooltip>
-            <UiV2Tooltip text={`Ссылка на текст · ${shortcutLabel('Ctrl+K')}`} placement="bottom">
-              <button
-                type="button"
-                class="feed-composer__tool"
-                aria-label="Ссылка на текст"
-                onmousedown={keepSelection}
-                onclick={() => openLinkDialog('inline')}
-              >{@html iconLink(16)}</button>
-            </UiV2Tooltip>
-          </div>
-
-          <div class="feed-composer__ribbon-group">
-            <UiV2Tooltip text={`Изображение · ${shortcutLabel('Ctrl+Shift+M')}`} placement="bottom">
-              <button
-                type="button"
-                class="feed-composer__tool"
-                aria-label="Изображение"
-                onmousedown={keepSelection}
-                onclick={() => pickImages()}
-              >{@html iconImage(16)}</button>
-            </UiV2Tooltip>
-            <UiV2Tooltip text="Карточка ссылки" placement="bottom">
-              <button
-                type="button"
-                class="feed-composer__tool"
-                aria-label="Карточка ссылки"
-                onmousedown={keepSelection}
-                onclick={() => openLinkDialog('embed')}
-              >{@html iconPaperclip(16)}</button>
-            </UiV2Tooltip>
-          </div>
-
-          <div class="feed-composer__ribbon-group">
-            <UiV2Tooltip text="Блок выше · Alt+↑" placement="bottom">
-              <button
-                type="button"
-                class="feed-composer__tool"
-                aria-label="Блок выше"
-                disabled={focusedIndex <= 0}
-                onmousedown={keepSelection}
-                onclick={() => focusedIndex > 0 && moveBlock(focusedIndex, -1)}
-              >{@html iconArrowUp(16)}</button>
-            </UiV2Tooltip>
-            <UiV2Tooltip text="Блок ниже · Alt+↓" placement="bottom">
-              <button
-                type="button"
-                class="feed-composer__tool"
-                aria-label="Блок ниже"
-                disabled={focusedIndex < 0 || focusedIndex >= blocks.length - 1}
-                onmousedown={keepSelection}
-                onclick={() => focusedIndex >= 0 && focusedIndex < blocks.length - 1 && moveBlock(focusedIndex, 1)}
-              >{@html iconArrowDown(16)}</button>
-            </UiV2Tooltip>
-            <UiV2Tooltip text="Удалить блок" placement="bottom">
-              <button
-                type="button"
-                class="feed-composer__tool"
-                aria-label="Удалить блок"
-                disabled={focusedIndex < 0}
-                onmousedown={keepSelection}
-                onclick={() => focusedIndex >= 0 && removeBlock(focusedIndex)}
-              >{@html iconTrash2(16)}</button>
-            </UiV2Tooltip>
-          </div>
-          {/if}
-
-          <div
-            class="feed-composer__ribbon-group feed-composer__ribbon-view"
-            role="radiogroup"
-            aria-label="Вид редактора"
-          >
-            <UiV2Tooltip text="Блоки" placement="bottom">
-              <button
-                type="button"
-                class="feed-composer__tool feed-composer__view-btn"
-                class:is-active={editView === 'block'}
-                role="radio"
-                aria-checked={editView === 'block'}
-                aria-label="Block"
-                onclick={() => setEditView('block')}
-              >Block</button>
-            </UiV2Tooltip>
-            <UiV2Tooltip text="Код записи · JSON" placement="bottom">
-              <button
-                type="button"
-                class="feed-composer__tool feed-composer__view-btn"
-                class:is-active={editView === 'code'}
-                role="radio"
-                aria-checked={editView === 'code'}
-                aria-label="Code"
-                onclick={() => setEditView('code')}
-              >Code</button>
-            </UiV2Tooltip>
-          </div>
-        </div>
-      {/if}
-
-      {#if channelOpen && !isSuggestion && !isEditMode && channels.length > 0}
-        <div class="feed-composer__picker" role="listbox" aria-label="Куда публиковать">
-          {#if blogs.length}
-            <p class="feed-composer__picker-label">Блоги</p>
-            {#each blogs as ch (ch.id)}
-              <button
-                type="button"
-                class="feed-composer__picker-item"
-                class:is-active={ch.id === channelId}
-                onclick={() => pickChannel(ch.id)}
-              >
-                <span
-                  class="feed-composer__avatar feed-composer__avatar--sm"
-                  class:feed-composer__avatar--empty={!channelAvatarUrl(ch.avatar)}
-                  style={channelAvatarUrl(ch.avatar)
-                    ? `background-image:url('${channelAvatarUrl(ch.avatar)}')`
-                    : undefined}
-                ></span>
-                <span>{ch.title || `Блог #${ch.id}`}</span>
-              </button>
-            {/each}
-          {/if}
-          {#if groups.length}
-            <p class="feed-composer__picker-label">Каналы</p>
-            {#each groups as ch (ch.id)}
-              <button
-                type="button"
-                class="feed-composer__picker-item"
-                class:is-active={ch.id === channelId}
-                onclick={() => pickChannel(ch.id)}
-              >
-                <span
-                  class="feed-composer__avatar feed-composer__avatar--sm feed-composer__avatar--channel"
-                  class:feed-composer__avatar--empty={!channelAvatarUrl(ch.avatar)}
-                  style={channelAvatarUrl(ch.avatar)
-                    ? `background-image:url('${channelAvatarUrl(ch.avatar)}')`
-                    : undefined}
-                ></span>
-                <span>{ch.title || `Канал #${ch.id}`}</span>
-              </button>
-            {/each}
-          {/if}
-        </div>
-      {/if}
-
-        {#if channels.length === 0 && !isEditMode}
-        <div class="feed-composer__empty">
-          <p>
-            {#if isSuggestion}
-              Не удалось открыть предложение для этого канала.
-            {:else}
-            Чтобы писать записи, создайте блог или получите права редактора в канале.
-            {/if}
-          </p>
-          {#if !isSuggestion && onCreateBlog}
-            <UiV2Button
-              variant="primary"
-              label={createBusy ? 'Создание…' : 'Создать блог'}
-              disabled={createBusy}
-              onclick={() => void onCreateBlog()}
-            />
-          {/if}
-        </div>
-      {:else if step === 'edit'}
-        <UiV2ScrollArea class="feed-composer__scroll" padding="1.1rem 1.35rem 1.75rem">
-          {#if effectiveRepost && !isSuggestion}
-            <p class="feed-composer__repost-hint">Репост записи #{effectiveRepost.id}</p>
-          {/if}
-          {#if editView === 'code'}
-            <label class="feed-composer__code-label" for="feed-composer-code">Код записи</label>
-            <textarea
-              id="feed-composer-code"
-              class="feed-composer__code"
-              spellcheck="false"
-              autocomplete="off"
-              autocapitalize="off"
-              wrap="off"
-              aria-invalid={codeError ? 'true' : 'false'}
-              aria-describedby={codeError ? 'feed-composer-code-error' : undefined}
-              bind:value={codeText}
-              onblur={() => { if (editView === 'code') applyCodeView(false); }}
-            ></textarea>
-            {#if codeError}
-              <p id="feed-composer-code-error" class="feed-composer__error" role="alert">{codeError}</p>
-          {/if}
-        {:else}
-          <div class="feed-composer__canvas">
-            {#each blocks as block, index (block.id)}
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <div
-                class="feed-composer__block"
-                class:is-focused={focusedId === block.id}
-                data-block-id={block.id}
-                role="group"
-                aria-label="Блок редактора"
-                aria-current={focusedId === block.id ? 'true' : undefined}
-                onpointerdown={() => { focusedId = block.id; }}
-              >
-                <div class="feed-composer__block-tools" role="toolbar" aria-label="Поле">
-                  <UiV2Tooltip text="Выше" placement="left">
-                    <button
-                      type="button"
-                      class="feed-composer__block-tool"
-                      aria-label="Выше"
-                      disabled={index <= 0}
-                      onmousedown={keepSelection}
-                      onclick={() => moveBlock(index, -1)}
-                    >{@html iconArrowUp(14)}</button>
-                  </UiV2Tooltip>
-                  <UiV2Tooltip text="Ниже" placement="left">
-                    <button
-                      type="button"
-                      class="feed-composer__block-tool"
-                      aria-label="Ниже"
-                      disabled={index >= blocks.length - 1}
-                      onmousedown={keepSelection}
-                      onclick={() => moveBlock(index, 1)}
-                    >{@html iconArrowDown(14)}</button>
-                  </UiV2Tooltip>
-                  <UiV2Tooltip text="Удалить поле" placement="left">
-                    <button
-                      type="button"
-                      class="feed-composer__block-tool"
-                      aria-label="Удалить поле"
-                      onmousedown={keepSelection}
-                      onclick={() => removeBlock(index)}
-                    >{@html iconTrash2(14)}</button>
-                  </UiV2Tooltip>
-                </div>
-                {#if block.type === 'paragraph' || block.type === 'header'}
-                  <div
-                    class="feed-composer__ce"
-                    class:feed-composer__ce--h={block.type === 'header'}
-                    contenteditable="true"
-                    role="textbox"
-                    tabindex="0"
-                    data-block-id={block.id}
-                    data-field="main"
-                    data-placeholder={block.type === 'header' ? 'Заголовок' : 'Начните писать'}
-                    use:bindHtml={block.html}
-                    oninput={(e) => onBlockInput(block.id, e)}
-                    onblur={commitHtml}
-                    onfocus={() => { focusedId = block.id; focusedItem = null; }}
-                    onkeydown={(e) => onBlockKeydown(block, index, e)}
-                  ></div>
-                {:else if block.type === 'quote'}
-                  <div class="feed-composer__quote">
-                    <div
-                      class="feed-composer__ce"
-                      contenteditable="true"
-                      role="textbox"
-                      tabindex="0"
-                      data-block-id={block.id}
-                      data-field="main"
-                      data-placeholder="Цитата"
-                      use:bindHtml={block.html}
-                      oninput={(e) => onBlockInput(block.id, e)}
-                      onblur={commitHtml}
-                      onfocus={() => { focusedId = block.id; focusedItem = null; }}
-                      onkeydown={(e) => onBlockKeydown(block, index, e)}
-                    ></div>
-                    <div
-                      class="feed-composer__ce feed-composer__ce--caption"
-                      contenteditable="true"
-                      role="textbox"
-                      tabindex="0"
-                      data-block-id={block.id}
-                      data-field="caption"
-                      data-placeholder="Автор"
-                      use:bindHtml={block.caption}
-                      oninput={(e) => onBlockInput(block.id, e, { field: 'caption' })}
-                      onblur={commitHtml}
-                      onfocus={() => { focusedId = block.id; focusedItem = null; }}
-                      onkeydown={(e) => onBlockKeydown(block, index, e)}
-                    ></div>
-                  </div>
-                {:else if block.type === 'list'}
-                  <div class="feed-composer__list" class:is-ordered={block.style === 'ordered'}>
-                    {#each block.items as item, itemIndex (itemIndex)}
-                      <div
-                        class="feed-composer__ce feed-composer__ce--li"
-                        contenteditable="true"
-                        role="textbox"
-                        tabindex="0"
-                        data-block-id={block.id}
-                        data-item-index={itemIndex}
-                        data-placeholder="Пункт списка"
-                        use:bindHtml={item}
-                        oninput={(e) => onBlockInput(block.id, e, { itemIndex })}
-                        onblur={commitHtml}
-                        onfocus={() => { focusedId = block.id; focusedItem = itemIndex; }}
-                        onkeydown={(e) => onBlockKeydown(block, index, e, itemIndex)}
-                      ></div>
-                    {/each}
-                  </div>
-                {:else if block.type === 'delimiter'}
-                  <div class="feed-composer__delimiter" aria-hidden="true">
-                    <span>*</span><span>*</span><span>*</span>
-                  </div>
-                {:else if block.type === 'media'}
-                  {@const canAdd = block.items.length < ARTICLE_MAX_MEDIA_ITEMS}
-                  {@const useGrid = block.items.length > 1}
-                  <div
-                    class="feed-composer__media"
-                    class:feed-composer__media--grid={useGrid}
-                    data-block-id={block.id}
-                    data-field="main"
-                    role="group"
-                    aria-label="Изображения"
-                    onfocusin={() => { focusedId = block.id; focusedItem = null; }}
-                  >
-                    {#each block.items as item, itemIndex (item.id)}
-                      <div
-                        class="feed-composer__media-item"
-                        class:is-solo={!useGrid}
-                        class:is-uploading={item.uploadProgress != null}
-                        aria-busy={item.uploadProgress != null ? 'true' : undefined}
-                      >
-                        <img
-                          src={mediaPreviewSrc(item, useGrid)}
-                          alt=""
-                          width={item.width || undefined}
-                          height={item.height || undefined}
-                          loading="lazy"
-                          decoding="async"
-                        />
-                        {#if item.uploadProgress != null}
-                          <div class="feed-composer__upload-status">
-                            <span>Загрузка {item.uploadProgress}%</span>
-                            <div
-                              class="feed-composer__upload-track"
-                              role="progressbar"
-                              aria-label="Загрузка изображения"
-                              aria-valuemin="0"
-                              aria-valuemax="100"
-                              aria-valuenow={item.uploadProgress}
-                            >
-                              <span style={`width:${item.uploadProgress}%`}></span>
-                            </div>
-                          </div>
-                        {/if}
-                        <div class="feed-composer__media-controls">
-                          {#if useGrid}
-                            <button
-                              type="button"
-                              class="feed-composer__media-fab"
-                              aria-label="Левее"
-                              disabled={itemIndex <= 0 || item.uploadProgress != null}
-                              onclick={() => moveMediaItem(index, itemIndex, -1)}
-                            >{@html iconArrowLeft(14)}</button>
-                            <button
-                              type="button"
-                              class="feed-composer__media-fab"
-                              aria-label="Правее"
-                              disabled={itemIndex >= block.items.length - 1 || item.uploadProgress != null}
-                              onclick={() => moveMediaItem(index, itemIndex, 1)}
-                            >{@html iconArrowRight(14)}</button>
-                            <button
-                              type="button"
-                              class="feed-composer__media-fab"
-                              aria-label="Удалить изображение"
-                              onclick={() => removeMediaItem(index, itemIndex)}
-                            >{@html iconX(14)}</button>
-                          {:else}
-                            {#if canAdd}
-                              <button
-                                type="button"
-                                class="feed-composer__media-pill"
-                                aria-label="Добавить еще"
-                                disabled={mediaBusy}
-                                onclick={() => pickImages(block.id)}
-                              >
-                                {@html iconPlus(14)}
-                                <span>Добавить еще</span>
-                              </button>
-                            {/if}
-                            <button
-                              type="button"
-                              class="feed-composer__media-fab"
-                              aria-label="Удалить изображение"
-                              onclick={() => removeMediaItem(index, itemIndex)}
-                            >{@html iconX(14)}</button>
-                          {/if}
-                        </div>
-                      </div>
-                    {/each}
-                    {#if useGrid && canAdd}
-                      <button
-                        type="button"
-                        class="feed-composer__media-add"
-                        disabled={mediaBusy}
-                        onclick={() => pickImages(block.id)}
-                      >
-                        {@html iconImage(22)}
-                        <span>Добавить еще</span>
-                      </button>
-                    {/if}
-                  </div>
-                {:else if block.type === 'embed'}
-                  <UiV2FeedPostEmbed
-                    title={block.data.title ?? ''}
-                    description={block.data.description ?? ''}
-                    image={toFeedImageUrl(block.data.image ?? '')}
-                    url={block.data.url}
-                    siteName={block.data.site_name ?? ''}
-                  />
-                {/if}
-              </div>
-            {/each}
-          </div>
-          {/if}
-          {#if errorMsg && !(editView === 'code' && codeError)}
-            <p class="feed-composer__error" role="alert">{errorMsg}</p>
-          {/if}
-          {#if mediaBusy}
-            <p class="feed-composer__hint">Загрузка медиа…</p>
-          {/if}
-        </UiV2ScrollArea>
-
+      {#if isPage}
+        {@render pageBar()}
       {:else}
-        <UiV2ScrollArea class="feed-composer__scroll" padding="1.1rem 1.25rem 1.5rem">
-          <div class="feed-composer__preview-meta">
-            {#if isSuggestion}
-              <p class="feed-composer__repost-hint">
-                Будет отправлено как предложение в «{selectedChannel?.title || 'канал'}»
-              </p>
-            {:else}
-              <UiV2Select
-                label="Куда публиковать"
-                options={channelOptions}
-                value={channelId != null ? String(channelId) : ''}
-                onChange={onChannelChange}
-              />
-            {/if}
-            {#if !selectedChannel?.is_blog}
-              <label class="feed-composer__signed">
-                <input type="checkbox" bind:checked={isSigned} />
-                <span>Подписать запись</span>
-              </label>
-            {/if}
-            {#if effectiveRepost && !isSuggestion}
-              <p class="feed-composer__repost-hint">Будет опубликован как репост записи #{effectiveRepost.id}</p>
-            {/if}
-            </div>
-          {#if previewPost}
-            <div class="feed-composer__preview-card">
-              <UiV2FeedPost data={previewPost} staticPreview />
-          </div>
-          {/if}
-          {#if errorMsg}
-            <p class="feed-composer__error" role="alert">{errorMsg}</p>
-          {/if}
-        </UiV2ScrollArea>
-        {/if}
-      </div>
+        {@render deskBar()}
+      {/if}
 
-    {#if inlineOpen && step === 'edit' && editView === 'block'}
+      {#if channels.length === 0 && !isEditMode}
+        {@render emptyState()}
+      {:else if step === 'edit'}
+        {#if !isPage}
+          {@render deskToolbar()}
+        {/if}
+        <UiV2ScrollArea
+          class="feed-composer__scroll"
+          padding={isPage ? '0.75rem 1rem 6.5rem' : '1.5rem 1.5rem 2rem'}
+        >
+          <div class="feed-composer__sheet">
+            {@render editBody()}
+          </div>
+        </UiV2ScrollArea>
+        {#if isPage}
+          {@render pageDock()}
+        {:else}
+          {@render deskStatus()}
+        {/if}
+      {:else if isPage}
+        {@render pagePreview()}
+      {:else}
+        {@render deskPreview()}
+      {/if}
+    </div>
+
+    {#if inlineOpen && step === 'edit' && editView === 'block' && !isPage}
       <div
         class="feed-composer__inline"
         role="toolbar"
         aria-label="Форматирование"
         style={`left:${inlineX}px; top:${inlineY}px`}
       >
-        <UiV2Tooltip text={`Жирный · ${shortcutLabel('Ctrl+B')}`} placement="top">
-          <button type="button" class="feed-composer__tool" class:is-active={inlineBold} aria-pressed={inlineBold} aria-label="Жирный" onmousedown={keepSelection} onclick={() => applyInline('bold')}>{@html iconBold(16)}</button>
-        </UiV2Tooltip>
-        <UiV2Tooltip text={`Курсив · ${shortcutLabel('Ctrl+I')}`} placement="top">
-          <button type="button" class="feed-composer__tool" class:is-active={inlineItalic} aria-pressed={inlineItalic} aria-label="Курсив" onmousedown={keepSelection} onclick={() => applyInline('italic')}>{@html iconItalic(16)}</button>
-        </UiV2Tooltip>
-        <UiV2Tooltip text={`Ссылка · ${shortcutLabel('Ctrl+K')}`} placement="top">
-          <button type="button" class="feed-composer__tool" aria-label="Ссылка на текст" onmousedown={keepSelection} onclick={() => openLinkDialog('inline')}>{@html iconLink(16)}</button>
-        </UiV2Tooltip>
+        <button type="button" class="feed-composer__tool" class:is-active={inlineBold} aria-pressed={inlineBold} aria-label="Жирный" onmousedown={keepSelection} onclick={() => applyInline('bold')}>{@html iconBold(16)}</button>
+        <button type="button" class="feed-composer__tool" class:is-active={inlineItalic} aria-pressed={inlineItalic} aria-label="Курсив" onmousedown={keepSelection} onclick={() => applyInline('italic')}>{@html iconItalic(16)}</button>
+        <button type="button" class="feed-composer__tool" aria-label="Ссылка на текст" onmousedown={keepSelection} onclick={() => openLinkDialog('inline')}>{@html iconLink(16)}</button>
       </div>
     {/if}
 
     {#if linkOpen}
+      {#if isPage}
+        <button
+          type="button"
+          class="feed-composer__scrim"
+          aria-label="Закрыть"
+          onclick={() => { linkOpen = false; linkRange = null; }}
+        ></button>
+      {/if}
       <div
         class="feed-composer__link"
         role="dialog"
         aria-label={linkMode === 'embed' ? 'Карточка ссылки' : 'Ссылка на текст'}
       >
-        <input
-          class="feed-composer__link-input"
-          type="url"
-          placeholder="https://"
-          bind:value={linkValue}
-          onkeydown={(e) => {
-            if (isKeyCode(e, 'Enter')) {
-              e.preventDefault();
-              void applyLink();
-            }
-            if (isKeyCode(e, 'Escape')) {
-              linkOpen = false;
-              linkRange = null;
-            }
-          }}
-        />
-        <UiV2Button variant="primary" size="sm" label="Готово" onclick={() => void applyLink()} />
-        <button
-          type="button"
-          class="feed-composer__icon-btn"
-          aria-label="Отмена"
-          onclick={() => {
-            linkOpen = false;
-            linkRange = null;
-          }}
-        >
-          {@html iconX(16)}
-        </button>
+        <p class="feed-composer__link-title">
+          {linkMode === 'embed' ? 'Карточка ссылки' : 'Добавить ссылку'}
+        </p>
+        <div class="feed-composer__link-row">
+          <input
+            class="feed-composer__link-input"
+            type="url"
+            inputmode="url"
+            placeholder={isPage ? 'URL' : 'https://'}
+            bind:value={linkValue}
+            onkeydown={(e) => {
+              if (isKeyCode(e, 'Enter')) {
+                e.preventDefault();
+                void applyLink();
+              }
+              if (isKeyCode(e, 'Escape')) {
+                linkOpen = false;
+                linkRange = null;
+              }
+            }}
+          />
+          {#if !isPage}
+            <UiV2Button variant="primary" size="sm" label="Готово" onclick={() => void applyLink()} />
+            <button
+              type="button"
+              class="feed-composer__icon-btn"
+              aria-label="Отмена"
+              onclick={() => { linkOpen = false; linkRange = null; }}
+            >{@html iconX(16)}</button>
+          {/if}
+        </div>
+        {#if isPage}
+          <div class="feed-composer__link-actions">
+            <UiV2Button variant="ghost" label="Отмена" onclick={() => { linkOpen = false; linkRange = null; }} />
+            <UiV2Button variant="primary" label="Готово" onclick={() => void applyLink()} />
           </div>
-      {/if}
+        {/if}
+      </div>
+    {/if}
 
     <input
       bind:this={fileInput}
@@ -2422,4 +2905,30 @@
       onchange={onFilesPicked}
     />
   </div>
+
+  <UiV2PopupMenu
+    open={menu !== null}
+    x={menuX}
+    y={menuY}
+    placement="anchor"
+    dropdown={!isPage && (menu === 'channel' || menu === 'kind')}
+    anchor={menuAnchor}
+    items={menuItems}
+    title={isPage ? menuTitle : ''}
+    onClose={closeMenu}
+    onSelect={(id) => onMenuSelect(id)}
+  />
+
+  {#if clearOpen}
+    <UiV2ChoiceSheet
+      title={isEditMode ? 'Вернуть назад' : 'Очистить'}
+      summary={isEditMode
+        ? 'Вернуть запись к исходному состоянию? Все внесённые изменения будут утрачены.'
+        : 'Вернуться к белому чистому листу, чтобы продолжить творить сначала?'}
+      options={[{ value: 'yes', label: isEditMode ? 'Вернуть как было' : 'Очистить запись' }]}
+      value=""
+      onSelect={clearEditor}
+      onClose={() => { clearOpen = false; }}
+    />
+  {/if}
 {/if}

@@ -16,7 +16,8 @@
   align-items: center;
   gap: 0.85rem;
   min-width: 0;
-  padding: 0.25rem 0.75rem 0.25rem 0.25rem;
+  // справа отступ шире: подсветка при наведении не обрезается впритык к тексту
+  padding: 0.25rem 1.25rem 0.25rem 0.25rem;
   border: 0;
   border-radius: 999px;
   background: transparent;

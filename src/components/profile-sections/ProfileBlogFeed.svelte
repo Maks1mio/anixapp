@@ -129,12 +129,18 @@
           {article}
           selected={selectedId === article.id}
           hideSubscribe
+          menuPinAvailable={isMyProfile}
           entryPoint="channel"
           onOpen={(a) => (selectedId = a.id)}
           onChannel={(id) => { if (id !== channel.id) navigate(`/channel/${id}`); }}
           {onVote}
           onArticleRemove={(id) => { articles = articles.filter((a) => a.id !== id); }}
-          onArticleChange={(next) => { articles = articles.map((a) => (a.id === next.id ? next : a)); }}
+          onArticleChange={(next) => {
+            const prev = articles.find((a) => a.id === next.id) as (FeedArticle & { is_pinned?: boolean }) | undefined;
+            articles = articles.map((a) => (a.id === next.id ? next : a));
+            // Закрепили / открепили — порядок задаёт сервер (закреплённая первой)
+            if (prev && !!prev.is_pinned !== !!(next as FeedArticle & { is_pinned?: boolean }).is_pinned) void load(0);
+          }}
           onRepost={(a) => void openComposer(a)}
           onEdit={(a) => void openComposer(null, a)}
         />

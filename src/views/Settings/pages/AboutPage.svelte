@@ -59,13 +59,13 @@
     <p class="uiv2-settings__version">{version}</p>
   </div>
   <p class="uiv2-settings__lead">
-    Неофициальный десктопный клиент для Anixart. Построен с использованием
+    Неофициальный клиент Anixart для ПК и Android. Построен на
     <a
       href="https://github.com/Maks1mio/anixapi"
       class="uiv2-settings__link"
       onclick={(e) => { e.preventDefault(); openExternal('https://github.com/Maks1mio/anixapi'); }}
     >AnixApi</a>
-    — TypeScript-обёртка над API Anixart 9.x для Node.js.
+    — TypeScript-обёртке над API Anixart.
   </p>
   <UiV2Button
     label="Поставить звезду проекту"
@@ -90,7 +90,6 @@
       <button
         type="button"
         class="uiv2-settings__icon-btn"
-        title="Telegram"
         aria-label="Открыть канал AnixApp в Telegram"
         onclick={() => openExternal(TG_CHANNEL)}
       >
@@ -101,7 +100,6 @@
       <button
         type="button"
         class="uiv2-settings__icon-btn"
-        title="GitHub"
         aria-label="Открыть GitHub разработчика"
         onclick={() => openExternal(GITHUB_PROFILE)}
       >

@@ -214,7 +214,7 @@
       left: 0;
       z-index: 30;
       width: var(--m-rail-w);
-      height: 100dvh;
+      height: calc(100dvh * var(--m-vh-fix, 1));
       display: flex;
       flex-direction: column;
       overflow: hidden;

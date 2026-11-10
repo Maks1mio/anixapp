@@ -93,7 +93,7 @@ function gpuAdapterUnavailableReason(chromiumMajor: number | null): string {
     if (chromiumMajor != null && chromiumMajor < 121) {
       return `WebView Chrome ${chromiumMajor} — нужен 121+. Обновите Android System WebView в Play Store`;
     }
-    return 'GPU-адаптер WebGPU не найден на этом TV (см. диагностику в Поведение)';
+    return 'GPU-адаптер WebGPU не найден на этом устройстве';
   }
   return 'GPU не выделен — включите аппаратное ускорение в браузере';
 }

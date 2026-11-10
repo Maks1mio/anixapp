@@ -33,6 +33,7 @@
   import { trackArticleEvent, type ArticleEntryPoint } from '../../utils/feed-article-events';
   import { feedArticleToUiV2FeedPost } from '../../utils/uikit-v2-feed-post';
   import { handleUserProfileClick } from '../../stores/user-profile';
+  import { openFeedArticle } from '../../stores/feed-focus';
   import {
     buildFeedArticleMenuItems,
     ensureFeedArticleMenuSession,
@@ -271,8 +272,12 @@
     }
   }
 
+  let postEl = $state<{ closeMenu: () => void } | null>(null);
+
+  /** «Репостнули» → сама запись-репост (в ленте), а не текущая */
   function openRepostArticle(repost: FeedArticle) {
-    onOpen?.(repost);
+    postEl?.closeMenu();
+    openFeedArticle(Number(repost.id));
   }
 </script>
 
@@ -292,6 +297,7 @@
   data-feed-article-id={article.id}
 >
   <UiV2FeedPost
+    bind:this={postEl}
     data={post}
     {showSubscribe}
     {menuItems}

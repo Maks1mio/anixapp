@@ -1,6 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { isTvMode } from '../../../platform/tv';
+  import { isMobileMode } from '../../../platform/mobile';
+  import {
+    getNativeAcceleration,
+    hasNativeAcceleration,
+    setNativeAcceleration,
+  } from '../../../native/anix-acceleration';
   import { isCapacitorNative } from '../../../native/anix-api-native';
   import { isGpuAvailable } from '../../../utils/webgpu-availability.svelte';
   import { isDebugMetricsEnabled, setDebugMetricsEnabled } from '../../../services/debug-metrics';
@@ -12,7 +18,19 @@
   import UiV2SettingsRow from '../../../components/uikit-v2/UiV2SettingsRow.svelte';
   import UiV2Button from '../../../components/uikit-v2/UiV2Button.svelte';
 
+  type Props = {
+    /** Встроено в другую страницу (телефон: «Воспроизведение») — без заглушки «нечего настраивать». */
+    embedded?: boolean;
+  };
+  let { embedded = false }: Props = $props();
+
+  /** Телефон: трея и флага ускорения окна нет — остаются только сведения о видеокарте. */
+  const mobile = isMobileMode();
   let hasElectron = $state(false);
+  /** Телефон: переключатель есть, если доступен плагин APK или (отладка в окне) настройка Electron. */
+  let mobileAccelAvailable = $state(false);
+  /** Значение, с которым запущено приложение: отличие от переключателя = нужен перезапуск. */
+  let accelAtLaunch = $state(true);
   let isNativeApk = $state(false);
   let minimizeToTray = $state(false);
   let adaptiveAcceleration = $state(true);
@@ -37,14 +55,28 @@
 
   async function loadBehavior() {
     isNativeApk = isCapacitorNative();
-    if (window.electron?.getSettings) {
+    if (window.electron?.getSettings && !mobile) {
       hasElectron = true;
       const settings = await window.electron.getSettings();
       minimizeToTray = settings.minimizeToTray ?? false;
       adaptiveAcceleration = settings.adaptiveAcceleration !== false;
       behaviorLoaded = true;
-    } else if (showTvMetrics || isNativeApk) {
+    } else if (showTvMetrics || isNativeApk || mobile) {
       behaviorLoaded = true;
+    }
+
+    if (mobile) {
+      if (hasNativeAcceleration()) {
+        const st = await getNativeAcceleration();
+        adaptiveAcceleration = st?.enabled ?? true;
+        accelAtLaunch = st?.applied ?? adaptiveAcceleration;
+        mobileAccelAvailable = true;
+      } else if (window.electron?.getSettings) {
+        const settings = await window.electron.getSettings();
+        adaptiveAcceleration = settings.adaptiveAcceleration !== false;
+        accelAtLaunch = adaptiveAcceleration;
+        mobileAccelAvailable = true;
+      }
     }
 
     debugMetrics = isDebugMetricsEnabled();
@@ -61,6 +93,10 @@
 
   function saveAccel(checked: boolean) {
     adaptiveAcceleration = checked;
+    if (mobile && hasNativeAcceleration()) {
+      void setNativeAcceleration(checked);
+      return;
+    }
     window.electron?.saveSettings?.({ adaptiveAcceleration: checked });
   }
 
@@ -73,31 +109,44 @@
 </script>
 
 <div class="uiv2-settings">
-  {#if !hasElectron && !showTvMetrics && !isNativeApk}
-    <p class="uiv2-settings__status">Настройки поведения доступны только в приложении Electron.</p>
+  {#if !hasElectron && !showTvMetrics && !isNativeApk && !mobile}
+    {#if !embedded}<p class="uiv2-settings__status">Здесь нечего настраивать в этой сборке.</p>{/if}
   {:else if !behaviorLoaded}
     <p class="uiv2-settings__status">Загрузка…</p>
   {:else}
-    {#if isNativeApk}
+    {#if isNativeApk || mobile}
       <section class="uiv2-settings__block">
-        <h3 class="uiv2-settings__title">Производительность</h3>
+        <h3 class="uiv2-settings__title">Видеокарта</h3>
         <div class="uiv2-settings__group">
+          {#if mobileAccelAvailable}
+            <UiV2SettingsRow
+              title="Адаптивное ускорение"
+              desc={adaptiveAcceleration !== accelAtLaunch
+                ? 'Изменение вступит в силу после перезапуска приложения.'
+                : 'Использовать видеокарту для обработки видео — без него не работает Anime4K. Выключите, если картинка мерцает или появляются артефакты.'}
+            >
+              <UiV2Toggle label="Адаптивное ускорение" checked={adaptiveAcceleration} onChange={saveAccel} />
+            </UiV2SettingsRow>
+          {/if}
           <UiV2SettingsRow
-            title="Адаптивное ускорение"
-            desc="GPU-флаги Chromium включены в APK. Anime4K: {isGpuAvailable() ? 'WebGPU доступен' : 'WebGPU недоступен'}."
+            title="Видеокарта для Anime4K"
+            desc={isGpuAvailable()
+              ? 'WebGPU доступен — Anime4K можно включить в «Воспроизведении».'
+              : 'WebGPU недоступен — Anime4K на этом устройстве не включится. Подробности ниже.'}
           >
-            <span class="uiv2-settings__pill">{isGpuAvailable() ? 'WebGPU OK' : 'Нет GPU'}</span>
+            <span class="uiv2-settings__pill">{isGpuAvailable() ? 'Доступно' : 'Нет WebGPU'}</span>
           </UiV2SettingsRow>
         </div>
       </section>
 
+      {#if isNativeApk}
       <section class="uiv2-settings__block">
         <h3 class="uiv2-settings__title">Устройство и GPU</h3>
         <div class="uiv2-settings__group uiv2-settings__group--pad">
           {#if diagnosticsLoading}
             <p class="uiv2-settings__status">Сбор диагностики…</p>
           {:else if diagnosticLines.length === 0}
-            <p class="uiv2-settings__status">Диагностика недоступна (нет native-моста AnixDevice).</p>
+            <p class="uiv2-settings__status">Не удалось собрать сведения об устройстве.</p>
           {:else}
             <dl class="uiv2-settings__diag">
               {#each diagnosticLines as line (line.key)}
@@ -129,6 +178,7 @@
           />
         </div>
       </section>
+      {/if}
     {/if}
 
     {#if showTvMetrics}

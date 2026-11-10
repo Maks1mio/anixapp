@@ -11,11 +11,17 @@
     backLabel?: string;
     onBack?: () => void;
     actions?: Snippet;
+    /** Аватар слева от заголовка (страница чужого профиля: «Коллекции» пользователя) */
+    avatarUrl?: string;
+    /** Клик по аватару / заголовку — открыть профиль */
+    onTitleClick?: () => void;
+    /** Ник в строке под заголовком (жирным, как в шапке закладок): «ник · subtitle» */
+    login?: string;
     /** Полоса под заголовком (вкладки) — при прокрутке закрепляется у верхнего края */
     children?: Snippet;
   }
 
-  let { title, subtitle, backLabel = 'Назад', onBack, actions, children }: Props = $props();
+  let { title, subtitle, backLabel = 'Назад', onBack, actions, avatarUrl, onTitleClick, login, children }: Props = $props();
 
   /** Шапка ушла под верхний край — показываем её полосу поверх контента */
   let docked = $state(false);
@@ -60,12 +66,31 @@
           {@html iconChevronLeft(20)}
         </UiV2RoundButton>
       {/if}
-      <div class="discover-hero__text">
-        <h1 class="discover-hero__title">{title}</h1>
-        {#if subtitle}
-          <p class="discover-hero__subtitle">{subtitle}</p>
-        {/if}
-      </div>
+      {#if avatarUrl !== undefined}
+        <!-- Тот же вид, что у шапки закладок (bm-head): аватар, заголовок, «ник · подпись», подсветка при наведении -->
+        <button type="button" class="bm-head__profile discover-hero__profile" onclick={() => onTitleClick?.()}>
+          <span
+            class="bm-head__avatar"
+            style={avatarUrl ? `background-image:url('${avatarUrl}')` : undefined}
+            aria-hidden="true"
+          ></span>
+          <span class="bm-head__text">
+            <span class="bm-head__title">{title}</span>
+            <span class="bm-head__meta">
+              {#if login}<span class="bm-head__login">{login}</span>{/if}
+              {#if login && subtitle}<span class="bm-head__dot" aria-hidden="true">·</span>{/if}
+              {#if subtitle}<span>{subtitle}</span>{/if}
+            </span>
+          </span>
+        </button>
+      {:else}
+        <div class="discover-hero__text">
+          <h1 class="discover-hero__title">{title}</h1>
+          {#if subtitle}
+            <p class="discover-hero__subtitle">{subtitle}</p>
+          {/if}
+        </div>
+      {/if}
     </div>
     {#if actions}
       <div class="discover-hero__actions">

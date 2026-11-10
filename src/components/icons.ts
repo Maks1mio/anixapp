@@ -54,6 +54,12 @@ import {
   ListChecks,
   ListOrdered,
   Lock,
+  Mail,
+  ShieldCheck,
+  KeyRound,
+  UserX,
+  Smile,
+  AtSign,
   LogOut,
   MessageCircle,
   MessageSquareX,
@@ -705,4 +711,34 @@ export function iconHash(size = 16): string {
 /** Код (API-запрос) */
 export function iconCodeXml(size = 16): string {
   return toSvg(CodeXml, size);
+}
+
+/** Почта (Email учётной записи) */
+export function iconMail(size = 18): string {
+  return toSvg(Mail, size);
+}
+
+/** Щит с галочкой (здоровье аккаунта) */
+export function iconShieldCheck(size = 18): string {
+  return toSvg(ShieldCheck, size);
+}
+
+/** Ключ (пароль) */
+export function iconKeyRound(size = 18): string {
+  return toSvg(KeyRound, size);
+}
+
+/** Пользователь с крестиком (блоклист, удаление аккаунта) */
+export function iconUserX(size = 18): string {
+  return toSvg(UserX, size);
+}
+
+/** Смайлик (статус профиля) */
+export function iconSmile(size = 18): string {
+  return toSvg(Smile, size);
+}
+
+/** @ (никнейм) */
+export function iconAtSign(size = 18): string {
+  return toSvg(AtSign, size);
 }

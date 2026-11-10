@@ -2409,3 +2409,156 @@ html:not(.mobile-mode):not(.tv-mode) .profile-panel__inner-slide:first-child .pr
   max-width: 56rem;
   margin-inline: auto;
 }
+
+/* ── Меню «Редактирование» профиля: строки с иконками, как меню настроек ПК ── */
+html:not(.mobile-mode) {
+  .profile-panel__edit-section {
+    margin: 0.6rem 0 0.1rem;
+    padding: 0.45rem 1.1rem 0.3rem;
+    color: $color-text-muted;
+    font-size: 0.78rem;
+    font-weight: 650;
+  }
+
+  .profile-panel__edit-row:has(> .profile-panel__edit-row-icon),
+  .profile-panel__edit-row--oauth {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 3.35rem;
+    padding: 0.55rem 0.9rem 0.55rem 1.1rem;
+    transition: background-color 0.12s ease;
+
+    &:hover {
+      background: color-mix(in srgb, $color-text 6%, transparent);
+    }
+
+    &:hover .profile-panel__edit-row-chevron {
+      opacity: 1;
+      transform: translateX(2px);
+    }
+  }
+
+  .profile-panel__edit-row-icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 12px;
+    background: color-mix(in srgb, $color-text 7%, transparent);
+    color: color-mix(in srgb, $color-text 86%, transparent);
+  }
+
+  .profile-panel__oauth-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 12px;
+  }
+
+  .profile-panel__edit-row-text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 0.12rem;
+    min-width: 0;
+  }
+
+  .profile-panel__edit-row-text .profile-panel__edit-row-title {
+    font-size: 0.93rem;
+    font-weight: 600;
+  }
+
+  .profile-panel__edit-row-text .profile-panel__edit-row-sub {
+    overflow: hidden;
+    font-size: 0.78rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .profile-panel__edit-row-chevron {
+    display: inline-flex;
+    flex: 0 0 auto;
+    color: $color-text-muted;
+    opacity: 0.55;
+    transition: opacity 0.12s ease, transform 0.12s ease;
+  }
+}
+
+/* Телефон: тот же список с иконками — в метриках экрана настроек Android (иконка 24 в колонке 56dp) */
+html.mobile-mode {
+  .profile-panel__edit-row:has(> .profile-panel__edit-row-icon),
+  .profile-panel__edit-row--oauth {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start !important;
+    gap: 0 !important;
+  }
+
+  .profile-panel__edit-row-icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    min-width: 40px;
+    padding: 4px 0;
+    color: var(--m-text);
+
+    :is(svg) {
+      width: 24px;
+      height: 24px;
+    }
+  }
+
+  .profile-panel__edit-row-icon--badge .profile-panel__edit-badge.user-badge {
+    width: 28px;
+    height: 28px;
+  }
+
+  .profile-panel__oauth-icon {
+    width: 28px;
+    height: 28px;
+    margin-right: 12px;
+  }
+
+  .profile-panel__edit-row-text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .profile-panel__edit-row-chevron {
+    display: inline-flex;
+    flex: none;
+    margin-left: 8px;
+    color: var(--m-text-3, var(--m-text-2));
+  }
+
+  /* значок уже слева — в подписи только название */
+  .profile-panel__edit-row-icon--badge ~ .profile-panel__edit-row-text .profile-panel__edit-badge-inline {
+    display: none;
+  }
+}
+
+/* Значок профиля вместо иконки в строке «Изменить значок» */
+html:not(.mobile-mode) {
+  .profile-panel__edit-row-icon--badge {
+    background: transparent;
+
+    .profile-panel__edit-badge.user-badge {
+      width: 2rem;
+      height: 2rem;
+    }
+  }
+
+  /* на ПК значок уже в плашке слева — в подписи только название */
+  .profile-panel__edit-badge-inline {
+    display: none;
+  }
+}
+
+.profile-panel__edit-badge-inline {
+  display: inline-flex;
+}

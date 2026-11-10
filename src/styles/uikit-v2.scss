@@ -8784,84 +8784,13 @@ button.uiv2-air-cal__day {
   line-height: 1.3;
 }
 
-.uiv2-feed-post__votes {
-  display: inline-flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 0.15rem;
-  min-height: 2rem;
-  padding: 0.15rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 8%, transparent);
-  color: var(--uiv2-fg-muted, #{$color-text-muted});
+// Голоса записи — стрелки как у комментариев (.uiv2-comment__vote)
+.uiv2-feed-post__arrows {
+  flex: none;
 
-  &--plus .uiv2-feed-post__score {
-    color: var(--color-success, #22c55e);
-  }
-
-  &--minus .uiv2-feed-post__score {
-    color: var(--uikit-v2-danger, #{$color-error});
-  }
-}
-
-.uiv2-feed-post__vote {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.85rem;
-  height: 1.7rem;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  transition: color 0.12s ease, background 0.12s ease;
-
-  &:hover:not(:disabled),
-  &:focus-visible {
-    background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 10%, transparent);
-    color: var(--uikit-v2-text, #{$color-text});
-    outline: none;
-  }
-
-  &:disabled {
+  .uiv2-comment__vote-btn:disabled {
     opacity: 0.55;
     cursor: default;
-  }
-
-  &--up {
-    color: var(--color-success, #22c55e);
-  }
-
-  &--down {
-    color: var(--uikit-v2-danger, #{$color-error});
-  }
-
-  .icon,
-  svg {
-    width: 16px;
-    height: 16px;
-  }
-}
-
-.uiv2-feed-post__score {
-  min-width: 1.1rem;
-  padding: 0 0.15rem;
-  text-align: center;
-  font-size: 0.88rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.1;
-  color: inherit;
-
-  &.is-plus {
-    color: var(--color-success, #22c55e);
-  }
-
-  &.is-minus {
-    color: var(--uikit-v2-danger, #{$color-error});
   }
 }
 
@@ -13725,4 +13654,71 @@ html:not(.mobile-mode) .release-filter .uiv2-menu-sheet__panel {
 
 html:not(.mobile-mode) .release-filter .uiv2-menu-sheet__handle {
   display: none;
+}
+
+/* ── Страницы настроек: общий вид, как в новом меню (подписи групп, ровные сетки, акцентная рамка выбора) ── */
+.uiv2-settings__title {
+  padding: 0 0.2rem;
+  font-size: 0.8rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  color: var(--uiv2-fg-muted);
+}
+
+.uiv2-settings__block > .uiv2-settings__desc {
+  padding: 0 0.2rem;
+}
+
+.uiv2-settings__group {
+  border-radius: 16px;
+}
+
+.uiv2-settings__theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  gap: 0.55rem;
+}
+
+.uiv2-settings__theme {
+  min-width: 0;
+
+  &--on {
+    box-shadow: inset 0 0 0 2px var(--uikit-v2-accent);
+  }
+}
+
+.uiv2-settings__theme-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.uiv2-settings__choice--on {
+  box-shadow: inset 0 0 0 2px var(--uikit-v2-accent);
+}
+
+/* Подзаголовки внутри карточки (режим, нагрузка…) — обычный регистр, плотнее к своим чипам */
+.uiv2-settings__subhead {
+  margin: 0.15rem 0 -0.35rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--uiv2-fg-muted);
+
+  &:first-child {
+    margin-top: 0;
+  }
+}
+
+/* Масштаб интерфейса телефона: пять равных шагов в ряд */
+.uiv2-settings__scale {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.4rem;
+
+  .uiv2-settings__chip {
+    padding: 0;
+  }
 }

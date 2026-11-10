@@ -105,6 +105,35 @@ html.mobile-mode {
     &__summary { font: 400 14px/1.35 var(--m-font); letter-spacing: 0.02em; color: var(--m-text-3); }
   }
 
+  /* Подписи групп меню — как на ПК: «Приложение», «Система», «AnixApp» */
+  .m-pref-group {
+    margin: var(--m-space-3) 0 0;
+    padding: var(--m-space-2) var(--m-space-4) var(--m-space-1);
+    font: 500 14px/1.3 var(--m-font);
+    color: var(--m-primary);
+  }
+
+  .m-pref__chevron {
+    flex: none;
+    display: inline-flex;
+    margin-left: var(--m-space-2);
+    color: var(--m-text-3);
+  }
+
+  /* Пояснение на экранах, где на телефоне настраивать нечего (Discord, обновление, отладка) */
+  .m-pref-note {
+    margin: var(--m-space-4);
+    padding: var(--m-space-4);
+    border-radius: 16px;
+    background: var(--m-surface-block);
+    font: 400 14px/1.45 var(--m-font);
+    color: var(--m-text-2);
+
+    p { margin: 0; }
+    p + p { margin-top: var(--m-space-2); }
+    b { color: var(--m-text); font-weight: 600; }
+  }
+
   .m-pref-cat {
     margin: var(--m-space-4) 0 0;
     padding: var(--m-space-2) var(--m-space-4);
@@ -361,3 +390,57 @@ html.mobile-mode {
     &:active { filter: brightness(0.92); }
   }
 }
+
+// ── Общие страницы настроек на телефоне: сетки и выбор — с полями гаттера, в метриках Anixart ──
+html.mobile-mode .m-settings__desktop {
+  .uiv2-settings__theme-grid,
+  .uiv2-settings__choice-grid {
+    padding: 0 var(--m-space-4) var(--m-space-2);
+  }
+
+  .uiv2-settings__theme-grid {
+    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    gap: var(--m-space-2);
+  }
+
+  .uiv2-settings__theme,
+  .uiv2-settings__choice {
+    border-radius: var(--m-radius-md);
+    background: var(--m-surface-block);
+    box-shadow: none;
+
+    &--on {
+      background: var(--m-secondary-container);
+      box-shadow: inset 0 0 0 2px var(--m-primary);
+    }
+  }
+
+  .uiv2-settings__theme-name { font: 400 13px/1.25 var(--m-font); color: var(--m-text); }
+  .uiv2-settings__choice span { font: 500 14px/1.25 var(--m-font); }
+
+  .uiv2-settings__block > .uiv2-settings__desc { padding: 0 var(--m-space-4) var(--m-space-2); }
+}
+
+html.mobile-mode .m-settings__desktop {
+  .uiv2-settings__subhead { margin: var(--m-space-2) 0 calc(var(--m-space-1) * -1); font: 500 13px/1.3 var(--m-font); color: var(--m-text-2); }
+  .uiv2-settings__subhead:first-child { margin-top: 0; }
+  .uiv2-settings__block > .uiv2-settings__notice { margin: 0 var(--m-space-4) var(--m-space-2); }
+}
+
+// «Уведомления»: раскрывающийся блок «Дополнительно» и кнопки проверки — плоско, как строки настроек Android
+html.mobile-mode .m-settings__desktop {
+  .notif-advanced {
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    &[open] .notif-advanced__summary { border-bottom: 0; }
+  }
+  .notif-advanced__summary { padding: var(--m-space-4) calc(var(--m-space-4) + 28px) var(--m-space-4) var(--m-space-4); }
+  .notif-advanced__title { font: 400 15px/1.3 var(--m-font); color: var(--m-text); }
+  .notif-advanced__hint { font: 400 14px/1.35 var(--m-font); color: var(--m-text-3); }
+  .notif-test-actions { gap: var(--m-space-2); }
+  .notif-prefs-wrap { margin: 0; }
+}
+
+// Иконка ближе к тексту (было 56dp — слишком широкий отступ)
+html.mobile-mode .m-pref__icon { min-width: 40px; padding-right: 0; }

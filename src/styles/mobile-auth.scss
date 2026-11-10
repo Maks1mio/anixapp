@@ -8,7 +8,7 @@ html.mobile-mode {
     // Шапка с постерами зависит от высоты экрана; логотип всегда заходит на её край, а текст начинается ниже
     --auth-hero: clamp(120px, 22dvh, 232px);
 
-    height: 100dvh;
+    height: calc(100dvh * var(--m-vh-fix, 1));
     min-height: 0;
     overflow: hidden auto;
     overscroll-behavior: contain;

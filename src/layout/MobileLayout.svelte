@@ -15,7 +15,8 @@
   import UiV2MediaLightbox from '../components/uikit-v2/UiV2MediaLightbox.svelte';
   import { closeFeedMediaLightbox, feedMediaLightbox } from '../utils/feed-media-lightbox';
   import { randomReleaseId, shuffleRandomRelease } from '../stores/random-release';
-  import { bookmarksSearchLabel, bookmarksSearchOpen, bookmarksSearchQuery, closeBookmarksSearch } from '../stores/mobile-bookmarks-search';
+  import { bookmarksForeign, bookmarksSearchLabel, bookmarksSearchOpen, bookmarksSearchQuery, closeBookmarksSearch } from '../stores/mobile-bookmarks-search';
+  import { closeLocalSearch, localSearchLabel, localSearchOpen, localSearchQuery } from '../stores/mobile-local-search';
   import { mobileNavOrder, mobilePhoneBarSize, moveMobileNavTabAcross, swapMobileNavTabs, PHONE_BAR_MAX, PHONE_BAR_MIN, type MobileNavTab } from '../stores/mobile-nav';
   import { isScrollRestorePending } from '../stores/view-state';
   import { notificationsModalOpen, settingsModalOpen, watchModalOpen, openSettingsModal, closeSettingsModal } from '../stores/modals';
@@ -30,9 +31,11 @@
   import { iconDownload, iconPlus, iconShuffle, iconCircleUser, iconSearch, iconSettings, iconBell } from '../components/icons';
   import { SIDEBAR_NAV_ITEMS, type SidebarNavId } from '../constants/sidebar-nav';
   import MobileSettings from './MobileSettings.svelte';
+  import MobileFeedCompose from '../views/MobileFeedCompose.svelte';
   import MobileSearch from './MobileSearch.svelte';
   import { buildSearchRoute, SEARCH_PLACEHOLDERS, type SearchTab } from '../search-controller';
   import { bindNativeBackButton, minimizeNativeApp } from '../platform/mobile-back';
+  import { mobileUiZoom } from '../platform/mobile';
   import SidebarProfilePanel from '../components/SidebarProfilePanel.svelte';
   import {
     profilePanelOpen,
@@ -167,7 +170,8 @@
     const viewport = window.visualViewport;
     if (!typing || !viewport) return;
     const sync = () => {
-      keyboardInset = Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop));
+      // Окно меряет в пикселях экрана, вёрстка под масштабом интерфейса — в своих
+      keyboardInset = Math.max(0, Math.round((window.innerHeight - viewport.height - viewport.offsetTop) / mobileUiZoom()));
     };
     sync();
     viewport.addEventListener('resize', sync);
@@ -190,6 +194,9 @@
   const isRoot = $derived(['/', '/catalog', '/overview', '/overview/popular', '/bookmarks', '/feed'].includes(path) || inCollections);
   /** В закладках поле открывается в верхней панели, а результаты остаются на странице, в текущей вкладке. */
   const bookmarksSearching = $derived(path === '/bookmarks' && $bookmarksSearchOpen);
+  /** Коллекции пользователя: рядом со стрелкой — поле поиска по ним, результаты на странице */
+  const userCollections = $derived(/^\/profile\/\d+\/collections$/.test(path));
+  const localSearching = $derived(userCollections && $localSearchOpen);
   const activeTab = $derived<MobileNavTab | null>(profileOpen ? 'profile' : rootTab);
   /** Ответы от ИИ-помощниц: как на ПК, новость важнее пометки beta. */
   const aiUnread = $derived($supportInbox.unread);
@@ -353,6 +360,7 @@
     else if (get(watchModalOpen)) watchModalOpen.set(false);
     else if (profileOpen) backInProfile();
     else if (bookmarksSearching) closeBookmarksSearch();
+    else if (localSearching) closeLocalSearch();
     else if (path !== '/') goBack();
     else void minimizeNativeApp();
   }
@@ -539,6 +547,12 @@
   >
   {#if isRoot && !bookmarksSearching}
     <header class="m-topbar">
+      {#if path === '/bookmarks' && $bookmarksForeign}
+        <!-- Списки другого пользователя: «назад» слева от поиска (в своих — нет) -->
+        <button type="button" class="m-icon-btn m-icon-btn--lead" onclick={goBack} aria-label="Назад">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        </button>
+      {/if}
       {@render searchEntry()}
       {#if $hasActiveDownloads}
         <!-- как в Anixart, в панели только настройки и уведомления; «Загрузки» появляются, пока что-то качается -->
@@ -557,7 +571,7 @@
     </header>
   {:else if !floatBack && !ownHeader}
     <header class="m-topbar m-topbar--inner">
-      <button type="button" class="m-icon-btn" onclick={bookmarksSearching ? closeBookmarksSearch : goBack} aria-label="Назад">
+      <button type="button" class="m-icon-btn" onclick={bookmarksSearching ? closeBookmarksSearch : localSearching ? closeLocalSearch : goBack} aria-label="Назад">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
       </button>
       {#if path === '/search'}
@@ -567,6 +581,17 @@
           value={$bookmarksSearchQuery}
           local={{ label: $bookmarksSearchLabel, onQuery: (q) => bookmarksSearchQuery.set(q) }}
         />
+      {:else if localSearching}
+        <MobileSearch
+          value={$localSearchQuery}
+          local={{ label: $localSearchLabel, onQuery: (q) => localSearchQuery.set(q) }}
+        />
+      {:else if userCollections}
+        <!-- Как на корневых экранах: сначала кнопка, поле открывается по нажатию -->
+        <button type="button" class="m-search" onclick={() => localSearchOpen.set(true)}>
+          {@html iconSearch(24)}
+          <span>{$localSearchLabel}</span>
+        </button>
       {/if}
     </header>
   {/if}
@@ -638,6 +663,13 @@
     </div>
   {/if}
 
+  {#if path === '/feed/write'}
+    <!-- Написание записи — отдельный экран со своей шапкой, как в Anixart -->
+    <div class="m-fullscreen m-fullscreen--page m-fullscreen--compose">
+      <MobileFeedCompose />
+    </div>
+  {/if}
+
   {#if $settingsModalOpen}
     <div class="m-fullscreen m-fullscreen--page">
       <MobileSettings onClose={closeSettingsModal} />
@@ -649,7 +681,7 @@
   .m-app {
     display: flex;
     flex-direction: column;
-    height: 100dvh;
+    height: calc(100dvh * var(--m-vh-fix, 1));
     overflow: hidden;
     background: var(--m-bg);
     color: var(--m-text);
@@ -734,6 +766,13 @@
   .m-fullscreen--page {
     z-index: 40;
     overflow: hidden;
+    padding-bottom: 0;
+  }
+
+  /* Редактор записи: шапка сверху, панель инструментов снизу — прокручивается только текст */
+  .m-fullscreen--compose {
+    display: flex;
+    flex-direction: column;
     padding-bottom: 0;
   }
 

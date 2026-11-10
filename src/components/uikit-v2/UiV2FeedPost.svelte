@@ -12,8 +12,8 @@
   import {
     iconMoreHorizontal,
     iconRepost,
-    iconThumbsUp,
-    iconThumbsDown,
+    iconChevronDown,
+    iconChevronUp,
     iconPlus,
     iconPin,
   } from '../icons';
@@ -222,9 +222,6 @@
   const shownPreview = $derived(hasBodyBlocks || hasStructuredBefore ? '' : preview);
   const shownMoreText = $derived(hasBodyBlocks || hasStructuredAfter ? '' : moreText);
   const lastComment = $derived(data.lastComment ?? null);
-  const scoreClass = $derived(
-    votes > 0 ? 'is-plus' : votes < 0 ? 'is-minus' : '',
-  );
 
   const repost = $derived(data.repost ?? null);
   const hasRepost = $derived(!!repost || !!data.containsRepost);
@@ -347,6 +344,11 @@
     menuY = e.clientY;
     menuPlacement = 'point';
     menuOpen = true;
+  }
+
+  /** Закрыть меню снаружи (например, после перехода из подменю «Репостнули») */
+  export function closeMenu() {
+    menuOpen = false;
   }
 
   async function handleMenuSelect(id: string) {
@@ -638,33 +640,32 @@
       {@html iconRepost(16)}
       <span>{ruRepostLabel(shares)}</span>
     </button>
-    <div
-      class="uiv2-feed-post__votes"
-      class:uiv2-feed-post__votes--plus={votes > 0}
-      class:uiv2-feed-post__votes--minus={votes < 0}
-    >
+    <!-- Голоса — как у комментариев: стрелки «вниз · счёт · вверх» без подложки -->
+    <div class="uiv2-comment__vote uiv2-feed-post__arrows">
       <button
         type="button"
-        class="uiv2-feed-post__vote"
-        class:uiv2-feed-post__vote--down={myVote === ARTICLE_VOTE_MINUS}
+        class="uiv2-comment__vote-btn"
+        class:uiv2-comment__vote-btn--down={myVote === ARTICLE_VOTE_MINUS}
         aria-pressed={myVote === ARTICLE_VOTE_MINUS}
         aria-label="Минус"
         disabled={voteBusy}
         onclick={(e) => setVote(e, ARTICLE_VOTE_MINUS)}
       >
-        {@html iconThumbsDown(16)}
+        {@html iconChevronDown(18)}
       </button>
-      <span class="uiv2-feed-post__score {scoreClass}">{votes}</span>
+      <span class="uiv2-comment__vote-count uiv2-comment__vote-count--{votes > 0 ? 'positive' : votes < 0 ? 'negative' : 'neutral'}">
+        {String(votes).replace('-', '–')}
+      </span>
       <button
         type="button"
-        class="uiv2-feed-post__vote"
-        class:uiv2-feed-post__vote--up={myVote === ARTICLE_VOTE_PLUS}
+        class="uiv2-comment__vote-btn"
+        class:uiv2-comment__vote-btn--up={myVote === ARTICLE_VOTE_PLUS}
         aria-pressed={myVote === ARTICLE_VOTE_PLUS}
         aria-label="Плюс"
         disabled={voteBusy}
         onclick={(e) => setVote(e, ARTICLE_VOTE_PLUS)}
       >
-        {@html iconThumbsUp(16)}
+        {@html iconChevronUp(18)}
       </button>
     </div>
   </footer>

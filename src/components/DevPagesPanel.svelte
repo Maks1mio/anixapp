@@ -73,7 +73,7 @@
         { route: '/profile/:profile/votes', name: 'Bookmarks (оценки юзера)' },
         { route: '/profile/:profile/lists', name: 'Bookmarks (списки юзера)' },
         { route: '/profile/:profile/friends', name: 'ProfileFriends' },
-        { route: '/profile/:profile/collections', name: 'ProfileCollections' },
+        { route: '/profile/:profile/collections', name: 'CollectionsList (пользователь)' },
         { route: '/profile/:profile/comments', name: 'ProfileComments' },
         { route: '/profile/:profile/videos', name: 'ProfileVideos' },
       ],

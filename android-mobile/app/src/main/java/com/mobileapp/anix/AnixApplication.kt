@@ -11,6 +11,8 @@ import com.google.firebase.FirebaseOptions
  */
 class AnixApplication : Application() {
     override fun onCreate() {
+        // WebGPU для Anime4K: флаги Chromium в каждом процессе приложения, до первого WebView
+        WebGpuWebViewBootstrap.applyEarly(this)
         super.onCreate()
         if (FirebaseApp.getApps(this).isEmpty()) {
             FirebaseApp.initializeApp(

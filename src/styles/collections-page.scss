@@ -686,3 +686,13 @@ body.collection-editor--grabbing {
 .collection-card__badge--private {
   color: $color-text-muted;
 }
+
+// Поиск по чужим коллекциям — тот же вид, что у кнопок и поиска в «Списках»
+.view-collections-list .bm-tools {
+  margin: 0;
+}
+
+.view-collections-list .bm-tools__search .uiv2-pill-field {
+  background: var(--uiv2-chrome-bg);
+  box-shadow: var(--uiv2-chrome-shadow);
+}

@@ -14,6 +14,12 @@
   import { navigate } from '../stores/navigation';
   import { requireAuth } from '../stores/auth';
   import { ensureProfileId } from '../utils/profile';
+  import { resolveJacksonRefs } from '../utils/jackson-refs';
+  import { buildPosterUrl } from '../utils/posterUrl';
+  import { openProfilePanel } from '../stores/profile-panel';
+  import { closeLocalSearch, localSearchLabel, localSearchQuery } from '../stores/mobile-local-search';
+  import UiV2PillField from '../components/uikit-v2/UiV2PillField.svelte';
+  import { iconSearch, iconX } from '../components/icons';
   import UiV2ContentRetryOverlay from '../components/uikit-v2/UiV2ContentRetryOverlay.svelte';
   import { headlineFromLoadError } from '../utils/content-load-error';
   import {
@@ -49,9 +55,18 @@
     week?: boolean;
     /** Режим «Мои» (/collections/my) — та же страница, список коллекций профиля */
     mine?: boolean;
+    /** Коллекции другого пользователя (/profile/:id/collections) — та же страница, что «Мои» */
+    userId?: number | null;
   }
 
-  let { week = false, mine = false }: Props = $props();
+  let { week = false, mine = false, userId = null }: Props = $props();
+
+  /** Чужой профиль: шапка с аватаром и ником, без «Создать» */
+  const foreign = $derived(userId != null && userId > 0);
+  let ownerLogin = $state('');
+  let ownerAvatar = $state('');
+  let ownerTotal = $state<number | null>(null);
+
 
   let items = $state<CollectionCardData[]>([]);
   let page = $state(0);
@@ -74,16 +89,57 @@
   let scrollListener: (() => void) | null = null;
   let unregisterScrollKey: (() => void) | null = null;
 
+  /** Поиск по коллекциям пользователя: у API его нет — фильтруем загруженное (и догружаем всё при вводе) */
+  let deskQuery = $state('');
+  const searchQuery = $derived((isMobileMode() ? $localSearchQuery : deskQuery).trim().toLowerCase());
+  const visibleItems = $derived(
+    foreign && searchQuery
+      ? items.filter((it) => {
+          return `${it.title ?? ''} ${it.description ?? ''}`.toLowerCase().includes(searchQuery);
+        })
+      : items,
+  );
+  $effect(() => {
+    if (!foreign) return;
+    localSearchLabel.set(ownerLogin ? `Поиск в коллекциях у ${ownerLogin}` : 'Поиск в коллекциях');
+  });
+  $effect(() => {
+    // Ищем по всем коллекциям, а не по первой странице
+    if (foreign && searchQuery && hasMore && !isLoading && loadState === 'ready') void untrack(() => loadPage());
+  });
+
   const listSort = $derived(week ? 4 : selectedSort);
   const listWhere = $derived(week ? 2 : 1);
-  const pageTitle = $derived(week ? 'Коллекции недели' : mine ? 'Мои коллекции' : 'Коллекции');
+  const pageTitle = $derived(week ? 'Коллекции недели' : foreign ? 'Коллекции' : mine ? 'Мои коллекции' : 'Коллекции');
   const pageSubtitle = $derived(
     week
       ? 'Лучшие подборки за неделю'
-      : mine
-        ? 'Ваши подборки релизов'
-        : 'Пользовательские коллекции релизов',
+      : foreign
+        ? (ownerTotal != null ? collectionsCountLabel(ownerTotal) : '')
+        : mine
+          ? 'Ваши подборки релизов'
+          : 'Пользовательские коллекции релизов',
   );
+
+  function collectionsCountLabel(n: number): string {
+    const m10 = n % 10;
+    const m100 = n % 100;
+    const word = m10 === 1 && m100 !== 11 ? 'коллекция'
+      : m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20) ? 'коллекции'
+        : 'коллекций';
+    return `${n} ${word}`;
+  }
+
+  async function loadOwner(id: number) {
+    try {
+      const info = resolveJacksonRefs(await window.anixApi?.profile.info(id) as Record<string, unknown>);
+      const p = info?.profile as { login?: string; avatar?: string } | undefined;
+      ownerLogin = p?.login ?? '';
+      ownerAvatar = p?.avatar ? buildPosterUrl(p.avatar) : '';
+    } catch {
+      /* шапка без ника — не критично */
+    }
+  }
 
 
   const sortTabs = COLLECTION_SORT_OPTIONS.map((o) => ({ id: String(o.value), label: o.label }));
@@ -219,7 +275,8 @@
 
   async function loadMinePage(token: number) {
     if (!window.anixApi?.collection?.profileCollections) return;
-    if (profileId == null) profileId = await ensureProfileId();
+    if (foreign) profileId = userId;
+    else if (profileId == null) profileId = await ensureProfileId();
     if (token !== loadToken) return;
     if (profileId == null) {
       errorMsg = 'Не удалось определить профиль';
@@ -230,8 +287,10 @@
     const data = (await window.anixApi.collection.profileCollections(profileId, nextPage)) as {
       content?: unknown[];
       last?: boolean;
+      total_count?: number;
     };
     if (token !== loadToken) return;
+    if (nextPage === 0 && typeof data?.total_count === 'number') ownerTotal = data.total_count;
     const content = (data?.content ?? []) as Record<string, unknown>[];
     if (!content.length) {
       hasMore = false;
@@ -348,7 +407,11 @@
   onMount(() => {
     mounted = true;
     shownMine = mine;
-    unregisterScrollKey = registerActiveScrollKey(() => buildViewStateKey(shownMine ? '/collections/my' : '/collections'));
+    unregisterScrollKey = registerActiveScrollKey(() => buildViewStateKey(
+      foreign ? `/profile/${userId}/collections` : shownMine ? '/collections/my' : '/collections',
+    ));
+    if (foreign && userId) void loadOwner(userId);
+    if (foreign) closeLocalSearch();
     const cached = getViewState<CollectionsViewState>(COLLECTIONS_VIEW_KEY());
     if (mine) {
       // Общий список из кэша держим наготове для возврата из «Моих»
@@ -380,6 +443,7 @@
   });
 
   onDestroy(() => {
+    if (foreign) closeLocalSearch();
     unregisterScrollKey?.();
     unregisterScrollKey = null;
     const allState = shownMine ? allSnapshot : snapshot();
@@ -388,8 +452,32 @@
   });
 </script>
 
+{#snippet userSearch()}
+  <!-- Как поиск в «Списках»: поле на всю ширину под вкладками -->
+  <div class="bm-tools" role="search">
+  <div class="bm-tools__search">
+    <UiV2PillField
+      size="md"
+      type="search"
+      label={ownerLogin ? `Поиск в коллекциях у ${ownerLogin}` : 'Поиск в коллекциях'}
+      value={deskQuery}
+      autocomplete="off"
+      spellcheck={false}
+      oninput={(e) => (deskQuery = (e.currentTarget as HTMLInputElement).value)}
+    >
+      {#snippet icon()}{@html iconSearch(16)}{/snippet}
+    </UiV2PillField>
+    {#if deskQuery}
+      <button type="button" class="bm-tools__clear" aria-label="Очистить поиск" onclick={() => (deskQuery = '')}>
+        {@html iconX(14)}
+      </button>
+    {/if}
+  </div>
+  </div>
+{/snippet}
+
 {#snippet headerActions()}
-  <CollectionsHeaderActions myActive={mine} onMy={toggleMine} onCreate={createCollection} />
+  <CollectionsHeaderActions myActive={mine && !foreign} onMy={() => (foreign ? navigate('/collections/my') : toggleMine())} onCreate={createCollection} />
 {/snippet}
 
 <div class="view view-collections-list discover-page collections-page" bind:this={wrapEl}>
@@ -397,9 +485,13 @@
   <DiscoverHero
     title={pageTitle}
     subtitle={pageSubtitle}
-    actions={isMobileMode() && !week ? headerActions : undefined}
+    avatarUrl={foreign ? ownerAvatar : undefined}
+    login={foreign ? ownerLogin : undefined}
+    onTitleClick={foreign && userId ? () => openProfilePanel(userId!, { login: ownerLogin }) : undefined}
+    actions={isMobileMode() && !week && !foreign ? headerActions : undefined}
   >
-    {#if !week}
+    <!-- Чужие коллекции: только шапка и поиск — без общих вкладок сортировки, «Мои» и «Создать» -->
+    {#if !week && !foreign}
       <UiV2Tabs
         tabs={sortTabs}
         activeId={mine ? '' : String(selectedSort)}
@@ -407,6 +499,9 @@
         class="uiv2-tabs--static collections-page__tabs"
         rightActions={isMobileMode() ? undefined : headerActions}
       />
+    {:else if foreign && !isMobileMode()}
+      <!-- На месте вкладок — поиск по коллекциям пользователя (закрепляется при прокрутке, как вкладки) -->
+      {@render userSearch()}
     {/if}
   </DiscoverHero>
 
@@ -419,7 +514,7 @@
     {:else if loadState === 'error'}
       <UiV2ContentRetryOverlay message={errorMsg} onRetry={() => void loadPage()} />
     {:else if loadState === 'empty'}
-      {#if mine}
+      {#if mine && !foreign}
         <div class="discover-empty">
           <span class="discover-empty__icon" aria-hidden="true">{@html iconFolder(26)}</span>
           <p class="discover-empty__title">Ой, а тут коллекций нет!</p>
@@ -435,11 +530,18 @@
         </div>
       {/if}
     {:else}
-      <div class="collections-feed">
-        {#each items as item (item.id)}
-          <CollectionCard data={item} variant="grid" />
-        {/each}
-      </div>
+      {#if foreign && searchQuery && visibleItems.length === 0 && !isLoading && !hasMore}
+        <div class="discover-empty">
+          <span class="discover-empty__icon" aria-hidden="true">{@html iconSearch(26)}</span>
+          <p class="discover-empty__title">Ничего не найдено</p>
+        </div>
+      {:else}
+        <div class="collections-feed">
+          {#each visibleItems as item (item.id)}
+            <CollectionCard data={item} variant="grid" />
+          {/each}
+        </div>
+      {/if}
       {#if isLoading}
         <div class="collections-feed" aria-busy="true">
           <UiV2CollectionCardSkeleton count={2} />

@@ -891,7 +891,21 @@
   color: var(--uiv2-fg-muted, #{$color-text-muted});
 }
 
+/* ───────────────────────── Редактор записи ─────────────────────────
+   ПК (окно / overlay): шапка «куда · шаги · действия», панель инструментов,
+   лист по центру, строка состояния. Телефон (--page): экран как в Anixart. */
+
 .feed-composer {
+  --fc-text: var(--uikit-v2-text, #{$color-text});
+  --fc-muted: var(--uiv2-fg-muted, #{$color-text-muted});
+  --fc-accent: var(--uikit-v2-accent, #{$color-accent});
+  --fc-surface: var(--uiv2-surface, #{$color-surface});
+  --fc-chrome: color-mix(in srgb, var(--fc-surface) 94%, #000);
+  --fc-line: color-mix(in srgb, var(--fc-text) 9%, transparent);
+  --fc-hover: color-mix(in srgb, var(--fc-text) 8%, transparent);
+  --fc-active: color-mix(in srgb, var(--fc-text) 14%, transparent);
+  --fc-field: color-mix(in srgb, var(--fc-text) 6%, transparent);
+
   position: fixed;
   inset: 0;
   z-index: 80;
@@ -904,12 +918,12 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  width: min(42rem, 100%);
+  width: min(56rem, 100%);
   height: 100%;
   overflow: hidden;
-  background: var(--uiv2-surface, #{$color-surface});
-  color: var(--uikit-v2-text, #{$color-text});
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 8%, transparent);
+  background: var(--fc-surface);
+  color: var(--fc-text);
+  box-shadow: 0 0 0 1px var(--fc-line);
 }
 
 .feed-composer--window {
@@ -922,17 +936,15 @@
   width: 100%;
   min-height: 0;
   justify-content: stretch;
-  background: var(--uiv2-surface, #{$color-surface});
+  background: var(--fc-surface);
 }
 
-.feed-composer--window .feed-composer__shell {
+.feed-composer--window .feed-composer__shell,
+.feed-composer--page .feed-composer__shell {
   width: 100%;
   flex: 1 1 auto;
   min-height: 0;
-}
-
-.feed-composer--window:not(.feed-composer--preview) .feed-composer__bar {
-  grid-template-columns: minmax(0, 1fr) auto;
+  box-shadow: none;
 }
 
 .composer-win {
@@ -962,60 +974,23 @@
   -webkit-app-region: no-drag;
 }
 
-.composer-win .feed-composer__ribbon,
+.composer-win .feed-composer__toolbar,
 .composer-win .feed-composer__bar {
   -webkit-app-region: no-drag;
 }
 
-.feed-composer__bar {
-  display: grid;
-  grid-template-columns: 2.5rem minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.45rem;
-  min-height: 3.35rem;
-  padding: 0.35rem 0.55rem 0.35rem 0.2rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 10%, transparent);
-}
-
-.feed-composer__who {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  min-width: 0;
-}
-
-.feed-composer__who-copy {
-  min-width: 0;
-}
-
-.feed-composer__title {
-  margin: 0;
-  font-size: 1.02rem;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.feed-composer__subtitle {
-  margin: 0.12rem 0 0;
-  overflow: hidden;
-  font-size: 0.75rem;
-  color: var(--uiv2-fg-muted, #{$color-text-muted});
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.feed-composer__bar-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.15rem;
-}
-
+/* общие кнопки */
 .feed-composer__icon-btn,
-.feed-composer__avatar-btn,
 .feed-composer__tool,
-.feed-composer__block-tool,
-.feed-composer__dock-btn,
-.feed-composer__chip {
+.feed-composer__tbtn,
+.feed-composer__kind,
+.feed-composer__grip,
+.feed-composer__dest,
+.feed-composer__step,
+.feed-composer__view-btn,
+.feed-composer__appbar-btn,
+.feed-composer__appbar-who,
+.feed-composer__dock-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1024,53 +999,58 @@
   border: 0;
   background: transparent;
   color: inherit;
+  font: inherit;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 
   &:disabled {
-    opacity: 0.35;
+    opacity: 0.38;
     cursor: default;
   }
 
   &:hover:not(:disabled),
   &:focus-visible {
     outline: none;
-    background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 10%, transparent);
+    background: var(--fc-hover);
   }
 }
 
 .feed-composer__icon-btn {
-  width: 2.4rem;
-  height: 2.4rem;
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
   border-radius: 999px;
-  color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 78%, transparent);
+  color: color-mix(in srgb, var(--fc-text) 78%, transparent);
 }
 
-.feed-composer__icon-btn--next {
-  color: var(--uikit-v2-text, #{$color-text});
-}
-
-.feed-composer__avatar-btn {
-  width: 2.15rem;
-  height: 2.15rem;
-  border-radius: 999px;
-}
-
+/* аватар канала / блога */
 .feed-composer__avatar {
   display: block;
+  flex: 0 0 auto;
   width: 2.15rem;
   height: 2.15rem;
   border-radius: 50%;
-  background-color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 12%, transparent);
+  background-color: var(--fc-active);
   background-size: cover;
   background-position: center;
-
-  &--channel {
-    border-radius: 8px;
-  }
 
   &--sm {
     width: 1.7rem;
     height: 1.7rem;
+  }
+
+  &--md {
+    width: 2.2rem;
+    height: 2.2rem;
+  }
+
+  &--lg {
+    width: 42px;
+    height: 42px;
+  }
+
+  &--channel {
+    border-radius: 28%;
   }
 
   &--empty {
@@ -1078,191 +1058,332 @@
   }
 }
 
-.feed-composer:not(.feed-composer--preview) .feed-composer__picker {
-  top: 6.35rem;
-}
+.feed-composer__menu-avatar {
+  display: block;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 50%;
+  background-color: color-mix(in srgb, currentColor 18%, transparent);
+  background-size: cover;
+  background-position: center;
 
-.feed-composer__picker {
-  position: absolute;
-  top: 3.4rem;
-  left: 3.1rem;
-  z-index: 4;
-  display: flex;
-  flex-direction: column;
-  width: min(18rem, calc(100% - 4rem));
-  max-height: 16rem;
-  overflow: auto;
-  padding: 0.45rem;
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--uiv2-surface, #{$color-surface}) 96%, #000);
-  box-shadow: 0 12px 32px color-mix(in srgb, #000 36%, transparent);
-}
-
-.feed-composer__picker-label {
-  margin: 0.35rem 0.45rem 0.2rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--uiv2-fg-muted, #{$color-text-muted});
-}
-
-.feed-composer__picker-item {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  width: 100%;
-  padding: 0.45rem 0.5rem;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-
-  &.is-active,
-  &:hover,
-  &:focus-visible {
-    background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 10%, transparent);
-    outline: none;
+  &.is-channel {
+    border-radius: 28%;
   }
 }
 
+/* ── ПК: шапка ── */
+.feed-composer__bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.6rem;
+  padding: 0.5rem 0.85rem;
+  border-bottom: 1px solid var(--fc-line);
+}
+
+.feed-composer__bar-start {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.feed-composer__dest {
+  gap: 0.6rem;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.3rem 0.65rem 0.3rem 0.3rem;
+  border-radius: 14px;
+  text-align: left;
+
+  &:disabled {
+    opacity: 1;
+  }
+
+  &.is-open {
+    background: var(--fc-active);
+  }
+}
+
+.feed-composer__dest-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.feed-composer__dest-kicker {
+  font-size: 0.72rem;
+  color: var(--fc-muted);
+}
+
+.feed-composer__dest-name {
+  overflow: hidden;
+  font-size: 0.92rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feed-composer__dest-chevron {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--fc-muted);
+}
+
+.feed-composer__steps {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.feed-composer__step {
+  gap: 0.45rem;
+  height: 2rem;
+  padding: 0 0.7rem 0 0.35rem;
+  border-radius: 999px;
+  color: var(--fc-muted);
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
+
+  &.is-active {
+    color: var(--fc-text);
+    background: var(--fc-hover);
+  }
+
+  &.is-done {
+    color: var(--fc-text);
+  }
+}
+
+.feed-composer__step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 50%;
+  background: var(--fc-active);
+  font-size: 0.72rem;
+  font-weight: 750;
+
+  .is-active > & {
+    background: var(--fc-accent);
+    color: #fff;
+  }
+
+  .is-done > & {
+    background: color-mix(in srgb, var(--fc-accent) 22%, transparent);
+    color: var(--fc-accent);
+  }
+}
+
+.feed-composer__step-line {
+  width: 1.5rem;
+  height: 1px;
+  background: var(--fc-line);
+}
+
+.feed-composer__bar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+/* ── ПК: панель инструментов ── */
+.feed-composer__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.9rem;
+  padding: 0.35rem 0.85rem;
+  border-bottom: 1px solid var(--fc-line);
+  background: var(--fc-chrome);
+  user-select: none;
+
+  .uiv2-tooltip__trigger {
+    display: inline-flex;
+  }
+}
+
+.feed-composer__tgroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.feed-composer__tsep {
+  width: 1px;
+  height: 1.3rem;
+  margin: 0 0.2rem;
+  background: var(--fc-line);
+}
+
+.feed-composer__tool {
+  min-width: 2rem;
+  height: 2rem;
+  border-radius: 9px;
+  color: color-mix(in srgb, var(--fc-text) 82%, transparent);
+
+  &.is-active {
+    background: var(--fc-active);
+    color: var(--fc-text);
+  }
+}
+
+.feed-composer__tbtn {
+  gap: 0.4rem;
+  height: 2rem;
+  padding: 0 0.65rem;
+  border-radius: 9px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--fc-text) 82%, transparent);
+}
+
+.feed-composer__kind {
+  gap: 0.45rem;
+  min-width: 10.5rem;
+  height: 2rem;
+  padding: 0 0.55rem 0 0.6rem;
+  border-radius: 9px;
+  background: var(--fc-field);
+  font-size: 0.84rem;
+  font-weight: 600;
+  justify-content: flex-start;
+
+  &.is-open {
+    background: var(--fc-active);
+  }
+}
+
+.feed-composer__kind-icon,
+.feed-composer__kind-chevron {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--fc-muted);
+}
+
+.feed-composer__kind-label {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.feed-composer__toolbar-note {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--fc-muted);
+}
+
+.feed-composer__toolbar-end {
+  margin-left: auto;
+}
+
+.feed-composer__view {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.15rem;
+  border-radius: 10px;
+  background: var(--fc-field);
+}
+
+.feed-composer__view-btn {
+  gap: 0.3rem;
+  height: 1.75rem;
+  padding: 0 0.7rem;
+  border-radius: 8px;
+  color: var(--fc-muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+
+  &.is-active,
+  &.is-active:hover {
+    background: var(--fc-surface);
+    color: var(--fc-text);
+    box-shadow: 0 1px 3px color-mix(in srgb, #000 28%, transparent);
+  }
+}
+
+/* ── лист с блоками ── */
 .feed-composer__scroll {
   flex: 1 1 0;
   height: 0;
   min-height: 0;
 }
 
-.feed-composer__empty {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-  padding: 1.5rem;
+.feed-composer__sheet {
+  width: 100%;
+  max-width: 42rem;
+  margin: 0 auto;
+  padding-left: 2.1rem;
+}
+
+.feed-composer--code .feed-composer__sheet {
+  max-width: none;
+  padding-left: 0;
 }
 
 .feed-composer__canvas {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
-}
-
-.feed-composer__code-label {
-  display: block;
-  margin: 0 0 0.45rem;
-  font-size: 0.78rem;
-  font-weight: 650;
-  color: var(--uiv2-fg-muted, #{$color-text-muted});
-}
-
-.feed-composer__code {
-  display: block;
-  box-sizing: border-box;
-  width: 100%;
-  min-height: min(70vh, 36rem);
-  margin: 0;
-  padding: 0.85rem 1rem;
-  border: 1px solid color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 14%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--uiv2-surface, #{$color-surface}) 88%, #000);
-  color: var(--uikit-v2-text, #{$color-text});
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  font-size: 0.8rem;
-  line-height: 1.45;
-  tab-size: 2;
-  resize: vertical;
-  white-space: pre;
-  overflow: auto;
-
-  &:focus,
-  &:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 28%, transparent);
-    outline-offset: 1px;
-  }
-
-  &[aria-invalid='true'] {
-    border-color: color-mix(in srgb, #e05a5a 70%, var(--uikit-v2-text, #{$color-text}));
-  }
+  gap: 0.35rem;
 }
 
 .feed-composer__block {
   position: relative;
-  isolation: isolate;
   min-width: 0;
-  padding: 0.35rem 5.4rem 0.35rem 0.4rem;
-  border-radius: 12px;
-  outline: 2px solid transparent;
-  outline-offset: 0;
+  padding: 0.45rem 0.65rem;
+  border-radius: 10px;
   background: transparent;
-  transition: outline-color 0.12s ease, background-color 0.12s ease;
+  transition: background-color 0.12s ease, box-shadow 0.12s ease;
+
+  &:hover {
+    background: color-mix(in srgb, var(--fc-text) 3%, transparent);
+  }
 
   &.is-focused {
-    outline-color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 28%, transparent);
-    background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 6%, transparent);
+    background: color-mix(in srgb, var(--fc-text) 5%, transparent);
+    box-shadow: inset 2px 0 0 var(--fc-accent);
   }
 
-  &.is-focused,
-  &:hover,
-  &:focus-within {
-    .feed-composer__block-tools {
-      opacity: 1;
-      pointer-events: auto;
-    }
-  }
-
-  &:hover,
-  &:focus-within {
-    z-index: 2;
-
-    .feed-composer__block-tools {
-      z-index: 4;
-    }
+  &:hover .feed-composer__grip,
+  &.is-focused .feed-composer__grip,
+  .feed-composer__grip.is-open {
+    opacity: 1;
   }
 }
 
-.feed-composer__canvas:hover .feed-composer__block.is-focused:not(:hover):not(:focus-within) .feed-composer__block-tools {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.feed-composer__block-tools {
+.feed-composer__grip {
   position: absolute;
-  top: 50%;
-  right: 0;
-  z-index: 2;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 0.08rem;
-  transform: translateY(-50%);
+  top: 0.35rem;
+  left: -2rem;
+  width: 1.6rem;
+  height: 1.75rem;
+  border-radius: 7px;
+  color: var(--fc-muted);
   opacity: 0;
-  pointer-events: none;
+  cursor: grab;
   transition: opacity 0.12s ease;
 
-  .uiv2-tooltip__trigger {
-    flex: 0 0 auto;
-    max-width: none;
-  }
-}
-
-.feed-composer__block-tool {
-  width: 1.7rem;
-  height: 1.7rem;
-  border-radius: 8px;
-  color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 72%, transparent);
-
-  &:hover:not(:disabled),
-  &:focus-visible {
-    background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 12%, transparent);
+  &:focus-visible,
+  &.is-open {
+    opacity: 1;
+    background: var(--fc-active);
   }
 }
 
 .feed-composer__ce {
-  min-height: 1.45em;
+  min-height: 1.5em;
   color: inherit;
   font: inherit;
-  line-height: 1.5;
+  font-size: 0.98rem;
+  line-height: 1.55;
   outline: none;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -1270,32 +1391,31 @@
   &:empty::before,
   &:not(:focus):has(> br:only-child)::before {
     content: attr(data-placeholder);
-    color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 38%, transparent);
+    color: color-mix(in srgb, var(--fc-text) 36%, transparent);
+    pointer-events: none;
   }
 
   &--h {
-    font-size: 1.28rem;
+    font-size: 1.35rem;
     font-weight: 750;
-    line-height: 1.25;
-    text-decoration: underline;
-    text-underline-offset: 0.18em;
+    line-height: 1.3;
   }
 
   &--caption {
-    margin-top: 0.35rem;
+    margin-top: 0.3rem;
     font-size: 0.85rem;
-    color: var(--uiv2-fg-muted, #{$color-text-muted});
+    color: var(--fc-muted);
   }
 }
 
 .feed-composer__quote {
-  padding: 0.15rem 0 0.15rem 0.85rem;
-  border-left: 3px solid color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 35%, transparent);
+  padding: 0.1rem 0 0.1rem 0.9rem;
+  border-left: 3px solid color-mix(in srgb, var(--fc-accent) 70%, transparent);
 }
 
 .feed-composer__list {
   display: block;
-  padding-left: 1.2rem;
+  padding-left: 1.3rem;
 
   &:not(.is-ordered) {
     list-style: disc;
@@ -1314,12 +1434,52 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.55rem;
-  padding: 0.5rem 0;
-  color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 72%, transparent);
+  gap: 0.6rem;
+  padding: 0.35rem 0;
+  color: color-mix(in srgb, var(--fc-text) 62%, transparent);
+  font-size: 1.1rem;
   letter-spacing: 0.08em;
 }
 
+.feed-composer__code-label {
+  display: block;
+  margin: 0 0 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--fc-muted);
+}
+
+.feed-composer__code {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: min(70vh, 36rem);
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--fc-text) 14%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--fc-surface) 88%, #000);
+  color: var(--fc-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  tab-size: 2;
+  resize: vertical;
+  white-space: pre;
+  overflow: auto;
+
+  &:focus,
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--fc-text) 28%, transparent);
+    outline-offset: 1px;
+  }
+
+  &[aria-invalid='true'] {
+    border-color: color-mix(in srgb, #e05a5a 70%, var(--fc-text));
+  }
+}
+
+/* медиа */
 .feed-composer__media {
   display: flex;
   flex-direction: column;
@@ -1330,7 +1490,6 @@
   &--grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 0.45rem;
   }
 }
 
@@ -1338,24 +1497,23 @@
   position: relative;
   overflow: hidden;
   border-radius: 12px;
-  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 8%, transparent);
+  background: var(--fc-hover);
 
   &.is-solo img {
+    display: block;
     width: 100%;
     height: auto;
     max-height: 28rem;
-    display: block;
     object-fit: contain;
-    vertical-align: middle;
   }
 
   &:not(.is-solo) {
     aspect-ratio: 1;
 
     img {
+      display: block;
       width: 100%;
       height: 100%;
-      display: block;
       object-fit: cover;
     }
   }
@@ -1390,7 +1548,7 @@
     display: block;
     height: 100%;
     border-radius: inherit;
-    background: var(--uikit-v2-accent, #{$color-accent});
+    background: var(--fc-accent);
     transition: width 120ms linear;
   }
 }
@@ -1439,11 +1597,11 @@
 }
 
 .feed-composer__media-fab {
+  flex: 0 0 auto;
   width: 1.85rem;
   height: 1.85rem;
   margin: 0;
   padding: 0;
-  flex: 0 0 auto;
   border-radius: 999px;
   line-height: 0;
 }
@@ -1463,10 +1621,10 @@
   justify-content: center;
   gap: 0.4rem;
   aspect-ratio: 1;
-  border: 0;
+  border: 1px dashed color-mix(in srgb, var(--fc-text) 22%, transparent);
   border-radius: 12px;
-  color: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 62%, transparent);
-  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 10%, transparent);
+  color: color-mix(in srgb, var(--fc-text) 62%, transparent);
+  background: transparent;
   font: inherit;
   font-size: 0.82rem;
   cursor: pointer;
@@ -1478,79 +1636,16 @@
 
   &:hover:not(:disabled),
   &:focus-visible {
-    background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 14%, transparent);
-    outline: 2px solid color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 28%, transparent);
-    outline-offset: 2px;
+    background: var(--fc-hover);
+    outline: none;
   }
 }
 
-.feed-composer__media-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-top: 0.45rem;
-}
-
-.feed-composer__chip {
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 10%, transparent);
-  font-size: 0.75rem;
-}
-
+/* всплывающее форматирование выделения (ПК) и окно ссылки */
 .feed-composer__inline,
 .feed-composer__link {
   background: color-mix(in srgb, var(--uiv2-surface, #1c1c1e) 94%, #000);
   box-shadow: 0 10px 28px color-mix(in srgb, #000 40%, transparent);
-}
-
-.feed-composer__ribbon {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem 0.55rem;
-  padding: 0.28rem 0.7rem 0.4rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 10%, transparent);
-  background: color-mix(in srgb, var(--uiv2-surface, #{$color-surface}) 92%, #000);
-  user-select: none;
-}
-
-.feed-composer__ribbon-view {
-  margin-left: auto;
-}
-
-.feed-composer__view-btn {
-  min-width: 3.55rem;
-  padding: 0 0.65rem;
-  font-size: 0.78rem;
-  font-weight: 650;
-}
-
-.feed-composer__ribbon-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.08rem;
-  padding: 0.12rem;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 6%, transparent);
-}
-
-.feed-composer__ribbon .uiv2-tooltip__trigger,
-.feed-composer__bar .uiv2-tooltip__trigger,
-.feed-composer__inline .uiv2-tooltip__trigger {
-  display: inline-flex;
-}
-
-.feed-composer__tool {
-  min-width: 2.05rem;
-  height: 2.05rem;
-  border-radius: 8px;
-  font-size: 0.82rem;
-  font-weight: 700;
-
-  &.is-active {
-    background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 16%, transparent);
-  }
 }
 
 .feed-composer__inline {
@@ -1559,41 +1654,32 @@
   display: flex;
   gap: 0.1rem;
   padding: 0.28rem;
-  border-radius: 16px;
+  border-radius: 14px;
   transform: translate(-50%, calc(-100% - 10px));
-
-  button {
-    min-width: 2.05rem;
-    height: 2.05rem;
-    padding: 0;
-    border: 0;
-    border-radius: 10px;
-    background: transparent;
-    color: inherit;
-    font-size: 0.8rem;
-    font-weight: 750;
-    cursor: pointer;
-
-    &:hover,
-    &:focus-visible {
-      background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 12%, transparent);
-      outline: none;
-    }
-  }
 }
 
 .feed-composer__link {
   position: absolute;
-  top: 6.7rem;
+  top: 7rem;
   left: 50%;
   z-index: 5;
+  width: min(28rem, calc(100% - 2rem));
+  padding: 0.6rem 0.6rem 0.55rem;
+  border-radius: 16px;
+  transform: translateX(-50%);
+}
+
+.feed-composer__link-title {
+  margin: 0 0.2rem 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: var(--fc-muted);
+}
+
+.feed-composer__link-row {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  width: min(28rem, calc(100% - 2rem));
-  padding: 0.45rem 0.5rem;
-  border-radius: 16px;
-  transform: translateX(-50%);
 }
 
 .feed-composer__link-input {
@@ -1603,12 +1689,12 @@
   padding: 0 0.7rem;
   border: 0;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 8%, transparent);
+  background: var(--fc-hover);
   color: inherit;
   font: inherit;
 
   &:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--uikit-v2-text, #{$color-text}) 24%, transparent);
+    outline: 2px solid color-mix(in srgb, var(--fc-text) 24%, transparent);
   }
 }
 
@@ -1616,11 +1702,62 @@
   display: none;
 }
 
-.feed-composer__hint,
+/* строка состояния (ПК) */
+.feed-composer__status {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem 1.1rem;
+  min-height: 2.1rem;
+  padding: 0.3rem 0.95rem;
+  border-top: 1px solid var(--fc-line);
+  color: var(--fc-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.feed-composer__status-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+
+  &.is-saved {
+    color: color-mix(in srgb, #6fa873 85%, var(--fc-text));
+  }
+}
+
+.feed-composer__status-hint {
+  overflow: hidden;
+  margin-left: auto;
+  text-overflow: ellipsis;
+}
+
+/* подсказки и ошибки */
 .feed-composer__repost-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   margin: 0 0 0.85rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 10px;
+  background: var(--fc-field);
+  font-size: 0.84rem;
+  color: var(--fc-muted);
+}
+
+.feed-composer__note {
+  margin: 0;
   font-size: 0.85rem;
-  color: var(--uiv2-fg-muted, #{$color-text-muted});
+  line-height: 1.45;
+  color: var(--fc-muted);
+
+  &--soft {
+    padding: 0 0.35rem;
+    font-size: 0.78rem;
+  }
+
+  &--pad {
+    margin: 0.85rem 1rem 0;
+  }
 }
 
 .feed-composer__error {
@@ -1629,18 +1766,56 @@
   color: #e53935;
 }
 
-.feed-composer__preview-meta {
+.feed-composer__empty {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 0.85rem;
-  margin-bottom: 1rem;
+  padding: 1.5rem;
+
+  p {
+    margin: 0;
+    color: var(--fc-muted);
+  }
 }
 
-.feed-composer__signed {
+/* ── ПК: шаг «Публикация» — одна колонка: «почти готова», подпись автора, предпросмотр ── */
+.feed-composer__publish {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 42rem;
+  margin: 0 auto;
+}
+
+.feed-composer__publish-title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.feed-composer__publish-text {
+  margin: 0.4rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--fc-muted);
+}
+
+.feed-composer__publish-row {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
-  font-size: 0.9rem;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  background: var(--uiv2-card-bg, var(--fc-field));
+}
+
+.feed-composer__section-label {
+  margin: 0 0 0.55rem;
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: var(--fc-muted);
 }
 
 .feed-composer__preview-card {
@@ -1649,9 +1824,384 @@
   background: color-mix(in srgb, var(--uikit-v2-bg, #121212) 65%, transparent);
 }
 
-.feed-composer__empty p {
+@media (max-width: 760px) {
+  .feed-composer__bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .feed-composer__steps {
+    display: none;
+  }
+
+  .feed-composer__status-hint {
+    display: none;
+  }
+}
+
+/* ───────────── Телефон: экран написания записи, как в Anixart ───────────── */
+.feed-composer--page {
+  --fc-text: var(--m-text, #{$color-text});
+  --fc-muted: var(--m-text-2, #{$color-text-muted});
+  --fc-accent: var(--m-primary, #{$color-accent});
+  --fc-surface: var(--m-bg, #121212);
+  --fc-chrome: var(--m-bg, #121212);
+  --fc-line: var(--m-divider, rgba(255, 255, 255, 0.1));
+
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--fc-surface);
+
+  .feed-composer__shell {
+    background: var(--fc-surface);
+  }
+
+  .feed-composer__sheet {
+    max-width: none;
+    padding-left: 0;
+  }
+
+  .feed-composer__canvas {
+    gap: 0.15rem;
+  }
+
+  .feed-composer__block {
+    padding: 0.4rem 0.15rem;
+    border-radius: 0;
+
+    &:hover {
+      background: transparent;
+    }
+
+    &.is-focused {
+      background: transparent;
+      box-shadow: none;
+    }
+  }
+
+  .feed-composer__ce {
+    font-size: 16px;
+    line-height: 1.5;
+
+    &--h {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    &--caption {
+      font-size: 14px;
+    }
+  }
+
+  .feed-composer__code {
+    min-height: calc(100dvh * var(--m-vh-fix, 1) - 15rem);
+    font-size: 12.5px;
+  }
+
+  .feed-composer__empty {
+    padding: 1.25rem 1rem;
+  }
+
+  .feed-composer__preview-card {
+    border-radius: 0;
+    background: transparent;
+  }
+}
+
+/* шапка 56dp: назад · аватар канала + заголовок · очистить · далее */
+.feed-composer__appbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  height: 56px;
+  background: var(--fc-surface);
+}
+
+.feed-composer__appbar-btn {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  color: var(--fc-text);
+
+  &:hover:not(:disabled),
+  &:focus-visible,
+  &:active:not(:disabled) {
+    background: var(--m-press, var(--fc-hover));
+  }
+
+  &--narrow {
+    width: 42px;
+    color: var(--fc-muted);
+  }
+
+  &--accent {
+    color: var(--fc-accent);
+  }
+}
+
+.feed-composer__appbar-who {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  gap: 16px;
+  min-width: 0;
+  height: 56px;
+  border-radius: 0;
+  text-align: left;
+
+  &:disabled {
+    opacity: 1;
+  }
+
+  &:hover:not(:disabled),
+  &:focus-visible {
+    background: transparent;
+  }
+}
+
+.feed-composer__appbar-avatar {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+}
+
+.feed-composer__appbar-chevron {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--fc-text);
+  color: var(--fc-surface);
+  box-shadow: 0 0 0 2px var(--fc-surface);
+}
+
+.feed-composer__appbar-title {
+  overflow: hidden;
+  font-size: 20px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feed-composer__spinner {
+  width: 22px;
+  height: 22px;
+  border: 2.5px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: feed-composer-spin 0.8s linear infinite;
+}
+
+@keyframes feed-composer-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* нижняя панель: отдельные «пилюли», парящие над текстом и клавиатурой */
+.feed-composer--page .feed-composer__shell {
+  position: relative;
+}
+
+.feed-composer__dock {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  padding: 1.75rem 0 calc(10px + var(--safe-bottom, 0px));
+  /* текст мягко уходит под панель, а не обрезается краем */
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--fc-surface) 82%, transparent) 45%,
+    var(--fc-surface)
+  );
+  pointer-events: none;
+}
+
+.feed-composer__dock-row {
+  /* размер кнопки тянется под ширину экрана: 11 кнопок в 4 пилюлях помещаются без прокрутки */
+  --dock-btn: clamp(34px, calc((100vw - 90px) / 11), 44px);
+  --dock-gap: clamp(5px, 1.6vw, 8px);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--dock-gap);
+  padding: 0 8px;
+  pointer-events: auto;
+}
+
+.feed-composer__pill {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  height: calc(var(--dock-btn) + 8px);
+  padding: 0 4px;
+  border-radius: calc(var(--dock-btn) * 0.45);
+  background: var(--m-surface-sheet, color-mix(in srgb, var(--fc-text) 9%, var(--fc-surface)));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--fc-text) 5%, transparent),
+    0 8px 22px color-mix(in srgb, #000 38%, transparent);
+}
+
+.feed-composer__dock-btn {
+  flex: 0 0 auto;
+  width: var(--dock-btn);
+  height: var(--dock-btn);
+  border-radius: calc(var(--dock-btn) * 0.34);
+  color: color-mix(in srgb, var(--fc-text) 62%, transparent);
+  transition: background-color 0.12s ease, color 0.12s ease;
+
+  svg {
+    width: min(20px, calc(var(--dock-btn) * 0.5));
+    height: min(20px, calc(var(--dock-btn) * 0.5));
+  }
+
+  &:hover:not(:disabled),
+  &:focus-visible,
+  &:active:not(:disabled) {
+    background: var(--m-press, var(--fc-hover));
+    color: var(--fc-text);
+  }
+
+  &:disabled {
+    opacity: 0.32;
+  }
+
+  &.is-active {
+    background: color-mix(in srgb, var(--fc-accent) 20%, transparent);
+    color: var(--fc-accent);
+  }
+
+  &--text {
+    font-size: min(19px, calc(var(--dock-btn) * 0.44));
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+}
+
+/* узкий телефон: отмена/повтор переезжают в «⋮», остальное крупнее */
+@media (max-width: 480px) {
+  .feed-composer__pill--history {
+    display: none;
+  }
+
+  .feed-composer__dock-row {
+    --dock-btn: clamp(32px, calc((100vw - 64px) / 9), 44px);
+  }
+}
+
+/* окно ссылки — шторка снизу */
+.feed-composer__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
   margin: 0;
-  color: var(--uiv2-fg-muted, #{$color-text-muted});
+  padding: 0;
+  border: 0;
+  background: color-mix(in srgb, #000 50%, transparent);
+}
+
+.feed-composer--page .feed-composer__link {
+  position: fixed;
+  top: auto;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 61;
+  width: auto;
+  padding: 1.25rem 1rem calc(0.85rem + var(--safe-bottom, 0px));
+  border-radius: var(--m-radius-xl, 28px) var(--m-radius-xl, 28px) 0 0;
+  background: var(--m-surface-sheet, var(--fc-surface));
+  transform: none;
+
+  .feed-composer__link-title {
+    margin: 0 0 0.85rem;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--fc-text);
+  }
+
+  .feed-composer__link-input {
+    height: var(--m-field-h, 50px);
+    padding: 0 0.9rem;
+    border: 1px solid var(--m-outline, var(--fc-line));
+    border-radius: var(--m-radius-xs, 4px);
+    background: transparent;
+    font-size: 16px;
+
+    &:focus-visible {
+      outline: 2px solid var(--fc-accent);
+      outline-offset: -1px;
+    }
+  }
+}
+
+.feed-composer__link-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+
+/* «Публикация»: Запись почти готова! · Подпись автора · предпросмотр */
+.feed-composer__ready {
+  padding: 16px;
+}
+
+.feed-composer__ready-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.feed-composer__ready-text {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--fc-text);
+}
+
+.feed-composer__divider {
+  height: 0.5px;
+  min-height: 1px;
+  background: var(--fc-line);
+}
+
+.feed-composer__switch-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+}
+
+.feed-composer__switch-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.feed-composer__switch-title {
+  font-size: 15px;
+}
+
+.feed-composer__switch-desc {
+  font-size: 14px;
+  color: var(--m-text-3, var(--fc-muted));
 }
 
 .feed-subs {
@@ -4763,4 +5313,65 @@
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+/* значок черновика: крутится, пока правка не записана, потом — галочка в кружке */
+.feed-composer__draft-icon,
+.feed-composer__status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.feed-composer__draft-state {
+  color: color-mix(in srgb, #6fa873 85%, var(--fc-text));
+
+  .feed-composer__draft-icon {
+    animation: feed-composer-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  &.is-saving {
+    color: var(--fc-muted);
+
+    .feed-composer__draft-icon {
+      animation: feed-composer-spin 0.9s linear infinite;
+    }
+  }
+}
+
+.feed-composer__status-main.is-saving {
+  color: var(--fc-muted);
+
+  .feed-composer__status-icon {
+    animation: feed-composer-spin 0.9s linear infinite;
+  }
+}
+
+@keyframes feed-composer-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* шапка телефона: круглые кнопки 44px с отступами от краёв и равным шагом между значками */
+.feed-composer__appbar {
+  gap: 4px;
+  padding: 0 8px;
+}
+
+.feed-composer__appbar-btn,
+.feed-composer__appbar-btn--narrow {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+
+.feed-composer__appbar-who {
+  margin-left: 4px;
 }

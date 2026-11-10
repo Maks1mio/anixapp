@@ -3,7 +3,7 @@
     "desktopName": "anixapp.desktop",
     "version": "0.1.64",
     "description": "Быстрый клиент для просмотра аниме на базе Anixart API",
-    "repository": "github:Maks1mio/anixapp",
+    "repository": "github:Anixapp-Community/anixapp",
     "main": "electron/main.js",
     "scripts": {
         "install:no-esbuild-postinstall": "cross-env ESBUILD_SKIP_POSTINSTALL=1 yarn install",

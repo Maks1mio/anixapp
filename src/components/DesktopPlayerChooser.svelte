@@ -13,7 +13,7 @@
   } from '../utils/player-integration';
   import { requestOpenExternal } from '../utils/external-link';
 
-  const GITHUB_ISSUES = 'https://github.com/Maks1mio/anixapp/issues';
+  const GITHUB_ISSUES = 'https://github.com/Anixapp-Community/anixapp/issues';
   const DISCORD_INVITE = 'https://discord.gg/qdFMFxzU9A';
 
   interface Props {

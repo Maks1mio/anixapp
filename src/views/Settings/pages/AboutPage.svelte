@@ -70,7 +70,7 @@
   <UiV2Button
     label="Поставить звезду проекту"
     variant="chrome"
-    onclick={() => openExternal('https://github.com/Maks1mio/anixapp')}
+    onclick={() => openExternal('https://github.com/Anixapp-Community/anixapp')}
   />
   <div class="uiv2-settings__group uiv2-settings__dev">
     <button

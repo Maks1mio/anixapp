@@ -18,6 +18,7 @@
   import { fetchAnnouncements, type Announcement } from '../services/announcements';
   import AnnouncementBanner from '../components/AnnouncementBanner.svelte';
   import HomeContinueWatching from '../components/HomeContinueWatching.svelte';
+  import HomeMobileUpdate from '../components/HomeMobileUpdate.svelte';
   import { swipeTabs } from '../actions/swipeTabs';
   import { isAuthenticated } from '../stores/auth';
   import TabPeek from '../components/TabPeek.svelte';
@@ -588,7 +589,7 @@
   </Tabs>
 
   <!-- На телефоне карточка над перелистываемым списком: она общая для всех вкладок -->
-  {#if isMobileMode()}<HomeContinueWatching />{/if}
+  {#if isMobileMode()}<div class="home-mobile-cards"><HomeMobileUpdate /><HomeContinueWatching /></div>{/if}
   <div class="home-content" use:swipeTabs={{ onSwipe: swipeToTab, enabled: isMobileMode(), activeId: activeTab }}>
     {#if !isMobileMode()}<HomeContinueWatching />{/if}
     <div class="home-list">

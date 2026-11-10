@@ -19,6 +19,7 @@ import com.mobileapp.anix.plugin.AnixOAuthPlugin;
 import com.mobileapp.anix.plugin.AnixPlayerPlugin;
 import com.mobileapp.anix.plugin.AnixPushPlugin;
 import com.mobileapp.anix.plugin.AnixQrPlugin;
+import com.mobileapp.anix.plugin.AnixUpdaterPlugin;
 import java.util.Locale;
 
 @UnstableApi
@@ -38,6 +39,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AnixPushPlugin.class);
         registerPlugin(AnixQrPlugin.class);
         registerPlugin(AnixAccelerationPlugin.class);
+        registerPlugin(AnixUpdaterPlugin.class);
         super.onCreate(savedInstanceState);
         drawUnderSystemBars();
     }

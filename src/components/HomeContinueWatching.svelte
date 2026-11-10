@@ -7,7 +7,8 @@
    */
   import { onDestroy, onMount } from 'svelte';
   import UiV2Card from './uikit-v2/UiV2Card.svelte';
-  import { iconX } from './icons';
+  import { isMobileMode } from '../platform/mobile';
+  import { iconPlay, iconX } from './icons';
   import { isAuthenticated } from '../stores/auth';
   import { navigate } from '../stores/navigation';
   import { isPlayerWindowOpen, openWatchModal } from '../stores/modals';
@@ -49,7 +50,8 @@
       const raw = data?.content?.[0];
       if (!raw) return;
       const card = mapHistoryRawToReleaseCard(raw);
-      if (!card.id || isDismissed(card)) {
+      // На телефоне плашку не скрывают — прежнее «Скрыть» тоже не действует
+      if (!card.id || (!isMobileMode() && isDismissed(card))) {
         item = null;
         return;
       }
@@ -71,9 +73,10 @@
     return [
       sameEpisode ? item?.historyView?.episodeLabel : `${p.episode_position} серия`,
       p.dubber_name || (sameEpisode ? item?.historyView?.dubberLabel : ''),
-      `${fmtTime(p.position_sec)} из ${fmtTime(p.duration_sec)}`,
     ].filter(Boolean).join(' · ');
   });
+  /** Таймкод у полосы прогресса, как в плеере */
+  const timecode = $derived(progress ? `${fmtTime(progress.position_sec)} / ${fmtTime(progress.duration_sec)}` : '');
   const poster = $derived(item?.poster ? toPosterDisplayUrl(item.poster, 'cardVertical') : '');
 
   async function watch() {
@@ -175,8 +178,11 @@
           <span class="home-continue__sub">{subtitle}</span>
         {/if}
         {#if progress}
-          <span class="home-continue__bar" aria-hidden="true">
-            <span style:width="{(progress.position_sec / progress.duration_sec) * 100}%"></span>
+          <span class="home-continue__track">
+            <span class="home-continue__bar" aria-hidden="true">
+              <span style:width="{(progress.position_sec / progress.duration_sec) * 100}%"></span>
+            </span>
+            <span class="home-continue__time">{timecode}</span>
           </span>
         {/if}
       </div>
@@ -186,7 +192,9 @@
           class="uiv2-btn uiv2-btn--md uiv2-btn--primary"
           disabled={opening}
           onclick={() => void watch()}
+          aria-label="Смотреть"
         >
+          <span class="home-continue__play-icon" aria-hidden="true">{@html iconPlay(20)}</span>
           <span class="uiv2-btn__label">{opening ? 'Открываю…' : 'Смотреть'}</span>
         </button>
         <button type="button" class="home-continue__dismiss" aria-label="Скрыть" onclick={dismiss}>
@@ -258,11 +266,25 @@
     white-space: nowrap;
   }
 
+  .home-continue__track {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: min(100%, 22rem);
+    margin-top: 0.3rem;
+  }
+
+  .home-continue__time {
+    flex: none;
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--uiv2-fg-muted);
+  }
+
   .home-continue__bar {
     overflow: hidden;
-    width: min(100%, 16rem);
+    flex: 1 1 auto;
     height: 3px;
-    margin-top: 0.3rem;
     border-radius: 999px;
     background: var(--uiv2-hover-bg);
 
@@ -279,6 +301,10 @@
     flex: 0 0 auto;
     align-items: center;
     gap: 0.35rem;
+  }
+
+  .home-continue__play-icon {
+    display: none;
   }
 
   .home-continue__dismiss {

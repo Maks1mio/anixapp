@@ -4,7 +4,7 @@
    * касание — показать/скрыть панели, двойное касание по краю — перемотка, горизонтальный жест — перемотка
    * с превью, вертикальный справа — громкость, слева — яркость, удержание — 2×. Экран всегда альбомный.
    */
-  import { onDestroy, onMount, untrack } from 'svelte';
+  import { onDestroy, onMount, tick, untrack } from 'svelte';
   import { fade } from 'svelte/transition';
   import { getWatchParams } from '../../router';
   import { navigate } from '../../stores/navigation';
@@ -25,7 +25,20 @@
   import ResumePrompt from '../Watch/components/ResumePrompt.svelte';
   import { episodeDisplayNumber } from '../../utils/episode-display';
   import { isCapacitorNative } from '../../native/anix-api-native';
-  import { loadAppSettings } from '../../utils/app-settings';
+  import { loadAppSettings, saveAppSettings } from '../../utils/app-settings';
+  import {
+    ANIME4K_INTENSITIES,
+    ANIME4K_TARGET_RES,
+    ANIME4K_TYPES,
+    anime4kTargetHeight,
+    mapAnime4kPreset,
+    normalizeAnime4kPreset,
+    normalizeAnime4kTargetRes,
+    type Anime4kIntensity,
+    type Anime4kTargetRes,
+    type Anime4kType,
+  } from '../Watch/core/anime4k-presets';
+  import { getWebGpuUnavailableReason, initWebGpuAvailability } from '../../utils/webgpu-availability.svelte';
   import { DEFAULT_PLAYER_HOTKEYS, formatSeekSeconds, normalizePlayerHotkeys } from '../../utils/player-hotkeys';
   import { bindNativeBackButton, pushBackHandler } from '../../platform/mobile-back';
   import {
@@ -110,6 +123,7 @@
 
   let videoEl = $state<HTMLVideoElement | null>(null);
   let iframeEl = $state<HTMLIFrameElement | null>(null);
+  let canvasEl = $state<HTMLCanvasElement | null>(null);
   let trackEl = $state<HTMLElement | null>(null);
 
   let episodeLoadGen = 0;
@@ -274,6 +288,21 @@
     }
   }
 
+  /**
+   * Кнопки панели оживают не сразу: касание, которое показало панель, иначе после pointerup
+   * превращается в click и попадает в кнопку, появившуюся под пальцем (Chrome ищет цель клика заново).
+   */
+  const CHROME_ARM_MS = 350;
+  let chromeArmed = $state(true);
+  $effect(() => {
+    if (!controlsVisible) {
+      chromeArmed = false;
+      return;
+    }
+    const t = window.setTimeout(() => { chromeArmed = true; }, CHROME_ARM_MS);
+    return () => window.clearTimeout(t);
+  });
+
   $effect(() => {
     // на паузе панели не прячутся; при старте воспроизведения — снова таймер
     if (!paused && controlsVisible) scheduleHide();
@@ -293,13 +322,124 @@
   // ── Медиа ────────────────────────────────────────────────────────────────────────────────
   function bindCoreEls() {
     core.video = videoEl;
-    core.canvas = null;
+    core.canvas = canvasEl;
     core.iframe = iframeEl;
     fluo.bind({ video: videoEl, core });
   }
 
   $effect(() => {
     bindCoreEls();
+  });
+
+  // ── Anime4K (WebGPU): те же настройки, что в «Настройки → Воспроизведение» и в плеере ПК ─────
+  const UPSCALE_HIDE_CLASS = 'watch-page__video--hidden-for-upscale';
+  let gpuAvailable = $state(false);
+  let gpuReason = $state<string | null>(null);
+  let upscaleType = $state<Anime4kType>('off');
+  let upscaleIntensity = $state<Anime4kIntensity>('optimal');
+  let upscaleTargetRes = $state<Anime4kTargetRes>('1080');
+  /** Canvas с картинкой Anime4K показан (видео под ним скрыто) */
+  let upscaleOn = $state(false);
+  let upscaleGen = 0;
+  const upscaleMapped = $derived(mapAnime4kPreset({ type: upscaleType, intensity: upscaleIntensity }));
+
+  function applyUpscalePrefs(src: Record<string, unknown>) {
+    const preset = normalizeAnime4kPreset(src);
+    upscaleType = preset.type;
+    upscaleIntensity = preset.intensity;
+    upscaleTargetRes = normalizeAnime4kTargetRes(src.upscaleTargetRes);
+  }
+
+  function stopUpscale() {
+    upscaleGen++;
+    core.stopUpscale();
+    upscaleOn = false;
+    videoEl?.classList.remove(UPSCALE_HIDE_CLASS);
+  }
+
+  /** Поднять (или подогнать под новый размер) Anime4K. Видео видно, пока не готов первый кадр фильтра. */
+  async function startUpscale() {
+    const gen = ++upscaleGen;
+    bindCoreEls();
+    const video = videoEl;
+    if (!upscaleMapped.enabled || !gpuAvailable || !useVideo || !video || !canvasEl) {
+      if (upscaleOn || core.upscale.active) stopUpscale();
+      return;
+    }
+    if (video.videoWidth < 2 || video.readyState < 3 /* HAVE_FUTURE_DATA */) return;
+    const ok = await core.startUpscale(true, upscaleMapped.mode, 'auto', anime4kTargetHeight(upscaleTargetRes));
+    if (gen !== upscaleGen) return;
+    if (ok) {
+      upscaleOn = true;
+      await tick();
+      if (gen !== upscaleGen) return;
+      video.classList.add(UPSCALE_HIDE_CLASS);
+    } else {
+      upscaleOn = false;
+      video.classList.remove(UPSCALE_HIDE_CLASS);
+    }
+  }
+
+  function saveUpscale() {
+    const mapped = mapAnime4kPreset({ type: upscaleType, intensity: upscaleIntensity });
+    const detail = {
+      upscaleEnabled: mapped.enabled,
+      upscaleMode: mapped.mode,
+      upscaleType,
+      upscaleIntensity,
+      upscaleTargetRes,
+    };
+    void saveAppSettings(detail);
+    window.dispatchEvent(new CustomEvent('anix:upscaleChanged', { detail }));
+  }
+
+  function setUpscaleType(t: Anime4kType) {
+    upscaleType = t;
+    saveUpscale();
+  }
+
+  function setUpscaleIntensity(i: Anime4kIntensity) {
+    upscaleIntensity = i;
+    saveUpscale();
+  }
+
+  function setUpscaleTargetRes(r: Anime4kTargetRes) {
+    upscaleTargetRes = r;
+    saveUpscale();
+  }
+
+  // Кадры пошли (новая серия, перемотка, смена качества) — подхватываем; тот же конфиг не пересобирается
+  $effect(() => {
+    const video = videoEl;
+    if (!video) return;
+    const kick = () => { if (upscaleMapped.enabled && gpuAvailable) void startUpscale(); };
+    video.addEventListener('playing', kick);
+    video.addEventListener('loadeddata', kick);
+    video.addEventListener('resize', kick);
+    return () => {
+      video.removeEventListener('playing', kick);
+      video.removeEventListener('loadeddata', kick);
+      video.removeEventListener('resize', kick);
+    };
+  });
+
+  // Поворот экрана меняет размер буфера
+  $effect(() => {
+    let timer = 0;
+    const onResize = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(() => { timer = 0; if (untrack(() => upscaleOn)) void startUpscale(); }, 200);
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      if (timer) window.clearTimeout(timer);
+    };
+  });
+
+  // Смена серии / ошибка: core.hideMedia() гасит WebGPU — синхронизируем флаг
+  $effect(() => {
+    if ((switching || loadState !== 'ready' || !useVideo) && untrack(() => upscaleOn)) stopUpscale();
   });
 
   function readNumber(key: string, fallback: number, min: number, max: number): number {
@@ -788,7 +928,22 @@
       const hk = normalizePlayerHotkeys(s.playerHotkeys);
       seekStep = hk.seekSeconds;
       rewindStep = hk.rewindSeconds;
+      applyUpscalePrefs(s as Record<string, unknown>);
+      void startUpscale();
     }).catch(() => {});
+    void initWebGpuAvailability().then((ok) => {
+      gpuAvailable = ok;
+      gpuReason = ok ? null : getWebGpuUnavailableReason();
+      if (ok) void startUpscale();
+    });
+    // Поменяли здесь, в «Настройки → Воспроизведение» или в другом окне
+    const onUpscaleChanged = (e: Event) => {
+      const detail = (e as CustomEvent<Record<string, unknown>>).detail;
+      if (!detail) return;
+      applyUpscalePrefs(detail);
+      void startUpscale();
+    };
+    window.addEventListener('anix:upscaleChanged', onUpscaleChanged);
 
     const offBack = pushBackHandler(() => {
       if (sheet) closeSheet();
@@ -817,6 +972,8 @@
       window.removeEventListener('pagehide', flushOnLeave);
       offBack();
       unbindNative();
+      window.removeEventListener('anix:upscaleChanged', onUpscaleChanged);
+      stopUpscale();
       if (document.documentElement.classList.contains('mobile-native')) setOrientation('portrait');
       for (const t of [hideTimer, hudTimer, tapSeekTimer, firstFrameTimer, longPressTimer]) if (t) window.clearTimeout(t);
       stopTicking();
@@ -846,6 +1003,8 @@
       crossorigin="anonymous"
       hidden={!useVideo || loadState === 'error' || switching}
     ></video>
+    <!-- Anime4K: картинка после WebGPU-фильтра; размер буфера и CSS-размер ставит UpscaleController -->
+    <canvas bind:this={canvasEl} class="mw__upscale" class:mw__upscale--on={upscaleOn && useVideo && !switching} aria-hidden="true"></canvas>
     <div class="mw__dim" style:opacity={(1 - brightness) * 0.85} aria-hidden="true"></div>
   </div>
 
@@ -917,12 +1076,16 @@
 
   {#if locked}
     {#if controlsVisible}
-      <button type="button" class="mw__unlock" onclick={() => { locked = false; showControls(); }} transition:fade={{ duration: 150 }}>
+      <button type="button" class="mw__unlock" class:mw__unlock--inert={!chromeArmed} onclick={() => { locked = false; showControls(); }} transition:fade={{ duration: 150 }}>
         {@html iconLockOpen(20)} <span>Разблокировать</span>
       </button>
     {/if}
   {:else if loadState === 'ready' || loadState === 'error'}
-    <div class="mw__chrome" class:mw__chrome--off={!controlsVisible || gesture === 'volume' || gesture === 'brightness'}>
+    <div
+      class="mw__chrome"
+      class:mw__chrome--off={!controlsVisible || gesture === 'volume' || gesture === 'brightness'}
+      class:mw__chrome--inert={!chromeArmed}
+    >
       <header class="mw__top">
         <button type="button" class="mw__icon" onclick={goBack} aria-label="Назад">{@html iconArrowLeft(24)}</button>
         <div class="mw__titles">
@@ -1054,6 +1217,51 @@
               {#if currentQuality === q.id}<span class="mw__row-check">{@html iconCheck(18)}</span>{/if}
             </button>
           {/each}
+          {#if useVideo}
+            <h3 class="mw__sheet-label">Anime4K</h3>
+            {#if !gpuAvailable}
+              <p class="mw__note">{gpuReason || 'Видеокарта этого устройства не поддерживает WebGPU — Anime4K недоступен'}</p>
+            {:else}
+              <div class="mw__chips">
+                {#each ANIME4K_TYPES as t (t.id)}
+                  <button type="button" class="mw__opt" class:mw__opt--on={upscaleType === t.id} onclick={() => setUpscaleType(t.id)}>
+                    {t.label}
+                  </button>
+                {/each}
+              </div>
+              <h4 class="mw__sheet-sublabel">Нагрузка на GPU</h4>
+              <div class="mw__chips">
+                {#each ANIME4K_INTENSITIES as i (i.id)}
+                  <button
+                    type="button"
+                    class="mw__opt"
+                    class:mw__opt--on={upscaleIntensity === i.id}
+                    disabled={upscaleType === 'off'}
+                    onclick={() => setUpscaleIntensity(i.id)}
+                  >
+                    {i.label}
+                  </button>
+                {/each}
+              </div>
+              <h4 class="mw__sheet-sublabel">Разрешение обработки</h4>
+              <div class="mw__chips">
+                {#each ANIME4K_TARGET_RES as r (r.id)}
+                  <button
+                    type="button"
+                    class="mw__opt"
+                    class:mw__opt--on={upscaleTargetRes === r.id}
+                    disabled={upscaleType === 'off'}
+                    onclick={() => setUpscaleTargetRes(r.id)}
+                  >
+                    {r.id === 'auto' ? 'Под экран' : r.label}
+                  </button>
+                {/each}
+              </div>
+              {#if upscaleType !== 'off'}
+                <p class="mw__note">Чем выше нагрузка и разрешение, тем сильнее греется устройство и быстрее садится батарея</p>
+              {/if}
+            {/if}
+          {/if}
           <p class="mw__hint">
             Касание — показать панель · двойное касание по краю — ±{seekStep} с · свайп по горизонтали — перемотка ·
             свайп справа — громкость, слева — яркость · удержание — 2×
@@ -1081,6 +1289,16 @@
   .mw__stage { position: absolute; inset: 0; }
   .mw__video, .mw__iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; object-fit: contain; }
   .mw__video[hidden], .mw__iframe[hidden] { display: none; }
+  :global(.mw__video.watch-page__video--hidden-for-upscale) { visibility: hidden; }
+  .mw__upscale {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    display: none;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    &--on { display: block; }
+  }
   .mw__dim { position: absolute; inset: 0; background: #000; pointer-events: none; }
   .mw__gestures { position: absolute; inset: 0; z-index: 1; touch-action: none; } // не наследуется — без него браузер забирает свайп
 
@@ -1099,6 +1317,8 @@
     transition: opacity 0.2s ease;
     > * { pointer-events: auto; }
     &--off { opacity: 0; > * { pointer-events: none; } }
+    // Только что показана касанием — кнопки ещё не принимают нажатия (см. CHROME_ARM_MS)
+    &--inert > * { pointer-events: none; }
   }
 
   .mw__top {
@@ -1348,6 +1568,7 @@
   }
   .mw__error-actions { display: flex; gap: 10px; }
 
+  .mw__unlock--inert { pointer-events: none; }
   .mw__unlock {
     position: absolute;
     z-index: 5;
@@ -1418,5 +1639,8 @@
   .mw__row-now { flex: none; padding: 2px 8px; border-radius: 6px; background: rgba(208, 188, 255, 0.18); font-size: 12px; }
   .mw__row-check { flex: none; display: inline-flex; }
   .mw__empty { margin: 20px; color: rgba(255, 255, 255, 0.6); }
+  .mw__sheet-sublabel { margin: 14px 20px 8px; font-size: 13px; font-weight: 400; color: rgba(255, 255, 255, 0.6); }
+  .mw__opt:disabled { opacity: 0.4; }
+  .mw__note { margin: 10px 20px 0; font-size: 12px; line-height: 1.5; color: rgba(255, 255, 255, 0.55); }
   .mw__hint { margin: 18px 20px 0; font-size: 12px; line-height: 1.5; color: rgba(255, 255, 255, 0.5); }
 </style>

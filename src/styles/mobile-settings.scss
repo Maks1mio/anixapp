@@ -120,7 +120,7 @@ html.mobile-mode {
     color: var(--m-text-3);
   }
 
-  /* Пояснение на экранах, где на телефоне настраивать нечего (Discord, обновление, отладка) */
+  /* Пояснение на экранах настроек телефона */
   .m-pref-note {
     margin: var(--m-space-4);
     padding: var(--m-space-4);
@@ -133,6 +133,74 @@ html.mobile-mode {
     p + p { margin-top: var(--m-space-2); }
     b { color: var(--m-text); font-weight: 600; }
   }
+
+  .m-pref__dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    margin-left: var(--m-space-2);
+    border-radius: 50%;
+    background: var(--m-primary);
+  }
+
+  /* Обновление: карточка версии с кнопкой и прогрессом скачивания */
+  .m-update {
+    margin: var(--m-space-4);
+    padding: var(--m-space-4);
+    border-radius: 20px;
+    background: var(--m-surface-block);
+
+    &__head { display: flex; align-items: center; gap: var(--m-space-3); }
+    &__icon {
+      flex: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--m-primary) 16%, transparent);
+      color: var(--m-primary);
+      &--ok { background: color-mix(in srgb, #3fb950 16%, transparent); color: #3fb950; }
+      &--spin svg { animation: m-update-spin 1s linear infinite; }
+    }
+    &__meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    &__title { font: 600 16px/1.3 var(--m-font); color: var(--m-text); }
+    &__sub { font: 400 13px/1.35 var(--m-font); color: var(--m-text-2); }
+    &__bar {
+      overflow: hidden;
+      height: 4px;
+      margin-top: var(--m-space-3);
+      border-radius: 999px;
+      background: var(--m-outline-variant);
+      > span { display: block; height: 100%; border-radius: inherit; background: var(--m-primary); transition: width 0.2s linear; }
+    }
+    &__actions { display: flex; flex-wrap: wrap; gap: var(--m-space-2); margin-top: var(--m-space-4); }
+    &__btn {
+      height: 40px;
+      padding: 0 20px;
+      border: 0;
+      border-radius: 999px;
+      background: var(--m-primary);
+      color: var(--m-on-primary, #fff);
+      font: 600 14px var(--m-font);
+      &:disabled { opacity: 0.6; }
+      &--tonal { background: var(--m-outline-variant); color: var(--m-text); }
+    }
+  }
+
+  .m-update-notes {
+    margin: 0 var(--m-space-4) var(--m-space-4);
+    padding: var(--m-space-4);
+    border-radius: 16px;
+    background: var(--m-surface-block);
+    font: 400 14px/1.5 var(--m-font);
+    color: var(--m-text-2);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  @keyframes m-update-spin { to { transform: rotate(360deg); } }
 
   .m-pref-cat {
     margin: var(--m-space-4) 0 0;

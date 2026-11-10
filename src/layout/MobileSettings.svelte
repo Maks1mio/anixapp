@@ -25,9 +25,7 @@
     iconLink,
     iconMessageCircle,
     iconQrCode,
-    iconSignal,
     iconRefreshCw,
-    iconClipboardList,
     iconCodeXml,
     iconChevronRight,
   } from '../components/icons';
@@ -40,6 +38,8 @@
   import AppearancePage from '../views/Settings/pages/AppearancePage.svelte';
   import BehaviorPage from '../views/Settings/pages/BehaviorPage.svelte';
   import DeveloperPage from '../views/Settings/pages/DeveloperPage.svelte';
+  import MobileUpdatePage from './MobileUpdatePage.svelte';
+  import { checkMobileUpdate, mobileUpdate } from '../stores/mobile-update';
 
   interface Props {
     onClose: () => void;
@@ -53,9 +53,7 @@
     | 'appearance'
     | 'connection'
     | 'qr'
-    | 'discord'
     | 'update'
-    | 'debug'
     | 'developer'
     | 'support'
     | 'about';
@@ -67,9 +65,7 @@
     appearance: 'Внешний вид',
     connection: 'Соединение',
     qr: 'Вход по QR',
-    discord: 'Discord Rich Presence',
     update: 'Обновление',
-    debug: 'Отладка',
     developer: 'Разработчик',
     support: 'Anix+',
     about: 'О программе',
@@ -84,6 +80,8 @@
     action?: () => void;
     /** Внешняя ссылка — без стрелки перехода */
     external?: boolean;
+    /** Точка «есть обновление» */
+    badge?: boolean;
   };
   const appVersionLabel = `AnixApp ${__ANIXAPP_VERSION__ ? `v${__ANIXAPP_VERSION__}` : ''}`.trim();
   const MENU: { title: string; items: MenuItem[] }[] = [
@@ -104,9 +102,8 @@
     {
       title: 'Система',
       items: [
-        { screen: 'discord', title: 'Discord Rich Presence', sub: 'Что вы смотрите — в статусе Discord', icon: iconSignal },
-        { screen: 'update', title: 'Обновление', sub: 'Версия приложения и новые выпуски', icon: iconRefreshCw },
-        { screen: 'debug', title: 'Отладка', sub: 'Логи приложения и сети', icon: iconClipboardList },
+        // Discord и журнал отладки на телефоне не работают — их здесь нет
+        { screen: 'update', title: 'Обновление', sub: 'Версия приложения и новые выпуски', icon: iconRefreshCw, badge: true },
       ],
     },
     {
@@ -114,7 +111,7 @@
       items: [
         { screen: 'support', title: 'Поддержать AnixApp', icon: iconGift },
         { title: 'Канал в Telegram', icon: iconMessageCircle, external: true, action: () => requestOpenExternal('https://t.me/anixapp') },
-        { title: 'Исходный код на GitHub', icon: iconLink, external: true, action: () => requestOpenExternal('https://github.com/Maks1mio/anixapp') },
+        { title: 'Исходный код на GitHub', icon: iconLink, external: true, action: () => requestOpenExternal('https://github.com/Anixapp-Community/anixapp') },
         { screen: 'about', title: 'О программе', sub: appVersionLabel, icon: iconInfo },
       ],
     },
@@ -131,9 +128,7 @@
     connection: 'connection',
     // На телефоне сведения о видеокарте живут в «Воспроизведении»
     behavior: 'playback',
-    discord: 'discord',
     update: 'update',
-    debug: 'debug',
     developer: 'developer',
     support: 'support',
     about: 'about',
@@ -192,6 +187,8 @@
     choice = null;
   }
 
+  onMount(() => void checkMobileUpdate());
+
   onMount(() =>
     pushBackHandler(() => {
       if (choice) choice = null;
@@ -223,6 +220,7 @@
               <span class="m-pref__title">{item.title}</span>
               {#if item.sub}<span class="m-pref__summary">{item.sub}</span>{/if}
             </span>
+            {#if item.badge && $mobileUpdate.available}<span class="m-pref__dot" aria-label="Есть обновление"></span>{/if}
             {#if !item.external}
               <span class="m-pref__chevron" aria-hidden="true">{@html iconChevronRight(18)}</span>
             {/if}
@@ -257,37 +255,8 @@
       <div class="m-settings__desktop"><NotificationsDevicePage /></div>
     {:else if screen === 'connection'}
       <div class="m-settings__desktop"><ConnectionPage /></div>
-    {:else if screen === 'discord'}
-      <div class="m-pref-note">
-        <p>Статус в Discord показывает AnixApp на компьютере: ему нужен запущенный Discord на том же устройстве.</p>
-        <p>На телефоне Discord не даёт приложениям менять статус, поэтому здесь настраивать нечего. Включите статус в AnixApp на ПК — его увидят и в мобильном Discord.</p>
-      </div>
     {:else if screen === 'update'}
-      <div class="m-pref-note">
-        <p>Установлена версия <b>{appVersionLabel}</b>.</p>
-        <p>На телефоне AnixApp обновляется установкой нового APK. Свежие выпуски и список изменений — на странице релизов.</p>
-      </div>
-      <button
-        type="button"
-        class="m-pref"
-        onclick={() => requestOpenExternal('https://github.com/Maks1mio/anixapp/releases')}
-      >
-        <span class="m-pref__text">
-          <span class="m-pref__title">Открыть страницу релизов</span>
-          <span class="m-pref__summary">github.com/Maks1mio/anixapp/releases</span>
-        </span>
-      </button>
-    {:else if screen === 'debug'}
-      <div class="m-pref-note">
-        <p>Подробный журнал запросов и ошибок ведёт AnixApp на ПК. На телефоне есть диагностика устройства: модель GPU, WebGPU и готовность Anime4K.</p>
-      </div>
-      <button type="button" class="m-pref" onclick={() => open('playback')}>
-        <span class="m-pref__text">
-          <span class="m-pref__title">Диагностика устройства</span>
-          <span class="m-pref__summary">Воспроизведение → Видеокарта</span>
-        </span>
-        <span class="m-pref__chevron" aria-hidden="true">{@html iconChevronRight(18)}</span>
-      </button>
+      <MobileUpdatePage />
     {:else if screen === 'developer'}
       <div class="m-settings__desktop"><DeveloperPage /></div>
     {:else if screen === 'qr'}

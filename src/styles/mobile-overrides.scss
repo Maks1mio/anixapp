@@ -611,6 +611,8 @@ html.mobile-mode {
     border: 0 !important;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
     transition: bottom 0.2s ease;
+    // Под нижней панелью (.m-dock, 30): раскрытые плитки разделов перекрывают карточку, а не наоборот
+    z-index: 29 !important;
   }
 
   // Панель уехала вниз при прокрутке: карточка опускается на её место и не висит в воздухе
@@ -999,48 +1001,111 @@ html.mobile-mode {
   }
 }
 
-// ── «Продолжить просмотр»: телефон — как строка релиза (постер слева, кнопка под текстом), планшет — в один ряд ──
+// ── Плашки над списком на главной ──
+// «Продолжить просмотр»: обложка, полоса прогресса с таймкодом во всю ширину текста, кнопка цвета акцента.
+// «Доступно обновление» (HomeMobileUpdate.svelte): на телефоне строка над ней, на планшете колонка справа.
 html.mobile-mode {
+  .home-mobile-cards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--m-space-2);
+    // Сверху и снизу по 16: снизу их даёт верхнее поле списка (.release-cards-grid-root), сверху — этот отступ,
+    // а свой нижний отступ вкладок, пока есть плашки, убран
+    padding: var(--m-space-4) var(--m-gutter) 0;
+    &:not(:has(> *)) { display: none; }
+  }
+  .view-home:has(.home-mobile-cards > *) .releases-type { margin-bottom: 0 !important; }
+  // У списка сверху отрицательный отступ (-0.6rem) — под плашками он съедал половину зазора
+  .view-home:has(.home-mobile-cards > *) .release-cards-grid-root { margin-top: 0 !important; }
+
   .home-continue {
     position: relative;
-    margin: var(--m-space-2) var(--m-gutter) var(--m-space-2);
+    margin: 0;
     padding: var(--m-space-3);
-    border-radius: 20px;
+    border-radius: 16px;
     background: var(--m-surface-block);
     box-shadow: none;
   }
   .home-continue__row {
     display: grid;
-    grid-template-columns: 72px minmax(0, 1fr);
-    grid-template-rows: 1fr auto;
-    gap: var(--m-space-2) var(--m-space-3);
-    align-items: start;
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    gap: var(--m-space-3);
+    align-items: center;
   }
-  .home-continue__poster { grid-row: 1 / 3; width: 72px; border-radius: var(--m-radius-md); }
-  // справа от текста — крестик
-  .home-continue__meta { padding-right: 28px; gap: 2px; }
-  .home-continue__kicker { font-size: 13px; color: var(--m-text-2); }
+  // Обложка — постер 2:3, скругление меньше, чем у карточки
+  .home-continue__poster { width: 64px; border-radius: 8px; }
+  .home-continue__meta { gap: 4px; padding: 0; }
+  .home-continue__kicker { display: none; } // заголовок карточки и кнопка «играть» говорят то же самое
   .home-continue__title {
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
+    overflow: hidden;
     color: var(--m-text);
-    font: 600 16px/1.25 var(--m-font);
+    font: 500 16px/20px var(--m-font);
     white-space: normal;
   }
-  .home-continue__sub { font-size: 13px; color: var(--m-text-2); }
-  .home-continue__bar { width: 100%; margin-top: var(--m-space-1); background: var(--m-outline-variant); > span { background: var(--m-primary); } }
-  .home-continue__actions .uiv2-btn { height: 40px; padding: 0 var(--m-space-5); border-radius: var(--m-radius-pill); font: 600 14px var(--m-font); }
-  .home-continue__dismiss { position: absolute; top: var(--m-space-1); right: var(--m-space-1); width: var(--m-touch); height: var(--m-touch); color: var(--m-text-2); }
+  .home-continue__sub { font: 400 13px/16px var(--m-font); color: var(--m-text-2); }
+  .home-continue__track { width: 100%; gap: var(--m-space-2); margin-top: var(--m-space-2); }
+  .home-continue__bar {
+    height: 4px;
+    background: color-mix(in srgb, var(--m-text) 12%, transparent);
+    > span { background: var(--m-primary); }
+  }
+  .home-continue__time { font: 500 12px/16px var(--m-font); color: var(--m-text-2); }
+
+  // Плашки на телефоне не закрываются: справа только «играть», по центру высоты
+  .home-continue__actions { align-self: center; }
+  .home-continue__actions .uiv2-btn {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--m-primary) !important;
+    color: var(--m-on-primary, #fff) !important;
+    box-shadow: none;
+    transition: transform 0.12s ease, filter 0.12s ease;
+    &:active:not(:disabled) { transform: scale(0.94); filter: brightness(0.92); }
+    .uiv2-btn__label { display: none; }
+  }
+  .home-continue__play-icon {
+    display: inline-flex;
+    margin-left: 2px; // треугольник визуально по центру круга
+    svg { width: 20px; height: 20px; }
+  }
+  .home-continue__dismiss { display: none; }
 }
 
+// Планшет: плашки рядом
 @media (min-width: 600px) {
   html.mobile-mode {
-    .home-continue__row { grid-template-columns: 72px minmax(0, 1fr) auto; grid-template-rows: auto; align-items: center; }
-    .home-continue__poster { grid-row: auto; }
-    .home-continue__meta { padding-right: 0; }
-    .home-continue__actions { padding-right: 40px; }
-    .home-continue__dismiss { top: 50%; right: var(--m-space-2); transform: translateY(-50%); }
+    // Плашки в ряд: «Продолжить» широкая, обновление — колонка справа; одна плашка — во всю ширину
+    .home-mobile-cards {
+      flex-direction: row;
+      align-items: stretch;
+      gap: var(--m-space-3);
+
+      > .home-continue { flex: 1 1 0; min-width: 0; order: 1; }
+      > .m-home-update { flex: 0 0 min(300px, 36%); order: 2; }
+      > :only-child { flex: 1 1 100% !important; }
+    }
+    .home-continue { padding: var(--m-space-3) var(--m-space-4) var(--m-space-3) var(--m-space-3); }
+    .home-continue__row { grid-template-columns: 72px minmax(0, 1fr) auto; gap: var(--m-space-4); }
+    .home-continue__poster { width: 72px; }
+    .home-continue__title { font-size: 17px; line-height: 22px; }
+    // Рядом колонка обновления — «играть» остаётся круглой под ✕, тексту хватает места
+    .home-continue__actions .uiv2-btn { width: 48px; height: 48px; }
+    .home-continue__play-icon svg { width: 22px; height: 22px; }
+
+    // Обновление без «Продолжить просмотр» — одной строкой во всю ширину
+    .home-mobile-cards > .m-home-update:only-child {
+      flex-wrap: nowrap;
+      align-items: center;
+      padding: var(--m-space-3) var(--m-space-4) var(--m-space-3) var(--m-space-3);
+      .m-home-update__text { flex-basis: auto; padding-top: 0; }
+      .m-home-update__btn { flex: none; order: 3; }
+    }
   }
 }
 
@@ -1089,7 +1154,12 @@ html.mobile-mode {
       background: var(--m-bg);
       transition: transform 0.2s ease;
     }
-    &--bars-hidden > .m-topbar { transform: translateY(-100%); }
+    // Уходит только под строку состояния: её полоса остаётся закрашенной фоном панели,
+    // а вкладки страниц едут на то же расстояние — между ними нет щели во время анимации
+    &--bars-hidden > .m-topbar { transform: translateY(calc(var(--safe-top) - 100%)); }
+    // Под строкой состояния остаётся низ панели — её содержимое гаснет, видна только полоса фона
+    > .m-topbar > * { transition: opacity 0.2s ease; }
+    &--bars-hidden > .m-topbar > * { opacity: 0; pointer-events: none; }
   }
 
   // sticky не работает внутри контейнера с overflow
@@ -1148,11 +1218,24 @@ html.mobile-mode {
   .discover-hero__actions { flex: none; margin-left: 0; }
 
   // Под верхней панелью, если она есть на странице
+  // Под верхней панелью; когда она уходит, вкладки едут вместе с ней (тот же transition) и встают
+  // под строку состояния — сдвиг на высоту панели без строки состояния, иначе уезжали под шторку
   .discover-hero-dock { top: var(--safe-top); margin: 0 calc(-1 * var(--m-gutter)); transition: transform 0.2s ease; }
-  // Отступ постоянный, а уезжает она тем же сдвигом, что и панель: иначе они расходятся и между ними видна щель
   .m-app__scroll:not(.m-app__scroll--no-bar) .discover-hero-dock { top: var(--m-bars-h); }
-  .m-app__scroll--bars-hidden:not(.m-app__scroll--no-bar) .discover-hero-dock { transform: translateY(calc(-1 * var(--m-bars-h))); }
+  .m-app__scroll--bars-hidden:not(.m-app__scroll--no-bar) .discover-hero-dock {
+    transform: translateY(calc(var(--safe-top) - var(--m-bars-h)));
+  }
   .discover-hero-dock__bar { padding: 0; background: var(--m-bg); transition: none; &::after { display: none; } }
+  // Страница без панели: полоса строки состояния над вкладками закрашена фоном, контент под значками не виден
+  .m-app__scroll--no-bar .discover-hero-dock__bar--visible::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: var(--safe-top);
+    background: var(--m-bg);
+  }
 
   // Популярное: чья статистика — переключатель из двух сегментов, видно, что это кнопки
   .popular-source__tabs.uiv2-tabs {

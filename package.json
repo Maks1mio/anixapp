@@ -99,7 +99,7 @@
     },
     "resolutions": {
         "axios": "^1.18.0",
-        "minimatch": "^10.0.3",
+        "minimatch": "^11.0.1",
         "follow-redirects": "^1.16.1",
         "postcss": "^8.5.25",
         "@xmldom/xmldom": "^0.8.15",

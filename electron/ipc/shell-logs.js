@@ -34,24 +34,21 @@ function normalizeExternalPayload(urlOrOpts, headers = {}) {
 function register() {
   ipcMain.handle('player:listExternal', (_, opts = {}) => {
     const fresh = !!(opts && opts.fresh);
-    const installed = listInstalledPlayers({ fresh }).map((p) => ({
+    const pick = (p) => ({
       id: p.id,
       label: p.label,
       description: p.description,
-      installed: true,
-      path: p.path,
-    }));
-    const installedIds = new Set(installed.map((p) => p.id));
-    const missing = listKnownPlayers()
-      .filter((p) => !installedIds.has(p.id))
-      .map((p) => ({
-        id: p.id,
-        label: p.label,
-        description: p.description,
-        installed: false,
-        path: null,
-      }));
-    return { players: [...installed, ...missing], installedCount: installed.length };
+      playlist: p.playlist,
+      downloadUrl: p.downloadUrl || null,
+      note: p.note || null,
+    });
+    const installedById = new Map(listInstalledPlayers({ fresh }).map((p) => [p.id, p]));
+    // Порядок реестра: и для списка установленных, и для экрана «Поддерживаемые плееры».
+    const players = listKnownPlayers().map((p) => {
+      const hit = installedById.get(p.id);
+      return { ...pick(p), installed: !!hit, path: hit ? hit.path : null };
+    });
+    return { players, installedCount: installedById.size };
   });
 
   ipcMain.handle('player:openExternal', async (_, urlOrOpts, headers = {}) => {

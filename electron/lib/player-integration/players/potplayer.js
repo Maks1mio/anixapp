@@ -8,6 +8,9 @@ const info = {
   id: 'potplayer',
   label: 'PotPlayer',
   description: 'Daum PotPlayer — плейлист .m3u с подписями серий.',
+  platforms: ['win32'],
+  playlist: true,
+  downloadUrl: 'https://potplayer.tv/',
 };
 
 function detect() {

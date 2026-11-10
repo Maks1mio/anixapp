@@ -300,7 +300,7 @@ async function buildExternalPlaylist(
   }
 
   meta = sliceMetaWindow(meta, currentEp, playlistWindow);
-  if (!externalPlayerUsesPlaylist(opts.playerId)) {
+  if (!(await externalPlayerUsesPlaylist(opts.playerId))) {
     const current = meta.find((m) => m.position === currentEp);
     meta = [current ?? { position: currentEp, name: '', url: '' }];
   }
@@ -391,8 +391,8 @@ async function launchExternalDesktop(
       return {
         started: false,
         message: result?.reason === 'player-not-found'
-          ? 'Не найден VLC или mpv. Установите один из них и повторите попытку.'
-          : 'Не удалось запустить VLC или mpv.',
+          ? 'Не найден сторонний плеер. Установите любой из поддерживаемых и повторите попытку.'
+          : 'Не удалось запустить сторонний плеер.',
       };
     }
     return { started: true };

@@ -556,7 +556,7 @@
     if (!selectedSource) return;
     if (kind === 'external') {
       pendingExternalPlayerId = getPreferredExternalPlayerId();
-      if (externalPlayerUsesPlaylist(pendingExternalPlayerId) && needsExternalPlaylistRange(episodes.length)) {
+      if (needsExternalPlaylistRange(episodes.length) && await externalPlayerUsesPlaylist(pendingExternalPlayerId)) {
         externalRangeEp = epPosition;
         return;
       }
@@ -587,7 +587,7 @@
     if (!selectedSource) return;
     if (kind === 'external') {
       pendingExternalPlayerId = playerId || getPreferredExternalPlayerId();
-      if (externalPlayerUsesPlaylist(pendingExternalPlayerId) && needsExternalPlaylistRange(episodes.length)) {
+      if (needsExternalPlaylistRange(episodes.length) && await externalPlayerUsesPlaylist(pendingExternalPlayerId)) {
         externalRangeEp = epPosition;
         return;
       }

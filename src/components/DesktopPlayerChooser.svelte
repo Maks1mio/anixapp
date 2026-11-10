@@ -29,6 +29,14 @@
   let remember = $state(initial.ask === false);
   let step = $state<'main' | 'external' | 'suggest'>('main');
   let installed = $state<ExternalPlayerOption[]>([]);
+  /** Все плееры, поддерживаемые на этой ОС (установленные и нет). */
+  let supported = $state<ExternalPlayerOption[]>([]);
+
+  /** ['A', 'B', 'C'] → «A, B или C» */
+  function joinOr(labels: string[]): string {
+    if (labels.length < 2) return labels.join('');
+    return `${labels.slice(0, -1).join(', ')} или ${labels[labels.length - 1]}`;
+  }
   let loadingPlayers = $state(true);
   let preferred = $state<ExternalPlayerId | null>(getPreferredExternalPlayerId());
 
@@ -42,7 +50,9 @@
         ? 'Проверяем установленные плееры…'
         : installed.length
           ? installed.map((p) => p.label).join(', ')
-          : 'Не найден VLC, mpv или PotPlayer.',
+          : supported.length
+            ? `Не найден ${joinOr(supported.map((p) => p.label))}.`
+            : 'Не найдено поддерживаемых плееров.',
       warning: 'Не помечается просмотренным в приложении при выборе серий в плеере.',
     },
   ]);
@@ -65,6 +75,7 @@
     if (!opts?.silent) loadingPlayers = true;
     try {
       const res = await listExternalPlayers({ fresh });
+      supported = res.players;
       applyInstalled(res.installed);
     } catch {
       if (!opts?.silent) installed = [];
@@ -113,6 +124,8 @@
 
   function closeSuggest() {
     step = 'external';
+    // Пользователь мог как раз поставить плеер по ссылке.
+    void refreshInstalled(true, { silent: true });
   }
 
   function openLink(url: string) {
@@ -155,13 +168,20 @@
         {#if !installed.length}
           <p class="dpc-missing__hint">На устройстве не найдено поддерживаемых плееров.</p>
         {/if}
-        <button type="button" class="dpc-missing__link" onclick={openSuggest}>Нет в списке!</button>
+        <div class="dpc-missing__row">
+          {#if supported.length}
+            <span class="dpc-missing__count">Найдено {installed.length} из {supported.length}</span>
+          {/if}
+          <button type="button" class="dpc-missing__link" onclick={openSuggest}>
+            Какие плееры поддерживаются?
+          </button>
+        </div>
       </div>
     {/snippet}
   </UiV2ChoiceSheet>
 {:else}
   <UiV2ChoiceSheet
-    title="Предложить плеер"
+    title="Поддерживаемые плееры"
     options={[]}
     value=""
     cancelLabel="Назад"
@@ -169,9 +189,36 @@
   >
     {#snippet footer()}
       <div class="dpc-suggest">
+        {#if supported.length}
+          <p class="dpc-suggest__lead">Установите любой — он появится в списке.</p>
+          <ul class="dpc-supported">
+            {#each supported as p (p.id)}
+              <li class="dpc-supported__row">
+                <span class="dpc-supported__body">
+                  <span class="dpc-supported__name">{p.label}</span>
+                  <span class="dpc-supported__mode">
+                    {p.playlist ? 'Плейлист серий' : 'Только текущая серия'}
+                  </span>
+                </span>
+                {#if p.installed}
+                  <span class="dpc-supported__status">{p.note || 'Установлен'}</span>
+                {:else if p.downloadUrl}
+                  <button
+                    type="button"
+                    class="dpc-supported__download"
+                    onclick={() => openLink(p.downloadUrl!)}
+                  >
+                    Скачать
+                  </button>
+                {:else}
+                  <span class="dpc-supported__missing">Не найден</span>
+                {/if}
+              </li>
+            {/each}
+          </ul>
+        {/if}
         <p class="dpc-suggest__text">
-          Можно предложить интеграцию плеера для вашего устройства - напишите issue на GitHub
-          или в Discord <strong>#баги-запросы</strong>.
+          Нужен другой плеер? Напишите issue на GitHub или в Discord <strong>#баги-запросы</strong>.
         </p>
         <ul class="dpc-suggest__links">
           <li>
@@ -228,6 +275,79 @@
   }
   .dpc-missing__link:hover {
     opacity: 0.9;
+  }
+  .dpc-missing__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+  }
+  .dpc-missing__count {
+    font-size: 0.82rem;
+    color: var(--uikit-v2-muted, #aeaeb2);
+  }
+
+  .dpc-suggest__lead {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--uikit-v2-muted, #aeaeb2);
+  }
+  .dpc-supported {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .dpc-supported__row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0;
+    border-top: 1px solid color-mix(in srgb, var(--uikit-v2-text, #fff) 10%, transparent);
+  }
+  .dpc-supported__body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .dpc-supported__name {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--uikit-v2-text, #f2f2f7);
+  }
+  .dpc-supported__mode {
+    font-size: 0.8rem;
+    color: var(--uikit-v2-muted, #aeaeb2);
+  }
+  .dpc-supported__status {
+    font-size: 0.82rem;
+    color: var(--uikit-v2-success, var(--color-success, #22c55e));
+    white-space: nowrap;
+  }
+  .dpc-supported__missing {
+    font-size: 0.82rem;
+    color: var(--uikit-v2-muted, #aeaeb2);
+    white-space: nowrap;
+  }
+  .dpc-supported__download {
+    border: 0;
+    padding: 0;
+    background: none;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--uikit-v2-accent, #ff3b5c);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .dpc-supported__download:hover {
+    text-decoration: underline;
+  }
+  .dpc-supported__download:focus-visible {
+    outline: 2px solid var(--uikit-v2-accent, #ff3b5c);
+    outline-offset: 2px;
   }
   .dpc-missing__link:focus-visible {
     outline: 2px solid var(--uikit-v2-accent, #ff3b5c);

@@ -10,13 +10,9 @@ const potplayer = require('./players/potplayer');
 const iina = require('./players/iina');
 const quicktime = require('./players/quicktime');
 
-/** Порядок в UI и приоритет автовыбора. Добавляй новых сюда. */
-const REGISTRY = [
-  vlc,
-  mpv,
-  potplayer,
-  ...(process.platform === 'darwin' ? [iina, quicktime] : []),
-];
+/** Порядок в UI и приоритет автовыбора. Добавляй новых сюда; info.platforms — где плеер бывает. */
+const REGISTRY = [vlc, mpv, potplayer, iina, quicktime]
+  .filter((p) => p.info.platforms.includes(process.platform));
 
 /** Кэш детекта: прогревается при старте приложения. */
 let installedCache = {

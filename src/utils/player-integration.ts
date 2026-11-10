@@ -3,7 +3,7 @@
  * список установленных плееров (VLC, mpv, PotPlayer, …) и предпочтение пользователя.
  */
 
-export type ExternalPlayerId = 'vlc' | 'mpv' | 'potplayer';
+export type ExternalPlayerId = 'vlc' | 'mpv' | 'potplayer' | 'iina' | 'quicktime';
 
 export interface ExternalPlayerOption {
   id: ExternalPlayerId;
@@ -11,15 +11,34 @@ export interface ExternalPlayerOption {
   description: string;
   installed: boolean;
   path?: string | null;
+  /** Плейлист серий (false — только текущая серия). */
+  playlist: boolean;
+  downloadUrl: string | null;
+  note: string | null;
+}
+
+/**
+ * Собирать ли плейлист серий для плеера — признак playlist из адаптера
+ * (QuickTime открывает только одну серию). Плеер выбирается как в main:
+ * указанный, если установлен, иначе первый установленный.
+ */
+export async function externalPlayerUsesPlaylist(id: string | null | undefined): Promise<boolean> {
+  try {
+    const { installed } = await listExternalPlayers();
+    const player = installed.find((p) => p.id === id) ?? installed[0];
+    return player ? player.playlist : true;
+  } catch {
+    return true;
+  }
 }
 
 const PREF_KEY = 'anix:externalPlayerId';
-const KNOWN_IDS: ExternalPlayerId[] = ['vlc', 'mpv', 'potplayer'];
 
+/** Сохранённый выбор не сверяем со списком: если плеера нет, main возьмёт первый установленный. */
 export function getPreferredExternalPlayerId(): ExternalPlayerId | null {
   try {
     const v = localStorage.getItem(PREF_KEY);
-    if (KNOWN_IDS.includes(v as ExternalPlayerId)) return v as ExternalPlayerId;
+    if (v) return v as ExternalPlayerId;
   } catch { /* ignore */ }
   return null;
 }
@@ -46,6 +65,9 @@ export async function listExternalPlayers(opts?: { fresh?: boolean }): Promise<{
     description: p.description,
     installed: !!p.installed,
     path: p.path ?? null,
+    playlist: p.playlist !== false,
+    downloadUrl: p.downloadUrl ?? null,
+    note: p.note ?? null,
   }));
   return {
     players,

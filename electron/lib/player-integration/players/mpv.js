@@ -8,6 +8,9 @@ const info = {
   id: 'mpv',
   label: 'mpv',
   description: 'mpv — быстрый плейлист с referer/user-agent.',
+  platforms: ['win32', 'darwin', 'linux'],
+  playlist: true,
+  downloadUrl: 'https://mpv.io/installation/',
 };
 
 function detect() {

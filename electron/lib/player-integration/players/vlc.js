@@ -8,6 +8,9 @@ const info = {
   id: 'vlc',
   label: 'VLC',
   description: 'VideoLAN VLC — плейлист .m3u с подписями серий.',
+  platforms: ['win32', 'darwin', 'linux'],
+  playlist: true,
+  downloadUrl: 'https://www.videolan.org/vlc/',
 };
 
 function detect() {

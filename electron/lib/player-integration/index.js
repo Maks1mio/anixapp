@@ -7,9 +7,12 @@ const path = require('path');
 const vlc = require('./players/vlc');
 const mpv = require('./players/mpv');
 const potplayer = require('./players/potplayer');
+const iina = require('./players/iina');
+const quicktime = require('./players/quicktime');
 
-/** Порядок в UI и приоритет автовыбора. Добавляй новых сюда. */
-const REGISTRY = [vlc, mpv, potplayer];
+/** Порядок в UI и приоритет автовыбора. Добавляй новых сюда; info.platforms — где плеер бывает. */
+const REGISTRY = [vlc, mpv, potplayer, iina, quicktime]
+  .filter((p) => p.info.platforms.includes(process.platform));
 
 /** Кэш детекта: прогревается при старте приложения. */
 let installedCache = {
@@ -109,7 +112,7 @@ async function launchExternalPlayer(opts = {}) {
   if (!adapter) return { ok: false, reason: 'player-not-found' };
 
   try {
-    const { args } = adapter.buildLaunchArgs({
+    const { args, executable } = adapter.buildLaunchArgs({
       url: opts.url,
       title: opts.title,
       referer: opts.referer,
@@ -117,7 +120,8 @@ async function launchExternalPlayer(opts = {}) {
       playlist: opts.playlist,
       startIndex: opts.startIndex,
     });
-    const launched = await spawnDetached(player.path, args);
+    // Адаптер может запускать плеер через другую программу (macOS: /usr/bin/open).
+    const launched = await spawnDetached(executable || player.path, args);
     if (!launched.ok) return launched;
     const playlistLen = Array.isArray(opts.playlist) ? opts.playlist.length : 0;
     return {

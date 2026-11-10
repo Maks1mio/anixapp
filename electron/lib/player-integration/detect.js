@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
@@ -196,15 +197,29 @@ function winProgramCandidates(name) {
   return out;
 }
 
+/** macOS: бандл и исполняемый файл внутри него для каждого плеера. */
+const DARWIN_APPS = {
+  vlc: { bundle: 'VLC.app', bin: 'VLC' },
+  mpv: { bundle: 'mpv.app', bin: 'mpv' },
+  iina: { bundle: 'IINA.app', bin: 'IINA' },
+  quicktime: { bundle: 'QuickTime Player.app', bin: 'QuickTime Player' },
+};
+
 /**
+ * macOS: «Программы» системные и пользователя; для mpv ещё Homebrew —
+ * у приложения, запущенного из Finder, в PATH нет /opt/homebrew/bin.
  * @param {string} name
+ * @param {string} [home]
  * @returns {string[]}
  */
-function darwinCandidates(name) {
+function darwinCandidates(name, home = os.homedir()) {
   if (process.platform !== 'darwin') return [];
-  if (name === 'vlc') return ['/Applications/VLC.app/Contents/MacOS/VLC'];
-  if (name === 'mpv') return ['/Applications/mpv.app/Contents/MacOS/mpv'];
-  return [];
+  const spec = DARWIN_APPS[name];
+  if (!spec) return [];
+  const out = ['/Applications', path.join(home, 'Applications'), '/System/Applications']
+    .map((dir) => path.join(dir, spec.bundle, 'Contents', 'MacOS', spec.bin));
+  if (name === 'mpv') out.push('/opt/homebrew/bin/mpv', '/usr/local/bin/mpv');
+  return out;
 }
 
 /**
@@ -263,4 +278,5 @@ module.exports = {
   findExecutable,
   findPlayerExecutable,
   extractExeFromCommand,
+  darwinCandidates,
 };

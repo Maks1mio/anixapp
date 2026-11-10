@@ -1,20 +1,19 @@
 'use strict';
 
 /**
- * @typedef {'vlc' | 'mpv' | 'potplayer'} ExternalPlayerId
+ * @typedef {'vlc' | 'mpv' | 'potplayer' | 'iina' | 'quicktime'} ExternalPlayerId
  *
  * @typedef {{
  *   id: ExternalPlayerId,
  *   label: string,
  *   description: string,
+ *   platforms: NodeJS.Platform[],
+ *   playlist: boolean,
+ *   downloadUrl: string | null,
+ *   note?: string,
  * }} ExternalPlayerInfo
  *
- * @typedef {{
- *   id: ExternalPlayerId,
- *   label: string,
- *   description: string,
- *   path: string,
- * }} InstalledExternalPlayer
+ * @typedef {ExternalPlayerInfo & { path: string }} InstalledExternalPlayer
  *
  * @typedef {{
  *   title: string,

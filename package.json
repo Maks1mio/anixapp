@@ -1,7 +1,7 @@
 {
     "name": "anixapp",
     "desktopName": "anixapp.desktop",
-    "version": "0.1.65",
+    "version": "0.1.66",
     "description": "Быстрый клиент для просмотра аниме на базе Anixart API",
     "repository": "github:Anixapp-Community/anixapp",
     "main": "electron/main.js",

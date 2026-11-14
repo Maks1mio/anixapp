@@ -18,7 +18,10 @@ import {
   type FluoRoomSettings,
 } from '../types';
 import { logFluoAction } from '../action-log';
-import { createFluoRoomWithOptions, joinFluoRoomWithPassword, FluoJoinError } from '../rooms-api';
+import { createFluoRoomWithOptions, joinFluoRoomWithPassword, FluoJoinError,
+  getFluoPeerSecret,
+  forgetFluoPeerSecret,
+} from '../rooms-api';
 import { createFluoClockOffset, fluoClockSample } from './clock-offset';
 
 export type FluoProfilePayload = {
@@ -788,7 +791,12 @@ function connectWs(rId: string): void {
   socket.onopen = () => {
     if (socket !== activeWs) return;
     reconnectAttempts = 0;
-    sendWs({ type: 'join', roomId: rId, peerId: myPeerId ?? undefined });
+    sendWs({
+      type: 'join',
+      roomId: rId,
+      peerId: myPeerId ?? undefined,
+      peerSecret: getFluoPeerSecret(rId, myPeerId)?.secret,
+    });
     // ping loop
     const ping = () => {
       if (socket !== activeWs || socket.readyState !== WebSocket.OPEN) return;
@@ -847,15 +855,21 @@ export async function leaveFluoRoomHttp(
   peerIdValue?: string | null,
 ): Promise<boolean> {
   if (!roomIdValue) return false;
-  if (!deviceId && !peerIdValue) return false;
+  // Newer anixback needs peerId + its secret; older one picks the leaver by deviceId / peerId.
+  // Everything we have is sent, so leave works against either server during the rollout.
+  const own = getFluoPeerSecret(roomIdValue, peerIdValue) ?? getFluoPeerSecret(roomIdValue);
+  const peerId = own?.peerId ?? peerIdValue ?? null;
+  if (!deviceId && !peerId) return false;
   try {
     const res = await fetchFluo(`/room/${encodeURIComponent(roomIdValue)}/leave`, {
       method: 'POST',
       body: JSON.stringify({
         ...(deviceId ? { deviceId } : {}),
-        ...(peerIdValue ? { peerId: peerIdValue } : {}),
+        ...(peerId ? { peerId } : {}),
+        ...(own ? { peerSecret: own.secret } : {}),
       }),
     });
+    forgetFluoPeerSecret(roomIdValue);
     if (!res.ok) return false;
     const data = (await res.json().catch(() => null)) as { left?: boolean } | null;
     return data?.left !== false;

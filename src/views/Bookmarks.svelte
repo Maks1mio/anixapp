@@ -948,8 +948,12 @@
 
   function applyListChangeToCurrentTab(releaseId: number, statusId: string | null) {
     tabPrefetch.clear();
-    const belongsHere = isReleaseListTab && statusId === activeTab;
+    // Вкладки-статусы (смотрю, в планах…) теряют тайтл при смене статуса;
+    // в избранном, истории и оценках он остаётся, меняется только подпись.
+    const isStatusTab = isReleaseListTab && Object.values(STATUS_TO_TAB).includes(activeTab);
+    const belongsHere = !isStatusTab || statusId === activeTab;
     if (belongsHere) {
+      if (!items.some((item) => item.id === releaseId)) return;
       items = items.map((item) => (
         item.id === releaseId ? { ...item, listStatus: statusId as ReleaseCardData['listStatus'] } : item
       ));

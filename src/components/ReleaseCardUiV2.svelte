@@ -11,6 +11,7 @@
   import type { UiV2PopupMenuItem } from './uikit-v2/UiV2PopupMenu.svelte';
   import { notifyFavoritesChanged } from '../utils/favorites-events';
   import { applyReleaseListStatus } from '../utils/release-list-status';
+  import { releaseListStatusOverrides, resolveReleaseListStatus } from '../stores/release-list-status';
   import type { ReleaseCardData } from '../types/release';
   import { formatReleaseEpisodes } from '../utils/release-card';
   import { isReleaseHiddenInAnixart } from '../services/hidden-releases';
@@ -47,6 +48,7 @@
   }: Props = $props();
 
   const id = $derived(data.id);
+  const listStatus = $derived(resolveReleaseListStatus($releaseListStatusOverrides, data.id, data.listStatus));
   /** Пометка из каталога anixback — для карточек вне поиска (главная, подборки…). */
   let hiddenInAnixart = $state(false);
   $effect(() => {
@@ -108,7 +110,7 @@
 
   function handleListStatusChange(next: UiV2AnimeCardListStatus | null) {
     if (!requireAuth() || !id) return;
-    applyReleaseListStatus(id, next, data.listStatus ?? null).catch(() => {});
+    applyReleaseListStatus(id, next, listStatus).catch(() => {});
   }
 
   function handleMenuSelect(menuId: string) {
@@ -142,7 +144,7 @@
   titleOriginal={data.titleEn}
   titleAlt={data.titleAlt}
   isFavorite={data.isFavorite}
-  listStatus={data.listStatus ?? null}
+  {listStatus}
   myVote={data.myVote ?? null}
   onVote={onVote && id ? (stars) => onVote(id, stars) : undefined}
   {voteBusy}

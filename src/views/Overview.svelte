@@ -28,7 +28,6 @@
   } from '../utils/overviewCache';
   import {
     fetchOverviewOverrides,
-    pruneOverviewStaleOverrides,
     type OverviewOverride,
   } from '../services/overview-overrides';
   import type { ReleaseCardData } from '../types/release';
@@ -99,9 +98,6 @@
   async function loadHeroOverrides(bannerList: OverviewBanner[] = banners) {
     try {
       const bannerIds = bannerList.map((b) => b.id).filter((id) => id > 0);
-      if (bannerIds.length > 0) {
-        await pruneOverviewStaleOverrides(bannerIds);
-      }
       const keep = new Set(bannerIds);
       const rows = await fetchOverviewOverrides();
       heroOverrides = rows.filter((o) => keep.has(o.bannerId));

@@ -1,4 +1,5 @@
 import { getApiBase } from './anixback-endpoint';
+import { authedFetch } from './agent-api';
 
 export interface AppBadge {
   slug: string;
@@ -24,20 +25,33 @@ export interface LinkCodeResult {
   telegram_username: string | null;
 }
 
-function appHeaders(profileId: number): HeadersInit {
+/**
+ * Own-account routes: newer anixback authorises them with the app session (Bearer from the
+ * bridge-verified Anixart token) and ignores X-Anixart-User-Id; older anixback still reads the
+ * header. Both are sent so the app works against either server during the rollout.
+ */
+function appHeaders(profileId: number, token?: string): Record<string, string> {
   return {
     'Content-Type': 'application/json',
     'X-Anixart-User-Id': String(profileId),
+    ...(token ? { 'x-anixapp-proxy-key': token } : {}),
   };
+}
+
+async function userFetch(path: string, profileId: number, init: RequestInit = {}, token?: string): Promise<Response> {
+  const withHeaders: RequestInit = { ...init, headers: appHeaders(profileId, token) };
+  try {
+    return await authedFetch(path, withHeaders);
+  } catch {
+    // No app session (no bridge / not signed in): plain request — enough for older servers.
+    return fetch(`${getApiBase()}${path}`, withHeaders);
+  }
 }
 
 /** Own badges + telegram link state. */
 export async function fetchMyBadges(profileId: number, token: string): Promise<BadgesMeResult | null> {
   try {
-    const res = await fetch(`${getApiBase()}/badges/me`, {
-      headers: { ...appHeaders(profileId), 'x-anixapp-proxy-key': token },
-      signal: AbortSignal.timeout(5000),
-    });
+    const res = await userFetch('/badges/me', profileId, { signal: AbortSignal.timeout(8000) }, token);
     if (!res.ok) return null;
     return (await res.json()) as BadgesMeResult;
   } catch {
@@ -60,10 +74,7 @@ export interface BadgeEvent {
 /** Badge notifications for the current user, newest first. */
 export async function fetchBadgeEvents(profileId: number): Promise<BadgeEvent[] | null> {
   try {
-    const res = await fetch(`${getApiBase()}/badges/events`, {
-      headers: appHeaders(profileId),
-      signal: AbortSignal.timeout(5000),
-    });
+    const res = await userFetch('/badges/events', profileId, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
     const data = (await res.json()) as { events?: BadgeEvent[] };
     return Array.isArray(data.events) ? data.events : [];
@@ -75,11 +86,7 @@ export async function fetchBadgeEvents(profileId: number): Promise<BadgeEvent[] 
 /** Create one-time code to link Telegram via bot. */
 export async function createLinkCode(profileId: number, token: string): Promise<LinkCodeResult | null> {
   try {
-    const res = await fetch(`${getApiBase()}/badges/link-code`, {
-      method: 'POST',
-      headers: { ...appHeaders(profileId), 'x-anixapp-proxy-key': token },
-      signal: AbortSignal.timeout(5000),
-    });
+    const res = await userFetch('/badges/link-code', profileId, { method: 'POST', signal: AbortSignal.timeout(8000) }, token);
     if (!res.ok) return null;
     return (await res.json()) as LinkCodeResult;
   } catch {

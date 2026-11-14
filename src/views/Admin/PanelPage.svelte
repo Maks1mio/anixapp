@@ -12,6 +12,7 @@
     deleteAnnouncement,
     type Announcement,
     type AnnouncementType,
+    type AnnouncementAudience,
   } from '../../services/announcements';
   import { getAdminToken, logoutAdminMode, adminMode, adminPermissions } from '../../stores/admin';
   import { getSearchParams } from '../../router';
@@ -57,7 +58,21 @@
   let formActive = $state(true);
   let formCommentsEnabled = $state(true);
   let formCommentsLocked = $state(false);
+  let formAudience = $state<AnnouncementAudience>('all');
+  let formAudienceVersion = $state('');
   let editingId = $state<string | null>(null);
+
+  const CURRENT_VERSION = typeof __ANIXAPP_VERSION__ === 'string' ? __ANIXAPP_VERSION__ : '';
+  const AUDIENCE_OPTIONS = [
+    { value: 'all', label: 'Всем' },
+    { value: 'below', label: 'Только старым версиям (ниже указанной)' },
+    { value: 'from', label: 'Только новым версиям (от указанной)' },
+  ];
+
+  function audienceChip(a: Announcement): string | null {
+    if (!a.audience || a.audience === 'all' || !a.audienceVersion) return null;
+    return a.audience === 'below' ? `< ${a.audienceVersion}` : `≥ ${a.audienceVersion}`;
+  }
 
   const canManageStaff = $derived($adminPermissions.includes('manage_staff'));
   const canManageAnnouncements = $derived($adminPermissions.includes('manage_announcements'));
@@ -117,6 +132,8 @@
     formActive = true;
     formCommentsEnabled = true;
     formCommentsLocked = false;
+    formAudience = 'all';
+    formAudienceVersion = CURRENT_VERSION;
     formError = '';
   }
 
@@ -139,6 +156,8 @@
     formActive = a.active;
     formCommentsEnabled = a.commentsEnabled;
     formCommentsLocked = a.commentsLocked;
+    formAudience = a.audience ?? 'all';
+    formAudienceVersion = a.audienceVersion ?? CURRENT_VERSION;
     formError = '';
     panelMode = 'edit';
     tab = 'announcements';
@@ -147,13 +166,23 @@
   async function saveAnnouncement() {
     if (busy) return;
     if (!formMessage.trim()) { formError = 'Введите текст объявления'; return; }
+    if (formAudience !== 'all' && !/\d/.test(formAudienceVersion)) { formError = 'Укажите версию, например 0.1.65'; return; }
     busy = true;
     formError = '';
     try {
       const link = formLinkUrl.trim() && formLinkLabel.trim()
         ? { url: formLinkUrl.trim(), label: formLinkLabel.trim() }
         : null;
-      const payload = { type: formType, message: formMessage.trim(), link, active: formActive, commentsEnabled: formCommentsEnabled, commentsLocked: formCommentsLocked };
+      const payload = {
+        type: formType,
+        message: formMessage.trim(),
+        link,
+        active: formActive,
+        commentsEnabled: formCommentsEnabled,
+        commentsLocked: formCommentsLocked,
+        audience: formAudience,
+        audienceVersion: formAudience === 'all' ? null : formAudienceVersion.trim(),
+      };
       if (editingId) await updateAnnouncement(editingId, payload);
       else await createAnnouncement(payload);
       closePanel();
@@ -263,6 +292,7 @@
                       <span class="adm-list-item__text">{a.message}</span>
                       <span class="adm-list-item__chips">
                         {#if !a.active}<span class="adm-chip adm-chip--muted">Скрыто</span>{/if}
+                        {#if audienceChip(a)}<span class="adm-chip">{audienceChip(a)}</span>{/if}
                         {#if a.commentsEnabled}<span class="adm-chip">Чат</span>{/if}
                         {#if typeof a.commentCount === 'number' && a.commentCount > 0}
                           <span class="adm-chip">{a.commentCount} комм.</span>
@@ -348,6 +378,30 @@
                     <label class="adm-field__label" for="ann-link-label">Подпись</label>
                     <input id="ann-link-label" type="text" class="adm-field__input" placeholder="Подробнее" bind:value={formLinkLabel} />
                   </div>
+                </div>
+              </div>
+
+              <!-- Audience card -->
+              <div class="adm-card">
+                <p class="adm-card__label">Кому показывать</p>
+                <div class="adm-card__body">
+                  <UiV2Select
+                    label="Версии приложения"
+                    options={AUDIENCE_OPTIONS}
+                    value={formAudience}
+                    onChange={(v) => { if (v) formAudience = v as AnnouncementAudience; }}
+                  />
+                  {#if formAudience !== 'all'}
+                    <div class="adm-field">
+                      <label class="adm-field__label" for="ann-aud-version">Версия</label>
+                      <input id="ann-aud-version" type="text" class="adm-field__input" placeholder="0.1.65" bind:value={formAudienceVersion} />
+                    </div>
+                    <p class="adm-field__hint">
+                      {formAudience === 'below'
+                        ? `Увидят версии ниже ${formAudienceVersion || '…'} и все старые сборки (они не сообщают версию).`
+                        : `Увидят версии ${formAudienceVersion || '…'} и новее. Старые сборки не увидят.`}
+                    </p>
+                  {/if}
                 </div>
               </div>
 
@@ -869,6 +923,13 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  color: var(--uiv2-fg-muted);
+}
+
+.adm-field__hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
   color: var(--uiv2-fg-muted);
 }
 

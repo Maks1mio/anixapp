@@ -65,24 +65,6 @@ export function invalidateOverviewOverridesCache(): void {
   cache = null;
 }
 
-export async function pruneOverviewStaleOverrides(bannerIds: number[]): Promise<number[]> {
-  if (!bannerIds.length) return [];
-  try {
-    const res = await fetch(`${getApiBase()}/overview/prune`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ banner_ids: bannerIds }),
-      signal: AbortSignal.timeout(12_000),
-    });
-    if (!res.ok) return [];
-    const data = (await res.json()) as { deleted?: number[] };
-    cache = null;
-    return Array.isArray(data.deleted) ? data.deleted : [];
-  } catch {
-    return [];
-  }
-}
-
 export function segmentDuration(seg: VideoSegment): number {
   return Math.max(0, seg.end - seg.start);
 }

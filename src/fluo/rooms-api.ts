@@ -19,6 +19,57 @@ type ProfilePayload = {
   deviceId?: string | null;
 };
 
+// ── per-room participant secret ────────────────────────────────────────────
+// anixback hands it out on create/join; WS join, leave and slot reclaim (reload) need it.
+// Peer ids are public (catalog, room state), so the secret is what proves «this is me».
+
+type PeerSecretEntry = { roomId: string; code: string; peerId: string; secret: string };
+const PEER_SECRETS_KEY = 'anix.fluo.peerSecrets';
+let peerSecrets: PeerSecretEntry[] | null = null;
+
+function loadPeerSecrets(): PeerSecretEntry[] {
+  if (peerSecrets) return peerSecrets;
+  try {
+    const raw = sessionStorage.getItem(PEER_SECRETS_KEY);
+    const parsed = raw ? (JSON.parse(raw) as PeerSecretEntry[]) : [];
+    peerSecrets = Array.isArray(parsed) ? parsed.filter((e) => e && e.roomId && e.peerId && e.secret) : [];
+  } catch {
+    peerSecrets = [];
+  }
+  return peerSecrets;
+}
+
+function savePeerSecrets(): void {
+  try {
+    sessionStorage.setItem(PEER_SECRETS_KEY, JSON.stringify(loadPeerSecrets().slice(-20)));
+  } catch {
+    /* storage unavailable — secrets stay in memory */
+  }
+}
+
+export function rememberFluoPeerSecret(roomId: string, code: string, peerId: string, secret: string): void {
+  if (!roomId || !peerId || !secret) return;
+  const list = loadPeerSecrets().filter((e) => e.roomId !== roomId);
+  list.push({ roomId, code: code.trim().toUpperCase(), peerId, secret });
+  peerSecrets = list;
+  savePeerSecrets();
+}
+
+export function getFluoPeerSecret(roomId: string, peerId?: string | null): { peerId: string; secret: string } | null {
+  const hit = loadPeerSecrets().find((e) => e.roomId === roomId && (!peerId || e.peerId === peerId));
+  return hit ? { peerId: hit.peerId, secret: hit.secret } : null;
+}
+
+function peerSecretForCode(code: string): string | null {
+  const c = code.trim().toUpperCase();
+  return loadPeerSecrets().find((e) => e.code === c)?.secret ?? null;
+}
+
+export function forgetFluoPeerSecret(roomId: string): void {
+  peerSecrets = loadPeerSecrets().filter((e) => e.roomId !== roomId);
+  savePeerSecrets();
+}
+
 async function fetchFluo(path: string, options: RequestInit = {}): Promise<Response> {
   return fetch(`${getFluoHttpBase()}${path}`, {
     ...options,
@@ -41,6 +92,7 @@ export type FluoCreateRoomResult = {
   roomId: string;
   code: string;
   myPeerId?: string;
+  peerSecret?: string;
   name?: string;
   visibility?: string;
   settings?: FluoRoomSettings;
@@ -89,7 +141,11 @@ export async function createFluoRoomWithOptions(
     e.code = code;
     throw e;
   }
-  return (await res.json()) as FluoCreateRoomResult;
+  const created = (await res.json()) as FluoCreateRoomResult;
+  if (created.myPeerId && created.peerSecret) {
+    rememberFluoPeerSecret(created.roomId, created.code, created.myPeerId, created.peerSecret);
+  }
+  return created;
 }
 
 export class FluoJoinError extends Error {
@@ -112,6 +168,7 @@ export async function joinFluoRoomWithPassword(
     body: JSON.stringify({
       code: code.trim(),
       ...profile,
+      ...(peerSecretForCode(code) ? { peerSecret: peerSecretForCode(code) } : {}),
       ...(password != null && password !== '' ? { password } : {}),
     }),
   });
@@ -137,7 +194,12 @@ export async function joinFluoRoomWithPassword(
   if (!res.ok) {
     throw new FluoJoinError('unknown', `Fluo join: ${res.status}`);
   }
-  return (await res.json()) as FluoRoomPublic;
+  const room = (await res.json()) as FluoRoomPublic & { peerSecret?: string };
+  if (room.myPeerId && room.peerSecret) {
+    rememberFluoPeerSecret(room.roomId, room.code ?? code, room.myPeerId, room.peerSecret);
+  }
+  delete room.peerSecret;
+  return room;
 }
 
 export type { FluoRoomListItem, FluoCreateRoomOptions, FluoRoomSettings };

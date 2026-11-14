@@ -1,5 +1,7 @@
 export type AnnouncementType = 'NOTE' | 'TIP' | 'IMPORTANT' | 'WARNING' | 'CAUTION' | 'DISCUSSION';
 export type Reaction = 'like' | 'dislike';
+/** all — всем; below — версиям ниже audienceVersion (и старым сборкам без версии); from — от audienceVersion. */
+export type AnnouncementAudience = 'all' | 'below' | 'from';
 
 export interface Announcement {
   id: string;
@@ -10,6 +12,8 @@ export interface Announcement {
   active: boolean;
   commentsEnabled: boolean;
   commentsLocked: boolean;
+  audience?: AnnouncementAudience;
+  audienceVersion?: string | null;
   commentCount?: number;
   lastCommenterIds?: number[];
   lastMessage?: string | null;
@@ -30,6 +34,7 @@ export interface Comment {
 }
 
 import { getApiBase, getAdminToken } from './admin-api';
+import { authedFetch } from './agent-api';
 
 function apiBase(): string {
   return getApiBase();
@@ -51,7 +56,11 @@ function adminHeaders(): HeadersInit {
 
 export async function fetchAnnouncements(): Promise<Announcement[]> {
   try {
-    const res = await fetch(`${apiBase()}/announcements`, { signal: AbortSignal.timeout(4000) });
+    // anixback filters by version: «обновитесь» for old builds, news for current ones.
+    const v = typeof __ANIXAPP_VERSION__ === 'string' && __ANIXAPP_VERSION__ ? __ANIXAPP_VERSION__ : '';
+    const res = await fetch(`${apiBase()}/announcements${v ? `?v=${encodeURIComponent(v)}` : ''}`, {
+      signal: AbortSignal.timeout(4000),
+    });
     if (!res.ok) return [];
     const data = await res.json();
     if (!Array.isArray(data)) return [];
@@ -74,6 +83,8 @@ export async function createAnnouncement(input: {
   commentsEnabled?: boolean;
   commentsLocked?: boolean;
   active?: boolean;
+  audience?: AnnouncementAudience;
+  audienceVersion?: string | null;
 }): Promise<Announcement> {
   const res = await fetch(`${apiBase()}/announcements`, {
     method: 'POST',
@@ -86,7 +97,7 @@ export async function createAnnouncement(input: {
 
 export async function updateAnnouncement(
   id: string,
-  patch: Partial<Pick<Announcement, 'type' | 'message' | 'link' | 'active' | 'commentsEnabled' | 'commentsLocked'>>
+  patch: Partial<Pick<Announcement, 'type' | 'message' | 'link' | 'active' | 'commentsEnabled' | 'commentsLocked' | 'audience' | 'audienceVersion'>>
 ): Promise<Announcement> {
   const res = await fetch(`${apiBase()}/announcements/${id}`, {
     method: 'PATCH',
@@ -105,11 +116,25 @@ export async function deleteAnnouncement(id: string): Promise<void> {
   if (!res.ok && res.status !== 204) throw new Error('failed to delete');
 }
 
+/**
+ * Who reacts / comments: newer anixback proves it with the app session (Bearer, issued after the
+ * bridge verified the Anixart token) and ignores user_id; older anixback still reads user_id.
+ * Both are sent so the app works against either server during the rollout.
+ */
+async function userFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  try {
+    return await authedFetch(path, init);
+  } catch {
+    // No app session (not signed in / no bridge): plain request — enough for older servers.
+    return fetch(`${apiBase()}${path}`, init);
+  }
+}
+
 export async function fetchReactions(announcementId: string, userId?: number): Promise<ReactionsResult> {
-  const url = userId
-    ? `${apiBase()}/announcements/${announcementId}/reactions?user_id=${userId}`
-    : `${apiBase()}/announcements/${announcementId}/reactions`;
-  const res = await fetch(url);
+  const path = userId
+    ? `/announcements/${announcementId}/reactions?user_id=${userId}`
+    : `/announcements/${announcementId}/reactions`;
+  const res = userId ? await userFetch(path) : await fetch(`${apiBase()}${path}`);
   if (!res.ok) return { likes: 0, dislikes: 0, userReaction: null };
   return res.json();
 }
@@ -119,7 +144,7 @@ export async function sendReaction(
   userId: number,
   reaction: Reaction
 ): Promise<ReactionsResult> {
-  const res = await fetch(`${apiBase()}/announcements/${announcementId}/reactions`, {
+  const res = await userFetch(`/announcements/${announcementId}/reactions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ user_id: userId, reaction }),
@@ -139,7 +164,7 @@ export async function sendComment(
   userId: number,
   message: string
 ): Promise<Comment> {
-  const res = await fetch(`${apiBase()}/announcements/${announcementId}/comments`, {
+  const res = await userFetch(`/announcements/${announcementId}/comments`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ user_id: userId, message }),
@@ -156,7 +181,7 @@ export async function deleteComment(
   commentId: string,
   userId: number
 ): Promise<void> {
-  const res = await fetch(`${apiBase()}/announcements/${announcementId}/comments/${commentId}`, {
+  const res = await userFetch(`/announcements/${announcementId}/comments/${commentId}`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ user_id: userId }),

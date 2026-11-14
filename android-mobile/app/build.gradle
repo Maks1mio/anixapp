@@ -37,8 +37,30 @@ android {
         compose true
         buildConfig true
     }
+    // Постоянный ключ подписи: без него CI подписывает APK случайным debug-ключом,
+    // и Android не ставит новую версию поверх старой («конфликтует с другим пакетом»).
+    // Ключ передаётся через окружение (в CI — из секретов), в репозитории его нет.
+    def anixKeystore = System.getenv('ANIX_KEYSTORE_FILE')
+    def anixHasKey = anixKeystore && file(anixKeystore).exists()
+    if (!anixHasKey && System.getenv('CI')) {
+        throw new GradleException('ANIX_KEYSTORE_FILE не задан: релизный APK без постоянного ключа не обновится поверх старого')
+    }
+    signingConfigs {
+        if (anixHasKey) {
+            anix {
+                storeFile file(anixKeystore)
+                storePassword System.getenv('ANIX_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANIX_KEY_ALIAS')
+                keyPassword System.getenv('ANIX_KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
+        debug {
+            if (anixHasKey) signingConfig signingConfigs.anix
+        }
         release {
+            if (anixHasKey) signingConfig signingConfigs.anix
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

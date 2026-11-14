@@ -90,6 +90,19 @@ jobs:
         env:
           RELEASE_TAG: ${{ needs.resolve-tag.outputs.tag }}
 
+      - name: Restore signing keystore
+        # Один постоянный ключ для всех релизов, иначе APK не ставится поверх прошлой версии.
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::error::Нет секрета ANDROID_KEYSTORE_BASE64"
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/anix-release.jks"
+          echo "ANIX_KEYSTORE_FILE=$RUNNER_TEMP/anix-release.jks" >> "$GITHUB_ENV"
+
       - run: yarn install --frozen-lockfile
 
       - name: Build Android TV APK
@@ -100,6 +113,9 @@ jobs:
         env:
           ANIXART_PROXY_APP_KEY: ${{ secrets.ANIXART_PROXY_APP_KEY }}
           ANIXBACK_PROXY_TARGET: ${{ secrets.ANIXBACK_PROXY_TARGET }}
+          ANIX_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANIX_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANIX_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -137,6 +153,19 @@ jobs:
         env:
           RELEASE_TAG: ${{ needs.resolve-tag.outputs.tag }}
 
+      - name: Restore signing keystore
+        # Один постоянный ключ для всех релизов, иначе APK не ставится поверх прошлой версии.
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::error::Нет секрета ANDROID_KEYSTORE_BASE64"
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/anix-release.jks"
+          echo "ANIX_KEYSTORE_FILE=$RUNNER_TEMP/anix-release.jks" >> "$GITHUB_ENV"
+
       - run: yarn install --frozen-lockfile
 
       - name: Build Android (phone) APK
@@ -144,6 +173,9 @@ jobs:
         env:
           ANIXART_PROXY_APP_KEY: ${{ secrets.ANIXART_PROXY_APP_KEY }}
           ANIXBACK_PROXY_TARGET: ${{ secrets.ANIXBACK_PROXY_TARGET }}
+          ANIX_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANIX_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANIX_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
       - uses: actions/upload-artifact@v4
         with:

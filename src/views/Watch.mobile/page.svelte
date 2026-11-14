@@ -25,6 +25,7 @@
   import ResumePrompt from '../Watch/components/ResumePrompt.svelte';
   import { episodeDisplayNumber } from '../../utils/episode-display';
   import { isCapacitorNative } from '../../native/anix-api-native';
+  import { getMediaLevels, setSystemVolume, setWindowBrightness } from '../../native/anix-media-levels';
   import { loadAppSettings, saveAppSettings } from '../../utils/app-settings';
   import {
     MOBILE_ANIME4K_INTENSITIES,
@@ -85,6 +86,9 @@
   const HIDE_MS = 3500;
   const DOUBLE_TAP_MS = 280;
   const LONG_PRESS_MS = 450;
+  // Мёртвая зона у краёв экрана (CSS px ≈ dp) поверх safe-area: оттуда стартуют системные жесты
+  // (шторка сверху, «домой» снизу, «назад» сбоку) — свайп оттуда не трогает яркость/громкость/перемотку.
+  const GESTURE_EDGE_DEAD_ZONE_PX = 28;
   const RATE_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
   let loadState = $state<LoadState>('loading');
@@ -101,6 +105,10 @@
   let bufferedPct = $state(0);
   let volume = $state(100);
   let brightness = $state(1);
+  // Android: жесты меняют системную громкость медиа и яркость экрана; null — веб-режим (элемент + затемнение)
+  let systemVolumeMax = $state<number | null>(null);
+  let systemBrightnessSet = false; // окну задана своя яркость — вернуть системную при выходе
+  let lastSystemVolumeIndex = -1;
   let playbackRate = $state(1);
   let qualityMap = $state<Record<string, string>>({});
   let currentQuality = $state('auto');
@@ -445,9 +453,35 @@
     return fallback;
   }
 
+  /** Громкость самого видео: при системном управлении — всегда 100, громкостью рулит система. */
+  function mediaVolume(): number {
+    return systemVolumeMax != null ? 100 : volume;
+  }
+
+  /** Подтянуть системные уровни (могли поменять кнопками/шторкой), пока жест не начался. */
+  async function refreshSystemLevels() {
+    const levels = await getMediaLevels();
+    if (!levels) return;
+    const firstTime = systemVolumeMax == null;
+    systemVolumeMax = levels.volumeMax;
+    if (gesture !== 'volume') {
+      lastSystemVolumeIndex = levels.volume;
+      volume = Math.round((levels.volume / levels.volumeMax) * 100);
+    }
+    if (gesture !== 'brightness') brightness = Math.max(0.02, Math.min(1, levels.brightness));
+    if (firstTime) applyVolume();
+  }
+
   function applyVolume() {
+    if (systemVolumeMax != null) {
+      const index = Math.round((volume / 100) * systemVolumeMax);
+      if (index !== lastSystemVolumeIndex) {
+        lastSystemVolumeIndex = index;
+        setSystemVolume(index);
+      }
+    }
     if (!videoEl) return;
-    const linear = Math.max(0, Math.min(1, volume / 100));
+    const linear = Math.max(0, Math.min(1, mediaVolume() / 100));
     core.surround.setOutputLevel(linear);
     videoEl.muted = linear <= 0;
     videoEl.volume = linear;
@@ -580,8 +614,8 @@
       dubberId,
       seekTime,
       initialPaused,
-      volume,
-      muted: volume <= 0,
+      volume: mediaVolume(),
+      muted: mediaVolume() <= 0,
       releaseId,
       sourceId,
       syncPlaybackRate: () => { if (videoEl) videoEl.playbackRate = playbackRate; },
@@ -726,8 +760,8 @@
       dubberId,
       seekTime: saved,
       initialPaused: wasPaused,
-      volume,
-      muted: volume <= 0,
+      volume: mediaVolume(),
+      muted: mediaVolume() <= 0,
       releaseId,
       sourceId,
       syncPlaybackRate: () => { if (videoEl) videoEl.playbackRate = playbackRate; },
@@ -759,6 +793,27 @@
   let lastTapZone: -1 | 0 | 1 = 0;
   let controlsBeforeTap = true;
   let activePointer: number | null = null;
+  let pBlockVertical = false; // старт у верха/низа — системная шторка или «домой»
+  let pBlockHorizontal = false; // старт у боковых краёв — системный «назад»
+  let pSuppressed = false; // свайп отдан системе: без жеста и без тапа
+
+  /** Реальные safe-area отступы в px (env() в JS напрямую не прочитать). */
+  function readSafeInsets(): { top: number; right: number; bottom: number; left: number } {
+    const probe = document.createElement('div');
+    probe.style.cssText =
+      'position:fixed;top:0;left:0;visibility:hidden;pointer-events:none;' +
+      'padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
+    document.body.appendChild(probe);
+    const cs = getComputedStyle(probe);
+    const insets = {
+      top: parseFloat(cs.paddingTop) || 0,
+      right: parseFloat(cs.paddingRight) || 0,
+      bottom: parseFloat(cs.paddingBottom) || 0,
+      left: parseFloat(cs.paddingLeft) || 0,
+    };
+    probe.remove();
+    return insets;
+  }
 
   function flashHud(kind: 'volume' | 'brightness') {
     hudKind = kind;
@@ -774,7 +829,18 @@
     pStartX = e.clientX;
     pStartY = e.clientY;
     pZone = e.clientX < w / 3 ? -1 : e.clientX > (w * 2) / 3 ? 1 : 0;
+    // плеер всегда position: fixed; inset: 0 — границы окна и есть границы экрана/видео
+    const inset = readSafeInsets();
+    const h = window.innerHeight;
+    pBlockVertical =
+      e.clientY < inset.top + GESTURE_EDGE_DEAD_ZONE_PX ||
+      e.clientY > h - inset.bottom - GESTURE_EDGE_DEAD_ZONE_PX;
+    pBlockHorizontal =
+      e.clientX < inset.left + GESTURE_EDGE_DEAD_ZONE_PX ||
+      e.clientX > w - inset.right - GESTURE_EDGE_DEAD_ZONE_PX;
+    pSuppressed = false;
     gesture = 'none';
+    if (systemVolumeMax != null) void refreshSystemLevels();
     if (locked) return;
     longPressTimer = window.setTimeout(() => {
       longPressTimer = 0;
@@ -785,14 +851,19 @@
   }
 
   function onStagePointerMove(e: PointerEvent) {
-    if (e.pointerId !== activePointer || locked || boosted) return;
+    if (e.pointerId !== activePointer || locked || boosted || pSuppressed) return;
     const dx = e.clientX - pStartX;
     const dy = e.clientY - pStartY;
     if (gesture === 'none') {
       if (Math.abs(dx) < 14 && Math.abs(dy) < 14) return;
       if (longPressTimer) window.clearTimeout(longPressTimer);
       longPressTimer = 0;
-      if (Math.abs(dx) > Math.abs(dy)) {
+      const horizontal = Math.abs(dx) > Math.abs(dy);
+      if (horizontal ? pBlockHorizontal : pBlockVertical) {
+        pSuppressed = true;
+        return;
+      }
+      if (horizontal) {
         if (!(duration > 0)) return;
         gesture = 'seek';
         pStartTime = currentTime;
@@ -811,7 +882,12 @@
       applyVolume();
       flashHud('volume');
     } else if (gesture === 'brightness') {
-      brightness = Math.max(0.15, Math.min(1, pStartValue - dy / (window.innerHeight * 0.7)));
+      const min = systemVolumeMax != null ? 0.02 : 0.15;
+      brightness = Math.max(min, Math.min(1, pStartValue - dy / (window.innerHeight * 0.7)));
+      if (systemVolumeMax != null) {
+        systemBrightnessSet = true;
+        setWindowBrightness(brightness);
+      }
       flashHud('brightness');
     }
   }
@@ -827,6 +903,10 @@
       if (videoEl) videoEl.playbackRate = playbackRate;
       return;
     }
+    if (pSuppressed) {
+      pSuppressed = false;
+      return;
+    }
     if (gesture === 'seek') {
       seekTo(scrubTime);
       gesture = 'none';
@@ -834,6 +914,11 @@
       return;
     }
     if (gesture === 'volume' || gesture === 'brightness') {
+      // системные уровни хранит сама система — в localStorage только веб-режим
+      if (systemVolumeMax != null) {
+        gesture = 'none';
+        return;
+      }
       try {
         localStorage.setItem(VOLUME_KEY, String(volume));
         localStorage.setItem(BRIGHTNESS_KEY, String(brightness));
@@ -916,6 +1001,7 @@
   onMount(() => {
     volume = readNumber(VOLUME_KEY, 100, 0, 100);
     brightness = readNumber(BRIGHTNESS_KEY, 1, 0.15, 1);
+    void refreshSystemLevels();
     bindCoreEls();
     if (document.documentElement.classList.contains('mobile-native')) setOrientation('landscape');
 
@@ -970,6 +1056,7 @@
       window.removeEventListener('anix:upscaleChanged', onUpscaleChanged);
       stopUpscale();
       if (document.documentElement.classList.contains('mobile-native')) setOrientation('portrait');
+      if (systemBrightnessSet) setWindowBrightness(-1);
       for (const t of [hideTimer, hudTimer, tapSeekTimer, firstFrameTimer, longPressTimer]) if (t) window.clearTimeout(t);
       stopTicking();
       core.destroy();
@@ -1000,7 +1087,7 @@
     ></video>
     <!-- Anime4K: картинка после WebGPU-фильтра; размер буфера и CSS-размер ставит UpscaleController -->
     <canvas bind:this={canvasEl} class="mw__upscale" class:mw__upscale--on={upscaleOn && useVideo && !switching} aria-hidden="true"></canvas>
-    <div class="mw__dim" style:opacity={(1 - brightness) * 0.85} aria-hidden="true"></div>
+    <div class="mw__dim" style:opacity={systemVolumeMax != null ? 0 : (1 - brightness) * 0.85} aria-hidden="true"></div>
   </div>
 
   <!-- слой жестов: под панелями, над видео -->

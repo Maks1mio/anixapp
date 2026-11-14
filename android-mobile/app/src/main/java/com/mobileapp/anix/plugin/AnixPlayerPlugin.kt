@@ -17,6 +17,9 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.StatFs
+import android.media.AudioManager
+import android.provider.Settings
+import android.view.WindowManager
 import androidx.activity.result.ActivityResult
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -142,6 +145,64 @@ class AnixPlayerPlugin : Plugin() {
             } else {
                 controller.show(WindowInsetsCompat.Type.systemBars())
             }
+            call.resolve()
+        }
+    }
+
+    // --- Системные громкость и яркость для веб-плеера ---------------------------------------
+
+    /**
+     * Текущие уровни: {volume, volumeMax} — индекс STREAM_MUSIC, {brightness} — 0..1
+     * (яркость окна, если плеер её задал, иначе системная).
+     */
+    @PluginMethod
+    fun getMediaLevels(call: PluginCall) {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val act = activity
+        val windowLevel = act?.window?.attributes?.screenBrightness ?: -1f
+        val brightness = if (windowLevel >= 0f) {
+            windowLevel
+        } else {
+            val raw = runCatching {
+                Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS)
+            }.getOrDefault(128)
+            (raw / 255f).coerceIn(0f, 1f)
+        }
+        call.resolve(
+            JSObject()
+                .put("volume", am.getStreamVolume(AudioManager.STREAM_MUSIC))
+                .put("volumeMax", am.getStreamMaxVolume(AudioManager.STREAM_MUSIC))
+                .put("brightness", brightness.toDouble()),
+        )
+    }
+
+    /** {index} — громкость медиа, как кнопками; системная плашка не показывается (у плеера своя). */
+    @PluginMethod
+    fun setSystemVolume(call: PluginCall) {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val index = (call.getInt("index") ?: 0).coerceIn(0, max)
+        runCatching { am.setStreamVolume(AudioManager.STREAM_MUSIC, index, 0) }
+        call.resolve(JSObject().put("volume", am.getStreamVolume(AudioManager.STREAM_MUSIC)).put("volumeMax", max))
+    }
+
+    /**
+     * {level} 0..1 — яркость экрана, пока открыто окно приложения (как в видеоплеерах, без WRITE_SETTINGS);
+     * level < 0 — вернуть системную.
+     */
+    @PluginMethod
+    fun setWindowBrightness(call: PluginCall) {
+        val level = call.getFloat("level") ?: -1f
+        val act = activity
+        if (act == null) { call.resolve(); return }
+        act.runOnUiThread {
+            val attrs = act.window.attributes
+            attrs.screenBrightness = if (level < 0f) {
+                WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            } else {
+                level.coerceIn(0.01f, 1f)
+            }
+            act.window.attributes = attrs
             call.resolve()
         }
     }

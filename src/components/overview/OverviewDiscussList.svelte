@@ -5,6 +5,7 @@
   import { episodesLabel, type OverviewDiscussItem } from '../../utils/overview';
   import { notifyFavoritesChanged } from '../../utils/favorites-events';
   import { applyReleaseListStatus } from '../../utils/release-list-status';
+  import { releaseListStatusOverrides, resolveReleaseListStatus } from '../../stores/release-list-status';
   import type { ReleaseMenuListStatus } from '../../utils/release-menu-v2';
   import UiV2DiscussList, { type UiV2DiscussItem } from '../uikit-v2/UiV2DiscussList.svelte';
 
@@ -29,7 +30,7 @@
       description: item.description,
       commentCount: item.commentPerDayCount,
       isFavorite: item.isFavorite,
-      listStatus: item.listStatus ?? null,
+      listStatus: resolveReleaseListStatus($releaseListStatusOverrides, item.id, item.listStatus),
       status: item.status,
       statusId: item.statusId,
       season: item.season,

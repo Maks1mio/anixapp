@@ -1,4 +1,5 @@
 import { notifyListStatusChanged } from './favorites-events';
+import { setReleaseListStatusOverride } from '../stores/release-list-status';
 
 export type ReleaseListStatusId =
   | 'watching'
@@ -26,5 +27,6 @@ export async function applyReleaseListStatus(
     await api.setListStatus(releaseId, nextStatus as unknown as number);
   }
 
+  setReleaseListStatusOverride(releaseId, nextStatus);
   notifyListStatusChanged({ releaseId, statusId: nextStatus });
 }
